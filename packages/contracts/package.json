@@ -10,6 +10,7 @@
     ".": "./src/index.ts"
   },
   "scripts": {
+    "check:openapi": "redocly lint openapi/allfit-v1.openapi.yaml --config ../../redocly.yaml",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit"
   }

@@ -1,11 +1,10 @@
 /**
  * Contract shared between the API and its three clients.
  *
- * `openapi/` is the source of truth and is edited by hand.
- * `generated/` is produced from it and is NEVER edited.
+ * `openapi/` is the canonical executable specification and is edited by hand.
+ * `generated/` is produced from it and is NEVER edited directly.
  *
- * The normative contract lives in allfitone-docs; a versioned copy is consumed
- * here. That both sides travel in the same commit is the main reason this is a
- * monorepo.
+ * The specification, generated DTOs, API and clients travel together in one
+ * monorepo commit. Product and architecture context remains in allfitone-docs.
  */
 export {}

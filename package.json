@@ -19,6 +19,7 @@
     "test": "turbo run test",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
+    "check:openapi": "redocly lint packages/contracts/openapi/allfit-v1.openapi.yaml",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },
@@ -35,6 +36,7 @@
     "@commitlint/cli": "^19.6.0",
     "@commitlint/config-conventional": "^19.6.0",
     "@eslint/js": "^10.0.1",
+    "@redocly/cli": "2.43.3",
     "@types/node": "^22.10.0",
     "eslint": "^9.17.0",
     "husky": "^9.1.7",

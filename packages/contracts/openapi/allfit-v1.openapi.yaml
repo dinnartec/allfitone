@@ -1,0 +1,2582 @@
+openapi: 3.1.0
+jsonSchemaDialect: https://json-schema.org/draft/2020-12/schema
+info:
+  title: Allfit V1 vertical slice API
+  version: 1.0.0
+  description: >-
+    Canonical contract for the first implementable vertical slice shared by
+    Allfit Studio and Allfit Space. Every operation maps to exactly one OP-* entry.
+    Endpoints outside this file remain non-implementable until added through
+    the contract-first gate.
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+servers:
+  - url: /
+tags:
+  - name: Studio Planning
+    description: Planning commands and queries performed from Allfit Studio.
+  - name: Space Agenda
+    description: Personal agenda queries exposed to Allfit Space.
+  - name: Space Execution
+    description: Workout execution commands performed from Allfit Space.
+  - name: Studio Execution
+    description: Authorized workout execution queries exposed to Allfit Studio.
+  - name: Space Privacy
+    description: Consent and privacy commands controlled by the person.
+  - name: Space Nutrition
+    description: Personal nutrition capture and goal operations.
+  - name: Studio Nutrition
+    description: Authorized professional nutrition operations.
+x-allfit-contract-gate:
+  source: V1_OPERATIONS_MATRIX.md
+  rule: No endpoint may be implemented before it has an OpenAPI operation and x-allfit-operation.
+x-allfit-media-url-policy:
+  space_owner:
+    delivery: signed_storage_url
+    scheme: HTTPS
+    ttl_seconds: 300
+    allowed_method: GET
+    cache_control: private, no-store
+    query_is_opaque: true
+    logging: Never log or persist the query string.
+  studio_professional:
+    delivery: authenticated_api_proxy
+    allowed_method: GET
+    cache_control: private, no-store
+    authorization_rechecked_per_request: true
+    redirect_to_storage: false
+    failure_without_effective_access: 404
+
+paths:
+  /studio/v1/organizations/{organizationId}/programs/{programId}/versions:
+    post:
+      tags: [Studio Planning]
+      operationId: publishProgramVersion
+      x-allfit-operation: OP-PLN-008
+      x-allfit-cache: no-store
+      summary: Publish an immutable program version
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/ProgramId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProgramVersionCreate'
+      responses:
+        '201':
+          description: Published version
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Location:
+              $ref: '#/components/headers/Location'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProgramVersion'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /studio/v1/organizations/{organizationId}/relationships/{relationshipId}/assignments:
+    post:
+      tags: [Studio Planning]
+      operationId: assignProgramVersion
+      x-allfit-operation: OP-PLN-010
+      x-allfit-cache: no-store
+      summary: Assign an immutable program version through an active relationship
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/RelationshipId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProgramAssignmentCreate'
+      responses:
+        '201':
+          description: Assignment and schedule materialized atomically
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Location:
+              $ref: '#/components/headers/Location'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProgramAssignment'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ScopeRequired'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /space/v1/agenda:
+    get:
+      tags: [Space Agenda]
+      operationId: listMyAgenda
+      x-allfit-operation: OP-PLN-016
+      x-allfit-cache: private, max-age=0, must-revalidate
+      summary: List the authenticated person's agenda
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/FromDate'
+        - $ref: '#/components/parameters/ToDate'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: Agenda page
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/PrivateRevalidate'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgendaPage'
+        '304':
+          description: The agenda representation has not changed
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/PrivateRevalidate'
+            ETag:
+              $ref: '#/components/headers/ETag'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /space/v1/planned-sessions/{plannedSessionId}/attempts:
+    post:
+      tags: [Space Execution]
+      operationId: startPlannedSessionAttempt
+      x-allfit-operation: OP-EXE-001
+      x-allfit-cache: no-store
+      x-allfit-command-resource-id: true
+      summary: Start an attempt using Command-Id as executed_session.id
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PlannedSessionId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttemptCreate'
+      responses:
+        '201':
+          description: Attempt started
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Location:
+              $ref: '#/components/headers/Location'
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Attempt'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /space/v1/executions/{executionId}/results:
+    put:
+      tags: [Space Execution]
+      operationId: replaceExecutionResults
+      x-allfit-operation: OP-EXE-005
+      x-allfit-cache: no-store
+      summary: Replace working results under optimistic concurrency
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ExecutionId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExecutionResultsReplace'
+      responses:
+        '200':
+          description: Results replaced and revision incremented
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExecutionResultsState'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/StaleDraft'
+        '422':
+          $ref: '#/components/responses/ContractValidationFailed'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+
+  /space/v1/executions/{executionId}/finalize:
+    post:
+      tags: [Space Execution]
+      operationId: finalizeExecution
+      x-allfit-operation: OP-EXE-006
+      x-allfit-cache: no-store
+      summary: Validate and finalize an execution atomically
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ExecutionId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExecutionFinalize'
+      responses:
+        '200':
+          description: Execution finalized
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExecutionFinalized'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ContractValidationFailed'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+
+  /studio/v1/organizations/{organizationId}/clients/{personId}/executions/{executionId}:
+    get:
+      tags: [Studio Execution]
+      operationId: getAuthorizedClientExecution
+      x-allfit-operation: OP-EXE-018
+      x-allfit-cache: private, no-store
+      summary: Read one execution through the authorized live projection
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/PersonId'
+        - $ref: '#/components/parameters/ExecutionId'
+      responses:
+        '200':
+          description: Authorized and field-redacted execution
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/PrivateNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthorizedExecution'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ScopeRequired'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /space/v1/consents/{grantId}/revocation:
+    post:
+      tags: [Space Privacy]
+      operationId: revokeConsentGrant
+      x-allfit-operation: OP-PRV-005
+      x-allfit-cache: no-store
+      summary: Revoke a live or frozen grant and invalidate projections atomically
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GrantId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      responses:
+        '200':
+          description: Grant revoked
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConsentRevocation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '410':
+          $ref: '#/components/responses/CommandEffectDisposed'
+
+  /space/v1/nutrition/meals:
+    post:
+      tags: [Space Nutrition]
+      operationId: createNutritionMeal
+      x-allfit-operation: OP-NUT-001
+      x-allfit-cache: no-store
+      x-allfit-command-resource-id: true
+      summary: Record one structured meal using Command-Id as its durable identity
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NutritionMealCreate'
+      responses:
+        '201':
+          description: Meal recorded
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Location:
+              $ref: '#/components/headers/Location'
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NutritionMeal'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+    get:
+      tags: [Space Nutrition]
+      operationId: listMyNutritionMeals
+      x-allfit-operation: OP-NUT-002
+      x-allfit-cache: private, no-store
+      summary: List meals owned by the authenticated person
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/FromDate'
+        - $ref: '#/components/parameters/ToDate'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Authorized personal meal page
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/PrivateNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NutritionMealPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+
+  /space/v1/nutrition/meals/{mealId}:
+    patch:
+      tags: [Space Nutrition]
+      operationId: updateNutritionMeal
+      x-allfit-operation: OP-NUT-003
+      x-allfit-cache: no-store
+      summary: Revise meal structure or attach a sanitized photo
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/MealId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+        - $ref: '#/components/parameters/NutritionMealIfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NutritionMealPatch'
+      responses:
+        '200':
+          description: Meal revised atomically
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NutritionMeal'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/StaleDraft'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+    delete:
+      tags: [Space Nutrition]
+      operationId: deleteNutritionMeal
+      x-allfit-operation: OP-NUT-004
+      x-allfit-cache: no-store
+      summary: Delete one personal meal through governed disposition
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/MealId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      responses:
+        '204':
+          description: Meal disposed
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '410':
+          $ref: '#/components/responses/CommandEffectDisposed'
+
+  /space/v1/nutrition/daily-summaries:
+    get:
+      tags: [Space Nutrition]
+      operationId: listMyNutritionDailySummaries
+      x-allfit-operation: OP-NUT-005
+      x-allfit-cache: private, no-store
+      summary: Calculate personal daily nutrition summaries
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/FromDate'
+        - $ref: '#/components/parameters/ToDate'
+      responses:
+        '200':
+          description: Daily summaries ordered by local date
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/PrivateNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NutritionDailySummaryPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+
+  /space/v1/nutrition/goals:
+    get:
+      tags: [Space Nutrition]
+      operationId: getMyNutritionGoals
+      x-allfit-operation: OP-NUT-006
+      x-allfit-cache: private, no-store
+      summary: Read the active goal and professional proposals
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Personal nutrition goal line
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/PrivateNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NutritionGoals'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+
+  /space/v1/nutrition/goals/versions:
+    post:
+      tags: [Space Nutrition]
+      operationId: publishSelfNutritionGoalVersion
+      x-allfit-operation: OP-NUT-007
+      x-allfit-cache: no-store
+      summary: Publish and activate one self-authored goal version
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SelfNutritionGoalVersionCreate'
+      responses:
+        '201':
+          description: Self-authored goal version activated
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Location:
+              $ref: '#/components/headers/Location'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NutritionGoalVersion'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /space/v1/nutrition/goal-versions/{goalVersionId}/decision:
+    post:
+      tags: [Space Nutrition]
+      operationId: decideNutritionGoalVersion
+      x-allfit-operation: OP-NUT-008
+      x-allfit-cache: no-store
+      summary: Accept or reject one professional nutrition goal proposal
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GoalVersionId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NutritionGoalDecisionCreate'
+      responses:
+        '200':
+          description: Proposal decided atomically
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NutritionGoalDecision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /studio/v1/organizations/{organizationId}/clients/{personId}/nutrition/meals:
+    get:
+      tags: [Studio Nutrition]
+      operationId: listAuthorizedClientNutritionMeals
+      x-allfit-operation: OP-NUT-009
+      x-allfit-cache: private, no-store
+      summary: List live authorized client meals with field-level media redaction
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/PersonId'
+        - $ref: '#/components/parameters/FromDate'
+        - $ref: '#/components/parameters/ToDate'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Authorized meal page
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/PrivateNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthorizedNutritionMealPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ScopeRequired'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /studio/v1/organizations/{organizationId}/clients/{personId}/nutrition/meals/{mealId}/photo:
+    get:
+      tags: [Studio Nutrition]
+      operationId: getAuthorizedClientNutritionMealPhoto
+      x-allfit-operation: OP-NUT-013
+      x-allfit-cache: private, no-store
+      x-allfit-no-redirect: true
+      summary: Stream one sanitized meal photo after rechecking live authorization
+      description: >
+        Revalidates the complete professional context plus nutrition_intake/read and
+        nutrition_media/read on every request, records ACCESS_EVENT, and streams the
+        sanitized object without exposing media_ref or a signed storage URL.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/PersonId'
+        - $ref: '#/components/parameters/MealId'
+      responses:
+        '200':
+          description: Sanitized image bytes streamed through the authenticated API
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/PrivateNoStore'
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /studio/v1/organizations/{organizationId}/clients/{personId}/nutrition/daily-summaries:
+    get:
+      tags: [Studio Nutrition]
+      operationId: listAuthorizedClientNutritionDailySummaries
+      x-allfit-operation: OP-NUT-010
+      x-allfit-cache: private, no-store
+      summary: Aggregate nutrition only after applying live authorization
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/PersonId'
+        - $ref: '#/components/parameters/FromDate'
+        - $ref: '#/components/parameters/ToDate'
+      responses:
+        '200':
+          description: Authorized daily summaries
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/PrivateNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NutritionDailySummaryPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ScopeRequired'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /studio/v1/organizations/{organizationId}/clients/{personId}/nutrition/goals/versions:
+    get:
+      tags: [Studio Nutrition]
+      operationId: listAuthorizedClientNutritionGoalVersions
+      x-allfit-operation: OP-NUT-011
+      x-allfit-cache: private, no-store
+      summary: List authorized live or explicitly selected frozen guidance
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/PersonId'
+        - $ref: '#/components/parameters/HistoricalAccessCase'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Authorized guidance versions
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/PrivateNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NutritionGoalVersionPage'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ScopeRequired'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      tags: [Studio Nutrition]
+      operationId: proposeClientNutritionGoalVersion
+      x-allfit-operation: OP-NUT-012
+      x-allfit-cache: no-store
+      summary: Propose a nutrition goal version without activating it
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/PersonId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProfessionalNutritionGoalVersionCreate'
+      responses:
+        '201':
+          description: Professional goal version proposed
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Location:
+              $ref: '#/components/headers/Location'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NutritionGoalVersion'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ScopeRequired'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: WorkOS AuthKit access token validated for the selected surface.
+
+  parameters:
+    OrganizationId:
+      name: organizationId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Uuid'
+    ProgramId:
+      name: programId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Uuid'
+    RelationshipId:
+      name: relationshipId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Uuid'
+    PlannedSessionId:
+      name: plannedSessionId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Uuid'
+    ExecutionId:
+      name: executionId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Uuid'
+    PersonId:
+      name: personId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Uuid'
+    GrantId:
+      name: grantId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Uuid'
+    MealId:
+      name: mealId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Uuid'
+    GoalVersionId:
+      name: goalVersionId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Uuid'
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: UUIDv4 reused only for HTTP retries of this operation.
+      schema:
+        $ref: '#/components/schemas/UuidV4'
+    CommandId:
+      name: Command-Id
+      in: header
+      required: true
+      description: UUIDv7 durable identity generated when the user intention is created.
+      schema:
+        $ref: '#/components/schemas/UuidV7'
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: Strong ETag for the execution revision used as the command base.
+      schema:
+        type: string
+        pattern: '^"execution:[0-9a-f-]{36}:r[0-9]+"$'
+    NutritionMealIfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: Strong ETag for the nutrition meal revision used as the command base.
+      schema:
+        type: string
+        pattern: '^"nutrition-meal:[0-9a-f-]{36}:r[0-9]+"$'
+    HistoricalAccessCase:
+      name: X-Historical-Access-Case
+      in: header
+      required: false
+      description: Opaque case UUID. When present the endpoint uses only the frozen guidance projection.
+      schema:
+        $ref: '#/components/schemas/Uuid'
+    IfNoneMatch:
+      name: If-None-Match
+      in: header
+      required: false
+      schema:
+        type: string
+        minLength: 3
+        maxLength: 160
+    FromDate:
+      name: from
+      in: query
+      required: true
+      schema:
+        type: string
+        format: date
+    ToDate:
+      name: to
+      in: query
+      required: true
+      description: Inclusive date; range from..to must not exceed 31 days.
+      schema:
+        type: string
+        format: date
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 25
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      schema:
+        type: string
+        minLength: 16
+        maxLength: 1024
+
+  headers:
+    NoStore:
+      required: true
+      schema:
+        type: string
+        const: no-store
+    PrivateNoStore:
+      required: true
+      schema:
+        type: string
+        const: private, no-store
+    PrivateRevalidate:
+      required: true
+      schema:
+        type: string
+        const: private, max-age=0, must-revalidate
+    ETag:
+      required: true
+      schema:
+        type: string
+        minLength: 3
+        maxLength: 160
+    Location:
+      required: true
+      schema:
+        type: string
+        format: uri-reference
+    IdempotentReplay:
+      required: false
+      description: Present and true only when the minimal outcome is replayed.
+      schema:
+        type: string
+        const: 'true'
+    RetryAfter:
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 30
+
+  responses:
+    BadRequest:
+      description: Missing/invalid headers or malformed request
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: https://errors.allfit.invalid/idempotency-key-required
+            title: Idempotency-Key is required
+            status: 400
+            request_id: 01JEXAMPLE0000000000000000
+    Unauthenticated:
+      description: Missing, invalid or expired token
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: https://errors.allfit.invalid/unauthenticated
+            title: Authentication is required
+            status: 401
+            request_id: 01JEXAMPLE0000000000000000
+    Forbidden:
+      description: Authenticated actor cannot execute the operation
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: https://errors.allfit.invalid/forbidden
+            title: The actor cannot execute this operation
+            status: 403
+            request_id: 01JEXAMPLE0000000000000000
+    ScopeRequired:
+      description: Required live grant is not effective
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/PrivateNoStore'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: https://errors.allfit.invalid/scope-required
+            title: Required consent is not effective
+            status: 403
+            request_id: 01JEXAMPLE0000000000000000
+            required_scope:
+              code: relationship_training
+              level: read
+    NotFound:
+      description: Resource absent or not visible to the actor
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: https://errors.allfit.invalid/not-found
+            title: Resource not found
+            status: 404
+            request_id: 01JEXAMPLE0000000000000000
+    Conflict:
+      description: Concurrent conflict or idempotency identity reuse
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+        Retry-After:
+          $ref: '#/components/headers/RetryAfter'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: https://errors.allfit.invalid/idempotency-in-progress
+            title: The command is still in progress
+            status: 409
+            request_id: 01JEXAMPLE0000000000000000
+    StaleDraft:
+      description: If-Match refers to a stale execution revision
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: https://errors.allfit.invalid/stale-draft
+            title: The local draft is stale
+            status: 409
+            request_id: 01JEXAMPLE0000000000000000
+    PreconditionRequired:
+      description: If-Match is required
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: https://errors.allfit.invalid/precondition-required
+            title: If-Match is required
+            status: 428
+            request_id: 01JEXAMPLE0000000000000000
+    ValidationFailed:
+      description: Request violates its closed schema or business validation
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: https://errors.allfit.invalid/validation-failed
+            title: The request does not satisfy the contract
+            status: 422
+            request_id: 01JEXAMPLE0000000000000000
+            errors:
+              - code: required
+                path: /started_at
+                message: started_at is required.
+    ContractValidationFailed:
+      description: Execution results do not satisfy the frozen result contract
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: https://errors.allfit.invalid/contract-validation-failed
+            title: The execution does not satisfy its frozen result contract
+            status: 422
+            request_id: 01JEXAMPLE0000000000000000
+            errors:
+              - code: required
+                path: /strength_sets/0/achieved_reps
+                message: The detailed contract requires achieved repetitions.
+    CommandEffectDisposed:
+      description: The command already ran but its effect was disposed
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: https://errors.allfit.invalid/command-effect-disposed
+            title: The command effect was disposed
+            status: 410
+            request_id: 01JEXAMPLE0000000000000000
+
+  schemas:
+    Uuid:
+      type: string
+      format: uuid
+      pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+    UuidV4:
+      type: string
+      format: uuid
+      pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+    UuidV7:
+      type: string
+      format: uuid
+      pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+    IanaTimeZone:
+      type: string
+      minLength: 3
+      maxLength: 100
+      anyOf:
+        - const: UTC
+        - pattern: '^[A-Za-z_]+(?:/[A-Za-z0-9_+\-]+)+$'
+    CompletenessLevel:
+      type: string
+      enum: [partial, summary, detailed, sensor_enriched]
+    PublicationStatus:
+      type: string
+      enum: [draft, published, deprecated, archived]
+    ExecutionStatus:
+      type: string
+      enum: [in_progress, paused, completed, abandoned]
+    ScopeCode:
+      type: string
+      enum:
+        [relationship_training, prior_training_history, body_progress, health_context,
+         nutrition_intake, nutrition_guidance, nutrition_media]
+    AccessLevel:
+      type: string
+      enum: [read, contribute]
+
+    ProgramVersionCreate:
+      type: object
+      additionalProperties: false
+      required: [sessions]
+      example:
+        notes: Bloque de fuerza de ocho semanas
+        sessions:
+          - position: 1
+            week: 1
+            day: 1
+            session_template_version_id: 018f6f8d-2b00-7a00-8000-000000000101
+            template_version_number: 1
+          - position: 2
+            week: 1
+            day: 3
+            session_template_version_id: 018f6f8d-2b00-7a00-8000-000000000102
+            template_version_number: 2
+      properties:
+        notes:
+          type: [string, 'null']
+          maxLength: 2000
+        sessions:
+          type: array
+          minItems: 1
+          maxItems: 730
+          items:
+            $ref: '#/components/schemas/ProgramVersionSessionCreate'
+    ProgramVersionSessionCreate:
+      type: object
+      additionalProperties: false
+      required:
+        [position, week, day, session_template_version_id, template_version_number]
+      properties:
+        position:
+          type: integer
+          minimum: 1
+          maximum: 730
+        week:
+          type: integer
+          minimum: 1
+          maximum: 104
+        day:
+          type: integer
+          minimum: 1
+          maximum: 7
+        session_template_version_id:
+          $ref: '#/components/schemas/Uuid'
+        template_version_number:
+          type: integer
+          minimum: 1
+    ProgramVersion:
+      type: object
+      additionalProperties: false
+      required: [id, version_number, status, published_at, session_count]
+      example:
+        id: 018f6f8d-2b00-7a00-8000-000000000201
+        version_number: 1
+        status: published
+        published_at: '2026-07-27T09:12:00-05:00'
+        session_count: 24
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        version_number:
+          type: integer
+          minimum: 1
+        status:
+          $ref: '#/components/schemas/PublicationStatus'
+        published_at:
+          type: string
+          format: date-time
+        session_count:
+          type: integer
+          minimum: 1
+
+    ProgramAssignmentCreate:
+      type: object
+      additionalProperties: false
+      required: [program_version_id, starts_on, timezone]
+      example:
+        program_version_id: 018f6f8d-2b00-7a00-8000-000000000201
+        starts_on: '2026-07-27'
+        timezone: America/Bogota
+      properties:
+        program_version_id:
+          $ref: '#/components/schemas/Uuid'
+        starts_on:
+          type: string
+          format: date
+        timezone:
+          $ref: '#/components/schemas/IanaTimeZone'
+    ProgramAssignment:
+      type: object
+      additionalProperties: false
+      required:
+        [id, status, origin_relationship_id, program_version_id, management, planned_sessions_created]
+      example:
+        id: 018f6f8d-2b00-7a00-8000-000000000401
+        status: active
+        origin_relationship_id: 018f6f8d-2b00-7a00-8000-000000000301
+        program_version_id: 018f6f8d-2b00-7a00-8000-000000000201
+        management:
+          relationship_id: 018f6f8d-2b00-7a00-8000-000000000301
+          since: '2026-07-27T09:14:00-05:00'
+        planned_sessions_created: 24
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        status:
+          type: string
+          enum: [active]
+        origin_relationship_id:
+          $ref: '#/components/schemas/Uuid'
+        program_version_id:
+          $ref: '#/components/schemas/Uuid'
+        management:
+          $ref: '#/components/schemas/AssignmentManagement'
+        planned_sessions_created:
+          type: integer
+          minimum: 1
+    AssignmentManagement:
+      type: object
+      additionalProperties: false
+      required: [relationship_id, since]
+      properties:
+        relationship_id:
+          $ref: '#/components/schemas/Uuid'
+        since:
+          type: string
+          format: date-time
+
+    AgendaPage:
+      type: object
+      additionalProperties: false
+      required: [data, page]
+      example:
+        data:
+          - id: 018f6f8d-2b00-7a00-8000-000000000501
+            assignment_id: 018f6f8d-2b00-7a00-8000-000000000401
+            scheduled_at: '2026-07-27T06:00:00-05:00'
+            timezone: America/Bogota
+            status: scheduled
+            activity_type:
+              code: strength_training
+              name: Entrenamiento de fuerza
+            management:
+              managed_by_relationship: true
+              organization_name: Estudio Norte
+            attempts: []
+        page:
+          next_cursor: null
+          has_more: false
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AgendaItem'
+        page:
+          $ref: '#/components/schemas/Page'
+    AgendaItem:
+      type: object
+      additionalProperties: false
+      required:
+        [id, assignment_id, scheduled_at, timezone, status, activity_type, management, attempts]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        assignment_id:
+          $ref: '#/components/schemas/Uuid'
+        scheduled_at:
+          type: string
+          format: date-time
+        timezone:
+          $ref: '#/components/schemas/IanaTimeZone'
+        status:
+          type: string
+          enum: [scheduled, cancelled, completed]
+        activity_type:
+          $ref: '#/components/schemas/ActivityTypeRef'
+        management:
+          $ref: '#/components/schemas/AgendaManagement'
+        attempts:
+          type: array
+          items:
+            $ref: '#/components/schemas/AttemptSummary'
+    ActivityTypeRef:
+      type: object
+      additionalProperties: false
+      required: [code, name]
+      properties:
+        code:
+          type: string
+          pattern: '^[a-z][a-z0-9_]{1,63}$'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+    AgendaManagement:
+      type: object
+      additionalProperties: false
+      required: [managed_by_relationship, organization_name]
+      properties:
+        managed_by_relationship:
+          type: boolean
+        organization_name:
+          type: [string, 'null']
+          maxLength: 160
+    AttemptSummary:
+      type: object
+      additionalProperties: false
+      required: [id, attempt_number, status]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        attempt_number:
+          type: integer
+          minimum: 1
+        status:
+          $ref: '#/components/schemas/ExecutionStatus'
+    Page:
+      type: object
+      additionalProperties: false
+      required: [next_cursor, has_more]
+      properties:
+        next_cursor:
+          type: [string, 'null']
+          minLength: 16
+          maxLength: 1024
+        has_more:
+          type: boolean
+
+    AttemptCreate:
+      type: object
+      additionalProperties: false
+      required: [started_at, timezone, requested_level, capture_source]
+      example:
+        started_at: '2026-07-27T06:04:00-05:00'
+        timezone: America/Bogota
+        requested_level: detailed
+        capture_source: manual
+      properties:
+        started_at:
+          type: string
+          format: date-time
+        timezone:
+          $ref: '#/components/schemas/IanaTimeZone'
+        requested_level:
+          $ref: '#/components/schemas/CompletenessLevel'
+        capture_source:
+          type: string
+          enum: [manual, device]
+    Attempt:
+      type: object
+      additionalProperties: false
+      required: [id, attempt_number, status, revision_number, result_contract]
+      example:
+        id: 0190a0b1-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+        attempt_number: 1
+        status: in_progress
+        revision_number: 0
+        result_contract:
+          id: 018f6f8d-2b00-7a00-8000-000000000801
+          version: 1
+          requested_level: detailed
+      properties:
+        id:
+          $ref: '#/components/schemas/UuidV7'
+        attempt_number:
+          type: integer
+          minimum: 1
+        status:
+          type: string
+          const: in_progress
+        revision_number:
+          type: integer
+          minimum: 0
+        result_contract:
+          $ref: '#/components/schemas/ResultContractRef'
+    ResultContractRef:
+      type: object
+      additionalProperties: false
+      required: [id, version, requested_level]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        version:
+          type: integer
+          minimum: 1
+        requested_level:
+          $ref: '#/components/schemas/CompletenessLevel'
+
+    ExecutionResultsReplace:
+      type: object
+      additionalProperties: false
+      required: [segments, strength_sets]
+      example:
+        segments:
+          - position: 1
+            activity_type_code: strength_training
+        strength_sets:
+          - segment_position: 1
+            order: 1
+            movement_id: 018f6f8d-2b00-7a00-8000-000000000601
+            planned_step_id: 018f6f8d-2b00-7a00-8000-000000000701
+            achieved_reps: 8
+            load:
+              value: 80
+              unit: kg
+            rpe: 8
+      properties:
+        segments:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/ExecutionSegment'
+        strength_sets:
+          type: array
+          minItems: 1
+          maxItems: 1000
+          items:
+            $ref: '#/components/schemas/StrengthSet'
+    ExecutionSegment:
+      type: object
+      additionalProperties: false
+      required: [position, activity_type_code]
+      properties:
+        position:
+          type: integer
+          minimum: 1
+          maximum: 100
+        activity_type_code:
+          type: string
+          pattern: '^[a-z][a-z0-9_]{1,63}$'
+    StrengthSet:
+      type: object
+      additionalProperties: false
+      required: [segment_position, order]
+      properties:
+        segment_position:
+          type: integer
+          minimum: 1
+          maximum: 100
+        order:
+          type: integer
+          minimum: 1
+          maximum: 1000
+        movement_id:
+          type: [string, 'null']
+          format: uuid
+        planned_step_id:
+          type: [string, 'null']
+          format: uuid
+        achieved_reps:
+          type: [integer, 'null']
+          minimum: 1
+        load:
+          oneOf:
+            - $ref: '#/components/schemas/Load'
+            - type: 'null'
+        rpe:
+          type: [number, 'null']
+          minimum: 0
+          maximum: 10
+    Load:
+      type: object
+      additionalProperties: false
+      required: [value, unit]
+      properties:
+        value:
+          type: number
+          minimum: 0
+        unit:
+          type: string
+          enum: [kg, lb]
+    ExecutionResultsState:
+      type: object
+      additionalProperties: false
+      required: [id, status, revision_number, segment_count, result_count]
+      example:
+        id: 0190a0b1-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+        status: in_progress
+        revision_number: 1
+        segment_count: 1
+        result_count: 1
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        status:
+          type: string
+          enum: [in_progress, paused]
+        revision_number:
+          type: integer
+          minimum: 1
+        segment_count:
+          type: integer
+          minimum: 1
+        result_count:
+          type: integer
+          minimum: 1
+
+    ExecutionFinalize:
+      type: object
+      additionalProperties: false
+      required: [ended_at]
+      example:
+        ended_at: '2026-07-27T07:05:00-05:00'
+      properties:
+        ended_at:
+          type: string
+          format: date-time
+    ExecutionFinalized:
+      type: object
+      additionalProperties: false
+      required:
+        [id, status, validation_status, revision_number, achieved_level, is_primary, contract]
+      example:
+        id: 0190a0b1-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+        status: completed
+        validation_status: valid
+        revision_number: 2
+        achieved_level: detailed
+        is_primary: true
+        contract:
+          id: 018f6f8d-2b00-7a00-8000-000000000801
+          version: 1
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        status:
+          type: string
+          const: completed
+        validation_status:
+          type: string
+          const: valid
+        revision_number:
+          type: integer
+          minimum: 1
+        achieved_level:
+          $ref: '#/components/schemas/CompletenessLevel'
+        is_primary:
+          type: boolean
+        contract:
+          $ref: '#/components/schemas/FrozenContractRef'
+    FrozenContractRef:
+      type: object
+      additionalProperties: false
+      required: [id, version]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        version:
+          type: integer
+          minimum: 1
+
+    AuthorizedExecution:
+      type: object
+      additionalProperties: false
+      required:
+        [id, started_at, timezone, achieved_level, strength_sets, body_weight, pain_reports, applied_scope]
+      example:
+        id: 0190a0b1-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+        started_at: '2026-07-27T06:04:00-05:00'
+        timezone: America/Bogota
+        achieved_level: detailed
+        strength_sets:
+          - order: 1
+            movement_id: 018f6f8d-2b00-7a00-8000-000000000601
+            achieved_reps: 8
+            load:
+              value: 80
+              unit: kg
+            rpe: 8
+        body_weight: null
+        pain_reports: null
+        applied_scope:
+          code: relationship_training
+          version: 1
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        started_at:
+          type: string
+          format: date-time
+        timezone:
+          $ref: '#/components/schemas/IanaTimeZone'
+        achieved_level:
+          $ref: '#/components/schemas/CompletenessLevel'
+        strength_sets:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuthorizedStrengthSet'
+        body_weight:
+          oneOf:
+            - $ref: '#/components/schemas/MeasuredValue'
+            - type: 'null'
+        pain_reports:
+          type: [array, 'null']
+          items:
+            type: string
+            maxLength: 500
+        applied_scope:
+          $ref: '#/components/schemas/AppliedScope'
+    AuthorizedStrengthSet:
+      type: object
+      additionalProperties: false
+      required: [order, movement_id, achieved_reps, load, rpe]
+      properties:
+        order:
+          type: integer
+          minimum: 1
+        movement_id:
+          type: [string, 'null']
+          format: uuid
+        achieved_reps:
+          type: [integer, 'null']
+          minimum: 1
+        load:
+          oneOf:
+            - $ref: '#/components/schemas/Load'
+            - type: 'null'
+        rpe:
+          type: [number, 'null']
+          minimum: 0
+          maximum: 10
+    MeasuredValue:
+      type: object
+      additionalProperties: false
+      required: [value, unit]
+      properties:
+        value:
+          type: number
+        unit:
+          type: string
+          minLength: 1
+          maxLength: 16
+    AppliedScope:
+      type: object
+      additionalProperties: false
+      required: [code, version]
+      properties:
+        code:
+          $ref: '#/components/schemas/ScopeCode'
+        version:
+          type: integer
+          minimum: 1
+
+    ConsentRevocation:
+      type: object
+      additionalProperties: false
+      required: [id, status, revoked_at]
+      example:
+        id: 018f6f8d-2b00-7a00-8000-000000000901
+        status: revoked
+        revoked_at: '2026-08-10T20:31:00-05:00'
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        status:
+          type: string
+          const: revoked
+        revoked_at:
+          type: string
+          format: date-time
+
+    NutrientCode:
+      type: string
+      enum: [energy, protein, carbohydrates, fat, fiber, water]
+    MealType:
+      type: string
+      enum: [breakfast, lunch, dinner, snack, other]
+    NutritionGoalStatus:
+      type: string
+      enum: [proposed, active, rejected, superseded, cancelled]
+
+    NutrientValue:
+      type: object
+      propertyNames:
+        enum: [nutrient_code, value, unit]
+      required: [nutrient_code, value, unit]
+      example:
+        nutrient_code: protein
+        value: 32
+        unit: g
+      oneOf:
+        - properties:
+            nutrient_code:
+              const: energy
+            unit:
+              const: kcal
+        - properties:
+            nutrient_code:
+              const: water
+            unit:
+              const: ml
+        - properties:
+            nutrient_code:
+              enum: [protein, carbohydrates, fat, fiber]
+            unit:
+              const: g
+      properties:
+        nutrient_code:
+          $ref: '#/components/schemas/NutrientCode'
+        value:
+          type: number
+          minimum: 0
+        unit:
+          type: string
+          enum: [kcal, g, ml]
+
+    NutritionMealItem:
+      type: object
+      propertyNames:
+        enum: [position, name, quantity, quantity_unit, nutrients]
+      required: [position, name, quantity, quantity_unit, nutrients]
+      example:
+        position: 1
+        name: Pollo con arroz
+        quantity: 320
+        quantity_unit: g
+        nutrients:
+          - nutrient_code: energy
+            value: 540
+            unit: kcal
+          - nutrient_code: protein
+            value: 42
+            unit: g
+      oneOf:
+        - properties:
+            quantity:
+              type: number
+              exclusiveMinimum: 0
+            quantity_unit:
+              type: string
+        - properties:
+            quantity:
+              type: 'null'
+            quantity_unit:
+              type: 'null'
+      properties:
+        position:
+          type: integer
+          minimum: 1
+          maximum: 100
+        name:
+          type: string
+          minLength: 1
+          maxLength: 160
+        quantity:
+          type: [number, 'null']
+          exclusiveMinimum: 0
+        quantity_unit:
+          type: [string, 'null']
+          maxLength: 16
+        nutrients:
+          type: array
+          maxItems: 6
+          items:
+            $ref: '#/components/schemas/NutrientValue'
+
+    NutritionMealCreate:
+      type: object
+      additionalProperties: false
+      required: [occurred_at, timezone, meal_type, items]
+      example:
+        occurred_at: '2026-07-28T12:30:00-05:00'
+        timezone: America/Bogota
+        meal_type: lunch
+        note: Registro manual
+        items:
+          - position: 1
+            name: Pollo con arroz
+            quantity: 320
+            quantity_unit: g
+            nutrients:
+              - nutrient_code: energy
+                value: 540
+                unit: kcal
+              - nutrient_code: protein
+                value: 42
+                unit: g
+      properties:
+        occurred_at:
+          type: string
+          format: date-time
+        timezone:
+          $ref: '#/components/schemas/IanaTimeZone'
+        meal_type:
+          $ref: '#/components/schemas/MealType'
+        note:
+          type: [string, 'null']
+          maxLength: 1000
+        items:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/NutritionMealItem'
+
+    NutritionPhotoUpload:
+      type: object
+      additionalProperties: false
+      required: [content_type, content]
+      properties:
+        content_type:
+          type: string
+          enum: [image/jpeg, image/png, image/webp]
+        content:
+          type: string
+          contentEncoding: base64
+          maxLength: 14000000
+          description: Base64 payload; server validates decoded size, strips EXIF/geolocation and stores only the sanitized image.
+
+    NutritionMealPatch:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        occurred_at:
+          type: string
+          format: date-time
+        timezone:
+          $ref: '#/components/schemas/IanaTimeZone'
+        meal_type:
+          $ref: '#/components/schemas/MealType'
+        note:
+          type: [string, 'null']
+          maxLength: 1000
+        items:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/NutritionMealItem'
+        photo:
+          oneOf:
+            - $ref: '#/components/schemas/NutritionPhotoUpload'
+            - type: 'null'
+        remove_photo:
+          type: boolean
+          default: false
+
+    NutritionMeal:
+      type: object
+      additionalProperties: false
+      required:
+        [id, occurred_at, local_date, timezone, meal_type, note, revision_number,
+         items, photo, applied_scopes]
+      example:
+        id: 0190f2d6-68d0-7b4a-8d7f-d152223eed28
+        occurred_at: '2026-07-28T12:30:00-05:00'
+        local_date: '2026-07-28'
+        timezone: America/Bogota
+        meal_type: lunch
+        note: Registro manual
+        revision_number: 0
+        items:
+          - position: 1
+            name: Pollo con arroz
+            quantity: 320
+            quantity_unit: g
+            nutrients:
+              - nutrient_code: protein
+                value: 42
+                unit: g
+        photo: null
+        applied_scopes: []
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        occurred_at:
+          type: string
+          format: date-time
+        local_date:
+          type: string
+          format: date
+        timezone:
+          $ref: '#/components/schemas/IanaTimeZone'
+        meal_type:
+          $ref: '#/components/schemas/MealType'
+        note:
+          type: [string, 'null']
+          maxLength: 1000
+        revision_number:
+          type: integer
+          minimum: 0
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/NutritionMealItem'
+        photo:
+          oneOf:
+            - $ref: '#/components/schemas/SignedMediaUrl'
+            - type: 'null'
+        applied_scopes:
+          type: array
+          maxItems: 2
+          items:
+            $ref: '#/components/schemas/AppliedScope'
+
+    NutritionMealPage:
+      type: object
+      additionalProperties: false
+      required: [data, page]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/NutritionMeal'
+        page:
+          $ref: '#/components/schemas/Page'
+
+    AuthorizedNutritionMeal:
+      type: object
+      additionalProperties: false
+      required:
+        [id, occurred_at, local_date, timezone, meal_type, note, revision_number,
+         items, photo, applied_scopes]
+      example:
+        id: 0190f2d6-68d0-7b4a-8d7f-d152223eed28
+        occurred_at: '2026-07-28T12:30:00-05:00'
+        local_date: '2026-07-28'
+        timezone: America/Bogota
+        meal_type: lunch
+        note: Registro manual
+        revision_number: 0
+        items:
+          - position: 1
+            name: Pollo con arroz
+            quantity: 320
+            quantity_unit: g
+            nutrients:
+              - nutrient_code: protein
+                value: 42
+                unit: g
+        photo:
+          href: /studio/v1/organizations/018f6f8d-2b00-7a00-8000-000000000101/clients/018f6f8d-2b00-7a00-8000-000000000102/nutrition/meals/0190f2d6-68d0-7b4a-8d7f-d152223eed28/photo
+          method: GET
+        applied_scopes:
+          - code: nutrition_intake
+            version: 1
+          - code: nutrition_media
+            version: 1
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        occurred_at:
+          type: string
+          format: date-time
+        local_date:
+          type: string
+          format: date
+        timezone:
+          $ref: '#/components/schemas/IanaTimeZone'
+        meal_type:
+          $ref: '#/components/schemas/MealType'
+        note:
+          type: [string, 'null']
+          maxLength: 1000
+        revision_number:
+          type: integer
+          minimum: 0
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/NutritionMealItem'
+        photo:
+          oneOf:
+            - $ref: '#/components/schemas/AuthenticatedMediaLink'
+            - type: 'null'
+        applied_scopes:
+          type: array
+          maxItems: 2
+          items:
+            $ref: '#/components/schemas/AppliedScope'
+
+    AuthorizedNutritionMealPage:
+      type: object
+      additionalProperties: false
+      required: [data, page]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuthorizedNutritionMeal'
+        page:
+          $ref: '#/components/schemas/Page'
+
+    NutritionDailySummary:
+      type: object
+      additionalProperties: false
+      required: [local_date, meal_count, nutrient_totals, applied_scope]
+      example:
+        local_date: '2026-07-28'
+        meal_count: 3
+        nutrient_totals:
+          - nutrient_code: energy
+            value: 1840
+            unit: kcal
+          - nutrient_code: protein
+            value: 112
+            unit: g
+        applied_scope: null
+      properties:
+        local_date:
+          type: string
+          format: date
+        meal_count:
+          type: integer
+          minimum: 0
+        nutrient_totals:
+          type: array
+          maxItems: 6
+          items:
+            $ref: '#/components/schemas/NutrientValue'
+        applied_scope:
+          oneOf:
+            - $ref: '#/components/schemas/AppliedScope'
+            - type: 'null'
+
+    NutritionDailySummaryPage:
+      type: object
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          type: array
+          maxItems: 31
+          items:
+            $ref: '#/components/schemas/NutritionDailySummary'
+
+    NutritionGoalTarget:
+      type: object
+      propertyNames:
+        enum: [nutrient_code, mode, minimum, maximum, exact, unit]
+      required: [nutrient_code, mode, minimum, maximum, exact, unit]
+      example:
+        nutrient_code: protein
+        mode: range
+        minimum: 100
+        maximum: 130
+        exact: null
+        unit: g
+      allOf:
+        - oneOf:
+            - properties:
+                nutrient_code:
+                  const: energy
+                unit:
+                  const: kcal
+            - properties:
+                nutrient_code:
+                  const: water
+                unit:
+                  const: ml
+            - properties:
+                nutrient_code:
+                  enum: [protein, carbohydrates, fat, fiber]
+                unit:
+                  const: g
+        - oneOf:
+            - properties:
+                mode:
+                  const: minimum
+                minimum:
+                  type: number
+                maximum:
+                  type: 'null'
+                exact:
+                  type: 'null'
+            - properties:
+                mode:
+                  const: maximum
+                minimum:
+                  type: 'null'
+                maximum:
+                  type: number
+                exact:
+                  type: 'null'
+            - properties:
+                mode:
+                  const: range
+                minimum:
+                  type: number
+                maximum:
+                  type: number
+                exact:
+                  type: 'null'
+            - properties:
+                mode:
+                  const: exact
+                minimum:
+                  type: 'null'
+                maximum:
+                  type: 'null'
+                exact:
+                  type: number
+      properties:
+        nutrient_code:
+          $ref: '#/components/schemas/NutrientCode'
+        mode:
+          type: string
+          enum: [minimum, maximum, range, exact]
+        minimum:
+          type: [number, 'null']
+          minimum: 0
+        maximum:
+          type: [number, 'null']
+          minimum: 0
+        exact:
+          type: [number, 'null']
+          minimum: 0
+        unit:
+          type: string
+          enum: [kcal, g, ml]
+
+    SelfNutritionGoalVersionCreate:
+      type: object
+      additionalProperties: false
+      required: [targets]
+      example:
+        rationale: Objetivo diario no clínico
+        targets:
+          - nutrient_code: protein
+            mode: range
+            minimum: 100
+            maximum: 130
+            exact: null
+            unit: g
+      properties:
+        rationale:
+          type: [string, 'null']
+          maxLength: 2000
+        targets:
+          type: array
+          minItems: 1
+          maxItems: 6
+          items:
+            $ref: '#/components/schemas/NutritionGoalTarget'
+
+    ProfessionalNutritionGoalVersionCreate:
+      type: object
+      additionalProperties: false
+      required: [rationale, targets]
+      example:
+        rationale: Objetivo diario no clínico
+        targets:
+          - nutrient_code: protein
+            mode: range
+            minimum: 100
+            maximum: 130
+            exact: null
+            unit: g
+      properties:
+        rationale:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          pattern: '.*\S.*'
+        targets:
+          type: array
+          minItems: 1
+          maxItems: 6
+          items:
+            $ref: '#/components/schemas/NutritionGoalTarget'
+
+    NutritionGoalDecisionCreate:
+      type: object
+      additionalProperties: false
+      required: [decision]
+      example:
+        decision: accepted
+      properties:
+        decision:
+          type: string
+          enum: [accepted, rejected]
+
+    NutritionGoalDecision:
+      type: object
+      additionalProperties: false
+      required: [id, goal_version_id, decision, decided_at, active_goal_version_id]
+      example:
+        id: 0190f2d6-68d1-739e-8e78-9b255804c4c8
+        goal_version_id: 0190f2d6-68d2-71cf-8247-527651199d86
+        decision: accepted
+        decided_at: '2026-07-28T18:00:00Z'
+        active_goal_version_id: 0190f2d6-68d2-71cf-8247-527651199d86
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        goal_version_id:
+          $ref: '#/components/schemas/Uuid'
+        decision:
+          type: string
+          enum: [accepted, rejected]
+        decided_at:
+          type: string
+          format: date-time
+        active_goal_version_id:
+          type: [string, 'null']
+          format: uuid
+
+    NutritionGoalAuthor:
+      type: object
+      additionalProperties: false
+      required: [kind, person_id]
+      example:
+        kind: professional
+        person_id: 018f6f8d-2b00-7a00-8000-000000000103
+      properties:
+        kind:
+          type: string
+          enum: [self, professional]
+        person_id:
+          $ref: '#/components/schemas/Uuid'
+
+    NutritionGoalVersion:
+      type: object
+      propertyNames:
+        enum:
+          - id
+          - version_number
+          - origin
+          - status
+          - rationale
+          - targets
+          - author
+          - created_at
+          - origin_relationship_id
+          - decision
+          - applied_scope
+      oneOf:
+        - properties:
+            origin:
+              const: self
+            author:
+              properties:
+                kind:
+                  const: self
+        - properties:
+            origin:
+              const: professional
+            rationale:
+              type: string
+              minLength: 1
+              maxLength: 2000
+              pattern: '.*\S.*'
+            author:
+              properties:
+                kind:
+                  const: professional
+      required:
+        [id, version_number, origin, status, rationale, targets, author, created_at,
+         origin_relationship_id, decision, applied_scope]
+      example:
+        id: 0190f2d6-68d2-71cf-8247-527651199d86
+        version_number: 2
+        origin: professional
+        status: proposed
+        rationale: Objetivo diario no clínico
+        targets:
+          - nutrient_code: protein
+            mode: range
+            minimum: 100
+            maximum: 130
+            exact: null
+            unit: g
+        author:
+          kind: professional
+          person_id: 018f6f8d-2b00-7a00-8000-000000000103
+        created_at: '2026-07-28T17:30:00Z'
+        origin_relationship_id: 0190f2d6-68d3-7bcc-a6dd-dc353ffbfaa4
+        decision: null
+        applied_scope: null
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        version_number:
+          type: integer
+          minimum: 1
+        origin:
+          type: string
+          enum: [self, professional]
+        status:
+          $ref: '#/components/schemas/NutritionGoalStatus'
+        rationale:
+          type: [string, 'null']
+          maxLength: 2000
+        targets:
+          type: array
+          minItems: 1
+          maxItems: 6
+          items:
+            $ref: '#/components/schemas/NutritionGoalTarget'
+        author:
+          $ref: '#/components/schemas/NutritionGoalAuthor'
+        created_at:
+          type: string
+          format: date-time
+        origin_relationship_id:
+          type: [string, 'null']
+          format: uuid
+        decision:
+          oneOf:
+            - $ref: '#/components/schemas/NutritionGoalDecision'
+            - type: 'null'
+        applied_scope:
+          oneOf:
+            - $ref: '#/components/schemas/AppliedScope'
+            - type: 'null'
+
+    NutritionGoals:
+      type: object
+      additionalProperties: false
+      required: [active, proposals]
+      properties:
+        active:
+          oneOf:
+            - $ref: '#/components/schemas/NutritionGoalVersion'
+            - type: 'null'
+        proposals:
+          type: array
+          items:
+            $ref: '#/components/schemas/NutritionGoalVersion'
+
+    NutritionGoalVersionPage:
+      type: object
+      additionalProperties: false
+      required: [data, page, frozen_at]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/NutritionGoalVersion'
+        page:
+          $ref: '#/components/schemas/Page'
+        frozen_at:
+          type: [string, 'null']
+          format: date-time
+
+    SignedMediaUrl:
+      type: object
+      additionalProperties: false
+      required: [url, expires_at, method]
+      example:
+        url: https://media.allfit.invalid/private/object?signature=opaque
+        expires_at: '2026-07-27T09:17:00-05:00'
+        method: GET
+      properties:
+        url:
+          type: string
+          format: uri
+          pattern: '^https://'
+        expires_at:
+          type: string
+          format: date-time
+          description: At most five minutes after issuance.
+        method:
+          type: string
+          const: GET
+
+    AuthenticatedMediaLink:
+      type: object
+      additionalProperties: false
+      required: [href, method]
+      example:
+        href: /studio/v1/organizations/018f6f8d-2b00-7a00-8000-000000000101/clients/018f6f8d-2b00-7a00-8000-000000000102/nutrition/meals/0190f2d6-68d0-7b4a-8d7f-d152223eed28/photo
+        method: GET
+      properties:
+        href:
+          type: string
+          format: uri-reference
+          pattern: '^/studio/v1/organizations/[^/?#]+/clients/[^/?#]+/nutrition/meals/[^/?#]+/photo$'
+          description: Authenticated API URL; the bearer token and live authorization are required on every GET.
+        method:
+          type: string
+          const: GET
+
+    Problem:
+      type: object
+      additionalProperties: false
+      required: [type, title, status, request_id]
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        status:
+          type: integer
+          minimum: 400
+          maximum: 599
+        detail:
+          type: string
+          maxLength: 2000
+        instance:
+          type: string
+          format: uri-reference
+        request_id:
+          type: string
+          minLength: 16
+          maxLength: 64
+        required_scope:
+          oneOf:
+            - $ref: '#/components/schemas/RequiredScope'
+            - type: 'null'
+        errors:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/ValidationIssue'
+    RequiredScope:
+      type: object
+      additionalProperties: false
+      required: [code, level]
+      properties:
+        code:
+          $ref: '#/components/schemas/ScopeCode'
+        level:
+          $ref: '#/components/schemas/AccessLevel'
+    ValidationIssue:
+      type: object
+      additionalProperties: false
+      required: [code, path, message]
+      properties:
+        code:
+          type: string
+          pattern: '^[a-z][a-z0-9_.-]{1,63}$'
+        path:
+          type: string
+          maxLength: 500
+        message:
+          type: string
+          maxLength: 500
