@@ -1,4 +1,5 @@
 export type {
+  AuthorizationRequest,
   AuthProvider,
   AuthResult,
   ExternalSubject,
@@ -11,5 +12,6 @@ export type {
 export { AuthError, type AuthErrorCode } from './errors.js'
 
 // The only place in the monorepo where the provider is chosen.
-// Switching providers means changing this line and writing the new adapter.
-export { createWorkOSAuthProvider as createAuthProvider } from './adapters/workos.js'
+// Switching providers means changing these lines and writing the new adapter.
+export { createWorkOSAuthProvider } from './adapters/workos.js'
+export { createAuthProviderFromEnv, type ProviderEnv } from './factory.js'

@@ -46,7 +46,7 @@ git clone git@github.com:dinnartec/allfitone.git
 cd allfitone
 
 bun install          # also registers the git hooks via husky
-cp .env.example .env.local
+cp .env.template .env.local
 ```
 
 Fill in `.env.local`. The identity provider values come from the WorkOS

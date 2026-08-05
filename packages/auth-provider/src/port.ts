@@ -49,7 +49,32 @@ export interface PasswordCredentials {
   password: string
 }
 
+export interface AuthorizationRequest {
+  surface: Surface
+  /** Where the provider sends the person back. Must match what is registered. */
+  redirectUri: string
+  /**
+   * CSRF protection. Generated per attempt, echoed back on the callback, and
+   * verified there. Without it, an attacker can hand a victim a callback URL
+   * carrying their own code and land the victim in the attacker's session.
+   */
+  state: string
+  /**
+   * Force a fresh login when the last active authentication is older than this.
+   * The path to re-authentication for sensitive operations.
+   */
+  maxAgeSeconds?: number
+}
+
 export interface AuthProvider {
+  /**
+   * Where to send the person to authenticate. Used by the hosted flow.
+   *
+   * Built here rather than by the client, so no frontend needs to know the
+   * provider exists.
+   */
+  getAuthorizationUrl(request: AuthorizationRequest): string
+
   /** Direct login. Used by Space, which has its own native screens. */
   authenticateWithPassword(credentials: PasswordCredentials, surface: Surface): Promise<AuthResult>
 

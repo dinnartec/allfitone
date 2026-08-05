@@ -4,17 +4,19 @@
  * The ONLY file in the monorepo allowed to import the provider SDK or talk to
  * the provider. The rule is in eslint.config.js and fails CI, not code review.
  *
- * `verifyAccessToken` is implemented and tested. The remaining methods throw:
- * their SDK signatures are unverified, and a method returning plausible fake
- * data is a lie discovered in production.
+ * Signatures were verified against @workos-inc/node 10.9.0 type declarations —
+ * see workos-client.ts for the exact dependency surface.
  *
- * Open questions for the spike:
- *   1. How the "this session satisfies AAL2" fact reaches the API. All Backoffice
- *      authorization depends on it, and it is not visible in the documented
- *      claim set.
- *   2. Refresh token rotation behaviour under concurrent requests.
- *   3. The exact `iss` value. Configurable here and unset by default, so a wrong
- *      guess cannot silently weaken verification — see `issuer` below.
+ * ON AUTHENTICATION ASSURANCE (AAL)
+ * The access token carries sid, org_id, role, roles, permissions, entitlements
+ * and feature_flags. It does NOT carry an assurance level, and the SDK's
+ * AuthenticationMethod union has no TOTP or MFA value either. So "this session
+ * completed a second factor" cannot be read from a token.
+ *
+ * It has to be recorded by us, once, at authentication time, against the sid —
+ * which is consistent with everything else here: the provider states a fact, and
+ * PostgreSQL owns it. Backoffice authority checks then read our record inside
+ * the transaction, not a claim.
  */
 
 import {
@@ -28,6 +30,7 @@ import {
 
 import type {
   AuthProvider,
+  AuthorizationRequest,
   AuthResult,
   ExternalSubject,
   PasswordCredentials,
@@ -36,8 +39,12 @@ import type {
   VerifiedToken,
 } from '../port.js'
 import { AuthError } from '../errors.js'
+import type { WorkOSAuthenticationResponse, WorkOSClient } from './workos-client.js'
 
 const SURFACES = ['space', 'studio', 'backoffice'] as const
+
+/** Access tokens are short-lived; the exact value is set in the provider dashboard. */
+const ASSUMED_ACCESS_TOKEN_TTL_SECONDS = 300
 
 export interface WorkOSConfig {
   apiKey: string
@@ -51,13 +58,25 @@ export interface WorkOSConfig {
   issuer?: string
   /**
    * Test seam: verify against a local key set instead of fetching the remote
-   * JWKS. Production leaves this unset and fetches per surface.
+   * JWKS. Production leaves this unset.
    */
   jwks?: JSONWebKeySet
+  /** Test seam: inject the SDK client. Production leaves this unset. */
+  client?: WorkOSClient
 }
 
 export function createWorkOSAuthProvider(config: WorkOSConfig): AuthProvider {
   assertConfig(config)
+
+  const client = config.client
+  const requireClient = (): WorkOSClient => {
+    if (!client) {
+      throw new Error(
+        'WorkOS client not provided. Construct the adapter with a client to reach the provider.',
+      )
+    }
+    return client
+  }
 
   // createRemoteJWKSet caches keys and handles rotation, so one per surface is
   // built once and reused for the process lifetime.
@@ -67,19 +86,42 @@ export function createWorkOSAuthProvider(config: WorkOSConfig): AuthProvider {
       surface,
       config.jwks
         ? createLocalJWKSet(config.jwks)
-        : createRemoteJWKSet(
-            new URL(`https://api.workos.com/sso/jwks/${config.clientIds[surface]}`),
-          ),
+        : createRemoteJWKSet(new URL(jwksUrlFor(config, surface))),
     )
   }
 
-  const unimplemented = (method: string): never => {
-    throw new Error(
-      `workos.${method} is not implemented. Do not use it until the SDK contract is verified.`,
-    )
+  const authenticate = async (
+    surface: Surface,
+    call: (c: WorkOSClient, clientId: string) => Promise<WorkOSAuthenticationResponse>,
+  ): Promise<AuthResult> => {
+    const clientId = config.clientIds[surface]
+    // Resolved outside the try: a missing client is a configuration fault, and
+    // translating it into a retryable provider outage would make a bad deploy
+    // retry forever instead of failing loudly.
+    const c = requireClient()
+
+    let response: WorkOSAuthenticationResponse
+    try {
+      response = await call(c, clientId)
+    } catch (cause) {
+      throw translate(cause)
+    }
+    return {
+      subject: response.user.id,
+      tokens: toSessionTokens(response),
+    }
   }
 
   return {
+    getAuthorizationUrl(request: AuthorizationRequest): string {
+      return requireClient().userManagement.getAuthorizationUrl({
+        clientId: config.clientIds[request.surface],
+        redirectUri: request.redirectUri,
+        state: request.state,
+        ...(request.maxAgeSeconds === undefined ? {} : { maxAge: request.maxAgeSeconds }),
+      })
+    },
+
     async verifyAccessToken(token: string, surface: Surface): Promise<VerifiedToken> {
       const getKey = keyResolvers.get(surface)
       if (!getKey) throw new AuthError('invalid_token', `unknown surface: ${surface}`)
@@ -125,35 +167,116 @@ export function createWorkOSAuthProvider(config: WorkOSConfig): AuthProvider {
     },
 
     async authenticateWithPassword(
-      _credentials: PasswordCredentials,
-      _surface: Surface,
+      credentials: PasswordCredentials,
+      surface: Surface,
     ): Promise<AuthResult> {
-      return unimplemented('authenticateWithPassword')
+      return authenticate(surface, (c, clientId) =>
+        c.userManagement.authenticateWithPassword({ ...credentials, clientId }),
+      )
     },
 
-    async authenticateWithCode(_code: string, _surface: Surface): Promise<AuthResult> {
-      return unimplemented('authenticateWithCode')
+    async authenticateWithCode(code: string, surface: Surface): Promise<AuthResult> {
+      return authenticate(surface, (c, clientId) =>
+        c.userManagement.authenticateWithCode({ code, clientId }),
+      )
     },
 
-    async refresh(_refreshToken: string, _surface: Surface): Promise<SessionTokens> {
-      return unimplemented('refresh')
+    async refresh(refreshToken: string, surface: Surface): Promise<SessionTokens> {
+      const result = await authenticate(surface, (c, clientId) =>
+        c.userManagement.authenticateWithRefreshToken({ refreshToken, clientId }),
+      )
+      return result.tokens
     },
 
-    async updateEmail(_subject: ExternalSubject, _email: string): Promise<void> {
-      return unimplemented('updateEmail')
+    async updateEmail(subject: ExternalSubject, email: string): Promise<void> {
+      const c = requireClient()
+      try {
+        await c.userManagement.updateUser({ userId: subject, email })
+      } catch (cause) {
+        throw translate(cause)
+      }
     },
 
-    async revokeSessions(_subject: ExternalSubject): Promise<void> {
-      return unimplemented('revokeSessions')
+    async revokeSessions(subject: ExternalSubject): Promise<void> {
+      // The SDK revokes one session at a time, so "close every session" is list
+      // then revoke each. Expressed here rather than in the domain, because the
+      // domain should not know that limitation exists.
+      const c = requireClient()
+      try {
+        const sessions = await c.userManagement.listSessions(subject)
+        for (const session of sessions.data) {
+          await c.userManagement.revokeSession({ sessionId: session.id })
+        }
+      } catch (cause) {
+        throw translate(cause)
+      }
     },
   }
+}
+
+function jwksUrlFor(config: WorkOSConfig, surface: Surface): string {
+  const clientId = config.clientIds[surface]
+  // Prefer the SDK's own URL builder when a client is available: if WorkOS moves
+  // the endpoint, we follow automatically instead of pointing at a dead path.
+  return config.client
+    ? config.client.userManagement.getJwksUrl(clientId)
+    : `https://api.workos.com/sso/jwks/${clientId}`
+}
+
+function toSessionTokens(response: WorkOSAuthenticationResponse): SessionTokens {
+  return {
+    accessToken: response.accessToken,
+    refreshToken: response.refreshToken,
+    expiresIn: ASSUMED_ACCESS_TOKEN_TTL_SECONDS,
+  }
+}
+
+/**
+ * Provider errors become port errors here and never escape this package.
+ *
+ * The distinction that matters: "email already registered" collapses into the
+ * same error as "malformed email". Propagating the difference would reveal
+ * whether a person has an account.
+ */
+function translate(cause: unknown): AuthError {
+  if (cause instanceof AuthError) return cause
+
+  const status = statusOf(cause)
+  const text = messageOf(cause).toLowerCase()
+
+  if (status === 401 || status === 403 || text.includes('invalid credential')) {
+    return new AuthError('invalid_credentials')
+  }
+  if (status === 422 || status === 409 || text.includes('email')) {
+    // Deliberately ambiguous. See errors.ts.
+    return new AuthError('invalid_email')
+  }
+  if (status === 429 || (status !== undefined && status >= 500)) {
+    return new AuthError('provider_unavailable', `provider status ${status}`)
+  }
+  if (status === undefined) {
+    // No status means it never reached the provider.
+    return new AuthError('provider_unavailable', 'request failed')
+  }
+  return new AuthError('invalid_credentials')
+}
+
+function statusOf(cause: unknown): number | undefined {
+  if (typeof cause !== 'object' || cause === null) return undefined
+  const candidate = cause as { status?: unknown; statusCode?: unknown }
+  const value = candidate.status ?? candidate.statusCode
+  return typeof value === 'number' ? value : undefined
+}
+
+function messageOf(cause: unknown): string {
+  return cause instanceof Error ? cause.message : ''
 }
 
 /** Network or JWKS availability, not a verdict about the token. */
 function isProviderOutage(cause: unknown): boolean {
   if (cause instanceof joseErrors.JWKSTimeout) return true
-  // A JWKS that cannot be parsed or reached surfaces as a plain fetch/TypeError
-  // rather than a JOSE error.
+  // A JWKS that cannot be reached surfaces as a plain fetch/TypeError rather
+  // than a JOSE error.
   return !(cause instanceof joseErrors.JOSEError) && cause instanceof Error
 }
 

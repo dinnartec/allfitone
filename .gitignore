@@ -6,7 +6,7 @@ dist/
 
 .env
 .env.*
-!.env.example
+!.env.template
 
 .DS_Store
 *.log

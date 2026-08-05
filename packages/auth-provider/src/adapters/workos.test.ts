@@ -15,6 +15,7 @@ import { SignJWT, exportJWK, generateKeyPair, type JWK, type KeyObject } from 'j
 import { createWorkOSAuthProvider } from './workos.js'
 import { AuthError } from '../errors.js'
 import type { AuthProvider, Surface } from '../port.js'
+import type { WorkOSUserManagement } from './workos-client.js'
 
 const CLIENT_IDS: Record<Surface, string> = {
   space: 'client_space_test',
@@ -72,6 +73,23 @@ beforeAll(async () => {
     jwks: { keys: [publicJwk] },
   })
 })
+
+/**
+ * Asserts the call rejects with an AuthError and returns it.
+ *
+ * A bare `.catch(e => e)` would quietly pass a resolved promise through as
+ * undefined, so a check that stopped rejecting would fail confusingly instead of
+ * saying so.
+ */
+async function rejection(promise: Promise<unknown>): Promise<AuthError> {
+  try {
+    await promise
+  } catch (error) {
+    if (error instanceof AuthError) return error
+    throw error
+  }
+  throw new Error('expected the call to reject, but it resolved')
+}
 
 describe('verifyAccessToken', () => {
   test('accepts a valid token and returns subject, session and surface', async () => {
@@ -188,7 +206,7 @@ describe('verifyAccessToken', () => {
       expiresIn: '-1s',
     })
 
-    const error = (await provider.verifyAccessToken(token, 'studio').catch((e) => e)) as AuthError
+    const error = await rejection(provider.verifyAccessToken(token, 'studio'))
 
     const serialized = `${error.message} ${error.detail ?? ''}`
     expect(serialized).not.toContain(token)
@@ -213,5 +231,198 @@ describe('configuration', () => {
         clientIds: { ...CLIENT_IDS, backoffice: '' },
       }),
     ).toThrow(/backoffice/)
+  })
+})
+
+/** Minimal fake of the SDK surface declared in workos-client.ts. */
+function fakeClient(overrides: Partial<WorkOSUserManagement> = {}) {
+  const calls: { method: string; args: unknown }[] = []
+  const record = <T>(method: string, args: unknown, result: T): T => {
+    calls.push({ method, args })
+    return result
+  }
+  const authResponse = {
+    accessToken: 'at_1',
+    refreshToken: 'rt_1',
+    user: { id: 'user_01FAKE' },
+  }
+  const userManagement: WorkOSUserManagement = {
+    authenticateWithCode: async (o) => record('authenticateWithCode', o, authResponse),
+    authenticateWithPassword: async (o) => record('authenticateWithPassword', o, authResponse),
+    authenticateWithRefreshToken: async (o) =>
+      record('authenticateWithRefreshToken', o, authResponse),
+    updateUser: async (o) => record('updateUser', o, {}),
+    listSessions: async (id) =>
+      record('listSessions', id, { data: [{ id: 's_1' }, { id: 's_2' }] }),
+    revokeSession: async (o) => record('revokeSession', o, undefined),
+    getJwksUrl: (clientId) => `https://api.workos.com/sso/jwks/${clientId}`,
+    getAuthorizationUrl: (o) =>
+      record(
+        'getAuthorizationUrl',
+        o,
+        `https://api.workos.com/user_management/authorize?client_id=${o.clientId}`,
+      ),
+    ...overrides,
+  }
+  return { client: { userManagement }, calls }
+}
+
+function providerWith(overrides: Partial<WorkOSUserManagement> = {}) {
+  const { client, calls } = fakeClient(overrides)
+  const provider = createWorkOSAuthProvider({
+    apiKey: 'sk_test',
+    clientIds: CLIENT_IDS,
+    jwks: { keys: [publicJwk] },
+    client,
+  })
+  return { provider, calls }
+}
+
+describe('authenticateWithCode', () => {
+  test('returns the subject and tokens, and uses the surface client_id', async () => {
+    const { provider, calls } = providerWith()
+
+    const result = await provider.authenticateWithCode('code_abc', 'studio')
+
+    expect(result.subject).toBe('user_01FAKE')
+    expect(result.tokens.accessToken).toBe('at_1')
+    expect(result.tokens.refreshToken).toBe('rt_1')
+    expect(calls[0]).toEqual({
+      method: 'authenticateWithCode',
+      args: { code: 'code_abc', clientId: CLIENT_IDS.studio },
+    })
+  })
+
+  test('sends the backoffice client_id when called for backoffice', async () => {
+    const { provider, calls } = providerWith()
+
+    await provider.authenticateWithCode('code_abc', 'backoffice')
+
+    expect(calls[0]?.args).toMatchObject({ clientId: CLIENT_IDS.backoffice })
+  })
+})
+
+describe('revokeSessions', () => {
+  test('revokes every session the person has, not just one', async () => {
+    const { provider, calls } = providerWith()
+
+    await provider.revokeSessions('user_01FAKE')
+
+    expect(calls.map((c) => c.method)).toEqual(['listSessions', 'revokeSession', 'revokeSession'])
+    expect(calls[1]?.args).toEqual({ sessionId: 's_1' })
+    expect(calls[2]?.args).toEqual({ sessionId: 's_2' })
+  })
+})
+
+describe('error translation', () => {
+  const failWith = (error: unknown) => ({
+    updateUser: async () => {
+      throw error
+    },
+  })
+
+  test('an email already in use is indistinguishable from a malformed one', async () => {
+    // The provider does distinguish them. Letting that difference through would
+    // reveal whether a person already has an account.
+    const inUse = Object.assign(new Error('Email already in use'), { status: 422 })
+    const malformed = Object.assign(new Error('email must be a valid email'), { status: 422 })
+
+    const a = await rejection(providerWith(failWith(inUse)).provider.updateEmail('u', 'x@y.com'))
+    const b = await rejection(providerWith(failWith(malformed)).provider.updateEmail('u', 'nope'))
+
+    expect(a.code).toBe('invalid_email')
+    expect(b.code).toBe(a.code)
+    expect(a.message).toBe(b.message)
+  })
+
+  test('wrong credentials are not retryable', async () => {
+    const unauthorized = Object.assign(new Error('Unauthorized'), { status: 401 })
+
+    const error = await rejection(
+      providerWith({
+        authenticateWithPassword: async () => {
+          throw unauthorized
+        },
+      }).provider.authenticateWithPassword({ email: 'a@b.com', password: 'x' }, 'space'),
+    )
+
+    expect(error.code).toBe('invalid_credentials')
+    // Retrying a rejected credential is how an attacker gets free attempts.
+    expect(error.retryable).toBe(false)
+  })
+
+  test('a provider outage is retryable', async () => {
+    const outage = Object.assign(new Error('Bad Gateway'), { status: 502 })
+
+    const error = await rejection(
+      providerWith({
+        authenticateWithCode: async () => {
+          throw outage
+        },
+      }).provider.authenticateWithCode('c', 'studio'),
+    )
+
+    expect(error.code).toBe('provider_unavailable')
+    expect(error.retryable).toBe(true)
+  })
+
+  test('refuses to reach the provider when no client was configured', async () => {
+    const provider = createWorkOSAuthProvider({
+      apiKey: 'sk_test',
+      clientIds: CLIENT_IDS,
+      jwks: { keys: [publicJwk] },
+    })
+
+    await expect(provider.authenticateWithCode('c', 'studio')).rejects.toThrow(
+      /client not provided/,
+    )
+  })
+})
+
+describe('getAuthorizationUrl', () => {
+  test('uses the client_id of the requested surface and passes state through', () => {
+    const { provider, calls } = providerWith()
+
+    const url = provider.getAuthorizationUrl({
+      surface: 'studio',
+      redirectUri: 'http://localhost:8080/studio/v1/auth/callback',
+      state: 'state_abc',
+    })
+
+    expect(url).toContain(CLIENT_IDS.studio)
+    expect(calls[0]?.args).toEqual({
+      clientId: CLIENT_IDS.studio,
+      redirectUri: 'http://localhost:8080/studio/v1/auth/callback',
+      state: 'state_abc',
+    })
+  })
+
+  test('omits maxAge entirely when not requested, rather than sending undefined', () => {
+    const { provider, calls } = providerWith()
+
+    provider.getAuthorizationUrl({
+      surface: 'backoffice',
+      redirectUri: 'http://localhost:8080/backoffice/v1/auth/callback',
+      state: 's',
+    })
+
+    expect(Object.keys(calls[0]?.args as object).sort()).toEqual([
+      'clientId',
+      'redirectUri',
+      'state',
+    ])
+  })
+
+  test('forwards maxAge when re-authentication is required', () => {
+    const { provider, calls } = providerWith()
+
+    provider.getAuthorizationUrl({
+      surface: 'backoffice',
+      redirectUri: 'http://localhost:8080/backoffice/v1/auth/callback',
+      state: 's',
+      maxAgeSeconds: 300,
+    })
+
+    expect(calls[0]?.args).toMatchObject({ maxAge: 300 })
   })
 })
