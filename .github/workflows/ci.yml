@@ -1,0 +1,72 @@
+# Continuous integration.
+#
+# Runs every check that AGENTS.md section 14 requires before merging. The git
+# hooks cover the same ground locally, but hooks live on a developer's machine —
+# this is the gate that actually holds.
+#
+# Not here yet: integration tests (RLS, INT, IDEM, API) against Supabase local.
+# They are added with the first migrations; packages/db is still empty, and a job
+# that tests nothing reads as coverage that does not exist.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A superseded run tells you nothing. Cancel it and save the minutes.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history so commitlint can see the pushed range.
+          fetch-depth: 0
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.16
+
+      - name: Cache turbo
+        uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: turbo-${{ runner.os }}-${{ github.sha }}
+          restore-keys: turbo-${{ runner.os }}-
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Format
+        run: bun run format:check
+
+      - name: Lint
+        run: bun run lint
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Test
+        run: bun run test
+
+      - name: Build
+        run: bun run build
+
+      # The commit-msg hook covers local commits, but a push from a machine
+      # without hooks installed would slip through. This closes that gap.
+      - name: Commit messages
+        if: github.event_name == 'pull_request'
+        run: |
+          bunx commitlint \
+            --from "${{ github.event.pull_request.base.sha }}" \
+            --to "${{ github.event.pull_request.head.sha }}" \
+            --verbose
