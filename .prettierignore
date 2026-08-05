@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.turbo/
+.vercel/
+coverage/
+
+# Generated output. Change the source and regenerate.
+packages/contracts/generated/
+packages/db/types/

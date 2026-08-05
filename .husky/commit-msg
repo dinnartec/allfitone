@@ -1,0 +1,2 @@
+# Conventional Commits, in English. See AGENTS.md section 13.
+bunx --no-install commitlint --edit "$1"

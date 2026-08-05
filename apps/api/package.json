@@ -1,0 +1,24 @@
+{
+  "name": "@allfitone/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --watch src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "test": "bun test",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@allfitone/auth-provider": "workspace:*",
+    "@allfitone/contracts": "workspace:*",
+    "@allfitone/db": "workspace:*",
+    "@allfitone/queue": "workspace:*",
+    "hono": "^4.6.0"
+  },
+  "devDependencies": {
+    "@hono/node-server": "^1.13.0"
+  }
+}

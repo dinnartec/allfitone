@@ -1,0 +1,18 @@
+{
+  "name": "@allfitone/worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --watch src/main.ts",
+    "build": "tsc",
+    "test": "bun test",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@allfitone/auth-provider": "workspace:*",
+    "@allfitone/db": "workspace:*",
+    "@allfitone/queue": "workspace:*"
+  }
+}

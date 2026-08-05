@@ -1,0 +1,16 @@
+{
+  "name": "@allfitone/db",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Migraciones, esquema y tipos de PostgreSQL",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit"
+  }
+}

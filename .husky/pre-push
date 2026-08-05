@@ -1,0 +1,9 @@
+# Heavier checks, still fast enough not to be skipped. Turbo caches, so repeat
+# runs are near-instant.
+#
+# RLS and INT tests are NOT here: they need Supabase running. That is CI's job.
+#
+# Once there is a stable baseline branch, narrow these with
+# --filter=...[origin/main] so only affected projects run.
+bun run typecheck
+bun run test
