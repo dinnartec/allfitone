@@ -1,5 +1,6 @@
 {
   "lockfileVersion": 1,
+  "configVersion": 0,
   "workspaces": {
     "": {
       "name": "allfitone",
@@ -7,6 +8,7 @@
         "@commitlint/cli": "^19.6.0",
         "@commitlint/config-conventional": "^19.6.0",
         "@eslint/js": "^10.0.1",
+        "@redocly/cli": "2.43.3",
         "@types/node": "^22.10.0",
         "eslint": "^9.17.0",
         "husky": "^9.1.7",
@@ -137,6 +139,8 @@
     "@humanwhocodes/module-importer": ["@humanwhocodes/module-importer@1.0.1", "", {}, "sha512-bxveV4V8v5Yb4ncFTT3rPSgZBOpCkjfK0y4oVVVJwIuDVBRMDXrPyXRL988i5ap9m9bnyEEjWfm5WkBmtffLfA=="],
 
     "@humanwhocodes/retry": ["@humanwhocodes/retry@0.4.3", "", {}, "sha512-bV0Tgo9K4hfPCek+aMAn81RppFKv2ySDQeMoSZuvTASywNTnVJCArCZE2FWqpvIatKu7VMRLWlR1EazvVhDyhQ=="],
+
+    "@redocly/cli": ["@redocly/cli@2.43.3", "", { "bin": { "openapi": "bin/cli.js", "redocly": "bin/cli.js" } }, "sha512-c6qQnH7N29FkpBAFDw+7cAsR+F5LXWWuS66BzHuC7zUsqqeZeUVxONRAAZHzwWG/N1zuqXMQZigVIh+ZC4OIFg=="],
 
     "@turbo/darwin-64": ["@turbo/darwin-64@2.10.8", "", { "os": "darwin", "cpu": "x64" }, "sha512-po+7rfJfUnFXjWlcoN2RwhErgzCdRtBc1T26vYPcywHlggmCQiQe1uWaE4j+BibI2uY9/2pDoFzMN0rmSaPFOw=="],
 

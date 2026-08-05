@@ -74,14 +74,15 @@ Any other route returns 404 until surfaces are mounted in
 Run from the repository root. Turbo runs each task across the workspaces and
 caches results, so repeat runs are near-instant.
 
-| Command             | What it does                         |
-| ------------------- | ------------------------------------ |
-| `bun run dev`       | Starts every app in watch mode       |
-| `bun run test`      | Runs tests (`bun test`)              |
-| `bun run lint`      | ESLint, including the boundary rules |
-| `bun run typecheck` | `tsc --noEmit` across workspaces     |
-| `bun run build`     | Builds every deployable              |
-| `bun run format`    | Prettier over the repository         |
+| Command                 | What it does                                 |
+| ----------------------- | -------------------------------------------- |
+| `bun run dev`           | Starts every app in watch mode               |
+| `bun run test`          | Runs tests (`bun test`)                      |
+| `bun run lint`          | ESLint, including the boundary rules         |
+| `bun run typecheck`     | `tsc --noEmit` across workspaces             |
+| `bun run build`         | Builds every deployable                      |
+| `bun run format`        | Prettier over the repository                 |
+| `bun run check:openapi` | Validates the canonical OpenAPI with Redocly |
 
 For a single workspace, use a filter:
 
@@ -178,5 +179,3 @@ it rejects a violating file before trusting it.
   needs it.
 - The contact-change operation is absent from the operations matrix, although its
   events are already declared in the data dictionary.
-- `allfitone-docs` still names a per-product repository as owner of the API and
-  `supabase/`, and does not mention `apps/worker`.
