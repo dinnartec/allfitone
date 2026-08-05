@@ -12,5 +12,8 @@
   "scripts": {
     "lint": "eslint .",
     "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "jose": "^6.2.8"
   }
 }

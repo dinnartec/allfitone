@@ -40,7 +40,10 @@ export default {
       ],
     ],
     'scope-empty': [2, 'never'],
-    'subject-case': [2, 'always', 'lower-case'],
+    // Forbid Title Case and SHOUTING, but allow acronyms inside the subject.
+    // This domain is full of them — JWKS, JWT, RLS, MFA, DTO, SQL — and a strict
+    // lower-case rule would fight the vocabulary on every commit.
+    'subject-case': [2, 'never', ['sentence-case', 'start-case', 'pascal-case', 'upper-case']],
     'header-max-length': [2, 'always', 100],
   },
 }
