@@ -6,7 +6,7 @@
  * the code.
  */
 import { serve } from '@hono/node-server'
-import { createApp } from './app.js'
+import { createApp } from './application.js'
 
 const port = Number(process.env.PORT ?? 8080)
 

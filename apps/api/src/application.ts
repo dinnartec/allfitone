@@ -9,9 +9,7 @@
 import { Hono } from 'hono'
 import { mountSurfaces } from './surfaces.js'
 
-export function createApp(): Hono {
-  const app = new Hono()
-
+export function createApp(app: Hono = new Hono()): Hono {
   app.get('/health', (c) => c.json({ status: 'ok' }))
 
   mountSurfaces(app)
