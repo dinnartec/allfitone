@@ -1,4 +1,35 @@
 /**
- * Router, response envelope, error catalogue. Includes 'wrong-surface' 403 when the token's client_id does not match the surface.
+ * Response envelope and error catalogue.
+ *
+ * Codes are stable strings, not statuses alone: clients branch on the code, and
+ * a status says too little. The catalogue is closed so a new failure mode has to
+ * be named here rather than invented at a call site.
  */
-export {}
+
+import type { Context } from 'hono'
+import type { ContentfulStatusCode } from 'hono/utils/http-status'
+
+export type ApiErrorCode =
+  /** Token absent, invalid or expired. */
+  | 'unauthenticated'
+  /** The token's client_id does not belong to this surface. */
+  | 'wrong-surface'
+  /** Malformed request: missing parameter, bad shape. */
+  | 'invalid-request'
+  /** A dependency we do not control did not answer. Retryable. */
+  | 'upstream-unavailable'
+
+const STATUS: Record<ApiErrorCode, ContentfulStatusCode> = {
+  unauthenticated: 401,
+  'wrong-surface': 403,
+  'invalid-request': 400,
+  'upstream-unavailable': 503,
+}
+
+/**
+ * `detail` is for humans reading logs. It must never carry a token, a claim
+ * value, or anything that reveals whether an account exists.
+ */
+export function fail(c: Context, code: ApiErrorCode, detail?: string) {
+  return c.json({ error: { code, ...(detail ? { detail } : {}) } }, STATUS[code])
+}

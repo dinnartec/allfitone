@@ -12,5 +12,9 @@
   "scripts": {
     "lint": "eslint .",
     "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@workos-inc/node": "^10.9.0",
+    "jose": "^6.2.8"
   }
 }
