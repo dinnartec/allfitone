@@ -25,7 +25,7 @@ Be aware of the actual state before you start:
 | `packages/auth-provider` | Working. Token verification, code exchange, sessions revocation                                          |
 | `packages/queue`         | Port defined; the Postgres adapter throws until `system.outbox_events` exists                            |
 | `packages/contracts`     | Canonical OpenAPI with 18 paths. `generated/` not produced yet                                           |
-| `packages/db`            | Empty. No migrations, no Supabase config yet                                                             |
+| `packages/db`            | Supabase CLI initialized for PostgreSQL-only local development; no migrations yet                        |
 
 Signing in works; **no session is established** and the subject is not resolved to
 a person. Both need the schema.
