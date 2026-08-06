@@ -41,10 +41,12 @@ tests yet, because there is no database to run them against.
 | [Bun](https://bun.sh)                                | 1.2+       | Install, tests, running TS in development |
 | Node                                                 | 22+        | Production runtime, and what Vercel runs  |
 | Docker                                               | any recent | Local database, once migrations exist     |
-| [Supabase CLI](https://supabase.com/docs/guides/cli) | latest     | Integration tests, once migrations exist  |
+| [Supabase CLI](https://supabase.com/docs/guides/cli) | 2.110.0    | Integration tests, once migrations exist  |
 
-Docker and the Supabase CLI are not required yet — `packages/db` has no
-migrations. Install them when the first vertical slice lands.
+The Supabase CLI is installed as a project dependency and must be invoked with
+`bunx supabase`; do not rely on a global installation. Docker is not required
+yet because `packages/db` has no migrations. It becomes necessary when the first
+database vertical slice lands.
 
 ## Setup
 
