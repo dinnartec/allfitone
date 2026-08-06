@@ -43,36 +43,65 @@ import type { WorkOSAuthenticationResponse, WorkOSClient } from './workos-client
 
 const SURFACES = ['space', 'studio', 'backoffice'] as const
 
+/**
+ * Operations that act on a person rather than a session are not surface-scoped.
+ * They still need some Application's credentials, and every Application in the
+ * environment reaches the same directory.
+ */
+const ADMIN_SURFACE: Surface = 'studio'
+
 /** Access tokens are short-lived; the exact value is set in the provider dashboard. */
 const ASSUMED_ACCESS_TOKEN_TTL_SECONDS = 300
 
-export interface WorkOSConfig {
+/**
+ * Credentials for one Application.
+ *
+ * Each Application carries its own API key, not just its own client_id. Sharing
+ * one key across surfaces fails the code exchange with `invalid_client`, which
+ * is how this was found.
+ */
+export interface SurfaceCredentials {
+  clientId: string
   apiKey: string
-  /** One client_id per Application. One environment, three applications, one directory. */
-  clientIds: Record<Surface, string>
+}
+
+export interface WorkOSConfig {
+  /** One entry per Application. One environment, three Applications, one directory. */
+  credentials: Record<Surface, SurfaceCredentials>
   /**
-   * Expected `iss`. Left unset until confirmed against a real token, because a
-   * wrong value would either reject everything or, worse, be quietly removed by
-   * whoever debugs it. Set it once verified — it is a real defence.
+   * Expected `iss`, shared by every Application in the environment.
+   *
+   * Confirmed empirically: the provider derives it from the environment's
+   * DEFAULT Application, not from the one you authenticate against. A token
+   * carrying Studio's client_id still carries the default Application's issuer,
+   * so it cannot be derived from the credentials above.
+   *
+   * Required rather than optional: an unset issuer would silently disable the
+   * check, and a disabled security check that looks configured is worse than an
+   * absent one.
    */
-  issuer?: string
+  issuer: string
   /**
    * Test seam: verify against a local key set instead of fetching the remote
    * JWKS. Production leaves this unset.
    */
   jwks?: JSONWebKeySet
-  /** Test seam: inject the SDK client. Production leaves this unset. */
-  client?: WorkOSClient
+  /**
+   * Test seam: inject a client per surface, mirroring production. Production
+   * leaves this unset.
+   */
+  clients?: Partial<Record<Surface, WorkOSClient>>
 }
 
 export function createWorkOSAuthProvider(config: WorkOSConfig): AuthProvider {
   assertConfig(config)
 
-  const client = config.client
-  const requireClient = (): WorkOSClient => {
+  const requireClient = (surface: Surface): WorkOSClient => {
+    const client = config.clients?.[surface]
     if (!client) {
       throw new Error(
-        'WorkOS client not provided. Construct the adapter with a client to reach the provider.',
+        `WorkOS client not provided for surface "${surface}". ` +
+          'Construct the adapter with a client to reach the provider.',
       )
     }
     return client
@@ -94,11 +123,11 @@ export function createWorkOSAuthProvider(config: WorkOSConfig): AuthProvider {
     surface: Surface,
     call: (c: WorkOSClient, clientId: string) => Promise<WorkOSAuthenticationResponse>,
   ): Promise<AuthResult> => {
-    const clientId = config.clientIds[surface]
+    const clientId = config.credentials[surface].clientId
     // Resolved outside the try: a missing client is a configuration fault, and
     // translating it into a retryable provider outage would make a bad deploy
     // retry forever instead of failing loudly.
-    const c = requireClient()
+    const c = requireClient(surface)
 
     let response: WorkOSAuthenticationResponse
     try {
@@ -114,9 +143,13 @@ export function createWorkOSAuthProvider(config: WorkOSConfig): AuthProvider {
 
   return {
     getAuthorizationUrl(request: AuthorizationRequest): string {
-      return requireClient().userManagement.getAuthorizationUrl({
-        clientId: config.clientIds[request.surface],
+      return requireClient(request.surface).userManagement.getAuthorizationUrl({
+        clientId: config.credentials[request.surface].clientId,
         redirectUri: request.redirectUri,
+        // The hosted login screen. Omitting it makes the SDK throw, and the
+        // alternatives (connectionId / organizationId) pin the flow to a single
+        // enterprise connection, which is not what a shared directory wants.
+        provider: 'authkit',
         state: request.state,
         ...(request.maxAgeSeconds === undefined ? {} : { maxAge: request.maxAgeSeconds }),
       })
@@ -130,7 +163,7 @@ export function createWorkOSAuthProvider(config: WorkOSConfig): AuthProvider {
       try {
         const result = await jwtVerify(token, getKey, {
           algorithms: ['RS256'],
-          ...(config.issuer ? { issuer: config.issuer } : {}),
+          issuer: config.issuer,
         })
         claims = result.payload as Record<string, unknown>
       } catch (cause) {
@@ -140,13 +173,21 @@ export function createWorkOSAuthProvider(config: WorkOSConfig): AuthProvider {
         if (isProviderOutage(cause)) {
           throw new AuthError('provider_unavailable', 'jwks fetch failed')
         }
-        throw new AuthError('invalid_token', reasonFor(cause))
+        // The expected issuer goes into the detail: "claim rejected" alone
+        // cannot say whether the token is wrong or the configuration is.
+        throw new AuthError(
+          'invalid_token',
+          `${reasonFor(cause)} (expected issuer ${config.issuer})`,
+        )
       }
 
       // A correctly signed, unexpired token issued for another surface is still
       // rejected. `wrong-surface` exists precisely for this.
-      if (claims.client_id !== config.clientIds[surface]) {
-        throw new AuthError('invalid_token', 'client_id does not match surface')
+      if (claims.client_id !== config.credentials[surface].clientId) {
+        throw new AuthError(
+          'invalid_token',
+          `client_id does not match surface (expected ${config.credentials[surface].clientId})`,
+        )
       }
 
       const subject = claims.sub
@@ -189,7 +230,9 @@ export function createWorkOSAuthProvider(config: WorkOSConfig): AuthProvider {
     },
 
     async updateEmail(subject: ExternalSubject, email: string): Promise<void> {
-      const c = requireClient()
+      // Not surface-scoped: it acts on the person, not on a session. Any
+      // Application's credentials reach the same directory.
+      const c = requireClient(ADMIN_SURFACE)
       try {
         await c.userManagement.updateUser({ userId: subject, email })
       } catch (cause) {
@@ -201,7 +244,7 @@ export function createWorkOSAuthProvider(config: WorkOSConfig): AuthProvider {
       // The SDK revokes one session at a time, so "close every session" is list
       // then revoke each. Expressed here rather than in the domain, because the
       // domain should not know that limitation exists.
-      const c = requireClient()
+      const c = requireClient(ADMIN_SURFACE)
       try {
         const sessions = await c.userManagement.listSessions(subject)
         for (const session of sessions.data) {
@@ -215,11 +258,12 @@ export function createWorkOSAuthProvider(config: WorkOSConfig): AuthProvider {
 }
 
 function jwksUrlFor(config: WorkOSConfig, surface: Surface): string {
-  const clientId = config.clientIds[surface]
+  const clientId = config.credentials[surface].clientId
   // Prefer the SDK's own URL builder when a client is available: if WorkOS moves
   // the endpoint, we follow automatically instead of pointing at a dead path.
-  return config.client
-    ? config.client.userManagement.getJwksUrl(clientId)
+  const client = config.clients?.[surface]
+  return client
+    ? client.userManagement.getJwksUrl(clientId)
     : `https://api.workos.com/sso/jwks/${clientId}`
 }
 
@@ -243,22 +287,25 @@ function translate(cause: unknown): AuthError {
 
   const status = statusOf(cause)
   const text = messageOf(cause).toLowerCase()
+  // Kept for server-side logs only. `detail` never reaches a client — see fail()
+  // in platform/http, which only forwards what the caller passes it.
+  const trace = `provider status ${status ?? 'none'}: ${messageOf(cause).slice(0, 200)}`
 
   if (status === 401 || status === 403 || text.includes('invalid credential')) {
-    return new AuthError('invalid_credentials')
+    return new AuthError('invalid_credentials', trace)
   }
   if (status === 422 || status === 409 || text.includes('email')) {
-    // Deliberately ambiguous. See errors.ts.
-    return new AuthError('invalid_email')
+    // Deliberately ambiguous to the caller. The trace stays server-side.
+    return new AuthError('invalid_email', trace)
   }
   if (status === 429 || (status !== undefined && status >= 500)) {
-    return new AuthError('provider_unavailable', `provider status ${status}`)
+    return new AuthError('provider_unavailable', trace)
   }
   if (status === undefined) {
     // No status means it never reached the provider.
-    return new AuthError('provider_unavailable', 'request failed')
+    return new AuthError('provider_unavailable', trace)
   }
-  return new AuthError('invalid_credentials')
+  return new AuthError('invalid_credentials', trace)
 }
 
 function statusOf(cause: unknown): number | undefined {
@@ -296,12 +343,18 @@ function reasonFor(cause: unknown): string {
 }
 
 function assertConfig(config: WorkOSConfig): void {
-  if (!config.apiKey) {
-    throw new Error('WORKOS_API_KEY missing. The API key never ships in a client bundle.')
+  if (!config.issuer) {
+    throw new Error('Expected issuer missing. Verification would silently accept any issuer.')
   }
   for (const surface of SURFACES) {
-    if (!config.clientIds[surface]) {
+    const credentials = config.credentials?.[surface]
+    if (!credentials?.clientId) {
       throw new Error(`Missing client_id for surface "${surface}".`)
+    }
+    // Each Application has its own key. Sharing one across surfaces fails the
+    // code exchange with `invalid_client`.
+    if (!credentials.apiKey) {
+      throw new Error(`Missing API key for surface "${surface}".`)
     }
   }
 }

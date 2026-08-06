@@ -54,9 +54,15 @@ export interface WorkOSUserManagement {
 
   getJwksUrl(clientId: string): string
 
+  /**
+   * The SDK rejects a call without one of provider / connectionId /
+   * organizationId, so `provider` is required here rather than optional. For
+   * the hosted flow the value is 'authkit'.
+   */
   getAuthorizationUrl(options: {
     clientId: string
     redirectUri: string
+    provider: 'authkit'
     state?: string
     maxAge?: number
   }): string

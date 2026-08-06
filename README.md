@@ -46,14 +46,15 @@ git clone git@github.com:dinnartec/allfitone.git
 cd allfitone
 
 bun install          # also registers the git hooks via husky
-cp .env.template .env.local
+cp .env.example .env.local
 ```
 
-Fill in `.env.local`. The identity provider values come from the WorkOS
-dashboard: one API key per environment, and one `client_id` per Application —
-Space, Studio and Backoffice each have their own.
+Fill in `.env.local`. In the WorkOS dashboard each Application has **its own
+`client_id` and its own API key** — Space, Studio and Backoffice are three
+Applications sharing one user directory. Reusing a single key across them fails
+the code exchange with `invalid_client`, and only when somebody tries to sign in.
 
-The API key is server-side only. It never goes into a client bundle.
+Those keys are server-side only. They never go into a client bundle.
 
 ```bash
 bun run dev
@@ -162,7 +163,13 @@ the `prepare` script. Confirm with `git config core.hooksPath` — it should pri
 `packageManager` field. It is already there; if you changed Bun versions, update
 it to match.
 
-**Port 8080 is taken.** Set `PORT` in `.env.local`.
+**Port 8080 is taken.** Set `PORT` and `API_PUBLIC_URL` in `.env.local`, and make the
+redirect URI in the WorkOS dashboard match. On macOS, Docker Desktop often holds 8080.
+
+**`API_PUBLIC_URL is not set` even though `.env.local` exists.** Turbo runs each
+task from its own workspace directory, so Bun looks for `apps/api/.env.local` and
+not the root one. The `dev` scripts pass `--env-file=../../.env.local` for exactly
+this reason; a task added without it will not see the root file.
 
 **Lint passes but you expected an error.** `no-restricted-imports` does not merge
 across flat-config blocks — the last matching block wins. Patterns are composed

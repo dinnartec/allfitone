@@ -145,30 +145,68 @@ Create a domain module when it has code. Not before.
 
 ## 5. Boundaries
 
-Five rules live in `eslint.config.js`. They fail CI, not code review.
+**No feature may mix logic across apps.** This is the hardest rule in this file.
+A monorepo earns its keep only while the projects inside it stay separable; the
+moment one app reaches into another, they are one tangled app that merely looks
+like two, and nothing can be extracted or deployed independently again.
 
-1. Only `packages/auth-provider` imports the identity provider SDK.
-2. Only `packages/queue` imports the queue SDK.
-3. `packages/` never depends on the hosting provider.
-4. An app never imports from another app. Shared code goes to `packages/`.
-5. A handler never executes SQL.
+Six rules live in `eslint.config.js`. They fail CI, not code review.
 
-These are not style preferences. They are the mechanism that keeps the
-architecture true when nobody is reviewing carefully. Never disable one inline.
+| #   | Rule                                                                      |
+| --- | ------------------------------------------------------------------------- |
+| 1   | Only `packages/auth-provider` imports the identity provider SDK           |
+| 2   | Only `packages/queue` imports the queue SDK                               |
+| 3   | `packages/` never depends on the hosting provider                         |
+| 4   | **An app never imports another app** — by workspace name or relative path |
+| 5   | A domain is reached through its `index.ts`, never into its internals      |
+| 6   | A handler never executes SQL                                              |
 
-Two known limits, so nobody assumes more coverage than exists:
+Never disable one inline.
 
-- Rule 4 matches import strings, so it catches `@allfitone/api` but not deep
-  relative traversal such as `../../api/src/app.js`. Closing it needs
-  `eslint-plugin-import`'s `no-restricted-paths`.
-- Boundaries **between domains** — `domains/x` must not reach inside
-  `domains/y` — are not enforced yet. They need `eslint-plugin-boundaries` and
-  become worth adding once a second domain has code.
+### What "mixing logic" means in practice
 
-If you add or change a rule here, prove it works: write a file that violates it,
-confirm ESLint rejects it, and confirm the legitimate case still passes. A
-boundary rule that silently does nothing is worse than no rule, because it is
-believed.
+Needing something another app has is not permission to reach for it. There are
+exactly two correct responses:
+
+1. **Extract it to a package.** If both apps need it, it was never app code.
+2. **Duplicate it deliberately**, when the two uses only look alike and will
+   diverge. Say so in the commit — an unexplained copy reads as an accident.
+
+Copy-pasting between apps to avoid the extraction is the failure this rule
+exists to prevent, and it is invisible to lint. It is a review responsibility.
+
+Rule 5 is the same principle one level down: a domain's `application/`,
+`infrastructure/`, `domain/` and `handlers/` belong to that domain. Everything
+else goes through its `index.ts`. This mirrors the database rule that no domain
+writes another domain's tables.
+
+Adding a domain means adding it to `DOMAINS` in `eslint.config.js`. Until it is
+there, its internals are reachable — the list is part of creating a domain, not
+an afterthought.
+
+### Proving a boundary rule works
+
+If you add or change one, **prove it**. Write a file that violates it, confirm
+ESLint rejects it, then write the legitimate case and confirm it passes. Both
+halves: a rule that blocks everything is as broken as one that blocks nothing.
+
+This is not ceremony. Every one of these rules has silently failed at least once
+during development — brace patterns that expand to nothing, a config block
+dropped in a refactor, a plugin that emitted warnings while evaluating nothing.
+Each time it looked configured and did nothing.
+
+Verify with the real repository and `--format json`, reading `ruleId`. Do not
+grep plain output: plugin warnings contain rule names and produce false
+positives, and `--format unix` no longer exists in ESLint 9 and silently reports
+nothing at all. Both mistakes were made here.
+
+### Known limit
+
+`no-restricted-imports` matches the import string, not the resolved path, so a
+future alias or an unusual spelling could slip past. `eslint-plugin-boundaries`
+would resolve paths properly, but v7 produced no diagnostics in this setup even
+with its own strict preset, so it was removed rather than left in place looking
+like protection. Revisit if a violation is ever found in review that lint missed.
 
 ---
 
@@ -479,6 +517,12 @@ everything.
 ## 15. Rules for AI agents
 
 Everything above applies to you. These additionally:
+
+**Never mix logic across apps.**
+Needing what another app has means extracting it to a package, or duplicating it
+deliberately and saying so. Never importing across apps, and never copy-pasting
+quietly. See section 5 — this is the rule that decides whether the monorepo stays
+separable.
 
 **Never bypass verification.**
 `git commit --no-verify` and `git push --no-verify` are forbidden without

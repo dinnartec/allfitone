@@ -3,69 +3,97 @@
 // These are not style: they keep architectural decisions true when nobody is
 // reading the pull request carefully. A failure here fails CI.
 //
-// IMPORTANT: `no-restricted-imports` does not merge across flat-config blocks —
-// the last matching block wins. So patterns are composed into one rule per file
-// scope instead of one block per rule. Splitting them silently disables all but
-// the last, which is exactly the kind of failure these rules exist to prevent.
+// These rules match the literal import specifier, not the resolved path. That
+// covers workspace imports and package names, and it does NOT cover deep
+// relative traversal such as `../../api/src/app.js`. See AGENTS.md section 5 —
+// the gap is real and named rather than papered over.
 //
-// Pending: boundaries between domains (`domains/x` must not reach inside
-// `domains/y`) need eslint-plugin-boundaries. Add once more than one domain has
-// code.
+// eslint-plugin-boundaries would close it, but v7 produced no diagnostics in
+// this setup even with its own strict preset, so it was removed rather than left
+// in place looking like protection.
 
 import js from '@eslint/js'
 import tseslint from 'typescript-eslint'
 
-// 1. Only packages/auth-provider knows the identity provider.
-//    Without this the abstraction erodes on the first hurried `bun add`.
+// --- Provider isolation ------------------------------------------------------
+
+// Only packages/auth-provider knows the identity provider. Without this the
+// abstraction erodes on the first hurried `bun add`.
 const NO_PROVIDER_SDK = {
   group: ['@workos-inc', '@workos-inc/*'],
   message: 'The provider SDK belongs in packages/auth-provider. Use its port.',
 }
 
-// 2. Only packages/queue knows the queue.
+// Only packages/queue knows the queue.
 const NO_QUEUE_SDK = {
   group: ['@vercel/queue', 'pg-boss', '@aws-sdk/client-sqs', '@aws-sdk/client-sns'],
   message: 'The queue SDK belongs in packages/queue. Use its port.',
 }
 
-// 3. Hosting primitives stay out of packages/.
-//    This is what lets apps/api move from Vercel to a container untouched.
+// Hosting primitives stay out of packages/. This is what lets apps/api move
+// from Vercel to a container untouched.
 const NO_HOSTING = {
   group: ['@vercel/*', 'next', 'next/*'],
   message: 'Shared libraries must not depend on the hosting provider.',
 }
 
-// 4. An app never imports from another app. Shared code goes to packages/.
+// Handlers never execute SQL. The read ritual — actor context plus access
+// record in the same transaction — lives in platform/db.
+// An app never imports another app. Shared code goes to packages/, and
+// duplicated logic across apps is exactly what this prevents.
 //
-// Partial: `no-restricted-imports` matches the import string, not the resolved
-// path, so this catches workspace imports but not deep relative traversal like
-// `../../api/src/app.js`. Closing that needs eslint-plugin-import's
-// no-restricted-paths, which resolves. Tracked in AGENTS.md section 5.
-const NO_CROSS_APP = {
-  group: [
-    '@allfitone/api',
-    '@allfitone/api/*',
-    '@allfitone/worker',
-    '@allfitone/worker/*',
-    '@allfitone/studio-web',
-    '@allfitone/studio-web/*',
-    '@allfitone/backoffice-web',
-    '@allfitone/backoffice-web/*',
-    '@allfitone/space',
-    '@allfitone/space/*',
-    '**/apps/*/**',
-  ],
+// Generated per app so each one blocks the OTHER four and never itself: a
+// blanket pattern would reject a legitimate `./space/...` inside apps/space.
+// Both spellings are covered — the workspace name and a relative path that
+// traverses into a sibling app.
+const APPS = ['api', 'worker', 'studio-web', 'backoffice-web', 'space']
+
+const noOtherApps = (self) => ({
+  group: APPS.filter((a) => a !== self).flatMap((a) => [
+    `@allfitone/${a}`,
+    `@allfitone/${a}/*`,
+    `**/${a}/**`,
+  ]),
   message: 'Apps do not import each other. Extract shared code to packages/.',
+})
+
+// A domain is reached through its index.ts and never from the inside. This is
+// the code-level mirror of the database rule: no domain writes another domain's
+// tables.
+//
+// Listed explicitly, like the apps, so a domain can still import its own
+// internals. Adding a domain means adding it here — and until it is added, its
+// internals are reachable, so the list is part of creating a domain.
+const DOMAINS = ['identity']
+
+// Brace expansion is NOT supported here — a `{a,b}` pattern silently matches
+// nothing, which is the worst failure mode for a rule like this. Expanded.
+const DOMAIN_LAYERS = ['domain', 'application', 'infrastructure', 'handlers']
+
+const internalsOf = (domain) => DOMAIN_LAYERS.map((layer) => `**/domains/${domain}/${layer}/**`)
+
+const noOtherDomainInternals = (self) => ({
+  group: DOMAINS.filter((d) => d !== self).flatMap(internalsOf),
+  message: 'Reach another domain through its index.ts, never into its internals.',
+})
+
+/** For everything that is not itself a domain: no domain internals at all. */
+const NO_DOMAIN_INTERNALS = {
+  group: internalsOf('*'),
+  message: 'Reach a domain through its index.ts, never into its internals.',
 }
 
-// 5. Handlers never execute SQL or open connections. The read ritual — actor
-//    context plus access record in the same transaction — lives in platform/db.
 const NO_DB_IN_HANDLERS = {
   group: ['postgres', 'pg', '**/platform/db', '**/platform/db/**'],
   message: 'Handlers do not touch the database. Call application/, which calls infrastructure/.',
 }
 
-const restrict = (...patterns) => ['error', { patterns }]
+// Empty groups are a schema error, and they happen naturally: with a single
+// domain, "every other domain" is an empty list.
+const restrict = (...patterns) => [
+  'error',
+  { patterns: patterns.filter((p) => p.group.length > 0) },
+]
 
 export default tseslint.config(
   {
@@ -82,8 +110,6 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
 
-  // No `any`, and no non-null assertions to silence a check the compiler is
-  // right about. See AGENTS.md section 9.
   {
     files: ['**/*.{ts,tsx}'],
     rules: {
@@ -96,21 +122,20 @@ export default tseslint.config(
     },
   },
 
-  // Default: nothing may reach a provider SDK directly.
+  // --- Literal-specifier restrictions ---------------------------------------
+  //
+  // `no-restricted-imports` does not merge across flat-config blocks — the last
+  // matching block wins. Patterns are therefore composed per scope. Splitting
+  // them into one block per rule silently disables all but the last, which is
+  // exactly the failure these rules exist to prevent.
   {
     files: ['**/*.{ts,tsx}'],
     rules: { 'no-restricted-imports': restrict(NO_PROVIDER_SDK, NO_QUEUE_SDK) },
   },
-
-  // Shared libraries additionally may not depend on the host.
   {
     files: ['packages/**/*.{ts,tsx}'],
-    rules: {
-      'no-restricted-imports': restrict(NO_PROVIDER_SDK, NO_QUEUE_SDK, NO_HOSTING),
-    },
+    rules: { 'no-restricted-imports': restrict(NO_PROVIDER_SDK, NO_QUEUE_SDK, NO_HOSTING) },
   },
-
-  // Each port's own package is the one place its SDK is allowed.
   {
     files: ['packages/auth-provider/**/*.ts'],
     rules: { 'no-restricted-imports': restrict(NO_QUEUE_SDK, NO_HOSTING) },
@@ -119,33 +144,44 @@ export default tseslint.config(
     files: ['packages/queue/**/*.ts'],
     rules: { 'no-restricted-imports': restrict(NO_PROVIDER_SDK, NO_HOSTING) },
   },
-
-  // Apps may use host primitives but never each other.
-  {
-    files: ['apps/**/*.{ts,tsx}'],
+  ...APPS.map((app) => ({
+    files: [`apps/${app}/**/*.{ts,tsx}`],
     rules: {
-      'no-restricted-imports': restrict(NO_PROVIDER_SDK, NO_QUEUE_SDK, NO_CROSS_APP),
+      'no-restricted-imports': restrict(
+        NO_PROVIDER_SDK,
+        NO_QUEUE_SDK,
+        noOtherApps(app),
+        NO_DOMAIN_INTERNALS,
+      ),
     },
-  },
-
-  // Handlers carry every restriction above, plus no database access.
+  })),
+  // Inside a domain: its own internals are fine, another domain's are not.
+  ...DOMAINS.map((domain) => ({
+    files: [`apps/api/src/domains/${domain}/**/*.ts`],
+    rules: {
+      'no-restricted-imports': restrict(
+        NO_PROVIDER_SDK,
+        NO_QUEUE_SDK,
+        noOtherApps('api'),
+        noOtherDomainInternals(domain),
+      ),
+    },
+  })),
   {
     files: ['apps/api/src/domains/*/handlers/**/*.ts'],
     rules: {
       'no-restricted-imports': restrict(
         NO_PROVIDER_SDK,
         NO_QUEUE_SDK,
-        NO_CROSS_APP,
+        noOtherApps('api'),
+        noOtherDomainInternals('identity'),
         NO_DB_IN_HANDLERS,
       ),
     },
   },
 
-  // Config files run in Node and are not part of the app graph.
   {
     files: ['*.config.js'],
-    languageOptions: {
-      globals: { process: 'readonly', console: 'readonly' },
-    },
+    languageOptions: { globals: { process: 'readonly', console: 'readonly' } },
   },
 )

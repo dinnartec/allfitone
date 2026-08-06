@@ -23,7 +23,21 @@ const CLIENT_IDS: Record<Surface, string> = {
   backoffice: 'client_backoffice_test',
 }
 
-const ISSUER = 'https://api.workos.com'
+/** Each Application has its own key; distinct values keep that honest. */
+const CREDENTIALS = {
+  space: { clientId: CLIENT_IDS.space, apiKey: 'sk_space' },
+  studio: { clientId: CLIENT_IDS.studio, apiKey: 'sk_studio' },
+  backoffice: { clientId: CLIENT_IDS.backoffice, apiKey: 'sk_backoffice' },
+}
+
+/**
+ * What the provider actually issues, confirmed against a real token.
+ *
+ * Note the client_id inside is NOT any of the three above: the provider builds
+ * the issuer from the environment's default Application, so it cannot be derived
+ * from the Application you authenticate against.
+ */
+const ISSUER = 'https://api.workos.com/user_management/client_01DEFAULTAPP'
 
 let privateKey: KeyObject
 let publicJwk: JWK
@@ -66,8 +80,7 @@ beforeAll(async () => {
   otherPrivateKey = other.privateKey as KeyObject
 
   provider = createWorkOSAuthProvider({
-    apiKey: 'sk_test_not_used_here',
-    clientIds: CLIENT_IDS,
+    credentials: CREDENTIALS,
     issuer: ISSUER,
     // Test seam: a local key set instead of fetching the remote JWKS.
     jwks: { keys: [publicJwk] },
@@ -215,20 +228,30 @@ describe('verifyAccessToken', () => {
 })
 
 describe('configuration', () => {
-  test('refuses to construct without an API key', () => {
+  test('refuses to construct without an expected issuer', () => {
+    // An unset issuer disables the check silently, which is worse than not
+    // having it: the configuration looks complete.
+    expect(() => createWorkOSAuthProvider({ issuer: '', credentials: CREDENTIALS })).toThrow(
+      /issuer/i,
+    )
+  })
+
+  test('refuses to construct when a surface has no API key of its own', () => {
+    // Sharing one key across Applications fails the code exchange with
+    // `invalid_client`, and only at the moment somebody tries to sign in.
     expect(() =>
       createWorkOSAuthProvider({
-        apiKey: '',
-        clientIds: CLIENT_IDS,
+        issuer: ISSUER,
+        credentials: { ...CREDENTIALS, backoffice: { clientId: 'c', apiKey: '' } },
       }),
-    ).toThrow(/WORKOS_API_KEY/)
+    ).toThrow(/backoffice/)
   })
 
   test('refuses to construct with a surface missing its client id', () => {
     expect(() =>
       createWorkOSAuthProvider({
-        apiKey: 'sk_test',
-        clientIds: { ...CLIENT_IDS, backoffice: '' },
+        issuer: ISSUER,
+        credentials: { ...CREDENTIALS, backoffice: { clientId: '', apiKey: 'sk' } },
       }),
     ).toThrow(/backoffice/)
   })
@@ -256,12 +279,17 @@ function fakeClient(overrides: Partial<WorkOSUserManagement> = {}) {
       record('listSessions', id, { data: [{ id: 's_1' }, { id: 's_2' }] }),
     revokeSession: async (o) => record('revokeSession', o, undefined),
     getJwksUrl: (clientId) => `https://api.workos.com/sso/jwks/${clientId}`,
-    getAuthorizationUrl: (o) =>
-      record(
+    getAuthorizationUrl: (o) => {
+      // Mirrors the real SDK's precondition. A fake more permissive than the
+      // thing it stands in for is a test that lies — this one did, until a real
+      // request threw.
+      if (!o.provider) throw new TypeError("Incomplete arguments. Need 'provider'.")
+      return record(
         'getAuthorizationUrl',
         o,
         `https://api.workos.com/user_management/authorize?client_id=${o.clientId}`,
-      ),
+      )
+    },
     ...overrides,
   }
   return { client: { userManagement }, calls }
@@ -270,10 +298,11 @@ function fakeClient(overrides: Partial<WorkOSUserManagement> = {}) {
 function providerWith(overrides: Partial<WorkOSUserManagement> = {}) {
   const { client, calls } = fakeClient(overrides)
   const provider = createWorkOSAuthProvider({
-    apiKey: 'sk_test',
-    clientIds: CLIENT_IDS,
+    credentials: CREDENTIALS,
+    issuer: ISSUER,
     jwks: { keys: [publicJwk] },
-    client,
+    // One client per surface, mirroring production.
+    clients: { space: client, studio: client, backoffice: client },
   })
   return { provider, calls }
 }
@@ -368,8 +397,8 @@ describe('error translation', () => {
 
   test('refuses to reach the provider when no client was configured', async () => {
     const provider = createWorkOSAuthProvider({
-      apiKey: 'sk_test',
-      clientIds: CLIENT_IDS,
+      credentials: CREDENTIALS,
+      issuer: ISSUER,
       jwks: { keys: [publicJwk] },
     })
 
@@ -393,6 +422,7 @@ describe('getAuthorizationUrl', () => {
     expect(calls[0]?.args).toEqual({
       clientId: CLIENT_IDS.studio,
       redirectUri: 'http://localhost:8080/studio/v1/auth/callback',
+      provider: 'authkit',
       state: 'state_abc',
     })
   })
@@ -408,6 +438,7 @@ describe('getAuthorizationUrl', () => {
 
     expect(Object.keys(calls[0]?.args as object).sort()).toEqual([
       'clientId',
+      'provider',
       'redirectUri',
       'state',
     ])

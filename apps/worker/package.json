@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun --watch src/main.ts",
-    "build": "tsc",
+    "dev": "bun --watch --env-file=../../.env.local src/main.ts",
+    "build": "tsc -p tsconfig.build.json",
     "test": "bun test",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit"

@@ -1,5 +1,5 @@
 /**
- * Mounts the four REST surfaces.
+ * Mounts the REST surfaces.
  *
  * A surface is a view of the domain, not a domain. Each domain's handlers are
  * grouped by surface and mounted under its prefix; the logic lives in
@@ -12,12 +12,13 @@
 
 import type { Hono } from 'hono'
 
-export function mountSurfaces(_app: Hono): void {
+import { studioIdentityRoutes } from './domains/identity/index.js'
+
+export function mountSurfaces(app: Hono): void {
+  app.route('/studio/v1', studioIdentityRoutes())
+
+  // Mounted as each vertical slice lands:
   // app.route('/space/v1', spaceSurface())
-  // app.route('/studio/v1', studioSurface())
   // app.route('/catalog/v1', catalogSurface())
   // app.route('/backoffice/v1', backofficeSurface())
-  //
-  // Each surface is composed from the handlers of the domains it exposes, and is
-  // mounted as its vertical slice lands. Identity is the first.
 }
