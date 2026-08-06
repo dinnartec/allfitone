@@ -85,6 +85,24 @@ export const allfitV1ContractManifest = {
     },
     {
       method: 'GET',
+      path: '/studio/v1/auth/callback',
+      operationId: 'completeStudioAuthentication',
+      allfitOperation: 'OP-IDN-026',
+    },
+    {
+      method: 'POST',
+      path: '/studio/v1/auth/logout',
+      operationId: 'logoutStudioSession',
+      allfitOperation: 'OP-IDN-028',
+    },
+    {
+      method: 'GET',
+      path: '/studio/v1/auth/start',
+      operationId: 'startStudioAuthentication',
+      allfitOperation: 'OP-IDN-025',
+    },
+    {
+      method: 'GET',
       path: '/studio/v1/organizations/{organizationId}/clients/{personId}/executions/{executionId}',
       operationId: 'getAuthorizedClientExecution',
       allfitOperation: 'OP-EXE-018',
@@ -131,6 +149,12 @@ export const allfitV1ContractManifest = {
       operationId: 'assignProgramVersion',
       allfitOperation: 'OP-PLN-010',
     },
+    {
+      method: 'GET',
+      path: '/studio/v1/session',
+      operationId: 'getStudioSession',
+      allfitOperation: 'OP-IDN-027',
+    },
   ],
   exclusions: [
     {
@@ -140,28 +164,6 @@ export const allfitV1ContractManifest = {
       owner: 'platform',
       lifecycle: 'permanent',
       reason: 'Liveness belongs to deployment operations, not the product API.',
-    },
-    {
-      method: 'GET',
-      path: '/studio/v1/auth/callback',
-      classification: 'provisional',
-      owner: 'identity',
-      lifecycle: 'provisional',
-      reason:
-        'The callback response is diagnostic until the real Studio session contract is implemented.',
-      exitCriterion:
-        'Replace it with the stable Studio session contract before authentication ships.',
-    },
-    {
-      method: 'GET',
-      path: '/studio/v1/auth/start',
-      classification: 'provisional',
-      owner: 'identity',
-      lifecycle: 'provisional',
-      reason:
-        'The hosted authentication flow is a walking skeleton without a stable session contract.',
-      exitCriterion:
-        'Replace it with the stable Studio session contract before authentication ships.',
     },
   ],
 } as const

@@ -15,6 +15,8 @@ info:
 servers:
   - url: /
 tags:
+  - name: Studio Identity
+    description: Hosted authentication and opaque browser sessions for Allfit Studio.
   - name: Studio Planning
     description: Planning commands and queries performed from Allfit Studio.
   - name: Space Agenda
@@ -42,20 +44,13 @@ x-allfit-contract-gate:
       owner: platform
       lifecycle: permanent
       reason: Liveness belongs to deployment operations, not the product API.
-    - method: GET
-      path: /studio/v1/auth/start
-      classification: provisional
-      owner: identity
-      lifecycle: provisional
-      reason: The hosted authentication flow is a walking skeleton without a stable session contract.
-      exit_criterion: Replace it with the stable Studio session contract before authentication ships.
-    - method: GET
-      path: /studio/v1/auth/callback
-      classification: provisional
-      owner: identity
-      lifecycle: provisional
-      reason: The callback response is diagnostic until the real Studio session contract is implemented.
-      exit_criterion: Replace it with the stable Studio session contract before authentication ships.
+x-allfit-error-catalog:
+  - code: registration-incomplete
+    status: 403
+    description: The authenticated account has not completed domain registration.
+  - code: account-closed
+    status: 403
+    description: The person linked to the authenticated account is closed.
 x-allfit-media-url-policy:
   space_owner:
     delivery: signed_storage_url
@@ -74,6 +69,125 @@ x-allfit-media-url-policy:
     failure_without_effective_access: 404
 
 paths:
+  /studio/v1/auth/start:
+    get:
+      tags: [Studio Identity]
+      operationId: startStudioAuthentication
+      x-allfit-operation: OP-IDN-025
+      x-allfit-cache: no-store
+      summary: Start the hosted Studio authentication flow
+      security: []
+      responses:
+        '302':
+          description: Redirect to the WorkOS hosted authentication flow
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Location:
+              $ref: '#/components/headers/Location'
+            Set-Cookie:
+              $ref: '#/components/headers/SetCookie'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /studio/v1/auth/callback:
+    get:
+      tags: [Studio Identity]
+      operationId: completeStudioAuthentication
+      x-allfit-operation: OP-IDN-026
+      x-allfit-cache: no-store
+      summary: Complete authentication and create an opaque Studio session
+      security: []
+      parameters:
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+        - name: state
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        '303':
+          description: Session created; redirect to Studio without credentials in the URL
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Location:
+              $ref: '#/components/headers/Location'
+            Set-Cookie:
+              $ref: '#/components/headers/SetCookie'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /studio/v1/session:
+    get:
+      tags: [Studio Identity]
+      operationId: getStudioSession
+      x-allfit-operation: OP-IDN-027
+      x-allfit-cache: private-no-store
+      summary: Get the current Studio session registration status
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Current authenticated Studio session
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/PrivateNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudioSession'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/AccountClosed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /studio/v1/auth/logout:
+    post:
+      tags: [Studio Identity]
+      operationId: logoutStudioSession
+      x-allfit-operation: OP-IDN-028
+      x-allfit-cache: no-store
+      summary: Revoke the current session and start hosted WorkOS logout
+      security:
+        - cookieAuth: []
+        - {}
+      parameters:
+        - name: Origin
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uri
+      responses:
+        '303':
+          description: Local session revoked; redirect to hosted logout and back to Studio
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Location:
+              $ref: '#/components/headers/Location'
+            Set-Cookie:
+              $ref: '#/components/headers/SetCookie'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
   /studio/v1/organizations/{organizationId}/programs/{programId}/versions:
     post:
       tags: [Studio Planning]
@@ -883,6 +997,11 @@ paths:
 
 components:
   securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: allfit_studio_session
+      description: Opaque, host-only, HttpOnly Studio browser-session cookie.
     bearerAuth:
       type: http
       scheme: bearer
@@ -1061,6 +1180,11 @@ components:
         type: integer
         minimum: 1
         maximum: 30
+    SetCookie:
+      required: true
+      description: Sets or clears an HttpOnly browser cookie; its value is always opaque.
+      schema:
+        type: string
 
   responses:
     BadRequest:
@@ -1104,6 +1228,34 @@ components:
             type: https://errors.allfit.invalid/forbidden
             title: The actor cannot execute this operation
             status: 403
+            request_id: 01JEXAMPLE0000000000000000
+    AccountClosed:
+      description: The person linked to the authenticated account is closed
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/PrivateNoStore'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: https://errors.allfit.invalid/account-closed
+            title: The account is closed
+            status: 403
+            request_id: 01JEXAMPLE0000000000000000
+    UpstreamUnavailable:
+      description: An authentication dependency is temporarily unavailable
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: https://errors.allfit.invalid/upstream-unavailable
+            title: Authentication is temporarily unavailable
+            status: 503
             request_id: 01JEXAMPLE0000000000000000
     ScopeRequired:
       description: Required live grant is not effective
@@ -1232,6 +1384,19 @@ components:
             request_id: 01JEXAMPLE0000000000000000
 
   schemas:
+    StudioRegistrationStatus:
+      type: string
+      enum: [complete, registration_incomplete]
+    StudioSession:
+      type: object
+      additionalProperties: false
+      required: [authenticated, registration_status]
+      properties:
+        authenticated:
+          type: boolean
+          const: true
+        registration_status:
+          $ref: '#/components/schemas/StudioRegistrationStatus'
     Uuid:
       type: string
       format: uuid

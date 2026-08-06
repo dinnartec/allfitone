@@ -66,6 +66,13 @@ export interface AuthorizationRequest {
   maxAgeSeconds?: number
 }
 
+export interface LogoutRequest {
+  /** `sid` from the verified access token. */
+  sessionId: string
+  /** Trusted application URL registered with the provider. */
+  returnTo: string
+}
+
 export interface AuthProvider {
   /**
    * Where to send the person to authenticate. Used by the hosted flow.
@@ -74,6 +81,9 @@ export interface AuthProvider {
    * provider exists.
    */
   getAuthorizationUrl(request: AuthorizationRequest): string
+
+  /** Hosted logout URL for exactly one provider session. */
+  getLogoutUrl(request: LogoutRequest): string
 
   /** Direct login. Used by Space, which has its own native screens. */
   authenticateWithPassword(credentials: PasswordCredentials, surface: Surface): Promise<AuthResult>

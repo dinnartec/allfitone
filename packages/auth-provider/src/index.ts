@@ -3,6 +3,7 @@ export type {
   AuthProvider,
   AuthResult,
   ExternalSubject,
+  LogoutRequest,
   PasswordCredentials,
   SessionTokens,
   Surface,

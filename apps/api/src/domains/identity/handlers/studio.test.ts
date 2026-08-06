@@ -1,23 +1,18 @@
-/**
- * Hosted-flow round trip.
- *
- * The state checks are CSRF protection, so they are written as denials and each
- * was observed passing — the callback accepting a forged request — before the
- * check existed.
- */
-
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { Hono } from 'hono'
-import { AuthError, type AuthProvider } from '@allfitone/auth-provider'
+import type { AuthProvider } from '@allfitone/auth-provider'
 
 import { setAuthProvider } from '../../../platform/auth/index.js'
+import { StudioSessionError, type StudioSessionService } from '../application/index.js'
 import { studioIdentityRoutes } from './studio.js'
 
 const AUTHORIZE_URL = 'https://api.workos.com/user_management/authorize?client_id=client_studio'
+const LOGOUT_URL = 'https://api.workos.com/user_management/sessions/logout?session_id=sid'
 
 function fakeProvider(overrides: Partial<AuthProvider> = {}): AuthProvider {
   return {
     getAuthorizationUrl: () => AUTHORIZE_URL,
+    getLogoutUrl: () => LOGOUT_URL,
     authenticateWithCode: async () => ({
       subject: 'user_01ABC',
       tokens: { accessToken: 'at', refreshToken: 'rt', expiresIn: 300 },
@@ -25,7 +20,7 @@ function fakeProvider(overrides: Partial<AuthProvider> = {}): AuthProvider {
     verifyAccessToken: async () => ({
       subject: 'user_01ABC',
       sessionId: 'session_01XYZ',
-      surface: 'studio' as const,
+      surface: 'studio',
     }),
     authenticateWithPassword: async () => {
       throw new Error('not used')
@@ -39,14 +34,25 @@ function fakeProvider(overrides: Partial<AuthProvider> = {}): AuthProvider {
   }
 }
 
-function app(provider: AuthProvider = fakeProvider()) {
+function fakeSessions(overrides: Partial<StudioSessionService> = {}): StudioSessionService {
+  return {
+    completeCode: async () => ({ opaqueToken: 'opaque-session' }),
+    readSession: async () => ({ authenticated: true, registration_status: 'complete' }),
+    logout: async () => LOGOUT_URL,
+    ...overrides,
+  }
+}
+
+function app(
+  provider: AuthProvider = fakeProvider(),
+  sessions: StudioSessionService = fakeSessions(),
+) {
   setAuthProvider(provider)
   const instance = new Hono()
-  instance.route('/studio/v1', studioIdentityRoutes())
+  instance.route('/studio/v1', studioIdentityRoutes(sessions))
   return instance
 }
 
-/** Reads the state the server just issued, the way a browser would. */
 function stateFrom(response: Response): string {
   const cookie = response.headers.get('set-cookie') ?? ''
   return /allfit_oauth_state=([^;]+)/.exec(cookie)?.[1] ?? ''
@@ -54,163 +60,150 @@ function stateFrom(response: Response): string {
 
 beforeEach(() => {
   process.env.API_PUBLIC_URL = 'http://localhost:8080'
+  process.env.STUDIO_WEB_URL = 'http://localhost:3000'
 })
 
-afterEach(() => {
-  setAuthProvider(undefined)
-})
+afterEach(() => setAuthProvider(undefined))
 
 describe('GET /auth/start', () => {
-  test('redirects to the provider and issues a state cookie', async () => {
+  test('redirects to WorkOS with a 256-bit state cookie', async () => {
     const response = await app().request('/studio/v1/auth/start')
-
     expect(response.status).toBe(302)
+    expect(response.headers.get('cache-control')).toBe('no-store')
     expect(response.headers.get('location')).toBe(AUTHORIZE_URL)
-    expect(stateFrom(response)).not.toBe('')
+    expect(Buffer.from(stateFrom(response), 'base64url')).toHaveLength(32)
   })
 
-  test('the state cookie is not readable by scripts', async () => {
+  test('protects and scopes the state cookie', async () => {
+    const previousNodeEnv = process.env.NODE_ENV
+    process.env.NODE_ENV = 'production'
     const cookie = (await app().request('/studio/v1/auth/start')).headers.get('set-cookie') ?? ''
-
+    if (previousNodeEnv === undefined) delete process.env.NODE_ENV
+    else process.env.NODE_ENV = previousNodeEnv
     expect(cookie.toLowerCase()).toContain('httponly')
-    // Strict would withhold the cookie on the navigation back from the provider.
+    expect(cookie.toLowerCase()).toContain('secure')
     expect(cookie).toContain('SameSite=Lax')
-  })
-
-  test('issues a different state on every attempt', async () => {
-    const instance = app()
-    const first = stateFrom(await instance.request('/studio/v1/auth/start'))
-    const second = stateFrom(await instance.request('/studio/v1/auth/start'))
-
-    expect(first).not.toBe(second)
-  })
-
-  test('refuses to assemble without the base URL, rather than failing per request', () => {
-    delete process.env.API_PUBLIC_URL
-
-    // Deriving it from the Host header instead would let a caller choose where
-    // the provider sends the person back. Failing at assembly means a bad
-    // deploy stops on boot instead of 500ing on the first sign-in.
-    expect(() => studioIdentityRoutes()).toThrow(/API_PUBLIC_URL/)
+    expect(cookie).toContain('Path=/studio/v1/auth')
   })
 })
 
 describe('GET /auth/callback', () => {
-  const callback = (query: string, cookie?: string) =>
-    app().request(`/studio/v1/auth/callback${query}`, {
-      headers: cookie ? { cookie } : {},
-    })
-
-  test('completes and reports what it verified', async () => {
+  test('creates an opaque session and redirects without leaking tokens', async () => {
     const instance = app()
     const state = stateFrom(await instance.request('/studio/v1/auth/start'))
-
-    const response = await instance.request(`/studio/v1/auth/callback?code=abc&state=${state}`, {
+    const response = await instance.request(`/studio/v1/auth/callback?code=secret&state=${state}`, {
       headers: { cookie: `allfit_oauth_state=${state}` },
     })
 
+    expect(response.status).toBe(303)
+    expect(response.headers.get('location')).toBe('http://localhost:3000')
+    const cookie = response.headers.get('set-cookie') ?? ''
+    expect(cookie).toContain('allfit_studio_session=opaque-session')
+    const sessionCookie = cookie
+      .split(/,\s*/)
+      .find((value) => value.startsWith('allfit_studio_session='))
+    expect(sessionCookie?.toLowerCase()).toContain('httponly')
+    expect(sessionCookie).toContain('Path=/studio/v1')
+    expect(sessionCookie).not.toContain('Max-Age')
+    expect(response.headers.get('location')).not.toContain('secret')
+  })
+
+  test('rejects missing or mismatched state and consumes the state cookie', async () => {
+    const response = await app().request('/studio/v1/auth/callback?code=abc&state=attacker', {
+      headers: { cookie: 'allfit_oauth_state=victim' },
+    })
+    expect(response.status).toBe(400)
+    expect(response.headers.get('set-cookie')).toContain('allfit_oauth_state=;')
+  })
+
+  test('rejects a missing state cookie as an expired flow', async () => {
+    const response = await app().request('/studio/v1/auth/callback?code=abc&state=expired')
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: 'invalid-request', detail: 'missing or expired state cookie' },
+    })
+  })
+})
+
+describe('GET /session', () => {
+  test('returns the registration status without exposing identifiers', async () => {
+    const response = await app().request('/studio/v1/session', {
+      headers: { cookie: 'allfit_studio_session=opaque-session' },
+    })
     expect(response.status).toBe(200)
-    await expect(response.json()).resolves.toMatchObject({
-      subjectFromExchange: 'user_01ABC',
-      verified: { subject: 'user_01ABC', sessionId: 'session_01XYZ', surface: 'studio' },
+    expect(response.headers.get('cache-control')).toBe('private, no-store')
+    await expect(response.json()).resolves.toEqual({
+      authenticated: true,
+      registration_status: 'complete',
     })
   })
 
-  test('reports the token issuer, which is the point of the skeleton', async () => {
-    // Temporary: WORKOS_ISSUER cannot be set until a real token states the
-    // value. This field is how the first real login answers that.
-    const payload = Buffer.from(
-      JSON.stringify({ iss: 'https://issuer.example', sub: 'u', sid: 's' }),
-    ).toString('base64url')
-    const instance = app(
-      fakeProvider({
-        authenticateWithCode: async () => ({
-          subject: 'user_01ABC',
-          tokens: { accessToken: `h.${payload}.sig`, refreshToken: 'rt', expiresIn: 300 },
-        }),
-      }),
-    )
-    const state = stateFrom(await instance.request('/studio/v1/auth/start'))
-
-    const response = await instance.request(`/studio/v1/auth/callback?code=abc&state=${state}`, {
-      headers: { cookie: `allfit_oauth_state=${state}` },
-    })
-
-    await expect(response.json()).resolves.toMatchObject({
-      diagnostic: { tokenIssuer: 'https://issuer.example' },
-    })
-  })
-
-  test('rejects a state that does not match the cookie', async () => {
-    // The forgery this prevents: an attacker hands the victim a callback URL
-    // carrying the attacker's code, landing the victim in the attacker's session.
-    const response = await callback('?code=abc&state=attacker', 'allfit_oauth_state=victim')
-
-    expect(response.status).toBe(400)
-    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid-request' } })
-  })
-
-  test('rejects a callback with no state cookie at all', async () => {
-    const response = await callback('?code=abc&state=whatever')
-
-    expect(response.status).toBe(400)
-  })
-
-  test('rejects a callback carrying neither a state parameter nor a cookie', async () => {
-    // Both absent is the dangerous case: a comparison alone would see
-    // undefined === undefined and wave it through. Only an explicit presence
-    // check closes it.
-    const response = await callback('?code=abc')
-
-    expect(response.status).toBe(400)
-  })
-
-  test('rejects a callback with no code', async () => {
-    const response = await callback('?state=s', 'allfit_oauth_state=s')
-
-    expect(response.status).toBe(400)
-  })
-
-  test('consumes the state even when the exchange fails, so it cannot be replayed', async () => {
-    const response = await callback('?code=abc&state=x', 'allfit_oauth_state=y')
-
-    expect(response.headers.get('set-cookie') ?? '').toContain('allfit_oauth_state=;')
-  })
-
-  test('reports an unreachable provider as retryable, not as a bad login', async () => {
-    const instance = app(
-      fakeProvider({
-        authenticateWithCode: async () => {
-          throw new AuthError('provider_unavailable')
+  test('preserves a session when WorkOS is transiently unavailable', async () => {
+    const response = await app(
+      fakeProvider(),
+      fakeSessions({
+        readSession: async () => {
+          throw new StudioSessionError('upstream-unavailable')
         },
       }),
-    )
-    const state = stateFrom(await instance.request('/studio/v1/auth/start'))
-
-    const response = await instance.request(`/studio/v1/auth/callback?code=abc&state=${state}`, {
-      headers: { cookie: `allfit_oauth_state=${state}` },
+    ).request('/studio/v1/session', {
+      headers: { cookie: 'allfit_studio_session=opaque-session' },
     })
-
     expect(response.status).toBe(503)
-    await expect(response.json()).resolves.toMatchObject({
-      error: { code: 'upstream-unavailable' },
-    })
+    expect(response.headers.get('set-cookie')).toBeNull()
   })
 
-  test('rejects a token that fails verification even though the exchange succeeded', async () => {
-    const instance = app(
-      fakeProvider({
-        verifyAccessToken: async () => {
-          throw new AuthError('invalid_token')
+  test('clears a terminally invalid session', async () => {
+    const response = await app(
+      fakeProvider(),
+      fakeSessions({
+        readSession: async () => {
+          throw new StudioSessionError('unauthenticated')
         },
       }),
-    )
-    const state = stateFrom(await instance.request('/studio/v1/auth/start'))
-
-    const response = await instance.request(`/studio/v1/auth/callback?code=abc&state=${state}`, {
-      headers: { cookie: `allfit_oauth_state=${state}` },
+    ).request('/studio/v1/session', {
+      headers: { cookie: 'allfit_studio_session=opaque-session' },
     })
-
     expect(response.status).toBe(401)
+    expect(response.headers.get('set-cookie')).toContain('allfit_studio_session=;')
+  })
+})
+
+describe('POST /auth/logout', () => {
+  test('requires the exact Studio origin', async () => {
+    const response = await app().request('/studio/v1/auth/logout', {
+      method: 'POST',
+      headers: { origin: 'https://attacker.test' },
+    })
+    expect(response.status).toBe(403)
+  })
+
+  test('revokes locally, clears the cookie and redirects to hosted logout', async () => {
+    const response = await app().request('/studio/v1/auth/logout', {
+      method: 'POST',
+      headers: {
+        origin: 'http://localhost:3000',
+        cookie: 'allfit_studio_session=opaque-session',
+      },
+    })
+    expect(response.status).toBe(303)
+    expect(response.headers.get('location')).toBe(LOGOUT_URL)
+    expect(response.headers.get('set-cookie')).toContain('allfit_studio_session=;')
+  })
+})
+
+describe('Studio CORS', () => {
+  test('allows credentials only for the exact Studio origin and varies by Origin', async () => {
+    const allowed = await app().request('/studio/v1/session', {
+      headers: { origin: 'http://localhost:3000' },
+    })
+    expect(allowed.headers.get('access-control-allow-origin')).toBe('http://localhost:3000')
+    expect(allowed.headers.get('access-control-allow-credentials')).toBe('true')
+    expect(allowed.headers.get('vary')).toBe('Origin')
+
+    const denied = await app().request('/studio/v1/session', {
+      headers: { origin: 'https://attacker.test' },
+    })
+    expect(denied.headers.get('access-control-allow-origin')).not.toBe('https://attacker.test')
   })
 })

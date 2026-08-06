@@ -290,6 +290,12 @@ function fakeClient(overrides: Partial<WorkOSUserManagement> = {}) {
         `https://api.workos.com/user_management/authorize?client_id=${o.clientId}`,
       )
     },
+    getLogoutUrl: (o) =>
+      record(
+        'getLogoutUrl',
+        o,
+        `https://api.workos.com/user_management/sessions/logout?session_id=${o.sessionId}`,
+      ),
     ...overrides,
   }
   return { client: { userManagement }, calls }
@@ -455,5 +461,22 @@ describe('getAuthorizationUrl', () => {
     })
 
     expect(calls[0]?.args).toMatchObject({ maxAge: 300 })
+  })
+})
+
+describe('getLogoutUrl', () => {
+  test('delegates hosted logout by session id without exposing the SDK', () => {
+    const { provider, calls } = providerWith()
+
+    const url = provider.getLogoutUrl({
+      sessionId: 'session_01XYZ',
+      returnTo: 'https://studio.allfit.one',
+    })
+
+    expect(url).toContain('session_01XYZ')
+    expect(calls[0]).toEqual({
+      method: 'getLogoutUrl',
+      args: { sessionId: 'session_01XYZ', returnTo: 'https://studio.allfit.one' },
+    })
   })
 })
