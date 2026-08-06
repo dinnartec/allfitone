@@ -1,0 +1,2 @@
+-- Development and integration-test seed data belongs here.
+-- Keep schema changes in supabase/migrations; this file contains INSERTs only.

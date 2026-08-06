@@ -402,7 +402,7 @@ proves nothing — it tests the mock. **Integration tests against a real databas
 with RLS active are the layer that carries the weight.**
 
 - Runner: `bun test`
-- Integration database: Supabase CLI locally (`supabase start`), same engine and
+- Integration database: Supabase CLI locally (`bun run db:start`), same engine and
   extensions as production, same for developers and CI
 
 ### Mandatory by category

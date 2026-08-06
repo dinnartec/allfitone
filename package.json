@@ -22,6 +22,13 @@
     "check:openapi": "redocly lint packages/contracts/openapi/allfit-v1.openapi.yaml",
     "generate:contracts": "bun run --cwd packages/contracts generate",
     "check:contracts": "bun run --cwd packages/contracts check:generated",
+    "db:start": "supabase start --workdir packages/db",
+    "db:stop": "supabase stop --workdir packages/db",
+    "db:status": "supabase status --workdir packages/db",
+    "db:reset": "supabase db reset --local --workdir packages/db",
+    "db:lint": "supabase db lint --local --level warning --fail-on error --workdir packages/db",
+    "db:test": "supabase test db --local --workdir packages/db",
+    "db:migration:new": "supabase migration new --workdir packages/db",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },
