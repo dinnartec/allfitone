@@ -15,15 +15,17 @@ Normative product and architecture documentation lives in `allfitone-docs`.
 
 Be aware of the actual state before you start:
 
-|                                                        |                                                                                                          |
-| ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
-| `apps/api`                                             | `GET /health` plus the Studio hosted login flow, verified end to end against a real provider environment |
-| `apps/worker`                                          | Empty. Starts and exits immediately                                                                      |
-| `apps/studio-web`, `apps/backoffice-web`, `apps/space` | Not scaffolded. README only                                                                              |
-| `packages/auth-provider`                               | Working. Token verification, code exchange, sessions revocation                                          |
-| `packages/queue`                                       | Port defined; the Postgres adapter throws until `system.outbox_events` exists                            |
-| `packages/contracts`                                   | Canonical OpenAPI with 18 paths. `generated/` not produced yet                                           |
-| `packages/db`                                          | Empty. No migrations, no Supabase config yet                                                             |
+|                          |                                                                                                          |
+| ------------------------ | -------------------------------------------------------------------------------------------------------- |
+| `apps/api`               | `GET /health` plus the Studio hosted login flow, verified end to end against a real provider environment |
+| `apps/worker`            | Empty. Starts and exits immediately                                                                      |
+| `apps/studio-web`        | Next.js app with the Studio hosted-login entry point                                                     |
+| `apps/backoffice-web`    | Next.js app; MFA login remains blocked on the Backoffice API surface                                     |
+| `apps/space`             | Not scaffolded. README only                                                                              |
+| `packages/auth-provider` | Working. Token verification, code exchange, sessions revocation                                          |
+| `packages/queue`         | Port defined; the Postgres adapter throws until `system.outbox_events` exists                            |
+| `packages/contracts`     | Canonical OpenAPI with 18 paths. `generated/` not produced yet                                           |
+| `packages/db`            | Empty. No migrations, no Supabase config yet                                                             |
 
 Signing in works; **no session is established** and the subject is not resolved to
 a person. Both need the schema.
@@ -75,6 +77,9 @@ curl http://localhost:8080/health
 Any other route returns 404 until surfaces are mounted in
 `apps/api/src/surfaces.ts`.
 
+Studio runs at `http://localhost:3000` and Backoffice at
+`http://localhost:3001`.
+
 ## Commands
 
 Run from the repository root. Turbo runs each task across the workspaces and
@@ -96,6 +101,32 @@ For a single workspace, use a filter:
 bun run dev --filter=@allfitone/api
 bun run test --filter=@allfitone/auth-provider
 ```
+
+## Web deployments on Vercel
+
+Create one Vercel project per web app from this same repository. Keep the build
+and install commands on their detected defaults; the root `bun.lock` and
+`packageManager` field make Vercel use Bun.
+
+| Vercel project         | Root Directory        | Production domain       |
+| ---------------------- | --------------------- | ----------------------- |
+| `allfitone-studio`     | `apps/studio-web`     | `studio.allfit.one`     |
+| `allfitone-backoffice` | `apps/backoffice-web` | `backoffice.allfit.one` |
+
+For both projects:
+
+- Set the production branch to `main`.
+- Set `NEXT_PUBLIC_API_URL=https://api.allfit.one` for Production.
+- Enable **Include source files outside of the Root Directory** so workspace
+  packages remain available.
+- Keep Vercel's **Skip deployments when there are no changes** optimization
+  enabled; Turbo determines whether the selected workspace is affected.
+
+Reserve `allfit.one` for the public product or marketing site. Point the two app
+subdomains to their Vercel projects after adding them under **Settings →
+Domains**. The API project must use `API_PUBLIC_URL=https://api.allfit.one`,
+`STUDIO_WEB_URL=https://studio.allfit.one`, and
+`BACKOFFICE_WEB_URL=https://backoffice.allfit.one` in Production.
 
 ## Git hooks
 

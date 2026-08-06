@@ -102,6 +102,7 @@ export default tseslint.config(
       '**/dist/**',
       '**/.turbo/**',
       '**/.vercel/**',
+      '**/.next/**',
       '**/generated/**',
       'packages/db/types/**',
     ],
