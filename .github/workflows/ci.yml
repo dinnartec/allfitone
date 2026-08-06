@@ -52,6 +52,9 @@ jobs:
       - name: OpenAPI
         run: bun run check:openapi
 
+      - name: Generated contracts
+        run: bun run check:contracts
+
       - name: Lint
         run: bun run lint
 
