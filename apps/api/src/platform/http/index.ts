@@ -18,12 +18,21 @@ export type ApiErrorCode =
   | 'invalid-request'
   /** A dependency we do not control did not answer. Retryable. */
   | 'upstream-unavailable'
+  /** Authenticated account has not completed domain registration. */
+  | 'registration-incomplete'
+  /** The linked domain person was closed. */
+  | 'account-closed'
+  /** Authenticated request is not allowed to perform this action. */
+  | 'forbidden'
 
 const STATUS: Record<ApiErrorCode, ContentfulStatusCode> = {
   unauthenticated: 401,
   'wrong-surface': 403,
   'invalid-request': 400,
   'upstream-unavailable': 503,
+  'registration-incomplete': 403,
+  'account-closed': 403,
+  forbidden: 403,
 }
 
 /**

@@ -4,9 +4,8 @@
 # hooks cover the same ground locally, but hooks live on a developer's machine —
 # this is the gate that actually holds.
 #
-# Not here yet: integration tests (RLS, INT, IDEM, API) against Supabase local.
-# They are added with the first migrations; packages/db is still empty, and a job
-# that tests nothing reads as coverage that does not exist.
+# Database integration checks run separately because they need the local
+# Supabase stack and must always tear it down, even when a gate fails.
 
 name: CI
 
@@ -76,3 +75,37 @@ jobs:
             --from "${{ github.event.pull_request.base.sha }}" \
             --to "${{ github.event.pull_request.head.sha }}" \
             --verbose
+
+  database:
+    name: Database
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.16
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Start Supabase
+        run: bun run db:start
+
+      - name: Reset database
+        run: bun run db:reset
+
+      - name: Lint database
+        run: bun run db:lint
+
+      - name: Test database
+        run: bun run db:test
+
+      - name: Generated database types
+        run: bun run check:db-types
+
+      - name: Stop Supabase
+        if: always()
+        run: bun run db:stop

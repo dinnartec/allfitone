@@ -66,6 +66,8 @@ export interface WorkOSUserManagement {
     state?: string
     maxAge?: number
   }): string
+
+  getLogoutUrl(options: { sessionId: string; returnTo?: string }): string
 }
 
 export interface WorkOSClient {

@@ -155,6 +155,13 @@ export function createWorkOSAuthProvider(config: WorkOSConfig): AuthProvider {
       })
     },
 
+    getLogoutUrl(request): string {
+      return requireClient(ADMIN_SURFACE).userManagement.getLogoutUrl({
+        sessionId: request.sessionId,
+        returnTo: request.returnTo,
+      })
+    },
+
     async verifyAccessToken(token: string, surface: Surface): Promise<VerifiedToken> {
       const getKey = keyResolvers.get(surface)
       if (!getKey) throw new AuthError('invalid_token', `unknown surface: ${surface}`)

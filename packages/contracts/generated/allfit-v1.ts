@@ -4,6 +4,74 @@
  */
 
 export interface paths {
+  '/studio/v1/auth/start': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** Start the hosted Studio authentication flow */
+    get: operations['startStudioAuthentication']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/studio/v1/auth/callback': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** Complete authentication and create an opaque Studio session */
+    get: operations['completeStudioAuthentication']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/studio/v1/session': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** Get the current Studio session registration status */
+    get: operations['getStudioSession']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/studio/v1/auth/logout': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /** Revoke the current session and start hosted WorkOS logout */
+    post: operations['logoutStudioSession']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/studio/v1/organizations/{organizationId}/programs/{programId}/versions': {
     parameters: {
       query?: never
@@ -320,6 +388,13 @@ export interface paths {
 export type webhooks = Record<string, never>
 export interface components {
   schemas: {
+    /** @enum {string} */
+    StudioRegistrationStatus: 'complete' | 'registration_incomplete'
+    StudioSession: {
+      /** @constant */
+      authenticated: true
+      registration_status: components['schemas']['StudioRegistrationStatus']
+    }
     /** Format: uuid */
     Uuid: string
     /** Format: uuid */
@@ -1291,6 +1366,42 @@ export interface components {
         'application/problem+json': components['schemas']['Problem']
       }
     }
+    /** @description The person linked to the authenticated account is closed */
+    AccountClosed: {
+      headers: {
+        'Cache-Control': components['headers']['PrivateNoStore']
+        [name: string]: unknown
+      }
+      content: {
+        /**
+         * @example {
+         *       "type": "https://errors.allfit.invalid/account-closed",
+         *       "title": "The account is closed",
+         *       "status": 403,
+         *       "request_id": "01JEXAMPLE0000000000000000"
+         *     }
+         */
+        'application/problem+json': components['schemas']['Problem']
+      }
+    }
+    /** @description An authentication dependency is temporarily unavailable */
+    UpstreamUnavailable: {
+      headers: {
+        'Cache-Control': components['headers']['NoStore']
+        [name: string]: unknown
+      }
+      content: {
+        /**
+         * @example {
+         *       "type": "https://errors.allfit.invalid/upstream-unavailable",
+         *       "title": "Authentication is temporarily unavailable",
+         *       "status": 503,
+         *       "request_id": "01JEXAMPLE0000000000000000"
+         *     }
+         */
+        'application/problem+json': components['schemas']['Problem']
+      }
+    }
     /** @description Required live grant is not effective */
     ScopeRequired: {
       headers: {
@@ -1492,11 +1603,112 @@ export interface components {
     /** @description Present and true only when the minimal outcome is replayed. */
     IdempotentReplay: 'true'
     RetryAfter: number
+    /** @description Sets or clears an HttpOnly browser cookie; its value is always opaque. */
+    SetCookie: string
   }
   pathItems: never
 }
 export type $defs = Record<string, never>
 export interface operations {
+  startStudioAuthentication: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Redirect to the WorkOS hosted authentication flow */
+      302: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          Location: components['headers']['Location']
+          'Set-Cookie': components['headers']['SetCookie']
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  completeStudioAuthentication: {
+    parameters: {
+      query: {
+        code: string
+        state: string
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Session created; redirect to Studio without credentials in the URL */
+      303: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          Location: components['headers']['Location']
+          'Set-Cookie': components['headers']['SetCookie']
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  getStudioSession: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Current authenticated Studio session */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['PrivateNoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['StudioSession']
+        }
+      }
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['AccountClosed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  logoutStudioSession: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: string
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Local session revoked; redirect to hosted logout and back to Studio */
+      303: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          Location: components['headers']['Location']
+          'Set-Cookie': components['headers']['SetCookie']
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
   publishProgramVersion: {
     parameters: {
       query?: never

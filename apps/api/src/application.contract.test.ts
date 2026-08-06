@@ -5,6 +5,8 @@ import { createApp } from './application.js'
 
 type Route = { method: string; path: string }
 
+const HTTP_METHODS = new Set(['DELETE', 'GET', 'HEAD', 'OPTIONS', 'PATCH', 'POST', 'PUT'])
+
 function routeKey(route: Route) {
   return `${route.method.toUpperCase()} ${route.path}`
 }
@@ -12,7 +14,9 @@ function routeKey(route: Route) {
 function contractDrift(implementedRoutes: readonly Route[], excludedRoutes: readonly Route[]) {
   const stableRoutes = new Set(allfitV1ContractManifest.operations.map(routeKey))
   const exclusions = new Set(excludedRoutes.map(routeKey))
-  const implemented = new Set(implementedRoutes.map(routeKey))
+  const implemented = new Set(
+    implementedRoutes.filter(({ method }) => HTTP_METHODS.has(method.toUpperCase())).map(routeKey),
+  )
 
   return {
     undocumented: [...implemented].filter(
@@ -25,6 +29,7 @@ function contractDrift(implementedRoutes: readonly Route[], excludedRoutes: read
 describe('OpenAPI route gate', () => {
   test('covers every implemented Hono route and keeps every exclusion live', () => {
     process.env.API_PUBLIC_URL = 'https://api.example.test'
+    process.env.STUDIO_WEB_URL = 'https://studio.example.test'
     const routes = createApp().routes.map(({ method, path }) => ({ method, path }))
 
     expect(contractDrift(routes, allfitV1ContractManifest.exclusions)).toEqual({

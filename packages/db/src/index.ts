@@ -8,4 +8,4 @@
  * This is why each domain's `infrastructure/` calls database functions directly
  * instead of hiding them behind a portable repository.
  */
-export {}
+export type { Database } from '../types/database.types.js'
