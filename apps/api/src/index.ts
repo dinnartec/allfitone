@@ -5,6 +5,8 @@
  * configuration. Bun remains the toolchain for installs, tests and local
  * TypeScript execution; the deployed function uses Vercel's Node.js runtime.
  */
-import { createApp } from './app.js'
+import { Hono } from 'hono'
 
-export default createApp()
+import { createApp } from './application.js'
+
+export default createApp(new Hono())
