@@ -3,8 +3,8 @@
 Working agreement for every contributor to this repository, human or AI.
 
 This file is normative. If your instinct conflicts with something here, this file
-wins. If this file conflicts with `allfitone-docs`, that repository wins — see
-[Source of truth](#16-source-of-truth).
+wins. For product and architecture topics owned by `allfitone-docs`, that
+repository wins — see [Source of truth](#16-source-of-truth).
 
 ---
 
@@ -93,7 +93,7 @@ packages/
 `apps/` are things that **run**. `packages/` are things that get **used**. If it
 has no meaningful "start", it is a package.
 
-Outside this repository: `allfitone-docs` (normative documentation) and
+Outside this repository: `allfitone-docs` (normative product and architecture documentation) and
 `allfitone-design-system` (published UI library).
 
 ---
@@ -544,8 +544,9 @@ State what it does, why the standard library or an existing dependency is
 insufficient, and what it costs. Wait for approval.
 
 **Never edit generated files.**
-`packages/contracts/generated/` and `packages/db/types/` are outputs. Change the
-source and regenerate.
+`packages/contracts/generated/` and `packages/db/types/` are outputs. The
+canonical OpenAPI lives in `packages/contracts/openapi/` and is edited by hand;
+change it there, validate it with `bun run check:openapi`, then regenerate DTOs.
 
 **Never touch authorization claims.**
 Do not read `role`, `permissions` or `org_id` from a token, and do not widen
@@ -569,17 +570,19 @@ authorization — go to a human first.
 
 ## 16. Source of truth
 
-| Question                                                        | Where it is answered       |
-| --------------------------------------------------------------- | -------------------------- |
-| What the product does, user stories                             | `allfitone-docs/products/` |
-| Architecture decisions, domain model, RLS matrix, API contracts | `allfitone-docs/platform/` |
-| Domain vocabulary                                               | `allfitone-docs` glossary  |
-| How we build and test                                           | This file                  |
-| What the code actually does                                     | The code                   |
+| Question                                            | Where it is answered          |
+| --------------------------------------------------- | ----------------------------- |
+| What the product does, user stories                 | `allfitone-docs/products/`    |
+| Architecture decisions, domain model and RLS matrix | `allfitone-docs/platform/`    |
+| Executable OpenAPI contract                         | `packages/contracts/openapi/` |
+| Domain vocabulary                                   | `allfitone-docs` glossary     |
+| How we build and test                               | This file                     |
+| What the code actually does                         | The code                      |
 
-`allfitone-docs` is normative and outranks this file. Never copy its content here
-— link to it. If an implementation decision starts to affect more than one
-product, its definition moves there.
+`allfitone-docs` is normative for the product and architecture topics it owns and
+outranks this file on those topics. Never copy its content here — link to it. If
+an implementation decision starts to affect more than one product, its
+definition moves there.
 
 If documentation and code disagree, that is a finding worth reporting, not a gap
 to paper over silently.
@@ -604,5 +607,3 @@ Track these; they are known gaps, not oversights:
   login needs it.
 - The contact-change operation is absent from the operations matrix, although its
   events are already declared in the data dictionary.
-- `allfitone-docs` still names a per-product repository as owner of the API and
-  `supabase/`, and does not mention `apps/worker`.

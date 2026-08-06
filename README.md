@@ -15,17 +15,22 @@ Normative product and architecture documentation lives in `allfitone-docs`.
 
 Be aware of the actual state before you start:
 
-|                                                        |                                                                |
-| ------------------------------------------------------ | -------------------------------------------------------------- |
-| `apps/api`                                             | Starts and serves `GET /health`. **No surface is mounted yet** |
-| `apps/worker`                                          | Empty. Starts and exits immediately                            |
-| `apps/studio-web`, `apps/backoffice-web`, `apps/space` | Not scaffolded. README only                                    |
-| `packages/auth-provider`, `packages/queue`             | Ports defined; adapters throw `not implemented`                |
-| `packages/db`                                          | Empty. No migrations, no Supabase config yet                   |
-| `packages/contracts`                                   | Empty. The specification is still only in `allfitone-docs`     |
+|                                                        |                                                                                                          |
+| ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| `apps/api`                                             | `GET /health` plus the Studio hosted login flow, verified end to end against a real provider environment |
+| `apps/worker`                                          | Empty. Starts and exits immediately                                                                      |
+| `apps/studio-web`, `apps/backoffice-web`, `apps/space` | Not scaffolded. README only                                                                              |
+| `packages/auth-provider`                               | Working. Token verification, code exchange, sessions revocation                                          |
+| `packages/queue`                                       | Port defined; the Postgres adapter throws until `system.outbox_events` exists                            |
+| `packages/contracts`                                   | Canonical OpenAPI with 18 paths. `generated/` not produced yet                                           |
+| `packages/db`                                          | Empty. No migrations, no Supabase config yet                                                             |
 
-Lint, typecheck, formatting and the git hooks are working. There are no tests
-yet, so `bun run test` passes trivially.
+Signing in works; **no session is established** and the subject is not resolved to
+a person. Both need the schema.
+
+Lint, typecheck, formatting, OpenAPI validation and the git hooks all run. Tests
+cover the identity port and the Studio login routes; there are no integration
+tests yet, because there is no database to run them against.
 
 ## Prerequisites
 
@@ -75,14 +80,15 @@ Any other route returns 404 until surfaces are mounted in
 Run from the repository root. Turbo runs each task across the workspaces and
 caches results, so repeat runs are near-instant.
 
-| Command             | What it does                         |
-| ------------------- | ------------------------------------ |
-| `bun run dev`       | Starts every app in watch mode       |
-| `bun run test`      | Runs tests (`bun test`)              |
-| `bun run lint`      | ESLint, including the boundary rules |
-| `bun run typecheck` | `tsc --noEmit` across workspaces     |
-| `bun run build`     | Builds every deployable              |
-| `bun run format`    | Prettier over the repository         |
+| Command                 | What it does                                 |
+| ----------------------- | -------------------------------------------- |
+| `bun run dev`           | Starts every app in watch mode               |
+| `bun run test`          | Runs tests (`bun test`)                      |
+| `bun run lint`          | ESLint, including the boundary rules         |
+| `bun run typecheck`     | `tsc --noEmit` across workspaces             |
+| `bun run build`         | Builds every deployable                      |
+| `bun run format`        | Prettier over the repository                 |
+| `bun run check:openapi` | Validates the canonical OpenAPI with Redocly |
 
 For a single workspace, use a filter:
 
@@ -185,5 +191,7 @@ it rejects a violating file before trusting it.
   needs it.
 - The contact-change operation is absent from the operations matrix, although its
   events are already declared in the data dictionary.
-- `allfitone-docs` still names a per-product repository as owner of the API and
-  `supabase/`, and does not mention `apps/worker`.
+- `allfitone-docs` is out of date on ownership: it still names a per-product
+  repository as owner of `supabase/`, the migrations and the API, never mentions
+  `apps/worker`, and — since the contract moved here — its claim that "contracts
+  remain in allfitone-docs" is no longer true.
