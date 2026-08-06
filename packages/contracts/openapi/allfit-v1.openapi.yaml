@@ -6,8 +6,9 @@ info:
   description: >-
     Canonical contract for the first implementable vertical slice shared by
     Allfit Studio and Allfit Space. Every operation maps to exactly one OP-* entry.
-    Endpoints outside this file remain non-implementable until added through
-    the contract-first gate.
+    Stable product endpoints outside this file remain non-implementable until
+    added through the contract-first gate. Operational and provisional routes
+    are not client contracts and must be declared in the auditable exclusion list.
   license:
     name: Proprietary
     identifier: LicenseRef-Proprietary
@@ -30,7 +31,31 @@ tags:
     description: Authorized professional nutrition operations.
 x-allfit-contract-gate:
   source: V1_OPERATIONS_MATRIX.md
-  rule: No endpoint may be implemented before it has an OpenAPI operation and x-allfit-operation.
+  rule: >-
+    Every implemented route must either have an OpenAPI operation with
+    x-allfit-operation or appear in exclusions. Exclusions are not stable client
+    contracts and must correspond to an implemented route.
+  exclusions:
+    - method: GET
+      path: /health
+      classification: operational
+      owner: platform
+      lifecycle: permanent
+      reason: Liveness belongs to deployment operations, not the product API.
+    - method: GET
+      path: /studio/v1/auth/start
+      classification: provisional
+      owner: identity
+      lifecycle: provisional
+      reason: The hosted authentication flow is a walking skeleton without a stable session contract.
+      exit_criterion: Replace it with the stable Studio session contract before authentication ships.
+    - method: GET
+      path: /studio/v1/auth/callback
+      classification: provisional
+      owner: identity
+      lifecycle: provisional
+      reason: The callback response is diagnostic until the real Studio session contract is implemented.
+      exit_criterion: Replace it with the stable Studio session contract before authentication ships.
 x-allfit-media-url-policy:
   space_owner:
     delivery: signed_storage_url

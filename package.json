@@ -20,13 +20,15 @@
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "check:openapi": "redocly lint packages/contracts/openapi/allfit-v1.openapi.yaml",
+    "generate:contracts": "bun run --cwd packages/contracts generate",
+    "check:contracts": "bun run --cwd packages/contracts check:generated",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },
   "lint-staged": {
     "*.{ts,tsx,js,mjs}": [
       "prettier --write",
-      "eslint --fix --max-warnings=0"
+      "eslint --fix --max-warnings=0 --no-warn-ignored"
     ],
     "*.{json,md,yml,yaml}": [
       "prettier --write"
@@ -42,6 +44,7 @@
     "eslint": "^9.17.0",
     "husky": "^9.1.7",
     "lint-staged": "^15.2.11",
+    "openapi-typescript": "7.13.0",
     "prettier": "^3.4.2",
     "turbo": "^2.3.0",
     "typescript": "^5.7.0",

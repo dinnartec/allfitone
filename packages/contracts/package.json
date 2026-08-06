@@ -11,6 +11,8 @@
   },
   "scripts": {
     "check:openapi": "redocly lint openapi/allfit-v1.openapi.yaml --config ../../redocly.yaml",
+    "generate": "bun scripts/generate.ts",
+    "check:generated": "bun run generate && git diff --exit-code -- generated",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit"
   }
