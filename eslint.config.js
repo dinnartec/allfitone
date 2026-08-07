@@ -30,6 +30,43 @@ const NO_QUEUE_SDK = {
   message: 'The queue SDK belongs in packages/queue. Use its port.',
 }
 
+// Product web apps consume visual decisions only through the React platform
+// package. Foundations and implementation libraries remain private to the DS.
+const UI_APPS = ['studio-web', 'backoffice-web']
+
+const NO_REACT_ROOT = {
+  name: '@allfitone/react',
+  message: 'Use an explicit public @allfitone/react subpath.',
+}
+
+const NO_DIRECT_UI = {
+  group: [
+    '@allfitone/brand',
+    '@allfitone/brand/*',
+    '@allfitone/icons',
+    '@allfitone/icons/*',
+    '@allfitone/tokens',
+    '@allfitone/tokens/*',
+    '@base-ui/react',
+    '@base-ui/react/*',
+    'lucide-react',
+    'lucide-react/*',
+    'class-variance-authority',
+    'clsx',
+    'tailwind-merge',
+    'shadcn',
+    'tailwindcss',
+    '@tailwindcss/*',
+    'tw-animate-css',
+  ],
+  message: 'Studio and Backoffice use explicit @allfitone/react subpaths only.',
+}
+
+const NO_LOCAL_UI = {
+  group: ['@/components/ui', '@/components/ui/*', '**/components/ui', '**/components/ui/**'],
+  message: 'Product apps do not own UI primitives. Add the capability to the Design System.',
+}
+
 // Hosting primitives stay out of packages/. This is what lets apps/api move
 // from Vercel to a container untouched.
 const NO_HOSTING = {
@@ -92,7 +129,10 @@ const NO_DB_IN_HANDLERS = {
 // domain, "every other domain" is an empty list.
 const restrict = (...patterns) => [
   'error',
-  { patterns: patterns.filter((p) => p.group.length > 0) },
+  {
+    paths: patterns.filter((pattern) => pattern.name),
+    patterns: patterns.filter((pattern) => pattern.group?.length > 0),
+  },
 ]
 
 export default tseslint.config(
@@ -153,9 +193,39 @@ export default tseslint.config(
         NO_QUEUE_SDK,
         noOtherApps(app),
         NO_DOMAIN_INTERNALS,
+        ...(UI_APPS.includes(app) ? [NO_REACT_ROOT, NO_DIRECT_UI, NO_LOCAL_UI] : []),
       ),
     },
   })),
+  {
+    files: UI_APPS.flatMap((app) => [`apps/${app}/**/*.{ts,tsx}`]),
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "JSXOpeningElement[name.name='svg']",
+          message: 'Inline SVG is forbidden. Use a public Design System brand or icon export.',
+        },
+        {
+          selector: "JSXAttribute[name.name='style']",
+          message: 'Inline visual styles are forbidden in Studio and Backoffice.',
+        },
+        {
+          selector: "JSXAttribute[name.name='className'] > Literal",
+          message: 'Literal visual classes are forbidden. Compose a public Design System API.',
+        },
+        {
+          selector: "JSXAttribute[name.name='className'] > JSXExpressionContainer > Literal",
+          message: 'Literal visual classes are forbidden. Compose a public Design System API.',
+        },
+        {
+          selector:
+            "JSXAttribute[name.name='className'] > JSXExpressionContainer > TemplateLiteral[expressions.length=0]",
+          message: 'Literal visual classes are forbidden. Compose a public Design System API.',
+        },
+      ],
+    },
+  },
   // Inside a domain: its own internals are fine, another domain's are not.
   ...DOMAINS.map((domain) => ({
     files: [`apps/api/src/domains/${domain}/**/*.ts`],
