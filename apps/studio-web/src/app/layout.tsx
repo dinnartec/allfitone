@@ -18,7 +18,7 @@ const body = Manrope({
 })
 
 export const metadata: Metadata = {
-  title: 'Allfit One Studio',
+  title: 'Allfit Studio',
   description: 'Gestión profesional para entrenadores, gimnasios y estudios.',
   robots: {
     index: false,

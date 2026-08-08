@@ -18,7 +18,7 @@ const body = Manrope({
 })
 
 export const metadata: Metadata = {
-  title: 'Allfit One Backoffice',
+  title: 'Allfit Backoffice',
   description: 'Operación interna de Allfit One.',
   robots: {
     index: false,
