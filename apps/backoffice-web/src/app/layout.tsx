@@ -1,7 +1,21 @@
 import type { Metadata } from 'next'
+import { Barlow_Condensed, Manrope } from 'next/font/google'
 import type { ReactNode } from 'react'
 
-import './globals.css'
+import '@allfitone/react/tokens.css'
+import '@allfitone/react/app.css'
+import '@allfitone/react/styles.css'
+
+const display = Barlow_Condensed({
+  subsets: ['latin'],
+  variable: '--afo-app-font-display',
+  weight: ['500', '600', '700'],
+})
+
+const body = Manrope({
+  subsets: ['latin'],
+  variable: '--afo-app-font-body',
+})
 
 export const metadata: Metadata = {
   title: 'Allfit Backoffice',
@@ -14,7 +28,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   return (
-    <html lang="es">
+    <html lang="es" data-afo-theme="dark" className={`${display.variable} ${body.variable}`}>
       <body>{children}</body>
     </html>
   )
