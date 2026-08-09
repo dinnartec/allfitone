@@ -1,40 +1,27 @@
 name: Deploy database
 
 on:
-  workflow_run:
-    workflows: [CI]
-    types: [completed]
-    branches: [main]
   workflow_dispatch:
-    inputs:
-      target:
-        description: Database environment to deploy
-        type: choice
-        required: true
-        default: staging
-        options:
-          - staging
-          - production
 
 permissions:
   contents: read
 
 concurrency:
-  group: database-${{ github.event_name == 'workflow_run' && 'staging' || inputs.target }}
+  group: database-production
   cancel-in-progress: false
 
 jobs:
   deploy:
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
-    name: Deploy ${{ github.event_name == 'workflow_run' && 'staging' || inputs.target }}
+    name: Deploy production
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    environment: supabase-${{ github.event_name == 'workflow_run' && 'staging' || inputs.target }}
+    environment: supabase-production
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Require main
+        run: test "$GITHUB_REF_NAME" = main
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -45,6 +32,27 @@ jobs:
 
       - name: Validate database policy
         run: bun run check:db-policy
+
+      # There is no shared staging database yet, so production promotion repeats
+      # the complete local database gate before any remote credentials are used.
+      - name: Start local Supabase
+        run: bun run db:start
+
+      - name: Reset local database
+        run: bun run db:reset
+
+      - name: Lint local database
+        run: bun run db:lint
+
+      - name: Test local database
+        run: bun run db:test
+
+      - name: Validate generated database types
+        run: bun run check:db-types
+
+      - name: Stop local Supabase
+        if: always()
+        run: bun run db:stop
 
       - name: Validate deployment credentials
         env:
