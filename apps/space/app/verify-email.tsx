@@ -12,9 +12,11 @@
  * grant a Fitness ID. Someone who abandons here has left a credential and
  * nothing else, and saying so beats letting them assume otherwise.
  *
- * The code field sets no `returnKeyType`. The iOS number pad has no return key,
- * so asking for one makes the platform draw a floating "Go" button over the
- * layout — which is what it was doing.
+ * The code is entered through `CodeField`, which owns the segmented boxes, the
+ * digit filtering and the refusal to set `returnKeyType` — the iOS number pad
+ * has no return key, and asking for one floats a loose button over the layout.
+ * All of that lives in the design system so the next screen that takes a code
+ * inherits it instead of rediscovering it.
  *
  * Verification confirms the address and then signs in, which is why the password
  * comes along. See the note in `create-account.tsx` about what that costs and
@@ -23,11 +25,11 @@
 
 import { AmbientBackdrop } from '@allfitone/react-native/backdrop'
 import { Button } from '@allfitone/react-native/button'
+import { CodeField } from '@allfitone/react-native/code-field'
 import { FoundationIcon } from '@allfitone/react-native/icons'
 import { InlineAlert } from '@allfitone/react-native/inline-alert'
 import { Screen } from '@allfitone/react-native/screen'
 import { Text } from '@allfitone/react-native/text'
-import { TextField } from '@allfitone/react-native/text-field'
 import { useTheme } from '@allfitone/react-native/theme'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useState } from 'react'
@@ -126,19 +128,17 @@ export default function VerifyEmail() {
         </Text>
 
         <View style={styles.form}>
-          <TextField
+          <CodeField
             label="Código"
             value={code}
             onChangeText={(next) => {
               setNotice(undefined)
-              setCode(next.replace(/[^0-9]/g, '').slice(0, CODE_LENGTH))
+              setCode(next)
             }}
-            placeholder="000000"
-            keyboardType="number-pad"
-            inputMode="numeric"
+            length={CODE_LENGTH}
             autoComplete="one-time-code"
             textContentType="oneTimeCode"
-            maxLength={CODE_LENGTH}
+            autoFocus
             editable={!submitting}
           />
 
