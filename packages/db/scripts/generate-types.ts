@@ -41,7 +41,9 @@ if (checkOnly) {
   const current = await Bun.file(outputPath)
     .text()
     .catch(() => '')
-  if (current !== formatted) {
+  // Git may check text files out with CRLF on Windows; generated content is
+  // equivalent when its normalized LF representation matches.
+  if (current.replaceAll('\r\n', '\n') !== formatted.replaceAll('\r\n', '\n')) {
     console.error('Generated PostgreSQL types are stale. Run `bun run db:types`.')
     process.exit(1)
   }
