@@ -251,8 +251,21 @@ export default tseslint.config(
     },
   },
 
+  // Build tooling configuration: CommonJS, runs in Node, not part of the app
+  // graph. `**/` is required — a bare `*.config.js` matches only the root, so
+  // metro.config.js inside an app would go unchecked and then fail in CI.
   {
-    files: ['*.config.js'],
-    languageOptions: { globals: { process: 'readonly', console: 'readonly' } },
+    files: ['**/*.config.js', '**/*.config.mjs', 'scripts/**/*.mjs'],
+    languageOptions: {
+      sourceType: 'commonjs',
+      globals: {
+        process: 'readonly',
+        console: 'readonly',
+        module: 'writable',
+        require: 'readonly',
+        __dirname: 'readonly',
+      },
+    },
+    rules: { '@typescript-eslint/no-require-imports': 'off' },
   },
 )
