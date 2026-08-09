@@ -38,6 +38,7 @@ function fakeSessions(overrides: Partial<StudioSessionService> = {}): StudioSess
   return {
     completeCode: async () => ({ opaqueToken: 'opaque-session' }),
     readSession: async () => ({ authenticated: true, registration_status: 'complete' }),
+    resolveActor: async () => ({ accountId: 'account_1', personId: 'person_1' }),
     logout: async () => LOGOUT_URL,
     ...overrides,
   }

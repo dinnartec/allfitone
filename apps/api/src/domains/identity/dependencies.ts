@@ -1,13 +1,20 @@
 /** Identity module composition. */
 
 import { authProvider } from '../../platform/auth/index.js'
-import { createStudioSessionService, type StudioSessionService } from './application/index.js'
 import {
+  createStudioOnboardingService,
+  createStudioSessionService,
+  type StudioOnboardingService,
+  type StudioSessionService,
+} from './application/index.js'
+import {
+  createIdentityOnboardingDatabase,
   createIdentitySessionDatabase,
   createSessionTokenVaultFromEnv,
 } from './infrastructure/index.js'
 
 let cached: StudioSessionService | undefined
+let cachedOnboarding: StudioOnboardingService | undefined
 
 export function studioSessionService(): StudioSessionService {
   if (cached) return cached
@@ -23,6 +30,11 @@ export function studioSessionService(): StudioSessionService {
     studioWebUrl,
   })
   return cached
+}
+
+export function studioOnboardingService(): StudioOnboardingService {
+  cachedOnboarding ??= createStudioOnboardingService(createIdentityOnboardingDatabase())
+  return cachedOnboarding
 }
 
 /** Test seam. Undefined restores environment-backed construction. */

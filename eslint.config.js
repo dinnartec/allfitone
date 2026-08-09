@@ -101,7 +101,7 @@ const noOtherApps = (self) => ({
 // Listed explicitly, like the apps, so a domain can still import its own
 // internals. Adding a domain means adding it here — and until it is added, its
 // internals are reachable, so the list is part of creating a domain.
-const DOMAINS = ['identity']
+const DOMAINS = ['identity', 'organizations']
 
 // Brace expansion is NOT supported here — a `{a,b}` pattern silently matches
 // nothing, which is the worst failure mode for a rule like this. Expanded.

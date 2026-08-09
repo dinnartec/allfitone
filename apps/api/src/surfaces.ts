@@ -12,10 +12,13 @@
 
 import type { Hono } from 'hono'
 
-import { studioIdentityRoutes } from './domains/identity/index.js'
+import { studioIdentityRoutes, studioOnboardingRoutes } from './domains/identity/index.js'
+import { studioOrganizationRoutes } from './domains/organizations/index.js'
 
 export function mountSurfaces(app: Hono): void {
   app.route('/studio/v1', studioIdentityRoutes())
+  app.route('/studio/v1', studioOnboardingRoutes())
+  app.route('/studio/v1', studioOrganizationRoutes())
 
   // Mounted as each vertical slice lands:
   // app.route('/space/v1', spaceSurface())

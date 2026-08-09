@@ -24,6 +24,46 @@ export interface ActorRegistration {
   personStatus?: 'active' | 'closed'
 }
 
+export interface StudioActor {
+  accountId: string
+  personId?: string
+}
+
+export interface OnboardingAttempt {
+  id: string
+  status: 'open' | 'activated' | 'expired' | 'ineligible'
+  eligibilityStatus: 'pending' | 'pass' | 'fail'
+  expiresAt: Date
+}
+
+export interface AdultEligibilityEvidence {
+  result: 'pass' | 'fail'
+  evaluatedAt: Date
+}
+
+export interface IdentityOnboardingDatabase {
+  startAttempt(input: CommandContext & { accountId: string }): Promise<OnboardingAttempt>
+  recordAdultEligibility(
+    input: CommandContext & { accountId: string; attemptId: string; declaredAdult: boolean },
+  ): Promise<AdultEligibilityEvidence>
+  activatePerson(
+    input: CommandContext & {
+      accountId: string
+      attemptId: string
+      givenName: string
+      familyName: string
+      termsAccepted: boolean
+      privacyNoticeAccepted: boolean
+    },
+  ): Promise<string>
+}
+
+export interface CommandContext {
+  idempotencyKey: string
+  commandId: string
+  requestHash: Uint8Array
+}
+
 export interface IdentitySessionDatabase {
   resolveOrCreateAccount(issuer: string, subject: string): Promise<AccessAccount>
   createSession(input: {

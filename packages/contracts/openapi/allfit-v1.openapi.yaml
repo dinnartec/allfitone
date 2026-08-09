@@ -17,6 +17,8 @@ servers:
 tags:
   - name: Studio Identity
     description: Hosted authentication and opaque browser sessions for Allfit Studio.
+  - name: Studio Organizations
+    description: Studio entry context, organization creation and membership resolution.
   - name: Studio Planning
     description: Planning commands and queries performed from Allfit Studio.
   - name: Space Agenda
@@ -185,6 +187,206 @@ paths:
               $ref: '#/components/headers/SetCookie'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /studio/v1/onboarding-attempts:
+    post:
+      tags: [Studio Identity]
+      operationId: startStudioOnboardingAttempt
+      x-allfit-operation: OP-IDN-001
+      x-allfit-cache: no-store
+      summary: Start or resume the authenticated account's onboarding attempt
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      responses:
+        '200':
+          description: Open onboarding attempt, newly created or resumed
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudioOnboardingAttempt'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /studio/v1/onboarding-attempts/{attemptId}/eligibility-evidence:
+    post:
+      tags: [Studio Identity]
+      operationId: recordStudioAdultEligibilityEvidence
+      x-allfit-operation: OP-IDN-002
+      x-allfit-cache: no-store
+      summary: Record the account holder's adult self-declaration
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OnboardingAttemptId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdultEligibilityEvidenceCreate'
+      responses:
+        '200':
+          description: Versioned adult eligibility evaluation
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdultEligibilityEvidence'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /studio/v1/onboarding-attempts/{attemptId}/completion:
+    post:
+      tags: [Studio Identity]
+      operationId: completeStudioOnboarding
+      x-allfit-operation: OP-IDN-003
+      x-allfit-cache: no-store
+      summary: Activate the account holder's canonical person
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OnboardingAttemptId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StudioOnboardingCompletion'
+      responses:
+        '200':
+          description: Registration completed idempotently
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudioOnboardingCompletionResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /studio/v1/me/memberships:
+    get:
+      tags: [Studio Organizations]
+      operationId: listMyStudioMemberships
+      x-allfit-operation: OP-ORG-014
+      x-allfit-cache: private-no-store
+      summary: List the person's current and past Studio memberships
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Memberships visible to the current person
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/PrivateNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudioMembershipList'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /studio/v1/organization-types:
+    get:
+      tags: [Studio Organizations]
+      operationId: listStudioOrganizationTypes
+      x-allfit-operation: OP-ORG-019
+      x-allfit-cache: private-no-store
+      summary: List governed organization types available during Studio onboarding
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Governed organization type catalogue
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/PrivateNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationTypeList'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /studio/v1/organizations:
+    post:
+      tags: [Studio Organizations]
+      operationId: createStudioOrganization
+      x-allfit-operation: OP-ORG-001
+      x-allfit-cache: no-store
+      summary: Create an organization with its initial owner membership
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrganizationCreate'
+      responses:
+        '201':
+          description: Organization and owner membership created atomically
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationCreated'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
 
@@ -1009,6 +1211,12 @@ components:
       description: WorkOS AuthKit access token validated for the selected surface.
 
   parameters:
+    OnboardingAttemptId:
+      name: attemptId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/UuidV7'
     OrganizationId:
       name: organizationId
       in: path
@@ -1397,6 +1605,208 @@ components:
           const: true
         registration_status:
           $ref: '#/components/schemas/StudioRegistrationStatus'
+    StudioOnboardingStatus:
+      type: string
+      enum: [open, activated, ineligible, expired]
+    StudioEligibilityStatus:
+      type: string
+      enum: [pending, pass, fail]
+    StudioOnboardingAttempt:
+      type: object
+      additionalProperties: false
+      required:
+        [id, status, eligibility_status, expires_at, terms_version, privacy_notice_version]
+      properties:
+        id:
+          $ref: '#/components/schemas/UuidV7'
+        status:
+          $ref: '#/components/schemas/StudioOnboardingStatus'
+        eligibility_status:
+          $ref: '#/components/schemas/StudioEligibilityStatus'
+        expires_at:
+          type: string
+          format: date-time
+        terms_version:
+          type: string
+          const: platform_terms_v1
+        privacy_notice_version:
+          type: string
+          const: privacy_notice_v1
+    AdultEligibilityEvidenceCreate:
+      type: object
+      additionalProperties: false
+      required: [declared_adult]
+      properties:
+        declared_adult:
+          type: boolean
+    AdultEligibilityPolicy:
+      type: object
+      additionalProperties: false
+      required: [code, version, minimum_age, jurisdiction, evidence_kind]
+      properties:
+        code:
+          type: string
+          const: adult_eligibility
+        version:
+          type: integer
+          const: 1
+        minimum_age:
+          type: integer
+          const: 18
+        jurisdiction:
+          type: string
+          const: CO
+        evidence_kind:
+          type: string
+          const: self_declaration
+    AdultEligibilityEvidence:
+      type: object
+      additionalProperties: false
+      required: [result, evaluated_at, policy]
+      properties:
+        result:
+          type: string
+          enum: [pass, fail]
+        evaluated_at:
+          type: string
+          format: date-time
+        policy:
+          $ref: '#/components/schemas/AdultEligibilityPolicy'
+    StudioOnboardingCompletion:
+      type: object
+      additionalProperties: false
+      required: [given_name, family_name, terms_accepted, privacy_notice_accepted]
+      properties:
+        given_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        family_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        terms_accepted:
+          type: boolean
+          const: true
+        privacy_notice_accepted:
+          type: boolean
+          const: true
+    StudioOnboardingCompletionResult:
+      type: object
+      additionalProperties: false
+      required: [registration_status]
+      properties:
+        registration_status:
+          type: string
+          const: complete
+    OrganizationTypeCode:
+      type: string
+      enum: [professional_practice, gym, studio, academy, clinic]
+    OrganizationType:
+      type: object
+      additionalProperties: false
+      required: [code, name]
+      properties:
+        code:
+          $ref: '#/components/schemas/OrganizationTypeCode'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+    OrganizationTypeList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/OrganizationType'
+    ResponsibleParty:
+      type: object
+      additionalProperties: false
+      required: [kind, name]
+      properties:
+        kind:
+          type: string
+          enum: [natural_person, legal_entity]
+        name:
+          type: string
+          minLength: 1
+          maxLength: 160
+    OrganizationCreate:
+      type: object
+      additionalProperties: false
+      required: [display_name, type_code, responsible_party]
+      properties:
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        type_code:
+          $ref: '#/components/schemas/OrganizationTypeCode'
+        responsible_party:
+          $ref: '#/components/schemas/ResponsibleParty'
+    OrganizationCreated:
+      type: object
+      additionalProperties: false
+      required: [id, display_name, type_code, membership_id, roles]
+      properties:
+        id:
+          $ref: '#/components/schemas/UuidV7'
+        display_name:
+          type: string
+        type_code:
+          $ref: '#/components/schemas/OrganizationTypeCode'
+        membership_id:
+          $ref: '#/components/schemas/UuidV7'
+        roles:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: string
+            enum: [owner, admin, coach, staff]
+    StudioMembership:
+      type: object
+      additionalProperties: false
+      required:
+        [membership_id, organization_id, display_name, type_code, status, joined_at, roles]
+      properties:
+        membership_id:
+          $ref: '#/components/schemas/UuidV7'
+        organization_id:
+          $ref: '#/components/schemas/UuidV7'
+        display_name:
+          type: string
+        type_code:
+          $ref: '#/components/schemas/OrganizationTypeCode'
+        status:
+          type: string
+          enum: [active, terminated]
+        joined_at:
+          type: string
+          format: date-time
+        ended_at:
+          type: [string, 'null']
+          format: date-time
+        roles:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            enum: [owner, admin, coach, staff]
+    StudioMembershipList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/StudioMembership'
     Uuid:
       type: string
       format: uuid

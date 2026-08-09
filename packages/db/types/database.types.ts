@@ -14,7 +14,9 @@ export type Database = {
         Args: never
         Returns: Database['identity']['Enums']['actor_kind']
       }
+      has_membership: { Args: { p_organization_id: string }; Returns: boolean }
       is_self: { Args: { target_person_id: string }; Returns: boolean }
+      owns_membership: { Args: { p_membership_id: string }; Returns: boolean }
       person: { Args: never; Returns: string }
     }
     Enums: {
@@ -117,6 +119,104 @@ export type Database = {
           },
         ]
       }
+      eligibility_evidence: {
+        Row: {
+          evaluated_at: string
+          id: string
+          onboarding_attempt_id: string
+          policy_snapshot: Json
+          policy_snapshot_schema_version: number
+          policy_version: number
+          result: Database['identity']['Enums']['eligibility_result']
+        }
+        Insert: {
+          evaluated_at?: string
+          id?: string
+          onboarding_attempt_id: string
+          policy_snapshot: Json
+          policy_snapshot_schema_version?: number
+          policy_version: number
+          result: Database['identity']['Enums']['eligibility_result']
+        }
+        Update: {
+          evaluated_at?: string
+          id?: string
+          onboarding_attempt_id?: string
+          policy_snapshot?: Json
+          policy_snapshot_schema_version?: number
+          policy_version?: number
+          result?: Database['identity']['Enums']['eligibility_result']
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_eligibility_evidence_attempt'
+            columns: ['onboarding_attempt_id']
+            isOneToOne: false
+            referencedRelation: 'onboarding_attempts'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      onboarding_attempts: {
+        Row: {
+          account_id: string
+          created_at: string
+          expires_at: string
+          id: string
+          invitation_token_hash: string | null
+          person_id: string | null
+          privacy_notice_accepted_at: string | null
+          privacy_notice_version: string | null
+          status: Database['identity']['Enums']['onboarding_status']
+          terms_accepted_at: string | null
+          terms_version: string | null
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          expires_at: string
+          id?: string
+          invitation_token_hash?: string | null
+          person_id?: string | null
+          privacy_notice_accepted_at?: string | null
+          privacy_notice_version?: string | null
+          status?: Database['identity']['Enums']['onboarding_status']
+          terms_accepted_at?: string | null
+          terms_version?: string | null
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          expires_at?: string
+          id?: string
+          invitation_token_hash?: string | null
+          person_id?: string | null
+          privacy_notice_accepted_at?: string | null
+          privacy_notice_version?: string | null
+          status?: Database['identity']['Enums']['onboarding_status']
+          terms_accepted_at?: string | null
+          terms_version?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_onboarding_attempts_account'
+            columns: ['account_id']
+            isOneToOne: false
+            referencedRelation: 'access_accounts'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'fk_onboarding_attempts_person'
+            columns: ['person_id']
+            isOneToOne: false
+            referencedRelation: 'people'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       people: {
         Row: {
           activated_at: string
@@ -167,6 +267,20 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      activate_person: {
+        Args: {
+          p_account_id: string
+          p_attempt_id: string
+          p_command_id: string
+          p_family_name: string
+          p_given_name: string
+          p_idempotency_key: string
+          p_privacy_notice_accepted: boolean
+          p_request_hash: string
+          p_terms_accepted: boolean
+        }
+        Returns: string
+      }
       create_access_session: {
         Args: {
           p_access_account_id: string
@@ -195,6 +309,20 @@ export type Database = {
           token_version: number
         }[]
       }
+      record_adult_eligibility: {
+        Args: {
+          p_account_id: string
+          p_attempt_id: string
+          p_command_id: string
+          p_declared_adult: boolean
+          p_idempotency_key: string
+          p_request_hash: string
+        }
+        Returns: {
+          evaluated_at: string
+          result: string
+        }[]
+      }
       resolve_or_create_access_account: {
         Args: { p_issuer: string; p_provider: string; p_subject: string }
         Returns: {
@@ -215,10 +343,26 @@ export type Database = {
         }
         Returns: boolean
       }
+      start_onboarding_attempt: {
+        Args: {
+          p_account_id: string
+          p_command_id: string
+          p_idempotency_key: string
+          p_request_hash: string
+        }
+        Returns: {
+          attempt_id: string
+          eligibility_status: string
+          expires_at: string
+          status: string
+        }[]
+      }
     }
     Enums: {
       access_session_surface: 'studio'
       actor_kind: 'anonymous' | 'account' | 'person' | 'professional' | 'worker' | 'support'
+      eligibility_result: 'pass' | 'fail' | 'review_required' | 'unknown'
+      onboarding_status: 'open' | 'activated' | 'ineligible' | 'expired'
       person_status: 'active' | 'closed'
     }
     CompositeTypes: {
@@ -346,6 +490,8 @@ export const Constants = {
     Enums: {
       access_session_surface: ['studio'],
       actor_kind: ['anonymous', 'account', 'person', 'professional', 'worker', 'support'],
+      eligibility_result: ['pass', 'fail', 'review_required', 'unknown'],
+      onboarding_status: ['open', 'activated', 'ineligible', 'expired'],
       person_status: ['active', 'closed'],
     },
   },

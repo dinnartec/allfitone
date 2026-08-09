@@ -8,7 +8,8 @@ type Route = { method: string; path: string }
 const HTTP_METHODS = new Set(['DELETE', 'GET', 'HEAD', 'OPTIONS', 'PATCH', 'POST', 'PUT'])
 
 function routeKey(route: Route) {
-  return `${route.method.toUpperCase()} ${route.path}`
+  const canonicalPath = route.path.replace(/:([A-Za-z0-9_]+)/g, '{$1}')
+  return `${route.method.toUpperCase()} ${canonicalPath}`
 }
 
 function contractDrift(implementedRoutes: readonly Route[], excludedRoutes: readonly Route[]) {
