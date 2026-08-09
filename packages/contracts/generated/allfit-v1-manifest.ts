@@ -19,7 +19,7 @@ export const allfitV1ContractManifest = {
     },
     {
       method: 'POST',
-      path: '/space/v1/auth/registrations/{registrationId}/verification',
+      path: '/space/v1/auth/registrations/verification',
       operationId: 'verifySpaceRegistration',
       allfitOperation: 'OP-IDN-030',
     },

@@ -274,6 +274,10 @@ function fakeClient(overrides: Partial<WorkOSUserManagement> = {}) {
     authenticateWithPassword: async (o) => record('authenticateWithPassword', o, authResponse),
     authenticateWithRefreshToken: async (o) =>
       record('authenticateWithRefreshToken', o, authResponse),
+    createUser: async (o) => record('createUser', o, { id: 'user_01NEW' }),
+    sendVerificationEmail: async (o) => record('sendVerificationEmail', o, {}),
+    authenticateWithEmailVerification: async (o) =>
+      record('authenticateWithEmailVerification', o, authResponse),
     updateUser: async (o) => record('updateUser', o, {}),
     listSessions: async (id) =>
       record('listSessions', id, { data: [{ id: 's_1' }, { id: 's_2' }] }),
@@ -478,5 +482,169 @@ describe('getLogoutUrl', () => {
       method: 'getLogoutUrl',
       args: { sessionId: 'session_01XYZ', returnTo: 'https://studio.allfit.one' },
     })
+  })
+})
+
+describe('register', () => {
+  test('creates the credential and sends the code', async () => {
+    const { provider, calls } = providerWith()
+
+    const outcome = await provider.register({ email: 'a@b.co', password: 'a-long-password' })
+
+    expect(outcome.created).toBe(true)
+    expect(calls.map((c) => c.method)).toEqual(['createUser', 'sendVerificationEmail'])
+    expect(calls[1].args).toEqual({ userId: 'user_01NEW' })
+  })
+
+  test('an address already in use is not an error', async () => {
+    // The whole point of HU-SP-001 criterion 3. The provider rejects the second
+    // registration; the port must not let that rejection reach the caller,
+    // because a caller with something to catch has something to disclose.
+    const { provider } = providerWith({
+      createUser: async () => {
+        throw Object.assign(new Error('email already in use'), { status: 422 })
+      },
+    })
+
+    const outcome = await provider.register({ email: 'a@b.co', password: 'a-long-password' })
+
+    expect(outcome.created).toBe(false)
+  })
+
+  test('a taken address and a fresh one are indistinguishable to a caller that ignores `created`', async () => {
+    // Written this way on purpose: it asserts the property the endpoint above
+    // relies on, rather than the branch this adapter happens to take.
+    const fresh = providerWith()
+    const taken = providerWith({
+      createUser: async () => {
+        throw Object.assign(new Error('email already in use'), { status: 422 })
+      },
+    })
+
+    const results = await Promise.all([
+      fresh.provider.register({ email: 'new@b.co', password: 'a-long-password' }).then(
+        () => 'resolved',
+        () => 'rejected',
+      ),
+      taken.provider.register({ email: 'old@b.co', password: 'a-long-password' }).then(
+        () => 'resolved',
+        () => 'rejected',
+      ),
+    ])
+
+    expect(results[0]).toBe(results[1])
+  })
+
+  test('a provider outage still fails, because retrying is the right answer', async () => {
+    const { provider } = providerWith({
+      createUser: async () => {
+        throw Object.assign(new Error('gateway'), { status: 503 })
+      },
+    })
+
+    await expect(
+      provider.register({ email: 'a@b.co', password: 'a-long-password' }),
+    ).rejects.toMatchObject({ code: 'provider_unavailable', retryable: true })
+  })
+
+  test('a credential created but uncontactable fails rather than stranding the person', async () => {
+    const { provider } = providerWith({
+      sendVerificationEmail: async () => {
+        throw Object.assign(new Error('gateway'), { status: 503 })
+      },
+    })
+
+    await expect(
+      provider.register({ email: 'a@b.co', password: 'a-long-password' }),
+    ).rejects.toMatchObject({ code: 'provider_unavailable' })
+  })
+})
+
+describe('verifyEmail', () => {
+  const CREDS = { email: 'a@b.co', password: 'a-long-password' }
+
+  /** The provider's rejection that carries the pending token. */
+  const pendingVerification = () =>
+    Object.assign(new Error('email verification required'), {
+      code: 'email_verification_required',
+      pendingAuthenticationToken: 'pat_1',
+    })
+
+  test('redeems the code for a session using the pending token', async () => {
+    const { provider, calls } = providerWith({
+      authenticateWithPassword: async () => {
+        throw pendingVerification()
+      },
+    })
+
+    const result = await provider.verifyEmail(CREDS, '481920', 'space')
+
+    expect(result.subject).toBe('user_01FAKE')
+    expect(result.tokens.accessToken).toBe('at_1')
+    expect(calls.at(-1)).toMatchObject({
+      method: 'authenticateWithEmailVerification',
+      args: { code: '481920', pendingAuthenticationToken: 'pat_1' },
+    })
+  })
+
+  test('refuses an already-verified address instead of authenticating it', async () => {
+    // Sign-in succeeds here, which means no verification is pending. Returning
+    // the session would make this a second way to authenticate that never
+    // touches the emailed code.
+    const { provider } = providerWith()
+
+    await expect(provider.verifyEmail(CREDS, '481920', 'space')).rejects.toMatchObject({
+      code: 'invalid_credentials',
+    })
+  })
+
+  test('a wrong code is rejected as bad credentials', async () => {
+    const { provider } = providerWith({
+      authenticateWithPassword: async () => {
+        throw pendingVerification()
+      },
+      authenticateWithEmailVerification: async () => {
+        throw Object.assign(new Error('invalid code'), { status: 401 })
+      },
+    })
+
+    await expect(provider.verifyEmail(CREDS, '000000', 'space')).rejects.toMatchObject({
+      code: 'invalid_credentials',
+    })
+  })
+
+  test('a wrong password and a wrong code are the same rejection', async () => {
+    const wrongPassword = providerWith({
+      authenticateWithPassword: async () => {
+        throw Object.assign(new Error('invalid credentials'), { status: 401 })
+      },
+    })
+    const wrongCode = providerWith({
+      authenticateWithPassword: async () => {
+        throw pendingVerification()
+      },
+      authenticateWithEmailVerification: async () => {
+        throw Object.assign(new Error('invalid code'), { status: 401 })
+      },
+    })
+
+    const [a, b] = await Promise.all([
+      wrongPassword.provider.verifyEmail(CREDS, '481920', 'space').catch((e) => e.code),
+      wrongCode.provider.verifyEmail(CREDS, '000000', 'space').catch((e) => e.code),
+    ])
+
+    expect(a).toBe(b)
+  })
+
+  test('uses the surface client id, so a Space code cannot mint a Studio session', async () => {
+    const { provider, calls } = providerWith({
+      authenticateWithPassword: async () => {
+        throw pendingVerification()
+      },
+    })
+
+    await provider.verifyEmail(CREDS, '481920', 'space')
+
+    expect(calls.at(-1)?.args).toMatchObject({ clientId: CREDENTIALS.space.clientId })
   })
 })

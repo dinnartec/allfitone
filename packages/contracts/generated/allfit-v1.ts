@@ -17,9 +17,9 @@ export interface paths {
      * Create an account and send an email verification code
      * @description Creates the credential and nothing else. No person, no Fitness ID, no row in our database: HU-SP-001 criterion 4 makes activation a later step, and HU-SP-007 forbids storing anything fitness-related before adult eligibility is established.
      *
-     *     **The response never reveals whether the email already has an account.** Success and "already registered" are indistinguishable — same status, same body shape, same `registrationId`. The provider distinguishes them and the adapter normalizes that away, because propagating it would turn this endpoint into an oracle for which addresses are registered. That is HU-SP-001 criterion 3, and it is the reason there is no 409 here.
+     *     **The response never reveals whether the email already has an account.** Success and "already registered" are indistinguishable — same status, same body shape, same expiry. The provider distinguishes them and the adapter normalizes that away, because propagating it would turn this endpoint into an oracle for which addresses are registered. That is HU-SP-001 criterion 3, and it is the reason there is no 409 here.
      *
-     *     `registrationId` is opaque and unguessable. It exists so verification can proceed without the client ever holding a provider user id, which would leak existence just as effectively as a status code.
+     *     Nothing is stored on our side, so there is no handle to return and no state to expire. Verification identifies the attempt by the address the client already holds.
      */
     post: operations['startSpaceRegistration']
     delete?: never
@@ -28,7 +28,7 @@ export interface paths {
     patch?: never
     trace?: never
   }
-  '/space/v1/auth/registrations/{registrationId}/verification': {
+  '/space/v1/auth/registrations/verification': {
     parameters: {
       query?: never
       header?: never
@@ -43,7 +43,9 @@ export interface paths {
      *
      *     Still creates nothing in our database. The `ACCESS_ACCOUNT` is derived on the first authenticated Space operation, which is `OP-IDN-001`.
      *
-     *     A wrong or expired code answers 401 without saying which, and without confirming that `registrationId` corresponds to anything. Rate limiting is mandatory here: a six-digit code is brute-forceable in minutes otherwise.
+     *     Identified by address rather than by a server-issued handle, so the endpoint holds no state and nothing can expire out from under it. The address is not a secret the client lacks — it typed it a minute earlier — and the response is identical whether the code is wrong, the address unknown, or the account already verified.
+     *
+     *     Rate limiting is mandatory here: a six-digit code is brute-forceable in minutes otherwise.
      */
     post: operations['verifySpaceRegistration']
     delete?: never
@@ -447,17 +449,17 @@ export interface components {
     }
     SpaceRegistrationAccepted: {
       /**
-       * Format: uuid
-       * @description Returned whether or not an account was created, so the response is identical in both cases.
-       */
-      registrationId: string
-      /**
        * Format: date-time
        * @description When the verification code stops being accepted.
        */
       expiresAt: string
     }
     SpaceRegistrationVerify: {
+      /**
+       * Format: email
+       * @description The address the code was sent to.
+       */
+      email: string
       /** @description The six-digit code sent to the address. */
       code: string
     }
@@ -1668,8 +1670,6 @@ export interface components {
     GrantId: components['schemas']['Uuid']
     MealId: components['schemas']['Uuid']
     GoalVersionId: components['schemas']['Uuid']
-    /** @description Opaque handle for a registration attempt. Deliberately not the provider's user id: handing that to the client would reveal that an account exists. */
-    RegistrationId: string
     /** @description UUIDv4 reused only for HTTP retries of this operation. */
     IdempotencyKey: components['schemas']['UuidV4']
     /** @description UUIDv7 durable identity generated when the user intention is created. */
@@ -1741,10 +1741,7 @@ export interface operations {
     parameters: {
       query?: never
       header?: never
-      path: {
-        /** @description Opaque handle for a registration attempt. Deliberately not the provider's user id: handing that to the client would reveal that an account exists. */
-        registrationId: components['parameters']['RegistrationId']
-      }
+      path?: never
       cookie?: never
     }
     requestBody: {
@@ -1764,7 +1761,7 @@ export interface operations {
         }
       }
       400: components['responses']['BadRequest']
-      /** @description The code is wrong, expired, or the registration does not exist. One answer for all three, so the endpoint cannot be used to probe. */
+      /** @description The code is wrong or expired, the address has no pending registration, or it was already verified. One answer for all of them, so the endpoint cannot be used to probe. */
       401: {
         headers: {
           'Cache-Control': components['headers']['NoStore']

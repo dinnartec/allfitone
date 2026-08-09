@@ -34,6 +34,7 @@ import type {
   AuthResult,
   ExternalSubject,
   PasswordCredentials,
+  RegistrationOutcome,
   SessionTokens,
   Surface,
   VerifiedToken,
@@ -214,6 +215,83 @@ export function createWorkOSAuthProvider(config: WorkOSConfig): AuthProvider {
       return { subject, sessionId, surface }
     },
 
+    async register(credentials: PasswordCredentials): Promise<RegistrationOutcome> {
+      // Not surface-scoped: creating a credential acts on the directory, which
+      // every Application in the environment shares.
+      const c = requireClient(ADMIN_SURFACE)
+
+      let userId: string
+      try {
+        const user = await c.userManagement.createUser(credentials)
+        userId = user.id
+      } catch (cause) {
+        const error = translate(cause)
+        // An address already in use is NOT an error to this caller. The provider
+        // rejects it, and `translate` has already flattened that rejection into
+        // the same code a malformed address produces — which is why the two
+        // cannot be told apart here either. Reporting "not created" and letting
+        // the caller answer exactly as it would on success is what makes the
+        // endpoint above indistinguishable in both cases.
+        //
+        // A malformed address therefore also reports "not created" rather than
+        // throwing. Format is validated before this call; by the time the
+        // provider is the one objecting, the only safe answer is silence.
+        if (error.code === 'invalid_email') return { created: false }
+        throw error
+      }
+
+      try {
+        await c.userManagement.sendVerificationEmail({ userId })
+      } catch (cause) {
+        // The credential exists but no code went out. Surfacing this as a
+        // failure is right: the person would otherwise wait for an email that
+        // never arrives, and retrying registration is safe because the second
+        // attempt lands on the already-in-use path above.
+        throw translate(cause)
+      }
+
+      return { created: true }
+    },
+
+    async verifyEmail(
+      credentials: PasswordCredentials,
+      code: string,
+      surface: Surface,
+    ): Promise<AuthResult> {
+      const clientId = config.credentials[surface].clientId
+      const client = requireClient(surface)
+
+      // The provider has no "verify this code" call that also authenticates.
+      // Signing in against an unverified account is what mints the pending
+      // token, so the failed attempt is the first half of the flow rather than
+      // an error to handle.
+      let pendingAuthenticationToken: string
+      try {
+        const already = await client.userManagement.authenticateWithPassword({
+          ...credentials,
+          clientId,
+        })
+        // Sign-in succeeded, so the address was already verified. Returning the
+        // session would be a second way to authenticate that skips the code
+        // entirely; refusing keeps this endpoint about proving the mailbox.
+        void already
+        throw new AuthError('invalid_credentials', 'email already verified')
+      } catch (cause) {
+        if (cause instanceof AuthError) throw cause
+        const pending = pendingTokenOf(cause)
+        if (pending === undefined) throw translate(cause)
+        pendingAuthenticationToken = pending
+      }
+
+      return authenticate(surface, (c, id) =>
+        c.userManagement.authenticateWithEmailVerification({
+          code,
+          pendingAuthenticationToken,
+          clientId: id,
+        }),
+      )
+    },
+
     async authenticateWithPassword(
       credentials: PasswordCredentials,
       surface: Surface,
@@ -313,6 +391,27 @@ function translate(cause: unknown): AuthError {
     return new AuthError('provider_unavailable', trace)
   }
   return new AuthError('invalid_credentials', trace)
+}
+
+/**
+ * Pulls the pending token out of the provider's "verify your email" rejection.
+ *
+ * The SDK raises `AuthenticationException` carrying both a code and the token.
+ * Read structurally rather than with `instanceof`: the class is not exported in
+ * a form this adapter can narrow against, and matching on shape keeps the check
+ * working across SDK minor versions.
+ *
+ * Returns undefined for every other rejection, so a genuine failure falls
+ * through to `translate` instead of being mistaken for a verification step.
+ */
+function pendingTokenOf(cause: unknown): string | undefined {
+  if (typeof cause !== 'object' || cause === null) return undefined
+  const candidate = cause as { code?: unknown; pendingAuthenticationToken?: unknown }
+  if (candidate.code !== 'email_verification_required') return undefined
+  return typeof candidate.pendingAuthenticationToken === 'string' &&
+    candidate.pendingAuthenticationToken.length > 0
+    ? candidate.pendingAuthenticationToken
+    : undefined
 }
 
 function statusOf(cause: unknown): number | undefined {

@@ -90,15 +90,15 @@ paths:
 
         **The response never reveals whether the email already has an account.**
         Success and "already registered" are indistinguishable — same status, same
-        body shape, same `registrationId`. The provider distinguishes them and the
+        body shape, same expiry. The provider distinguishes them and the
         adapter normalizes that away, because propagating it would turn this
         endpoint into an oracle for which addresses are registered. That is
         HU-SP-001 criterion 3, and it is the reason there is no 409 here.
 
 
-        `registrationId` is opaque and unguessable. It exists so verification can
-        proceed without the client ever holding a provider user id, which would
-        leak existence just as effectively as a status code.
+        Nothing is stored on our side, so there is no handle to return and no
+        state to expire. Verification identifies the attempt by the address the
+        client already holds.
       security: []
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -132,7 +132,7 @@ paths:
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
 
-  /space/v1/auth/registrations/{registrationId}/verification:
+  /space/v1/auth/registrations/verification:
     post:
       tags: [Space Identity]
       operationId: verifySpaceRegistration
@@ -149,12 +149,16 @@ paths:
         the first authenticated Space operation, which is `OP-IDN-001`.
 
 
-        A wrong or expired code answers 401 without saying which, and without
-        confirming that `registrationId` corresponds to anything. Rate limiting is
-        mandatory here: a six-digit code is brute-forceable in minutes otherwise.
+        Identified by address rather than by a server-issued handle, so the
+        endpoint holds no state and nothing can expire out from under it. The
+        address is not a secret the client lacks — it typed it a minute earlier —
+        and the response is identical whether the code is wrong, the address
+        unknown, or the account already verified.
+
+
+        Rate limiting is mandatory here: a six-digit code is brute-forceable in
+        minutes otherwise.
       security: []
-      parameters:
-        - $ref: '#/components/parameters/RegistrationId'
       requestBody:
         required: true
         content:
@@ -175,8 +179,9 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           description: >-
-            The code is wrong, expired, or the registration does not exist. One
-            answer for all three, so the endpoint cannot be used to probe.
+            The code is wrong or expired, the address has no pending
+            registration, or it was already verified. One answer for all of
+            them, so the endpoint cannot be used to probe.
           headers:
             Cache-Control:
               $ref: '#/components/headers/NoStore'
@@ -1183,16 +1188,6 @@ components:
       required: true
       schema:
         $ref: '#/components/schemas/Uuid'
-    RegistrationId:
-      name: registrationId
-      in: path
-      required: true
-      description: >-
-        Opaque handle for a registration attempt. Deliberately not the provider's
-        user id: handing that to the client would reveal that an account exists.
-      schema:
-        type: string
-        format: uuid
     IdempotencyKey:
       name: Idempotency-Key
       in: header
@@ -1551,14 +1546,8 @@ components:
     SpaceRegistrationAccepted:
       type: object
       additionalProperties: false
-      required: [registrationId, expiresAt]
+      required: [expiresAt]
       properties:
-        registrationId:
-          type: string
-          format: uuid
-          description: >-
-            Returned whether or not an account was created, so the response is
-            identical in both cases.
         expiresAt:
           type: string
           format: date-time
@@ -1566,8 +1555,13 @@ components:
     SpaceRegistrationVerify:
       type: object
       additionalProperties: false
-      required: [code]
+      required: [email, code]
       properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+          description: The address the code was sent to.
         code:
           type: string
           pattern: '^[0-9]{6}$'

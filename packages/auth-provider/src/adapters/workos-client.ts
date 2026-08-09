@@ -44,6 +44,23 @@ export interface WorkOSUserManagement {
     clientId: string
   }): Promise<WorkOSAuthenticationResponse>
 
+  createUser(options: { email: string; password: string }): Promise<{ id: string }>
+
+  /**
+   * Sends the verification code. Creating a user does not send one on its own.
+   */
+  sendVerificationEmail(options: { userId: string }): Promise<unknown>
+
+  /**
+   * Redeems the emailed code for a session, using the pending token that a
+   * sign-in against an unverified account raises.
+   */
+  authenticateWithEmailVerification(options: {
+    code: string
+    pendingAuthenticationToken: string
+    clientId: string
+  }): Promise<WorkOSAuthenticationResponse>
+
   updateUser(options: { userId: string; email: string }): Promise<unknown>
 
   /** The SDK returns an AutoPaginatable; we only need the current page. */
