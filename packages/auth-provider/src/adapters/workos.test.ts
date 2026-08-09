@@ -606,10 +606,13 @@ describe('verifyEmail', () => {
   test('an unknown address is rejected exactly like a wrong code', async () => {
     const unknown = providerWith({ listUsers: async () => ({ data: [] }) })
     const wrongCode = providerWith({
+      // The provider's actual rejection, captured from the live API. Note the
+      // word "email" in both the code and the message: read loosely, a mistyped
+      // code looks like a bad address.
       verifyEmail: async () => {
-        throw Object.assign(new Error('Invalid one-time code'), {
+        throw Object.assign(new Error('Email verification code is incorrect.'), {
           status: 400,
-          code: 'invalid_one_time_code',
+          code: 'email_verification_code_incorrect',
         })
       },
     })

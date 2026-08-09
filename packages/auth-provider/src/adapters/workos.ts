@@ -377,6 +377,15 @@ function translate(cause: unknown): AuthError {
   // duplicate registration answered 401 while a fresh one answered 202, in
   // direct violation of HU-SP-001 criterion 3. Verified against the live API.
   const codes = providerErrorCodes(cause)
+  // Checked before the address rules, because the provider names a wrong
+  // verification code `email_verification_code_incorrect` and reports it as
+  // "Email verification code is incorrect." Both contain the word this file
+  // otherwise treats as meaning "the address is unusable", so without this a
+  // mistyped code came back as a malformed email and answered 400 instead of
+  // 401 — telling the person to fix an address that was never wrong.
+  if (codes.some((code) => code.includes('verification_code'))) {
+    return new AuthError('invalid_credentials', trace)
+  }
   if (codes.some((code) => code.includes('email'))) {
     return new AuthError('invalid_email', trace)
   }
@@ -387,6 +396,9 @@ function translate(cause: unknown): AuthError {
     return new AuthError('weak_password', trace)
   }
   if (status === 401 || status === 403 || text.includes('invalid credential')) {
+    return new AuthError('invalid_credentials', trace)
+  }
+  if (text.includes('verification code')) {
     return new AuthError('invalid_credentials', trace)
   }
   if (status === 422 || status === 409 || text.includes('email')) {

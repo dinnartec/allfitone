@@ -11,6 +11,8 @@
  * rebuild the disclosure the server went to some trouble to prevent.
  */
 
+import Constants from 'expo-constants'
+
 import type { AllfitV1Schemas } from '@allfitone/contracts'
 
 export type RegistrationAccepted = AllfitV1Schemas['SpaceRegistrationAccepted']
@@ -37,11 +39,34 @@ export class ApiError extends Error {
   }
 }
 
+/** The port the API listens on. Only the host varies between simulator and device. */
+const API_PORT = 8080
+
 /**
- * The simulator reaches the host on localhost; a device needs the host's LAN
- * address, which is why this is configurable rather than hardcoded.
+ * Where the API lives, resolved rather than assumed.
+ *
+ * `localhost` on a physical device means the device, not the machine running the
+ * API, so a hardcoded default works in the simulator and fails on a phone with
+ * a network error that looks like the phone is offline.
+ *
+ * Metro already solved this: the bundle was fetched from the development
+ * machine, and `hostUri` is the address it was fetched from — localhost in the
+ * simulator, the LAN address on a device. Reusing it means the same build works
+ * in both places with no configuration, and no IP to update when the network
+ * changes.
+ *
+ * `EXPO_PUBLIC_API_URL` still wins when set, for a deployed API.
  */
-const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080'
+function resolveBaseUrl(): string {
+  const configured = process.env.EXPO_PUBLIC_API_URL
+  if (configured) return configured
+
+  const hostUri = Constants.expoConfig?.hostUri
+  const host = hostUri?.split(':')[0]
+  return host ? `http://${host}:${API_PORT}` : `http://localhost:${API_PORT}`
+}
+
+const BASE_URL = resolveBaseUrl()
 
 /** Long enough for a cold provider call, short enough to not feel hung. */
 const TIMEOUT_MS = 15_000
