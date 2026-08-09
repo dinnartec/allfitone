@@ -14,6 +14,10 @@ export type Database = {
         Args: never
         Returns: Database['identity']['Enums']['actor_kind']
       }
+      can_read_membership_event: {
+        Args: { p_membership_id: string }
+        Returns: boolean
+      }
       has_membership: { Args: { p_organization_id: string }; Returns: boolean }
       is_self: { Args: { target_person_id: string }; Returns: boolean }
       owns_membership: { Args: { p_membership_id: string }; Returns: boolean }

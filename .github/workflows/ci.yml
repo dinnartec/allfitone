@@ -110,6 +110,9 @@ jobs:
       - name: Test database
         run: bun run db:test
 
+      - name: Test database concurrency
+        run: bun run db:test:concurrency
+
       - name: Generated database types
         run: bun run check:db-types
 

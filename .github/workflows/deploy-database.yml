@@ -47,6 +47,9 @@ jobs:
       - name: Test local database
         run: bun run db:test
 
+      - name: Test local database concurrency
+        run: bun run db:test:concurrency
+
       - name: Validate generated database types
         run: bun run check:db-types
 
