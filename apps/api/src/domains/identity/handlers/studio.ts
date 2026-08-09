@@ -35,7 +35,9 @@ export function studioIdentityRoutes(injectedService?: StudioSessionService): Ho
       origin: studioOrigin,
       credentials: true,
       allowMethods: ['GET', 'POST', 'OPTIONS'],
-      allowHeaders: ['Content-Type'],
+      // Mounted Studio handlers share one middleware chain, so this policy can answer
+      // preflights for onboarding and organizations before their own policies.
+      allowHeaders: ['Content-Type', 'Idempotency-Key', 'Command-Id'],
     }),
   )
 
