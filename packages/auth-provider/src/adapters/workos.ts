@@ -225,7 +225,7 @@ export function createWorkOSAuthProvider(config: WorkOSConfig): AuthProvider {
         const user = await c.userManagement.createUser(credentials)
         userId = user.id
       } catch (cause) {
-        const error = translate(cause)
+        const error = asAdminFailure(cause)
         // An address already in use is NOT an error to this caller. The provider
         // rejects it, and `translate` has flattened that rejection into the same
         // code a malformed address produces, so the two cannot be told apart
@@ -245,7 +245,7 @@ export function createWorkOSAuthProvider(config: WorkOSConfig): AuthProvider {
         // person would otherwise wait for an email that never arrives, and
         // retrying is safe because the second attempt lands on the
         // already-in-use path above.
-        throw translate(cause)
+        throw asAdminFailure(cause)
       }
 
       return { created: true }
@@ -269,7 +269,7 @@ export function createWorkOSAuthProvider(config: WorkOSConfig): AuthProvider {
         if (!user) throw new AuthError('invalid_credentials', 'no user for address')
         userId = user.id
       } catch (cause) {
-        throw cause instanceof AuthError ? cause : translate(cause)
+        throw cause instanceof AuthError ? cause : asAdminFailure(cause)
       }
 
       try {
@@ -401,6 +401,27 @@ function translate(cause: unknown): AuthError {
     return new AuthError('provider_unavailable', trace)
   }
   return new AuthError('invalid_credentials', trace)
+}
+
+/**
+ * Translation for calls that carry no person credentials.
+ *
+ * `createUser`, `listUsers` and `sendVerificationEmail` authenticate with our
+ * API key alone. A 401 or 403 there can only mean **our** key was refused, and
+ * routing it through the ordinary path turns a server misconfiguration into
+ * "check your email and password" — which is what it did, for the whole time an
+ * expired key went unnoticed.
+ *
+ * Reported as unavailable so the surface answers 503. Not strictly accurate —
+ * the provider answered fine — but it puts the failure on our side of the line,
+ * which is where it belongs and what a person can act on.
+ */
+function asAdminFailure(cause: unknown): AuthError {
+  const error = translate(cause)
+  if (error.code !== 'invalid_credentials') return error
+  const status = statusOf(cause)
+  if (status !== 401 && status !== 403) return error
+  return new AuthError('provider_unavailable', `admin call refused: ${error.detail ?? 'no detail'}`)
 }
 
 function statusOf(cause: unknown): number | undefined {

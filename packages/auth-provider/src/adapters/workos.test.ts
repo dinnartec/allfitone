@@ -547,6 +547,22 @@ describe('register', () => {
     expect(results[0]).toBe(results[1])
   })
 
+  test("a refused API key is our fault, not the person's", async () => {
+    // These calls carry no person credentials, so a 401 can only mean our key
+    // was rejected. Reporting it as bad credentials tells someone to check an
+    // email and password that were never the problem — which is exactly what
+    // happened when a key silently stopped working.
+    const { provider } = providerWith({
+      createUser: async () => {
+        throw Object.assign(new Error('Could not authorize the request.'), { status: 401 })
+      },
+    })
+
+    await expect(
+      provider.register({ email: 'a@b.co', password: 'a-long-password' }),
+    ).rejects.toMatchObject({ code: 'provider_unavailable', retryable: true })
+  })
+
   test('a provider outage still fails, because retrying is the right answer', async () => {
     const { provider } = providerWith({
       createUser: async () => {
