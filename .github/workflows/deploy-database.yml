@@ -1,0 +1,108 @@
+name: Deploy database
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Database environment to deploy
+        type: choice
+        required: true
+        default: staging
+        options:
+          - staging
+          - production
+
+permissions:
+  contents: read
+
+concurrency:
+  group: database-${{ github.event_name == 'workflow_run' && 'staging' || inputs.target }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    name: Deploy ${{ github.event_name == 'workflow_run' && 'staging' || inputs.target }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: supabase-${{ github.event_name == 'workflow_run' && 'staging' || inputs.target }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.16
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Validate database policy
+        run: bun run check:db-policy
+
+      - name: Validate deployment credentials
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          SUPABASE_ADMIN_DATABASE_URL: ${{ secrets.SUPABASE_ADMIN_DATABASE_URL }}
+          ALLFIT_API_DB_PASSWORD: ${{ secrets.ALLFIT_API_DB_PASSWORD }}
+        run: |
+          test -n "$SUPABASE_ACCESS_TOKEN"
+          test -n "$SUPABASE_PROJECT_REF"
+          test -n "$SUPABASE_DB_PASSWORD"
+          test -n "$SUPABASE_ADMIN_DATABASE_URL"
+          test -n "$ALLFIT_API_DB_PASSWORD"
+
+      - name: Link target project
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: >-
+          bunx supabase link
+          --project-ref "$SUPABASE_PROJECT_REF"
+          --password "$SUPABASE_DB_PASSWORD"
+          --workdir packages/db
+          --yes
+
+      - name: Show pending migrations
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: bunx supabase migration list --linked --password "$SUPABASE_DB_PASSWORD" --workdir packages/db
+
+      - name: Dry-run migration deployment
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: bunx supabase db push --linked --password "$SUPABASE_DB_PASSWORD" --workdir packages/db --dry-run
+
+      - name: Apply migrations
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: bunx supabase db push --linked --password "$SUPABASE_DB_PASSWORD" --workdir packages/db --yes
+
+      - name: Configure runtime database role
+        env:
+          SUPABASE_ADMIN_DATABASE_URL: ${{ secrets.SUPABASE_ADMIN_DATABASE_URL }}
+          ALLFIT_API_DB_PASSWORD: ${{ secrets.ALLFIT_API_DB_PASSWORD }}
+        run: |
+          psql "$SUPABASE_ADMIN_DATABASE_URL" \
+            --set=ON_ERROR_STOP=1 \
+            --set=role_password="$ALLFIT_API_DB_PASSWORD" <<'SQL'
+          alter role allfit_api password :'role_password';
+          SQL
+
+      - name: Verify migration history
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: bunx supabase migration list --linked --password "$SUPABASE_DB_PASSWORD" --workdir packages/db

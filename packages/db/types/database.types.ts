@@ -59,7 +59,7 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'access_accounts_person_id_fkey'
+            foreignKeyName: 'fk_access_accounts_person'
             columns: ['person_id']
             isOneToOne: false
             referencedRelation: 'people'
@@ -109,7 +109,7 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'access_sessions_access_account_id_fkey'
+            foreignKeyName: 'fk_access_sessions_access_account'
             columns: ['access_account_id']
             isOneToOne: false
             referencedRelation: 'access_accounts'

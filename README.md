@@ -15,38 +15,38 @@ Normative product and architecture documentation lives in `allfitone-docs`.
 
 Be aware of the actual state before you start:
 
-|                          |                                                                                                          |
-| ------------------------ | -------------------------------------------------------------------------------------------------------- |
-| `apps/api`               | `GET /health` plus the Studio hosted login flow, verified end to end against a real provider environment |
-| `apps/worker`            | Empty. Starts and exits immediately                                                                      |
-| `apps/studio-web`        | Next.js app with the Studio hosted-login entry point                                                     |
-| `apps/backoffice-web`    | Next.js app; MFA login remains blocked on the Backoffice API surface                                     |
-| `apps/space`             | Not scaffolded. README only                                                                              |
-| `packages/auth-provider` | Working. Token verification, code exchange, sessions revocation                                          |
-| `packages/queue`         | Port defined; the Postgres adapter throws until `system.outbox_events` exists                            |
-| `packages/contracts`     | Canonical OpenAPI with 18 paths. `generated/` not produced yet                                           |
-| `packages/db`            | Supabase CLI initialized for PostgreSQL-only local development; no migrations yet                        |
+|                          |                                                                                                            |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| `apps/api`               | `GET /health` plus the Studio hosted login flow, verified end to end against a real provider environment   |
+| `apps/worker`            | Empty. Starts and exits immediately                                                                        |
+| `apps/studio-web`        | Next.js app with the Studio hosted-login entry point                                                       |
+| `apps/backoffice-web`    | Next.js app; MFA login remains blocked on the Backoffice API surface                                       |
+| `apps/space`             | Not scaffolded. README only                                                                                |
+| `packages/auth-provider` | Working. Token verification, code exchange, sessions revocation                                            |
+| `packages/queue`         | Port defined; the Postgres adapter throws until `system.outbox_events` exists                              |
+| `packages/contracts`     | Canonical OpenAPI with 18 paths. `generated/` not produced yet                                             |
+| `packages/db`            | PostgreSQL-only Supabase stack with identity, access-account and Studio-session migrations and pgTAP tests |
 
-Signing in works; **no session is established** and the subject is not resolved to
-a person. Both need the schema.
+Studio sign-in resolves or creates the external access account and establishes a
+persistent encrypted session. Linking that account to a domain person is a
+separate product operation and may remain pending.
 
 Lint, typecheck, formatting, OpenAPI validation and the git hooks all run. Tests
-cover the identity port and the Studio login routes; there are no integration
-tests yet, because there is no database to run them against.
+cover the identity port, Studio login routes, physical database structure, RLS
+and persistent session functions.
 
 ## Prerequisites
 
-| Tool                                                 | Version    | Needed for                                |
-| ---------------------------------------------------- | ---------- | ----------------------------------------- |
-| [Bun](https://bun.sh)                                | 1.2+       | Install, tests, running TS in development |
-| Node                                                 | 22+        | Production runtime, and what Vercel runs  |
-| Docker                                               | any recent | Local database, once migrations exist     |
-| [Supabase CLI](https://supabase.com/docs/guides/cli) | 2.110.0    | Integration tests, once migrations exist  |
+| Tool                                                 | Version    | Needed for                                  |
+| ---------------------------------------------------- | ---------- | ------------------------------------------- |
+| [Bun](https://bun.sh)                                | 1.2+       | Install, tests, running TS in development   |
+| Node                                                 | 22+        | Production runtime, and what Vercel runs    |
+| Docker                                               | any recent | Local PostgreSQL stack and database tests   |
+| [Supabase CLI](https://supabase.com/docs/guides/cli) | 2.110.0    | Migrations, lint, pgTAP and generated types |
 
 The Supabase CLI is installed as a project dependency and must be invoked with
-`bunx supabase`; do not rely on a global installation. Docker is not required
-yet because `packages/db` has no migrations. It becomes necessary when the first
-database vertical slice lands.
+`bunx supabase`; do not rely on a global installation. Docker is required for
+local database development and for the database integration checks.
 
 ## Setup
 
@@ -87,15 +87,19 @@ Studio runs at `http://localhost:3000` and Backoffice at
 Run from the repository root. Turbo runs each task across the workspaces and
 caches results, so repeat runs are near-instant.
 
-| Command                 | What it does                                 |
-| ----------------------- | -------------------------------------------- |
-| `bun run dev`           | Starts every app in watch mode               |
-| `bun run test`          | Runs tests (`bun test`)                      |
-| `bun run lint`          | ESLint, including the boundary rules         |
-| `bun run typecheck`     | `tsc --noEmit` across workspaces             |
-| `bun run build`         | Builds every deployable                      |
-| `bun run format`        | Prettier over the repository                 |
-| `bun run check:openapi` | Validates the canonical OpenAPI with Redocly |
+| Command                   | What it does                                          |
+| ------------------------- | ----------------------------------------------------- |
+| `bun run dev`             | Starts every app in watch mode                        |
+| `bun run test`            | Runs tests (`bun test`)                               |
+| `bun run lint`            | ESLint, including the boundary rules                  |
+| `bun run typecheck`       | `tsc --noEmit` across workspaces                      |
+| `bun run build`           | Builds every deployable                               |
+| `bun run format`          | Prettier over the repository                          |
+| `bun run check:openapi`   | Validates the canonical OpenAPI with Redocly          |
+| `bun run check:db-policy` | Validates migration history, names, seeds and secrets |
+| `bun run db:reset`        | Rebuilds the local database from migrations           |
+| `bun run db:test`         | Runs the database pgTAP suite                         |
+| `bun run check:db-types`  | Verifies generated database types                     |
 
 For a single workspace, use a filter:
 
@@ -129,6 +133,12 @@ subdomains to their Vercel projects after adding them under **Settings →
 Domains**. The API project must use `API_PUBLIC_URL=https://api.allfit.one`,
 `STUDIO_WEB_URL=https://studio.allfit.one`, and
 `BACKOFFICE_WEB_URL=https://backoffice.allfit.one` in Production.
+
+The API runtime also requires a Supavisor transaction-pooler `DATABASE_URL` for
+the `allfit_api` role and a 32-byte base64 `SESSION_ENCRYPTION_KEY`. Keep staging
+and production values separate. Database migrations are deployed only through
+the protected GitHub workflow documented in
+[`allfitone-docs/platform/database/OPERATIONS.md`](https://github.com/dinnartec/allfitone-docs/blob/main/platform/database/OPERATIONS.md).
 
 ## Git hooks
 

@@ -20,6 +20,7 @@
     "lint": "bun run check:ui-boundaries && turbo run lint",
     "typecheck": "turbo run typecheck",
     "check:ui-boundaries": "node scripts/check-ui-boundaries.mjs",
+    "check:db-policy": "node scripts/check-db-policy.mjs",
     "check:openapi": "redocly lint packages/contracts/openapi/allfit-v1.openapi.yaml",
     "generate:contracts": "bun run --cwd packages/contracts generate",
     "check:contracts": "bun run --cwd packages/contracts check:generated",
