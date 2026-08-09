@@ -225,6 +225,7 @@ export function createWorkOSAuthProvider(config: WorkOSConfig): AuthProvider {
       const client = requireClient(surface)
       const clientId = config.credentials[surface].clientId
 
+      let addressWasTaken = false
       try {
         await c.userManagement.createUser(credentials)
       } catch (cause) {
@@ -239,8 +240,13 @@ export function createWorkOSAuthProvider(config: WorkOSConfig): AuthProvider {
         // A malformed address therefore also reports "not created" rather than
         // throwing. Format is validated before this call; by the time the
         // provider is the one objecting, the only safe answer is silence.
-        if (error.code === 'invalid_email') return { created: false }
-        throw error
+        if (error.code !== 'invalid_email') throw error
+        // The address already has an account. Not an error to the caller — see
+        // above — but not the end of the attempt either: whoever is holding the
+        // matching password may be the owner coming back to a registration they
+        // abandoned, and HU-SP-006 criterion 2 says they resume rather than start
+        // over. Falling through to the sign-in below decides which it is.
+        addressWasTaken = true
       }
 
       // The handle is taken now, not at verification. Signing in against an
@@ -253,13 +259,18 @@ export function createWorkOSAuthProvider(config: WorkOSConfig): AuthProvider {
       // sending again would open a second verification and invalidate the first.
       try {
         await client.userManagement.authenticateWithPassword({ ...credentials, clientId })
-        // Authentication succeeded, so the address needed no verification. There
-        // is no handle to return and nothing was emailed.
-        return { created: true }
+        // Signed in, so the address was already verified. Returning these tokens
+        // would turn registration into a second way to authenticate that skips
+        // the emailed code entirely.
+        return { created: !addressWasTaken }
       } catch (cause) {
         const pending = pendingTokenOf(cause)
-        if (pending === undefined) throw translate(cause)
-        return { created: true, pendingToken: pending }
+        if (pending !== undefined) return { created: !addressWasTaken, pendingToken: pending }
+        // Wrong password against someone else's address. Reporting the failure
+        // would answer "does this address have an account", so it reports
+        // nothing and the caller pairs the absent handle with a decoy.
+        if (addressWasTaken) return { created: false }
+        throw translate(cause)
       }
     },
 

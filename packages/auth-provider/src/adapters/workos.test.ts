@@ -564,6 +564,57 @@ describe('register', () => {
     expect(results[0]).toBe(results[1])
   })
 
+  test('an abandoned registration resumes instead of dead-ending', async () => {
+    // HU-SP-006 criterion 2. Someone who registered, never verified and came
+    // back gets a usable handle rather than a decoy that can never redeem.
+    const { provider } = providerWith({
+      createUser: async () => throwEmailNotAvailable(),
+      authenticateWithPassword: async () => {
+        throw Object.assign(new Error('email verification required'), {
+          code: 'email_verification_required',
+          pendingAuthenticationToken: 'pat_resumed',
+        })
+      },
+    })
+
+    const outcome = await provider.register(
+      { email: 'a@b.co', password: 'a-long-password' },
+      'space',
+    )
+
+    expect(outcome.pendingToken).toBe('pat_resumed')
+  })
+
+  test('a wrong password against a taken address yields no handle and no error', async () => {
+    // The attacker case. Reporting the failure would answer "does this address
+    // have an account"; reporting success with a handle would hand them one.
+    const { provider } = providerWith({
+      createUser: async () => throwEmailNotAvailable(),
+      authenticateWithPassword: async () => {
+        throw Object.assign(new Error('Invalid credentials'), { status: 401 })
+      },
+    })
+
+    const outcome = await provider.register(
+      { email: 'a@b.co', password: 'a-long-password' },
+      'space',
+    )
+
+    expect(outcome.pendingToken).toBeUndefined()
+  })
+
+  test('an already-verified address never yields tokens from registration', async () => {
+    // Otherwise registration becomes a sign-in that skips the emailed code.
+    const { provider } = providerWith({ createUser: async () => throwEmailNotAvailable() })
+
+    const outcome = await provider.register(
+      { email: 'a@b.co', password: 'a-long-password' },
+      'space',
+    )
+
+    expect(outcome.pendingToken).toBeUndefined()
+  })
+
   test('a provider outage still fails, because retrying is the right answer', async () => {
     const { provider } = providerWith({
       createUser: async () => {
