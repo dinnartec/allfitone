@@ -11,10 +11,9 @@
  * write — not because the screen is lax, but because the response admits no
  * other behaviour. That is HU-SP-001 criterion 3 arriving here as an absence.
  *
- * The password travels on to the next screen. The provider mints its pending
- * verification token from a sign-in attempt, so the code alone cannot redeem a
- * session; see the note there about why this is a route param and what that
- * costs.
+ * What travels to the next screen is the opaque handle the API returns, not the
+ * password. The handle redeems the code and nothing else, so a navigation state
+ * dump exposes something short-lived and useless rather than a credential.
  */
 
 import { AmbientBackdrop } from '@allfitone/react-native/backdrop'
@@ -73,8 +72,11 @@ export default function CreateAccount() {
     setFailure(undefined)
     const address = email.trim()
     try {
-      await register(address, password)
-      router.push({ pathname: '/verify-email', params: { email: address, password } })
+      const accepted = await register(address, password)
+      router.push({
+        pathname: '/verify-email',
+        params: { email: address, verificationToken: accepted.verificationToken },
+      })
     } catch (cause) {
       setFailure(messageFor(cause))
     } finally {

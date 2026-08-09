@@ -19,7 +19,9 @@ export interface paths {
      *
      *     **The response never reveals whether the email already has an account.** Success and "already registered" are indistinguishable — same status, same body shape, same expiry. The provider distinguishes them and the adapter normalizes that away, because propagating it would turn this endpoint into an oracle for which addresses are registered. That is HU-SP-001 criterion 3, and it is the reason there is no 409 here.
      *
-     *     Nothing is stored on our side, so there is no handle to return and no state to expire. Verification identifies the attempt by the address the client already holds.
+     *     Returns an opaque `verificationToken` that ties the emailed code to this attempt. It is obtained here rather than at verification because the provider mints it from a sign-in against an unverified account, and every such attempt opens a **new** verification and sends a **new** code — fetching it later would cancel the code the person is about to type.
+     *
+     *     The field is always present. An absent one would say which case the caller is in; when no credential was created the value redeems nothing and earns the same rejection a wrong code earns.
      */
     post: operations['startSpaceRegistration']
     delete?: never
@@ -43,9 +45,9 @@ export interface paths {
      *
      *     Still creates nothing in our database. The `ACCESS_ACCOUNT` is derived on the first authenticated Space operation, which is `OP-IDN-001`.
      *
-     *     Identified by the credentials the client already holds rather than by a server-issued handle, so the endpoint keeps no state and nothing expires out from under it. The provider drives verification through a sign-in attempt against an unverified account, which is why the password is sent alongside the code.
+     *     Takes the handle from registration rather than the credentials. The password is not sent again: the code proves possession of the mailbox, which is the assurance a password reset already relies on.
      *
-     *     The response is identical whether the code is wrong, the password wrong, the address unknown, or the account already verified.
+     *     The response is identical whether the code is wrong, the handle expired, or the handle never redeemed anything.
      *
      *     Rate limiting is mandatory here: a six-digit code is brute-forceable in minutes otherwise.
      */
@@ -450,6 +452,8 @@ export interface components {
       password: string
     }
     SpaceRegistrationAccepted: {
+      /** @description Opaque handle returned with the code. Always present, so the shape cannot reveal whether an account was created. */
+      verificationToken: string
       /**
        * Format: date-time
        * @description When the verification code stops being accepted.
@@ -457,13 +461,8 @@ export interface components {
       expiresAt: string
     }
     SpaceRegistrationVerify: {
-      /**
-       * Format: email
-       * @description The address the code was sent to.
-       */
-      email: string
-      /** @description The same password used to register. The provider mints the pending verification token from a sign-in attempt, so it is required here and is not a second authentication factor. Composition is not re-checked: the credential already exists, and rejecting it here would lock out an account created under an earlier policy. */
-      password: string
+      /** @description The handle returned when the registration was accepted. */
+      verificationToken: string
       /** @description The six-digit code sent to the address. */
       code: string
     }

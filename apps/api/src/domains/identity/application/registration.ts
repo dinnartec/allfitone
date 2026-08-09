@@ -12,6 +12,8 @@
  * there is nothing to keep consistent across two.
  */
 
+import { randomUUID } from 'node:crypto'
+
 import { AuthError, type AuthProvider } from '@allfitone/auth-provider'
 
 /**
@@ -38,6 +40,15 @@ export class RegistrationError extends Error {
 
 export interface RegistrationAccepted {
   expiresAt: Date
+  /**
+   * Opaque handle the client returns with the code.
+   *
+   * Always present, whether or not a credential was created: an absent field
+   * would say which case the caller is in. When nothing was created the value is
+   * a random string that redeems nothing, and the failure it eventually produces
+   * is the same one a wrong code produces.
+   */
+  verificationToken: string
 }
 
 export interface SessionIssued {
@@ -52,7 +63,7 @@ export interface SpaceRegistrationService {
    * taken. The caller has nothing to branch on, which is the point.
    */
   register(email: string, password: string): Promise<RegistrationAccepted>
-  verify(email: string, password: string, code: string): Promise<SessionIssued>
+  verify(verificationToken: string, code: string): Promise<SessionIssued>
 }
 
 export interface SpaceRegistrationDependencies {
@@ -67,26 +78,29 @@ export function createSpaceRegistrationService(
 
   return {
     async register(email, password) {
+      let pendingToken: string | undefined
       try {
-        // The outcome says whether a credential was created. It is deliberately
-        // ignored: acting on it here is exactly the disclosure HU-SP-001
-        // criterion 3 forbids, and the port documents the flag as being for
-        // server-side metrics only.
-        await dependencies.authProvider.register({ email, password })
+        // `created` is deliberately ignored: acting on it is exactly the
+        // disclosure HU-SP-001 criterion 3 forbids, and the port documents the
+        // flag as being for server-side metrics only.
+        const outcome = await dependencies.authProvider.register({ email, password }, 'space')
+        pendingToken = outcome.pendingToken
       } catch (cause) {
         throw toRegistrationError(cause)
       }
 
-      return { expiresAt: new Date(now().getTime() + VERIFICATION_WINDOW_MINUTES * 60_000) }
+      return {
+        expiresAt: new Date(now().getTime() + VERIFICATION_WINDOW_MINUTES * 60_000),
+        // A decoy when the provider minted nothing, so the response shape does
+        // not betray which case this was. It redeems nothing, and the rejection
+        // it earns is the same one a wrong code earns.
+        verificationToken: pendingToken ?? randomUUID(),
+      }
     },
 
-    async verify(email, password, code) {
+    async verify(verificationToken, code) {
       try {
-        const result = await dependencies.authProvider.verifyEmail(
-          { email, password },
-          code,
-          'space',
-        )
+        const result = await dependencies.authProvider.verifyEmail(verificationToken, code, 'space')
         return {
           accessToken: result.tokens.accessToken,
           refreshToken: result.tokens.refreshToken,
@@ -100,6 +114,15 @@ export function createSpaceRegistrationService(
 }
 
 function toRegistrationError(cause: unknown): RegistrationError {
+  // Server-side only. The client is told one thing for several causes on
+  // purpose, which leaves nobody able to diagnose a failure from the outside —
+  // including us. `detail` carries the provider's reason and never reaches a
+  // response; see `fail`, which forwards only what it is handed.
+  console.warn('[identity] registration failed', {
+    code: cause instanceof AuthError ? cause.code : 'non-auth-error',
+    detail: cause instanceof AuthError ? cause.detail : String(cause).slice(0, 200),
+  })
+
   if (!(cause instanceof AuthError)) return new RegistrationError('upstream-unavailable')
 
   switch (cause.code) {

@@ -11,14 +11,15 @@
  * grant a Fitness ID. Someone who abandons here has left a credential and
  * nothing else, and saying so beats letting them assume otherwise.
  *
- * KNOWN GAP — the password arrives as a route parameter, because the provider
- * mints its pending verification token from a sign-in attempt and the code alone
- * cannot redeem a session. Expo Router puts params in the navigation state, so
- * the value can surface in a state dump or a deep link. It never leaves the
- * device and never lands in storage, but it is more exposure than a password
- * deserves. The fix is for the API to hold the pending token behind a short
- * opaque handle; that is a contract change, not a screen change, and it is
- * tracked rather than quietly accepted.
+ * The code field sets no `returnKeyType`. The iOS number pad has no return key,
+ * so asking for one makes the platform draw a floating "Go" button over the
+ * layout — which is what it was doing.
+ *
+ * The route carries an opaque handle rather than the password. An earlier
+ * version passed the credential, because the provider mints its pending token
+ * from a sign-in attempt; that turned out to be wrong for a worse reason than
+ * exposure, since each such sign-in opens a new verification and invalidates the
+ * code already sent.
  */
 
 import { AmbientBackdrop } from '@allfitone/react-native/backdrop'
@@ -41,9 +42,9 @@ const CODE_LENGTH = 6
 export default function VerifyEmail() {
   const theme = useTheme()
   const router = useRouter()
-  const { email = '', password = '' } = useLocalSearchParams<{
+  const { email = '', verificationToken = '' } = useLocalSearchParams<{
     email?: string
-    password?: string
+    verificationToken?: string
   }>()
 
   const [code, setCode] = useState('')
@@ -56,7 +57,7 @@ export default function VerifyEmail() {
     setSubmitting(true)
     setFailure(undefined)
     try {
-      const session = await verifyRegistration(email, password, code)
+      const session = await verifyRegistration(verificationToken, code)
       await storeSession(session)
       // Onboarding has no screen yet. Landing on the welcome screen with a
       // session is wrong, but inventing a destination would be worse — the next
@@ -119,7 +120,6 @@ export default function VerifyEmail() {
             autoComplete="one-time-code"
             textContentType="oneTimeCode"
             maxLength={CODE_LENGTH}
-            returnKeyType="go"
             editable={!submitting}
           />
 

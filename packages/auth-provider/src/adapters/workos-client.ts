@@ -47,11 +47,6 @@ export interface WorkOSUserManagement {
   createUser(options: { email: string; password: string }): Promise<{ id: string }>
 
   /**
-   * Sends the verification code. Creating a user does not send one on its own.
-   */
-  sendVerificationEmail(options: { userId: string }): Promise<unknown>
-
-  /**
    * Redeems the emailed code for a session, using the pending token that a
    * sign-in against an unverified account raises.
    */

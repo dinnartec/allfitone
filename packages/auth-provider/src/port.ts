@@ -88,6 +88,19 @@ export interface RegistrationOutcome {
    * reintroduces exactly the disclosure the port exists to prevent.
    */
   readonly created: boolean
+  /**
+   * Opaque handle tying the emailed code to this attempt, when one was created.
+   *
+   * Obtained here rather than at verification time, and that ordering is not
+   * incidental. Each sign-in against an unverified account opens a **new**
+   * verification and sends a **new** code, invalidating the previous one — so
+   * fetching this later would cancel the very code the person is about to type.
+   *
+   * Absent when no credential was created. A caller must not branch on that:
+   * pair it with an equally opaque placeholder so the two cases stay
+   * indistinguishable.
+   */
+  readonly pendingToken?: string
 }
 
 export interface AuthProvider {
@@ -110,25 +123,19 @@ export interface AuthProvider {
    * Creates no person and no domain record. The account is a credential until
    * onboarding completes.
    */
-  register(credentials: PasswordCredentials): Promise<RegistrationOutcome>
+  register(credentials: PasswordCredentials, surface: Surface): Promise<RegistrationOutcome>
 
   /**
-   * Confirms possession of the address and authenticates in one step.
+   * Redeems the emailed code for a session, using the handle from registration.
    *
-   * Takes the password rather than a stored handle because the provider drives
-   * verification through a failed sign-in: authenticating an unverified account
-   * yields a short-lived pending token, which the emailed code then redeems for
-   * a real session. Nothing is stored on our side and nothing expires out from
-   * under the caller.
-   *
-   * Returns tokens because the person proved control of the mailbox — the same
-   * assurance a password reset relies on — so asking again for the password they
+   * Takes no password: the code proves possession of the mailbox, which is the
+   * same assurance a password reset relies on, and asking again for the one
    * typed a minute earlier buys nothing.
    *
-   * Throws `invalid_credentials` for a wrong code, wrong password, unknown
-   * address, and already-verified account alike.
+   * Throws `invalid_credentials` for a wrong code, an expired handle and an
+   * unknown one alike.
    */
-  verifyEmail(credentials: PasswordCredentials, code: string, surface: Surface): Promise<AuthResult>
+  verifyEmail(pendingToken: string, code: string, surface: Surface): Promise<AuthResult>
 
   /** Hosted logout URL for exactly one provider session. */
   getLogoutUrl(request: LogoutRequest): string

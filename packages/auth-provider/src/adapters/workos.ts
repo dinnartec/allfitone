@@ -215,15 +215,18 @@ export function createWorkOSAuthProvider(config: WorkOSConfig): AuthProvider {
       return { subject, sessionId, surface }
     },
 
-    async register(credentials: PasswordCredentials): Promise<RegistrationOutcome> {
-      // Not surface-scoped: creating a credential acts on the directory, which
-      // every Application in the environment shares.
+    async register(
+      credentials: PasswordCredentials,
+      surface: Surface,
+    ): Promise<RegistrationOutcome> {
+      // Creating a credential acts on the directory, which every Application
+      // shares; minting the handle is surface-scoped, so both clients are needed.
       const c = requireClient(ADMIN_SURFACE)
+      const client = requireClient(surface)
+      const clientId = config.credentials[surface].clientId
 
-      let userId: string
       try {
-        const user = await c.userManagement.createUser(credentials)
-        userId = user.id
+        await c.userManagement.createUser(credentials)
       } catch (cause) {
         const error = translate(cause)
         // An address already in use is NOT an error to this caller. The provider
@@ -240,53 +243,31 @@ export function createWorkOSAuthProvider(config: WorkOSConfig): AuthProvider {
         throw error
       }
 
+      // The handle is taken now, not at verification. Signing in against an
+      // unverified account is what mints it, and every such attempt opens a NEW
+      // verification and sends a NEW code — so doing this later would cancel the
+      // code the person is holding and then fail to redeem it. Confirmed against
+      // the live API: three sign-ins produced three distinct verification ids.
+      //
+      // No explicit send either. Creating the user already dispatches a code;
+      // sending again would open a second verification and invalidate the first.
       try {
-        await c.userManagement.sendVerificationEmail({ userId })
+        await client.userManagement.authenticateWithPassword({ ...credentials, clientId })
+        // Authentication succeeded, so the address needed no verification. There
+        // is no handle to return and nothing was emailed.
+        return { created: true }
       } catch (cause) {
-        // The credential exists but no code went out. Surfacing this as a
-        // failure is right: the person would otherwise wait for an email that
-        // never arrives, and retrying registration is safe because the second
-        // attempt lands on the already-in-use path above.
-        throw translate(cause)
-      }
-
-      return { created: true }
-    },
-
-    async verifyEmail(
-      credentials: PasswordCredentials,
-      code: string,
-      surface: Surface,
-    ): Promise<AuthResult> {
-      const clientId = config.credentials[surface].clientId
-      const client = requireClient(surface)
-
-      // The provider has no "verify this code" call that also authenticates.
-      // Signing in against an unverified account is what mints the pending
-      // token, so the failed attempt is the first half of the flow rather than
-      // an error to handle.
-      let pendingAuthenticationToken: string
-      try {
-        const already = await client.userManagement.authenticateWithPassword({
-          ...credentials,
-          clientId,
-        })
-        // Sign-in succeeded, so the address was already verified. Returning the
-        // session would be a second way to authenticate that skips the code
-        // entirely; refusing keeps this endpoint about proving the mailbox.
-        void already
-        throw new AuthError('invalid_credentials', 'email already verified')
-      } catch (cause) {
-        if (cause instanceof AuthError) throw cause
         const pending = pendingTokenOf(cause)
         if (pending === undefined) throw translate(cause)
-        pendingAuthenticationToken = pending
+        return { created: true, pendingToken: pending }
       }
+    },
 
+    async verifyEmail(pendingToken: string, code: string, surface: Surface): Promise<AuthResult> {
       return authenticate(surface, (c, id) =>
         c.userManagement.authenticateWithEmailVerification({
           code,
-          pendingAuthenticationToken,
+          pendingAuthenticationToken: pendingToken,
           clientId: id,
         }),
       )
