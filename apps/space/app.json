@@ -1,0 +1,30 @@
+{
+  "expo": {
+    "name": "Allfit Space",
+    "slug": "allfit-space",
+    "version": "0.0.0",
+    "icon": "./assets/icon/icon.png",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "scheme": "allfitspace",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.dinnartec.allfitspace"
+    },
+    "android": {
+      "package": "com.dinnartec.allfitspace",
+      "edgeToEdgeEnabled": true,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon/adaptive-icon.png",
+        "backgroundColor": "#05090F"
+      },
+      "softwareKeyboardLayoutMode": "pan"
+    },
+    "plugins": ["expo-router", "expo-secure-store"],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "platforms": ["ios", "android"]
+  }
+}
