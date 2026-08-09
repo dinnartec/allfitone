@@ -49,7 +49,10 @@ function messageFor(cause: unknown): string {
   if (!(cause instanceof ApiError)) return 'Algo salió mal. Inténtalo otra vez.'
   switch (cause.failure) {
     case 'weak-password':
-      return 'Esa contraseña es muy común o muy corta. Prueba con una más larga.'
+      // Reached only when the password passed our rules and the provider still
+      // refused it, which now means it resembles something already breached
+      // rather than that it is short.
+      return 'Esa contraseña es demasiado fácil de adivinar. Cámbiale algunas letras o alárgala.'
     case 'unavailable':
       return 'No pudimos conectar. Revisa tu conexión e inténtalo otra vez.'
     default:

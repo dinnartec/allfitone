@@ -233,7 +233,11 @@ export function createWorkOSAuthProvider(config: WorkOSConfig): AuthProvider {
         // it would on success, which is what makes the endpoint above
         // indistinguishable in both cases.
         if (error.code !== 'invalid_email') throw error
-        return { created: false }
+        // The address already has an account. Not an error to this caller — see
+        // above — but not the end of the attempt either: if it is still
+        // unverified, this is someone asking for their code again, and doing
+        // nothing is why the resend button appeared to work and never delivered.
+        return { created: false, resent: await resendIfUnverified(c, credentials.email) }
       }
 
       try {
@@ -413,6 +417,29 @@ function translate(cause: unknown): AuthError {
     return new AuthError('provider_unavailable', trace)
   }
   return new AuthError('invalid_credentials', trace)
+}
+
+/**
+ * Sends the code again for an address that exists but is not yet verified.
+ *
+ * Separate from registration because the provider has no idempotent "register
+ * or resend": creating the user is what fails, and this is what the failure
+ * should lead to. A verified address gets nothing, which is correct — there is
+ * no code to resend and mailing one would be a way to pester an account holder.
+ *
+ * Failures are swallowed. The caller's response must not vary with what happened
+ * here, and a person who receives nothing will press the button again.
+ */
+async function resendIfUnverified(client: WorkOSClient, email: string): Promise<boolean> {
+  try {
+    const found = await client.userManagement.listUsers({ email })
+    const user = found.data[0]
+    if (!user || user.emailVerified) return false
+    await client.userManagement.sendVerificationEmail({ userId: user.id })
+    return true
+  } catch {
+    return false
+  }
 }
 
 /**

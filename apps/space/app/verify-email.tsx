@@ -1,11 +1,12 @@
 /**
  * Email verification.
  *
- * The wording is the criterion. HU-SP-001 criterion 3 requires the same message
- * whether or not the address already had an account, so the copy says *"si ese
- * correo puede recibir una cuenta"* rather than "te enviamos un código" — the
- * second sentence asserts something the reader can check, and checking it is
- * exactly how an address gets confirmed as registered.
+ * The wording still satisfies HU-SP-001 criterion 3, which requires the same
+ * message whether or not the address already had an account. It is the *same
+ * message either way* that carries the rule, not the hedging: the story itself
+ * describes the compliant copy as telling the person to check their mail
+ * "exista o no". An earlier version said "si ese correo puede recibir una
+ * cuenta", which met the rule and read like a legal notice.
  *
  * The panel below the code exists for criterion 4: creating an account does not
  * grant a Fitness ID. Someone who abandons here has left a credential and
@@ -121,8 +122,7 @@ export default function VerifyEmail() {
           {'Revisa tu\ncorreo'}
         </Text>
         <Text role="body" size="md" color="secondary" style={styles.lede}>
-          Si ese correo puede recibir una cuenta, le enviamos un código de seis dígitos
-          {email ? ` a ${email}` : ''}.
+          Te enviamos un código de seis dígitos{email ? ` a ${email}` : ' a tu correo'}.
         </Text>
 
         <View style={styles.form}>

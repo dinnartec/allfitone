@@ -88,6 +88,11 @@ export interface RegistrationOutcome {
    * reintroduces exactly the disclosure the port exists to prevent.
    */
   readonly created: boolean
+  /**
+   * True when the address already existed, was unverified, and a fresh code went
+   * out. Server-side signal only, on the same terms as `created`.
+   */
+  readonly resent?: boolean
 }
 
 export interface AuthProvider {

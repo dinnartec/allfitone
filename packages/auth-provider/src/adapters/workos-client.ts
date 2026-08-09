@@ -23,6 +23,12 @@ export interface WorkOSAuthenticationResponse {
   authenticationMethod?: string
 }
 
+export interface WorkOSUser {
+  id: string
+  /** Whether a code is still outstanding for this address. */
+  emailVerified: boolean
+}
+
 export interface WorkOSSession {
   id: string
 }
@@ -50,7 +56,7 @@ export interface WorkOSUserManagement {
    * Filtering by email is the only lookup the SDK offers — there is no
    * getUserByEmail. Returns an AutoPaginatable; we read the current page.
    */
-  listUsers(options: { email: string }): Promise<{ data: { id: string }[] }>
+  listUsers(options: { email: string }): Promise<{ data: WorkOSUser[] }>
 
   /** Sends the code. Creating a user opens a verification but does not email it. */
   sendVerificationEmail(options: { userId: string }): Promise<unknown>

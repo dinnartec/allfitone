@@ -275,7 +275,8 @@ function fakeClient(overrides: Partial<WorkOSUserManagement> = {}) {
     authenticateWithRefreshToken: async (o) =>
       record('authenticateWithRefreshToken', o, authResponse),
     createUser: async (o) => record('createUser', o, { id: 'user_01NEW' }),
-    listUsers: async (o) => record('listUsers', o, { data: [{ id: 'user_01FAKE' }] }),
+    listUsers: async (o) =>
+      record('listUsers', o, { data: [{ id: 'user_01FAKE', emailVerified: false }] }),
     sendVerificationEmail: async (o) => record('sendVerificationEmail', o, {}),
     verifyEmail: async (o) => record('verifyEmail', o, {}),
     updateUser: async (o) => record('updateUser', o, {}),
@@ -525,6 +526,31 @@ describe('register', () => {
     const outcome = await provider.register({ email: 'a@b.co', password: 'a-long-password' })
 
     expect(outcome.created).toBe(false)
+  })
+
+  test('a taken but unverified address gets its code sent again', async () => {
+    // What the resend button relies on. Returning early here is why pressing it
+    // appeared to work and delivered nothing.
+    const { provider, calls } = providerWith({ createUser: async () => throwEmailNotAvailable() })
+
+    const outcome = await provider.register({ email: 'a@b.co', password: 'a-long-password' })
+
+    expect(outcome.resent).toBe(true)
+    expect(calls.map((c) => c.method)).toContain('sendVerificationEmail')
+  })
+
+  test('a verified address is not mailed again', async () => {
+    // There is no code to resend, and sending one would be a way to pester
+    // somebody who already finished.
+    const { provider, calls } = providerWith({
+      createUser: async () => throwEmailNotAvailable(),
+      listUsers: async () => ({ data: [{ id: 'user_01FAKE', emailVerified: true }] }),
+    })
+
+    const outcome = await provider.register({ email: 'a@b.co', password: 'a-long-password' })
+
+    expect(outcome.resent).toBe(false)
+    expect(calls.map((c) => c.method)).not.toContain('sendVerificationEmail')
   })
 
   test('a taken address and a fresh one are indistinguishable to a caller that ignores `created`', async () => {
