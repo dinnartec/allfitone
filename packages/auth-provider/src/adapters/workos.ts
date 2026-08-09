@@ -376,6 +376,15 @@ function translate(cause: unknown): AuthError {
   // in platform/http, which only forwards what the caller passes it.
   const trace = `provider status ${status ?? 'none'}: ${messageOf(cause).slice(0, 200)}`
 
+  // Checked before status, because the provider reports an address already in
+  // use as a plain 400 whose top-level message says only "Could not create
+  // user." The reason lives in a nested `errors[].code`, and reading only the
+  // status or the message lands this in the default branch — which is how a
+  // duplicate registration answered 401 while a fresh one answered 202, in
+  // direct violation of HU-SP-001 criterion 3. Verified against the live API.
+  if (providerErrorCodes(cause).some((code) => code.includes('email'))) {
+    return new AuthError('invalid_email', trace)
+  }
   if (status === 401 || status === 403 || text.includes('invalid credential')) {
     return new AuthError('invalid_credentials', trace)
   }
@@ -419,6 +428,41 @@ function statusOf(cause: unknown): number | undefined {
   const candidate = cause as { status?: unknown; statusCode?: unknown }
   const value = candidate.status ?? candidate.statusCode
   return typeof value === 'number' ? value : undefined
+}
+
+/**
+ * Every error code the provider attached, top level and nested.
+ *
+ * The SDK surfaces its response body on the thrown error, and the useful code is
+ * usually not the outer one: a duplicate address arrives as
+ * `user_creation_error` wrapping `email_not_available`. Collecting both means
+ * the caller matches on the specific reason without knowing which level it
+ * arrived at.
+ */
+function providerErrorCodes(cause: unknown): string[] {
+  if (typeof cause !== 'object' || cause === null) return []
+  const candidate = cause as {
+    code?: unknown
+    rawData?: { code?: unknown; errors?: unknown }
+    errors?: unknown
+  }
+
+  const codes: string[] = []
+  const push = (value: unknown) => {
+    if (typeof value === 'string' && value.length > 0) codes.push(value.toLowerCase())
+  }
+
+  push(candidate.code)
+  push(candidate.rawData?.code)
+
+  for (const list of [candidate.errors, candidate.rawData?.errors]) {
+    if (!Array.isArray(list)) continue
+    for (const entry of list) {
+      if (typeof entry === 'object' && entry !== null) push((entry as { code?: unknown }).code)
+    }
+  }
+
+  return codes
 }
 
 function messageOf(cause: unknown): string {

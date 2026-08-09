@@ -485,6 +485,24 @@ describe('getLogoutUrl', () => {
   })
 })
 
+/**
+ * The provider's actual rejection for a duplicate address, captured from the
+ * live API rather than imagined.
+ *
+ * It is a plain 400 whose message says only "Could not create user." — the
+ * reason is nested. An earlier version of this test invented a 422 with the word
+ * "email" in the message, which the adapter happened to classify correctly, so
+ * the test passed while the real thing answered 401. A double more convenient
+ * than the system it stands in for is a test that lies.
+ */
+function throwEmailNotAvailable(): never {
+  throw Object.assign(new Error('Could not create user.'), {
+    status: 400,
+    code: 'user_creation_error',
+    errors: [{ code: 'email_not_available', message: 'This email is not available.' }],
+  })
+}
+
 describe('register', () => {
   test('creates the credential and sends the code', async () => {
     const { provider, calls } = providerWith()
@@ -502,11 +520,7 @@ describe('register', () => {
     // The whole point of HU-SP-001 criterion 3. The provider rejects the second
     // registration; the port must not let that rejection reach the caller,
     // because a caller with something to catch has something to disclose.
-    const { provider } = providerWith({
-      createUser: async () => {
-        throw Object.assign(new Error('email already in use'), { status: 422 })
-      },
-    })
+    const { provider } = providerWith({ createUser: async () => throwEmailNotAvailable() })
 
     const outcome = await provider.register({ email: 'a@b.co', password: 'a-long-password' })
 
@@ -517,11 +531,7 @@ describe('register', () => {
     // Written this way on purpose: it asserts the property the endpoint above
     // relies on, rather than the branch this adapter happens to take.
     const fresh = providerWith()
-    const taken = providerWith({
-      createUser: async () => {
-        throw Object.assign(new Error('email already in use'), { status: 422 })
-      },
-    })
+    const taken = providerWith({ createUser: async () => throwEmailNotAvailable() })
 
     const results = await Promise.all([
       fresh.provider.register({ email: 'new@b.co', password: 'a-long-password' }).then(
