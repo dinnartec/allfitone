@@ -115,6 +115,42 @@ export const allfitV1ContractManifest = {
     },
     {
       method: 'GET',
+      path: '/studio/v1/me/memberships',
+      operationId: 'listMyStudioMemberships',
+      allfitOperation: 'OP-ORG-014',
+    },
+    {
+      method: 'POST',
+      path: '/studio/v1/onboarding-attempts',
+      operationId: 'startStudioOnboardingAttempt',
+      allfitOperation: 'OP-IDN-001',
+    },
+    {
+      method: 'POST',
+      path: '/studio/v1/onboarding-attempts/{attemptId}/completion',
+      operationId: 'completeStudioOnboarding',
+      allfitOperation: 'OP-IDN-003',
+    },
+    {
+      method: 'POST',
+      path: '/studio/v1/onboarding-attempts/{attemptId}/eligibility-evidence',
+      operationId: 'recordStudioAdultEligibilityEvidence',
+      allfitOperation: 'OP-IDN-002',
+    },
+    {
+      method: 'GET',
+      path: '/studio/v1/organization-types',
+      operationId: 'listStudioOrganizationTypes',
+      allfitOperation: 'OP-ORG-019',
+    },
+    {
+      method: 'POST',
+      path: '/studio/v1/organizations',
+      operationId: 'createStudioOrganization',
+      allfitOperation: 'OP-ORG-001',
+    },
+    {
+      method: 'GET',
       path: '/studio/v1/organizations/{organizationId}/clients/{personId}/executions/{executionId}',
       operationId: 'getAuthorizedClientExecution',
       allfitOperation: 'OP-EXE-018',

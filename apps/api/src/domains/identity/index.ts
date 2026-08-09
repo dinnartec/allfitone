@@ -8,4 +8,10 @@
  */
 
 export { studioIdentityRoutes } from './handlers/studio.js'
+export { STUDIO_SESSION_COOKIE } from './handlers/studio.js'
+export { studioOnboardingRoutes } from './handlers/studio-onboarding.js'
 export { spaceIdentityRoutes } from './handlers/space.js'
+export { studioSessionService, trustedStudioWebUrl } from './dependencies.js'
+export { StudioSessionError } from './application/index.js'
+export type { StudioSessionService } from './application/index.js'
+export type { StudioActor } from './domain/index.js'

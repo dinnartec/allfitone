@@ -12,7 +12,7 @@ import { StudioSessionError, type StudioSessionService } from '../application/in
 import { studioSessionService, trustedStudioWebUrl } from '../dependencies.js'
 
 const STATE_COOKIE = 'allfit_oauth_state'
-const SESSION_COOKIE = 'allfit_studio_session'
+export const STUDIO_SESSION_COOKIE = 'allfit_studio_session'
 const STATE_TTL_SECONDS = 600
 const STATE_COOKIE_PATH = '/studio/v1/auth'
 const SESSION_COOKIE_PATH = '/studio/v1'
@@ -67,7 +67,7 @@ export function studioIdentityRoutes(injectedService?: StudioSessionService): Ho
 
     try {
       const result = await sessions().completeCode(code)
-      setCookie(c, SESSION_COOKIE, result.opaqueToken, sessionCookieOptions())
+      setCookie(c, STUDIO_SESSION_COOKIE, result.opaqueToken, sessionCookieOptions())
       return c.redirect(studioWebUrl, 303)
     } catch (error) {
       return sessionFailure(c, error, 'authentication callback failed')
@@ -76,14 +76,14 @@ export function studioIdentityRoutes(injectedService?: StudioSessionService): Ho
 
   routes.get('/session', async (c) => {
     c.header('Cache-Control', 'private, no-store')
-    const opaqueToken = getCookie(c, SESSION_COOKIE)
+    const opaqueToken = getCookie(c, STUDIO_SESSION_COOKIE)
     if (!opaqueToken) return fail(c, 'unauthenticated', 'missing session cookie')
 
     try {
       return c.json(await sessions().readSession(opaqueToken))
     } catch (error) {
       if (error instanceof StudioSessionError && error.code !== 'upstream-unavailable') {
-        deleteCookie(c, SESSION_COOKIE, { path: SESSION_COOKIE_PATH })
+        deleteCookie(c, STUDIO_SESSION_COOKIE, { path: SESSION_COOKIE_PATH })
       }
       return sessionFailure(c, error, 'session validation failed')
     }
@@ -96,8 +96,8 @@ export function studioIdentityRoutes(injectedService?: StudioSessionService): Ho
     }
 
     try {
-      const logoutUrl = await sessions().logout(getCookie(c, SESSION_COOKIE))
-      deleteCookie(c, SESSION_COOKIE, { path: SESSION_COOKIE_PATH })
+      const logoutUrl = await sessions().logout(getCookie(c, STUDIO_SESSION_COOKIE))
+      deleteCookie(c, STUDIO_SESSION_COOKIE, { path: SESSION_COOKIE_PATH })
       return c.redirect(logoutUrl, 303)
     } catch (error) {
       return sessionFailure(c, error, 'logout failed')

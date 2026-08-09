@@ -1,0 +1,122 @@
+import { describe, expect, test, beforeEach } from 'bun:test'
+import { Hono } from 'hono'
+
+import type { StudioOnboardingService, StudioSessionService } from '../application/index.js'
+import { studioOnboardingRoutes } from './studio-onboarding.js'
+
+const COMMAND_HEADERS = {
+  origin: 'https://studio.example.test',
+  cookie: 'allfit_studio_session=opaque',
+  'idempotency-key': '11111111-1111-4111-8111-111111111111',
+  'command-id': '22222222-2222-7222-8222-222222222222',
+  'content-type': 'application/json',
+}
+
+function sessions(overrides: Partial<StudioSessionService> = {}): StudioSessionService {
+  return {
+    completeCode: async () => ({ opaqueToken: 'opaque' }),
+    readSession: async () => ({
+      authenticated: true,
+      registration_status: 'registration_incomplete',
+    }),
+    resolveActor: async () => ({ accountId: '0198d000-0000-7000-8000-000000000011' }),
+    logout: async () => 'https://studio.example.test',
+    ...overrides,
+  }
+}
+
+function onboarding(overrides: Partial<StudioOnboardingService> = {}): StudioOnboardingService {
+  return {
+    startAttempt: async () => ({
+      id: '0198d000-0000-7000-8000-000000000021',
+      status: 'open',
+      eligibilityStatus: 'pending',
+      expiresAt: new Date('2026-08-10T12:00:00.000Z'),
+    }),
+    recordAdultEligibility: async () => ({
+      result: 'pass',
+      evaluatedAt: new Date('2026-08-09T12:00:00.000Z'),
+    }),
+    complete: async () => '0198d000-0000-7000-8000-000000000031',
+    ...overrides,
+  }
+}
+
+function app(
+  sessionService: StudioSessionService = sessions(),
+  onboardingService: StudioOnboardingService = onboarding(),
+) {
+  const instance = new Hono()
+  instance.route('/studio/v1', studioOnboardingRoutes(sessionService, onboardingService))
+  return instance
+}
+
+beforeEach(() => {
+  process.env.STUDIO_WEB_URL = 'https://studio.example.test'
+})
+
+describe('Studio onboarding routes', () => {
+  test('allows an authenticated account without a person to start activation', async () => {
+    const response = await app().request('/studio/v1/onboarding-attempts', {
+      method: 'POST',
+      headers: COMMAND_HEADERS,
+    })
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({
+      status: 'open',
+      eligibility_status: 'pending',
+      terms_version: 'platform_terms_v1',
+      privacy_notice_version: 'privacy_notice_v1',
+    })
+  })
+
+  test('requires the exact Studio origin for state changes', async () => {
+    const response = await app().request('/studio/v1/onboarding-attempts', {
+      method: 'POST',
+      headers: { ...COMMAND_HEADERS, origin: 'https://attacker.test' },
+    })
+    expect(response.status).toBe(403)
+  })
+
+  test('requires an opaque session cookie', async () => {
+    const { cookie: _cookie, ...headers } = COMMAND_HEADERS
+    const response = await app().request('/studio/v1/onboarding-attempts', {
+      method: 'POST',
+      headers,
+    })
+    expect(response.status).toBe(401)
+  })
+
+  test('rejects completion without both legal acceptances', async () => {
+    const response = await app().request(
+      '/studio/v1/onboarding-attempts/0198d000-0000-7000-8000-000000000021/completion',
+      {
+        method: 'POST',
+        headers: COMMAND_HEADERS,
+        body: JSON.stringify({
+          given_name: 'Ada',
+          family_name: 'Lovelace',
+          terms_accepted: true,
+          privacy_notice_accepted: false,
+        }),
+      },
+    )
+    expect(response.status).toBe(400)
+  })
+
+  test('returns a closed 503 when onboarding persistence is unavailable', async () => {
+    const response = await app(
+      sessions(),
+      onboarding({
+        startAttempt: async () => {
+          throw new Error('database unavailable')
+        },
+      }),
+    ).request('/studio/v1/onboarding-attempts', {
+      method: 'POST',
+      headers: COMMAND_HEADERS,
+    })
+    expect(response.status).toBe(503)
+    await expect(response.json()).resolves.toEqual({ error: { code: 'upstream-unavailable' } })
+  })
+})

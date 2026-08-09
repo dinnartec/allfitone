@@ -26,6 +26,8 @@ export type ApiErrorCode =
   | 'forbidden'
   /** The chosen password was refused: too short, or known to be breached. */
   | 'weak-password'
+  /** The command conflicts with durable state or a prior idempotent request. */
+  | 'conflict'
 
 const STATUS: Record<ApiErrorCode, ContentfulStatusCode> = {
   unauthenticated: 401,
@@ -36,6 +38,7 @@ const STATUS: Record<ApiErrorCode, ContentfulStatusCode> = {
   'account-closed': 403,
   forbidden: 403,
   'weak-password': 422,
+  conflict: 409,
 }
 
 /**

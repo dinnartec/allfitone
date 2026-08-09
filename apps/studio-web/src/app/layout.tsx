@@ -5,6 +5,7 @@ import type { ReactNode } from 'react'
 import '@allfitone/react/tokens.css'
 import '@allfitone/react/app.css'
 import '@allfitone/react/styles.css'
+import './studio.composition.css'
 
 const display = Barlow_Condensed({
   subsets: ['latin'],

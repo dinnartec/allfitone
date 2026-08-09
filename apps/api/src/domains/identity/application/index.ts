@@ -4,10 +4,13 @@ import { AuthError, type AuthProvider, type SessionTokens } from '@allfitone/aut
 
 import type {
   IdentitySessionDatabase,
+  IdentityOnboardingDatabase,
+  CommandContext,
   RegistrationStatus,
   SessionCipherContext,
   SessionTokenVault,
   StoredAccessSession,
+  StudioActor,
 } from '../domain/index.js'
 
 const REFRESH_WINDOW_MS = 30_000
@@ -27,7 +30,23 @@ export interface StudioSessionService {
     authenticated: true
     registration_status: RegistrationStatus
   }>
+  resolveActor(opaqueToken: string): Promise<StudioActor>
   logout(opaqueToken: string | undefined): Promise<string>
+}
+
+export interface StudioOnboardingService {
+  startAttempt(
+    actor: StudioActor,
+    command: CommandContext,
+  ): ReturnType<IdentityOnboardingDatabase['startAttempt']>
+  recordAdultEligibility(
+    actor: StudioActor,
+    input: Omit<Parameters<IdentityOnboardingDatabase['recordAdultEligibility']>[0], 'accountId'>,
+  ): ReturnType<IdentityOnboardingDatabase['recordAdultEligibility']>
+  complete(
+    actor: StudioActor,
+    input: Omit<Parameters<IdentityOnboardingDatabase['activatePerson']>[0], 'accountId'>,
+  ): ReturnType<IdentityOnboardingDatabase['activatePerson']>
 }
 
 export interface StudioSessionDependencies {
@@ -70,21 +89,14 @@ export function createStudioSessionService(
     },
 
     async readSession(opaqueToken) {
-      const session = await authenticatedSession(opaqueToken, true)
-      const registration = await dependencies.database.resolveRegistration(session.accountId)
-      if (registration.personStatus === 'closed') {
-        await dependencies.database.revokeSession(session.sessionId)
-        throw new StudioSessionError('account-closed')
-      }
-      if (registration.personId && registration.personStatus !== 'active') {
-        await dependencies.database.revokeSession(session.sessionId)
-        throw new StudioSessionError('unauthenticated')
-      }
+      const actor = await resolveActor(opaqueToken)
       return {
         authenticated: true,
-        registration_status: registration.personId ? 'complete' : 'registration_incomplete',
+        registration_status: actor.personId ? 'complete' : 'registration_incomplete',
       }
     },
+
+    resolveActor,
 
     async logout(opaqueToken) {
       if (!opaqueToken) return dependencies.studioWebUrl
@@ -99,6 +111,23 @@ export function createStudioSessionService(
         returnTo: dependencies.studioWebUrl,
       })
     },
+  }
+
+  async function resolveActor(opaqueToken: string): Promise<StudioActor> {
+    const session = await authenticatedSession(opaqueToken, true)
+    const registration = await dependencies.database.resolveRegistration(session.accountId)
+    if (registration.personStatus === 'closed') {
+      await dependencies.database.revokeSession(session.sessionId)
+      throw new StudioSessionError('account-closed')
+    }
+    if (registration.personId && registration.personStatus !== 'active') {
+      await dependencies.database.revokeSession(session.sessionId)
+      throw new StudioSessionError('unauthenticated')
+    }
+    return {
+      accountId: session.accountId,
+      ...(registration.personId ? { personId: registration.personId } : {}),
+    }
   }
 
   async function authenticatedSession(
@@ -172,6 +201,18 @@ export function createStudioSessionService(
       await dependencies.database.revokeSession(session.sessionId)
       throw new StudioSessionError('unauthenticated')
     }
+  }
+}
+
+export function createStudioOnboardingService(
+  database: IdentityOnboardingDatabase,
+): StudioOnboardingService {
+  return {
+    startAttempt: (actor, command) =>
+      database.startAttempt({ accountId: actor.accountId, ...command }),
+    recordAdultEligibility: (actor, input) =>
+      database.recordAdultEligibility({ accountId: actor.accountId, ...input }),
+    complete: (actor, input) => database.activatePerson({ accountId: actor.accountId, ...input }),
   }
 }
 

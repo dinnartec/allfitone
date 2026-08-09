@@ -124,6 +124,108 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/studio/v1/onboarding-attempts': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /** Start or resume the authenticated account's onboarding attempt */
+    post: operations['startStudioOnboardingAttempt']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/studio/v1/onboarding-attempts/{attemptId}/eligibility-evidence': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /** Record the account holder's adult self-declaration */
+    post: operations['recordStudioAdultEligibilityEvidence']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/studio/v1/onboarding-attempts/{attemptId}/completion': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /** Activate the account holder's canonical person */
+    post: operations['completeStudioOnboarding']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/studio/v1/me/memberships': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** List the person's current and past Studio memberships */
+    get: operations['listMyStudioMemberships']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/studio/v1/organization-types': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** List governed organization types available during Studio onboarding */
+    get: operations['listStudioOrganizationTypes']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/studio/v1/organizations': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /** Create an organization with its initial owner membership */
+    post: operations['createStudioOrganization']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/studio/v1/organizations/{organizationId}/programs/{programId}/versions': {
     parameters: {
       query?: never
@@ -481,6 +583,97 @@ export interface components {
       /** @constant */
       authenticated: true
       registration_status: components['schemas']['StudioRegistrationStatus']
+    }
+    /** @enum {string} */
+    StudioOnboardingStatus: 'open' | 'activated' | 'ineligible' | 'expired'
+    /** @enum {string} */
+    StudioEligibilityStatus: 'pending' | 'pass' | 'fail'
+    StudioOnboardingAttempt: {
+      id: components['schemas']['UuidV7']
+      status: components['schemas']['StudioOnboardingStatus']
+      eligibility_status: components['schemas']['StudioEligibilityStatus']
+      /** Format: date-time */
+      expires_at: string
+      /** @constant */
+      terms_version: 'platform_terms_v1'
+      /** @constant */
+      privacy_notice_version: 'privacy_notice_v1'
+    }
+    AdultEligibilityEvidenceCreate: {
+      declared_adult: boolean
+    }
+    AdultEligibilityPolicy: {
+      /** @constant */
+      code: 'adult_eligibility'
+      /** @constant */
+      version: 1
+      /** @constant */
+      minimum_age: 18
+      /** @constant */
+      jurisdiction: 'CO'
+      /** @constant */
+      evidence_kind: 'self_declaration'
+    }
+    AdultEligibilityEvidence: {
+      /** @enum {string} */
+      result: 'pass' | 'fail'
+      /** Format: date-time */
+      evaluated_at: string
+      policy: components['schemas']['AdultEligibilityPolicy']
+    }
+    StudioOnboardingCompletion: {
+      given_name: string
+      family_name: string
+      /** @constant */
+      terms_accepted: true
+      /** @constant */
+      privacy_notice_accepted: true
+    }
+    StudioOnboardingCompletionResult: {
+      /** @constant */
+      registration_status: 'complete'
+    }
+    /** @enum {string} */
+    OrganizationTypeCode: 'professional_practice' | 'gym' | 'studio' | 'academy' | 'clinic'
+    OrganizationType: {
+      code: components['schemas']['OrganizationTypeCode']
+      name: string
+    }
+    OrganizationTypeList: {
+      items: components['schemas']['OrganizationType'][]
+    }
+    ResponsibleParty: {
+      /** @enum {string} */
+      kind: 'natural_person' | 'legal_entity'
+      name: string
+    }
+    OrganizationCreate: {
+      display_name: string
+      type_code: components['schemas']['OrganizationTypeCode']
+      responsible_party: components['schemas']['ResponsibleParty']
+    }
+    OrganizationCreated: {
+      id: components['schemas']['UuidV7']
+      display_name: string
+      type_code: components['schemas']['OrganizationTypeCode']
+      membership_id: components['schemas']['UuidV7']
+      roles: ('owner' | 'admin' | 'coach' | 'staff')[]
+    }
+    StudioMembership: {
+      membership_id: components['schemas']['UuidV7']
+      organization_id: components['schemas']['UuidV7']
+      display_name: string
+      type_code: components['schemas']['OrganizationTypeCode']
+      /** @enum {string} */
+      status: 'active' | 'terminated'
+      /** Format: date-time */
+      joined_at: string
+      /** Format: date-time */
+      ended_at?: string | null
+      roles: ('owner' | 'admin' | 'coach' | 'staff')[]
+    }
+    StudioMembershipList: {
+      items: components['schemas']['StudioMembership'][]
     }
     /** Format: uuid */
     Uuid: string
@@ -1665,6 +1858,7 @@ export interface components {
     }
   }
   parameters: {
+    OnboardingAttemptId: components['schemas']['UuidV7']
     OrganizationId: components['schemas']['Uuid']
     ProgramId: components['schemas']['Uuid']
     RelationshipId: components['schemas']['Uuid']
@@ -1875,6 +2069,192 @@ export interface operations {
         content?: never
       }
       403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  startStudioOnboardingAttempt: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Open onboarding attempt, newly created or resumed */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['StudioOnboardingAttempt']
+        }
+      }
+      401: components['responses']['Unauthenticated']
+      409: components['responses']['Conflict']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  recordStudioAdultEligibilityEvidence: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        attemptId: components['parameters']['OnboardingAttemptId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AdultEligibilityEvidenceCreate']
+      }
+    }
+    responses: {
+      /** @description Versioned adult eligibility evaluation */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['AdultEligibilityEvidence']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      409: components['responses']['Conflict']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  completeStudioOnboarding: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        attemptId: components['parameters']['OnboardingAttemptId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['StudioOnboardingCompletion']
+      }
+    }
+    responses: {
+      /** @description Registration completed idempotently */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['StudioOnboardingCompletionResult']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      409: components['responses']['Conflict']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listMyStudioMemberships: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Memberships visible to the current person */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['PrivateNoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['StudioMembershipList']
+        }
+      }
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listStudioOrganizationTypes: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Governed organization type catalogue */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['PrivateNoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['OrganizationTypeList']
+        }
+      }
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  createStudioOrganization: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['OrganizationCreate']
+      }
+    }
+    responses: {
+      /** @description Organization and owner membership created atomically */
+      201: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['OrganizationCreated']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      409: components['responses']['Conflict']
       503: components['responses']['UpstreamUnavailable']
     }
   }
