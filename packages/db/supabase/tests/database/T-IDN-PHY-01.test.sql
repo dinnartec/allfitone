@@ -1,6 +1,6 @@
 begin;
 
-select plan(12);
+select plan(23);
 
 select has_schema('identity', 'identity schema exists');
 select has_schema('access_control', 'access_control schema exists');
@@ -23,10 +23,63 @@ select ok(
     select 1
     from pg_catalog.pg_constraint
     where conrelid = 'identity.access_accounts'::regclass
-      and conname = 'access_accounts_provider_issuer_subject_key'
+      and conname = 'uq_access_accounts_provider_identity'
       and contype = 'u'
   ),
   'external account identity is unique'
+);
+
+select col_is_pk('identity', 'people', 'id', 'people uses the canonical primary-key constraint');
+select has_index('identity', 'people', 'uidx_people_contact_email', 'contact email index is canonical');
+select has_index('identity', 'people', 'uidx_people_contact_phone', 'contact phone index is canonical');
+select has_index('identity', 'access_accounts', 'idx_access_accounts_person_id', 'account person index is canonical');
+select has_index('identity', 'access_sessions', 'idx_access_sessions_access_account_id', 'session account index is canonical');
+select has_trigger('identity', 'people', 'trg_people_update_set_updated_at', 'people trigger is canonical');
+select policies_are(
+  'identity',
+  'people',
+  array['people_all_owner', 'people_select_self'],
+  'people policies use canonical names'
+);
+select ok(
+  not exists (
+    select 1
+    from pg_catalog.pg_constraint as constraint_object
+    join pg_catalog.pg_class as relation on relation.oid = constraint_object.conrelid
+    join pg_catalog.pg_namespace as namespace on namespace.oid = relation.relnamespace
+    where namespace.nspname in ('identity', 'access_control')
+      and constraint_object.conname !~ '^(pk|fk|uq|ck|ex)_'
+  ),
+  'all application constraints use canonical names'
+);
+select ok(
+  not exists (
+    select 1
+    from pg_catalog.pg_class as index_object
+    join pg_catalog.pg_namespace as namespace on namespace.oid = index_object.relnamespace
+    where namespace.nspname in ('identity', 'access_control')
+      and index_object.relkind = 'i'
+      and index_object.relname !~ '^(pk|uq|idx|uidx)_'
+  ),
+  'all application indexes use canonical names'
+);
+select ok(
+  not exists (
+    select 1
+    from information_schema.triggers
+    where trigger_schema in ('identity', 'access_control')
+      and trigger_name !~ '^trg_'
+  ),
+  'all application triggers use canonical names'
+);
+select ok(
+  not exists (
+    select 1
+    from pg_catalog.pg_policies
+    where schemaname in ('identity', 'access_control')
+      and policyname !~ '^[a-z][a-z0-9_]*_(select|insert|update|delete|all)_[a-z0-9_]+$'
+  ),
+  'all application policies use canonical names'
 );
 
 select * from finish();

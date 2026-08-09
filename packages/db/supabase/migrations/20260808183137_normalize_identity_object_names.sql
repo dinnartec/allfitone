@@ -1,0 +1,44 @@
+-- Normalize existing identity objects to the repository naming policy.
+-- This is forward-only because the bootstrap migration may already exist in a
+-- shared environment.
+
+set lock_timeout = '5s';
+set statement_timeout = '60s';
+
+alter table identity.people rename constraint people_pkey to pk_people;
+alter table identity.people rename constraint people_email_verification_chk to ck_people_email_verification;
+alter table identity.people rename constraint people_phone_verification_chk to ck_people_phone_verification;
+alter table identity.people rename constraint people_given_name_check to ck_people_given_name_not_blank;
+alter table identity.people rename constraint people_family_name_check to ck_people_family_name_not_blank;
+
+alter table identity.access_accounts rename constraint access_accounts_pkey to pk_access_accounts;
+alter table identity.access_accounts rename constraint access_accounts_person_id_fkey to fk_access_accounts_person;
+alter table identity.access_accounts rename constraint access_accounts_provider_issuer_subject_key to uq_access_accounts_provider_identity;
+alter table identity.access_accounts rename constraint access_accounts_provider_check to ck_access_accounts_provider_workos;
+alter table identity.access_accounts rename constraint access_accounts_issuer_check to ck_access_accounts_issuer_not_blank;
+alter table identity.access_accounts rename constraint access_accounts_subject_check to ck_access_accounts_subject_not_blank;
+
+alter table identity.access_sessions rename constraint access_sessions_pkey to pk_access_sessions;
+alter table identity.access_sessions rename constraint access_sessions_access_account_id_fkey to fk_access_sessions_access_account;
+alter table identity.access_sessions rename constraint access_sessions_surface_provider_session_key to uq_access_sessions_surface_provider_session;
+alter table identity.access_sessions rename constraint access_sessions_token_hash_key to uq_access_sessions_token_hash;
+alter table identity.access_sessions rename constraint access_sessions_provider_session_id_check to ck_access_sessions_provider_session_id_not_blank;
+alter table identity.access_sessions rename constraint access_sessions_token_hash_check to ck_access_sessions_token_hash_length;
+alter table identity.access_sessions rename constraint access_sessions_token_ciphertext_check to ck_access_sessions_token_ciphertext_version;
+alter table identity.access_sessions rename constraint access_sessions_token_version_check to ck_access_sessions_token_version_positive;
+
+alter index identity.people_contact_email_uidx rename to uidx_people_contact_email;
+alter index identity.people_contact_phone_uidx rename to uidx_people_contact_phone;
+alter index identity.access_accounts_person_id_idx rename to idx_access_accounts_person_id;
+alter index identity.access_sessions_account_id_idx rename to idx_access_sessions_access_account_id;
+alter index identity.access_sessions_active_idx rename to idx_access_sessions_active;
+
+alter trigger people_set_updated_at on identity.people rename to trg_people_update_set_updated_at;
+alter trigger access_accounts_set_updated_at on identity.access_accounts rename to trg_access_accounts_update_set_updated_at;
+alter trigger access_sessions_set_updated_at on identity.access_sessions rename to trg_access_sessions_update_set_updated_at;
+
+alter policy people_owner_manage on identity.people rename to people_all_owner;
+alter policy people_read_self on identity.people rename to people_select_self;
+alter policy access_accounts_owner_manage on identity.access_accounts rename to access_accounts_all_owner;
+alter policy access_accounts_read_self on identity.access_accounts rename to access_accounts_select_self;
+alter policy access_sessions_owner_manage on identity.access_sessions rename to access_sessions_all_owner;

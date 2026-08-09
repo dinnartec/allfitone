@@ -271,6 +271,13 @@ Every external provider sits behind a port in `packages/`:
 triggers, and functions. This is deliberate. The last line of defence over health
 data must not depend on the application being correctly written.
 
+The canonical migration, environment, deployment, backup and naming policy lives
+in [`allfitone-docs/platform/database`](https://github.com/dinnartec/allfitone-docs/tree/main/platform/database).
+Read both `DATABASE_AND_SUPABASE_BEST_PRACTICES.md` and `OPERATIONS.md` before
+changing the schema or deployment workflow. All database changes must pass
+`bun run check:db-policy`; shared migration history is immutable and fixes are
+forward-only.
+
 Consequences you must respect:
 
 - `infrastructure/` calls database functions directly. Do not build a portable
@@ -570,19 +577,21 @@ authorization — go to a human first.
 
 ## 16. Source of truth
 
-| Question                                            | Where it is answered          |
-| --------------------------------------------------- | ----------------------------- |
-| What the product does, user stories                 | `allfitone-docs/products/`    |
-| Architecture decisions, domain model and RLS matrix | `allfitone-docs/platform/`    |
-| Executable OpenAPI contract                         | `packages/contracts/openapi/` |
-| Domain vocabulary                                   | `allfitone-docs` glossary     |
-| How we build and test                               | This file                     |
-| What the code actually does                         | The code                      |
+| Question                                            | Where it is answered                |
+| --------------------------------------------------- | ----------------------------------- |
+| What the product does, user stories                 | `allfitone-docs/products/`          |
+| Architecture decisions, domain model and RLS matrix | `allfitone-docs/platform/`          |
+| Database standards, deployment and recovery         | `allfitone-docs/platform/database/` |
+| Executable OpenAPI contract                         | `packages/contracts/openapi/`       |
+| Domain vocabulary                                   | `allfitone-docs` glossary           |
+| How we build and test                               | This file                           |
+| What the code actually does                         | The code                            |
 
-`allfitone-docs` is normative for the product and architecture topics it owns and
-outranks this file on those topics. Never copy its content here — link to it. If
-an implementation decision starts to affect more than one product, its
-definition moves there.
+`allfitone-docs` is the only documentation repository and is normative for the
+topics it owns. This repository keeps only concise onboarding pointers and
+executable artifacts beside the code. Never copy normative or operational
+documentation here; link to it. All new or modified documentation and technical
+writing must be in English.
 
 If documentation and code disagree, that is a finding worth reporting, not a gap
 to paper over silently.

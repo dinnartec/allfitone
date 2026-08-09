@@ -83,6 +83,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -90,6 +92,11 @@ jobs:
 
       - name: Install
         run: bun install --frozen-lockfile
+
+      - name: Database policy
+        env:
+          DB_POLICY_BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: bun run check:db-policy -- --base "$DB_POLICY_BASE_SHA"
 
       - name: Start Supabase
         run: bun run db:start
