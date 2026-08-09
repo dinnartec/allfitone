@@ -382,8 +382,15 @@ function translate(cause: unknown): AuthError {
   // status or the message lands this in the default branch — which is how a
   // duplicate registration answered 401 while a fresh one answered 202, in
   // direct violation of HU-SP-001 criterion 3. Verified against the live API.
-  if (providerErrorCodes(cause).some((code) => code.includes('email'))) {
+  const codes = providerErrorCodes(cause)
+  if (codes.some((code) => code.includes('email'))) {
     return new AuthError('invalid_email', trace)
+  }
+  // Also a 400 with the reason nested. Distinguished from the address case
+  // because it is the one rejection worth describing to the person: it is about
+  // the secret they chose, and says nothing about who else has an account.
+  if (codes.some((code) => code.includes('password'))) {
+    return new AuthError('weak_password', trace)
   }
   if (status === 401 || status === 403 || text.includes('invalid credential')) {
     return new AuthError('invalid_credentials', trace)

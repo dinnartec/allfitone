@@ -17,9 +17,17 @@ import { fail } from '../../../platform/http/index.js'
 import { RegistrationError, type SpaceRegistrationService } from '../application/registration.js'
 import { spaceRegistrationService } from '../dependencies.js'
 
-/** Long enough to be worth attacking offline, short enough to type. */
-const MIN_PASSWORD_LENGTH = 12
+const MIN_PASSWORD_LENGTH = 8
 const MAX_PASSWORD_LENGTH = 256
+/**
+ * Product decision: eight characters with a lowercase letter, an uppercase
+ * letter and a digit.
+ *
+ * Enforced on registration only. Verification takes the password again to mint
+ * the provider's pending token, and re-checking composition there would lock out
+ * any account created under an earlier policy.
+ */
+const PASSWORD_COMPOSITION = /^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])/
 /** RFC 5321 caps the whole address here. */
 const MAX_EMAIL_LENGTH = 254
 const VERIFICATION_CODE = /^[0-9]{6}$/
@@ -34,7 +42,9 @@ export function spaceIdentityRoutes(injectedService?: SpaceRegistrationService):
     const body = await readJson(c.req.raw)
     const email = readEmail(body)
     const password = readPassword(body)
-    if (!email || !password) return fail(c, 'invalid-request')
+    if (!email || !password || !PASSWORD_COMPOSITION.test(password)) {
+      return fail(c, 'invalid-request')
+    }
 
     try {
       const accepted = await registrations().register(email, password)
@@ -98,8 +108,9 @@ function readEmail(body: Record<string, unknown>): string | undefined {
 }
 
 /**
- * Length is the only rule. Composition requirements push people toward
- * predictable substitutions; length and the provider's breach check do more.
+ * Length only. Composition is checked at the registration route, because
+ * verification must accept whatever the account was created with.
+ *
  * Never trimmed — leading and trailing spaces are legitimate characters.
  */
 function readPassword(body: Record<string, unknown>): string | undefined {

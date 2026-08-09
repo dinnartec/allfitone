@@ -12,3 +12,6 @@ dist/
 *.p12
 *.key
 *.mobileprovision
+
+# Local API target. Not versioned: it differs per machine.
+.env

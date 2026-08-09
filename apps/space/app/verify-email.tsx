@@ -4,22 +4,27 @@
  * The wording is the criterion. HU-SP-001 criterion 3 requires the same message
  * whether or not the address already had an account, so the copy says *"si ese
  * correo puede recibir una cuenta"* rather than "te enviamos un código" — the
- * second sentence asserts something the person can check, and checking it is
+ * second sentence asserts something the reader can check, and checking it is
  * exactly how an address gets confirmed as registered.
  *
  * The panel below the code exists for criterion 4: creating an account does not
  * grant a Fitness ID. Someone who abandons here has left a credential and
- * nothing else, and saying so is more honest than letting them assume otherwise.
+ * nothing else, and saying so beats letting them assume otherwise.
  *
- * Verification returns a session, so this is the last screen before onboarding
- * rather than a detour back to sign-in.
- *
- * Nothing is wired to the API yet — see `create-account.tsx`.
+ * KNOWN GAP — the password arrives as a route parameter, because the provider
+ * mints its pending verification token from a sign-in attempt and the code alone
+ * cannot redeem a session. Expo Router puts params in the navigation state, so
+ * the value can surface in a state dump or a deep link. It never leaves the
+ * device and never lands in storage, but it is more exposure than a password
+ * deserves. The fix is for the API to hold the pending token behind a short
+ * opaque handle; that is a contract change, not a screen change, and it is
+ * tracked rather than quietly accepted.
  */
 
 import { AmbientBackdrop } from '@allfitone/react-native/backdrop'
 import { Button } from '@allfitone/react-native/button'
 import { FoundationIcon } from '@allfitone/react-native/icons'
+import { InlineAlert } from '@allfitone/react-native/inline-alert'
 import { Screen } from '@allfitone/react-native/screen'
 import { Text } from '@allfitone/react-native/text'
 import { TextField } from '@allfitone/react-native/text-field'
@@ -28,15 +33,45 @@ import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
 
+import { ApiError, verifyRegistration } from '../src/client'
+import { storeSession } from '../src/client/session'
+
 const CODE_LENGTH = 6
 
 export default function VerifyEmail() {
   const theme = useTheme()
   const router = useRouter()
-  const { email } = useLocalSearchParams<{ email?: string }>()
+  const { email = '', password = '' } = useLocalSearchParams<{
+    email?: string
+    password?: string
+  }>()
 
   const [code, setCode] = useState('')
-  const canSubmit = code.length === CODE_LENGTH
+  const [submitting, setSubmitting] = useState(false)
+  const [failure, setFailure] = useState<string | undefined>(undefined)
+
+  const canSubmit = code.length === CODE_LENGTH && !submitting
+
+  const submit = async () => {
+    setSubmitting(true)
+    setFailure(undefined)
+    try {
+      const session = await verifyRegistration(email, password, code)
+      await storeSession(session)
+      // Onboarding has no screen yet. Landing on the welcome screen with a
+      // session is wrong, but inventing a destination would be worse — the next
+      // slice replaces this line.
+      router.replace('/welcome')
+    } catch (cause) {
+      setFailure(
+        cause instanceof ApiError && cause.failure === 'unavailable'
+          ? 'No pudimos conectar. Revisa tu conexión e inténtalo otra vez.'
+          : 'El código no es válido o ya venció.',
+      )
+    } finally {
+      setSubmitting(false)
+    }
+  }
 
   return (
     <Screen edges={['top', 'bottom']}>
@@ -85,6 +120,7 @@ export default function VerifyEmail() {
             textContentType="oneTimeCode"
             maxLength={CODE_LENGTH}
             returnKeyType="go"
+            editable={!submitting}
           />
 
           <View
@@ -106,7 +142,17 @@ export default function VerifyEmail() {
             </Text>
           </View>
 
-          <Button label="Verificar" disabled={!canSubmit} style={styles.submit} />
+          {failure ? <InlineAlert message={failure} /> : null}
+
+          <Button
+            label="Verificar"
+            disabled={!canSubmit}
+            loading={submitting}
+            onPress={() => {
+              void submit()
+            }}
+            style={styles.submit}
+          />
         </View>
       </ScrollView>
 

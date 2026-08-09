@@ -26,7 +26,8 @@ import { AuthError, type AuthProvider } from '@allfitone/auth-provider'
  */
 const VERIFICATION_WINDOW_MINUTES = 10
 
-export type RegistrationErrorCode = 'invalid-request' | 'upstream-unavailable' | 'unauthenticated'
+export type RegistrationErrorCode =
+  'invalid-request' | 'upstream-unavailable' | 'unauthenticated' | 'weak-password'
 
 export class RegistrationError extends Error {
   constructor(readonly code: RegistrationErrorCode) {
@@ -113,5 +114,10 @@ function toRegistrationError(cause: unknown): RegistrationError {
       // Only reachable on a malformed address: the port swallows the
       // already-in-use case rather than raising it.
       return new RegistrationError('invalid-request')
+    case 'weak_password':
+      // The one rejection reported precisely. It concerns the secret the person
+      // just chose and reveals nothing about who else is registered, so hiding
+      // it would cost them a retry and buy nobody any privacy.
+      return new RegistrationError('weak-password')
   }
 }

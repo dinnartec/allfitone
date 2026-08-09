@@ -446,7 +446,7 @@ export interface components {
        * @description Becomes both the sign-in email and, once a person exists, the contact email. They are the same datum by DT-016 and never diverge.
        */
       email: string
-      /** @description Minimum length is the only rule enforced here. Composition rules push people toward predictable substitutions; length and a breach check at the provider do more. */
+      /** @description At least eight characters, with a lowercase letter, an uppercase letter and a digit. */
       password: string
     }
     SpaceRegistrationAccepted: {
@@ -462,7 +462,7 @@ export interface components {
        * @description The address the code was sent to.
        */
       email: string
-      /** @description The same password used to register. The provider mints the pending verification token from a sign-in attempt, so it is required here and is not a second authentication factor. */
+      /** @description The same password used to register. The provider mints the pending verification token from a sign-in attempt, so it is required here and is not a second authentication factor. Composition is not re-checked: the credential already exists, and rejecting it here would lock out an account created under an earlier policy. */
       password: string
       /** @description The six-digit code sent to the address. */
       code: string

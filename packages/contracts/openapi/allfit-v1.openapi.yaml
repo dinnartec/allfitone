@@ -1541,12 +1541,12 @@ components:
             email. They are the same datum by DT-016 and never diverge.
         password:
           type: string
-          minLength: 12
+          minLength: 8
           maxLength: 256
+          pattern: '^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9]).{8,256}$'
           description: >-
-            Minimum length is the only rule enforced here. Composition rules push
-            people toward predictable substitutions; length and a breach check at
-            the provider do more.
+            At least eight characters, with a lowercase letter, an uppercase
+            letter and a digit.
     SpaceRegistrationAccepted:
       type: object
       additionalProperties: false
@@ -1568,12 +1568,14 @@ components:
           description: The address the code was sent to.
         password:
           type: string
-          minLength: 12
+          minLength: 8
           maxLength: 256
           description: >-
             The same password used to register. The provider mints the pending
             verification token from a sign-in attempt, so it is required here and
-            is not a second authentication factor.
+            is not a second authentication factor. Composition is not re-checked:
+            the credential already exists, and rejecting it here would lock out
+            an account created under an earlier policy.
         code:
           type: string
           pattern: '^[0-9]{6}$'

@@ -15,6 +15,14 @@ export type AuthErrorCode =
   | 'invalid_credentials'
   /** Email rejected: malformed OR already in use. Deliberately ambiguous. */
   | 'invalid_email'
+  /**
+   * The password itself was refused: too short, or matched a breach corpus.
+   *
+   * Safe to report precisely, unlike everything else here. It describes what the
+   * person just typed, not whether an account exists, so being specific helps
+   * them and tells an attacker nothing.
+   */
+  | 'weak_password'
   /** Token missing, badly signed, expired, or issued for another surface. */
   | 'invalid_token'
   /** The provider did not respond. Retryable; nothing else here is. */

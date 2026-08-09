@@ -17,7 +17,8 @@ import { RegistrationError, type SpaceRegistrationService } from '../application
 import { spaceIdentityRoutes } from './space.js'
 
 const EMAIL = 'walberto@dinnartec.co'
-const PASSWORD = 'a-sufficiently-long-password'
+/** Satisfies the policy: length, a lowercase letter, an uppercase one and a digit. */
+const PASSWORD = 'Una-Contrasena-2026'
 const CODE = '481920'
 const EXPIRES_AT = new Date('2026-08-09T12:10:00.000Z')
 
@@ -95,7 +96,7 @@ describe('POST /space/v1/auth/registrations', () => {
     expect(rejected.headers.get('Cache-Control')).toBe('no-store')
   })
 
-  test('rejects a password below the minimum before reaching the provider', async () => {
+  test('rejects a password that fails composition before reaching the provider', async () => {
     let called = false
     const app = appWith({
       register: async () => {
@@ -111,6 +112,32 @@ describe('POST /space/v1/auth/registrations', () => {
 
     expect(response.status).toBe(400)
     expect(called).toBe(false)
+
+    // Long enough, but no digit and no uppercase.
+    const weak = await post(app, '/space/v1/auth/registrations', {
+      email: EMAIL,
+      password: 'todo-en-minusculas',
+    })
+    expect(weak.status).toBe(400)
+    expect(called).toBe(false)
+  })
+
+  test('reports a password the provider refuses as 422, not as a failed sign-in', async () => {
+    // The provider enforces its own floor and a breach check. Answering 401
+    // would tell the person their credentials were wrong, when the truth is
+    // that the password they chose was never accepted.
+    const app = appWith({
+      register: async () => {
+        throw new RegistrationError('weak-password')
+      },
+    })
+
+    const response = await post(app, '/space/v1/auth/registrations', {
+      email: EMAIL,
+      password: PASSWORD,
+    })
+
+    expect(response.status).toBe(422)
   })
 
   test('does not trim the password, because spaces are characters', async () => {

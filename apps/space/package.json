@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@allfitone/contracts": "workspace:*",
     "@allfitone/react-native": "0.4.0",
     "expo": "57.0.11",
     "expo-blur": "57.0.2",

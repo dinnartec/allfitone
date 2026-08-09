@@ -6,20 +6,21 @@
  * so at the moment someone is deciding whether to type an address is worth more
  * than saying it later.
  *
- * The screen never learns whether the address already had an account, and that
- * is deliberate all the way down — the API answers identically either way. It
- * therefore has nothing to display differently, which is the easiest kind of
- * privacy rule to keep: one nobody can break from here.
+ * Submitting always moves to verification. The API answers identically whether
+ * or not the address was taken, so there is no "already registered" branch to
+ * write — not because the screen is lax, but because the response admits no
+ * other behaviour. That is HU-SP-001 criterion 3 arriving here as an absence.
  *
- * Nothing is wired to the API yet. `AFO-34` covers the contract, the provider
- * port and the endpoints; this screen is composed against them but the client
- * that calls them does not exist, so the button reports that rather than
- * pretending to submit.
+ * The password travels on to the next screen. The provider mints its pending
+ * verification token from a sign-in attempt, so the code alone cannot redeem a
+ * session; see the note there about why this is a route param and what that
+ * costs.
  */
 
 import { AmbientBackdrop } from '@allfitone/react-native/backdrop'
 import { Button } from '@allfitone/react-native/button'
 import { FoundationIcon } from '@allfitone/react-native/icons'
+import { InlineAlert } from '@allfitone/react-native/inline-alert'
 import { Screen } from '@allfitone/react-native/screen'
 import { Text } from '@allfitone/react-native/text'
 import { TextField } from '@allfitone/react-native/text-field'
@@ -28,8 +29,30 @@ import { useRouter } from 'expo-router'
 import { useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
 
-/** Matches the API, which rejects anything shorter before reaching the provider. */
-const MIN_PASSWORD_LENGTH = 12
+import { ApiError, register } from '../src/client'
+
+/** Mirrors the API, which rejects anything else before reaching the provider. */
+const MIN_PASSWORD_LENGTH = 8
+const PASSWORD_COMPOSITION = /^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])/
+
+const PASSWORD_RULE = 'Al menos 8 caracteres, con una mayúscula, una minúscula y un número'
+
+/**
+ * Only the password case is described precisely. The others are deliberately
+ * vague: the API cannot tell us whether the address was taken, and inventing a
+ * more specific message would either be a guess or a disclosure.
+ */
+function messageFor(cause: unknown): string {
+  if (!(cause instanceof ApiError)) return 'Algo salió mal. Inténtalo otra vez.'
+  switch (cause.failure) {
+    case 'weak-password':
+      return 'Esa contraseña es muy común o muy corta. Prueba con una más larga.'
+    case 'unavailable':
+      return 'No pudimos conectar. Revisa tu conexión e inténtalo otra vez.'
+    default:
+      return 'Revisa el correo y la contraseña.'
+  }
+}
 
 export default function CreateAccount() {
   const theme = useTheme()
@@ -37,9 +60,27 @@ export default function CreateAccount() {
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [failure, setFailure] = useState<string | undefined>(undefined)
 
-  const passwordTooShort = password.length > 0 && password.length < MIN_PASSWORD_LENGTH
-  const canSubmit = email.includes('@') && password.length >= MIN_PASSWORD_LENGTH
+  const passwordValid =
+    password.length >= MIN_PASSWORD_LENGTH && PASSWORD_COMPOSITION.test(password)
+  const passwordProblem = password.length > 0 && !passwordValid
+  const canSubmit = email.includes('@') && passwordValid && !submitting
+
+  const submit = async () => {
+    setSubmitting(true)
+    setFailure(undefined)
+    const address = email.trim()
+    try {
+      await register(address, password)
+      router.push({ pathname: '/verify-email', params: { email: address, password } })
+    } catch (cause) {
+      setFailure(messageFor(cause))
+    } finally {
+      setSubmitting(false)
+    }
+  }
 
   return (
     <Screen edges={['top', 'bottom']}>
@@ -87,24 +128,34 @@ export default function CreateAccount() {
             inputMode="email"
             textContentType="emailAddress"
             returnKeyType="next"
+            editable={!submitting}
           />
 
           <TextField
             label="Contraseña"
             value={password}
             onChangeText={setPassword}
-            placeholder={`Mínimo ${MIN_PASSWORD_LENGTH} caracteres`}
+            placeholder="Mínimo 8 caracteres"
             autoCapitalize="none"
             autoComplete="new-password"
             secureTextEntry
             textContentType="newPassword"
             returnKeyType="go"
-            {...(passwordTooShort
-              ? { error: `Necesita al menos ${MIN_PASSWORD_LENGTH} caracteres` }
-              : {})}
+            editable={!submitting}
+            {...(passwordProblem ? { error: PASSWORD_RULE } : {})}
           />
 
-          <Button label="Crear cuenta" disabled={!canSubmit} style={styles.submit} />
+          {failure ? <InlineAlert message={failure} /> : null}
+
+          <Button
+            label="Crear cuenta"
+            disabled={!canSubmit}
+            loading={submitting}
+            onPress={() => {
+              void submit()
+            }}
+            style={styles.submit}
+          />
 
           <Text role="body" size="xs" color="muted" align="center" style={styles.legal}>
             Al continuar aceptas los términos y la política de tratamiento de datos.
