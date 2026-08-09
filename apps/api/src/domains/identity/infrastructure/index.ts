@@ -2,10 +2,12 @@
 
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto'
 import type { SessionTokens } from '@allfitone/auth-provider'
+import type postgres from 'postgres'
 
 import { database } from '../../../platform/db/index.js'
 import type {
   IdentitySessionDatabase,
+  IdentityOnboardingDatabase,
   SessionCipherContext,
   SessionTokenVault,
   StoredAccessSession,
@@ -22,6 +24,94 @@ type SessionRow = {
   access_token_expires_at: Date
   token_version: number
   person_status: 'active' | 'closed' | null
+}
+
+export function createIdentityOnboardingDatabase(): IdentityOnboardingDatabase {
+  const sql = database()
+
+  return {
+    async startAttempt(input) {
+      return sql.begin(async (transaction) => {
+        await setAccountActor(transaction, input.accountId)
+        const [row] = await transaction<
+          {
+            attempt_id: string
+            status: 'open' | 'activated' | 'expired' | 'ineligible'
+            eligibility_status: 'pending' | 'pass' | 'fail'
+            expires_at: Date
+          }[]
+        >`
+          select * from identity.start_onboarding_attempt(
+            ${input.accountId}::uuid,
+            ${input.idempotencyKey}::uuid,
+            ${input.commandId}::uuid,
+            ${input.requestHash}
+          )
+        `
+        if (!row) throw new Error('PostgreSQL did not resolve an onboarding attempt')
+        return {
+          id: row.attempt_id,
+          status: row.status,
+          eligibilityStatus: row.eligibility_status,
+          expiresAt: new Date(row.expires_at),
+        }
+      })
+    },
+
+    async recordAdultEligibility(input) {
+      return sql.begin(async (transaction) => {
+        await setAccountActor(transaction, input.accountId)
+        const [row] = await transaction<
+          {
+            result: 'pass' | 'fail'
+            evaluated_at: Date
+          }[]
+        >`
+          select * from identity.record_adult_eligibility(
+            ${input.accountId}::uuid,
+            ${input.attemptId}::uuid,
+            ${input.declaredAdult},
+            ${input.idempotencyKey}::uuid,
+            ${input.commandId}::uuid,
+            ${input.requestHash}
+          )
+        `
+        if (!row) throw new Error('PostgreSQL did not record eligibility evidence')
+        return { result: row.result, evaluatedAt: new Date(row.evaluated_at) }
+      })
+    },
+
+    async activatePerson(input) {
+      return sql.begin(async (transaction) => {
+        await setAccountActor(transaction, input.accountId)
+        const [row] = await transaction<{ person_id: string }[]>`
+          select identity.activate_person(
+            ${input.accountId}::uuid,
+            ${input.attemptId}::uuid,
+            ${input.givenName},
+            ${input.familyName},
+            ${input.termsAccepted},
+            ${input.privacyNoticeAccepted},
+            ${input.idempotencyKey}::uuid,
+            ${input.commandId}::uuid,
+            ${input.requestHash}
+          ) as person_id
+        `
+        if (!row) throw new Error('PostgreSQL did not activate the person')
+        return row.person_id
+      })
+    },
+  }
+}
+
+async function setAccountActor(
+  transaction: postgres.TransactionSql,
+  accountId: string,
+): Promise<void> {
+  await transaction`
+    select set_config('app.actor_kind', 'account', true),
+           set_config('app.actor_account_id', ${accountId}, true)
+  `
 }
 
 export function createIdentitySessionDatabase(): IdentitySessionDatabase {

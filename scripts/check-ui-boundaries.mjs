@@ -1,7 +1,5 @@
 import { readdir } from 'node:fs/promises'
 import { extname, join, relative, resolve, sep } from 'node:path'
-import console from 'node:console'
-import process from 'node:process'
 import { fileURLToPath, URL } from 'node:url'
 
 const repositoryRoot = resolve(fileURLToPath(new URL('..', import.meta.url)))
@@ -18,6 +16,14 @@ const forbiddenStyleExtensions = new Set([
 ])
 
 const violations = []
+
+function isProductCompositionStylesheet(repositoryPath) {
+  // Product-specific page composition may consume published tokens and primitives;
+  // reusable primitives, assets and arbitrary component styles remain forbidden.
+  return /^apps\/(?:studio-web|backoffice-web)\/src\/app\/[a-z0-9-]+\.composition\.css$/.test(
+    repositoryPath,
+  )
+}
 
 async function inspectDirectory(directory) {
   const entries = await readdir(directory, { withFileTypes: true })
@@ -36,7 +42,11 @@ async function inspectDirectory(directory) {
       continue
     }
 
-    if (entry.isFile() && forbiddenStyleExtensions.has(extname(entry.name).toLowerCase())) {
+    if (
+      entry.isFile() &&
+      forbiddenStyleExtensions.has(extname(entry.name).toLowerCase()) &&
+      !isProductCompositionStylesheet(repositoryPath)
+    ) {
       violations.push(`${repositoryPath}: local UI assets and stylesheets are forbidden`)
     }
   }

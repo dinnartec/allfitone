@@ -24,6 +24,8 @@ export type ApiErrorCode =
   | 'account-closed'
   /** Authenticated request is not allowed to perform this action. */
   | 'forbidden'
+  /** The command conflicts with durable state or a prior idempotent request. */
+  | 'conflict'
 
 const STATUS: Record<ApiErrorCode, ContentfulStatusCode> = {
   unauthenticated: 401,
@@ -33,6 +35,7 @@ const STATUS: Record<ApiErrorCode, ContentfulStatusCode> = {
   'registration-incomplete': 403,
   'account-closed': 403,
   forbidden: 403,
+  conflict: 409,
 }
 
 /**
