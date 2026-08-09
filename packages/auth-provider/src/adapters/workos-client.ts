@@ -47,14 +47,16 @@ export interface WorkOSUserManagement {
   createUser(options: { email: string; password: string }): Promise<{ id: string }>
 
   /**
-   * Redeems the emailed code for a session, using the pending token that a
-   * sign-in against an unverified account raises.
+   * Filtering by email is the only lookup the SDK offers — there is no
+   * getUserByEmail. Returns an AutoPaginatable; we read the current page.
    */
-  authenticateWithEmailVerification(options: {
-    code: string
-    pendingAuthenticationToken: string
-    clientId: string
-  }): Promise<WorkOSAuthenticationResponse>
+  listUsers(options: { email: string }): Promise<{ data: { id: string }[] }>
+
+  /** Sends the code. Creating a user opens a verification but does not email it. */
+  sendVerificationEmail(options: { userId: string }): Promise<unknown>
+
+  /** Marks the address verified. Does not authenticate; that is a second call. */
+  verifyEmail(options: { code: string; userId: string }): Promise<unknown>
 
   updateUser(options: { userId: string; email: string }): Promise<unknown>
 

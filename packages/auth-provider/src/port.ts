@@ -88,19 +88,6 @@ export interface RegistrationOutcome {
    * reintroduces exactly the disclosure the port exists to prevent.
    */
   readonly created: boolean
-  /**
-   * Opaque handle tying the emailed code to this attempt, when one was created.
-   *
-   * Obtained here rather than at verification time, and that ordering is not
-   * incidental. Each sign-in against an unverified account opens a **new**
-   * verification and sends a **new** code, invalidating the previous one — so
-   * fetching this later would cancel the very code the person is about to type.
-   *
-   * Absent when no credential was created. A caller must not branch on that:
-   * pair it with an equally opaque placeholder so the two cases stay
-   * indistinguishable.
-   */
-  readonly pendingToken?: string
 }
 
 export interface AuthProvider {
@@ -123,19 +110,24 @@ export interface AuthProvider {
    * Creates no person and no domain record. The account is a credential until
    * onboarding completes.
    */
-  register(credentials: PasswordCredentials, surface: Surface): Promise<RegistrationOutcome>
+  register(credentials: PasswordCredentials): Promise<RegistrationOutcome>
 
   /**
-   * Redeems the emailed code for a session, using the handle from registration.
+   * Confirms possession of the address, then authenticates.
    *
-   * Takes no password: the code proves possession of the mailbox, which is the
-   * same assurance a password reset relies on, and asking again for the one
-   * typed a minute earlier buys nothing.
+   * Two provider calls rather than one, because the only call that redeems a
+   * code and returns a session at once needs a token that is invalidated the
+   * moment the code is emailed — the two are mutually exclusive. Marking the
+   * address verified and then signing in normally is the flow that works.
    *
-   * Throws `invalid_credentials` for a wrong code, an expired handle and an
-   * unknown one alike.
+   * Takes the password because the second half is an ordinary sign-in. Returns
+   * tokens because the person proved control of the mailbox, so asking again
+   * for the password they typed a minute earlier buys nothing.
+   *
+   * Throws `invalid_credentials` for a wrong code, a wrong password and an
+   * unknown address alike.
    */
-  verifyEmail(pendingToken: string, code: string, surface: Surface): Promise<AuthResult>
+  verifyEmail(credentials: PasswordCredentials, code: string, surface: Surface): Promise<AuthResult>
 
   /** Hosted logout URL for exactly one provider session. */
   getLogoutUrl(request: LogoutRequest): string

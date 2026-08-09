@@ -21,11 +21,10 @@ const EMAIL = 'walberto@dinnartec.co'
 const PASSWORD = 'Una-Contrasena-2026'
 const CODE = '481920'
 const EXPIRES_AT = new Date('2026-08-09T12:10:00.000Z')
-const TOKEN = 'pat_opaque_handle'
 
 function appWith(overrides: Partial<SpaceRegistrationService> = {}): Hono {
   const service: SpaceRegistrationService = {
-    register: async () => ({ expiresAt: EXPIRES_AT, verificationToken: TOKEN }),
+    register: async () => ({ expiresAt: EXPIRES_AT }),
     verify: async () => ({ accessToken: 'at_1', refreshToken: 'rt_1', expiresIn: 300 }),
     ...overrides,
   }
@@ -59,10 +58,7 @@ describe('POST /space/v1/auth/registrations', () => {
     })
 
     expect(response.status).toBe(202)
-    expect(await response.json()).toEqual({
-      expiresAt: EXPIRES_AT.toISOString(),
-      verificationToken: TOKEN,
-    })
+    expect(await response.json()).toEqual({ expiresAt: EXPIRES_AT.toISOString() })
   })
 
   test('an address that already has an account is indistinguishable from a new one', async () => {
@@ -105,7 +101,7 @@ describe('POST /space/v1/auth/registrations', () => {
     const app = appWith({
       register: async () => {
         called = true
-        return { expiresAt: EXPIRES_AT, verificationToken: TOKEN }
+        return { expiresAt: EXPIRES_AT }
       },
     })
 
@@ -149,7 +145,7 @@ describe('POST /space/v1/auth/registrations', () => {
     const app = appWith({
       register: async (_email, password) => {
         received = password
-        return { expiresAt: EXPIRES_AT, verificationToken: TOKEN }
+        return { expiresAt: EXPIRES_AT }
       },
     })
 
@@ -188,7 +184,7 @@ describe('POST /space/v1/auth/registrations/verification', () => {
   const path = '/space/v1/auth/registrations/verification'
 
   test('returns the first session so the password is not asked for twice', async () => {
-    const response = await post(appWith(), path, { verificationToken: TOKEN, code: CODE })
+    const response = await post(appWith(), path, { email: EMAIL, password: PASSWORD, code: CODE })
 
     expect(response.status).toBe(200)
     expect(await response.json()).toEqual({
@@ -198,7 +194,7 @@ describe('POST /space/v1/auth/registrations/verification', () => {
     })
   })
 
-  test('a wrong code and an unknown handle answer identically', async () => {
+  test('a wrong code and an unknown address answer identically', async () => {
     // Both arrive as the same error, and this asserts they also leave as one.
     const app = appWith({
       verify: async () => {
@@ -206,8 +202,12 @@ describe('POST /space/v1/auth/registrations/verification', () => {
       },
     })
 
-    const wrongCode = await post(app, path, { verificationToken: TOKEN, code: '000000' })
-    const unknown = await post(app, path, { verificationToken: 'otro_handle', code: CODE })
+    const wrongCode = await post(app, path, { email: EMAIL, password: PASSWORD, code: '000000' })
+    const unknown = await post(app, path, {
+      email: 'nobody@dinnartec.co',
+      password: PASSWORD,
+      code: CODE,
+    })
 
     expect(await fingerprint(wrongCode)).toEqual(await fingerprint(unknown))
     expect(wrongCode.status).toBe(401)
@@ -220,7 +220,7 @@ describe('POST /space/v1/auth/registrations/verification', () => {
       },
     })
 
-    const response = await post(app, path, { verificationToken: TOKEN, code: '000000' })
+    const response = await post(app, path, { email: EMAIL, password: PASSWORD, code: '000000' })
     const body = (await response.json()) as { error: { code: string; detail?: string } }
 
     // A detail here is how "no such address" ends up in a client, one helpful
@@ -246,7 +246,7 @@ describe('POST /space/v1/auth/registrations/verification', () => {
   })
 
   test('is never cached', async () => {
-    const response = await post(appWith(), path, { verificationToken: TOKEN, code: CODE })
+    const response = await post(appWith(), path, { email: EMAIL, password: PASSWORD, code: CODE })
     expect(response.headers.get('Cache-Control')).toBe('no-store')
   })
 })

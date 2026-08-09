@@ -12,8 +12,6 @@
  * there is nothing to keep consistent across two.
  */
 
-import { randomUUID } from 'node:crypto'
-
 import { AuthError, type AuthProvider } from '@allfitone/auth-provider'
 
 /**
@@ -40,15 +38,6 @@ export class RegistrationError extends Error {
 
 export interface RegistrationAccepted {
   expiresAt: Date
-  /**
-   * Opaque handle the client returns with the code.
-   *
-   * Always present, whether or not a credential was created: an absent field
-   * would say which case the caller is in. When nothing was created the value is
-   * a random string that redeems nothing, and the failure it eventually produces
-   * is the same one a wrong code produces.
-   */
-  verificationToken: string
 }
 
 export interface SessionIssued {
@@ -63,7 +52,7 @@ export interface SpaceRegistrationService {
    * taken. The caller has nothing to branch on, which is the point.
    */
   register(email: string, password: string): Promise<RegistrationAccepted>
-  verify(verificationToken: string, code: string): Promise<SessionIssued>
+  verify(email: string, password: string, code: string): Promise<SessionIssued>
 }
 
 export interface SpaceRegistrationDependencies {
@@ -78,29 +67,26 @@ export function createSpaceRegistrationService(
 
   return {
     async register(email, password) {
-      let pendingToken: string | undefined
       try {
-        // `created` is deliberately ignored: acting on it is exactly the
-        // disclosure HU-SP-001 criterion 3 forbids, and the port documents the
-        // flag as being for server-side metrics only.
-        const outcome = await dependencies.authProvider.register({ email, password }, 'space')
-        pendingToken = outcome.pendingToken
+        // The outcome says whether a credential was created. It is deliberately
+        // ignored: acting on it is exactly the disclosure HU-SP-001 criterion 3
+        // forbids, and the port documents the flag as being for server-side
+        // metrics only.
+        await dependencies.authProvider.register({ email, password })
       } catch (cause) {
         throw toRegistrationError(cause)
       }
 
-      return {
-        expiresAt: new Date(now().getTime() + VERIFICATION_WINDOW_MINUTES * 60_000),
-        // A decoy when the provider minted nothing, so the response shape does
-        // not betray which case this was. It redeems nothing, and the rejection
-        // it earns is the same one a wrong code earns.
-        verificationToken: pendingToken ?? randomUUID(),
-      }
+      return { expiresAt: new Date(now().getTime() + VERIFICATION_WINDOW_MINUTES * 60_000) }
     },
 
-    async verify(verificationToken, code) {
+    async verify(email, password, code) {
       try {
-        const result = await dependencies.authProvider.verifyEmail(verificationToken, code, 'space')
+        const result = await dependencies.authProvider.verifyEmail(
+          { email, password },
+          code,
+          'space',
+        )
         return {
           accessToken: result.tokens.accessToken,
           refreshToken: result.tokens.refreshToken,

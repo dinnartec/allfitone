@@ -50,13 +50,7 @@ export function spaceIdentityRoutes(injectedService?: SpaceRegistrationService):
       const accepted = await registrations().register(email, password)
       // 202, not 201: a created resource would be a claim about what happened,
       // and the whole point is that the caller cannot tell.
-      return c.json(
-        {
-          expiresAt: accepted.expiresAt.toISOString(),
-          verificationToken: accepted.verificationToken,
-        },
-        202,
-      )
+      return c.json({ expiresAt: accepted.expiresAt.toISOString() }, 202)
     } catch (cause) {
       return failRegistration(c, cause)
     }
@@ -66,12 +60,13 @@ export function spaceIdentityRoutes(injectedService?: SpaceRegistrationService):
     c.header('Cache-Control', 'no-store')
 
     const body = await readJson(c.req.raw)
-    const token = readVerificationToken(body)
+    const email = readEmail(body)
+    const password = readPassword(body)
     const code = readCode(body)
-    if (!token || !code) return fail(c, 'invalid-request')
+    if (!email || !password || !code) return fail(c, 'invalid-request')
 
     try {
-      const session = await registrations().verify(token, code)
+      const session = await registrations().verify(email, password, code)
       return c.json(session, 200)
     } catch (cause) {
       return failRegistration(c, cause)
@@ -123,17 +118,6 @@ function readPassword(body: Record<string, unknown>): string | undefined {
   if (typeof value !== 'string') return undefined
   if (value.length < MIN_PASSWORD_LENGTH || value.length > MAX_PASSWORD_LENGTH) return undefined
   return value
-}
-
-/**
- * Opaque to us as well: it is the provider's handle, so nothing here inspects
- * or validates its contents beyond being a plausible string.
- */
-function readVerificationToken(body: Record<string, unknown>): string | undefined {
-  const value = body.verificationToken
-  if (typeof value !== 'string') return undefined
-  const trimmed = value.trim()
-  return trimmed.length > 0 && trimmed.length <= 512 ? trimmed : undefined
 }
 
 function readCode(body: Record<string, unknown>): string | undefined {

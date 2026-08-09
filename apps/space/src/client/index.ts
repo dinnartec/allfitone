@@ -94,11 +94,13 @@ export function register(email: string, password: string): Promise<RegistrationA
 }
 
 export function verifyRegistration(
-  verificationToken: string,
+  email: string,
+  password: string,
   code: string,
 ): Promise<SessionTokens> {
   return post<SessionTokens>('/space/v1/auth/registrations/verification', {
-    verificationToken,
+    email,
+    password,
     code,
   })
 }

@@ -275,8 +275,9 @@ function fakeClient(overrides: Partial<WorkOSUserManagement> = {}) {
     authenticateWithRefreshToken: async (o) =>
       record('authenticateWithRefreshToken', o, authResponse),
     createUser: async (o) => record('createUser', o, { id: 'user_01NEW' }),
-    authenticateWithEmailVerification: async (o) =>
-      record('authenticateWithEmailVerification', o, authResponse),
+    listUsers: async (o) => record('listUsers', o, { data: [{ id: 'user_01FAKE' }] }),
+    sendVerificationEmail: async (o) => record('sendVerificationEmail', o, {}),
+    verifyEmail: async (o) => record('verifyEmail', o, {}),
     updateUser: async (o) => record('updateUser', o, {}),
     listSessions: async (id) =>
       record('listSessions', id, { data: [{ id: 's_1' }, { id: 's_2' }] }),
@@ -503,31 +504,16 @@ function throwEmailNotAvailable(): never {
 }
 
 describe('register', () => {
-  test('creates the credential, which is what dispatches the code', async () => {
-    const { provider, calls } = providerWith({
-      authenticateWithPassword: async () => {
-        throw Object.assign(new Error('email verification required'), {
-          code: 'email_verification_required',
-          pendingAuthenticationToken: 'pat_1',
-        })
-      },
-    })
+  test('creates the credential and sends the code', async () => {
+    const { provider, calls } = providerWith()
 
-    const outcome = await provider.register(
-      { email: 'a@b.co', password: 'a-long-password' },
-      'space',
-    )
+    const outcome = await provider.register({ email: 'a@b.co', password: 'a-long-password' })
 
     expect(outcome.created).toBe(true)
-    // The handle is minted during registration, not later. Fetching it at
-    // verification time would open a new verification and cancel the code the
-    // person is holding.
-    expect(outcome.pendingToken).toBe('pat_1')
-    // Creating the user already dispatches the code. An explicit send would open
-    // a second verification and invalidate the first — two emails, and the older
-    // one stops working.
-    expect(calls.map((c) => c.method)).not.toContain('sendVerificationEmail')
-    expect(calls.map((c) => c.method)).toContain('createUser')
+    // Creating a user opens a verification but does not email it; the send is
+    // what dispatches a code.
+    expect(calls.map((c) => c.method)).toEqual(['createUser', 'sendVerificationEmail'])
+    expect(calls.at(1)?.args).toEqual({ userId: 'user_01NEW' })
   })
 
   test('an address already in use is not an error', async () => {
@@ -536,10 +522,7 @@ describe('register', () => {
     // because a caller with something to catch has something to disclose.
     const { provider } = providerWith({ createUser: async () => throwEmailNotAvailable() })
 
-    const outcome = await provider.register(
-      { email: 'a@b.co', password: 'a-long-password' },
-      'space',
-    )
+    const outcome = await provider.register({ email: 'a@b.co', password: 'a-long-password' })
 
     expect(outcome.created).toBe(false)
   })
@@ -551,68 +534,17 @@ describe('register', () => {
     const taken = providerWith({ createUser: async () => throwEmailNotAvailable() })
 
     const results = await Promise.all([
-      fresh.provider.register({ email: 'new@b.co', password: 'a-long-password' }, 'space').then(
+      fresh.provider.register({ email: 'new@b.co', password: 'a-long-password' }).then(
         () => 'resolved',
         () => 'rejected',
       ),
-      taken.provider.register({ email: 'old@b.co', password: 'a-long-password' }, 'space').then(
+      taken.provider.register({ email: 'old@b.co', password: 'a-long-password' }).then(
         () => 'resolved',
         () => 'rejected',
       ),
     ])
 
     expect(results[0]).toBe(results[1])
-  })
-
-  test('an abandoned registration resumes instead of dead-ending', async () => {
-    // HU-SP-006 criterion 2. Someone who registered, never verified and came
-    // back gets a usable handle rather than a decoy that can never redeem.
-    const { provider } = providerWith({
-      createUser: async () => throwEmailNotAvailable(),
-      authenticateWithPassword: async () => {
-        throw Object.assign(new Error('email verification required'), {
-          code: 'email_verification_required',
-          pendingAuthenticationToken: 'pat_resumed',
-        })
-      },
-    })
-
-    const outcome = await provider.register(
-      { email: 'a@b.co', password: 'a-long-password' },
-      'space',
-    )
-
-    expect(outcome.pendingToken).toBe('pat_resumed')
-  })
-
-  test('a wrong password against a taken address yields no handle and no error', async () => {
-    // The attacker case. Reporting the failure would answer "does this address
-    // have an account"; reporting success with a handle would hand them one.
-    const { provider } = providerWith({
-      createUser: async () => throwEmailNotAvailable(),
-      authenticateWithPassword: async () => {
-        throw Object.assign(new Error('Invalid credentials'), { status: 401 })
-      },
-    })
-
-    const outcome = await provider.register(
-      { email: 'a@b.co', password: 'a-long-password' },
-      'space',
-    )
-
-    expect(outcome.pendingToken).toBeUndefined()
-  })
-
-  test('an already-verified address never yields tokens from registration', async () => {
-    // Otherwise registration becomes a sign-in that skips the emailed code.
-    const { provider } = providerWith({ createUser: async () => throwEmailNotAvailable() })
-
-    const outcome = await provider.register(
-      { email: 'a@b.co', password: 'a-long-password' },
-      'space',
-    )
-
-    expect(outcome.pendingToken).toBeUndefined()
   })
 
   test('a provider outage still fails, because retrying is the right answer', async () => {
@@ -623,39 +555,42 @@ describe('register', () => {
     })
 
     await expect(
-      provider.register({ email: 'a@b.co', password: 'a-long-password' }, 'space'),
+      provider.register({ email: 'a@b.co', password: 'a-long-password' }),
     ).rejects.toMatchObject({ code: 'provider_unavailable', retryable: true })
   })
 })
 
 describe('verifyEmail', () => {
-  test('redeems the code with the handle minted at registration', async () => {
+  const CREDS = { email: 'a@b.co', password: 'a-long-password' }
+
+  test('marks the address verified, then signs in', async () => {
     const { provider, calls } = providerWith()
 
-    const result = await provider.verifyEmail('pat_1', '481920', 'space')
+    const result = await provider.verifyEmail(CREDS, '481920', 'space')
 
     expect(result.subject).toBe('user_01FAKE')
-    expect(result.tokens.accessToken).toBe('at_1')
-    expect(calls.at(-1)).toMatchObject({
-      method: 'authenticateWithEmailVerification',
-      args: { code: '481920', pendingAuthenticationToken: 'pat_1' },
-    })
+    expect(calls.map((c) => c.method)).toEqual([
+      'listUsers',
+      'verifyEmail',
+      'authenticateWithPassword',
+    ])
   })
 
-  test('never signs in, because doing so would cancel the code being redeemed', async () => {
-    // The regression this guards is the one that shipped: each sign-in against
-    // an unverified account opens a new verification and emails a new code, so a
-    // sign-in here invalidated the code the person had just been sent.
+  test('never mints a pending token, which emailing the code would invalidate', async () => {
+    // The regression this guards shipped twice. The single call that redeems a
+    // code and returns a session needs a token that `sendVerificationEmail`
+    // invalidates, so the two cannot both happen.
     const { provider, calls } = providerWith()
 
-    await provider.verifyEmail('pat_1', '481920', 'space')
+    await provider.verifyEmail(CREDS, '481920', 'space')
 
-    expect(calls.map((c) => c.method)).not.toContain('authenticateWithPassword')
+    expect(calls.map((c) => c.method)).not.toContain('authenticateWithEmailVerification')
   })
 
-  test('a wrong code is rejected as bad credentials', async () => {
-    const { provider } = providerWith({
-      authenticateWithEmailVerification: async () => {
+  test('an unknown address is rejected exactly like a wrong code', async () => {
+    const unknown = providerWith({ listUsers: async () => ({ data: [] }) })
+    const wrongCode = providerWith({
+      verifyEmail: async () => {
         throw Object.assign(new Error('Invalid one-time code'), {
           status: 400,
           code: 'invalid_one_time_code',
@@ -663,15 +598,19 @@ describe('verifyEmail', () => {
       },
     })
 
-    await expect(provider.verifyEmail('pat_1', '000000', 'space')).rejects.toMatchObject({
-      code: 'invalid_credentials',
-    })
+    const [a, b] = await Promise.all([
+      unknown.provider.verifyEmail(CREDS, '481920', 'space').catch((e) => e.code),
+      wrongCode.provider.verifyEmail(CREDS, '000000', 'space').catch((e) => e.code),
+    ])
+
+    expect(a).toBe('invalid_credentials')
+    expect(a).toBe(b)
   })
 
   test('uses the surface client id, so a Space code cannot mint a Studio session', async () => {
     const { provider, calls } = providerWith()
 
-    await provider.verifyEmail('pat_1', '481920', 'space')
+    await provider.verifyEmail(CREDS, '481920', 'space')
 
     expect(calls.at(-1)?.args).toMatchObject({ clientId: CREDENTIALS.space.clientId })
   })

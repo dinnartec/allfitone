@@ -15,11 +15,9 @@
  * so asking for one makes the platform draw a floating "Go" button over the
  * layout — which is what it was doing.
  *
- * The route carries an opaque handle rather than the password. An earlier
- * version passed the credential, because the provider mints its pending token
- * from a sign-in attempt; that turned out to be wrong for a worse reason than
- * exposure, since each such sign-in opens a new verification and invalidates the
- * code already sent.
+ * Verification confirms the address and then signs in, which is why the password
+ * comes along. See the note in `create-account.tsx` about what that costs and
+ * why the alternative did not survive contact with the provider.
  */
 
 import { AmbientBackdrop } from '@allfitone/react-native/backdrop'
@@ -34,7 +32,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
 
-import { ApiError, verifyRegistration } from '../src/client'
+import { ApiError, register, verifyRegistration } from '../src/client'
 import { storeSession } from '../src/client/session'
 
 const CODE_LENGTH = 6
@@ -42,22 +40,40 @@ const CODE_LENGTH = 6
 export default function VerifyEmail() {
   const theme = useTheme()
   const router = useRouter()
-  const { email = '', verificationToken = '' } = useLocalSearchParams<{
+  const { email = '', password = '' } = useLocalSearchParams<{
     email?: string
-    verificationToken?: string
+    password?: string
   }>()
 
   const [code, setCode] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [failure, setFailure] = useState<string | undefined>(undefined)
+  const [notice, setNotice] = useState<string | undefined>(undefined)
 
   const canSubmit = code.length === CODE_LENGTH && !submitting
+
+  const resend = async () => {
+    setSubmitting(true)
+    setFailure(undefined)
+    try {
+      // Registering again is what re-sends: the provider treats a repeat as the
+      // already-registered path and issues a fresh code, so there is no separate
+      // resend endpoint to call.
+      await register(email, password)
+      setCode('')
+      setNotice('Te enviamos un código nuevo.')
+    } catch {
+      setFailure('No pudimos reenviar el código. Inténtalo otra vez.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
 
   const submit = async () => {
     setSubmitting(true)
     setFailure(undefined)
     try {
-      const session = await verifyRegistration(verificationToken, code)
+      const session = await verifyRegistration(email, password, code)
       await storeSession(session)
       // Onboarding has no screen yet. Landing on the welcome screen with a
       // session is wrong, but inventing a destination would be worse — the next
@@ -113,7 +129,10 @@ export default function VerifyEmail() {
           <TextField
             label="Código"
             value={code}
-            onChangeText={(next) => setCode(next.replace(/[^0-9]/g, '').slice(0, CODE_LENGTH))}
+            onChangeText={(next) => {
+              setNotice(undefined)
+              setCode(next.replace(/[^0-9]/g, '').slice(0, CODE_LENGTH))
+            }}
             placeholder="000000"
             keyboardType="number-pad"
             inputMode="numeric"
@@ -143,6 +162,7 @@ export default function VerifyEmail() {
           </View>
 
           {failure ? <InlineAlert message={failure} /> : null}
+          {notice && !failure ? <InlineAlert message={notice} tone="success" /> : null}
 
           <Button
             label="Verificar"
@@ -156,7 +176,14 @@ export default function VerifyEmail() {
         </View>
       </ScrollView>
 
-      <Pressable accessibilityRole="link" style={styles.link}>
+      <Pressable
+        accessibilityRole="link"
+        disabled={submitting}
+        onPress={() => {
+          void resend()
+        }}
+        style={styles.link}
+      >
         <Text role="body" size="sm" color="secondary" align="center">
           ¿No te llegó?{' '}
           <Text role="control" size="sm" color="accent">
