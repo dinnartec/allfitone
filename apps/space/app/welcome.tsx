@@ -26,7 +26,7 @@
  * lands where it decides something: accepting a gym's invitation.
  */
 
-import { BrandLockup } from '@allfitone/react-native/brand'
+import { ProductLockup } from '@allfitone/react-native/brand'
 import { Button } from '@allfitone/react-native/button'
 import { GlassPanel } from '@allfitone/react-native/glass'
 import { Scrim } from '@allfitone/react-native/gradient'
@@ -71,9 +71,16 @@ export default function Welcome() {
       <Scrim height={scrimHeight} coverage={SCRIM_COVERAGE} />
 
       <Screen edges={['top', 'bottom']} style={styles.screen}>
-        {/* Always the dark-surface lockup: this sits on imagery, where a
+        {/* The product lockup, not the ecosystem one: DT-001 reserves "Allfit
+            One" for the ecosystem and this is a Space surface. Always the
+            dark-surface variant, because it sits on imagery where a
             theme-driven mark would go dark against a dark photograph. */}
-        <BrandLockup surface="dark" height={26} accessibilityLabel="Allfit Space" />
+        <ProductLockup
+          product="space"
+          surface="dark"
+          height={26}
+          accessibilityLabel="Allfit Space"
+        />
 
         <View style={styles.spacer} />
 
