@@ -3,11 +3,16 @@
 import { authProvider } from '../../platform/auth/index.js'
 import { createStudioSessionService, type StudioSessionService } from './application/index.js'
 import {
+  createSpaceRegistrationService,
+  type SpaceRegistrationService,
+} from './application/registration.js'
+import {
   createIdentitySessionDatabase,
   createSessionTokenVaultFromEnv,
 } from './infrastructure/index.js'
 
 let cached: StudioSessionService | undefined
+let cachedRegistrations: SpaceRegistrationService | undefined
 
 export function studioSessionService(): StudioSessionService {
   if (cached) return cached
@@ -28,6 +33,20 @@ export function studioSessionService(): StudioSessionService {
 /** Test seam. Undefined restores environment-backed construction. */
 export function setStudioSessionService(service: StudioSessionService | undefined): void {
   cached = service
+}
+
+/**
+ * Needs no database and no issuer: account creation touches the provider only.
+ */
+export function spaceRegistrationService(): SpaceRegistrationService {
+  if (cachedRegistrations) return cachedRegistrations
+  cachedRegistrations = createSpaceRegistrationService({ authProvider: authProvider() })
+  return cachedRegistrations
+}
+
+/** Test seam. Undefined restores environment-backed construction. */
+export function setSpaceRegistrationService(service: SpaceRegistrationService | undefined): void {
+  cachedRegistrations = service
 }
 
 export function trustedStudioWebUrl(): string {

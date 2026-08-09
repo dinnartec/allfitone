@@ -149,11 +149,15 @@ paths:
         the first authenticated Space operation, which is `OP-IDN-001`.
 
 
-        Identified by address rather than by a server-issued handle, so the
-        endpoint holds no state and nothing can expire out from under it. The
-        address is not a secret the client lacks — it typed it a minute earlier —
-        and the response is identical whether the code is wrong, the address
-        unknown, or the account already verified.
+        Identified by the credentials the client already holds rather than by a
+        server-issued handle, so the endpoint keeps no state and nothing expires
+        out from under it. The provider drives verification through a sign-in
+        attempt against an unverified account, which is why the password is sent
+        alongside the code.
+
+
+        The response is identical whether the code is wrong, the password wrong,
+        the address unknown, or the account already verified.
 
 
         Rate limiting is mandatory here: a six-digit code is brute-forceable in
@@ -1555,13 +1559,21 @@ components:
     SpaceRegistrationVerify:
       type: object
       additionalProperties: false
-      required: [email, code]
+      required: [email, password, code]
       properties:
         email:
           type: string
           format: email
           maxLength: 254
           description: The address the code was sent to.
+        password:
+          type: string
+          minLength: 12
+          maxLength: 256
+          description: >-
+            The same password used to register. The provider mints the pending
+            verification token from a sign-in attempt, so it is required here and
+            is not a second authentication factor.
         code:
           type: string
           pattern: '^[0-9]{6}$'

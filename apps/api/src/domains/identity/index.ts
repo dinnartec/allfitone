@@ -8,3 +8,4 @@
  */
 
 export { studioIdentityRoutes } from './handlers/studio.js'
+export { spaceIdentityRoutes } from './handlers/space.js'

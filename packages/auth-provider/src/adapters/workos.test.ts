@@ -493,7 +493,9 @@ describe('register', () => {
 
     expect(outcome.created).toBe(true)
     expect(calls.map((c) => c.method)).toEqual(['createUser', 'sendVerificationEmail'])
-    expect(calls[1].args).toEqual({ userId: 'user_01NEW' })
+    // The code goes to the user that was just created, not to whatever the
+    // caller supplied — the id never leaves this adapter.
+    expect(calls.at(1)?.args).toEqual({ userId: 'user_01NEW' })
   })
 
   test('an address already in use is not an error', async () => {

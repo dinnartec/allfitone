@@ -26,6 +26,12 @@ function provider(overrides: Partial<AuthProvider> = {}): AuthProvider {
       sessionId: 'provider_session_1',
       surface: 'studio',
     }),
+    register: async () => {
+      throw new Error('not used')
+    },
+    verifyEmail: async () => {
+      throw new Error('not used')
+    },
     updateEmail: async () => undefined,
     revokeSessions: async () => undefined,
     ...overrides,
