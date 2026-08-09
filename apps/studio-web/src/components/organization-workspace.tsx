@@ -8,6 +8,7 @@ import { useCallback, useEffect, useState } from 'react'
 
 import { organizationTypeLabel } from './membership-selector'
 import { LoadingStage, StudioFrame } from './studio-frame'
+import { membershipRoleSummary } from '@/lib/membership-roles'
 import { StudioApiError, studioApi, type Membership } from '@/lib/studio-api'
 
 type WorkspaceState =
@@ -82,7 +83,7 @@ export function OrganizationWorkspace({ organizationId }: { organizationId: stri
           </div>
           <div data-workspace-identity>
             <Badge variant="success">Organización activa</Badge>
-            <Badge variant="sport">Owner</Badge>
+            <Badge variant="sport">{membershipRoleSummary(current.roles)}</Badge>
           </div>
         </header>
 

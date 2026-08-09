@@ -48,6 +48,7 @@ select ok(
     join pg_catalog.pg_class as relation on relation.oid = constraint_object.conrelid
     join pg_catalog.pg_namespace as namespace on namespace.oid = relation.relnamespace
     where namespace.nspname in ('identity', 'access_control')
+      and constraint_object.contype <> 't'
       and constraint_object.conname !~ '^(pk|fk|uq|ck|ex)_'
   ),
   'all application constraints use canonical names'

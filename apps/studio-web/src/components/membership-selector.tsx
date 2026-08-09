@@ -3,6 +3,7 @@
 import { Button } from '@allfitone/react/components/button'
 
 import { StudioFrame } from './studio-frame'
+import { membershipRoleSummary } from '@/lib/membership-roles'
 import type { Membership } from '@/lib/studio-api'
 
 export function MembershipSelector({
@@ -26,7 +27,7 @@ export function MembershipSelector({
               <div>
                 <span data-membership-type>{organizationTypeLabel(membership.type_code)}</span>
                 <h2>{membership.display_name}</h2>
-                <p>{membership.roles.includes('owner') ? 'Owner' : membership.roles.join(' · ')}</p>
+                <p>{membershipRoleSummary(membership.roles)}</p>
               </div>
               <Button onClick={() => onSelect(membership.organization_id)}>
                 Entrar al espacio
