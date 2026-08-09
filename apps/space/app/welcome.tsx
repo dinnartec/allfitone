@@ -80,6 +80,7 @@ export default function Welcome() {
           surface="dark"
           height={26}
           accessibilityLabel="Allfit Space"
+          style={styles.lockup}
         />
 
         <View style={styles.spacer} />
@@ -124,6 +125,11 @@ const styles = StyleSheet.create({
   },
   screen: {
     backgroundColor: 'transparent',
+  },
+  lockup: {
+    // The safe area alone leaves the mark level with the status bar, which reads
+    // as chrome rather than as the product signing the screen.
+    marginTop: 16,
   },
   spacer: {
     flex: 1,
