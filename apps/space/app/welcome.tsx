@@ -94,9 +94,7 @@ export default function Welcome() {
         </View>
 
         <GlassPanel radius="panel" style={styles.actions}>
-          {/* Registration has no screen yet, so its button stays inert rather
-              than leading somewhere that does not exist. */}
-          <Button label="Crear mi cuenta" />
+          <Button label="Crear mi cuenta" onPress={() => router.push('/create-account')} />
           <Pressable
             accessibilityRole="link"
             onPress={() => router.push('/sign-in')}
