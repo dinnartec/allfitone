@@ -1,6 +1,5 @@
 import { ProductLockup } from '@allfitone/react/brand'
-import { Button, buttonVariants } from '@allfitone/react/components/button'
-import Link from 'next/link'
+import { Button } from '@allfitone/react/components/button'
 import type { ReactNode } from 'react'
 
 import { studioApi } from '@/lib/studio-api'
@@ -11,12 +10,10 @@ export function StudioFrame({
   step,
   children,
   showLogout = true,
-  showProfile = false,
 }: {
   step: StudioStep
   children: ReactNode
   showLogout?: boolean
-  showProfile?: boolean
 }) {
   return (
     <main data-studio-canvas>
@@ -30,16 +27,6 @@ export function StudioFrame({
         />
         {showLogout ? (
           <div data-studio-header-actions>
-            {showProfile ? (
-              <Link
-                href="/profile"
-                data-slot="button"
-                data-variant="ghost"
-                className={buttonVariants({ variant: 'ghost', size: 'sm' })}
-              >
-                Perfil profesional
-              </Link>
-            ) : null}
             <form action={`${studioApi.apiUrl}/studio/v1/auth/logout`} method="post">
               <Button type="submit" variant="ghost" size="sm">
                 Cerrar sesión

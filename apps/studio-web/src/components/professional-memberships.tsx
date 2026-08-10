@@ -33,9 +33,9 @@ export function ProfessionalMemberships({ memberships }: { memberships: Membersh
     <section data-profile-section aria-labelledby="memberships-title">
       <div data-profile-section-heading>
         <div>
-          <p data-profile-kicker>Contexto profesional</p>
-          <h2 id="memberships-title">Dónde trabajas</h2>
-          <p>Estas membresías son informativas y no se pueden editar desde tu perfil.</p>
+          <p data-profile-kicker>Actividad en Studio</p>
+          <h2 id="memberships-title">Mis espacios</h2>
+          <p>Consulta tus vinculaciones. Esta vista no cambia roles ni permisos.</p>
         </div>
       </div>
       <StatStrip>
@@ -46,9 +46,9 @@ export function ProfessionalMemberships({ memberships }: { memberships: Membersh
         <Empty>
           <EmptyHeader>
             <EmptyMedia variant="icon">00</EmptyMedia>
-            <EmptyTitle>Tu perfil es independiente de un espacio</EmptyTitle>
+            <EmptyTitle>Aún no tienes espacios</EmptyTitle>
             <EmptyDescription>
-              Puedes completar tu presentación ahora y crear una organización después.
+              Puedes crear una organización o aceptar una invitación cuando lo necesites.
             </EmptyDescription>
           </EmptyHeader>
         </Empty>

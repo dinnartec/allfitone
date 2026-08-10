@@ -43,7 +43,7 @@ export function AccessLanding() {
         <AccessHero aria-labelledby="studio-access-title">
           <AccessEyebrow>
             <PulseMark />
-            Studio para profesionales
+            Studio para espacios y profesionales
           </AccessEyebrow>
           <AccessTitle id="studio-access-title">Haz que cada entrenamiento cuente.</AccessTitle>
           <AccessDescription>
@@ -59,7 +59,7 @@ export function AccessLanding() {
               Entra. El contexto ya está listo.
             </AccessPanelTitle>
             <AccessPanelDescription>
-              Accede de forma segura para continuar con tus personas, planes y sesiones.
+              Accede de forma segura para continuar con tus espacios, equipo y actividad.
             </AccessPanelDescription>
           </AccessPanelHeader>
 

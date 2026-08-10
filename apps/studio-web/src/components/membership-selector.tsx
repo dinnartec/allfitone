@@ -14,7 +14,7 @@ export function MembershipSelector({
   onSelect: (organizationId: string) => void
 }) {
   return (
-    <StudioFrame step="ready" showProfile>
+    <StudioFrame step="ready">
       <article data-studio-panel="selector">
         <div data-studio-panel-intro>
           <p data-studio-eyebrow>Selecciona un espacio</p>

@@ -152,9 +152,12 @@ export function ProfessionalCredentials({
     <section data-profile-section aria-labelledby="credentials-title">
       <div data-profile-section-heading>
         <div>
-          <p data-profile-kicker>Registro personal</p>
-          <h2 id="credentials-title">Credenciales</h2>
-          <p>Declara estudios, licencias y certificaciones. Declarar no significa verificar.</p>
+          <p data-profile-kicker>Opcional · Personal</p>
+          <h2 id="credentials-title">Credenciales profesionales</h2>
+          <p>
+            No necesitas añadir credenciales para usar Studio. Declara solo las que quieras
+            presentar; declarar no significa verificar.
+          </p>
         </div>
         <Button onClick={() => setIntent({ kind: 'declare' })} disabled={!profileExists}>
           Añadir credencial
