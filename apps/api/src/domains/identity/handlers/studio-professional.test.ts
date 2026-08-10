@@ -49,7 +49,10 @@ function sessions(overrides: Partial<StudioSessionService> = {}): StudioSessionS
       },
       identity: { givenName: 'Ada', familyName: 'Lovelace' },
     }),
-    logout: async () => 'https://studio.example.test',
+    logout: async () => ({
+      redirectUrl: 'https://studio.example.test',
+      outcome: 'already-absent',
+    }),
     ...overrides,
   }
 }

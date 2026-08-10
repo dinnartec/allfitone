@@ -1,4 +1,7 @@
+'use client'
+
 import { ProductLockup } from '@allfitone/react/brand'
+import { Alert, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
 import {
   AccessDescription,
   AccessEyebrow,
@@ -23,10 +26,19 @@ import {
 import { buttonVariants } from '@allfitone/react/components/button'
 import { PulseMark } from '@allfitone/react/components/pulse-mark'
 import { ForwardIcon, FoundationIcon } from '@allfitone/react/icons'
+import { useEffect } from 'react'
 
+import { prepareStudioAuthentication } from '@/lib/session-activity'
 import { studioApi } from '@/lib/studio-api'
 
-export function AccessLanding() {
+export function AccessLanding({ logoutPartial = false }: { logoutPartial?: boolean }) {
+  useEffect(() => {
+    if (!logoutPartial) return
+    const url = new URL(window.location.href)
+    url.searchParams.delete('logout')
+    window.history.replaceState(window.history.state, '', url)
+  }, [logoutPartial])
+
   return (
     <AccessShell>
       <AccessHeader>
@@ -64,12 +76,22 @@ export function AccessLanding() {
           </AccessPanelHeader>
 
           <AccessPanelContent>
+            {logoutPartial ? (
+              <Alert variant="warning" live="polite">
+                <AlertTitle>La sesión se cerró en este equipo</AlertTitle>
+                <AlertDescription>
+                  No pudimos confirmar todo el cierre remoto. Si vuelves a entrar, completa de nuevo
+                  el acceso con el proveedor de identidad.
+                </AlertDescription>
+              </Alert>
+            ) : null}
             <AccessPanelAction>
               <a
                 data-slot="button"
                 data-variant="default"
                 className={buttonVariants({ size: 'lg' })}
                 href={`${studioApi.apiUrl}/studio/v1/auth/start`}
+                onClick={prepareStudioAuthentication}
               >
                 Entrar a Studio
                 <ForwardIcon data-icon="inline-end" decorative />

@@ -2283,9 +2283,19 @@ export interface operations {
       path?: never
       cookie?: never
     }
-    requestBody?: never
+    requestBody?: {
+      content: {
+        'application/x-www-form-urlencoded': {
+          /**
+           * @default manual
+           * @enum {string}
+           */
+          reason?: 'manual' | 'inactivity'
+        }
+      }
+    }
     responses: {
-      /** @description Local session revoked; redirect to hosted logout and back to Studio */
+      /** @description Browser session cleared; redirect to hosted logout or a recoverable partial-close notice */
       303: {
         headers: {
           'Cache-Control': components['headers']['NoStore']
@@ -2296,7 +2306,6 @@ export interface operations {
         content?: never
       }
       403: components['responses']['Forbidden']
-      503: components['responses']['UpstreamUnavailable']
     }
   }
   getMyStudioProfessionalProfile: {

@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from 'react'
 
 import { AccessLanding } from './access-landing'
 import { ActivationForm } from './activation-form'
+import { InvitationWaiting } from './invitation-waiting'
 import { MembershipSelector } from './membership-selector'
 import { SpaceSetup } from './space-setup'
 import { LoadingStage, StudioFrame } from './studio-frame'
@@ -26,19 +27,17 @@ type FlowState =
   | { kind: 'access' }
   | { kind: 'activation'; attempt: OnboardingAttempt; identity: StudioSession['identity'] }
   | { kind: 'space'; organizationTypes: OrganizationType[]; fullName?: string }
+  | { kind: 'waiting' }
   | { kind: 'select'; memberships: Membership[] }
   | { kind: 'error'; message: string }
 
-export function StudioEntry() {
+export function StudioEntry({ logoutPartial = false }: { logoutPartial?: boolean }) {
   const router = useRouter()
   const [flow, setFlow] = useState<FlowState>({ kind: 'loading' })
 
   const resolveMemberships = useCallback(
-    async (fullName?: string) => {
-      const [membershipList, typeList] = await Promise.all([
-        studioApi.memberships(),
-        studioApi.organizationTypes(),
-      ])
+    async (fullName?: string, emptyDestination: 'space' | 'waiting' = 'space') => {
+      const membershipList = await studioApi.memberships()
       const destination = resolveMembershipDestination(membershipList.items)
       if (destination.kind === 'organization') {
         router.replace(`/organizations/${destination.organizationId}`)
@@ -48,6 +47,11 @@ export function StudioEntry() {
         setFlow({ kind: 'select', memberships: destination.memberships })
         return
       }
+      if (emptyDestination === 'waiting') {
+        setFlow({ kind: 'waiting' })
+        return
+      }
+      const typeList = await studioApi.organizationTypes()
       setFlow({
         kind: 'space',
         organizationTypes: typeList.items,
@@ -56,6 +60,18 @@ export function StudioEntry() {
     },
     [router],
   )
+
+  const checkWaitingMemberships = useCallback(async () => {
+    try {
+      await resolveMemberships(undefined, 'waiting')
+    } catch (caught) {
+      if (caught instanceof StudioApiError && caught.status === 401) {
+        setFlow({ kind: 'access' })
+        return
+      }
+      throw caught
+    }
+  }, [resolveMemberships])
 
   const bootstrap = useCallback(async () => {
     setFlow({ kind: 'loading' })
@@ -88,7 +104,7 @@ export function StudioEntry() {
   }, [bootstrap])
 
   if (flow.kind === 'loading') return <LoadingStage />
-  if (flow.kind === 'access') return <AccessLanding />
+  if (flow.kind === 'access') return <AccessLanding logoutPartial={logoutPartial} />
   if (flow.kind === 'activation') {
     return (
       <ActivationForm
@@ -109,9 +125,13 @@ export function StudioEntry() {
         organizationTypes={flow.organizationTypes}
         fullName={flow.fullName}
         onCreated={(organizationId) => router.replace(`/organizations/${organizationId}`)}
+        onWait={() => setFlow({ kind: 'waiting' })}
         onSessionExpired={() => setFlow({ kind: 'access' })}
       />
     )
+  }
+  if (flow.kind === 'waiting') {
+    return <InvitationWaiting onCheck={checkWaitingMemberships} />
   }
   if (flow.kind === 'select') {
     return (

@@ -9,7 +9,9 @@ import {
   terminatedMembership,
 } from './studio-api-mock'
 
-test('keeps account and professional setup outside the initial onboarding', async ({ page }) => {
+test('offers creation or an explicit invitation wait without professional setup', async ({
+  page,
+}) => {
   const fixture = createStudioApiFixture()
   await installStudioApiMock(page, fixture)
 
@@ -18,8 +20,107 @@ test('keeps account and professional setup outside the initial onboarding', asyn
   await expect(page.getByRole('heading', { name: '¿Cómo trabajas hoy?' })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Mi cuenta', exact: true })).toHaveCount(0)
   await expect(page.getByText(/perfil profesional/i)).toHaveCount(0)
-  await expect(page.getByRole('button', { name: /Crear mi espacio/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Trabajo por mi cuenta' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Tengo un equipo o centro' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Esperar una invitación' })).toBeVisible()
   await expect(page.getByText(/práctica/i)).toHaveCount(0)
+})
+
+test('waits without mutations and rechecks an empty membership list', async ({ page }) => {
+  const fixture = createStudioApiFixture()
+  await installStudioApiMock(page, fixture)
+  await page.goto('/')
+
+  const wait = page.getByRole('button', { name: 'Esperar una invitación' })
+  await wait.focus()
+  await page.keyboard.press('Enter')
+
+  await expect(
+    page.getByRole('heading', { name: 'Tu espacio puede llegar después.' }),
+  ).toBeVisible()
+  await expect(page.getByText('Sin membresías activas')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Cerrar sesión' })).toBeVisible()
+  expect(fixture.requests.filter((request) => request.method !== 'GET')).toHaveLength(0)
+
+  await page.getByRole('button', { name: 'Comprobar de nuevo' }).click()
+  await expect(page.getByText('Sin membresías activas')).toBeVisible()
+  expect(
+    fixture.requests.filter(
+      (request) => request.method === 'GET' && request.path === '/studio/v1/me/memberships',
+    ),
+  ).toHaveLength(2)
+})
+
+test('enters a newly active membership from the invitation wait', async ({ page }) => {
+  const fixture = createStudioApiFixture()
+  await installStudioApiMock(page, fixture)
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Esperar una invitación' }).click()
+
+  fixture.memberships = [terminatedMembership, activeMembership]
+  await page.getByRole('button', { name: 'Comprobar de nuevo' }).click()
+
+  await expect(page).toHaveURL(`/organizations/${activeMembership.organization_id}`)
+  await expect(page.getByText(activeMembership.display_name)).toBeVisible()
+})
+
+test('opens the selector when multiple memberships arrive during the wait', async ({ page }) => {
+  const fixture = createStudioApiFixture()
+  await installStudioApiMock(page, fixture)
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Esperar una invitación' }).click()
+
+  fixture.memberships = [activeMembership, secondActiveMembership]
+  await page.getByRole('button', { name: 'Comprobar de nuevo' }).click()
+
+  await expect(page.getByRole('heading', { name: '¿Dónde quieres trabajar hoy?' })).toBeVisible()
+  await expect(page.getByText(activeMembership.display_name)).toBeVisible()
+  await expect(page.getByText(secondActiveMembership.display_name)).toBeVisible()
+})
+
+test('returns an expired waiting session to the access landing', async ({ page }) => {
+  let membershipReads = 0
+  const fixture = createStudioApiFixture({
+    intercept: (request) => {
+      if (request.method !== 'GET' || request.path !== '/studio/v1/me/memberships') {
+        return undefined
+      }
+      membershipReads += 1
+      return membershipReads === 2 ? { status: 401, body: error('unauthenticated') } : undefined
+    },
+  })
+  await installStudioApiMock(page, fixture)
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Esperar una invitación' }).click()
+
+  await page.getByRole('button', { name: 'Comprobar de nuevo' }).click()
+
+  await expect(page.getByRole('link', { name: 'Entrar a Studio' })).toBeVisible()
+})
+
+test('recovers when checking memberships fails temporarily', async ({ page }) => {
+  let membershipReads = 0
+  const fixture = createStudioApiFixture({
+    intercept: (request) => {
+      if (request.method !== 'GET' || request.path !== '/studio/v1/me/memberships') {
+        return undefined
+      }
+      membershipReads += 1
+      return membershipReads === 2
+        ? { status: 503, body: error('upstream-unavailable') }
+        : undefined
+    },
+  })
+  await installStudioApiMock(page, fixture)
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Esperar una invitación' }).click()
+
+  await page.getByRole('button', { name: 'Comprobar de nuevo' }).click()
+  await expect(page.getByText('La comprobación no terminó')).toBeVisible()
+
+  fixture.memberships = [activeMembership]
+  await page.getByRole('button', { name: 'Comprobar de nuevo' }).click()
+  await expect(page).toHaveURL(`/organizations/${activeMembership.organization_id}`)
 })
 
 test('routes one active membership directly and ignores terminated history', async ({ page }) => {
@@ -52,6 +153,173 @@ test('shows the organization selector only for multiple active memberships', asy
   await expect(page.getByRole('link', { name: 'Mi cuenta', exact: true })).toHaveCount(0)
 })
 
+test('keeps the active organization and its roles visible in the workspace', async ({ page }) => {
+  const fixture = createStudioApiFixture({
+    memberships: [activeMembership, terminatedMembership, secondActiveMembership],
+  })
+  await installStudioApiMock(page, fixture)
+
+  await page.goto(`/organizations/${activeMembership.organization_id}`)
+
+  await expect(
+    page.getByRole('heading', { name: activeMembership.display_name, level: 1 }),
+  ).toBeVisible()
+  await expect(page.getByText('Gimnasio', { exact: true })).toBeVisible()
+  await expect(page.getByText('Propietario', { exact: true })).toBeVisible()
+  await expect(page.getByLabel('Cambiar de organización')).toBeVisible()
+  await expect(page.getByText(terminatedMembership.display_name)).toHaveCount(0)
+})
+
+test('replaces the organization context without retaining the previous workspace', async ({
+  page,
+}) => {
+  const fixture = createStudioApiFixture({
+    memberships: [activeMembership, secondActiveMembership],
+    intercept: async (request) => {
+      if (
+        request.method === 'GET' &&
+        request.path === '/studio/v1/me/memberships' &&
+        page.url().includes(secondActiveMembership.organization_id)
+      ) {
+        await new Promise((resolve) => setTimeout(resolve, 250))
+      }
+      return undefined
+    },
+  })
+  await installStudioApiMock(page, fixture)
+  await page.goto(`/organizations/${activeMembership.organization_id}`)
+
+  await page.getByLabel('Cambiar de organización').click()
+  await page.getByRole('option', { name: `${secondActiveMembership.display_name} · Coach` }).click()
+
+  await expect(
+    page.getByRole('heading', { name: activeMembership.display_name, level: 1 }),
+  ).toHaveCount(0)
+  await expect(page).toHaveURL(`/organizations/${secondActiveMembership.organization_id}`)
+  await expect(
+    page.getByRole('heading', { name: secondActiveMembership.display_name, level: 1 }),
+  ).toBeVisible()
+  await expect(page.getByText('Coach', { exact: true })).toBeVisible()
+  await expect(page.getByText('Propietario', { exact: true })).toHaveCount(0)
+
+  const storage = await page.evaluate(() => ({
+    local: Object.entries(localStorage),
+    session: Object.entries(sessionStorage),
+  }))
+  expect(JSON.stringify(storage)).not.toContain(activeMembership.organization_id)
+  expect(JSON.stringify(storage)).not.toContain(secondActiveMembership.organization_id)
+})
+
+test('blocks direct access to a terminated organization membership', async ({ page }) => {
+  const fixture = createStudioApiFixture({
+    memberships: [activeMembership, terminatedMembership],
+  })
+  await installStudioApiMock(page, fixture)
+
+  await page.goto(`/organizations/${terminatedMembership.organization_id}`)
+
+  await expect(page.getByText('Este espacio no está disponible')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Elegir otro espacio' })).toBeVisible()
+  await expect(page.getByText(terminatedMembership.display_name)).toHaveCount(0)
+})
+
+test('revalidates a restored workspace and blocks a membership that ended', async ({ page }) => {
+  const fixture = createStudioApiFixture({
+    memberships: [activeMembership, secondActiveMembership],
+  })
+  await installStudioApiMock(page, fixture)
+  await page.goto(`/organizations/${activeMembership.organization_id}`)
+  await expect(
+    page.getByRole('heading', { name: activeMembership.display_name, level: 1 }),
+  ).toBeVisible()
+
+  fixture.memberships = [
+    { ...activeMembership, status: 'terminated', ended_at: '2026-08-10T12:00:00.000Z' },
+    secondActiveMembership,
+  ]
+  await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pageshow')))
+
+  await expect(page.getByText('Este espacio no está disponible')).toBeVisible()
+  await expect(
+    page.getByRole('heading', { name: activeMembership.display_name, level: 1 }),
+  ).toHaveCount(0)
+})
+
+test('recovers from a temporary organization context failure without exposing content', async ({
+  page,
+}) => {
+  let available = false
+  const fixture = createStudioApiFixture({
+    memberships: [activeMembership],
+    intercept: (request) =>
+      request.method === 'GET' && request.path === '/studio/v1/me/memberships' && !available
+        ? { status: 503, body: error('upstream-unavailable') }
+        : undefined,
+  })
+  await installStudioApiMock(page, fixture)
+  await page.goto(`/organizations/${activeMembership.organization_id}`)
+
+  await expect(page.getByText('No pudimos comprobar tu acceso')).toBeVisible()
+  await expect(page.getByText(activeMembership.display_name)).toHaveCount(0)
+
+  available = true
+  await page.getByRole('button', { name: 'Reintentar' }).click()
+  await expect(
+    page.getByRole('heading', { name: activeMembership.display_name, level: 1 }),
+  ).toBeVisible()
+})
+
+test('returns an expired organization session to the access landing', async ({ page }) => {
+  const fixture = createStudioApiFixture({
+    memberships: [activeMembership],
+    intercept: (request) =>
+      request.method === 'GET' && request.path === '/studio/v1/me/memberships'
+        ? { status: 401, body: error('unauthenticated') }
+        : undefined,
+  })
+  await installStudioApiMock(page, fixture)
+
+  await page.goto(`/organizations/${activeMembership.organization_id}`)
+
+  await expect(page).toHaveURL('/')
+  await expect(page.getByRole('link', { name: 'Entrar a Studio' })).toBeVisible()
+  await expect(page.getByText(activeMembership.display_name)).toHaveCount(0)
+})
+
+test('switches by keyboard and browser history does not restore the previous organization', async ({
+  page,
+}) => {
+  const memberships = [activeMembership, secondActiveMembership]
+  const fixture = createStudioApiFixture({
+    memberships,
+    me: { profile: null, memberships },
+  })
+  await installStudioApiMock(page, fixture)
+  await page.goto('/account')
+  await page.getByRole('button', { name: 'Mis espacios' }).click()
+
+  const firstMembership = page
+    .locator('[data-membership-card]')
+    .filter({ hasText: activeMembership.display_name })
+  await firstMembership.getByRole('button', { name: 'Entrar al espacio' }).click()
+  await expect(page).toHaveURL(`/organizations/${activeMembership.organization_id}`)
+
+  await page.getByLabel('Cambiar de organización').focus()
+  await page.keyboard.press('Enter')
+  const secondOption = page.getByRole('option', {
+    name: `${secondActiveMembership.display_name} · Coach`,
+  })
+  await secondOption.focus()
+  await page.keyboard.press('Enter')
+  await expect(page).toHaveURL(`/organizations/${secondActiveMembership.organization_id}`)
+
+  await page.goBack()
+  await expect(page).toHaveURL('/account')
+  await expect(
+    page.getByRole('heading', { name: activeMembership.display_name, level: 1 }),
+  ).toHaveCount(0)
+})
+
 test('routes incomplete and expired sessions through the existing entry flow', async ({ page }) => {
   const fixture = createStudioApiFixture({
     session: {
@@ -82,4 +350,39 @@ test('returns unauthenticated sessions to the access landing', async ({ page }) 
   await page.goto('/')
 
   await expect(page.getByRole('link', { name: 'Entrar a Studio' })).toBeVisible()
+})
+
+test.describe('invitation wait on mobile', () => {
+  test.use({ viewport: { width: 390, height: 844 } })
+
+  test('keeps actions inside the viewport', async ({ page }) => {
+    const fixture = createStudioApiFixture()
+    await installStudioApiMock(page, fixture)
+    await page.goto('/')
+    await page.getByRole('button', { name: 'Esperar una invitación' }).click()
+
+    await expect(page.getByRole('button', { name: 'Comprobar de nuevo' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Cerrar sesión' })).toBeVisible()
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true)
+  })
+})
+
+test.describe('organization context on mobile', () => {
+  test.use({ viewport: { width: 390, height: 844 } })
+
+  test('keeps the active organization and switcher inside the viewport', async ({ page }) => {
+    const fixture = createStudioApiFixture({
+      memberships: [activeMembership, secondActiveMembership],
+    })
+    await installStudioApiMock(page, fixture)
+    await page.goto(`/organizations/${activeMembership.organization_id}`)
+
+    await expect(
+      page.getByRole('heading', { name: activeMembership.display_name, level: 1 }),
+    ).toBeVisible()
+    await expect(page.getByLabel('Cambiar de organización')).toBeVisible()
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  })
 })

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test'
 import { Hono } from 'hono'
 import type { AuthProvider } from '@allfitone/auth-provider'
 
@@ -54,7 +54,7 @@ function fakeSessions(overrides: Partial<StudioSessionService> = {}): StudioSess
       actor: { accountId: 'account_1', personId: 'person_1' },
       identity: { givenName: 'Ada', familyName: 'Lovelace' },
     }),
-    logout: async () => LOGOUT_URL,
+    logout: async () => ({ redirectUrl: LOGOUT_URL, outcome: 'revoked' }),
     ...overrides,
   }
 }
@@ -188,11 +188,22 @@ describe('GET /session', () => {
 
 describe('POST /auth/logout', () => {
   test('requires the exact Studio origin', async () => {
-    const response = await app().request('/studio/v1/auth/logout', {
+    let logoutCalls = 0
+    const response = await app(
+      fakeProvider(),
+      fakeSessions({
+        logout: async () => {
+          logoutCalls += 1
+          return { redirectUrl: LOGOUT_URL, outcome: 'revoked' }
+        },
+      }),
+    ).request('/studio/v1/auth/logout', {
       method: 'POST',
       headers: { origin: 'https://attacker.test' },
     })
     expect(response.status).toBe(403)
+    expect(response.headers.get('set-cookie')).toBeNull()
+    expect(logoutCalls).toBe(0)
   })
 
   test('revokes locally, clears the cookie and redirects to hosted logout', async () => {
@@ -205,6 +216,68 @@ describe('POST /auth/logout', () => {
     })
     expect(response.status).toBe(303)
     expect(response.headers.get('location')).toBe(LOGOUT_URL)
+    expect(response.headers.get('set-cookie')).toContain('allfit_studio_session=;')
+  })
+
+  test('defaults the metric trigger to manual and accepts inactivity form posts', async () => {
+    const info = spyOn(console, 'info').mockImplementation(() => undefined)
+    const response = await app().request('/studio/v1/auth/logout', {
+      method: 'POST',
+      headers: {
+        origin: 'http://localhost:3000',
+        'content-type': 'application/x-www-form-urlencoded',
+        cookie: 'allfit_studio_session=opaque-session',
+      },
+      body: 'reason=inactivity',
+    })
+
+    expect(response.status).toBe(303)
+    expect(JSON.parse(String(info.mock.calls.at(-1)?.[0]))).toEqual({
+      kind: 'counter',
+      name: 'studio.auth.logout',
+      value: 1,
+      dimensions: { trigger: 'inactivity', outcome: 'revoked' },
+    })
+    info.mockRestore()
+  })
+
+  test('clears the cookie and returns to a partial notice when logout fails', async () => {
+    const response = await app(
+      fakeProvider(),
+      fakeSessions({
+        logout: async () => {
+          throw new Error('database unavailable')
+        },
+      }),
+    ).request('/studio/v1/auth/logout', {
+      method: 'POST',
+      headers: {
+        origin: 'http://localhost:3000',
+        cookie: 'allfit_studio_session=opaque-session',
+      },
+    })
+
+    expect(response.status).toBe(303)
+    expect(response.headers.get('location')).toBe('http://localhost:3000/?logout=partial')
+    expect(response.headers.get('set-cookie')).toContain('allfit_studio_session=;')
+  })
+
+  test('treats a missing session as an idempotent logout', async () => {
+    const response = await app(
+      fakeProvider(),
+      fakeSessions({
+        logout: async () => ({
+          redirectUrl: 'http://localhost:3000',
+          outcome: 'already-absent',
+        }),
+      }),
+    ).request('/studio/v1/auth/logout', {
+      method: 'POST',
+      headers: { origin: 'http://localhost:3000' },
+    })
+
+    expect(response.status).toBe(303)
+    expect(response.headers.get('location')).toBe('http://localhost:3000')
     expect(response.headers.get('set-cookie')).toContain('allfit_studio_session=;')
   })
 })

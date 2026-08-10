@@ -1,5 +1,7 @@
 import type { AllfitV1Schemas } from '@allfitone/contracts'
 
+import { notifyStudioAuthenticated, notifyStudioUnauthenticated } from './session-activity'
+
 export type StudioSession = AllfitV1Schemas['StudioSession']
 export type OnboardingAttempt = AllfitV1Schemas['StudioOnboardingAttempt']
 export type AdultEligibilityEvidence = AllfitV1Schemas['AdultEligibilityEvidence']
@@ -59,7 +61,11 @@ export const studioApi = {
       },
     ),
 
-  memberships: () => request<AllfitV1Schemas['StudioMembershipList']>('/studio/v1/me/memberships'),
+  memberships: (signal?: AbortSignal) =>
+    request<AllfitV1Schemas['StudioMembershipList']>(
+      '/studio/v1/me/memberships',
+      signal ? { signal } : {},
+    ),
 
   organizationTypes: () =>
     request<AllfitV1Schemas['OrganizationTypeList']>('/studio/v1/organization-types'),
@@ -177,7 +183,7 @@ async function catalogRequest<T>(path: string, cacheName: string): Promise<T> {
 }
 
 async function fetchApi(path: string, init: RequestInit = {}): Promise<Response> {
-  return fetch(`${API_URL}${path}`, {
+  const response = await fetch(`${API_URL}${path}`, {
     ...init,
     credentials: 'include',
     headers: {
@@ -186,6 +192,9 @@ async function fetchApi(path: string, init: RequestInit = {}): Promise<Response>
       ...init.headers,
     },
   })
+  if (response.status === 401) notifyStudioUnauthenticated()
+  else if (response.ok) notifyStudioAuthenticated()
+  return response
 }
 
 async function responseError(response: Response): Promise<StudioApiError> {

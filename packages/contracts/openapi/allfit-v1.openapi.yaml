@@ -309,9 +309,21 @@ paths:
           schema:
             type: string
             format: uri
+      requestBody:
+        required: false
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                reason:
+                  type: string
+                  enum: [manual, inactivity]
+                  default: manual
       responses:
         '303':
-          description: Local session revoked; redirect to hosted logout and back to Studio
+          description: Browser session cleared; redirect to hosted logout or a recoverable partial-close notice
           headers:
             Cache-Control:
               $ref: '#/components/headers/NoStore'
@@ -321,8 +333,6 @@ paths:
               $ref: '#/components/headers/SetCookie'
         '403':
           $ref: '#/components/responses/Forbidden'
-        '503':
-          $ref: '#/components/responses/UpstreamUnavailable'
 
   /studio/v1/me:
     get:
