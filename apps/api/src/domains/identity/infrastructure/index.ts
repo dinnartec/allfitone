@@ -273,21 +273,18 @@ function sessionSecret(value: unknown): StoredSessionSecret {
     throw new Error('Invalid session identity payload')
   }
   const names = identity as Record<string, unknown>
-  const givenName = names.givenName
-  const familyName = names.familyName
-  if (
-    (givenName !== null && typeof givenName !== 'string') ||
-    (familyName !== null && typeof familyName !== 'string')
-  ) {
-    throw new Error('Invalid session identity payload')
-  }
   return {
     tokens: sessionTokens(candidate.tokens),
     identity: {
-      givenName,
-      familyName,
+      givenName: sessionIdentityName(names.givenName),
+      familyName: sessionIdentityName(names.familyName),
     },
   }
+}
+
+function sessionIdentityName(value: unknown): string | null {
+  if (value === null || typeof value === 'string') return value
+  throw new Error('Invalid session identity payload')
 }
 
 function storedSession(row: SessionRow): StoredAccessSession {
