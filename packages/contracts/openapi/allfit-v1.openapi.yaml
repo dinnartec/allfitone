@@ -1598,13 +1598,28 @@ components:
     StudioSession:
       type: object
       additionalProperties: false
-      required: [authenticated, registration_status]
+      required: [authenticated, registration_status, identity]
       properties:
         authenticated:
           type: boolean
           const: true
         registration_status:
           $ref: '#/components/schemas/StudioRegistrationStatus'
+        identity:
+          $ref: '#/components/schemas/StudioAccountIdentity'
+    StudioAccountIdentity:
+      type: object
+      additionalProperties: false
+      required: [given_name, family_name]
+      properties:
+        given_name:
+          type: [string, 'null']
+          minLength: 1
+          maxLength: 100
+        family_name:
+          type: [string, 'null']
+          minLength: 1
+          maxLength: 100
     StudioOnboardingStatus:
       type: string
       enum: [open, activated, ineligible, expired]
@@ -1675,7 +1690,7 @@ components:
     StudioOnboardingCompletion:
       type: object
       additionalProperties: false
-      required: [given_name, family_name, terms_accepted, privacy_notice_accepted]
+      required: [terms_accepted, privacy_notice_accepted]
       properties:
         given_name:
           type: string
@@ -1701,7 +1716,7 @@ components:
           const: complete
     OrganizationTypeCode:
       type: string
-      enum: [professional_practice, gym, studio, academy, clinic]
+      enum: [professional_practice, gym, studio]
     OrganizationType:
       type: object
       additionalProperties: false

@@ -1,5 +1,4 @@
-import { BrandLockup } from '@allfitone/react/brand'
-import { Badge } from '@allfitone/react/components/badge'
+import { ProductLockup } from '@allfitone/react/brand'
 import { Button } from '@allfitone/react/components/button'
 import type { ReactNode } from 'react'
 
@@ -19,17 +18,22 @@ export function StudioFrame({
   return (
     <main data-studio-canvas>
       <header data-studio-header>
-        <BrandLockup surface="light" title="Allfit One" width={148} height={40} />
-        <div data-studio-header-actions>
-          <Badge variant="sport">Studio</Badge>
-          {showLogout ? (
+        <ProductLockup
+          product="studio"
+          surface="light"
+          title="Allfit Studio"
+          width={169}
+          height={40}
+        />
+        {showLogout ? (
+          <div data-studio-header-actions>
             <form action={`${studioApi.apiUrl}/studio/v1/auth/logout`} method="post">
               <Button type="submit" variant="ghost" size="sm">
                 Cerrar sesión
               </Button>
             </form>
-          ) : null}
-        </div>
+          </div>
+        ) : null}
       </header>
       <StudioProgress step={step} />
       <section data-studio-stage>{children}</section>
@@ -52,7 +56,7 @@ export function StudioProgress({ step }: { step: StudioStep }) {
               aria-current={status === 'current' ? 'step' : undefined}
             >
               <span data-progress-index>{index < current ? '✓' : `0${index + 1}`}</span>
-              <span>{label}</span>
+              <span data-progress-label>{label}</span>
             </li>
           )
         })}

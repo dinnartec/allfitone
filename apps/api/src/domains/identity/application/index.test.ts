@@ -12,14 +12,19 @@ import { createStudioSessionService, StudioSessionError } from './index.js'
 const NOW = new Date('2026-08-06T12:00:00.000Z')
 const CURRENT = { accessToken: 'access-current', refreshToken: 'refresh-current', expiresIn: 300 }
 const ROTATED = { accessToken: 'access-rotated', refreshToken: 'refresh-rotated', expiresIn: 300 }
+const IDENTITY = { givenName: 'Ada', familyName: 'Lovelace' }
 
 function provider(overrides: Partial<AuthProvider> = {}): AuthProvider {
   return {
     getAuthorizationUrl: () => 'https://workos.test/authorize',
     getLogoutUrl: ({ sessionId, returnTo }) =>
       `https://workos.test/logout?sid=${sessionId}&return_to=${encodeURIComponent(returnTo)}`,
-    authenticateWithCode: async () => ({ subject: 'user_1', tokens: CURRENT }),
-    authenticateWithPassword: async () => ({ subject: 'user_1', tokens: CURRENT }),
+    authenticateWithCode: async () => ({ subject: 'user_1', identity: IDENTITY, tokens: CURRENT }),
+    authenticateWithPassword: async () => ({
+      subject: 'user_1',
+      identity: IDENTITY,
+      tokens: CURRENT,
+    }),
     refresh: async () => ROTATED,
     verifyAccessToken: async () => ({
       subject: 'user_1',
@@ -98,8 +103,15 @@ function vault(): SessionTokenVault {
   return {
     generateOpaqueToken: () => 'opaque',
     hashOpaqueToken: () => new Uint8Array(32).fill(1),
-    seal: (tokens) => `v1.${tokens.accessToken}`,
-    open: (ciphertext) => (ciphertext.includes('rotated') ? ROTATED : CURRENT),
+    seal: (secret) =>
+      `v1.${secret.tokens.accessToken}.${secret.identity.givenName}.${secret.identity.familyName}`,
+    open: (ciphertext) => {
+      const [, accessToken, givenName, familyName] = ciphertext.split('.')
+      return {
+        tokens: accessToken?.includes('rotated') ? ROTATED : CURRENT,
+        identity: { givenName: givenName ?? null, familyName: familyName ?? null },
+      }
+    },
   }
 }
 
@@ -123,7 +135,7 @@ describe('completeCode', () => {
     const database = new MemoryDatabase()
     await expect(service(database).completeCode('code')).resolves.toEqual({ opaqueToken: 'opaque' })
     expect(database.accountResolutions).toBe(1)
-    expect(database.session?.tokenCiphertext).toBe('v1.access-current')
+    expect(database.session?.tokenCiphertext).toBe('v1.access-current.Ada.Lovelace')
     expect(database.session?.accessTokenExpiresAt.toISOString()).toBe('2026-08-06T12:05:00.000Z')
   })
 
@@ -150,6 +162,7 @@ describe('readSession', () => {
     await expect(service(database).readSession('opaque')).resolves.toEqual({
       authenticated: true,
       registration_status: 'registration_incomplete',
+      identity: { given_name: 'Ada', family_name: 'Lovelace' },
     })
   })
 
@@ -189,7 +202,7 @@ describe('readSession', () => {
 
     await service(database).readSession('opaque')
     expect(database.rotations).toBe(1)
-    expect(database.session?.tokenCiphertext).toBe('v1.access-rotated')
+    expect(database.session?.tokenCiphertext).toBe('v1.access-rotated.Ada.Lovelace')
     expect(database.session?.tokenVersion).toBe(2)
   })
 

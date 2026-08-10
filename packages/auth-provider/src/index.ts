@@ -1,5 +1,6 @@
 export type {
   AuthorizationRequest,
+  AuthenticatedIdentity,
   AuthProvider,
   AuthResult,
   ExternalSubject,

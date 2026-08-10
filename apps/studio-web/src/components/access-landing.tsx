@@ -1,4 +1,4 @@
-import { BrandLockup } from '@allfitone/react/brand'
+import { ProductLockup } from '@allfitone/react/brand'
 import {
   AccessDescription,
   AccessEyebrow,
@@ -20,7 +20,6 @@ import {
   AccessShell,
   AccessTitle,
 } from '@allfitone/react/components/access-shell'
-import { Badge } from '@allfitone/react/components/badge'
 import { buttonVariants } from '@allfitone/react/components/button'
 import { PulseMark } from '@allfitone/react/components/pulse-mark'
 import { ForwardIcon, FoundationIcon } from '@allfitone/react/icons'
@@ -31,8 +30,13 @@ export function AccessLanding() {
   return (
     <AccessShell>
       <AccessHeader>
-        <BrandLockup surface="light" title="Allfit One" width={148} height={40} />
-        <Badge variant="sport">Studio</Badge>
+        <ProductLockup
+          product="studio"
+          surface="light"
+          title="Allfit Studio"
+          width={169}
+          height={40}
+        />
       </AccessHeader>
 
       <AccessMain>

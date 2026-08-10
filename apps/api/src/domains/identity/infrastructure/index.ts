@@ -204,12 +204,12 @@ export function createSessionTokenVaultFromEnv(): SessionTokenVault {
   return {
     generateOpaqueToken: () => randomBytes(32).toString('base64url'),
     hashOpaqueToken: (token) => createHash('sha256').update(token).digest(),
-    seal(tokens, context) {
+    seal(secret, context) {
       const nonce = randomBytes(12)
       const cipher = createCipheriv('aes-256-gcm', key, nonce)
       cipher.setAAD(aad(context))
       const encrypted = Buffer.concat([
-        cipher.update(JSON.stringify(tokens), 'utf8'),
+        cipher.update(JSON.stringify(secret), 'utf8'),
         cipher.final(),
       ])
       return `v1.${nonce.toString('base64url')}.${encrypted.toString('base64url')}.${cipher.getAuthTag().toString('base64url')}`
@@ -226,7 +226,7 @@ export function createSessionTokenVaultFromEnv(): SessionTokenVault {
         decipher.update(Buffer.from(encryptedValue, 'base64url')),
         decipher.final(),
       ]).toString('utf8')
-      return sessionTokens(JSON.parse(plaintext) as unknown)
+      return sessionSecret(JSON.parse(plaintext) as unknown)
     },
   }
 }
@@ -252,6 +252,38 @@ function sessionTokens(value: unknown): SessionTokens {
     accessToken: candidate.accessToken,
     refreshToken: candidate.refreshToken,
     expiresIn: candidate.expiresIn,
+  }
+}
+
+function sessionSecret(value: unknown) {
+  if (typeof value !== 'object' || value === null) throw new Error('Invalid session secret payload')
+  const candidate = value as Record<string, unknown>
+
+  // Sessions issued before identity prefill stored the tokens as the root payload.
+  if (!('tokens' in candidate)) {
+    return {
+      tokens: sessionTokens(value),
+      identity: { givenName: null, familyName: null },
+    }
+  }
+
+  const identity = candidate.identity
+  if (typeof identity !== 'object' || identity === null) {
+    throw new Error('Invalid session identity payload')
+  }
+  const names = identity as Record<string, unknown>
+  if (
+    (names.givenName !== null && typeof names.givenName !== 'string') ||
+    (names.familyName !== null && typeof names.familyName !== 'string')
+  ) {
+    throw new Error('Invalid session identity payload')
+  }
+  return {
+    tokens: sessionTokens(candidate.tokens),
+    identity: {
+      givenName: names.givenName,
+      familyName: names.familyName,
+    },
   }
 }
 

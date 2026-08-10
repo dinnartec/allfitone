@@ -18,8 +18,13 @@ function sessions(overrides: Partial<StudioSessionService> = {}): StudioSessionS
     readSession: async () => ({
       authenticated: true,
       registration_status: 'registration_incomplete',
+      identity: { given_name: 'Ada', family_name: 'Lovelace' },
     }),
     resolveActor: async () => ({ accountId: '0198d000-0000-7000-8000-000000000011' }),
+    resolveAccountIdentity: async () => ({
+      actor: { accountId: '0198d000-0000-7000-8000-000000000011' },
+      identity: { givenName: 'Ada', familyName: 'Lovelace' },
+    }),
     logout: async () => 'https://studio.example.test',
     ...overrides,
   }
@@ -102,6 +107,56 @@ describe('Studio onboarding routes', () => {
       },
     )
     expect(response.status).toBe(400)
+  })
+
+  test('uses the identity captured by WorkOS without asking for the name again', async () => {
+    let completedWith: { givenName: string; familyName: string } | undefined
+    const response = await app(
+      sessions(),
+      onboarding({
+        complete: async (_actor, input) => {
+          completedWith = { givenName: input.givenName, familyName: input.familyName }
+          return '0198d000-0000-7000-8000-000000000031'
+        },
+      }),
+    ).request('/studio/v1/onboarding-attempts/0198d000-0000-7000-8000-000000000021/completion', {
+      method: 'POST',
+      headers: COMMAND_HEADERS,
+      body: JSON.stringify({ terms_accepted: true, privacy_notice_accepted: true }),
+    })
+
+    expect(response.status).toBe(200)
+    expect(completedWith).toEqual({ givenName: 'Ada', familyName: 'Lovelace' })
+  })
+
+  test('accepts a manual name only when the provider did not supply it', async () => {
+    let completedWith: { givenName: string; familyName: string } | undefined
+    const response = await app(
+      sessions({
+        resolveAccountIdentity: async () => ({
+          actor: { accountId: '0198d000-0000-7000-8000-000000000011' },
+          identity: { givenName: null, familyName: null },
+        }),
+      }),
+      onboarding({
+        complete: async (_actor, input) => {
+          completedWith = { givenName: input.givenName, familyName: input.familyName }
+          return '0198d000-0000-7000-8000-000000000031'
+        },
+      }),
+    ).request('/studio/v1/onboarding-attempts/0198d000-0000-7000-8000-000000000021/completion', {
+      method: 'POST',
+      headers: COMMAND_HEADERS,
+      body: JSON.stringify({
+        given_name: 'Grace',
+        family_name: 'Hopper',
+        terms_accepted: true,
+        privacy_notice_accepted: true,
+      }),
+    })
+
+    expect(response.status).toBe(200)
+    expect(completedWith).toEqual({ givenName: 'Grace', familyName: 'Hopper' })
   })
 
   test('returns a closed 503 when onboarding persistence is unavailable', async () => {

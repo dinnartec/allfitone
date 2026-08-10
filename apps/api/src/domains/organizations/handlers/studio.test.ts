@@ -16,10 +16,21 @@ const HEADERS = {
 function sessions(overrides: Partial<StudioSessionService> = {}): StudioSessionService {
   return {
     completeCode: async () => ({ opaqueToken: 'opaque' }),
-    readSession: async () => ({ authenticated: true, registration_status: 'complete' }),
+    readSession: async () => ({
+      authenticated: true,
+      registration_status: 'complete',
+      identity: { given_name: 'Ada', family_name: 'Lovelace' },
+    }),
     resolveActor: async () => ({
       accountId: '0198d000-0000-7000-8000-000000000011',
       personId: '0198d000-0000-7000-8000-000000000012',
+    }),
+    resolveAccountIdentity: async () => ({
+      actor: {
+        accountId: '0198d000-0000-7000-8000-000000000011',
+        personId: '0198d000-0000-7000-8000-000000000012',
+      },
+      identity: { givenName: 'Ada', familyName: 'Lovelace' },
     }),
     logout: async () => 'https://studio.example.test',
     ...overrides,
@@ -30,7 +41,7 @@ function organizations(
   overrides: Partial<StudioOrganizationService> = {},
 ): StudioOrganizationService {
   return {
-    listTypes: async () => [{ code: 'professional_practice', name: 'Práctica profesional' }],
+    listTypes: async () => [{ code: 'professional_practice', name: 'Profesional independiente' }],
     listMemberships: async () => [],
     create: async () => ({
       id: '0198d000-0000-7000-8000-000000000021',
@@ -54,6 +65,14 @@ beforeEach(() => {
 })
 
 describe('Studio organization routes', () => {
+  test('returns only the governed active organization types', async () => {
+    const response = await app().request('/studio/v1/organization-types', { headers: HEADERS })
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({
+      items: [{ code: 'professional_practice', name: 'Profesional independiente' }],
+    })
+  })
+
   test('returns the current memberships without cacheable identifiers', async () => {
     const response = await app(
       organizations({
@@ -92,6 +111,19 @@ describe('Studio organization routes', () => {
       display_name: 'Ada Entrena',
       roles: ['owner'],
     })
+  })
+
+  test('rejects an inactive organization type', async () => {
+    const response = await app().request('/studio/v1/organizations', {
+      method: 'POST',
+      headers: HEADERS,
+      body: JSON.stringify({
+        display_name: 'Ada Academy',
+        type_code: 'academy',
+        responsible_party: { kind: 'natural_person', name: 'Ada Lovelace' },
+      }),
+    })
+    expect(response.status).toBe(400)
   })
 
   test('rejects creation from another origin', async () => {
