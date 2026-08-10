@@ -121,6 +121,47 @@ describe('Studio professional profile routes', () => {
     await expect(response.json()).resolves.toEqual({ profile: null, memberships: [] })
   })
 
+  test('returns active memberships and terminated history without dropping end dates', async () => {
+    const response = await app(
+      professional({
+        getMe: async () => ({
+          profile: null,
+          memberships: [
+            {
+              membershipId: '0198d000-0000-7000-8000-000000000041',
+              organizationId: '0198d000-0000-7000-8000-000000000042',
+              displayName: 'Active Gym',
+              typeCode: 'gym',
+              status: 'active',
+              joinedAt: new Date('2025-01-01T00:00:00.000Z'),
+              endedAt: null,
+              roles: ['coach'],
+            },
+            {
+              membershipId: '0198d000-0000-7000-8000-000000000043',
+              organizationId: '0198d000-0000-7000-8000-000000000044',
+              displayName: 'Closed Studio',
+              typeCode: 'studio',
+              status: 'terminated',
+              joinedAt: new Date('2024-01-01T00:00:00.000Z'),
+              endedAt: new Date('2025-06-01T00:00:00.000Z'),
+              roles: ['staff'],
+            },
+          ],
+        }),
+      }),
+    ).request('/studio/v1/me', { headers: HEADERS })
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('cache-control')).toBe('private, no-store')
+    await expect(response.json()).resolves.toMatchObject({
+      memberships: [
+        { status: 'active', ended_at: null, roles: ['coach'] },
+        { status: 'terminated', ended_at: '2025-06-01T00:00:00.000Z', roles: ['staff'] },
+      ],
+    })
+  })
+
   test('requires a completed Studio registration', async () => {
     const response = await app(
       professional(),

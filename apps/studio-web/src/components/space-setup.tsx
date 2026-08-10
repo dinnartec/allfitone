@@ -1,7 +1,7 @@
 'use client'
 
 import { Alert, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
-import { Button } from '@allfitone/react/components/button'
+import { Button, buttonVariants } from '@allfitone/react/components/button'
 import {
   Field,
   FieldDescription,
@@ -18,6 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@allfitone/react/components/select'
+import Link from 'next/link'
 import { useState, type FormEvent } from 'react'
 
 import { StudioFrame } from './studio-frame'
@@ -40,7 +41,7 @@ export function SpaceSetup({
   const [mode, setMode] = useState<StartMode>()
 
   return (
-    <StudioFrame step="space">
+    <StudioFrame step="space" showProfile>
       {mode ? (
         <SpaceForm
           mode={mode}
@@ -56,6 +57,18 @@ export function SpaceSetup({
             <p data-studio-eyebrow>Elige cómo empezar</p>
             <h1>¿Cómo trabajas hoy?</h1>
             <p>Elige la estructura que mejor representa tu trabajo. Podrás ampliarla después.</p>
+            <p>
+              ¿También entrenas o prestas servicios? El perfil profesional es opcional y puedes
+              completarlo en cualquier momento.
+            </p>
+            <Link
+              href="/profile"
+              data-slot="button"
+              data-variant="outline"
+              className={buttonVariants({ variant: 'outline', size: 'sm' })}
+            >
+              Abrir perfil profesional
+            </Link>
           </div>
           <div data-studio-choice-grid>
             <button type="button" data-studio-choice onClick={() => setMode('individual')}>

@@ -1,6 +1,6 @@
 begin;
 
-select plan(33);
+select plan(40);
 
 select has_table('catalog', 'professional_specialties', 'professional specialties catalogue exists');
 select has_table('catalog', 'professional_credential_types', 'professional credential types catalogue exists');
@@ -26,6 +26,14 @@ insert into identity.people (id, given_name, family_name)
 values
   ('01991600-0000-7000-8000-000000000001', 'Ada', 'Profile'),
   ('01991600-0000-7000-8000-000000000002', 'Grace', 'Private');
+
+insert into system.outbox_events (aggregate_type, aggregate_id, event_type, payload)
+values (
+  'professional_profile',
+  '01991600-0000-7000-8000-000000000099',
+  'identity.professional_profile_updated.v1',
+  '{}'::jsonb
+);
 
 set local role allfit_api;
 select set_config('app.actor_kind', 'person', true);
@@ -148,10 +156,81 @@ select is(
     select count(*)
     from system.outbox_events
     where event_type = 'identity.professional_profile_updated.v1'
+      and aggregate_type = 'professional_profile'
+      and aggregate_id = (select (profile ->> 'id')::uuid from test_profile_result)
   ),
   1::bigint,
-  'a replay or identical content does not emit another profile event'
+  'a replay or identical content does not emit another event for the profile under test'
 );
+
+insert into organizations.organizations (
+  id,
+  type_code,
+  display_name,
+  status,
+  responsible_party
+) values
+  (
+    '01991600-0000-7000-8000-000000000101',
+    'gym',
+    'Active Gym',
+    'active',
+    '{"party_kind":"natural_person","party_name":"Grace Private","purpose":"studio_operations"}'::jsonb
+  ),
+  (
+    '01991600-0000-7000-8000-000000000111',
+    'studio',
+    'Closed Studio',
+    'closed',
+    '{"party_kind":"natural_person","party_name":"Grace Private","purpose":"studio_operations"}'::jsonb
+  );
+
+insert into organizations.organization_memberships (
+  id,
+  organization_id,
+  person_id,
+  status,
+  joined_at,
+  ended_at
+) values
+  (
+    '01991600-0000-7000-8000-000000000102',
+    '01991600-0000-7000-8000-000000000101',
+    '01991600-0000-7000-8000-000000000002',
+    'active',
+    '2025-01-01T00:00:00Z',
+    null
+  ),
+  (
+    '01991600-0000-7000-8000-000000000103',
+    '01991600-0000-7000-8000-000000000101',
+    '01991600-0000-7000-8000-000000000001',
+    'active',
+    '2025-02-01T00:00:00Z',
+    null
+  ),
+  (
+    '01991600-0000-7000-8000-000000000112',
+    '01991600-0000-7000-8000-000000000111',
+    '01991600-0000-7000-8000-000000000001',
+    'terminated',
+    '2024-01-01T00:00:00Z',
+    '2025-06-01T00:00:00Z'
+  );
+
+insert into organizations.membership_roles (membership_id, role_code, valid_from, valid_to)
+values
+  ('01991600-0000-7000-8000-000000000102', 'owner', '2025-01-01T00:00:00Z', null),
+  (
+    '01991600-0000-7000-8000-000000000102',
+    'coach',
+    clock_timestamp() - interval '1 year',
+    clock_timestamp() + interval '1 year'
+  ),
+  ('01991600-0000-7000-8000-000000000103', 'coach', '2025-02-01T00:00:00Z', null),
+  ('01991600-0000-7000-8000-000000000112', 'admin', '2024-01-01T00:00:00Z', '2024-12-01T00:00:00Z'),
+  ('01991600-0000-7000-8000-000000000112', 'staff', '2024-01-01T00:00:00Z', '2025-06-01T00:00:00Z'),
+  ('01991600-0000-7000-8000-000000000112', 'coach', '2025-07-01T00:00:00Z', null);
 
 set local role allfit_api;
 
@@ -273,6 +352,50 @@ select identity.get_my_professional_context(
   '01991600-0000-7000-8000-000000000001',
   '33333333-3333-4333-8333-333333333333'
 ) as body;
+
+select is(
+  jsonb_array_length((select body -> 'memberships' from test_me)),
+  2,
+  'the consolidated projection includes active and terminated memberships'
+);
+select is(
+  (select body #>> '{memberships,0,status}' from test_me),
+  'active',
+  'active memberships are projected before history'
+);
+select ok(
+  (select body #> '{memberships,0,roles}' from test_me) ? 'coach',
+  'active memberships include roles whose validity window is still open'
+);
+select is(
+  (select body #>> '{memberships,0,roles,0}' from test_me),
+  'coach',
+  'active memberships project currently effective roles'
+);
+select is(
+  (select body #>> '{memberships,1,display_name}' from test_me),
+  'Closed Studio',
+  'terminated memberships remain visible when the organization is closed'
+);
+select is(
+  (select body #>> '{memberships,1,roles,0}' from test_me),
+  'staff',
+  'terminated memberships project only roles effective at termination'
+);
+
+select set_config('app.actor_person_id', '01991600-0000-7000-8000-000000000002', true);
+select throws_ok(
+  $$
+    select identity.get_my_professional_context(
+      '01991600-0000-7000-8000-000000000001',
+      '33333333-3333-4333-8333-333333333334'
+    )
+  $$,
+  '42501',
+  null,
+  'another person cannot read professional membership history'
+);
+select set_config('app.actor_person_id', '01991600-0000-7000-8000-000000000001', true);
 
 select ok(
   (

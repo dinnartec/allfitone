@@ -119,9 +119,9 @@ export interface ProfessionalMembershipSummary {
   organizationId: string
   displayName: string
   typeCode: 'professional_practice' | 'gym' | 'studio'
-  status: 'active'
+  status: 'active' | 'terminated'
   joinedAt: Date
-  endedAt: null
+  endedAt: Date | null
   roles: Array<'owner' | 'admin' | 'coach' | 'staff'>
 }
 

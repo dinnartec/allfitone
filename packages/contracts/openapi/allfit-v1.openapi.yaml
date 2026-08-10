@@ -335,7 +335,7 @@ paths:
         - cookieAuth: []
       responses:
         '200':
-          description: Personal professional profile, credentials and membership summary
+          description: Personal professional profile, credentials, and active and terminated membership history
           headers:
             Cache-Control:
               $ref: '#/components/headers/PrivateNoStore'
@@ -2317,6 +2317,7 @@ components:
           $ref: '#/components/schemas/OrganizationTypeCode'
         status:
           type: string
+          description: Current or final state of the person's membership.
           enum: [active, terminated]
         joined_at:
           type: string
@@ -2324,8 +2325,10 @@ components:
         ended_at:
           type: [string, 'null']
           format: date-time
+          description: Membership termination time; null while the membership is active.
         roles:
           type: array
+          description: Current roles for an active membership, or roles effective at termination for history.
           uniqueItems: true
           items:
             type: string
@@ -2556,6 +2559,7 @@ components:
             - type: 'null'
         memberships:
           type: array
+          description: Personal active memberships followed by terminated membership history.
           maxItems: 100
           items:
             $ref: '#/components/schemas/StudioMembership'

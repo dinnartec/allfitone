@@ -119,3 +119,24 @@ jobs:
       - name: Stop Supabase
         if: always()
         run: bun run db:stop
+
+  studio-e2e:
+    name: Studio E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.16
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Install Chromium
+        run: bunx playwright install --with-deps chromium
+
+      - name: Test Studio interactions
+        run: bun run --cwd apps/studio-web test:e2e

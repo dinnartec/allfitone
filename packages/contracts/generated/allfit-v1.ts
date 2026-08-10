@@ -790,12 +790,19 @@ export interface components {
       organization_id: components['schemas']['UuidV7']
       display_name: string
       type_code: components['schemas']['OrganizationTypeCode']
-      /** @enum {string} */
+      /**
+       * @description Current or final state of the person's membership.
+       * @enum {string}
+       */
       status: 'active' | 'terminated'
       /** Format: date-time */
       joined_at: string
-      /** Format: date-time */
+      /**
+       * Format: date-time
+       * @description Membership termination time; null while the membership is active.
+       */
       ended_at?: string | null
+      /** @description Current roles for an active membership, or roles effective at termination for history. */
       roles: ('owner' | 'admin' | 'coach' | 'staff')[]
     }
     StudioMembershipList: {
@@ -876,6 +883,7 @@ export interface components {
     }
     StudioMe: {
       profile: components['schemas']['ProfessionalProfile'] | null
+      /** @description Personal active memberships followed by terminated membership history. */
       memberships: components['schemas']['StudioMembership'][]
     }
     /** Format: uuid */
@@ -2300,7 +2308,7 @@ export interface operations {
     }
     requestBody?: never
     responses: {
-      /** @description Personal professional profile, credentials and membership summary */
+      /** @description Personal professional profile, credentials, and active and terminated membership history */
       200: {
         headers: {
           'Cache-Control': components['headers']['PrivateNoStore']

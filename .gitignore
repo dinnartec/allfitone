@@ -4,6 +4,8 @@ dist/
 .expo/
 .vercel/
 .next/
+.next-e2e/
+.next-build/
 *.tsbuildinfo
 
 .env
@@ -13,3 +15,5 @@ dist/
 .DS_Store
 *.log
 coverage/
+playwright-report/
+test-results/

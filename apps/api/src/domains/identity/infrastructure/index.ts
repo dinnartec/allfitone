@@ -72,9 +72,9 @@ type RawStudioProfessionalContext = {
     organization_id: string
     display_name: string
     type_code: 'professional_practice' | 'gym' | 'studio'
-    status: 'active'
+    status: 'active' | 'terminated'
     joined_at: string
-    ended_at: null
+    ended_at: string | null
     roles: Array<'owner' | 'admin' | 'coach' | 'staff'>
   }>
 }
@@ -486,7 +486,7 @@ function professionalContext(raw: RawStudioProfessionalContext): StudioProfessio
       typeCode: membership.type_code,
       status: membership.status,
       joinedAt: new Date(membership.joined_at),
-      endedAt: null,
+      endedAt: membership.ended_at ? new Date(membership.ended_at) : null,
       roles: membership.roles,
     })),
   }
