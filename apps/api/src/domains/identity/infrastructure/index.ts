@@ -11,6 +11,7 @@ import type {
   SessionCipherContext,
   SessionTokenVault,
   StoredAccessSession,
+  StoredSessionSecret,
 } from '../domain/index.js'
 
 type AccountRow = { account_id: string; person_id: string | null }
@@ -255,7 +256,7 @@ function sessionTokens(value: unknown): SessionTokens {
   }
 }
 
-function sessionSecret(value: unknown) {
+function sessionSecret(value: unknown): StoredSessionSecret {
   if (typeof value !== 'object' || value === null) throw new Error('Invalid session secret payload')
   const candidate = value as Record<string, unknown>
 
@@ -272,17 +273,19 @@ function sessionSecret(value: unknown) {
     throw new Error('Invalid session identity payload')
   }
   const names = identity as Record<string, unknown>
+  const givenName = names.givenName
+  const familyName = names.familyName
   if (
-    (names.givenName !== null && typeof names.givenName !== 'string') ||
-    (names.familyName !== null && typeof names.familyName !== 'string')
+    (givenName !== null && typeof givenName !== 'string') ||
+    (familyName !== null && typeof familyName !== 'string')
   ) {
     throw new Error('Invalid session identity payload')
   }
   return {
     tokens: sessionTokens(candidate.tokens),
     identity: {
-      givenName: names.givenName,
-      familyName: names.familyName,
+      givenName,
+      familyName,
     },
   }
 }
