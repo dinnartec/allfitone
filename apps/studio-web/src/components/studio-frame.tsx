@@ -1,8 +1,7 @@
 import { ProductLockup } from '@allfitone/react/brand'
-import { Button } from '@allfitone/react/components/button'
 import type { ReactNode } from 'react'
 
-import { studioApi } from '@/lib/studio-api'
+import { LogoutForm } from './logout-form'
 
 export type StudioStep = 'identity' | 'space' | 'ready'
 
@@ -27,11 +26,7 @@ export function StudioFrame({
         />
         {showLogout ? (
           <div data-studio-header-actions>
-            <form action={`${studioApi.apiUrl}/studio/v1/auth/logout`} method="post">
-              <Button type="submit" variant="ghost" size="sm">
-                Cerrar sesión
-              </Button>
-            </form>
+            <LogoutForm />
           </div>
         ) : null}
       </header>

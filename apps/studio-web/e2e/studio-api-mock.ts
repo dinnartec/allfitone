@@ -23,6 +23,7 @@ export interface StudioApiFixture {
   me: { profile: Record<string, unknown> | null; memberships: unknown[] }
   specialties: Array<{ code: string; name: string; description: string | null }>
   credentialTypes: Array<{ code: string; name: string; description: string | null }>
+  signedOut: boolean
   requests: MockRequest[]
   intercept?: (
     request: MockRequest,
@@ -135,6 +136,7 @@ export function createStudioApiFixture(
         description: null,
       },
     ],
+    signedOut: false,
     requests: [],
     ...overrides,
   }
@@ -165,7 +167,12 @@ function defaultResponse(
   fixture: StudioApiFixture,
 ): MockResponse | undefined {
   if (request.method === 'GET' && request.path === '/studio/v1/session') {
+    if (fixture.signedOut) return { status: 401, body: error('unauthenticated') }
     return { status: 200, body: fixture.session }
+  }
+  if (request.method === 'POST' && request.path === '/studio/v1/auth/logout') {
+    fixture.signedOut = true
+    return { status: 303, headers: { Location: `${STUDIO_ORIGIN}/` } }
   }
   if (request.method === 'GET' && request.path === '/studio/v1/me/memberships') {
     return { status: 200, body: { items: fixture.memberships } }

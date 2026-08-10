@@ -49,6 +49,8 @@ class MemoryDatabase implements IdentitySessionDatabase {
   revoked = false
   rotations = 0
   accountResolutions = 0
+  failLoad = false
+  failRevoke = false
 
   async resolveOrCreateAccount() {
     this.accountResolutions += 1
@@ -75,6 +77,7 @@ class MemoryDatabase implements IdentitySessionDatabase {
   }
 
   async loadSession() {
+    if (this.failLoad) throw new Error('database unavailable')
     return this.revoked ? undefined : this.session
   }
 
@@ -96,6 +99,7 @@ class MemoryDatabase implements IdentitySessionDatabase {
   }
 
   async revokeSession() {
+    if (this.failRevoke) throw new Error('database unavailable')
     this.revoked = true
     return true
   }
@@ -244,11 +248,54 @@ describe('readSession', () => {
 })
 
 describe('logout', () => {
-  test('revokes the local session and returns hosted logout', async () => {
+  test('revokes the local session before returning hosted logout', async () => {
     const database = new MemoryDatabase()
     await service(database).completeCode('code')
-    const url = await service(database).logout('opaque')
-    expect(url).toContain('sid=provider_session_1')
+    const authProvider = provider({
+      getLogoutUrl: ({ sessionId, returnTo }) => {
+        expect(database.revoked).toBeTrue()
+        return `https://workos.test/logout?sid=${sessionId}&return_to=${encodeURIComponent(returnTo)}`
+      },
+    })
+    const result = await service(database, authProvider).logout('opaque')
+    expect(result).toEqual({
+      redirectUrl:
+        'https://workos.test/logout?sid=provider_session_1&return_to=https%3A%2F%2Fstudio.test',
+      outcome: 'revoked',
+    })
     expect(database.revoked).toBeTrue()
+  })
+
+  test('treats a missing cookie or revoked session as already absent', async () => {
+    const database = new MemoryDatabase()
+    await expect(service(database).logout(undefined)).resolves.toEqual({
+      redirectUrl: 'https://studio.test',
+      outcome: 'already-absent',
+    })
+    await expect(service(database).logout('opaque')).resolves.toEqual({
+      redirectUrl: 'https://studio.test',
+      outcome: 'already-absent',
+    })
+  })
+
+  test('returns a local partial destination when the session cannot be loaded', async () => {
+    const database = new MemoryDatabase()
+    database.failLoad = true
+    await expect(service(database).logout('opaque')).resolves.toEqual({
+      redirectUrl: 'https://studio.test/?logout=partial',
+      outcome: 'partial',
+    })
+  })
+
+  test('still issues hosted logout with a partial return when local revocation fails', async () => {
+    const database = new MemoryDatabase()
+    await service(database).completeCode('code')
+    database.failRevoke = true
+
+    const result = await service(database).logout('opaque')
+
+    expect(result.outcome).toBe('partial')
+    expect(result.redirectUrl).toContain('sid=provider_session_1')
+    expect(result.redirectUrl).toContain(encodeURIComponent('https://studio.test/?logout=partial'))
   })
 })

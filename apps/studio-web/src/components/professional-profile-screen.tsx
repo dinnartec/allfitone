@@ -21,6 +21,7 @@ import {
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useState } from 'react'
 
+import { LogoutForm } from './logout-form'
 import { ProfessionalCredentials } from './professional-credentials'
 import { ProfessionalMemberships } from './professional-memberships'
 import { ProfessionalPresentation } from './professional-presentation'
@@ -393,11 +394,7 @@ function AccountShell({ children, onSpaces }: { children: React.ReactNode; onSpa
             <Button variant="ghost" size="sm" onClick={onSpaces}>
               Mis espacios
             </Button>
-            <form action={`${studioApi.apiUrl}/studio/v1/auth/logout`} method="post">
-              <Button type="submit" variant="outline" size="sm">
-                Cerrar sesión
-              </Button>
-            </form>
+            <LogoutForm variant="outline" />
           </WorkspaceActions>
         </WorkspaceHeader>
         <WorkspaceContent data-profile-content>{children}</WorkspaceContent>

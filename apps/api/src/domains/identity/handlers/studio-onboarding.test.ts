@@ -25,7 +25,10 @@ function sessions(overrides: Partial<StudioSessionService> = {}): StudioSessionS
       actor: { accountId: '0198d000-0000-7000-8000-000000000011' },
       identity: { givenName: 'Ada', familyName: 'Lovelace' },
     }),
-    logout: async () => 'https://studio.example.test',
+    logout: async () => ({
+      redirectUrl: 'https://studio.example.test',
+      outcome: 'already-absent',
+    }),
     ...overrides,
   }
 }

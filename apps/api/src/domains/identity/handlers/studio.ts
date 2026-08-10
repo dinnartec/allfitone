@@ -10,6 +10,7 @@ import { authProvider } from '../../../platform/auth/index.js'
 import { fail } from '../../../platform/http/index.js'
 import {
   recordStudioAuthCallback,
+  recordStudioLogout,
   recordStudioRegistrationIncomplete,
 } from '../../../platform/observability/index.js'
 import { StudioSessionError, type StudioSessionService } from '../application/index.js'
@@ -116,16 +117,37 @@ export function studioIdentityRoutes(injectedService?: StudioSessionService): Ho
       return fail(c, 'forbidden', 'origin is not allowed')
     }
 
+    const opaqueToken = getCookie(c, STUDIO_SESSION_COOKIE)
+    deleteCookie(c, STUDIO_SESSION_COOKIE, { path: SESSION_COOKIE_PATH })
+    const trigger = await logoutTrigger(c.req.parseBody())
+
     try {
-      const logoutUrl = await sessions().logout(getCookie(c, STUDIO_SESSION_COOKIE))
-      deleteCookie(c, STUDIO_SESSION_COOKIE, { path: SESSION_COOKIE_PATH })
-      return c.redirect(logoutUrl, 303)
-    } catch (error) {
-      return sessionFailure(c, error, 'logout failed')
+      const result = await sessions().logout(opaqueToken)
+      recordStudioLogout(trigger, result.outcome)
+      return c.redirect(result.redirectUrl, 303)
+    } catch {
+      recordStudioLogout(trigger, 'partial')
+      return c.redirect(partialLogoutReturnTo(studioWebUrl), 303)
     }
   })
 
   return routes
+}
+
+async function logoutTrigger(
+  body: Promise<Record<string, string | File>>,
+): Promise<'inactivity' | 'manual'> {
+  try {
+    return (await body).reason === 'inactivity' ? 'inactivity' : 'manual'
+  } catch {
+    return 'manual'
+  }
+}
+
+function partialLogoutReturnTo(studioWebUrl: string): string {
+  const returnTo = new URL(studioWebUrl)
+  returnTo.searchParams.set('logout', 'partial')
+  return returnTo.toString()
 }
 
 function sessionCookieOptions() {

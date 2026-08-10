@@ -31,7 +31,7 @@ type FlowState =
   | { kind: 'select'; memberships: Membership[] }
   | { kind: 'error'; message: string }
 
-export function StudioEntry() {
+export function StudioEntry({ logoutPartial = false }: { logoutPartial?: boolean }) {
   const router = useRouter()
   const [flow, setFlow] = useState<FlowState>({ kind: 'loading' })
 
@@ -104,7 +104,7 @@ export function StudioEntry() {
   }, [bootstrap])
 
   if (flow.kind === 'loading') return <LoadingStage />
-  if (flow.kind === 'access') return <AccessLanding />
+  if (flow.kind === 'access') return <AccessLanding logoutPartial={logoutPartial} />
   if (flow.kind === 'activation') {
     return (
       <ActivationForm

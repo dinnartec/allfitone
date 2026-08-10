@@ -38,7 +38,14 @@ export interface StudioSessionService {
   }>
   resolveActor(opaqueToken: string): Promise<StudioActor>
   resolveAccountIdentity(opaqueToken: string): Promise<StudioAccountIdentity>
-  logout(opaqueToken: string | undefined): Promise<string>
+  logout(opaqueToken: string | undefined): Promise<StudioLogoutResult>
+}
+
+export type StudioLogoutOutcome = 'already-absent' | 'partial' | 'revoked'
+
+export interface StudioLogoutResult {
+  redirectUrl: string
+  outcome: StudioLogoutOutcome
 }
 
 export interface StudioOnboardingService {
@@ -146,17 +153,48 @@ export function createStudioSessionService(
     resolveAccountIdentity,
 
     async logout(opaqueToken) {
-      if (!opaqueToken) return dependencies.studioWebUrl
-      const session = await dependencies.database.loadSession(
-        dependencies.tokenVault.hashOpaqueToken(opaqueToken),
-      )
-      if (!session) return dependencies.studioWebUrl
+      if (!opaqueToken) {
+        return { redirectUrl: dependencies.studioWebUrl, outcome: 'already-absent' }
+      }
 
-      await dependencies.database.revokeSession(session.sessionId)
-      return dependencies.authProvider.getLogoutUrl({
-        sessionId: session.providerSessionId,
-        returnTo: dependencies.studioWebUrl,
-      })
+      let session: StoredAccessSession | undefined
+      try {
+        session = await dependencies.database.loadSession(
+          dependencies.tokenVault.hashOpaqueToken(opaqueToken),
+        )
+      } catch {
+        return {
+          redirectUrl: partialLogoutReturnTo(dependencies.studioWebUrl),
+          outcome: 'partial',
+        }
+      }
+      if (!session) {
+        return { redirectUrl: dependencies.studioWebUrl, outcome: 'already-absent' }
+      }
+
+      try {
+        const revoked = await dependencies.database.revokeSession(session.sessionId)
+        return {
+          redirectUrl: dependencies.authProvider.getLogoutUrl({
+            sessionId: session.providerSessionId,
+            returnTo: dependencies.studioWebUrl,
+          }),
+          outcome: revoked ? 'revoked' : 'already-absent',
+        }
+      } catch {
+        const returnTo = partialLogoutReturnTo(dependencies.studioWebUrl)
+        try {
+          return {
+            redirectUrl: dependencies.authProvider.getLogoutUrl({
+              sessionId: session.providerSessionId,
+              returnTo,
+            }),
+            outcome: 'partial',
+          }
+        } catch {
+          return { redirectUrl: returnTo, outcome: 'partial' }
+        }
+      }
     },
   }
 
@@ -255,6 +293,12 @@ export function createStudioSessionService(
       throw new StudioSessionError('unauthenticated')
     }
   }
+}
+
+function partialLogoutReturnTo(studioWebUrl: string): string {
+  const returnTo = new URL(studioWebUrl)
+  returnTo.searchParams.set('logout', 'partial')
+  return returnTo.toString()
 }
 
 export function createStudioOnboardingService(

@@ -2,6 +2,7 @@ import { describe, expect, spyOn, test } from 'bun:test'
 
 import {
   recordStudioAuthCallback,
+  recordStudioLogout,
   recordStudioMembershipDestination,
   recordStudioRegistrationIncomplete,
 } from './index.js'
@@ -41,6 +42,20 @@ describe('Studio operational counters', () => {
         dimensions: { destination: 'multiple' },
       },
     ])
+    info.mockRestore()
+  })
+
+  test('emits a closed logout trigger and outcome without session details', () => {
+    const info = spyOn(console, 'info').mockImplementation(() => undefined)
+
+    recordStudioLogout('inactivity', 'partial')
+
+    expect(JSON.parse(String(info.mock.calls[0]?.[0]))).toEqual({
+      kind: 'counter',
+      name: 'studio.auth.logout',
+      value: 1,
+      dimensions: { trigger: 'inactivity', outcome: 'partial' },
+    })
     info.mockRestore()
   })
 })

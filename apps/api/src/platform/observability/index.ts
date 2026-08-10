@@ -11,6 +11,9 @@ type StudioAuthCallbackFailure =
 
 type StudioMembershipDestination = 'multiple' | 'one' | 'zero'
 
+type StudioLogoutTrigger = 'inactivity' | 'manual'
+type StudioLogoutOutcome = 'already-absent' | 'partial' | 'revoked'
+
 export function recordStudioAuthCallback(
   outcome: 'failed' | 'succeeded',
   reason?: StudioAuthCallbackFailure,
@@ -27,6 +30,13 @@ export function recordStudioRegistrationIncomplete(): void {
 
 export function recordStudioMembershipDestination(destination: StudioMembershipDestination): void {
   writeCounter('studio.membership.destination', { destination })
+}
+
+export function recordStudioLogout(
+  trigger: StudioLogoutTrigger,
+  outcome: StudioLogoutOutcome,
+): void {
+  writeCounter('studio.auth.logout', { trigger, outcome })
 }
 
 function writeCounter(name: string, dimensions: Readonly<Record<string, string>>): void {

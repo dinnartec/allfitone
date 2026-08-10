@@ -5,7 +5,8 @@ import { Button } from '@allfitone/react/components/button'
 import { useState } from 'react'
 
 import { StudioFrame } from './studio-frame'
-import { StudioApiError, studioApi } from '@/lib/studio-api'
+import { LogoutForm } from './logout-form'
+import { StudioApiError } from '@/lib/studio-api'
 
 export function InvitationWaiting({ onCheck }: { onCheck: () => Promise<void> }) {
   const [checking, setChecking] = useState(false)
@@ -65,11 +66,7 @@ export function InvitationWaiting({ onCheck }: { onCheck: () => Promise<void> })
             <Button size="lg" onClick={() => void checkAgain()} disabled={checking}>
               {checking ? 'Comprobando…' : 'Comprobar de nuevo'}
             </Button>
-            <form action={`${studioApi.apiUrl}/studio/v1/auth/logout`} method="post">
-              <Button type="submit" size="lg" variant="outline" disabled={checking}>
-                Cerrar sesión
-              </Button>
-            </form>
+            <LogoutForm size="lg" variant="outline" disabled={checking} />
           </div>
         </div>
       </article>
