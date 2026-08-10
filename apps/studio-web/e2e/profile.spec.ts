@@ -10,6 +10,33 @@ import {
   terminatedMembership,
 } from './studio-api-mock'
 
+test('keeps professional setup dormant until the person opts in', async ({ page }) => {
+  const fixture = createStudioApiFixture({
+    me: { profile: null, memberships: [activeMembership] },
+  })
+  await installStudioApiMock(page, fixture)
+
+  await page.goto('/account')
+
+  await expect(page.getByRole('heading', { name: 'Tu cuenta de Studio' })).toBeVisible()
+  await expect(page.getByText('Perfil profesional', { exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Configurar perfil profesional' })).toBeVisible()
+  await expect(page.getByLabel('Titular profesional')).toHaveCount(0)
+  await expect(page.getByRole('tab', { name: /Credenciales/ })).toHaveCount(0)
+  expect(
+    fixture.requests.some((request) => request.path === '/studio/v1/professional-specialties'),
+  ).toBe(false)
+  expect(
+    fixture.requests.some((request) => request.path === '/studio/v1/professional-credential-types'),
+  ).toBe(false)
+
+  await page.getByRole('button', { name: 'Configurar perfil profesional' }).click()
+
+  await expect(page.getByRole('heading', { name: 'Configura tu perfil profesional' })).toBeVisible()
+  await expect(page.getByLabel('Titular profesional')).toBeVisible()
+  await expect(page.getByRole('tab', { name: /Credenciales/ })).toHaveCount(0)
+})
+
 test('presents an optional profile with active and terminated membership context', async ({
   page,
 }) => {
@@ -21,13 +48,11 @@ test('presents an optional profile with active and terminated membership context
   })
   await installStudioApiMock(page, fixture)
 
-  await page.goto('/profile')
+  await page.goto('/account')
 
-  await expect(page.getByText('Perfil profesional opcional')).toBeVisible()
+  await expect(page.getByText('Perfil profesional', { exact: true })).toBeVisible()
   await expect(page.getByText('Perfil creado')).toBeVisible()
-  await expect(
-    page.getByText('Si únicamente administras un espacio, no lo necesitas.', { exact: false }),
-  ).toBeVisible()
+  await expect(page.getByText('Sus credenciales son opcionales', { exact: false })).toBeVisible()
 
   await page.getByRole('tab', { name: 'Mis espacios' }).click()
   await expect(page.getByText('Espacios activos')).toBeVisible()
@@ -40,7 +65,7 @@ test('presents an optional profile with active and terminated membership context
   const lightKicker = page.locator('[data-profile-section] [data-profile-kicker]').first()
   expect(await contrastRatio(lightKicker)).toBeGreaterThanOrEqual(4.5)
 
-  await page.getByRole('tab', { name: 'Credenciales' }).click()
+  await page.getByRole('tab', { name: 'Credenciales opcionales' }).click()
   const evidence = page.getByRole('link', { name: 'Abrir evidencia declarada' })
   await expect(evidence).toHaveAttribute('rel', 'noopener noreferrer')
   expect(await contrastRatio(evidence)).toBeGreaterThanOrEqual(4.5)
@@ -64,7 +89,7 @@ test('reuses command headers after ambiguous profile failures and rotates after 
     },
   })
   await installStudioApiMock(page, fixture)
-  await page.goto('/profile')
+  await page.goto('/account')
 
   const headline = page.getByLabel('Titular profesional')
   const save = page.getByRole('button', { name: 'Guardar cambios' })
@@ -98,7 +123,7 @@ test('collapses synchronous double submission into one profile mutation', async 
     },
   })
   await installStudioApiMock(page, fixture)
-  await page.goto('/profile')
+  await page.goto('/account')
   await page.getByLabel('Titular profesional').fill('Entrenadora sin duplicados')
 
   await page.locator('[data-profile-editor] form').evaluate((form) => {
@@ -123,7 +148,7 @@ test.describe('mobile and reduced motion', () => {
       },
     })
     await installStudioApiMock(page, fixture)
-    await page.goto('/profile')
+    await page.goto('/account')
 
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),

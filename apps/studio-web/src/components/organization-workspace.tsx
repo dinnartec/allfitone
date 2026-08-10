@@ -51,7 +51,7 @@ export function OrganizationWorkspace({ organizationId }: { organizationId: stri
   if (state.kind === 'loading') return <LoadingStage label="Abriendo tu workspace…" />
   if (state.kind === 'forbidden') {
     return (
-      <StudioFrame step="ready" showProfile>
+      <StudioFrame step="ready">
         <div data-studio-error-stage>
           <Alert variant="warning">
             <AlertTitle>Este espacio no está disponible</AlertTitle>
@@ -66,7 +66,7 @@ export function OrganizationWorkspace({ organizationId }: { organizationId: stri
   }
   if (state.kind === 'error') {
     return (
-      <StudioFrame step="ready" showProfile>
+      <StudioFrame step="ready">
         <div data-studio-error-stage>
           <Alert variant="danger" live="assertive">
             <AlertTitle>No pudimos cargar el espacio</AlertTitle>
@@ -80,7 +80,7 @@ export function OrganizationWorkspace({ organizationId }: { organizationId: stri
 
   const { current, memberships } = state
   return (
-    <StudioFrame step="ready" showProfile>
+    <StudioFrame step="ready">
       <article data-workspace>
         <header data-workspace-heading>
           <div>

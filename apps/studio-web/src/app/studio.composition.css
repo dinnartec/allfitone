@@ -850,6 +850,79 @@ input {
   color: var(--afo-color-neutral-ink-soft);
 }
 
+[data-account-map] {
+  display: grid;
+  align-items: stretch;
+  gap: 20px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+[data-account-track] {
+  min-width: 0;
+  background: rgb(242 251 252 / 94%);
+}
+[data-account-track] [data-slot='card-header'] {
+  align-items: start;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+[data-account-track] [data-slot='card-title'] {
+  font-family: var(--afo-app-font-display), var(--afo-font-family-display);
+  font-size: clamp(2.2rem, 4vw, 3.4rem);
+  letter-spacing: var(--afo-letter-spacing-tight);
+  line-height: 1;
+  text-transform: uppercase;
+}
+[data-account-track] [data-slot='card-content'] {
+  display: grid;
+  align-content: start;
+  gap: 22px;
+}
+[data-account-track] [data-slot='card-content'] > p {
+  margin: 0;
+  color: var(--afo-color-neutral-ink-soft);
+  line-height: var(--afo-line-height-relaxed);
+}
+[data-account-track='professional'] {
+  border-color: rgb(10 27 34 / 24%);
+}
+[data-account-signal] {
+  display: grid;
+  align-items: center;
+  gap: 12px;
+  grid-template-columns: 16px minmax(40px, 1fr) auto;
+}
+[data-account-signal] span {
+  width: 16px;
+  height: 16px;
+  border: 3px solid var(--afo-color-brand-turquoise-deep);
+  border-radius: 50%;
+  background: var(--afo-color-neutral-salt);
+}
+[data-account-signal] i {
+  height: 1px;
+  background: var(--afo-color-brand-turquoise-deep);
+}
+[data-account-signal] strong {
+  color: var(--afo-color-brand-turquoise-deep);
+  font-size: var(--afo-font-size-xs);
+  letter-spacing: var(--afo-letter-spacing-label);
+  text-transform: uppercase;
+}
+[data-account-signal][data-dormant] span {
+  border-color: var(--afo-color-neutral-graphite);
+}
+[data-account-signal][data-dormant] i {
+  height: 0;
+  border-top: 1px dashed var(--afo-color-neutral-graphite);
+  background: transparent;
+}
+[data-account-signal][data-dormant] strong {
+  color: var(--afo-color-neutral-graphite);
+}
+[data-profile-setup-actions] {
+  display: flex;
+  justify-content: flex-start;
+}
+
 [data-profile-presentation] {
   display: grid;
   align-items: start;
@@ -946,6 +1019,14 @@ input {
 [data-trajectory-line] i {
   height: 1px;
   background: linear-gradient(90deg, var(--afo-color-brand-primary), rgb(85 239 251 / 30%));
+}
+[data-trajectory-state='preview'] [data-trajectory-line] span {
+  border-color: var(--afo-color-neutral-steel);
+}
+[data-trajectory-state='preview'] [data-trajectory-line] i {
+  height: 0;
+  border-top: 1px dashed var(--afo-color-neutral-steel);
+  background: transparent;
 }
 [data-trajectory-copy] {
   display: grid;
@@ -1108,7 +1189,8 @@ input {
     order: -1;
   }
   [data-credential-grid],
-  [data-membership-context-grid] {
+  [data-membership-context-grid],
+  [data-account-map] {
     grid-template-columns: 1fr;
   }
 }

@@ -1,5 +1,5 @@
-import { ProfessionalProfileScreen } from '@/components/professional-profile-screen'
+import { redirect } from 'next/navigation'
 
-export default function ProfilePage() {
-  return <ProfessionalProfileScreen />
+export default function LegacyProfilePage() {
+  redirect('/account')
 }

@@ -73,6 +73,12 @@ export function ProfessionalPresentation({
   )
   const selectedOptions = options.filter((option) => draft.specialty_codes.includes(option.code))
   const publishedCodes = useMemo(() => new Set(specialties.map((item) => item.code)), [specialties])
+  const currentYear = new Date().getUTCFullYear()
+  const hasValidTrajectoryYear =
+    draft.practice_started_year >= 1900 && draft.practice_started_year <= currentYear
+  const previewExperienceYears = hasValidTrajectoryYear
+    ? currentYear - draft.practice_started_year
+    : undefined
 
   function changeDraft(next: ProfessionalProfilePut) {
     setDraft(next)
@@ -148,7 +154,7 @@ export function ProfessionalPresentation({
                   onChange={(event) => changeDraft({ ...draft, headline: event.target.value })}
                 />
                 <FieldDescription id="profile-headline-help">
-                  Una frase clara sobre tu práctica. {draft.headline.length}/120
+                  Una frase clara sobre tus servicios. {draft.headline.length}/120
                 </FieldDescription>
                 <FieldError id="profile-headline-error">{errors.headline}</FieldError>
               </Field>
@@ -172,14 +178,16 @@ export function ProfessionalPresentation({
 
               <div data-profile-field-grid>
                 <Field data-invalid={Boolean(errors.practice_started_year)}>
-                  <FieldLabel htmlFor="profile-started-year">Año de inicio</FieldLabel>
+                  <FieldLabel htmlFor="profile-started-year">
+                    Año en que comenzaste a ejercer
+                  </FieldLabel>
                   <Input
                     id="profile-started-year"
                     type="number"
                     inputMode="numeric"
                     min={1900}
-                    max={new Date().getUTCFullYear()}
-                    value={draft.practice_started_year}
+                    max={currentYear}
+                    value={draft.practice_started_year || ''}
                     aria-invalid={Boolean(errors.practice_started_year)}
                     onChange={(event) =>
                       changeDraft({ ...draft, practice_started_year: Number(event.target.value) })
@@ -263,8 +271,12 @@ export function ProfessionalPresentation({
         </CardContent>
       </Card>
 
-      <aside data-trajectory-panel aria-label="Trayectoria profesional">
-        <p data-profile-kicker>Trayectoria declarada</p>
+      <aside
+        data-trajectory-panel
+        data-trajectory-state={profile ? 'active' : 'preview'}
+        aria-label="Trayectoria profesional"
+      >
+        <p data-profile-kicker>{profile ? 'Trayectoria declarada' : 'Vista previa'}</p>
         <div data-trajectory-line aria-hidden="true">
           <span />
           <i />
@@ -272,19 +284,23 @@ export function ProfessionalPresentation({
         </div>
         <div data-trajectory-copy>
           <div>
-            <small>Comenzaste en</small>
-            <strong>{draft.practice_started_year || '—'}</strong>
+            <small>{profile ? 'Comenzaste a ejercer en' : 'Año de inicio'}</small>
+            <strong>{hasValidTrajectoryYear ? draft.practice_started_year : '—'}</strong>
           </div>
           <div>
-            <small>Hoy</small>
+            <small>{profile ? 'Hoy' : 'Experiencia calculada'}</small>
             <strong>
-              {profile
-                ? `${profile.experience_years} ${profile.experience_years === 1 ? 'año' : 'años'}`
-                : 'Por calcular'}
+              {previewExperienceYears === undefined
+                ? '—'
+                : `${previewExperienceYears} ${previewExperienceYears === 1 ? 'año' : 'años'}`}
             </strong>
           </div>
         </div>
-        <p>Los años se derivan de tu fecha de inicio y se actualizan automáticamente.</p>
+        <p>
+          {profile
+            ? 'Los años se derivan del año en que comenzaste y se actualizan automáticamente.'
+            : 'Esta línea se activa cuando guardas tu perfil. Nada se publica mientras completas el formulario.'}
+        </p>
       </aside>
     </div>
   )
@@ -301,7 +317,7 @@ function profileDraft(profile: ProfessionalProfile | null): ProfessionalProfileP
     : {
         headline: '',
         bio: '',
-        practice_started_year: new Date().getUTCFullYear(),
+        practice_started_year: 0,
         specialty_codes: [],
       }
 }

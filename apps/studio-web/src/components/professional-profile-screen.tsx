@@ -4,6 +4,7 @@ import { ProductLockup } from '@allfitone/react/brand'
 import { Alert, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
 import { Badge } from '@allfitone/react/components/badge'
 import { Button } from '@allfitone/react/components/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@allfitone/react/components/card'
 import { Spinner } from '@allfitone/react/components/spinner'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@allfitone/react/components/tabs'
 import { Toaster } from '@allfitone/react/components/sonner'
@@ -30,11 +31,14 @@ import {
   type StudioMe,
 } from '@/lib/studio-api'
 
-type ProfileState =
+type AccountState =
+  { kind: 'loading' } | { kind: 'ready'; me: StudioMe } | { kind: 'error'; retryable: boolean }
+
+type CatalogState =
+  | { kind: 'idle' }
   | { kind: 'loading' }
   | {
       kind: 'ready'
-      me: StudioMe
       specialties: ProfessionalCatalogItem[]
       credentialTypes: ProfessionalCatalogItem[]
     }
@@ -42,7 +46,9 @@ type ProfileState =
 
 export function ProfessionalProfileScreen() {
   const router = useRouter()
-  const [state, setState] = useState<ProfileState>({ kind: 'loading' })
+  const [state, setState] = useState<AccountState>({ kind: 'loading' })
+  const [catalogs, setCatalogs] = useState<CatalogState>({ kind: 'idle' })
+  const [setupStarted, setSetupStarted] = useState(false)
 
   const routeSessionFailure = useCallback(
     (error: unknown): boolean => {
@@ -58,23 +64,34 @@ export function ProfessionalProfileScreen() {
     [router],
   )
 
-  const load = useCallback(async () => {
+  const loadAccount = useCallback(async () => {
     setState({ kind: 'loading' })
     try {
-      const [me, specialtyList, credentialTypeList] = await Promise.all([
-        studioApi.me(),
+      setState({ kind: 'ready', me: await studioApi.me() })
+    } catch (error) {
+      if (routeSessionFailure(error)) return
+      setState({
+        kind: 'error',
+        retryable: error instanceof StudioApiError && error.status === 503,
+      })
+    }
+  }, [routeSessionFailure])
+
+  const loadProfessionalCatalogs = useCallback(async () => {
+    setCatalogs({ kind: 'loading' })
+    try {
+      const [specialtyList, credentialTypeList] = await Promise.all([
         studioApi.professionalSpecialties(),
         studioApi.professionalCredentialTypes(),
       ])
-      setState({
+      setCatalogs({
         kind: 'ready',
-        me,
         specialties: specialtyList.items,
         credentialTypes: credentialTypeList.items,
       })
     } catch (error) {
       if (routeSessionFailure(error)) return
-      setState({
+      setCatalogs({
         kind: 'error',
         retryable: error instanceof StudioApiError && error.status === 503,
       })
@@ -93,106 +110,274 @@ export function ProfessionalProfileScreen() {
   }, [routeSessionFailure])
 
   useEffect(() => {
-    void load()
-  }, [load])
+    void loadAccount()
+  }, [loadAccount])
+
+  useEffect(() => {
+    if (state.kind === 'ready' && state.me.profile && catalogs.kind === 'idle') {
+      void loadProfessionalCatalogs()
+    }
+  }, [catalogs.kind, loadProfessionalCatalogs, state])
 
   return (
-    <ProfileShell onSpaces={() => router.push('/')}>
+    <AccountShell onSpaces={() => router.push('/')}>
       {state.kind === 'loading' ? (
         <div data-profile-state role="status" aria-live="polite">
-          <Spinner label="Cargando tu perfil" />
-          <p>Reuniendo tu presentación y credenciales…</p>
+          <Spinner label="Cargando tu cuenta" />
+          <p>Reuniendo tus espacios y opciones personales…</p>
         </div>
       ) : state.kind === 'error' ? (
         <div data-profile-state>
           <Alert variant="danger" live="assertive">
-            <AlertTitle>No pudimos abrir tu perfil</AlertTitle>
+            <AlertTitle>No pudimos abrir tu cuenta</AlertTitle>
             <AlertDescription>
               {state.retryable
-                ? 'El servicio no está disponible en este momento. Puedes reintentar sin perder información.'
-                : 'Ocurrió un error al reunir tu información profesional.'}
+                ? 'El servicio no está disponible en este momento. Puedes reintentar.'
+                : 'Ocurrió un error al reunir la información de tu cuenta.'}
             </AlertDescription>
-            <Button onClick={() => void load()}>Reintentar</Button>
+            <Button onClick={() => void loadAccount()}>Reintentar</Button>
           </Alert>
         </div>
-      ) : (
-        <ProfileReady
-          state={state}
+      ) : !state.me.profile && !setupStarted ? (
+        <AccountOverview
+          me={state.me}
+          onStartProfessionalSetup={() => {
+            setSetupStarted(true)
+            if (catalogs.kind === 'idle' || catalogs.kind === 'error') {
+              void loadProfessionalCatalogs()
+            }
+          }}
+        />
+      ) : catalogs.kind === 'ready' ? (
+        <ProfessionalArea
+          me={state.me}
+          specialties={catalogs.specialties}
+          credentialTypes={catalogs.credentialTypes}
+          setupStarted={setupStarted}
+          onCancelSetup={() => setSetupStarted(false)}
           onSessionFailure={routeSessionFailure}
           onRefreshMe={refreshMe}
           onMeChange={(me) =>
             setState((current) => (current.kind === 'ready' ? { ...current, me } : current))
           }
         />
+      ) : catalogs.kind === 'error' ? (
+        <ProfessionalCatalogError
+          retryable={catalogs.retryable}
+          onRetry={() => void loadProfessionalCatalogs()}
+          onBack={!state.me.profile ? () => setSetupStarted(false) : undefined}
+        />
+      ) : (
+        <div data-profile-state role="status" aria-live="polite">
+          <Spinner label="Preparando la configuración profesional" />
+          <p>Reuniendo especialidades y tipos de credencial…</p>
+        </div>
       )}
-    </ProfileShell>
+    </AccountShell>
   )
 }
 
-function ProfileReady({
-  state,
+function AccountOverview({
+  me,
+  onStartProfessionalSetup,
+}: {
+  me: StudioMe
+  onStartProfessionalSetup: () => void
+}) {
+  const activeSpaces = me.memberships.filter((membership) => membership.status === 'active').length
+  return (
+    <>
+      <WorkspaceHeading data-profile-heading data-account-heading>
+        <div>
+          <WorkspaceEyebrow>Mi cuenta</WorkspaceEyebrow>
+          <WorkspaceTitle>Tu cuenta de Studio</WorkspaceTitle>
+          <p>
+            Administra tus espacios. Si también entrenas o prestas servicios, puedes crear un perfil
+            profesional separado cuando lo necesites.
+          </p>
+        </div>
+        <Badge variant="success">Cuenta activa</Badge>
+      </WorkspaceHeading>
+
+      <section data-account-map aria-label="Opciones de mi cuenta">
+        <Card data-account-track="spaces">
+          <CardHeader>
+            <div>
+              <p data-profile-kicker>Siempre disponible</p>
+              <CardTitle>Mis espacios</CardTitle>
+            </div>
+            <Badge variant="outline">
+              {activeSpaces} {activeSpaces === 1 ? 'activo' : 'activos'}
+            </Badge>
+          </CardHeader>
+          <CardContent>
+            <p>Consulta las organizaciones donde participas y tu historial de vinculaciones.</p>
+            <div data-account-signal aria-hidden="true">
+              <span />
+              <i />
+              <strong>Activo</strong>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card data-account-track="professional">
+          <CardHeader>
+            <div>
+              <p data-profile-kicker>Solo si prestas servicios</p>
+              <CardTitle>Perfil profesional</CardTitle>
+            </div>
+            <Badge variant="outline">Opcional</Badge>
+          </CardHeader>
+          <CardContent>
+            <p>
+              Presenta tu experiencia y, si quieres, declara credenciales. Administrar un espacio no
+              requiere completar esta información.
+            </p>
+            <div data-account-signal data-dormant aria-hidden="true">
+              <span />
+              <i />
+              <strong>Sin iniciar</strong>
+            </div>
+            <Button onClick={onStartProfessionalSetup}>Configurar perfil profesional</Button>
+          </CardContent>
+        </Card>
+      </section>
+
+      <ProfessionalMemberships memberships={me.memberships} />
+    </>
+  )
+}
+
+function ProfessionalArea({
+  me,
+  specialties,
+  credentialTypes,
+  setupStarted,
+  onCancelSetup,
   onSessionFailure,
   onRefreshMe,
   onMeChange,
 }: {
-  state: Extract<ProfileState, { kind: 'ready' }>
+  me: StudioMe
+  specialties: ProfessionalCatalogItem[]
+  credentialTypes: ProfessionalCatalogItem[]
+  setupStarted: boolean
+  onCancelSetup: () => void
   onSessionFailure: (error: unknown) => boolean
   onRefreshMe: () => Promise<StudioMe | undefined>
   onMeChange: (me: StudioMe) => void
 }) {
-  const profile = state.me.profile
+  const profile = me.profile
+
+  if (!profile && setupStarted) {
+    return (
+      <>
+        <WorkspaceHeading data-profile-heading data-professional-setup-heading>
+          <div>
+            <WorkspaceEyebrow>Opcional · Personal</WorkspaceEyebrow>
+            <WorkspaceTitle>Configura tu perfil profesional</WorkspaceTitle>
+            <p>
+              Hazlo únicamente si entrenas o prestas servicios. Este perfil es tuyo y no cambia
+              roles, permisos ni membresías.
+            </p>
+          </div>
+          <Badge variant="outline">Sin publicar</Badge>
+        </WorkspaceHeading>
+        <div data-profile-setup-actions>
+          <Button variant="ghost" onClick={onCancelSetup}>
+            Volver a mi cuenta
+          </Button>
+        </div>
+        <ProfessionalPresentation
+          profile={null}
+          specialties={specialties}
+          onSessionFailure={onSessionFailure}
+          onSaved={(savedProfile) => onMeChange({ ...me, profile: savedProfile })}
+        />
+      </>
+    )
+  }
+
+  if (!profile) return null
+
   return (
     <>
       <WorkspaceHeading data-profile-heading>
         <div>
-          <WorkspaceEyebrow>Perfil profesional opcional</WorkspaceEyebrow>
-          <WorkspaceTitle>{profile?.headline ?? 'Tu experiencia, en tus palabras.'}</WorkspaceTitle>
+          <WorkspaceEyebrow>Perfil profesional</WorkspaceEyebrow>
+          <WorkspaceTitle>{profile.headline}</WorkspaceTitle>
           <p>
-            Complétalo solo si entrenas o prestas servicios profesionales. Si únicamente administras
-            un espacio, no lo necesitas. Nunca modifica tus permisos.
+            Tu presentación personal viaja contigo entre espacios. Sus credenciales son opcionales y
+            nunca cambian tus permisos.
           </p>
         </div>
-        <Badge variant={profile ? 'success' : 'outline'}>
-          {profile ? 'Perfil creado' : 'Opcional'}
-        </Badge>
+        <Badge variant="success">Perfil creado</Badge>
       </WorkspaceHeading>
 
       <Tabs defaultValue="presentation" data-profile-tabs>
-        <TabsList variant="line" aria-label="Secciones de mi perfil">
+        <TabsList variant="line" aria-label="Secciones de mi cuenta">
           <TabsTrigger value="presentation">Presentación</TabsTrigger>
-          <TabsTrigger value="credentials">Credenciales</TabsTrigger>
+          <TabsTrigger value="credentials">Credenciales opcionales</TabsTrigger>
           <TabsTrigger value="spaces">Mis espacios</TabsTrigger>
         </TabsList>
         <TabsContent value="presentation">
           <ProfessionalPresentation
             profile={profile}
-            specialties={state.specialties}
+            specialties={specialties}
             onSessionFailure={onSessionFailure}
-            onSaved={(savedProfile) => onMeChange({ ...state.me, profile: savedProfile })}
+            onSaved={(savedProfile) => onMeChange({ ...me, profile: savedProfile })}
           />
         </TabsContent>
         <TabsContent value="credentials">
           <ProfessionalCredentials
-            credentials={profile?.credentials ?? []}
-            credentialTypes={state.credentialTypes}
-            profileExists={Boolean(profile)}
+            credentials={profile.credentials}
+            credentialTypes={credentialTypes}
+            profileExists
             onSessionFailure={onSessionFailure}
             onRefreshMe={onRefreshMe}
-            onCredentialsChange={(credentials) => {
-              if (!profile) return
-              onMeChange({ ...state.me, profile: { ...profile, credentials } })
-            }}
+            onCredentialsChange={(credentials) =>
+              onMeChange({ ...me, profile: { ...profile, credentials } })
+            }
           />
         </TabsContent>
         <TabsContent value="spaces">
-          <ProfessionalMemberships memberships={state.me.memberships} />
+          <ProfessionalMemberships memberships={me.memberships} />
         </TabsContent>
       </Tabs>
     </>
   )
 }
 
-function ProfileShell({ children, onSpaces }: { children: React.ReactNode; onSpaces: () => void }) {
+function ProfessionalCatalogError({
+  retryable,
+  onRetry,
+  onBack,
+}: {
+  retryable: boolean
+  onRetry: () => void
+  onBack?: (() => void) | undefined
+}) {
+  return (
+    <div data-profile-state>
+      <Alert variant="danger" live="assertive">
+        <AlertTitle>No pudimos preparar el perfil profesional</AlertTitle>
+        <AlertDescription>
+          {retryable
+            ? 'Los catálogos profesionales no están disponibles en este momento.'
+            : 'Ocurrió un error al reunir los catálogos profesionales.'}
+        </AlertDescription>
+        <Button onClick={onRetry}>Reintentar</Button>
+        {onBack ? (
+          <Button variant="ghost" onClick={onBack}>
+            Volver a mi cuenta
+          </Button>
+        ) : null}
+      </Alert>
+    </div>
+  )
+}
+
+function AccountShell({ children, onSpaces }: { children: React.ReactNode; onSpaces: () => void }) {
   return (
     <WorkspaceShell>
       <WorkspaceMain data-profile-canvas>
