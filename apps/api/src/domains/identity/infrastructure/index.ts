@@ -283,7 +283,8 @@ function sessionSecret(value: unknown): StoredSessionSecret {
 }
 
 function sessionIdentityName(value: unknown): string | null {
-  if (value === null || typeof value === 'string') return value
+  if (value === null) return null
+  if (typeof value === 'string') return value
   throw new Error('Invalid session identity payload')
 }
 
