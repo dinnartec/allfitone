@@ -8,6 +8,10 @@ import { database } from '../../../platform/db/index.js'
 import type {
   IdentitySessionDatabase,
   IdentityOnboardingDatabase,
+  IdentityProfessionalDatabase,
+  ProfessionalCredential,
+  ProfessionalProfile,
+  StudioProfessionalContext,
   SessionCipherContext,
   SessionTokenVault,
   StoredAccessSession,
@@ -25,6 +29,54 @@ type SessionRow = {
   access_token_expires_at: Date
   token_version: number
   person_status: 'active' | 'closed' | null
+}
+
+type RawProfessionalCredential = {
+  id: string
+  credential_type_code: string
+  credential_type_name: string
+  issuer: string
+  name: string
+  identifier: string | null
+  issued_on: string | null
+  expires_on: string | null
+  verification_url: string | null
+  status: 'active' | 'retired'
+  supersedes_credential_id: string | null
+  created_at: string
+  retired_at: string | null
+  verification: {
+    state: ProfessionalCredential['verification']['state']
+    valid_from: string | null
+    valid_to: string | null
+    effective: boolean
+  }
+}
+
+type RawProfessionalProfile = {
+  id: string
+  headline: string
+  bio: string
+  practice_started_year: number
+  experience_years: number
+  specialties: Array<{ code: string; name: string; description: string | null }>
+  credentials: RawProfessionalCredential[]
+  created_at: string
+  updated_at: string
+}
+
+type RawStudioProfessionalContext = {
+  profile: RawProfessionalProfile | null
+  memberships: Array<{
+    membership_id: string
+    organization_id: string
+    display_name: string
+    type_code: 'professional_practice' | 'gym' | 'studio'
+    status: 'active'
+    joined_at: string
+    ended_at: null
+    roles: Array<'owner' | 'admin' | 'coach' | 'staff'>
+  }>
 }
 
 export function createIdentityOnboardingDatabase(): IdentityOnboardingDatabase {
@@ -105,6 +157,116 @@ export function createIdentityOnboardingDatabase(): IdentityOnboardingDatabase {
   }
 }
 
+export function createIdentityProfessionalDatabase(): IdentityProfessionalDatabase {
+  const sql = database()
+
+  return {
+    async getMe(personId, requestId) {
+      return sql.begin(async (transaction) => {
+        await setPersonActor(transaction, personId, requestId)
+        const [row] = await transaction<{ context: RawStudioProfessionalContext }[]>`
+          select identity.get_my_professional_context(
+            ${personId}::uuid,
+            ${requestId}::uuid
+          ) as context
+        `
+        if (!row) throw new Error('PostgreSQL did not return the professional context')
+        return professionalContext(row.context)
+      })
+    },
+
+    async putProfile(input) {
+      return sql.begin(async (transaction) => {
+        await setPersonActor(transaction, input.personId, input.commandId)
+        const [row] = await transaction<{ profile: RawProfessionalProfile; replayed: boolean }[]>`
+          select * from identity.put_professional_profile(
+            ${input.personId}::uuid,
+            ${input.headline},
+            ${input.bio},
+            ${input.practiceStartedYear}::integer,
+            ${input.specialtyCodes}::text[],
+            ${input.idempotencyKey}::uuid,
+            ${input.commandId}::uuid,
+            ${input.requestHash}
+          )
+        `
+        if (!row) throw new Error('PostgreSQL did not resolve the professional profile')
+        return { resource: professionalProfile(row.profile), replayed: row.replayed }
+      })
+    },
+
+    async declareCredential(input) {
+      return sql.begin(async (transaction) => {
+        await setPersonActor(transaction, input.personId, input.commandId)
+        const [row] = await transaction<
+          { credential: RawProfessionalCredential; replayed: boolean }[]
+        >`
+          select * from identity.declare_professional_credential(
+            ${input.personId}::uuid,
+            ${input.credentialTypeCode},
+            ${input.issuer},
+            ${input.name},
+            ${input.identifier}::text,
+            ${input.issuedOn}::date,
+            ${input.expiresOn}::date,
+            ${input.verificationUrl}::text,
+            ${input.idempotencyKey}::uuid,
+            ${input.commandId}::uuid,
+            ${input.requestHash}
+          )
+        `
+        if (!row) throw new Error('PostgreSQL did not declare the professional credential')
+        return { resource: professionalCredential(row.credential), replayed: row.replayed }
+      })
+    },
+
+    async reviseCredential(input) {
+      return sql.begin(async (transaction) => {
+        await setPersonActor(transaction, input.personId, input.commandId)
+        const [row] = await transaction<
+          { credential: RawProfessionalCredential; replayed: boolean }[]
+        >`
+          select * from identity.revise_professional_credential(
+            ${input.personId}::uuid,
+            ${input.credentialId}::uuid,
+            ${input.credentialTypeCode},
+            ${input.issuer},
+            ${input.name},
+            ${input.identifier}::text,
+            ${input.issuedOn}::date,
+            ${input.expiresOn}::date,
+            ${input.verificationUrl}::text,
+            ${input.idempotencyKey}::uuid,
+            ${input.commandId}::uuid,
+            ${input.requestHash}
+          )
+        `
+        if (!row) throw new Error('PostgreSQL did not revise the professional credential')
+        return { resource: professionalCredential(row.credential), replayed: row.replayed }
+      })
+    },
+
+    async retireCredential(input) {
+      return sql.begin(async (transaction) => {
+        await setPersonActor(transaction, input.personId, input.commandId)
+        const [row] = await transaction<
+          { credential: RawProfessionalCredential; replayed: boolean }[]
+        >`
+          select * from identity.retire_professional_credential(
+            ${input.personId}::uuid,
+            ${input.credentialId}::uuid,
+            ${input.idempotencyKey}::uuid,
+            ${input.commandId}::uuid,
+            ${input.requestHash}
+          )
+        `
+        if (!row) throw new Error('PostgreSQL did not retire the professional credential')
+        return { resource: professionalCredential(row.credential), replayed: row.replayed }
+      })
+    },
+  }
+}
+
 async function setAccountActor(
   transaction: postgres.TransactionSql,
   accountId: string,
@@ -112,6 +274,18 @@ async function setAccountActor(
   await transaction`
     select set_config('app.actor_kind', 'account', true),
            set_config('app.actor_account_id', ${accountId}, true)
+  `
+}
+
+async function setPersonActor(
+  transaction: postgres.TransactionSql,
+  personId: string,
+  requestId: string,
+): Promise<void> {
+  await transaction`
+    select set_config('app.actor_kind', 'person', true),
+           set_config('app.actor_person_id', ${personId}, true),
+           set_config('app.request_id', ${requestId}, true)
   `
 }
 
@@ -299,5 +473,59 @@ function storedSession(row: SessionRow): StoredAccessSession {
     accessTokenExpiresAt: new Date(row.access_token_expires_at),
     tokenVersion: row.token_version,
     ...(row.person_status ? { personStatus: row.person_status } : {}),
+  }
+}
+
+function professionalContext(raw: RawStudioProfessionalContext): StudioProfessionalContext {
+  return {
+    profile: raw.profile ? professionalProfile(raw.profile) : null,
+    memberships: raw.memberships.map((membership) => ({
+      membershipId: membership.membership_id,
+      organizationId: membership.organization_id,
+      displayName: membership.display_name,
+      typeCode: membership.type_code,
+      status: membership.status,
+      joinedAt: new Date(membership.joined_at),
+      endedAt: null,
+      roles: membership.roles,
+    })),
+  }
+}
+
+function professionalProfile(raw: RawProfessionalProfile): ProfessionalProfile {
+  return {
+    id: raw.id,
+    headline: raw.headline,
+    bio: raw.bio,
+    practiceStartedYear: raw.practice_started_year,
+    experienceYears: raw.experience_years,
+    specialties: raw.specialties,
+    credentials: raw.credentials.map(professionalCredential),
+    createdAt: new Date(raw.created_at),
+    updatedAt: new Date(raw.updated_at),
+  }
+}
+
+function professionalCredential(raw: RawProfessionalCredential): ProfessionalCredential {
+  return {
+    id: raw.id,
+    credentialTypeCode: raw.credential_type_code,
+    credentialTypeName: raw.credential_type_name,
+    issuer: raw.issuer,
+    name: raw.name,
+    identifier: raw.identifier,
+    issuedOn: raw.issued_on,
+    expiresOn: raw.expires_on,
+    verificationUrl: raw.verification_url,
+    status: raw.status,
+    supersedesCredentialId: raw.supersedes_credential_id,
+    createdAt: new Date(raw.created_at),
+    retiredAt: raw.retired_at ? new Date(raw.retired_at) : null,
+    verification: {
+      state: raw.verification.state,
+      validFrom: raw.verification.valid_from ? new Date(raw.verification.valid_from) : null,
+      validTo: raw.verification.valid_to ? new Date(raw.verification.valid_to) : null,
+      effective: raw.verification.effective,
+    },
   }
 }

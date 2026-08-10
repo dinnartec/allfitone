@@ -28,4 +28,33 @@ describe('Studio surface CORS', () => {
       expect.arrayContaining(['content-type', 'idempotency-key', 'command-id']),
     )
   })
+
+  test('allows profile PUT and catalogue revalidation headers through the assembled application', async () => {
+    process.env.API_PUBLIC_URL = 'https://api.example.test'
+    process.env.STUDIO_WEB_URL = 'https://studio.example.test'
+
+    const profile = await createApp().request('/studio/v1/me/professional-profile', {
+      method: 'OPTIONS',
+      headers: {
+        origin: 'https://studio.example.test',
+        'access-control-request-method': 'PUT',
+        'access-control-request-headers': 'command-id,content-type,idempotency-key',
+      },
+    })
+    const catalogue = await createApp().request('/studio/v1/professional-specialties', {
+      method: 'OPTIONS',
+      headers: {
+        origin: 'https://studio.example.test',
+        'access-control-request-method': 'GET',
+        'access-control-request-headers': 'if-none-match',
+      },
+    })
+
+    expect(profile.status).toBe(204)
+    expect(profile.headers.get('access-control-allow-methods')).toContain('PUT')
+    expect(catalogue.status).toBe(204)
+    expect(catalogue.headers.get('access-control-allow-headers')?.toLowerCase()).toContain(
+      'if-none-match',
+    )
+  })
 })

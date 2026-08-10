@@ -5,7 +5,10 @@ import { AuthError, type AuthProvider, type SessionTokens } from '@allfitone/aut
 import type {
   IdentitySessionDatabase,
   IdentityOnboardingDatabase,
+  IdentityProfessionalDatabase,
   CommandContext,
+  ProfessionalCredentialInput,
+  ProfessionalProfileInput,
   RegistrationStatus,
   SessionCipherContext,
   SessionTokenVault,
@@ -51,6 +54,35 @@ export interface StudioOnboardingService {
     actor: StudioActor,
     input: Omit<Parameters<IdentityOnboardingDatabase['activatePerson']>[0], 'accountId'>,
   ): ReturnType<IdentityOnboardingDatabase['activatePerson']>
+}
+
+export class StudioProfessionalError extends Error {
+  constructor(readonly code: 'registration-incomplete') {
+    super(code)
+    this.name = 'StudioProfessionalError'
+  }
+}
+
+export interface StudioProfessionalService {
+  getMe(actor: StudioActor, requestId: string): ReturnType<IdentityProfessionalDatabase['getMe']>
+  putProfile(
+    actor: StudioActor,
+    input: CommandContext & ProfessionalProfileInput,
+  ): ReturnType<IdentityProfessionalDatabase['putProfile']>
+  declareCredential(
+    actor: StudioActor,
+    input: CommandContext & ProfessionalCredentialInput,
+  ): ReturnType<IdentityProfessionalDatabase['declareCredential']>
+  reviseCredential(
+    actor: StudioActor,
+    credentialId: string,
+    input: CommandContext & ProfessionalCredentialInput,
+  ): ReturnType<IdentityProfessionalDatabase['reviseCredential']>
+  retireCredential(
+    actor: StudioActor,
+    credentialId: string,
+    command: CommandContext,
+  ): ReturnType<IdentityProfessionalDatabase['retireCredential']>
 }
 
 export interface StudioSessionDependencies {
@@ -234,6 +266,35 @@ export function createStudioOnboardingService(
     recordAdultEligibility: (actor, input) =>
       database.recordAdultEligibility({ accountId: actor.accountId, ...input }),
     complete: (actor, input) => database.activatePerson({ accountId: actor.accountId, ...input }),
+  }
+}
+
+export function createStudioProfessionalService(
+  professionalDatabase: IdentityProfessionalDatabase,
+): StudioProfessionalService {
+  const personId = (actor: StudioActor) => {
+    if (!actor.personId) throw new StudioProfessionalError('registration-incomplete')
+    return actor.personId
+  }
+
+  return {
+    getMe: (actor, requestId) => professionalDatabase.getMe(personId(actor), requestId),
+    putProfile: (actor, input) =>
+      professionalDatabase.putProfile({ personId: personId(actor), ...input }),
+    declareCredential: (actor, input) =>
+      professionalDatabase.declareCredential({ personId: personId(actor), ...input }),
+    reviseCredential: (actor, credentialId, input) =>
+      professionalDatabase.reviseCredential({
+        personId: personId(actor),
+        credentialId,
+        ...input,
+      }),
+    retireCredential: (actor, credentialId, command) =>
+      professionalDatabase.retireCredential({
+        personId: personId(actor),
+        credentialId,
+        ...command,
+      }),
   }
 }
 

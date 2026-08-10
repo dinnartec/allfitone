@@ -72,6 +72,125 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/studio/v1/me': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** Get the current person's consolidated professional profile */
+    get: operations['getMyStudioProfessionalProfile']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/studio/v1/me/professional-profile': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    /** Create or replace the current person's professional profile */
+    put: operations['putMyStudioProfessionalProfile']
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/studio/v1/me/professional-credentials': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /** Declare a professional credential without verifying it */
+    post: operations['declareMyStudioProfessionalCredential']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/studio/v1/me/professional-credentials/{credentialId}/revisions': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /** Replace an active professional credential with a new revision */
+    post: operations['reviseMyStudioProfessionalCredential']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/studio/v1/me/professional-credentials/{credentialId}/retirement': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /** Retire an active professional credential */
+    post: operations['retireMyStudioProfessionalCredential']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/studio/v1/professional-specialties': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** List published professional specialties in governed order */
+    get: operations['listStudioProfessionalSpecialties']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/studio/v1/professional-credential-types': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** List published professional credential types in governed order */
+    get: operations['listStudioProfessionalCredentialTypes']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/studio/v1/onboarding-attempts': {
     parameters: {
       query?: never
@@ -592,6 +711,83 @@ export interface components {
     }
     StudioMembershipList: {
       items: components['schemas']['StudioMembership'][]
+    }
+    ProfessionalCatalogItem: {
+      code: string
+      name: string
+      description: string | null
+    }
+    ProfessionalSpecialtyList: {
+      items: components['schemas']['ProfessionalCatalogItem'][]
+    }
+    ProfessionalCredentialTypeList: {
+      items: components['schemas']['ProfessionalCatalogItem'][]
+    }
+    ProfessionalProfilePut: {
+      headline: string
+      bio: string
+      practice_started_year: number
+      specialty_codes: string[]
+    }
+    ProfessionalCredentialWrite: {
+      credential_type_code: string
+      issuer: string
+      name: string
+      identifier?: string | null
+      /** Format: date */
+      issued_on?: string | null
+      /** Format: date */
+      expires_on?: string | null
+      /** Format: uri */
+      verification_url?: string | null
+    }
+    ProfessionalCredentialVerification: {
+      /** @enum {string} */
+      state: 'unverified' | 'verified' | 'expired' | 'rejected' | 'unverifiable' | 'revoked'
+      /** Format: date-time */
+      valid_from: string | null
+      /** Format: date-time */
+      valid_to: string | null
+      effective: boolean
+    }
+    ProfessionalCredential: {
+      id: components['schemas']['UuidV7']
+      credential_type_code: string
+      credential_type_name: string
+      issuer: string
+      name: string
+      identifier: string | null
+      /** Format: date */
+      issued_on: string | null
+      /** Format: date */
+      expires_on: string | null
+      /** Format: uri */
+      verification_url: string | null
+      /** @enum {string} */
+      status: 'active' | 'retired'
+      supersedes_credential_id: components['schemas']['UuidV7'] | null
+      /** Format: date-time */
+      created_at: string
+      /** Format: date-time */
+      retired_at: string | null
+      verification: components['schemas']['ProfessionalCredentialVerification']
+    }
+    ProfessionalProfile: {
+      id: components['schemas']['UuidV7']
+      headline: string
+      bio: string
+      practice_started_year: number
+      experience_years: number
+      specialties: components['schemas']['ProfessionalCatalogItem'][]
+      credentials: components['schemas']['ProfessionalCredential'][]
+      /** Format: date-time */
+      created_at: string
+      /** Format: date-time */
+      updated_at: string
+    }
+    StudioMe: {
+      profile: components['schemas']['ProfessionalProfile'] | null
+      memberships: components['schemas']['StudioMembership'][]
     }
     /** Format: uuid */
     Uuid: string
@@ -1582,6 +1778,24 @@ export interface components {
         'application/problem+json': components['schemas']['Problem']
       }
     }
+    /** @description The authenticated Studio account has not completed registration */
+    RegistrationIncomplete: {
+      headers: {
+        'Cache-Control': components['headers']['PrivateNoStore']
+        [name: string]: unknown
+      }
+      content: {
+        /**
+         * @example {
+         *       "type": "https://errors.allfit.invalid/registration-incomplete",
+         *       "title": "Registration must be completed first",
+         *       "status": 403,
+         *       "request_id": "01JEXAMPLE0000000000000000"
+         *     }
+         */
+        'application/problem+json': components['schemas']['Problem']
+      }
+    }
     /** @description An authentication dependency is temporarily unavailable */
     UpstreamUnavailable: {
       headers: {
@@ -1766,6 +1980,8 @@ export interface components {
   }
   parameters: {
     OnboardingAttemptId: components['schemas']['UuidV7']
+    CredentialId: components['schemas']['UuidV7']
+    Origin: string
     OrganizationId: components['schemas']['Uuid']
     ProgramId: components['schemas']['Uuid']
     RelationshipId: components['schemas']['Uuid']
@@ -1905,6 +2121,255 @@ export interface operations {
         content?: never
       }
       403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  getMyStudioProfessionalProfile: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Personal professional profile, credentials and membership summary */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['PrivateNoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['StudioMe']
+        }
+      }
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['RegistrationIncomplete']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  putMyStudioProfessionalProfile: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ProfessionalProfilePut']
+      }
+    }
+    responses: {
+      /** @description Professional profile created, updated or replayed */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ProfessionalProfile']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['RegistrationIncomplete']
+      409: components['responses']['Conflict']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  declareMyStudioProfessionalCredential: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ProfessionalCredentialWrite']
+      }
+    }
+    responses: {
+      /** @description Professional credential declared or replayed */
+      201: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ProfessionalCredential']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['RegistrationIncomplete']
+      409: components['responses']['Conflict']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  reviseMyStudioProfessionalCredential: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        credentialId: components['parameters']['CredentialId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ProfessionalCredentialWrite']
+      }
+    }
+    responses: {
+      /** @description Successor credential created and prior version retired atomically */
+      201: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ProfessionalCredential']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['RegistrationIncomplete']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  retireMyStudioProfessionalCredential: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        credentialId: components['parameters']['CredentialId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Credential retired or replayed */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ProfessionalCredential']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['RegistrationIncomplete']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listStudioProfessionalSpecialties: {
+    parameters: {
+      query?: never
+      header?: {
+        'If-None-Match'?: components['parameters']['IfNoneMatch']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Published professional specialty catalogue */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['PrivateRevalidate']
+          ETag: components['headers']['ETag']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ProfessionalSpecialtyList']
+        }
+      }
+      /** @description Catalogue has not changed */
+      304: {
+        headers: {
+          'Cache-Control': components['headers']['PrivateRevalidate']
+          ETag: components['headers']['ETag']
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['RegistrationIncomplete']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listStudioProfessionalCredentialTypes: {
+    parameters: {
+      query?: never
+      header?: {
+        'If-None-Match'?: components['parameters']['IfNoneMatch']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Published professional credential type catalogue */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['PrivateRevalidate']
+          ETag: components['headers']['ETag']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ProfessionalCredentialTypeList']
+        }
+      }
+      /** @description Catalogue has not changed */
+      304: {
+        headers: {
+          'Cache-Control': components['headers']['PrivateRevalidate']
+          ETag: components['headers']['ETag']
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['RegistrationIncomplete']
       503: components['responses']['UpstreamUnavailable']
     }
   }

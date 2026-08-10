@@ -266,6 +266,218 @@ export type Database = {
         }
         Relationships: []
       }
+      professional_credential_verifications: {
+        Row: {
+          decided_at: string
+          evidence_fingerprint: string
+          id: string
+          method: string
+          policy_code: string
+          professional_credential_id: string
+          result: string
+          revoked_at: string | null
+          source_authority: string
+          source_checked_at: string
+          source_jurisdiction: string
+          source_reference: string
+          source_status: string
+          source_valid_to: string | null
+          supersedes_verification_id: string | null
+          valid_from: string | null
+          valid_to: string | null
+          verifier_person_id: string
+        }
+        Insert: {
+          decided_at?: string
+          evidence_fingerprint: string
+          id?: string
+          method: string
+          policy_code: string
+          professional_credential_id: string
+          result: string
+          revoked_at?: string | null
+          source_authority: string
+          source_checked_at: string
+          source_jurisdiction: string
+          source_reference: string
+          source_status: string
+          source_valid_to?: string | null
+          supersedes_verification_id?: string | null
+          valid_from?: string | null
+          valid_to?: string | null
+          verifier_person_id: string
+        }
+        Update: {
+          decided_at?: string
+          evidence_fingerprint?: string
+          id?: string
+          method?: string
+          policy_code?: string
+          professional_credential_id?: string
+          result?: string
+          revoked_at?: string | null
+          source_authority?: string
+          source_checked_at?: string
+          source_jurisdiction?: string
+          source_reference?: string
+          source_status?: string
+          source_valid_to?: string | null
+          supersedes_verification_id?: string | null
+          valid_from?: string | null
+          valid_to?: string | null
+          verifier_person_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_professional_credential_verifications_credential'
+            columns: ['professional_credential_id']
+            isOneToOne: false
+            referencedRelation: 'professional_credentials'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'fk_professional_credential_verifications_supersedes'
+            columns: ['supersedes_verification_id']
+            isOneToOne: false
+            referencedRelation: 'professional_credential_verifications'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'fk_professional_credential_verifications_verifier'
+            columns: ['verifier_person_id']
+            isOneToOne: false
+            referencedRelation: 'people'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      professional_credentials: {
+        Row: {
+          created_at: string
+          credential_type_code: string
+          expires_on: string | null
+          id: string
+          identifier: string | null
+          issued_on: string | null
+          issuer: string
+          name: string
+          professional_profile_id: string
+          retired_at: string | null
+          status: string
+          supersedes_credential_id: string | null
+          verification_url: string | null
+        }
+        Insert: {
+          created_at?: string
+          credential_type_code: string
+          expires_on?: string | null
+          id?: string
+          identifier?: string | null
+          issued_on?: string | null
+          issuer: string
+          name: string
+          professional_profile_id: string
+          retired_at?: string | null
+          status?: string
+          supersedes_credential_id?: string | null
+          verification_url?: string | null
+        }
+        Update: {
+          created_at?: string
+          credential_type_code?: string
+          expires_on?: string | null
+          id?: string
+          identifier?: string | null
+          issued_on?: string | null
+          issuer?: string
+          name?: string
+          professional_profile_id?: string
+          retired_at?: string | null
+          status?: string
+          supersedes_credential_id?: string | null
+          verification_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_professional_credentials_profile'
+            columns: ['professional_profile_id']
+            isOneToOne: false
+            referencedRelation: 'professional_profiles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'fk_professional_credentials_supersedes'
+            columns: ['supersedes_credential_id']
+            isOneToOne: false
+            referencedRelation: 'professional_credentials'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      professional_profile_specialties: {
+        Row: {
+          declared_at: string
+          professional_profile_id: string
+          specialty_code: string
+        }
+        Insert: {
+          declared_at?: string
+          professional_profile_id: string
+          specialty_code: string
+        }
+        Update: {
+          declared_at?: string
+          professional_profile_id?: string
+          specialty_code?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_professional_profile_specialties_profile'
+            columns: ['professional_profile_id']
+            isOneToOne: false
+            referencedRelation: 'professional_profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      professional_profiles: {
+        Row: {
+          bio: string
+          created_at: string
+          headline: string
+          id: string
+          person_id: string
+          practice_started_year: number
+          updated_at: string
+        }
+        Insert: {
+          bio: string
+          created_at?: string
+          headline: string
+          id?: string
+          person_id: string
+          practice_started_year: number
+          updated_at?: string
+        }
+        Update: {
+          bio?: string
+          created_at?: string
+          headline?: string
+          id?: string
+          person_id?: string
+          practice_started_year?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_professional_profiles_person'
+            columns: ['person_id']
+            isOneToOne: true
+            referencedRelation: 'people'
+            referencedColumns: ['id']
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -296,6 +508,29 @@ export type Database = {
         }
         Returns: string
       }
+      declare_professional_credential: {
+        Args: {
+          p_command_id: string
+          p_credential_type_code: string
+          p_expires_on: string
+          p_idempotency_key: string
+          p_identifier: string
+          p_issued_on: string
+          p_issuer: string
+          p_name: string
+          p_person_id: string
+          p_request_hash: string
+          p_verification_url: string
+        }
+        Returns: {
+          credential: Json
+          replayed: boolean
+        }[]
+      }
+      get_my_professional_context: {
+        Args: { p_person_id: string; p_request_id: string }
+        Returns: Json
+      }
       load_access_session: {
         Args: {
           p_surface: Database['identity']['Enums']['access_session_surface']
@@ -313,6 +548,30 @@ export type Database = {
           token_version: number
         }[]
       }
+      professional_credential_projection: {
+        Args: { p_credential_id: string }
+        Returns: Json
+      }
+      professional_profile_projection: {
+        Args: { p_profile_id: string }
+        Returns: Json
+      }
+      put_professional_profile: {
+        Args: {
+          p_bio: string
+          p_command_id: string
+          p_headline: string
+          p_idempotency_key: string
+          p_person_id: string
+          p_practice_started_year: number
+          p_request_hash: string
+          p_specialty_codes: string[]
+        }
+        Returns: {
+          profile: Json
+          replayed: boolean
+        }[]
+      }
       record_adult_eligibility: {
         Args: {
           p_account_id: string
@@ -327,11 +586,48 @@ export type Database = {
           result: string
         }[]
       }
+      require_professional_actor: {
+        Args: { p_person_id: string }
+        Returns: undefined
+      }
       resolve_or_create_access_account: {
         Args: { p_issuer: string; p_provider: string; p_subject: string }
         Returns: {
           account_id: string
           person_id: string
+        }[]
+      }
+      retire_professional_credential: {
+        Args: {
+          p_command_id: string
+          p_credential_id: string
+          p_idempotency_key: string
+          p_person_id: string
+          p_request_hash: string
+        }
+        Returns: {
+          credential: Json
+          replayed: boolean
+        }[]
+      }
+      revise_professional_credential: {
+        Args: {
+          p_command_id: string
+          p_credential_id: string
+          p_credential_type_code: string
+          p_expires_on: string
+          p_idempotency_key: string
+          p_identifier: string
+          p_issued_on: string
+          p_issuer: string
+          p_name: string
+          p_person_id: string
+          p_request_hash: string
+          p_verification_url: string
+        }
+        Returns: {
+          credential: Json
+          replayed: boolean
         }[]
       }
       revoke_access_session: {
@@ -360,6 +656,18 @@ export type Database = {
           expires_at: string
           status: string
         }[]
+      }
+      validate_professional_credential_input: {
+        Args: {
+          p_credential_type_code: string
+          p_expires_on: string
+          p_identifier: string
+          p_issued_on: string
+          p_issuer: string
+          p_name: string
+          p_verification_url: string
+        }
+        Returns: undefined
       }
     }
     Enums: {

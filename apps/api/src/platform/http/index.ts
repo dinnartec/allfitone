@@ -26,6 +26,10 @@ export type ApiErrorCode =
   | 'forbidden'
   /** The command conflicts with durable state or a prior idempotent request. */
   | 'conflict'
+  /** A visible resource does not exist. */
+  | 'not-found'
+  /** A well-formed request violates a closed business schema. */
+  | 'validation-failed'
 
 const STATUS: Record<ApiErrorCode, ContentfulStatusCode> = {
   unauthenticated: 401,
@@ -36,6 +40,8 @@ const STATUS: Record<ApiErrorCode, ContentfulStatusCode> = {
   'account-closed': 403,
   forbidden: 403,
   conflict: 409,
+  'not-found': 404,
+  'validation-failed': 422,
 }
 
 /**

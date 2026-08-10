@@ -69,6 +69,106 @@ export interface CommandContext {
   requestHash: Uint8Array
 }
 
+export interface ProfessionalCatalogItem {
+  code: string
+  name: string
+  description: string | null
+}
+
+export type ProfessionalCredentialVerificationState =
+  'unverified' | 'verified' | 'expired' | 'rejected' | 'unverifiable' | 'revoked'
+
+export interface ProfessionalCredentialVerification {
+  state: ProfessionalCredentialVerificationState
+  validFrom: Date | null
+  validTo: Date | null
+  effective: boolean
+}
+
+export interface ProfessionalCredential {
+  id: string
+  credentialTypeCode: string
+  credentialTypeName: string
+  issuer: string
+  name: string
+  identifier: string | null
+  issuedOn: string | null
+  expiresOn: string | null
+  verificationUrl: string | null
+  status: 'active' | 'retired'
+  supersedesCredentialId: string | null
+  createdAt: Date
+  retiredAt: Date | null
+  verification: ProfessionalCredentialVerification
+}
+
+export interface ProfessionalProfile {
+  id: string
+  headline: string
+  bio: string
+  practiceStartedYear: number
+  experienceYears: number
+  specialties: ProfessionalCatalogItem[]
+  credentials: ProfessionalCredential[]
+  createdAt: Date
+  updatedAt: Date
+}
+
+export interface ProfessionalMembershipSummary {
+  membershipId: string
+  organizationId: string
+  displayName: string
+  typeCode: 'professional_practice' | 'gym' | 'studio'
+  status: 'active'
+  joinedAt: Date
+  endedAt: null
+  roles: Array<'owner' | 'admin' | 'coach' | 'staff'>
+}
+
+export interface StudioProfessionalContext {
+  profile: ProfessionalProfile | null
+  memberships: ProfessionalMembershipSummary[]
+}
+
+export interface ProfessionalProfileInput {
+  headline: string
+  bio: string
+  practiceStartedYear: number
+  specialtyCodes: string[]
+}
+
+export interface ProfessionalCredentialInput {
+  credentialTypeCode: string
+  issuer: string
+  name: string
+  identifier: string | null
+  issuedOn: string | null
+  expiresOn: string | null
+  verificationUrl: string | null
+}
+
+export interface CommandResult<T> {
+  resource: T
+  replayed: boolean
+}
+
+export interface IdentityProfessionalDatabase {
+  getMe(personId: string, requestId: string): Promise<StudioProfessionalContext>
+  putProfile(
+    input: CommandContext & ProfessionalProfileInput & { personId: string },
+  ): Promise<CommandResult<ProfessionalProfile>>
+  declareCredential(
+    input: CommandContext & ProfessionalCredentialInput & { personId: string },
+  ): Promise<CommandResult<ProfessionalCredential>>
+  reviseCredential(
+    input: CommandContext &
+      ProfessionalCredentialInput & { personId: string; credentialId: string },
+  ): Promise<CommandResult<ProfessionalCredential>>
+  retireCredential(
+    input: CommandContext & { personId: string; credentialId: string },
+  ): Promise<CommandResult<ProfessionalCredential>>
+}
+
 export interface IdentitySessionDatabase {
   resolveOrCreateAccount(issuer: string, subject: string): Promise<AccessAccount>
   createSession(input: {

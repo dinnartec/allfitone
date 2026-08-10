@@ -38,8 +38,8 @@ export function studioOrganizationRoutes(
     cors({
       origin: studioOrigin,
       credentials: true,
-      allowMethods: ['GET', 'POST', 'OPTIONS'],
-      allowHeaders: ['Content-Type', 'Idempotency-Key', 'Command-Id'],
+      allowMethods: ['GET', 'POST', 'PUT', 'OPTIONS'],
+      allowHeaders: ['Content-Type', 'Idempotency-Key', 'Command-Id', 'If-None-Match'],
     }),
   )
   routes.use('*', async (c, next) => {

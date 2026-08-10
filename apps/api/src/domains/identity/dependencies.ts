@@ -3,18 +3,22 @@
 import { authProvider } from '../../platform/auth/index.js'
 import {
   createStudioOnboardingService,
+  createStudioProfessionalService,
   createStudioSessionService,
   type StudioOnboardingService,
+  type StudioProfessionalService,
   type StudioSessionService,
 } from './application/index.js'
 import {
   createIdentityOnboardingDatabase,
+  createIdentityProfessionalDatabase,
   createIdentitySessionDatabase,
   createSessionTokenVaultFromEnv,
 } from './infrastructure/index.js'
 
 let cached: StudioSessionService | undefined
 let cachedOnboarding: StudioOnboardingService | undefined
+let cachedProfessional: StudioProfessionalService | undefined
 
 export function studioSessionService(): StudioSessionService {
   if (cached) return cached
@@ -35,6 +39,11 @@ export function studioSessionService(): StudioSessionService {
 export function studioOnboardingService(): StudioOnboardingService {
   cachedOnboarding ??= createStudioOnboardingService(createIdentityOnboardingDatabase())
   return cachedOnboarding
+}
+
+export function studioProfessionalService(): StudioProfessionalService {
+  cachedProfessional ??= createStudioProfessionalService(createIdentityProfessionalDatabase())
+  return cachedProfessional
 }
 
 /** Test seam. Undefined restores environment-backed construction. */

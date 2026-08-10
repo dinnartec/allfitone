@@ -103,9 +103,39 @@ export const allfitV1ContractManifest = {
     },
     {
       method: 'GET',
+      path: '/studio/v1/me',
+      operationId: 'getMyStudioProfessionalProfile',
+      allfitOperation: 'OP-IDN-017',
+    },
+    {
+      method: 'GET',
       path: '/studio/v1/me/memberships',
       operationId: 'listMyStudioMemberships',
       allfitOperation: 'OP-ORG-014',
+    },
+    {
+      method: 'POST',
+      path: '/studio/v1/me/professional-credentials',
+      operationId: 'declareMyStudioProfessionalCredential',
+      allfitOperation: 'OP-IDN-029',
+    },
+    {
+      method: 'POST',
+      path: '/studio/v1/me/professional-credentials/{credentialId}/retirement',
+      operationId: 'retireMyStudioProfessionalCredential',
+      allfitOperation: 'OP-IDN-031',
+    },
+    {
+      method: 'POST',
+      path: '/studio/v1/me/professional-credentials/{credentialId}/revisions',
+      operationId: 'reviseMyStudioProfessionalCredential',
+      allfitOperation: 'OP-IDN-030',
+    },
+    {
+      method: 'PUT',
+      path: '/studio/v1/me/professional-profile',
+      operationId: 'putMyStudioProfessionalProfile',
+      allfitOperation: 'OP-IDN-010',
     },
     {
       method: 'POST',
@@ -184,6 +214,18 @@ export const allfitV1ContractManifest = {
       path: '/studio/v1/organizations/{organizationId}/relationships/{relationshipId}/assignments',
       operationId: 'assignProgramVersion',
       allfitOperation: 'OP-PLN-010',
+    },
+    {
+      method: 'GET',
+      path: '/studio/v1/professional-credential-types',
+      operationId: 'listStudioProfessionalCredentialTypes',
+      allfitOperation: 'OP-CAT-014',
+    },
+    {
+      method: 'GET',
+      path: '/studio/v1/professional-specialties',
+      operationId: 'listStudioProfessionalSpecialties',
+      allfitOperation: 'OP-CAT-013',
     },
     {
       method: 'GET',
