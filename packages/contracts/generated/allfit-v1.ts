@@ -20,6 +20,8 @@ export interface paths {
      *     **The response never reveals whether the email already has an account.** Success and "already registered" are indistinguishable — same status, same body shape, same expiry. The provider distinguishes them and the adapter normalizes that away, because propagating it would turn this endpoint into an oracle for which addresses are registered. That is HU-SP-001 criterion 3, and it is the reason there is no 409 here.
      *
      *     Nothing is stored on our side, so there is no handle to return and no state to expire.
+     *
+     *     **No `Idempotency-Key`, deliberately.** Replaying a key means storing the first result and returning it again, which contradicts storing nothing. Accepting the header without that store would be decoration. A retry therefore sends a second code, which is a cost carried by rate limiting rather than by a key an unauthenticated caller chooses — a per-key row written on an anonymous endpoint is itself a way to fill our storage.
      */
     post: operations['startSpaceRegistration']
     delete?: never
@@ -1905,10 +1907,7 @@ export interface operations {
   startSpaceRegistration: {
     parameters: {
       query?: never
-      header: {
-        /** @description UUIDv4 reused only for HTTP retries of this operation. */
-        'Idempotency-Key': components['parameters']['IdempotencyKey']
-      }
+      header?: never
       path?: never
       cookie?: never
     }
@@ -1922,7 +1921,6 @@ export interface operations {
       202: {
         headers: {
           'Cache-Control': components['headers']['NoStore']
-          'Idempotent-Replay': components['headers']['IdempotentReplay']
           [name: string]: unknown
         }
         content: {

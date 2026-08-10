@@ -100,9 +100,15 @@ paths:
 
         Nothing is stored on our side, so there is no handle to return and no
         state to expire.
+
+
+        **No `Idempotency-Key`, deliberately.** Replaying a key means storing the
+        first result and returning it again, which contradicts storing nothing.
+        Accepting the header without that store would be decoration. A retry
+        therefore sends a second code, which is a cost carried by rate limiting
+        rather than by a key an unauthenticated caller chooses — a per-key row
+        written on an anonymous endpoint is itself a way to fill our storage.
       security: []
-      parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -118,8 +124,6 @@ paths:
           headers:
             Cache-Control:
               $ref: '#/components/headers/NoStore'
-            Idempotent-Replay:
-              $ref: '#/components/headers/IdempotentReplay'
           content:
             application/json:
               schema:
