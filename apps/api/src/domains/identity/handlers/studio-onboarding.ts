@@ -110,12 +110,17 @@ export function studioOnboardingRoutes(
     if (!command) return fail(c, 'invalid-request', 'valid command headers are required')
 
     try {
-      const actor = await authenticatedActor(c, sessions())
-      if (actor instanceof Response) return actor
-      await onboarding().complete(actor, {
+      const accountIdentity = await authenticatedAccountIdentity(c, sessions())
+      if (accountIdentity instanceof Response) return accountIdentity
+      const givenName = accountIdentity.identity.givenName ?? body.given_name?.trim()
+      const familyName = accountIdentity.identity.familyName ?? body.family_name?.trim()
+      if (!givenName || !familyName) {
+        return fail(c, 'invalid-request', 'complete identity is required')
+      }
+      await onboarding().complete(accountIdentity.actor, {
         attemptId,
-        givenName: body.given_name.trim(),
-        familyName: body.family_name.trim(),
+        givenName,
+        familyName,
         termsAccepted: body.terms_accepted,
         privacyNoticeAccepted: body.privacy_notice_accepted,
         ...command,
@@ -143,6 +148,17 @@ async function authenticatedActor(c: Context, sessions: StudioSessionService) {
   if (!token) return fail(c, 'unauthenticated', 'missing session cookie')
   try {
     return await sessions.resolveActor(token)
+  } catch (error) {
+    if (error instanceof StudioSessionError) return fail(c, error.code)
+    throw error
+  }
+}
+
+async function authenticatedAccountIdentity(c: Context, sessions: StudioSessionService) {
+  const token = getCookie(c, STUDIO_SESSION_COOKIE)
+  if (!token) return fail(c, 'unauthenticated', 'missing session cookie')
+  try {
+    return await sessions.resolveAccountIdentity(token)
   } catch (error) {
     if (error instanceof StudioSessionError) return fail(c, error.code)
     throw error
@@ -191,17 +207,25 @@ function isEvidenceCreate(value: unknown): value is EvidenceCreate {
 
 function isCompletion(value: unknown): value is Completion {
   if (!isObject(value)) return false
-  const keys = Object.keys(value).sort().join(',')
+  const allowedKeys = new Set([
+    'given_name',
+    'family_name',
+    'terms_accepted',
+    'privacy_notice_accepted',
+  ])
   return (
-    keys === 'family_name,given_name,privacy_notice_accepted,terms_accepted' &&
-    typeof value.given_name === 'string' &&
-    value.given_name.trim().length > 0 &&
-    value.given_name.length <= 100 &&
-    typeof value.family_name === 'string' &&
-    value.family_name.trim().length > 0 &&
-    value.family_name.length <= 100 &&
+    Object.keys(value).every((key) => allowedKeys.has(key)) &&
+    validOptionalName(value.given_name) &&
+    validOptionalName(value.family_name) &&
     value.terms_accepted === true &&
     value.privacy_notice_accepted === true
+  )
+}
+
+function validOptionalName(value: unknown): boolean {
+  return (
+    value === undefined ||
+    (typeof value === 'string' && value.trim().length > 0 && value.length <= 100)
   )
 }
 

@@ -14,21 +14,29 @@ import { Input } from '@allfitone/react/components/input'
 import { useState, type FormEvent } from 'react'
 
 import { StudioFrame } from './studio-frame'
-import { StudioApiError, newCommand, studioApi, type OnboardingAttempt } from '@/lib/studio-api'
+import {
+  StudioApiError,
+  newCommand,
+  studioApi,
+  type OnboardingAttempt,
+  type StudioSession,
+} from '@/lib/studio-api'
 
 export function ActivationForm({
   attempt,
+  identity,
   onComplete,
   onSessionExpired,
   onRetryAttempt,
 }: {
   attempt: OnboardingAttempt
+  identity: StudioSession['identity']
   onComplete: (fullName: string) => void
   onSessionExpired: () => void
   onRetryAttempt: () => Promise<void>
 }) {
-  const [givenName, setGivenName] = useState('')
-  const [familyName, setFamilyName] = useState('')
+  const [givenName, setGivenName] = useState(identity.given_name ?? '')
+  const [familyName, setFamilyName] = useState(identity.family_name ?? '')
   const [adult, setAdult] = useState(false)
   const [terms, setTerms] = useState(false)
   const [privacy, setPrivacy] = useState(false)
@@ -53,16 +61,7 @@ export function ActivationForm({
     setError(undefined)
     try {
       await studioApi.recordAdultEligibility(attempt.id, true, evidenceCommand)
-      await studioApi.completeOnboarding(
-        attempt.id,
-        {
-          given_name: givenName.trim(),
-          family_name: familyName.trim(),
-          terms_accepted: true,
-          privacy_notice_accepted: true,
-        },
-        completionCommand,
-      )
+      await studioApi.completeOnboarding(attempt.id, completionBody(), completionCommand)
       onComplete(`${givenName.trim()} ${familyName.trim()}`)
     } catch (caught) {
       if (caught instanceof StudioApiError && caught.status === 401) {
@@ -87,6 +86,15 @@ export function ActivationForm({
     }
   }
 
+  function completionBody() {
+    return {
+      ...(identity.given_name ? {} : { given_name: givenName.trim() }),
+      ...(identity.family_name ? {} : { family_name: familyName.trim() }),
+      terms_accepted: true as const,
+      privacy_notice_accepted: true as const,
+    }
+  }
+
   async function retryAttempt() {
     setRetrying(true)
     setError(undefined)
@@ -105,44 +113,57 @@ export function ActivationForm({
       <article data-studio-panel="activation">
         <div data-studio-panel-intro>
           <p data-studio-eyebrow>Activación personal</p>
-          <h1>Primero, pongamos tu identidad en regla.</h1>
+          <h1>Confirma y deja tu identidad lista.</h1>
           <p>
-            Esta activación es tuya. Ninguna organización ni administrador puede completarla por ti.
+            Tu nombre ya viene de tu cuenta. Solo tú puedes confirmar tu mayoría de edad y las
+            aceptaciones.
           </p>
           <div data-studio-signal-note>
             <span aria-hidden="true">18+</span>
-            <p>En esta versión declaras ser mayor de edad. No guardamos tu fecha de nacimiento.</p>
+            <p>Declaras ser mayor de edad. No pedimos ni guardamos tu fecha de nacimiento.</p>
           </div>
         </div>
 
         <form data-studio-form onSubmit={submit} noValidate>
           <FieldGroup>
-            <div data-studio-field-grid>
-              <Field>
-                <FieldLabel htmlFor="given-name">Nombres</FieldLabel>
-                <Input
-                  id="given-name"
-                  name="givenName"
-                  autoComplete="given-name"
-                  maxLength={100}
-                  value={givenName}
-                  onChange={(event) => setGivenName(event.target.value)}
-                  required
-                />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="family-name">Apellidos</FieldLabel>
-                <Input
-                  id="family-name"
-                  name="familyName"
-                  autoComplete="family-name"
-                  maxLength={100}
-                  value={familyName}
-                  onChange={(event) => setFamilyName(event.target.value)}
-                  required
-                />
-              </Field>
-            </div>
+            {identity.given_name && identity.family_name ? (
+              <div data-studio-identity-summary>
+                <span>Nombre de tu cuenta</span>
+                <strong>{`${givenName.trim()} ${familyName.trim()}`}</strong>
+                <p>Usaremos este nombre para crear tu identidad personal en Allfit One.</p>
+              </div>
+            ) : (
+              <div data-studio-field-grid>
+                {!identity.given_name ? (
+                  <Field>
+                    <FieldLabel htmlFor="given-name">Nombres</FieldLabel>
+                    <Input
+                      id="given-name"
+                      name="givenName"
+                      autoComplete="given-name"
+                      maxLength={100}
+                      value={givenName}
+                      onChange={(event) => setGivenName(event.target.value)}
+                      required
+                    />
+                  </Field>
+                ) : null}
+                {!identity.family_name ? (
+                  <Field>
+                    <FieldLabel htmlFor="family-name">Apellidos</FieldLabel>
+                    <Input
+                      id="family-name"
+                      name="familyName"
+                      autoComplete="family-name"
+                      maxLength={100}
+                      value={familyName}
+                      onChange={(event) => setFamilyName(event.target.value)}
+                      required
+                    />
+                  </Field>
+                ) : null}
+              </div>
+            )}
 
             <fieldset data-studio-check-group>
               <legend>Confirmaciones obligatorias</legend>
@@ -168,8 +189,7 @@ export function ActivationForm({
                 <span>Acepto el Aviso de privacidad, versión 1.</span>
               </label>
               <FieldDescription>
-                Los textos legales consultables se incorporarán en un corte posterior; esta
-                aceptación queda registrada con su versión.
+                Registraremos ambas aceptaciones junto con su versión.
               </FieldDescription>
             </fieldset>
           </FieldGroup>
@@ -190,7 +210,7 @@ export function ActivationForm({
 
           <div data-studio-form-actions>
             <Button type="submit" size="lg" disabled={!valid || submitting || expired}>
-              {submitting ? 'Activando…' : 'Activar mi identidad'}
+              {submitting ? 'Confirmando…' : 'Confirmar mi identidad'}
             </Button>
             <p aria-live="polite">
               {submitting ? 'Guardando la declaración y las aceptaciones…' : 'Paso 1 de 3'}

@@ -15,6 +15,7 @@ function fakeProvider(overrides: Partial<AuthProvider> = {}): AuthProvider {
     getLogoutUrl: () => LOGOUT_URL,
     authenticateWithCode: async () => ({
       subject: 'user_01ABC',
+      identity: { givenName: 'Ada', familyName: 'Lovelace' },
       tokens: { accessToken: 'at', refreshToken: 'rt', expiresIn: 300 },
     }),
     verifyAccessToken: async () => ({
@@ -43,8 +44,16 @@ function fakeProvider(overrides: Partial<AuthProvider> = {}): AuthProvider {
 function fakeSessions(overrides: Partial<StudioSessionService> = {}): StudioSessionService {
   return {
     completeCode: async () => ({ opaqueToken: 'opaque-session' }),
-    readSession: async () => ({ authenticated: true, registration_status: 'complete' }),
+    readSession: async () => ({
+      authenticated: true,
+      registration_status: 'complete',
+      identity: { given_name: 'Ada', family_name: 'Lovelace' },
+    }),
     resolveActor: async () => ({ accountId: 'account_1', personId: 'person_1' }),
+    resolveAccountIdentity: async () => ({
+      actor: { accountId: 'account_1', personId: 'person_1' },
+      identity: { givenName: 'Ada', familyName: 'Lovelace' },
+    }),
     logout: async () => LOGOUT_URL,
     ...overrides,
   }
@@ -142,6 +151,7 @@ describe('GET /session', () => {
     await expect(response.json()).resolves.toEqual({
       authenticated: true,
       registration_status: 'complete',
+      identity: { given_name: 'Ada', family_name: 'Lovelace' },
     })
   })
 

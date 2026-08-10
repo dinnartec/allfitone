@@ -7,6 +7,10 @@ values
   ('0198d000-0000-7000-8000-000000000011', 'workos', 'https://issuer.test', 'onboarding_one'),
   ('0198d000-0000-7000-8000-000000000012', 'workos', 'https://issuer.test', 'onboarding_two');
 
+create temporary table test_people_before as
+select count(*) as people_count
+from identity.people;
+
 set local role allfit_api;
 select set_config('app.actor_kind', 'account', true);
 select set_config('app.actor_account_id', '0198d000-0000-7000-8000-000000000011', true);
@@ -80,7 +84,11 @@ select is(
   'replaying completion never creates another person'
 );
 reset role;
-select is((select count(*) from identity.people), 1::bigint, 'only one person exists after completion replay');
+select is(
+  (select count(*) from identity.people),
+  (select people_count + 1 from test_people_before),
+  'only one person exists after completion replay'
+);
 
 set local role allfit_api;
 select set_config('app.actor_kind', 'account', true);

@@ -1,4 +1,4 @@
-import type { SessionTokens } from '@allfitone/auth-provider'
+import type { AuthenticatedIdentity, SessionTokens } from '@allfitone/auth-provider'
 
 export type RegistrationStatus = 'complete' | 'registration_incomplete'
 
@@ -27,6 +27,11 @@ export interface ActorRegistration {
 export interface StudioActor {
   accountId: string
   personId?: string
+}
+
+export interface StudioAccountIdentity {
+  actor: StudioActor
+  identity: AuthenticatedIdentity
 }
 
 export interface OnboardingAttempt {
@@ -87,8 +92,13 @@ export interface IdentitySessionDatabase {
 export interface SessionTokenVault {
   generateOpaqueToken(): string
   hashOpaqueToken(token: string): Uint8Array
-  seal(tokens: SessionTokens, context: SessionCipherContext): string
-  open(ciphertext: string, context: SessionCipherContext): SessionTokens
+  seal(secret: StoredSessionSecret, context: SessionCipherContext): string
+  open(ciphertext: string, context: SessionCipherContext): StoredSessionSecret
+}
+
+export interface StoredSessionSecret {
+  tokens: SessionTokens
+  identity: AuthenticatedIdentity
 }
 
 export interface SessionCipherContext {

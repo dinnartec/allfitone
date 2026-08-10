@@ -1,20 +1,41 @@
 begin;
 
-select plan(11);
+select plan(14);
 
 insert into identity.people (id, given_name, family_name)
 values
   ('0198e000-0000-7000-8000-000000000001', 'Ada', 'Owner'),
   ('0198e000-0000-7000-8000-000000000002', 'Grace', 'Other');
 
+select is(
+  (select name from organizations.organization_types where code = 'professional_practice'),
+  'Profesional independiente',
+  'the individual organization type uses the approved product label'
+);
+
+select is(
+  (
+    select count(*)
+    from organizations.organization_types
+    where code in ('academy', 'clinic')
+      and not active
+  ),
+  2::bigint,
+  'academy and clinic remain governed but inactive'
+);
+
 set local role allfit_api;
 select set_config('app.actor_kind', 'person', true);
 select set_config('app.actor_person_id', '0198e000-0000-7000-8000-000000000001', true);
 
-select is(
-  (select count(*) from organizations.list_organization_types()),
-  5::bigint,
-  'T-ORG-API-01 exposes the five governed organization types'
+select results_eq(
+  $$ select code, name from organizations.list_organization_types() $$,
+  $$ values
+    ('professional_practice'::text, 'Profesional independiente'::text),
+    ('gym'::text, 'Gimnasio'::text),
+    ('studio'::text, 'Estudio'::text)
+  $$,
+  'T-ORG-API-01 exposes only the three active organization types'
 );
 
 create temporary table test_organization as
@@ -69,6 +90,25 @@ select is(
   (select roles from organizations.list_my_memberships('0198e000-0000-7000-8000-000000000001')),
   array['owner']::text[],
   'membership projection carries the effective role'
+);
+
+select throws_ok(
+  $$
+    select *
+    from organizations.create_organization(
+      '0198e000-0000-7000-8000-000000000001',
+      'Inactive Academy',
+      'academy',
+      'natural_person',
+      'Ada Owner',
+      '22222222-2222-4222-8222-222222222223',
+      '22222222-2222-7222-8222-222222222224',
+      decode(repeat('22', 32), 'hex')
+    )
+  $$,
+  '22023',
+  null,
+  'inactive organization types cannot be created'
 );
 
 select set_config('app.actor_person_id', '0198e000-0000-7000-8000-000000000002', true);

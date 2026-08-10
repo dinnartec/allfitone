@@ -138,6 +138,10 @@ export function createWorkOSAuthProvider(config: WorkOSConfig): AuthProvider {
     }
     return {
       subject: response.user.id,
+      identity: {
+        givenName: normalizedName(response.user.firstName),
+        familyName: normalizedName(response.user.lastName),
+      },
       tokens: toSessionTokens(response),
     }
   }
@@ -356,6 +360,11 @@ function toSessionTokens(response: WorkOSAuthenticationResponse): SessionTokens 
     refreshToken: response.refreshToken,
     expiresIn: ASSUMED_ACCESS_TOKEN_TTL_SECONDS,
   }
+}
+
+function normalizedName(value: string | null): string | null {
+  const normalized = value?.trim()
+  return normalized ? normalized : null
 }
 
 /**

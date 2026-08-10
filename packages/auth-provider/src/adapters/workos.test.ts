@@ -267,7 +267,7 @@ function fakeClient(overrides: Partial<WorkOSUserManagement> = {}) {
   const authResponse = {
     accessToken: 'at_1',
     refreshToken: 'rt_1',
-    user: { id: 'user_01FAKE' },
+    user: { id: 'user_01FAKE', firstName: 'Ada', lastName: 'Lovelace' },
   }
   const userManagement: WorkOSUserManagement = {
     authenticateWithCode: async (o) => record('authenticateWithCode', o, authResponse),
@@ -325,6 +325,7 @@ describe('authenticateWithCode', () => {
     const result = await provider.authenticateWithCode('code_abc', 'studio')
 
     expect(result.subject).toBe('user_01FAKE')
+    expect(result.identity).toEqual({ givenName: 'Ada', familyName: 'Lovelace' })
     expect(result.tokens.accessToken).toBe('at_1')
     expect(result.tokens.refreshToken).toBe('rt_1')
     expect(calls[0]).toEqual({

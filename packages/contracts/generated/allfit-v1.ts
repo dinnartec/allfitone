@@ -585,6 +585,11 @@ export interface components {
       /** @constant */
       authenticated: true
       registration_status: components['schemas']['StudioRegistrationStatus']
+      identity: components['schemas']['StudioAccountIdentity']
+    }
+    StudioAccountIdentity: {
+      given_name: string | null
+      family_name: string | null
     }
     /** @enum {string} */
     StudioOnboardingStatus: 'open' | 'activated' | 'ineligible' | 'expired'
@@ -624,8 +629,8 @@ export interface components {
       policy: components['schemas']['AdultEligibilityPolicy']
     }
     StudioOnboardingCompletion: {
-      given_name: string
-      family_name: string
+      given_name?: string
+      family_name?: string
       /** @constant */
       terms_accepted: true
       /** @constant */
@@ -636,7 +641,7 @@ export interface components {
       registration_status: 'complete'
     }
     /** @enum {string} */
-    OrganizationTypeCode: 'professional_practice' | 'gym' | 'studio' | 'academy' | 'clinic'
+    OrganizationTypeCode: 'professional_practice' | 'gym' | 'studio'
     OrganizationType: {
       code: components['schemas']['OrganizationTypeCode']
       name: string

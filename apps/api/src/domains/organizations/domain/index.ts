@@ -1,4 +1,4 @@
-export type OrganizationTypeCode = 'professional_practice' | 'gym' | 'studio' | 'academy' | 'clinic'
+export type OrganizationTypeCode = 'professional_practice' | 'gym' | 'studio'
 
 export interface OrganizationType {
   code: OrganizationTypeCode

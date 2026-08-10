@@ -14,7 +14,11 @@
 export interface WorkOSAuthenticationResponse {
   accessToken: string
   refreshToken: string
-  user: { id: string }
+  user: {
+    id: string
+    firstName: string | null
+    lastName: string | null
+  }
   /**
    * How the person authenticated. Notably this union contains no TOTP or MFA
    * value, and it is absent from the access token — see the AAL note in

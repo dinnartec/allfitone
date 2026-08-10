@@ -18,12 +18,13 @@ import {
   type Membership,
   type OnboardingAttempt,
   type OrganizationType,
+  type StudioSession,
 } from '@/lib/studio-api'
 
 type FlowState =
   | { kind: 'loading' }
   | { kind: 'access' }
-  | { kind: 'activation'; attempt: OnboardingAttempt }
+  | { kind: 'activation'; attempt: OnboardingAttempt; identity: StudioSession['identity'] }
   | { kind: 'space'; organizationTypes: OrganizationType[]; fullName?: string }
   | { kind: 'select'; memberships: Membership[] }
   | { kind: 'error'; message: string }
@@ -60,12 +61,13 @@ export function StudioEntry() {
     setFlow({ kind: 'loading' })
     try {
       const session = await studioApi.session()
+      const fullName = identityName(session.identity)
       if (session.registration_status === 'registration_incomplete') {
         const attempt = await studioApi.startAttempt(newCommand())
-        setFlow({ kind: 'activation', attempt })
+        setFlow({ kind: 'activation', attempt, identity: session.identity })
         return
       }
-      await resolveMemberships()
+      await resolveMemberships(fullName)
     } catch (caught) {
       if (caught instanceof StudioApiError && caught.status === 401) {
         setFlow({ kind: 'access' })
@@ -91,11 +93,12 @@ export function StudioEntry() {
     return (
       <ActivationForm
         attempt={flow.attempt}
+        identity={flow.identity}
         onComplete={(fullName) => void resolveMemberships(fullName)}
         onSessionExpired={() => setFlow({ kind: 'access' })}
         onRetryAttempt={async () => {
           const attempt = await studioApi.startAttempt(newCommand())
-          setFlow({ kind: 'activation', attempt })
+          setFlow({ kind: 'activation', attempt, identity: flow.identity })
         }}
       />
     )
@@ -129,4 +132,9 @@ export function StudioEntry() {
       </div>
     </StudioFrame>
   )
+}
+
+function identityName(identity: StudioSession['identity']): string | undefined {
+  const fullName = [identity.given_name, identity.family_name].filter(Boolean).join(' ').trim()
+  return fullName || undefined
 }

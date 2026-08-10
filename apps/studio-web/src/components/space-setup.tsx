@@ -10,6 +10,14 @@ import {
   FieldLabel,
 } from '@allfitone/react/components/field'
 import { Input } from '@allfitone/react/components/input'
+import { RadioGroup, RadioGroupItem } from '@allfitone/react/components/radio-group'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@allfitone/react/components/select'
 import { useState, type FormEvent } from 'react'
 
 import { StudioFrame } from './studio-frame'
@@ -46,29 +54,25 @@ export function SpaceSetup({
         <article data-studio-panel="choice">
           <div data-studio-panel-intro>
             <p data-studio-eyebrow>Elige cómo empezar</p>
-            <h1>Tu trabajo necesita un espacio propio.</h1>
-            <p>
-              Define la estructura inicial. Podrás ampliar el equipo y la operación en cortes
-              posteriores.
-            </p>
+            <h1>¿Cómo trabajas hoy?</h1>
+            <p>Elige la estructura que mejor representa tu trabajo. Podrás ampliarla después.</p>
           </div>
           <div data-studio-choice-grid>
             <button type="button" data-studio-choice onClick={() => setMode('individual')}>
-              <span data-choice-index>01</span>
+              <span data-choice-kicker>Para mí</span>
               <strong>Trabajo por mi cuenta</strong>
               <span>
-                Crea una práctica profesional en la que tú eres la persona responsable y owner.
+                Crea una práctica profesional. Tú quedarás como responsable y propietario.
               </span>
-              <span data-choice-action>Elegir práctica individual →</span>
+              <span data-choice-action>Crear mi práctica →</span>
             </button>
             <button type="button" data-studio-choice onClick={() => setMode('team')}>
-              <span data-choice-index>02</span>
+              <span data-choice-kicker>Para un equipo</span>
               <strong>Tengo un equipo o centro</strong>
               <span>
-                Configura un gimnasio, estudio, academia, clínica o práctica con responsable
-                gobernado.
+                Configura un gimnasio, estudio, academia, clínica o práctica para tu equipo.
               </span>
-              <span data-choice-action>Elegir espacio de equipo →</span>
+              <span data-choice-action>Crear un espacio de equipo →</span>
             </button>
           </div>
         </article>
@@ -150,15 +154,8 @@ function SpaceForm({
         <p data-studio-eyebrow>
           {mode === 'individual' ? 'Práctica individual' : 'Equipo o centro'}
         </p>
-        <h1>
-          {mode === 'individual'
-            ? 'Ponle nombre a tu práctica.'
-            : 'Define la identidad del espacio.'}
-        </h1>
-        <p>
-          La organización quedará activa y tu membresía se creará con el rol owner en una sola
-          operación.
-        </p>
+        <h1>{mode === 'individual' ? 'Nombra tu práctica.' : 'Dale identidad a tu espacio.'}</h1>
+        <p>Al crearla, quedará activa y tú serás su propietario.</p>
       </div>
 
       <form data-studio-form onSubmit={submit}>
@@ -180,40 +177,52 @@ function SpaceForm({
             <>
               <Field>
                 <FieldLabel htmlFor="organization-type">Tipo de organización</FieldLabel>
-                <select
-                  id="organization-type"
-                  data-studio-native-control
+                <Select
                   value={typeCode}
-                  onChange={(event) => setTypeCode(event.target.value as OrganizationType['code'])}
+                  onValueChange={(value) => {
+                    if (value !== null) setTypeCode(value)
+                  }}
+                  items={organizationTypes.map((type) => ({
+                    label: type.name,
+                    value: type.code,
+                  }))}
                 >
-                  {organizationTypes.map((type) => (
-                    <option key={type.code} value={type.code}>
-                      {type.name}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger id="organization-type" data-studio-select-trigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent align="start">
+                    {organizationTypes.map((type) => (
+                      <SelectItem key={type.code} value={type.code}>
+                        {type.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </Field>
 
-              <fieldset data-studio-segment-group>
+              <fieldset data-studio-responsible-group>
                 <legend>Parte responsable</legend>
-                <div>
-                  <button
-                    type="button"
-                    data-selected={responsibleKind === 'natural_person'}
-                    onClick={() => setResponsibleKind('natural_person')}
-                  >
-                    Persona natural
-                  </button>
-                  <button
-                    type="button"
-                    data-selected={responsibleKind === 'legal_entity'}
-                    onClick={() => setResponsibleKind('legal_entity')}
-                  >
-                    Entidad
-                  </button>
-                </div>
+                <RadioGroup
+                  value={responsibleKind}
+                  onValueChange={(value) => {
+                    if (value === 'natural_person' || value === 'legal_entity') {
+                      setResponsibleKind(value)
+                    }
+                  }}
+                  aria-label="Parte responsable"
+                  data-studio-responsible-options
+                >
+                  <label data-studio-responsible-option>
+                    <RadioGroupItem value="natural_person" />
+                    <span>Persona natural</span>
+                  </label>
+                  <label data-studio-responsible-option>
+                    <RadioGroupItem value="legal_entity" />
+                    <span>Entidad</span>
+                  </label>
+                </RadioGroup>
                 <FieldDescription>
-                  Si eliges persona natural, el responsable será el titular autenticado.
+                  Si eliges persona natural, tú quedarás como responsable.
                 </FieldDescription>
               </fieldset>
 
@@ -235,7 +244,7 @@ function SpaceForm({
             <Alert variant="info">
               <AlertTitle>Responsable natural</AlertTitle>
               <AlertDescription>
-                El titular autenticado quedará registrado como responsable de esta práctica.
+                Tu nombre quedará registrado como responsable de esta práctica.
               </AlertDescription>
             </Alert>
           )}
@@ -245,7 +254,11 @@ function SpaceForm({
 
         <div data-studio-form-actions>
           <Button type="submit" size="lg" disabled={!valid || submitting}>
-            {submitting ? 'Creando espacio…' : 'Crear mi espacio'}
+            {submitting
+              ? 'Creando…'
+              : mode === 'individual'
+                ? 'Crear mi práctica'
+                : 'Crear el espacio'}
           </Button>
           <Button type="button" variant="ghost" onClick={onBack} disabled={submitting}>
             Volver

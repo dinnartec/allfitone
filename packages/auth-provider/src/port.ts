@@ -22,8 +22,15 @@ export interface SessionTokens {
   expiresIn: number
 }
 
+/** Basic account-holder identity returned by the authentication provider. */
+export interface AuthenticatedIdentity {
+  givenName: string | null
+  familyName: string | null
+}
+
 export interface AuthResult {
   subject: ExternalSubject
+  identity: AuthenticatedIdentity
   tokens: SessionTokens
 }
 

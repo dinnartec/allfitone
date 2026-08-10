@@ -21,6 +21,15 @@ const body = Manrope({
 export const metadata: Metadata = {
   title: 'Allfit Studio',
   description: 'Gestión profesional para entrenadores, gimnasios y estudios.',
+  icons: {
+    icon: [
+      {
+        url: '/brand/allfit-one/favicon/allfit-one-favicon-cyan.svg',
+        type: 'image/svg+xml',
+      },
+    ],
+    shortcut: '/brand/allfit-one/favicon/allfit-one-favicon-cyan.svg',
+  },
   robots: {
     index: false,
     follow: false,

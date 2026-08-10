@@ -3,6 +3,13 @@
 import { Alert, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
 import { Badge } from '@allfitone/react/components/badge'
 import { Button } from '@allfitone/react/components/button'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@allfitone/react/components/select'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useState } from 'react'
 
@@ -88,20 +95,30 @@ export function OrganizationWorkspace({ organizationId }: { organizationId: stri
         </header>
 
         {memberships.length > 1 ? (
-          <label data-workspace-switcher>
-            <span>Cambiar de organización</span>
-            <select
-              data-studio-native-control
+          <div data-workspace-switcher>
+            <label htmlFor="organization-switcher">Cambiar de organización</label>
+            <Select
               value={current.organization_id}
-              onChange={(event) => router.push(`/organizations/${event.target.value}`)}
+              onValueChange={(value) => {
+                if (value !== null) router.push(`/organizations/${value}`)
+              }}
+              items={memberships.map((membership) => ({
+                label: membership.display_name,
+                value: membership.organization_id,
+              }))}
             >
-              {memberships.map((membership) => (
-                <option key={membership.membership_id} value={membership.organization_id}>
-                  {membership.display_name}
-                </option>
-              ))}
-            </select>
-          </label>
+              <SelectTrigger id="organization-switcher" data-studio-select-trigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent align="start">
+                {memberships.map((membership) => (
+                  <SelectItem key={membership.membership_id} value={membership.organization_id}>
+                    {membership.display_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         ) : null}
 
         <section data-workspace-status aria-labelledby="workspace-status-title">
@@ -117,14 +134,14 @@ export function OrganizationWorkspace({ organizationId }: { organizationId: stri
           </div>
           <div data-current>
             <span>03</span>
-            <p id="workspace-status-title">Workspace</p>
-            <strong>Activo</strong>
+            <p id="workspace-status-title">Listo</p>
+            <strong>Workspace activo</strong>
           </div>
         </section>
 
         <section data-next-steps>
           <div data-studio-panel-intro>
-            <p data-studio-eyebrow>Lo que viene</p>
+            <p data-studio-eyebrow>Siguientes pasos</p>
             <h2>La base está preparada.</h2>
             <p>Estos módulos se habilitarán en los siguientes cortes del producto.</p>
           </div>

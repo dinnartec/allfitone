@@ -9,7 +9,9 @@ import type {
   RegistrationStatus,
   SessionCipherContext,
   SessionTokenVault,
+  StoredSessionSecret,
   StoredAccessSession,
+  StudioAccountIdentity,
   StudioActor,
 } from '../domain/index.js'
 
@@ -29,8 +31,10 @@ export interface StudioSessionService {
   readSession(opaqueToken: string): Promise<{
     authenticated: true
     registration_status: RegistrationStatus
+    identity: { given_name: string | null; family_name: string | null }
   }>
   resolveActor(opaqueToken: string): Promise<StudioActor>
+  resolveAccountIdentity(opaqueToken: string): Promise<StudioAccountIdentity>
   logout(opaqueToken: string | undefined): Promise<string>
 }
 
@@ -82,21 +86,32 @@ export function createStudioSessionService(
         accountId: account.accountId,
         providerSessionId: verified.sessionId,
         tokenHash: dependencies.tokenVault.hashOpaqueToken(opaqueToken),
-        tokenCiphertext: dependencies.tokenVault.seal(result.tokens, context),
+        tokenCiphertext: dependencies.tokenVault.seal(
+          { tokens: result.tokens, identity: result.identity },
+          context,
+        ),
         accessTokenExpiresAt: expiresAt(result.tokens, now()),
       })
       return { opaqueToken }
     },
 
     async readSession(opaqueToken) {
-      const actor = await resolveActor(opaqueToken)
+      const context = await resolveAccountIdentity(opaqueToken)
       return {
         authenticated: true,
-        registration_status: actor.personId ? 'complete' : 'registration_incomplete',
+        registration_status: context.actor.personId ? 'complete' : 'registration_incomplete',
+        identity: {
+          given_name: context.identity.givenName,
+          family_name: context.identity.familyName,
+        },
       }
     },
 
-    resolveActor,
+    async resolveActor(opaqueToken) {
+      return (await resolveAccountIdentity(opaqueToken)).actor
+    },
+
+    resolveAccountIdentity,
 
     async logout(opaqueToken) {
       if (!opaqueToken) return dependencies.studioWebUrl
@@ -113,8 +128,8 @@ export function createStudioSessionService(
     },
   }
 
-  async function resolveActor(opaqueToken: string): Promise<StudioActor> {
-    const session = await authenticatedSession(opaqueToken, true)
+  async function resolveAccountIdentity(opaqueToken: string): Promise<StudioAccountIdentity> {
+    const { session, secret } = await authenticatedSession(opaqueToken, true)
     const registration = await dependencies.database.resolveRegistration(session.accountId)
     if (registration.personStatus === 'closed') {
       await dependencies.database.revokeSession(session.sessionId)
@@ -125,24 +140,27 @@ export function createStudioSessionService(
       throw new StudioSessionError('unauthenticated')
     }
     return {
-      accountId: session.accountId,
-      ...(registration.personId ? { personId: registration.personId } : {}),
+      actor: {
+        accountId: session.accountId,
+        ...(registration.personId ? { personId: registration.personId } : {}),
+      },
+      identity: secret.identity,
     }
   }
 
   async function authenticatedSession(
     opaqueToken: string,
     reloadAfterRace: boolean,
-  ): Promise<StoredAccessSession> {
+  ): Promise<{ session: StoredAccessSession; secret: StoredSessionSecret }> {
     const session = await dependencies.database.loadSession(
       dependencies.tokenVault.hashOpaqueToken(opaqueToken),
     )
     if (!session) throw new StudioSessionError('unauthenticated')
 
     const context = cipherContext(session.accountId, session.providerSessionId)
-    let tokens: SessionTokens
+    let secret: StoredSessionSecret
     try {
-      tokens = dependencies.tokenVault.open(session.tokenCiphertext, context)
+      secret = dependencies.tokenVault.open(session.tokenCiphertext, context)
     } catch {
       await dependencies.database.revokeSession(session.sessionId)
       throw new StudioSessionError('unauthenticated')
@@ -151,14 +169,14 @@ export function createStudioSessionService(
     if (session.accessTokenExpiresAt.getTime() <= now().getTime() + REFRESH_WINDOW_MS) {
       let refreshed: SessionTokens
       try {
-        refreshed = await dependencies.authProvider.refresh(tokens.refreshToken, 'studio')
+        refreshed = await dependencies.authProvider.refresh(secret.tokens.refreshToken, 'studio')
       } catch (error) {
         if (error instanceof AuthError && error.retryable) {
           if (session.accessTokenExpiresAt.getTime() <= now().getTime()) {
             throw new StudioSessionError('upstream-unavailable')
           }
-          await verify(tokens.accessToken, session)
-          return session
+          await verify(secret.tokens.accessToken, session)
+          return { session, secret }
         }
         await dependencies.database.revokeSession(session.sessionId)
         throw new StudioSessionError('unauthenticated')
@@ -168,18 +186,21 @@ export function createStudioSessionService(
       const rotated = await dependencies.database.rotateSession({
         sessionId: session.sessionId,
         expectedTokenVersion: session.tokenVersion,
-        tokenCiphertext: dependencies.tokenVault.seal(refreshed, context),
+        tokenCiphertext: dependencies.tokenVault.seal(
+          { tokens: refreshed, identity: secret.identity },
+          context,
+        ),
         accessTokenExpiresAt: expiresAt(refreshed, now()),
       })
       if (!rotated) {
         if (!reloadAfterRace) throw new StudioSessionError('upstream-unavailable')
         return authenticatedSession(opaqueToken, false)
       }
-      return session
+      return { session, secret: { tokens: refreshed, identity: secret.identity } }
     }
 
-    await verify(tokens.accessToken, session)
-    return session
+    await verify(secret.tokens.accessToken, session)
+    return { session, secret }
   }
 
   async function verify(accessToken: string, session: StoredAccessSession): Promise<void> {

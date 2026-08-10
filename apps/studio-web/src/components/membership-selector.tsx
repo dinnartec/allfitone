@@ -42,10 +42,8 @@ export function MembershipSelector({
 
 export function organizationTypeLabel(type: Membership['type_code']): string {
   return {
-    professional_practice: 'Práctica profesional',
+    professional_practice: 'Profesional independiente',
     gym: 'Gimnasio',
     studio: 'Estudio',
-    academy: 'Academia',
-    clinic: 'Clínica',
   }[type]
 }
