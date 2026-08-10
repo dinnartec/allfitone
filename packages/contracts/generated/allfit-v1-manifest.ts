@@ -13,6 +13,18 @@ export const allfitV1ContractManifest = {
     },
     {
       method: 'POST',
+      path: '/space/v1/auth/registrations',
+      operationId: 'startSpaceRegistration',
+      allfitOperation: 'OP-IDN-029',
+    },
+    {
+      method: 'POST',
+      path: '/space/v1/auth/registrations/verification',
+      operationId: 'verifySpaceRegistration',
+      allfitOperation: 'OP-IDN-030',
+    },
+    {
+      method: 'POST',
       path: '/space/v1/consents/{grantId}/revocation',
       operationId: 'revokeConsentGrant',
       allfitOperation: 'OP-PRV-005',

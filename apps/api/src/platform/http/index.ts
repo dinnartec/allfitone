@@ -24,6 +24,8 @@ export type ApiErrorCode =
   | 'account-closed'
   /** Authenticated request is not allowed to perform this action. */
   | 'forbidden'
+  /** The chosen password was refused: too short, or known to be breached. */
+  | 'weak-password'
   /** The command conflicts with durable state or a prior idempotent request. */
   | 'conflict'
   /** A visible resource does not exist. */
@@ -39,6 +41,7 @@ const STATUS: Record<ApiErrorCode, ContentfulStatusCode> = {
   'registration-incomplete': 403,
   'account-closed': 403,
   forbidden: 403,
+  'weak-password': 422,
   conflict: 409,
   'not-found': 404,
   'validation-failed': 422,

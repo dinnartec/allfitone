@@ -274,6 +274,11 @@ function fakeClient(overrides: Partial<WorkOSUserManagement> = {}) {
     authenticateWithPassword: async (o) => record('authenticateWithPassword', o, authResponse),
     authenticateWithRefreshToken: async (o) =>
       record('authenticateWithRefreshToken', o, authResponse),
+    createUser: async (o) => record('createUser', o, { id: 'user_01NEW' }),
+    listUsers: async (o) =>
+      record('listUsers', o, { data: [{ id: 'user_01FAKE', emailVerified: false }] }),
+    sendVerificationEmail: async (o) => record('sendVerificationEmail', o, {}),
+    verifyEmail: async (o) => record('verifyEmail', o, {}),
     updateUser: async (o) => record('updateUser', o, {}),
     listSessions: async (id) =>
       record('listSessions', id, { data: [{ id: 's_1' }, { id: 's_2' }] }),
@@ -479,5 +484,180 @@ describe('getLogoutUrl', () => {
       method: 'getLogoutUrl',
       args: { sessionId: 'session_01XYZ', returnTo: 'https://studio.allfit.one' },
     })
+  })
+})
+
+/**
+ * The provider's actual rejection for a duplicate address, captured from the
+ * live API rather than imagined.
+ *
+ * It is a plain 400 whose message says only "Could not create user." — the
+ * reason is nested. An earlier version of this test invented a 422 with the word
+ * "email" in the message, which the adapter happened to classify correctly, so
+ * the test passed while the real thing answered 401. A double more convenient
+ * than the system it stands in for is a test that lies.
+ */
+function throwEmailNotAvailable(): never {
+  throw Object.assign(new Error('Could not create user.'), {
+    status: 400,
+    code: 'user_creation_error',
+    errors: [{ code: 'email_not_available', message: 'This email is not available.' }],
+  })
+}
+
+describe('register', () => {
+  test('creates the credential and sends the code', async () => {
+    const { provider, calls } = providerWith()
+
+    const outcome = await provider.register({ email: 'a@b.co', password: 'a-long-password' })
+
+    expect(outcome.created).toBe(true)
+    // Creating a user opens a verification but does not email it; the send is
+    // what dispatches a code.
+    expect(calls.map((c) => c.method)).toEqual(['createUser', 'sendVerificationEmail'])
+    expect(calls.at(1)?.args).toEqual({ userId: 'user_01NEW' })
+  })
+
+  test('an address already in use is not an error', async () => {
+    // The whole point of HU-SP-001 criterion 3. The provider rejects the second
+    // registration; the port must not let that rejection reach the caller,
+    // because a caller with something to catch has something to disclose.
+    const { provider } = providerWith({ createUser: async () => throwEmailNotAvailable() })
+
+    const outcome = await provider.register({ email: 'a@b.co', password: 'a-long-password' })
+
+    expect(outcome.created).toBe(false)
+  })
+
+  test('a taken but unverified address gets its code sent again', async () => {
+    // What the resend button relies on. Returning early here is why pressing it
+    // appeared to work and delivered nothing.
+    const { provider, calls } = providerWith({ createUser: async () => throwEmailNotAvailable() })
+
+    const outcome = await provider.register({ email: 'a@b.co', password: 'a-long-password' })
+
+    expect(outcome.resent).toBe(true)
+    expect(calls.map((c) => c.method)).toContain('sendVerificationEmail')
+  })
+
+  test('a verified address is not mailed again', async () => {
+    // There is no code to resend, and sending one would be a way to pester
+    // somebody who already finished.
+    const { provider, calls } = providerWith({
+      createUser: async () => throwEmailNotAvailable(),
+      listUsers: async () => ({ data: [{ id: 'user_01FAKE', emailVerified: true }] }),
+    })
+
+    const outcome = await provider.register({ email: 'a@b.co', password: 'a-long-password' })
+
+    expect(outcome.resent).toBe(false)
+    expect(calls.map((c) => c.method)).not.toContain('sendVerificationEmail')
+  })
+
+  test('a taken address and a fresh one are indistinguishable to a caller that ignores `created`', async () => {
+    // Written this way on purpose: it asserts the property the endpoint above
+    // relies on, rather than the branch this adapter happens to take.
+    const fresh = providerWith()
+    const taken = providerWith({ createUser: async () => throwEmailNotAvailable() })
+
+    const results = await Promise.all([
+      fresh.provider.register({ email: 'new@b.co', password: 'a-long-password' }).then(
+        () => 'resolved',
+        () => 'rejected',
+      ),
+      taken.provider.register({ email: 'old@b.co', password: 'a-long-password' }).then(
+        () => 'resolved',
+        () => 'rejected',
+      ),
+    ])
+
+    expect(results[0]).toBe(results[1])
+  })
+
+  test("a refused API key is our fault, not the person's", async () => {
+    // These calls carry no person credentials, so a 401 can only mean our key
+    // was rejected. Reporting it as bad credentials tells someone to check an
+    // email and password that were never the problem — which is exactly what
+    // happened when a key silently stopped working.
+    const { provider } = providerWith({
+      createUser: async () => {
+        throw Object.assign(new Error('Could not authorize the request.'), { status: 401 })
+      },
+    })
+
+    await expect(
+      provider.register({ email: 'a@b.co', password: 'a-long-password' }),
+    ).rejects.toMatchObject({ code: 'provider_unavailable', retryable: true })
+  })
+
+  test('a provider outage still fails, because retrying is the right answer', async () => {
+    const { provider } = providerWith({
+      createUser: async () => {
+        throw Object.assign(new Error('gateway'), { status: 503 })
+      },
+    })
+
+    await expect(
+      provider.register({ email: 'a@b.co', password: 'a-long-password' }),
+    ).rejects.toMatchObject({ code: 'provider_unavailable', retryable: true })
+  })
+})
+
+describe('verifyEmail', () => {
+  const CREDS = { email: 'a@b.co', password: 'a-long-password' }
+
+  test('marks the address verified, then signs in', async () => {
+    const { provider, calls } = providerWith()
+
+    const result = await provider.verifyEmail(CREDS, '481920', 'space')
+
+    expect(result.subject).toBe('user_01FAKE')
+    expect(calls.map((c) => c.method)).toEqual([
+      'listUsers',
+      'verifyEmail',
+      'authenticateWithPassword',
+    ])
+  })
+
+  test('never mints a pending token, which emailing the code would invalidate', async () => {
+    // The regression this guards shipped twice. The single call that redeems a
+    // code and returns a session needs a token that `sendVerificationEmail`
+    // invalidates, so the two cannot both happen.
+    const { provider, calls } = providerWith()
+
+    await provider.verifyEmail(CREDS, '481920', 'space')
+
+    expect(calls.map((c) => c.method)).not.toContain('authenticateWithEmailVerification')
+  })
+
+  test('an unknown address is rejected exactly like a wrong code', async () => {
+    const unknown = providerWith({ listUsers: async () => ({ data: [] }) })
+    const wrongCode = providerWith({
+      // The provider's actual rejection, captured from the live API. Note the
+      // word "email" in both the code and the message: read loosely, a mistyped
+      // code looks like a bad address.
+      verifyEmail: async () => {
+        throw Object.assign(new Error('Email verification code is incorrect.'), {
+          status: 400,
+          code: 'email_verification_code_incorrect',
+        })
+      },
+    })
+
+    const [a, b] = await Promise.all([
+      unknown.provider.verifyEmail(CREDS, '481920', 'space').catch((e) => e.code),
+      wrongCode.provider.verifyEmail(CREDS, '000000', 'space').catch((e) => e.code),
+    ])
+
+    expect(a).toBe('invalid_credentials')
+    expect(a).toBe(b)
+  })
+
+  test('uses the surface client id, so a Space code cannot mint a Studio session', async () => {
+    const { provider, calls } = providerWith()
+
+    await provider.verifyEmail(CREDS, '481920', 'space')
+
+    expect(calls.at(-1)?.args).toMatchObject({ clientId: CREDENTIALS.space.clientId })
   })
 })

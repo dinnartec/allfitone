@@ -129,7 +129,11 @@ export default function SignIn() {
       {/* Anchored to the bottom rather than trailing the form. Inside the
           centred block its own margin would push the fields up instead of
           moving the link down. */}
-      <Pressable accessibilityRole="link" style={styles.link}>
+      <Pressable
+        accessibilityRole="link"
+        onPress={() => router.replace('/create-account')}
+        style={styles.link}
+      >
         <Text role="body" size="sm" color="secondary" align="center">
           ¿No tienes cuenta?{' '}
           <Text role="control" size="sm" color="accent">
