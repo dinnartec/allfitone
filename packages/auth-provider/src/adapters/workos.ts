@@ -34,6 +34,7 @@ import type {
   AuthResult,
   ExternalSubject,
   PasswordCredentials,
+  RegistrationOutcome,
   SessionTokens,
   Surface,
   VerifiedToken,
@@ -214,6 +215,81 @@ export function createWorkOSAuthProvider(config: WorkOSConfig): AuthProvider {
       return { subject, sessionId, surface }
     },
 
+    async register(credentials: PasswordCredentials): Promise<RegistrationOutcome> {
+      // Not surface-scoped: creating a credential acts on the directory, which
+      // every Application in the environment shares.
+      const c = requireClient(ADMIN_SURFACE)
+
+      let userId: string
+      try {
+        const user = await c.userManagement.createUser(credentials)
+        userId = user.id
+      } catch (cause) {
+        const error = asAdminFailure(cause)
+        // An address already in use is NOT an error to this caller. The provider
+        // rejects it, and `translate` has flattened that rejection into the same
+        // code a malformed address produces, so the two cannot be told apart
+        // here either. Reporting "not created" lets the caller answer exactly as
+        // it would on success, which is what makes the endpoint above
+        // indistinguishable in both cases.
+        if (error.code !== 'invalid_email') throw error
+        // The address already has an account. Not an error to this caller — see
+        // above — but not the end of the attempt either: if it is still
+        // unverified, this is someone asking for their code again, and doing
+        // nothing is why the resend button appeared to work and never delivered.
+        return { created: false, resent: await resendIfUnverified(c, credentials.email) }
+      }
+
+      try {
+        // Creating a user opens a verification but does not email it. This is
+        // the call that actually sends a code.
+        await c.userManagement.sendVerificationEmail({ userId })
+      } catch (cause) {
+        // The credential exists but no code went out. Failing is right: the
+        // person would otherwise wait for an email that never arrives, and
+        // retrying is safe because the second attempt lands on the
+        // already-in-use path above.
+        throw asAdminFailure(cause)
+      }
+
+      return { created: true }
+    },
+
+    async verifyEmail(
+      credentials: PasswordCredentials,
+      code: string,
+      surface: Surface,
+    ): Promise<AuthResult> {
+      const c = requireClient(ADMIN_SURFACE)
+
+      // The provider offers no lookup by address other than a filtered list.
+      let userId: string
+      try {
+        const found = await c.userManagement.listUsers({ email: credentials.email })
+        const user = found.data[0]
+        // No such address. Reported as bad credentials so it is answered
+        // identically to a wrong code, which is what stops this from becoming a
+        // way to ask whether an address is registered.
+        if (!user) throw new AuthError('invalid_credentials', 'no user for address')
+        userId = user.id
+      } catch (cause) {
+        throw cause instanceof AuthError ? cause : asAdminFailure(cause)
+      }
+
+      try {
+        await c.userManagement.verifyEmail({ code, userId })
+      } catch (cause) {
+        throw translate(cause)
+      }
+
+      // Verified, so an ordinary sign-in now succeeds and yields the session.
+      // The single call that does both at once cannot be used here: it needs a
+      // pending token that emailing the code invalidates.
+      return authenticate(surface, (client, clientId) =>
+        client.userManagement.authenticateWithPassword({ ...credentials, clientId }),
+      )
+    },
+
     async authenticateWithPassword(
       credentials: PasswordCredentials,
       surface: Surface,
@@ -298,7 +374,35 @@ function translate(cause: unknown): AuthError {
   // in platform/http, which only forwards what the caller passes it.
   const trace = `provider status ${status ?? 'none'}: ${messageOf(cause).slice(0, 200)}`
 
+  // Checked before status, because the provider reports an address already in
+  // use as a plain 400 whose top-level message says only "Could not create
+  // user." The reason lives in a nested `errors[].code`, and reading only the
+  // status or the message lands this in the default branch — which is how a
+  // duplicate registration answered 401 while a fresh one answered 202, in
+  // direct violation of HU-SP-001 criterion 3. Verified against the live API.
+  const codes = providerErrorCodes(cause)
+  // Checked before the address rules, because the provider names a wrong
+  // verification code `email_verification_code_incorrect` and reports it as
+  // "Email verification code is incorrect." Both contain the word this file
+  // otherwise treats as meaning "the address is unusable", so without this a
+  // mistyped code came back as a malformed email and answered 400 instead of
+  // 401 — telling the person to fix an address that was never wrong.
+  if (codes.some((code) => code.includes('verification_code'))) {
+    return new AuthError('invalid_credentials', trace)
+  }
+  if (codes.some((code) => code.includes('email'))) {
+    return new AuthError('invalid_email', trace)
+  }
+  // Also a 400 with the reason nested. Distinguished from the address case
+  // because it is the one rejection worth describing to the person: it is about
+  // the secret they chose, and says nothing about who else has an account.
+  if (codes.some((code) => code.includes('password'))) {
+    return new AuthError('weak_password', trace)
+  }
   if (status === 401 || status === 403 || text.includes('invalid credential')) {
+    return new AuthError('invalid_credentials', trace)
+  }
+  if (text.includes('verification code')) {
     return new AuthError('invalid_credentials', trace)
   }
   if (status === 422 || status === 409 || text.includes('email')) {
@@ -315,11 +419,90 @@ function translate(cause: unknown): AuthError {
   return new AuthError('invalid_credentials', trace)
 }
 
+/**
+ * Sends the code again for an address that exists but is not yet verified.
+ *
+ * Separate from registration because the provider has no idempotent "register
+ * or resend": creating the user is what fails, and this is what the failure
+ * should lead to. A verified address gets nothing, which is correct — there is
+ * no code to resend and mailing one would be a way to pester an account holder.
+ *
+ * Failures are swallowed. The caller's response must not vary with what happened
+ * here, and a person who receives nothing will press the button again.
+ */
+async function resendIfUnverified(client: WorkOSClient, email: string): Promise<boolean> {
+  try {
+    const found = await client.userManagement.listUsers({ email })
+    const user = found.data[0]
+    if (!user || user.emailVerified) return false
+    await client.userManagement.sendVerificationEmail({ userId: user.id })
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Translation for calls that carry no person credentials.
+ *
+ * `createUser`, `listUsers` and `sendVerificationEmail` authenticate with our
+ * API key alone. A 401 or 403 there can only mean **our** key was refused, and
+ * routing it through the ordinary path turns a server misconfiguration into
+ * "check your email and password" — which is what it did, for the whole time an
+ * expired key went unnoticed.
+ *
+ * Reported as unavailable so the surface answers 503. Not strictly accurate —
+ * the provider answered fine — but it puts the failure on our side of the line,
+ * which is where it belongs and what a person can act on.
+ */
+function asAdminFailure(cause: unknown): AuthError {
+  const error = translate(cause)
+  if (error.code !== 'invalid_credentials') return error
+  const status = statusOf(cause)
+  if (status !== 401 && status !== 403) return error
+  return new AuthError('provider_unavailable', `admin call refused: ${error.detail ?? 'no detail'}`)
+}
+
 function statusOf(cause: unknown): number | undefined {
   if (typeof cause !== 'object' || cause === null) return undefined
   const candidate = cause as { status?: unknown; statusCode?: unknown }
   const value = candidate.status ?? candidate.statusCode
   return typeof value === 'number' ? value : undefined
+}
+
+/**
+ * Every error code the provider attached, top level and nested.
+ *
+ * The SDK surfaces its response body on the thrown error, and the useful code is
+ * usually not the outer one: a duplicate address arrives as
+ * `user_creation_error` wrapping `email_not_available`. Collecting both means
+ * the caller matches on the specific reason without knowing which level it
+ * arrived at.
+ */
+function providerErrorCodes(cause: unknown): string[] {
+  if (typeof cause !== 'object' || cause === null) return []
+  const candidate = cause as {
+    code?: unknown
+    rawData?: { code?: unknown; errors?: unknown }
+    errors?: unknown
+  }
+
+  const codes: string[] = []
+  const push = (value: unknown) => {
+    if (typeof value === 'string' && value.length > 0) codes.push(value.toLowerCase())
+  }
+
+  push(candidate.code)
+  push(candidate.rawData?.code)
+
+  for (const list of [candidate.errors, candidate.rawData?.errors]) {
+    if (!Array.isArray(list)) continue
+    for (const entry of list) {
+      if (typeof entry === 'object' && entry !== null) push((entry as { code?: unknown }).code)
+    }
+  }
+
+  return codes
 }
 
 function messageOf(cause: unknown): string {

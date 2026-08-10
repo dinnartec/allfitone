@@ -73,6 +73,28 @@ export interface LogoutRequest {
   returnTo: string
 }
 
+/**
+ * What a registration attempt tells the caller. Deliberately nothing.
+ *
+ * There is no "created" flag and no identifier, because the endpoint above this
+ * must answer identically whether or not the address already had an account.
+ * Returning anything the caller could branch on would push the decision one
+ * layer up and eventually leak.
+ */
+export interface RegistrationOutcome {
+  /**
+   * True when a credential was created and a code sent. **For server-side
+   * metrics and logs only** — a caller that varies its response on this
+   * reintroduces exactly the disclosure the port exists to prevent.
+   */
+  readonly created: boolean
+  /**
+   * True when the address already existed, was unverified, and a fresh code went
+   * out. Server-side signal only, on the same terms as `created`.
+   */
+  readonly resent?: boolean
+}
+
 export interface AuthProvider {
   /**
    * Where to send the person to authenticate. Used by the hosted flow.
@@ -81,6 +103,36 @@ export interface AuthProvider {
    * provider exists.
    */
   getAuthorizationUrl(request: AuthorizationRequest): string
+
+  /**
+   * Creates a credential and sends a verification code.
+   *
+   * Never throws for an address that already has an account: that case is
+   * indistinguishable from success by design, and a distinct error here would
+   * only move the disclosure into a `catch`. Malformed addresses and provider
+   * outages still throw.
+   *
+   * Creates no person and no domain record. The account is a credential until
+   * onboarding completes.
+   */
+  register(credentials: PasswordCredentials): Promise<RegistrationOutcome>
+
+  /**
+   * Confirms possession of the address, then authenticates.
+   *
+   * Two provider calls rather than one, because the only call that redeems a
+   * code and returns a session at once needs a token that is invalidated the
+   * moment the code is emailed — the two are mutually exclusive. Marking the
+   * address verified and then signing in normally is the flow that works.
+   *
+   * Takes the password because the second half is an ordinary sign-in. Returns
+   * tokens because the person proved control of the mailbox, so asking again
+   * for the password they typed a minute earlier buys nothing.
+   *
+   * Throws `invalid_credentials` for a wrong code, a wrong password and an
+   * unknown address alike.
+   */
+  verifyEmail(credentials: PasswordCredentials, code: string, surface: Surface): Promise<AuthResult>
 
   /** Hosted logout URL for exactly one provider session. */
   getLogoutUrl(request: LogoutRequest): string
