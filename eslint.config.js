@@ -101,13 +101,19 @@ const noOtherApps = (self) => ({
 // Listed explicitly, like the apps, so a domain can still import its own
 // internals. Adding a domain means adding it here — and until it is added, its
 // internals are reachable, so the list is part of creating a domain.
-const DOMAINS = ['identity', 'organizations']
+const DOMAINS = ['catalog', 'identity', 'organizations']
 
 // Brace expansion is NOT supported here — a `{a,b}` pattern silently matches
 // nothing, which is the worst failure mode for a rule like this. Expanded.
 const DOMAIN_LAYERS = ['domain', 'application', 'infrastructure', 'handlers']
 
-const internalsOf = (domain) => DOMAIN_LAYERS.map((layer) => `**/domains/${domain}/${layer}/**`)
+const internalsOf = (domain) =>
+  DOMAIN_LAYERS.flatMap((layer) => [
+    `**/domains/${domain}/${layer}/**`,
+    `../${domain}/${layer}/**`,
+    `../../${domain}/${layer}/**`,
+    `../../../${domain}/${layer}/**`,
+  ])
 
 const noOtherDomainInternals = (self) => ({
   group: DOMAINS.filter((d) => d !== self).flatMap(internalsOf),
@@ -238,18 +244,18 @@ export default tseslint.config(
       ),
     },
   })),
-  {
-    files: ['apps/api/src/domains/*/handlers/**/*.ts'],
+  ...DOMAINS.map((domain) => ({
+    files: [`apps/api/src/domains/${domain}/handlers/**/*.ts`],
     rules: {
       'no-restricted-imports': restrict(
         NO_PROVIDER_SDK,
         NO_QUEUE_SDK,
         noOtherApps('api'),
-        noOtherDomainInternals('identity'),
+        noOtherDomainInternals(domain),
         NO_DB_IN_HANDLERS,
       ),
     },
-  },
+  })),
 
   // Build tooling configuration: CommonJS, runs in Node, not part of the app
   // graph. `**/` is required — a bare `*.config.js` matches only the root, so

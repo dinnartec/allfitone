@@ -138,8 +138,8 @@ function corsPolicy(origin: string) {
   return cors({
     origin,
     credentials: true,
-    allowMethods: ['POST', 'OPTIONS'],
-    allowHeaders: ['Content-Type', 'Idempotency-Key', 'Command-Id'],
+    allowMethods: ['GET', 'POST', 'PUT', 'OPTIONS'],
+    allowHeaders: ['Content-Type', 'Idempotency-Key', 'Command-Id', 'If-None-Match'],
   })
 }
 

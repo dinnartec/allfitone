@@ -51,7 +51,7 @@ export function OrganizationWorkspace({ organizationId }: { organizationId: stri
   if (state.kind === 'loading') return <LoadingStage label="Abriendo tu workspace…" />
   if (state.kind === 'forbidden') {
     return (
-      <StudioFrame step="ready">
+      <StudioFrame step="ready" showProfile>
         <div data-studio-error-stage>
           <Alert variant="warning">
             <AlertTitle>Este espacio no está disponible</AlertTitle>
@@ -66,7 +66,7 @@ export function OrganizationWorkspace({ organizationId }: { organizationId: stri
   }
   if (state.kind === 'error') {
     return (
-      <StudioFrame step="ready">
+      <StudioFrame step="ready" showProfile>
         <div data-studio-error-stage>
           <Alert variant="danger" live="assertive">
             <AlertTitle>No pudimos cargar el espacio</AlertTitle>
@@ -80,7 +80,7 @@ export function OrganizationWorkspace({ organizationId }: { organizationId: stri
 
   const { current, memberships } = state
   return (
-    <StudioFrame step="ready">
+    <StudioFrame step="ready" showProfile>
       <article data-workspace>
         <header data-workspace-heading>
           <div>
@@ -149,21 +149,13 @@ export function OrganizationWorkspace({ organizationId }: { organizationId: stri
             <li>
               <span>01</span>
               <div>
-                <strong>Completar perfil profesional</strong>
-                <p>Especialidades, presentación y señales profesionales.</p>
-              </div>
-              <small>Próximamente</small>
-            </li>
-            <li>
-              <span>02</span>
-              <div>
                 <strong>Invitar al equipo</strong>
                 <p>Membresías, roles y aceptación de invitaciones.</p>
               </div>
               <small>Próximamente</small>
             </li>
             <li>
-              <span>03</span>
+              <span>02</span>
               <div>
                 <strong>Configurar la operación</strong>
                 <p>Disciplinas, sedes y preferencias del espacio.</p>

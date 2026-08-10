@@ -19,6 +19,8 @@ tags:
     description: Hosted authentication and opaque browser sessions for Allfit Studio.
   - name: Studio Organizations
     description: Studio entry context, organization creation and membership resolution.
+  - name: Studio Catalog
+    description: Governed professional catalogues available to active Studio people.
   - name: Space Identity
     description: >-
       Headless account creation and authentication for Allfit Space. The app owns
@@ -319,6 +321,280 @@ paths:
               $ref: '#/components/headers/SetCookie'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /studio/v1/me:
+    get:
+      tags: [Studio Identity]
+      operationId: getMyStudioProfessionalProfile
+      x-allfit-operation: OP-IDN-017
+      x-allfit-cache: private-no-store
+      summary: Get the current person's consolidated professional profile
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Personal professional profile, credentials, and active and terminated membership history
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/PrivateNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudioMe'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/RegistrationIncomplete'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /studio/v1/me/professional-profile:
+    put:
+      tags: [Studio Identity]
+      operationId: putMyStudioProfessionalProfile
+      x-allfit-operation: OP-IDN-010
+      x-allfit-cache: no-store
+      summary: Create or replace the current person's professional profile
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProfessionalProfilePut'
+      responses:
+        '200':
+          description: Professional profile created, updated or replayed
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfessionalProfile'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/RegistrationIncomplete'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /studio/v1/me/professional-credentials:
+    post:
+      tags: [Studio Identity]
+      operationId: declareMyStudioProfessionalCredential
+      x-allfit-operation: OP-IDN-029
+      x-allfit-cache: no-store
+      summary: Declare a professional credential without verifying it
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProfessionalCredentialWrite'
+      responses:
+        '201':
+          description: Professional credential declared or replayed
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfessionalCredential'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/RegistrationIncomplete'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /studio/v1/me/professional-credentials/{credentialId}/revisions:
+    post:
+      tags: [Studio Identity]
+      operationId: reviseMyStudioProfessionalCredential
+      x-allfit-operation: OP-IDN-030
+      x-allfit-cache: no-store
+      summary: Replace an active professional credential with a new revision
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CredentialId'
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProfessionalCredentialWrite'
+      responses:
+        '201':
+          description: Successor credential created and prior version retired atomically
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfessionalCredential'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/RegistrationIncomplete'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /studio/v1/me/professional-credentials/{credentialId}/retirement:
+    post:
+      tags: [Studio Identity]
+      operationId: retireMyStudioProfessionalCredential
+      x-allfit-operation: OP-IDN-031
+      x-allfit-cache: no-store
+      summary: Retire an active professional credential
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CredentialId'
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      responses:
+        '200':
+          description: Credential retired or replayed
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfessionalCredential'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/RegistrationIncomplete'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /studio/v1/professional-specialties:
+    get:
+      tags: [Studio Catalog]
+      operationId: listStudioProfessionalSpecialties
+      x-allfit-operation: OP-CAT-013
+      x-allfit-cache: private-revalidate
+      summary: List published professional specialties in governed order
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: Published professional specialty catalogue
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/PrivateRevalidate'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfessionalSpecialtyList'
+        '304':
+          description: Catalogue has not changed
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/PrivateRevalidate'
+            ETag:
+              $ref: '#/components/headers/ETag'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/RegistrationIncomplete'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /studio/v1/professional-credential-types:
+    get:
+      tags: [Studio Catalog]
+      operationId: listStudioProfessionalCredentialTypes
+      x-allfit-operation: OP-CAT-014
+      x-allfit-cache: private-revalidate
+      summary: List published professional credential types in governed order
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: Published professional credential type catalogue
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/PrivateRevalidate'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfessionalCredentialTypeList'
+        '304':
+          description: Catalogue has not changed
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/PrivateRevalidate'
+            ETag:
+              $ref: '#/components/headers/ETag'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/RegistrationIncomplete'
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
 
@@ -1349,6 +1625,19 @@ components:
       required: true
       schema:
         $ref: '#/components/schemas/UuidV7'
+    CredentialId:
+      name: credentialId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/UuidV7'
+    Origin:
+      name: Origin
+      in: header
+      required: true
+      schema:
+        type: string
+        format: uri
     OrganizationId:
       name: organizationId
       in: path
@@ -1581,6 +1870,20 @@ components:
           example:
             type: https://errors.allfit.invalid/account-closed
             title: The account is closed
+            status: 403
+            request_id: 01JEXAMPLE0000000000000000
+    RegistrationIncomplete:
+      description: The authenticated Studio account has not completed registration
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/PrivateNoStore'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: https://errors.allfit.invalid/registration-incomplete
+            title: Registration must be completed first
             status: 403
             request_id: 01JEXAMPLE0000000000000000
     TooManyRequests:
@@ -2014,6 +2317,7 @@ components:
           $ref: '#/components/schemas/OrganizationTypeCode'
         status:
           type: string
+          description: Current or final state of the person's membership.
           enum: [active, terminated]
         joined_at:
           type: string
@@ -2021,8 +2325,10 @@ components:
         ended_at:
           type: [string, 'null']
           format: date-time
+          description: Membership termination time; null while the membership is active.
         roles:
           type: array
+          description: Current roles for an active membership, or roles effective at termination for history.
           uniqueItems: true
           items:
             type: string
@@ -2034,6 +2340,226 @@ components:
       properties:
         items:
           type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/StudioMembership'
+    ProfessionalCatalogItem:
+      type: object
+      additionalProperties: false
+      required: [code, name, description]
+      properties:
+        code:
+          type: string
+          pattern: '^[a-z][a-z0-9_]{1,63}$'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        description:
+          type: [string, 'null']
+          minLength: 1
+          maxLength: 500
+    ProfessionalSpecialtyList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/ProfessionalCatalogItem'
+    ProfessionalCredentialTypeList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/ProfessionalCatalogItem'
+    ProfessionalProfilePut:
+      type: object
+      additionalProperties: false
+      required: [headline, bio, practice_started_year, specialty_codes]
+      properties:
+        headline:
+          type: string
+          minLength: 1
+          maxLength: 120
+        bio:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        practice_started_year:
+          type: integer
+          minimum: 1900
+        specialty_codes:
+          type: array
+          minItems: 1
+          maxItems: 50
+          uniqueItems: true
+          items:
+            type: string
+            pattern: '^[a-z][a-z0-9_]{1,63}$'
+    ProfessionalCredentialWrite:
+      type: object
+      additionalProperties: false
+      required: [credential_type_code, issuer, name]
+      properties:
+        credential_type_code:
+          type: string
+          pattern: '^[a-z][a-z0-9_]{1,63}$'
+        issuer:
+          type: string
+          minLength: 1
+          maxLength: 200
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        identifier:
+          type: [string, 'null']
+          minLength: 1
+          maxLength: 160
+        issued_on:
+          type: [string, 'null']
+          format: date
+        expires_on:
+          type: [string, 'null']
+          format: date
+        verification_url:
+          type: [string, 'null']
+          format: uri
+          pattern: '^https://'
+          maxLength: 2048
+    ProfessionalCredentialVerification:
+      type: object
+      additionalProperties: false
+      required: [state, valid_from, valid_to, effective]
+      properties:
+        state:
+          type: string
+          enum: [unverified, verified, expired, rejected, unverifiable, revoked]
+        valid_from:
+          type: [string, 'null']
+          format: date-time
+        valid_to:
+          type: [string, 'null']
+          format: date-time
+        effective:
+          type: boolean
+    ProfessionalCredential:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - credential_type_code
+        - credential_type_name
+        - issuer
+        - name
+        - identifier
+        - issued_on
+        - expires_on
+        - verification_url
+        - status
+        - supersedes_credential_id
+        - created_at
+        - retired_at
+        - verification
+      properties:
+        id:
+          $ref: '#/components/schemas/UuidV7'
+        credential_type_code:
+          type: string
+        credential_type_name:
+          type: string
+        issuer:
+          type: string
+        name:
+          type: string
+        identifier:
+          type: [string, 'null']
+        issued_on:
+          type: [string, 'null']
+          format: date
+        expires_on:
+          type: [string, 'null']
+          format: date
+        verification_url:
+          type: [string, 'null']
+          format: uri
+        status:
+          type: string
+          enum: [active, retired]
+        supersedes_credential_id:
+          oneOf:
+            - $ref: '#/components/schemas/UuidV7'
+            - type: 'null'
+        created_at:
+          type: string
+          format: date-time
+        retired_at:
+          type: [string, 'null']
+          format: date-time
+        verification:
+          $ref: '#/components/schemas/ProfessionalCredentialVerification'
+    ProfessionalProfile:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - headline
+        - bio
+        - practice_started_year
+        - experience_years
+        - specialties
+        - credentials
+        - created_at
+        - updated_at
+      properties:
+        id:
+          $ref: '#/components/schemas/UuidV7'
+        headline:
+          type: string
+        bio:
+          type: string
+        practice_started_year:
+          type: integer
+          minimum: 1900
+        experience_years:
+          type: integer
+          minimum: 0
+        specialties:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/ProfessionalCatalogItem'
+        credentials:
+          type: array
+          maxItems: 200
+          items:
+            $ref: '#/components/schemas/ProfessionalCredential'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    StudioMe:
+      type: object
+      additionalProperties: false
+      required: [profile, memberships]
+      properties:
+        profile:
+          oneOf:
+            - $ref: '#/components/schemas/ProfessionalProfile'
+            - type: 'null'
+        memberships:
+          type: array
+          description: Personal active memberships followed by terminated membership history.
           maxItems: 100
           items:
             $ref: '#/components/schemas/StudioMembership'
