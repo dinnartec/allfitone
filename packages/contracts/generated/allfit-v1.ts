@@ -4,6 +4,60 @@
  */
 
 export interface paths {
+  '/space/v1/auth/registrations': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Create an account and send an email verification code
+     * @description Creates the credential and nothing else. No person, no Fitness ID, no row in our database: HU-SP-001 criterion 4 makes activation a later step, and HU-SP-007 forbids storing anything fitness-related before adult eligibility is established.
+     *
+     *     **The response never reveals whether the email already has an account.** Success and "already registered" are indistinguishable — same status, same body shape, same expiry. The provider distinguishes them and the adapter normalizes that away, because propagating it would turn this endpoint into an oracle for which addresses are registered. That is HU-SP-001 criterion 3, and it is the reason there is no 409 here.
+     *
+     *     Nothing is stored on our side, so there is no handle to return and no state to expire.
+     *
+     *     **No `Idempotency-Key`, deliberately.** Replaying a key means storing the first result and returning it again, which contradicts storing nothing. Accepting the header without that store would be decoration. A retry therefore sends a second code, which is a cost carried by rate limiting rather than by a key an unauthenticated caller chooses — a per-key row written on an anonymous endpoint is itself a way to fill our storage.
+     */
+    post: operations['startSpaceRegistration']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/auth/registrations/verification': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Verify the email code and issue the first session
+     * @description Confirms the person controls the address, then returns tokens so they are not asked for the password they typed moments ago. The assurance is the same one a password reset relies on: possession of the mailbox.
+     *
+     *     Still creates nothing in our database. The `ACCESS_ACCOUNT` is derived on the first authenticated Space operation, which is `OP-IDN-001`.
+     *
+     *     Marks the address verified and then signs in, which is two provider calls. The one call that redeems a code and returns a session at once needs a token that emailing the code invalidates, so the two are mutually exclusive.
+     *
+     *     The password is sent because the second half is an ordinary sign-in, not because it is a second factor. The response is identical whether the code is wrong, the password wrong, or the address unknown.
+     *
+     *     Rate limiting is mandatory here: a six-digit code is brute-forceable in minutes otherwise.
+     */
+    post: operations['verifySpaceRegistration']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/studio/v1/auth/start': {
     parameters: {
       query?: never
@@ -490,6 +544,41 @@ export interface paths {
 export type webhooks = Record<string, never>
 export interface components {
   schemas: {
+    SpaceRegistrationCreate: {
+      /**
+       * Format: email
+       * @description Becomes both the sign-in email and, once a person exists, the contact email. They are the same datum by DT-016 and never diverge.
+       */
+      email: string
+      /** @description At least eight characters, with a lowercase letter, an uppercase letter and a digit. */
+      password: string
+    }
+    SpaceRegistrationAccepted: {
+      /**
+       * Format: date-time
+       * @description When the verification code stops being accepted.
+       */
+      expiresAt: string
+    }
+    SpaceRegistrationVerify: {
+      /**
+       * Format: email
+       * @description The address the code was sent to.
+       */
+      email: string
+      /** @description The same password used to register. Composition is not re-checked: the credential already exists, and rejecting it here would lock out an account created under an earlier policy. */
+      password: string
+      /** @description The six-digit code sent to the address. */
+      code: string
+    }
+    SpaceSessionTokens: {
+      /** @description Bearer token for /space/v1. Carries `sub` and `sid`; any other claim it may contain is ignored by the API, because authorization is resolved in PostgreSQL. */
+      accessToken: string
+      /** @description Rotates on use — the previous value stops working. */
+      refreshToken: string
+      /** @description Seconds until the access token expires. */
+      expiresIn: number
+    }
     /** @enum {string} */
     StudioRegistrationStatus: 'complete' | 'registration_incomplete'
     StudioSession: {
@@ -1582,6 +1671,17 @@ export interface components {
         'application/problem+json': components['schemas']['Problem']
       }
     }
+    /** @description Rate limit exceeded. Mandatory on the authentication surface: without it a six-digit verification code is brute-forceable, and repeated registration attempts become a way to enumerate addresses by timing. */
+    TooManyRequests: {
+      headers: {
+        'Cache-Control': components['headers']['NoStore']
+        'Retry-After': components['headers']['RetryAfter']
+        [name: string]: unknown
+      }
+      content: {
+        'application/problem+json': components['schemas']['Problem']
+      }
+    }
     /** @description An authentication dependency is temporarily unavailable */
     UpstreamUnavailable: {
       headers: {
@@ -1809,6 +1909,73 @@ export interface components {
 }
 export type $defs = Record<string, never>
 export interface operations {
+  startSpaceRegistration: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SpaceRegistrationCreate']
+      }
+    }
+    responses: {
+      /** @description Accepted. If the address can receive an account, a verification code has been sent. Deliberately not 201: the client is told nothing about whether a resource was created. */
+      202: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SpaceRegistrationAccepted']
+        }
+      }
+      400: components['responses']['BadRequest']
+      422: components['responses']['ValidationFailed']
+      429: components['responses']['TooManyRequests']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  verifySpaceRegistration: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SpaceRegistrationVerify']
+      }
+    }
+    responses: {
+      /** @description Email verified and the first session issued */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SpaceSessionTokens']
+        }
+      }
+      400: components['responses']['BadRequest']
+      /** @description The code is wrong or expired, the address has no pending registration, or it was already verified. One answer for all of them, so the endpoint cannot be used to probe. */
+      401: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['Problem']
+        }
+      }
+      429: components['responses']['TooManyRequests']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
   startStudioAuthentication: {
     parameters: {
       query?: never

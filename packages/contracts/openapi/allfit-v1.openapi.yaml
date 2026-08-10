@@ -19,6 +19,11 @@ tags:
     description: Hosted authentication and opaque browser sessions for Allfit Studio.
   - name: Studio Organizations
     description: Studio entry context, organization creation and membership resolution.
+  - name: Space Identity
+    description: >-
+      Headless account creation and authentication for Allfit Space. The app owns
+      its screens and never calls the identity provider: it posts credentials
+      here and the API makes the provider call with the server API key.
   - name: Studio Planning
     description: Planning commands and queries performed from Allfit Studio.
   - name: Space Agenda
@@ -71,6 +76,133 @@ x-allfit-media-url-policy:
     failure_without_effective_access: 404
 
 paths:
+  /space/v1/auth/registrations:
+    post:
+      tags: [Space Identity]
+      operationId: startSpaceRegistration
+      x-allfit-operation: OP-IDN-029
+      x-allfit-cache: no-store
+      summary: Create an account and send an email verification code
+      description: >-
+        Creates the credential and nothing else. No person, no Fitness ID, no row
+        in our database: HU-SP-001 criterion 4 makes activation a later step, and
+        HU-SP-007 forbids storing anything fitness-related before adult
+        eligibility is established.
+
+
+        **The response never reveals whether the email already has an account.**
+        Success and "already registered" are indistinguishable — same status, same
+        body shape, same expiry. The provider distinguishes them and the
+        adapter normalizes that away, because propagating it would turn this
+        endpoint into an oracle for which addresses are registered. That is
+        HU-SP-001 criterion 3, and it is the reason there is no 409 here.
+
+
+        Nothing is stored on our side, so there is no handle to return and no
+        state to expire.
+
+
+        **No `Idempotency-Key`, deliberately.** Replaying a key means storing the
+        first result and returning it again, which contradicts storing nothing.
+        Accepting the header without that store would be decoration. A retry
+        therefore sends a second code, which is a cost carried by rate limiting
+        rather than by a key an unauthenticated caller chooses — a per-key row
+        written on an anonymous endpoint is itself a way to fill our storage.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SpaceRegistrationCreate'
+      responses:
+        '202':
+          description: >-
+            Accepted. If the address can receive an account, a verification code
+            has been sent. Deliberately not 201: the client is told nothing about
+            whether a resource was created.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpaceRegistrationAccepted'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /space/v1/auth/registrations/verification:
+    post:
+      tags: [Space Identity]
+      operationId: verifySpaceRegistration
+      x-allfit-operation: OP-IDN-030
+      x-allfit-cache: no-store
+      summary: Verify the email code and issue the first session
+      description: >-
+        Confirms the person controls the address, then returns tokens so they are
+        not asked for the password they typed moments ago. The assurance is the
+        same one a password reset relies on: possession of the mailbox.
+
+
+        Still creates nothing in our database. The `ACCESS_ACCOUNT` is derived on
+        the first authenticated Space operation, which is `OP-IDN-001`.
+
+
+        Marks the address verified and then signs in, which is two provider
+        calls. The one call that redeems a code and returns a session at once
+        needs a token that emailing the code invalidates, so the two are
+        mutually exclusive.
+
+
+        The password is sent because the second half is an ordinary sign-in, not
+        because it is a second factor. The response is identical whether the code
+        is wrong, the password wrong, or the address unknown.
+
+
+        Rate limiting is mandatory here: a six-digit code is brute-forceable in
+        minutes otherwise.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SpaceRegistrationVerify'
+      responses:
+        '200':
+          description: Email verified and the first session issued
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpaceSessionTokens'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          description: >-
+            The code is wrong or expired, the address has no pending
+            registration, or it was already verified. One answer for all of
+            them, so the endpoint cannot be used to probe.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
   /studio/v1/auth/start:
     get:
       tags: [Studio Identity]
@@ -1451,6 +1583,20 @@ components:
             title: The account is closed
             status: 403
             request_id: 01JEXAMPLE0000000000000000
+    TooManyRequests:
+      description: >-
+        Rate limit exceeded. Mandatory on the authentication surface: without it a
+        six-digit verification code is brute-forceable, and repeated registration
+        attempts become a way to enumerate addresses by timing.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+        Retry-After:
+          $ref: '#/components/headers/RetryAfter'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
     UpstreamUnavailable:
       description: An authentication dependency is temporarily unavailable
       headers:
@@ -1592,6 +1738,75 @@ components:
             request_id: 01JEXAMPLE0000000000000000
 
   schemas:
+    SpaceRegistrationCreate:
+      type: object
+      additionalProperties: false
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+          description: >-
+            Becomes both the sign-in email and, once a person exists, the contact
+            email. They are the same datum by DT-016 and never diverge.
+        password:
+          type: string
+          minLength: 8
+          maxLength: 256
+          pattern: '^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9]).{8,256}$'
+          description: >-
+            At least eight characters, with a lowercase letter, an uppercase
+            letter and a digit.
+    SpaceRegistrationAccepted:
+      type: object
+      additionalProperties: false
+      required: [expiresAt]
+      properties:
+        expiresAt:
+          type: string
+          format: date-time
+          description: When the verification code stops being accepted.
+    SpaceRegistrationVerify:
+      type: object
+      additionalProperties: false
+      required: [email, password, code]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+          description: The address the code was sent to.
+        password:
+          type: string
+          minLength: 8
+          maxLength: 256
+          description: >-
+            The same password used to register. Composition is not re-checked:
+            the credential already exists, and rejecting it here would lock out
+            an account created under an earlier policy.
+        code:
+          type: string
+          pattern: '^[0-9]{6}$'
+          description: The six-digit code sent to the address.
+    SpaceSessionTokens:
+      type: object
+      additionalProperties: false
+      required: [accessToken, refreshToken, expiresIn]
+      properties:
+        accessToken:
+          type: string
+          description: >-
+            Bearer token for /space/v1. Carries `sub` and `sid`; any other claim
+            it may contain is ignored by the API, because authorization is
+            resolved in PostgreSQL.
+        refreshToken:
+          type: string
+          description: Rotates on use — the previous value stops working.
+        expiresIn:
+          type: integer
+          minimum: 1
+          description: Seconds until the access token expires.
     StudioRegistrationStatus:
       type: string
       enum: [complete, registration_incomplete]
