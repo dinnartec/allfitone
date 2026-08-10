@@ -30,11 +30,13 @@ export function SpaceSetup({
   organizationTypes,
   fullName,
   onCreated,
+  onWait,
   onSessionExpired,
 }: {
   organizationTypes: OrganizationType[]
   fullName?: string | undefined
   onCreated: (organizationId: string) => void
+  onWait: () => void
   onSessionExpired: () => void
 }) {
   const [mode, setMode] = useState<StartMode>()
@@ -69,6 +71,14 @@ export function SpaceSetup({
               <strong>Tengo un equipo o centro</strong>
               <span>Configura un gimnasio, estudio u otro espacio para tu equipo.</span>
               <span data-choice-action>Crear un espacio de equipo →</span>
+            </button>
+            <button type="button" data-studio-choice="waiting" onClick={onWait}>
+              <span data-choice-kicker>Más adelante</span>
+              <strong>Esperar una invitación</strong>
+              <span>
+                No tienes que crear un espacio ahora. Vuelve cuando un equipo te haya invitado.
+              </span>
+              <span data-choice-action>Esperar una invitación →</span>
             </button>
           </div>
         </article>

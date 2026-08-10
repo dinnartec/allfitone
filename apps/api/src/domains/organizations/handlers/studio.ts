@@ -14,6 +14,7 @@ import {
   trustedStudioWebUrl,
 } from '../../identity/index.js'
 import { fail } from '../../../platform/http/index.js'
+import { recordStudioMembershipDestination } from '../../../platform/observability/index.js'
 import { StudioOrganizationError, type StudioOrganizationService } from '../application/index.js'
 import { studioOrganizationService } from '../dependencies.js'
 import type { OrganizationTypeCode } from '../domain/index.js'
@@ -53,6 +54,10 @@ export function studioOrganizationRoutes(
       const actor = await studioActor(c, sessions())
       if (actor instanceof Response) return actor
       const items = await organizations().listMemberships(actor)
+      const activeCount = items.filter((membership) => membership.status === 'active').length
+      recordStudioMembershipDestination(
+        activeCount === 0 ? 'zero' : activeCount === 1 ? 'one' : 'multiple',
+      )
       return c.json({
         items: items.map((membership) => ({
           membership_id: membership.membershipId,
