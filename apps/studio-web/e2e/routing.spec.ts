@@ -24,6 +24,8 @@ test('keeps profile optional when the person has no active spaces', async ({ pag
     '/profile',
   )
   await expect(page.getByRole('link', { name: 'Perfil profesional', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: /Crear mi espacio/ })).toBeVisible()
+  await expect(page.getByText(/práctica/i)).toHaveCount(0)
 })
 
 test('routes one active membership directly and ignores terminated history', async ({ page }) => {

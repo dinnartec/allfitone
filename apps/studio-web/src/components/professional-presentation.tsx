@@ -148,7 +148,7 @@ export function ProfessionalPresentation({
                   onChange={(event) => changeDraft({ ...draft, headline: event.target.value })}
                 />
                 <FieldDescription id="profile-headline-help">
-                  Una frase clara sobre tu práctica. {draft.headline.length}/120
+                  Una frase clara sobre tus servicios. {draft.headline.length}/120
                 </FieldDescription>
                 <FieldError id="profile-headline-error">{errors.headline}</FieldError>
               </Field>
@@ -172,7 +172,9 @@ export function ProfessionalPresentation({
 
               <div data-profile-field-grid>
                 <Field data-invalid={Boolean(errors.practice_started_year)}>
-                  <FieldLabel htmlFor="profile-started-year">Año de inicio</FieldLabel>
+                  <FieldLabel htmlFor="profile-started-year">
+                    Año en que comenzaste a ejercer
+                  </FieldLabel>
                   <Input
                     id="profile-started-year"
                     type="number"
@@ -272,7 +274,7 @@ export function ProfessionalPresentation({
         </div>
         <div data-trajectory-copy>
           <div>
-            <small>Comenzaste en</small>
+            <small>Comenzaste a ejercer en</small>
             <strong>{draft.practice_started_year || '—'}</strong>
           </div>
           <div>
@@ -284,7 +286,7 @@ export function ProfessionalPresentation({
             </strong>
           </div>
         </div>
-        <p>Los años se derivan de tu fecha de inicio y se actualizan automáticamente.</p>
+        <p>Los años se derivan del año en que comenzaste y se actualizan automáticamente.</p>
       </aside>
     </div>
   )

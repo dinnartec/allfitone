@@ -74,17 +74,13 @@ export function SpaceSetup({
             <button type="button" data-studio-choice onClick={() => setMode('individual')}>
               <span data-choice-kicker>Para mí</span>
               <strong>Trabajo por mi cuenta</strong>
-              <span>
-                Crea una práctica profesional. Tú quedarás como responsable y propietario.
-              </span>
-              <span data-choice-action>Crear mi práctica →</span>
+              <span>Crea tu espacio profesional. Tú quedarás como responsable y propietario.</span>
+              <span data-choice-action>Crear mi espacio →</span>
             </button>
             <button type="button" data-studio-choice onClick={() => setMode('team')}>
               <span data-choice-kicker>Para un equipo</span>
               <strong>Tengo un equipo o centro</strong>
-              <span>
-                Configura un gimnasio, estudio, academia, clínica o práctica para tu equipo.
-              </span>
+              <span>Configura un gimnasio, estudio u otro espacio para tu equipo.</span>
               <span data-choice-action>Crear un espacio de equipo →</span>
             </button>
           </div>
@@ -110,7 +106,7 @@ function SpaceForm({
   onSessionExpired: () => void
 }) {
   const [displayName, setDisplayName] = useState(
-    mode === 'individual' ? (fullName ? `Práctica de ${fullName}` : 'Mi práctica profesional') : '',
+    mode === 'individual' ? (fullName ? `Espacio de ${fullName}` : 'Mi espacio profesional') : '',
   )
   const [typeCode, setTypeCode] = useState<OrganizationType['code']>(
     mode === 'individual' ? 'professional_practice' : 'studio',
@@ -165,10 +161,12 @@ function SpaceForm({
     <article data-studio-panel="space-form">
       <div data-studio-panel-intro>
         <p data-studio-eyebrow>
-          {mode === 'individual' ? 'Práctica individual' : 'Equipo o centro'}
+          {mode === 'individual' ? 'Profesional independiente' : 'Equipo o centro'}
         </p>
-        <h1>{mode === 'individual' ? 'Nombra tu práctica.' : 'Dale identidad a tu espacio.'}</h1>
-        <p>Al crearla, quedará activa y tú serás su propietario.</p>
+        <h1>
+          {mode === 'individual' ? 'Dale nombre a tu espacio.' : 'Dale identidad a tu espacio.'}
+        </h1>
+        <p>Al crearlo, quedará activo y tú serás su propietario.</p>
       </div>
 
       <form data-studio-form onSubmit={submit}>
@@ -257,7 +255,7 @@ function SpaceForm({
             <Alert variant="info">
               <AlertTitle>Responsable natural</AlertTitle>
               <AlertDescription>
-                Tu nombre quedará registrado como responsable de esta práctica.
+                Tu nombre quedará registrado como responsable de este espacio.
               </AlertDescription>
             </Alert>
           )}
@@ -270,7 +268,7 @@ function SpaceForm({
             {submitting
               ? 'Creando…'
               : mode === 'individual'
-                ? 'Crear mi práctica'
+                ? 'Crear mi espacio'
                 : 'Crear el espacio'}
           </Button>
           <Button type="button" variant="ghost" onClick={onBack} disabled={submitting}>
