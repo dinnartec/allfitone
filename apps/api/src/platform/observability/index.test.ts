@@ -1,6 +1,7 @@
 import { describe, expect, spyOn, test } from 'bun:test'
 
 import {
+  recordIdentityPasswordResetWebhook,
   recordStudioAuthCallback,
   recordStudioLogout,
   recordStudioMembershipDestination,
@@ -55,6 +56,20 @@ describe('Studio operational counters', () => {
       name: 'studio.auth.logout',
       value: 1,
       dimensions: { trigger: 'inactivity', outcome: 'partial' },
+    })
+    info.mockRestore()
+  })
+
+  test('emits the closed password-reset webhook outcome without identity details', () => {
+    const info = spyOn(console, 'info').mockImplementation(() => undefined)
+
+    recordIdentityPasswordResetWebhook('account-absent')
+
+    expect(JSON.parse(String(info.mock.calls[0]?.[0]))).toEqual({
+      kind: 'counter',
+      name: 'identity.password_reset.webhook',
+      value: 1,
+      dimensions: { outcome: 'account-absent' },
     })
     info.mockRestore()
   })

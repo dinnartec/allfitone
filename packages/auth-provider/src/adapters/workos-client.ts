@@ -37,6 +37,23 @@ export interface WorkOSSession {
   id: string
 }
 
+/** Common event envelope returned after the SDK verifies and deserializes it. */
+export interface WorkOSEvent {
+  id: string
+  createdAt: string
+  event: string
+  data: unknown
+}
+
+export interface WorkOSWebhooks {
+  constructEvent(options: {
+    payload: string
+    sigHeader: string
+    secret: string
+    tolerance: number
+  }): Promise<WorkOSEvent>
+}
+
 export interface WorkOSUserManagement {
   authenticateWithCode(options: {
     code: string
@@ -96,4 +113,5 @@ export interface WorkOSUserManagement {
 
 export interface WorkOSClient {
   userManagement: WorkOSUserManagement
+  webhooks: WorkOSWebhooks
 }

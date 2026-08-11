@@ -7,6 +7,7 @@ import type postgres from 'postgres'
 import { database } from '../../../platform/db/index.js'
 import type {
   IdentitySessionDatabase,
+  IdentityWebhookDatabase,
   IdentityOnboardingDatabase,
   IdentityProfessionalDatabase,
   ProfessionalCredential,
@@ -366,6 +367,37 @@ export function createIdentitySessionDatabase(): IdentitySessionDatabase {
           ? { personId: account.person_id, personStatus: person.status }
           : { personId: account.person_id }
       })
+    },
+  }
+}
+
+export function createIdentityWebhookDatabase(): IdentityWebhookDatabase {
+  const sql = database()
+
+  return {
+    async processPasswordResetSucceeded(input) {
+      const [row] = await sql<
+        {
+          outcome: 'account_absent' | 'processed'
+          revoked_session_count: number
+          replayed: boolean
+        }[]
+      >`
+        select *
+        from identity.process_password_reset_succeeded(
+          ${input.provider},
+          ${input.issuer},
+          ${input.eventId},
+          ${input.subject},
+          ${input.occurredAt}::timestamptz
+        )
+      `
+      if (!row) throw new Error('PostgreSQL did not process the password reset')
+      return {
+        outcome: row.outcome === 'account_absent' ? 'account-absent' : 'processed',
+        revokedSessionCount: row.revoked_session_count,
+        replayed: row.replayed,
+      }
     },
   }
 }

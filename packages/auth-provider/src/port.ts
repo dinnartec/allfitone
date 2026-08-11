@@ -51,6 +51,15 @@ export interface VerifiedToken {
   surface: Surface
 }
 
+/** Provider event projected into the only identity fact Allfit consumes. */
+export interface AuthProviderEvent {
+  kind: 'password-reset-succeeded'
+  eventId: string
+  subject: ExternalSubject
+  /** ISO-8601 instant assigned by the provider when the event occurred. */
+  occurredAt: string
+}
+
 export interface PasswordCredentials {
   email: string
   password: string
@@ -158,6 +167,14 @@ export interface AuthProvider {
    * Fails closed: any doubt is a rejection.
    */
   verifyAccessToken(token: string, surface: Surface): Promise<VerifiedToken>
+
+  /**
+   * Verifies a provider webhook over its untouched body.
+   *
+   * A signed event that Allfit does not consume returns `null`. Invalid
+   * signatures and malformed consumed events fail closed with `invalid_webhook`.
+   */
+  verifyWebhookEvent(rawPayload: string, signature: string): Promise<AuthProviderEvent | null>
 
   /**
    * Changes the sign-in email.

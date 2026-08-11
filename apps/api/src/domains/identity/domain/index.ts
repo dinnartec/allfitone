@@ -189,6 +189,24 @@ export interface IdentitySessionDatabase {
   resolveRegistration(accountId: string): Promise<ActorRegistration>
 }
 
+export type PasswordResetDatabaseOutcome = 'account-absent' | 'processed'
+
+export interface PasswordResetProcessingResult {
+  outcome: PasswordResetDatabaseOutcome
+  revokedSessionCount: number
+  replayed: boolean
+}
+
+export interface IdentityWebhookDatabase {
+  processPasswordResetSucceeded(input: {
+    provider: 'workos'
+    issuer: string
+    eventId: string
+    subject: string
+    occurredAt: string
+  }): Promise<PasswordResetProcessingResult>
+}
+
 export interface SessionTokenVault {
   generateOpaqueToken(): string
   hashOpaqueToken(token: string): Uint8Array

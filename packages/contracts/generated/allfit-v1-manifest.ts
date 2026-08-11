@@ -255,5 +255,13 @@ export const allfitV1ContractManifest = {
       lifecycle: 'permanent',
       reason: 'Liveness belongs to deployment operations, not the product API.',
     },
+    {
+      method: 'POST',
+      path: '/webhooks/workos',
+      classification: 'operational',
+      owner: 'identity',
+      lifecycle: 'permanent',
+      reason: 'Signed provider delivery shared by every application; it is not a client API.',
+    },
   ],
 } as const

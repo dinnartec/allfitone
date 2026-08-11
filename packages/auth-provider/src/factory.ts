@@ -49,6 +49,7 @@ export function createAuthProviderFromEnv(env: ProviderEnv = process.env): AuthP
     // client_ids above — the provider builds it from the environment's default
     // Application. The walking-skeleton callback reports the real value.
     issuer: required(env, 'WORKOS_ISSUER'),
+    webhookSecret: required(env, 'WORKOS_WEBHOOK_SECRET'),
     clients,
   })
 }

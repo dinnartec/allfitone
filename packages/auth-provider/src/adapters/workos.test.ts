@@ -15,7 +15,7 @@ import { SignJWT, exportJWK, generateKeyPair, type JWK, type KeyObject } from 'j
 import { createWorkOSAuthProvider } from './workos.js'
 import { AuthError } from '../errors.js'
 import type { AuthProvider, Surface } from '../port.js'
-import type { WorkOSUserManagement } from './workos-client.js'
+import type { WorkOSEvent, WorkOSUserManagement, WorkOSWebhooks } from './workos-client.js'
 
 const CLIENT_IDS: Record<Surface, string> = {
   space: 'client_space_test',
@@ -38,6 +38,7 @@ const CREDENTIALS = {
  * from the Application you authenticate against.
  */
 const ISSUER = 'https://api.workos.com/user_management/client_01DEFAULTAPP'
+const WEBHOOK_SECRET = 'whsec_test'
 
 let privateKey: KeyObject
 let publicJwk: JWK
@@ -82,6 +83,7 @@ beforeAll(async () => {
   provider = createWorkOSAuthProvider({
     credentials: CREDENTIALS,
     issuer: ISSUER,
+    webhookSecret: WEBHOOK_SECRET,
     // Test seam: a local key set instead of fetching the remote JWKS.
     jwks: { keys: [publicJwk] },
   })
@@ -231,9 +233,13 @@ describe('configuration', () => {
   test('refuses to construct without an expected issuer', () => {
     // An unset issuer disables the check silently, which is worse than not
     // having it: the configuration looks complete.
-    expect(() => createWorkOSAuthProvider({ issuer: '', credentials: CREDENTIALS })).toThrow(
-      /issuer/i,
-    )
+    expect(() =>
+      createWorkOSAuthProvider({
+        issuer: '',
+        webhookSecret: WEBHOOK_SECRET,
+        credentials: CREDENTIALS,
+      }),
+    ).toThrow(/issuer/i)
   })
 
   test('refuses to construct when a surface has no API key of its own', () => {
@@ -242,6 +248,7 @@ describe('configuration', () => {
     expect(() =>
       createWorkOSAuthProvider({
         issuer: ISSUER,
+        webhookSecret: WEBHOOK_SECRET,
         credentials: { ...CREDENTIALS, backoffice: { clientId: 'c', apiKey: '' } },
       }),
     ).toThrow(/backoffice/)
@@ -251,6 +258,7 @@ describe('configuration', () => {
     expect(() =>
       createWorkOSAuthProvider({
         issuer: ISSUER,
+        webhookSecret: WEBHOOK_SECRET,
         credentials: { ...CREDENTIALS, backoffice: { clientId: '', apiKey: 'sk' } },
       }),
     ).toThrow(/backoffice/)
@@ -258,7 +266,10 @@ describe('configuration', () => {
 })
 
 /** Minimal fake of the SDK surface declared in workos-client.ts. */
-function fakeClient(overrides: Partial<WorkOSUserManagement> = {}) {
+function fakeClient(
+  overrides: Partial<WorkOSUserManagement> = {},
+  webhookOverrides: Partial<WorkOSWebhooks> = {},
+) {
   const calls: { method: string; args: unknown }[] = []
   const record = <T>(method: string, args: unknown, result: T): T => {
     calls.push({ method, args })
@@ -303,14 +314,31 @@ function fakeClient(overrides: Partial<WorkOSUserManagement> = {}) {
       ),
     ...overrides,
   }
-  return { client: { userManagement }, calls }
+  const webhooks: WorkOSWebhooks = {
+    constructEvent: async (options) => {
+      calls.push({ method: 'constructEvent', args: options })
+      return webhookOverrides.constructEvent
+        ? webhookOverrides.constructEvent(options)
+        : {
+            id: 'event_ignored',
+            createdAt: '2026-08-10T12:00:00.000Z',
+            event: 'user.updated',
+            data: {},
+          }
+    },
+  }
+  return { client: { userManagement, webhooks }, calls }
 }
 
-function providerWith(overrides: Partial<WorkOSUserManagement> = {}) {
-  const { client, calls } = fakeClient(overrides)
+function providerWith(
+  overrides: Partial<WorkOSUserManagement> = {},
+  webhookOverrides: Partial<WorkOSWebhooks> = {},
+) {
+  const { client, calls } = fakeClient(overrides, webhookOverrides)
   const provider = createWorkOSAuthProvider({
     credentials: CREDENTIALS,
     issuer: ISSUER,
+    webhookSecret: WEBHOOK_SECRET,
     jwks: { keys: [publicJwk] },
     // One client per surface, mirroring production.
     clients: { space: client, studio: client, backoffice: client },
@@ -411,6 +439,7 @@ describe('error translation', () => {
     const provider = createWorkOSAuthProvider({
       credentials: CREDENTIALS,
       issuer: ISSUER,
+      webhookSecret: WEBHOOK_SECRET,
       jwks: { keys: [publicJwk] },
     })
 
@@ -484,6 +513,78 @@ describe('getLogoutUrl', () => {
       method: 'getLogoutUrl',
       args: { sessionId: 'session_01XYZ', returnTo: 'https://studio.allfit.one' },
     })
+  })
+})
+
+describe('verifyWebhookEvent', () => {
+  const resetEvent: WorkOSEvent = {
+    id: 'event_01RESET',
+    createdAt: '2026-08-10T12:00:00.000Z',
+    event: 'password_reset.succeeded',
+    data: {
+      object: 'password_reset',
+      id: 'password_reset_secret',
+      userId: 'user_01FAKE',
+      email: 'private@example.com',
+      createdAt: '2026-08-10T11:55:00.000Z',
+      expiresAt: '2026-08-10T12:55:00.000Z',
+    },
+  }
+
+  test('verifies the untouched payload with an explicit five-minute tolerance', async () => {
+    const { provider, calls } = providerWith({}, { constructEvent: async () => resetEvent })
+
+    await provider.verifyWebhookEvent('{ "raw": true }', 't=1,v1=signed')
+
+    expect(calls[0]).toEqual({
+      method: 'constructEvent',
+      args: {
+        payload: '{ "raw": true }',
+        sigHeader: 't=1,v1=signed',
+        secret: WEBHOOK_SECRET,
+        tolerance: 300_000,
+      },
+    })
+  })
+
+  test('projects no email, reset id or provider context', async () => {
+    const { provider } = providerWith({}, { constructEvent: async () => resetEvent })
+
+    const event = await provider.verifyWebhookEvent('payload', 'signature')
+
+    expect(event).toEqual({
+      kind: 'password-reset-succeeded',
+      eventId: 'event_01RESET',
+      subject: 'user_01FAKE',
+      occurredAt: '2026-08-10T12:00:00.000Z',
+    })
+    const serialized = JSON.stringify(event)
+    expect(serialized).not.toContain('private@example.com')
+    expect(serialized).not.toContain('password_reset_secret')
+    expect(Object.keys(event ?? {}).sort()).toEqual(['eventId', 'kind', 'occurredAt', 'subject'])
+  })
+
+  test('returns null for a signed event that Identity does not consume', async () => {
+    const { provider } = providerWith()
+
+    await expect(provider.verifyWebhookEvent('payload', 'signature')).resolves.toBeNull()
+  })
+
+  test('fails closed without copying signature or payload into the error', async () => {
+    const { provider } = providerWith(
+      {},
+      {
+        constructEvent: async () => {
+          throw new Error('bad t=secret signature containing private@example.com')
+        },
+      },
+    )
+
+    const error = await rejection(provider.verifyWebhookEvent('private@example.com', 't=secret'))
+
+    expect(error.code).toBe('invalid_webhook')
+    expect(`${error.message} ${error.detail ?? ''}`).not.toContain('private@example.com')
+    expect(`${error.message} ${error.detail ?? ''}`).not.toContain('t=secret')
   })
 })
 
