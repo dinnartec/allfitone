@@ -217,6 +217,12 @@ export const allfitV1ContractManifest = {
     },
     {
       method: 'POST',
+      path: '/studio/v1/organizations/{organizationId}/invitations',
+      operationId: 'createStudioTeamInvitation',
+      allfitOperation: 'OP-ORG-005',
+    },
+    {
+      method: 'POST',
       path: '/studio/v1/organizations/{organizationId}/programs/{programId}/versions',
       operationId: 'publishProgramVersion',
       allfitOperation: 'OP-PLN-008',

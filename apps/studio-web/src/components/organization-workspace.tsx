@@ -1,4 +1,17 @@
+'use client'
+
+import { Button } from '@allfitone/react/components/button'
+import { useRouter } from 'next/navigation'
+
+import { useOrganizationContext } from './organization-context'
+import { canInviteTeam } from '@/lib/team-invitations'
+
+const INVITATIONS_ENABLED = process.env.NEXT_PUBLIC_STAFF_INVITATIONS_ENABLED === 'true'
+
 export function OrganizationWorkspace() {
+  const router = useRouter()
+  const { current } = useOrganizationContext()
+  const canInvite = INVITATIONS_ENABLED && canInviteTeam(current.roles)
   return (
     <>
       <section data-workspace-welcome>
@@ -42,7 +55,18 @@ export function OrganizationWorkspace() {
               <strong>Invitar al equipo</strong>
               <p>Membresías, roles y aceptación de invitaciones.</p>
             </div>
-            <small>Próximamente</small>
+            {canInvite ? (
+              <Button
+                size="sm"
+                onClick={() =>
+                  router.push(`/organizations/${current.organization_id}/team/invitations/new`)
+                }
+              >
+                Invitar
+              </Button>
+            ) : (
+              <small>Próximamente</small>
+            )}
           </li>
           <li>
             <span>02</span>

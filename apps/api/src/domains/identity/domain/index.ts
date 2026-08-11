@@ -207,6 +207,33 @@ export interface IdentityWebhookDatabase {
   }): Promise<PasswordResetProcessingResult>
 }
 
+export type TeamInvitationRole = 'admin' | 'coach' | 'staff'
+
+export interface TeamInvitation {
+  id: string
+  intentId: string
+  status: 'pending'
+  channel: 'email'
+  contactHint: string
+  expiresAt: Date
+  proposedRoleCode: TeamInvitationRole
+  reused: boolean
+}
+
+export interface IdentityInvitationDatabase {
+  issue(
+    input: CommandContext & {
+      personId: string
+      organizationId: string
+      channel: 'email'
+      contact: string
+      proposedRoleCode: TeamInvitationRole
+      tokenHash: Uint8Array
+      tokenKeyVersion: number
+    },
+  ): Promise<CommandResult<TeamInvitation>>
+}
+
 export interface SessionTokenVault {
   generateOpaqueToken(): string
   hashOpaqueToken(token: string): Uint8Array

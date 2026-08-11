@@ -221,6 +221,30 @@ function defaultResponse(
       },
     }
   }
+  if (
+    request.method === 'POST' &&
+    /^\/studio\/v1\/organizations\/[^/]+\/invitations$/.test(request.path)
+  ) {
+    return {
+      status: 201,
+      body: {
+        id: '01991600-6000-7000-8000-000000000001',
+        status: 'pending',
+        channel: 'email',
+        contact_hint: 'p***@example.test',
+        expires_at: '2026-08-18T12:00:00.000Z',
+        reused: false,
+        intents: [
+          {
+            id: '01991600-6000-7000-8000-000000000002',
+            kind: 'membership',
+            status: 'pending',
+            proposed_role_code: 'staff',
+          },
+        ],
+      },
+    }
+  }
   if (request.method === 'PUT' && request.path === '/studio/v1/me/professional-profile') {
     const body = request.body as {
       headline: string

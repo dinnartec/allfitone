@@ -16,6 +16,8 @@ export type ProfessionalProfile = AllfitV1Schemas['ProfessionalProfile']
 export type ProfessionalProfilePut = AllfitV1Schemas['ProfessionalProfilePut']
 export type ProfessionalCredential = AllfitV1Schemas['ProfessionalCredential']
 export type ProfessionalCredentialWrite = AllfitV1Schemas['ProfessionalCredentialWrite']
+export type TeamInvitationCreate = AllfitV1Schemas['TeamInvitationCreate']
+export type TeamInvitation = AllfitV1Schemas['TeamInvitation']
 
 const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080').replace(/\/$/, '')
 
@@ -123,6 +125,17 @@ export const studioApi = {
 
   createOrganization: (body: OrganizationCreate, command: CommandHeaders) =>
     request<OrganizationCreated>('/studio/v1/organizations', {
+      method: 'POST',
+      headers: commandHeaders(command),
+      body: JSON.stringify(body),
+    }),
+
+  createTeamInvitation: (
+    organizationId: string,
+    body: TeamInvitationCreate,
+    command: CommandHeaders,
+  ) =>
+    request<TeamInvitation>(`/studio/v1/organizations/${organizationId}/invitations`, {
       method: 'POST',
       headers: commandHeaders(command),
       body: JSON.stringify(body),

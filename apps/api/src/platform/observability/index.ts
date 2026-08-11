@@ -17,6 +17,8 @@ type StudioLogoutOutcome = 'already-absent' | 'partial' | 'revoked'
 export type IdentityPasswordResetWebhookOutcome =
   'account-absent' | 'failed' | 'ignored' | 'invalid' | 'processed' | 'replayed'
 
+type StudioTeamInvitationOutcome = 'created' | 'failed' | 'replayed' | 'reused'
+
 export function recordStudioAuthCallback(
   outcome: 'failed' | 'succeeded',
   reason?: StudioAuthCallbackFailure,
@@ -46,6 +48,10 @@ export function recordIdentityPasswordResetWebhook(
   outcome: IdentityPasswordResetWebhookOutcome,
 ): void {
   writeCounter('identity.password_reset.webhook', { outcome })
+}
+
+export function recordStudioTeamInvitation(outcome: StudioTeamInvitationOutcome): void {
+  writeCounter('studio.team_invitation.command', { outcome })
 }
 
 function writeCounter(name: string, dimensions: Readonly<Record<string, string>>): void {

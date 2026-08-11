@@ -4,10 +4,9 @@
  * Claims with `SELECT ... FOR UPDATE SKIP LOCKED`, which is what lets several
  * consumers work in parallel without colliding.
  *
- * STATUS: skeleton. Implemented once `system.outbox_events` exists in
- * packages/db. The port shape is already settled.
  */
 
+import type postgres from 'postgres'
 import type { Queue, QueueMessage } from '../port.js'
 
 export interface PostgresQueueConfig {
@@ -17,23 +16,39 @@ export interface PostgresQueueConfig {
   maxAttempts: number
 }
 
-export function createPostgresQueue(_config: PostgresQueueConfig): Queue {
-  const pending = (method: string): never => {
-    throw new Error(`postgresQueue.${method} not implemented: requires system.outbox_events`)
+export function createPostgresQueue(sql: postgres.Sql, config: PostgresQueueConfig): Queue {
+  if (config.visibilityTimeoutMs !== 120_000 || config.maxAttempts !== 5) {
+    throw new Error('Postgres queue configuration must match the governed database policy')
   }
-
   return {
-    async publish(_topic: string, _payload: unknown): Promise<void> {
-      return pending('publish')
+    async claim(topic: string, limit: number): Promise<QueueMessage[]> {
+      return sql.begin(async (transaction) => {
+        await setWorkerActor(transaction)
+        const rows = await transaction<
+          Array<{ id: string; topic: string; payload: unknown; attempt: number }>
+        >`
+          select * from system.claim_outbox_events(${topic}, ${limit}::integer)
+        `
+        return rows
+      })
     },
-    async claim(_topic: string, _limit: number): Promise<QueueMessage[]> {
-      return pending('claim')
+    async ack(id: string): Promise<void> {
+      await sql.begin(async (transaction) => {
+        await setWorkerActor(transaction)
+        await transaction`select system.ack_outbox_event(${id}::uuid)`
+      })
     },
-    async ack(_id: string): Promise<void> {
-      return pending('ack')
-    },
-    async nack(_id: string, _reason: string): Promise<void> {
-      return pending('nack')
+    async nack(id: string, reason: string, retryable: boolean): Promise<void> {
+      await sql.begin(async (transaction) => {
+        await setWorkerActor(transaction)
+        await transaction`
+          select system.nack_outbox_event(${id}::uuid, ${reason}, ${retryable})
+        `
+      })
     },
   }
+}
+
+async function setWorkerActor(transaction: postgres.TransactionSql): Promise<void> {
+  await transaction`select set_config('app.actor_kind', 'worker', true)`
 }

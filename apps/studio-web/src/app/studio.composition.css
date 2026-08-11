@@ -1327,6 +1327,75 @@ input {
   white-space: nowrap;
 }
 
+[data-studio-panel='team-invitation'] {
+  min-height: 600px;
+}
+[data-team-invitation-state] {
+  display: grid;
+  min-height: 420px;
+  place-content: center;
+}
+[data-team-invitation-state] > [data-slot='alert'] {
+  max-width: 640px;
+}
+[data-team-invitation-result] {
+  display: grid;
+  padding: clamp(32px, 6vw, 70px);
+  gap: 32px;
+  border: 1px solid rgb(10 27 34 / 14%);
+  border-top: 7px solid var(--afo-color-brand-primary);
+  border-radius: var(--afo-radius-3xl);
+  background: var(--afo-color-neutral-salt);
+  box-shadow: var(--afo-shadow-md);
+}
+[data-team-invitation-result] h2 {
+  margin: 0;
+  font-family: var(--afo-app-font-display), var(--afo-font-family-display);
+  font-size: clamp(2.8rem, 5vw, 4.8rem);
+  letter-spacing: var(--afo-letter-spacing-display);
+  line-height: 0.95;
+  text-transform: uppercase;
+}
+[data-team-invitation-result] > div > p:last-child {
+  max-width: 62ch;
+  color: var(--afo-color-neutral-ink-soft);
+  line-height: var(--afo-line-height-relaxed);
+}
+[data-team-invitation-result] dl {
+  display: grid;
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid rgb(10 27 34 / 12%);
+  border-radius: var(--afo-radius-2xl);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+[data-team-invitation-result] dl > div {
+  display: grid;
+  min-height: 108px;
+  padding: 22px;
+  align-content: space-between;
+  border-right: 1px solid rgb(10 27 34 / 12%);
+  background: var(--afo-color-neutral-white);
+}
+[data-team-invitation-result] dl > div:last-child {
+  border-right: 0;
+}
+[data-team-invitation-result] dt {
+  color: var(--afo-color-neutral-graphite);
+  font-size: var(--afo-font-size-xs);
+  font-weight: var(--afo-font-weight-bold);
+  letter-spacing: var(--afo-letter-spacing-label);
+  text-transform: uppercase;
+}
+[data-team-invitation-result] dd {
+  margin: 0;
+  font-weight: var(--afo-font-weight-bold);
+}
+[data-team-invitation-actions] {
+  display: flex;
+  gap: 12px;
+}
+
 @media (max-width: 860px) {
   [data-profile-heading] {
     min-height: 320px;
@@ -1345,6 +1414,17 @@ input {
   [data-membership-context-grid],
   [data-account-map] {
     grid-template-columns: 1fr;
+  }
+  [data-team-invitation-result] dl {
+    grid-template-columns: 1fr;
+  }
+  [data-team-invitation-result] dl > div {
+    min-height: 86px;
+    border-right: 0;
+    border-bottom: 1px solid rgb(10 27 34 / 12%);
+  }
+  [data-team-invitation-result] dl > div:last-child {
+    border-bottom: 0;
   }
 }
 
@@ -1431,5 +1511,12 @@ input {
   [data-next-steps] li > [data-slot='button'] {
     width: 100%;
     grid-column: 2;
+  }
+  [data-team-invitation-actions] {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  [data-team-invitation-actions] > [data-slot='button'] {
+    width: 100%;
   }
 }

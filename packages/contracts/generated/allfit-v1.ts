@@ -347,6 +347,26 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/studio/v1/organizations/{organizationId}/invitations': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Invite someone to join an organization team
+     * @description Creates or reuses a pending email invitation and its membership intent. The command never creates an account, person, profile, or membership and never reveals whether the contact already belongs to Allfit One.
+     */
+    post: operations['createStudioTeamInvitation']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/studio/v1/organizations/{organizationId}/programs/{programId}/versions': {
     parameters: {
       query?: never
@@ -784,6 +804,41 @@ export interface components {
       type_code: components['schemas']['OrganizationTypeCode']
       membership_id: components['schemas']['UuidV7']
       roles: ('owner' | 'admin' | 'coach' | 'staff')[]
+    }
+    TeamInvitationCreate: {
+      /** @enum {string} */
+      channel: 'email'
+      /** Format: email */
+      contact: string
+      intents: components['schemas']['TeamInvitationIntentCreate'][]
+    }
+    TeamInvitationIntentCreate: {
+      /** @enum {string} */
+      kind: 'membership'
+      /** @enum {string} */
+      proposed_role_code: 'admin' | 'coach' | 'staff'
+    }
+    TeamInvitation: {
+      id: components['schemas']['UuidV7']
+      /** @enum {string} */
+      status: 'pending'
+      /** @enum {string} */
+      channel: 'email'
+      /** @description Masked destination; never the complete email address. */
+      contact_hint: string
+      /** Format: date-time */
+      expires_at: string
+      reused: boolean
+      intents: components['schemas']['TeamInvitationIntent'][]
+    }
+    TeamInvitationIntent: {
+      id: components['schemas']['UuidV7']
+      /** @enum {string} */
+      kind: 'membership'
+      /** @enum {string} */
+      status: 'pending'
+      /** @enum {string} */
+      proposed_role_code: 'admin' | 'coach' | 'staff'
     }
     StudioMembership: {
       membership_id: components['schemas']['UuidV7']
@@ -2740,6 +2795,55 @@ export interface operations {
       401: components['responses']['Unauthenticated']
       403: components['responses']['Forbidden']
       409: components['responses']['Conflict']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  createStudioTeamInvitation: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['TeamInvitationCreate']
+      }
+    }
+    responses: {
+      /** @description An equivalent pending invitation was reused */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['TeamInvitation']
+        }
+      }
+      /** @description Invitation and membership intent created atomically */
+      201: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['TeamInvitation']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      422: components['responses']['ValidationFailed']
       503: components['responses']['UpstreamUnavailable']
     }
   }
