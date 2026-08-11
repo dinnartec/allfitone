@@ -1,5 +1,8 @@
 -- HU-STUDIO-014: durable, capability-gated team invitations and email delivery outbox.
 
+set lock_timeout = '5s';
+set statement_timeout = '60s';
+
 create type identity.invitation_status as enum ('pending', 'claimed', 'revoked', 'expired');
 create type identity.invitation_intent_kind as enum ('membership', 'service_relationship', 'program_assignment');
 create type identity.invitation_intent_status as enum ('pending', 'accepted', 'rejected', 'expired');
