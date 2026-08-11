@@ -25,6 +25,8 @@ export type AuthErrorCode =
   | 'weak_password'
   /** Token missing, badly signed, expired, or issued for another surface. */
   | 'invalid_token'
+  /** Webhook signature or consumed event payload was rejected. */
+  | 'invalid_webhook'
   /** The provider did not respond. Retryable; nothing else here is. */
   | 'provider_unavailable'
 

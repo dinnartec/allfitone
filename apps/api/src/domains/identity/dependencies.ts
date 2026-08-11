@@ -10,6 +10,10 @@ import {
   type StudioSessionService,
 } from './application/index.js'
 import {
+  createIdentityWebhookService,
+  type IdentityWebhookService,
+} from './application/webhooks.js'
+import {
   createSpaceRegistrationService,
   type SpaceRegistrationService,
 } from './application/registration.js'
@@ -17,6 +21,7 @@ import {
   createIdentityOnboardingDatabase,
   createIdentityProfessionalDatabase,
   createIdentitySessionDatabase,
+  createIdentityWebhookDatabase,
   createSessionTokenVaultFromEnv,
 } from './infrastructure/index.js'
 
@@ -24,6 +29,7 @@ let cached: StudioSessionService | undefined
 let cachedOnboarding: StudioOnboardingService | undefined
 let cachedProfessional: StudioProfessionalService | undefined
 let cachedRegistrations: SpaceRegistrationService | undefined
+let cachedWebhooks: IdentityWebhookService | undefined
 
 export function studioSessionService(): StudioSessionService {
   if (cached) return cached
@@ -68,6 +74,23 @@ export function spaceRegistrationService(): SpaceRegistrationService {
 /** Test seam. Undefined restores environment-backed construction. */
 export function setSpaceRegistrationService(service: SpaceRegistrationService | undefined): void {
   cachedRegistrations = service
+}
+
+export function identityWebhookService(): IdentityWebhookService {
+  if (cachedWebhooks) return cachedWebhooks
+  const issuer = process.env.WORKOS_ISSUER
+  if (!issuer) throw new Error('WORKOS_ISSUER is not set')
+  cachedWebhooks = createIdentityWebhookService({
+    authProvider: authProvider(),
+    database: createIdentityWebhookDatabase(),
+    issuer,
+  })
+  return cachedWebhooks
+}
+
+/** Test seam. Undefined restores environment-backed construction. */
+export function setIdentityWebhookService(service: IdentityWebhookService | undefined): void {
+  cachedWebhooks = service
 }
 
 export function trustedStudioWebUrl(): string {

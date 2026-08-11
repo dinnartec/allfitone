@@ -113,6 +113,7 @@ function toRegistrationError(cause: unknown): RegistrationError {
 
   switch (cause.code) {
     case 'provider_unavailable':
+    case 'invalid_webhook':
       return new RegistrationError('upstream-unavailable')
     case 'invalid_credentials':
     case 'invalid_token':

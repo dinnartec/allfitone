@@ -23,6 +23,7 @@ function fakeProvider(overrides: Partial<AuthProvider> = {}): AuthProvider {
       sessionId: 'session_01XYZ',
       surface: 'studio',
     }),
+    verifyWebhookEvent: async () => null,
     authenticateWithPassword: async () => {
       throw new Error('not used')
     },

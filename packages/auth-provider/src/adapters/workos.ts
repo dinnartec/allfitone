@@ -30,6 +30,7 @@ import {
 
 import type {
   AuthProvider,
+  AuthProviderEvent,
   AuthorizationRequest,
   AuthResult,
   ExternalSubject,
@@ -53,6 +54,9 @@ const ADMIN_SURFACE: Surface = 'studio'
 
 /** Access tokens are short-lived; the exact value is set in the provider dashboard. */
 const ASSUMED_ACCESS_TOKEN_TTL_SECONDS = 300
+
+/** Five minutes in the milliseconds expected by the WorkOS SDK. */
+const WEBHOOK_TOLERANCE_MILLISECONDS = 300_000
 
 /**
  * Credentials for one Application.
@@ -82,6 +86,8 @@ export interface WorkOSConfig {
    * absent one.
    */
   issuer: string
+  /** Secret assigned to the environment's WorkOS webhook endpoint. */
+  webhookSecret: string
   /**
    * Test seam: verify against a local key set instead of fetching the remote
    * JWKS. Production leaves this unset.
@@ -217,6 +223,43 @@ export function createWorkOSAuthProvider(config: WorkOSConfig): AuthProvider {
       // token and are NOT returned: authorization is resolved in PostgreSQL,
       // inside the transaction. Widening this creates a second source of truth.
       return { subject, sessionId, surface }
+    },
+
+    async verifyWebhookEvent(
+      rawPayload: string,
+      signature: string,
+    ): Promise<AuthProviderEvent | null> {
+      let event
+      try {
+        event = await requireClient(ADMIN_SURFACE).webhooks.constructEvent({
+          payload: rawPayload,
+          sigHeader: signature,
+          secret: config.webhookSecret,
+          tolerance: WEBHOOK_TOLERANCE_MILLISECONDS,
+        })
+      } catch {
+        // Deliberately omit the SDK error: verification failures can echo the
+        // signature or payload and neither belongs in logs.
+        throw new AuthError('invalid_webhook', 'webhook rejected')
+      }
+
+      if (event.event !== 'password_reset.succeeded') return null
+
+      const data = event.data
+      const subject = field(data, 'userId')
+      const occurredAt = normalizedInstant(event.createdAt)
+      if (!event.id || !subject || !occurredAt) {
+        throw new AuthError('invalid_webhook', 'consumed event malformed')
+      }
+
+      // Do not spread the provider object. Password-reset email, reset id and
+      // context are intentionally discarded at this boundary.
+      return {
+        kind: 'password-reset-succeeded',
+        eventId: event.id,
+        subject,
+        occurredAt,
+      }
     },
 
     async register(credentials: PasswordCredentials): Promise<RegistrationOutcome> {
@@ -365,6 +408,17 @@ function toSessionTokens(response: WorkOSAuthenticationResponse): SessionTokens 
 function normalizedName(value: string | null): string | null {
   const normalized = value?.trim()
   return normalized ? normalized : null
+}
+
+function field(value: unknown, name: string): string | null {
+  if (typeof value !== 'object' || value === null) return null
+  const candidate = (value as Record<string, unknown>)[name]
+  return typeof candidate === 'string' && candidate.length > 0 ? candidate : null
+}
+
+function normalizedInstant(value: string): string | null {
+  const epoch = Date.parse(value)
+  return Number.isNaN(epoch) ? null : new Date(epoch).toISOString()
 }
 
 /**
@@ -544,6 +598,9 @@ function reasonFor(cause: unknown): string {
 function assertConfig(config: WorkOSConfig): void {
   if (!config.issuer) {
     throw new Error('Expected issuer missing. Verification would silently accept any issuer.')
+  }
+  if (!config.webhookSecret) {
+    throw new Error('WorkOS webhook secret missing. Signed events cannot be verified.')
   }
   for (const surface of SURFACES) {
     const credentials = config.credentials?.[surface]

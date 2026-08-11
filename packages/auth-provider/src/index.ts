@@ -2,6 +2,7 @@ export type {
   AuthorizationRequest,
   AuthenticatedIdentity,
   AuthProvider,
+  AuthProviderEvent,
   AuthResult,
   ExternalSubject,
   LogoutRequest,

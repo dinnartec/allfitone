@@ -221,6 +221,53 @@ export type Database = {
           },
         ]
       }
+      password_reset_receipts: {
+        Row: {
+          access_account_id: string | null
+          id: string
+          issuer: string
+          occurred_at: string
+          processed_at: string | null
+          provider: string
+          provider_event_id: string
+          received_at: string
+          result: Database['identity']['Enums']['password_reset_receipt_result'] | null
+          revoked_session_count: number
+        }
+        Insert: {
+          access_account_id?: string | null
+          id?: string
+          issuer: string
+          occurred_at: string
+          processed_at?: string | null
+          provider: string
+          provider_event_id: string
+          received_at?: string
+          result?: Database['identity']['Enums']['password_reset_receipt_result'] | null
+          revoked_session_count?: number
+        }
+        Update: {
+          access_account_id?: string | null
+          id?: string
+          issuer?: string
+          occurred_at?: string
+          processed_at?: string | null
+          provider?: string
+          provider_event_id?: string
+          received_at?: string
+          result?: Database['identity']['Enums']['password_reset_receipt_result'] | null
+          revoked_session_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_password_reset_receipts_access_account'
+            columns: ['access_account_id']
+            isOneToOne: false
+            referencedRelation: 'access_accounts'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       people: {
         Row: {
           activated_at: string
@@ -548,6 +595,20 @@ export type Database = {
           token_version: number
         }[]
       }
+      process_password_reset_succeeded: {
+        Args: {
+          p_issuer: string
+          p_occurred_at: string
+          p_provider: string
+          p_provider_event_id: string
+          p_subject: string
+        }
+        Returns: {
+          outcome: string
+          replayed: boolean
+          revoked_session_count: number
+        }[]
+      }
       professional_credential_projection: {
         Args: { p_credential_id: string }
         Returns: Json
@@ -675,6 +736,7 @@ export type Database = {
       actor_kind: 'anonymous' | 'account' | 'person' | 'professional' | 'worker' | 'support'
       eligibility_result: 'pass' | 'fail' | 'review_required' | 'unknown'
       onboarding_status: 'open' | 'activated' | 'ineligible' | 'expired'
+      password_reset_receipt_result: 'processed' | 'account_absent'
       person_status: 'active' | 'closed'
     }
     CompositeTypes: {
@@ -804,6 +866,7 @@ export const Constants = {
       actor_kind: ['anonymous', 'account', 'person', 'professional', 'worker', 'support'],
       eligibility_result: ['pass', 'fail', 'review_required', 'unknown'],
       onboarding_status: ['open', 'activated', 'ineligible', 'expired'],
+      password_reset_receipt_result: ['processed', 'account_absent'],
       person_status: ['active', 'closed'],
     },
   },

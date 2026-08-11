@@ -14,6 +14,9 @@ type StudioMembershipDestination = 'multiple' | 'one' | 'zero'
 type StudioLogoutTrigger = 'inactivity' | 'manual'
 type StudioLogoutOutcome = 'already-absent' | 'partial' | 'revoked'
 
+export type IdentityPasswordResetWebhookOutcome =
+  'account-absent' | 'failed' | 'ignored' | 'invalid' | 'processed' | 'replayed'
+
 export function recordStudioAuthCallback(
   outcome: 'failed' | 'succeeded',
   reason?: StudioAuthCallbackFailure,
@@ -37,6 +40,12 @@ export function recordStudioLogout(
   outcome: StudioLogoutOutcome,
 ): void {
   writeCounter('studio.auth.logout', { trigger, outcome })
+}
+
+export function recordIdentityPasswordResetWebhook(
+  outcome: IdentityPasswordResetWebhookOutcome,
+): void {
+  writeCounter('identity.password_reset.webhook', { outcome })
 }
 
 function writeCounter(name: string, dimensions: Readonly<Record<string, string>>): void {

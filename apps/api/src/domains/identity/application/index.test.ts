@@ -31,6 +31,7 @@ function provider(overrides: Partial<AuthProvider> = {}): AuthProvider {
       sessionId: 'provider_session_1',
       surface: 'studio',
     }),
+    verifyWebhookEvent: async () => null,
     register: async () => {
       throw new Error('not used')
     },
