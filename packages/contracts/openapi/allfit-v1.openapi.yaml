@@ -814,6 +814,63 @@ paths:
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
 
+  /studio/v1/organizations/{organizationId}/invitations:
+    post:
+      tags: [Studio Organizations]
+      operationId: createStudioTeamInvitation
+      x-allfit-operation: OP-ORG-005
+      x-allfit-cache: no-store
+      summary: Invite someone to join an organization team
+      description: >-
+        Creates or reuses a pending email invitation and its membership intent.
+        The command never creates an account, person, profile, or membership and
+        never reveals whether the contact already belongs to Allfit One.
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeamInvitationCreate'
+      responses:
+        '200':
+          description: An equivalent pending invitation was reused
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamInvitation'
+        '201':
+          description: Invitation and membership intent created atomically
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamInvitation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
   /studio/v1/organizations/{organizationId}/programs/{programId}/versions:
     post:
       tags: [Studio Planning]
@@ -2317,6 +2374,79 @@ components:
           items:
             type: string
             enum: [owner, admin, coach, staff]
+    TeamInvitationCreate:
+      type: object
+      additionalProperties: false
+      required: [channel, contact, intents]
+      properties:
+        channel:
+          type: string
+          enum: [email]
+        contact:
+          type: string
+          format: email
+          minLength: 3
+          maxLength: 254
+        intents:
+          type: array
+          minItems: 1
+          maxItems: 1
+          items:
+            $ref: '#/components/schemas/TeamInvitationIntentCreate'
+    TeamInvitationIntentCreate:
+      type: object
+      additionalProperties: false
+      required: [kind, proposed_role_code]
+      properties:
+        kind:
+          type: string
+          enum: [membership]
+        proposed_role_code:
+          type: string
+          enum: [admin, coach, staff]
+    TeamInvitation:
+      type: object
+      additionalProperties: false
+      required: [id, status, channel, contact_hint, expires_at, reused, intents]
+      properties:
+        id:
+          $ref: '#/components/schemas/UuidV7'
+        status:
+          type: string
+          enum: [pending]
+        channel:
+          type: string
+          enum: [email]
+        contact_hint:
+          type: string
+          description: Masked destination; never the complete email address.
+        expires_at:
+          type: string
+          format: date-time
+        reused:
+          type: boolean
+        intents:
+          type: array
+          minItems: 1
+          maxItems: 1
+          items:
+            $ref: '#/components/schemas/TeamInvitationIntent'
+    TeamInvitationIntent:
+      type: object
+      additionalProperties: false
+      required: [id, kind, status, proposed_role_code]
+      properties:
+        id:
+          $ref: '#/components/schemas/UuidV7'
+        kind:
+          type: string
+          enum: [membership]
+        status:
+          type: string
+          enum: [pending]
+        proposed_role_code:
+          type: string
+          enum: [admin, coach, staff]
     StudioMembership:
       type: object
       additionalProperties: false

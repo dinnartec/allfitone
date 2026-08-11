@@ -16,6 +16,7 @@
     "@allfitone/auth-provider": "workspace:*",
     "@allfitone/contracts": "workspace:*",
     "@allfitone/db": "workspace:*",
+    "@allfitone/notifications": "workspace:*",
     "@allfitone/queue": "workspace:*",
     "hono": "^4.6.0",
     "postgres": "3.4.9"

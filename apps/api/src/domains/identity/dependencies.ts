@@ -2,6 +2,10 @@
 
 import { authProvider } from '../../platform/auth/index.js'
 import {
+  createStudioInvitationService,
+  type StudioInvitationService,
+} from './application/invitations.js'
+import {
   createStudioOnboardingService,
   createStudioProfessionalService,
   createStudioSessionService,
@@ -22,6 +26,7 @@ import {
   createIdentityProfessionalDatabase,
   createIdentitySessionDatabase,
   createIdentityWebhookDatabase,
+  createIdentityInvitationDatabase,
   createSessionTokenVaultFromEnv,
 } from './infrastructure/index.js'
 
@@ -30,6 +35,7 @@ let cachedOnboarding: StudioOnboardingService | undefined
 let cachedProfessional: StudioProfessionalService | undefined
 let cachedRegistrations: SpaceRegistrationService | undefined
 let cachedWebhooks: IdentityWebhookService | undefined
+let cachedInvitations: StudioInvitationService | undefined
 
 export function studioSessionService(): StudioSessionService {
   if (cached) return cached
@@ -86,6 +92,18 @@ export function identityWebhookService(): IdentityWebhookService {
     issuer,
   })
   return cachedWebhooks
+}
+
+export function studioInvitationService(): StudioInvitationService {
+  cachedInvitations ??= createStudioInvitationService(createIdentityInvitationDatabase(), {
+    enabled: process.env.STAFF_INVITATIONS_ENABLED === 'true',
+  })
+  return cachedInvitations
+}
+
+/** Test seam. Undefined restores environment-backed construction. */
+export function setStudioInvitationService(service: StudioInvitationService | undefined): void {
+  cachedInvitations = service
 }
 
 /** Test seam. Undefined restores environment-backed construction. */

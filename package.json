@@ -37,7 +37,7 @@
     "db:reset": "supabase db reset --local --workdir packages/db",
     "db:lint": "supabase db lint --local --level warning --fail-on error --workdir packages/db",
     "db:test": "supabase test db --local --workdir packages/db",
-    "db:test:concurrency": "bun test packages/db/tests/idempotency-concurrency.test.ts",
+    "db:test:concurrency": "bun test packages/db/tests",
     "db:types": "bun packages/db/scripts/generate-types.ts",
     "check:db-types": "bun packages/db/scripts/generate-types.ts --check",
     "db:migration:new": "supabase migration new --workdir packages/db",

@@ -18,6 +18,10 @@ export type Database = {
         Args: { p_membership_id: string }
         Returns: boolean
       }
+      has_capability: {
+        Args: { p_capability_code: string; p_organization_id: string }
+        Returns: boolean
+      }
       has_membership: { Args: { p_organization_id: string }; Returns: boolean }
       is_self: { Args: { target_person_id: string }; Returns: boolean }
       owns_membership: { Args: { p_membership_id: string }; Returns: boolean }
@@ -160,6 +164,101 @@ export type Database = {
             referencedColumns: ['id']
           },
         ]
+      }
+      invitation_intents: {
+        Row: {
+          created_at: string
+          decided_at: string | null
+          id: string
+          invitation_id: string
+          kind: Database['identity']['Enums']['invitation_intent_kind']
+          materialized_membership_id: string | null
+          proposed_role_code: string | null
+          status: Database['identity']['Enums']['invitation_intent_status']
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          decided_at?: string | null
+          id?: string
+          invitation_id: string
+          kind: Database['identity']['Enums']['invitation_intent_kind']
+          materialized_membership_id?: string | null
+          proposed_role_code?: string | null
+          status?: Database['identity']['Enums']['invitation_intent_status']
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          decided_at?: string | null
+          id?: string
+          invitation_id?: string
+          kind?: Database['identity']['Enums']['invitation_intent_kind']
+          materialized_membership_id?: string | null
+          proposed_role_code?: string | null
+          status?: Database['identity']['Enums']['invitation_intent_status']
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_invitation_intents_invitation'
+            columns: ['invitation_id']
+            isOneToOne: false
+            referencedRelation: 'invitations'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      invitations: {
+        Row: {
+          channel: string
+          contact: string
+          created_at: string
+          expires_at: string
+          id: string
+          issued_by_membership_id: string
+          organization_id: string
+          proposal_hash: string
+          responsible_party: Json
+          responsible_party_schema_version: number
+          status: Database['identity']['Enums']['invitation_status']
+          token_hash: string
+          token_key_version: number
+          updated_at: string
+        }
+        Insert: {
+          channel: string
+          contact: string
+          created_at?: string
+          expires_at: string
+          id: string
+          issued_by_membership_id: string
+          organization_id: string
+          proposal_hash: string
+          responsible_party: Json
+          responsible_party_schema_version?: number
+          status?: Database['identity']['Enums']['invitation_status']
+          token_hash: string
+          token_key_version: number
+          updated_at?: string
+        }
+        Update: {
+          channel?: string
+          contact?: string
+          created_at?: string
+          expires_at?: string
+          id?: string
+          issued_by_membership_id?: string
+          organization_id?: string
+          proposal_hash?: string
+          responsible_party?: Json
+          responsible_party_schema_version?: number
+          status?: Database['identity']['Enums']['invitation_status']
+          token_hash?: string
+          token_key_version?: number
+          updated_at?: string
+        }
+        Relationships: []
       }
       onboarding_attempts: {
         Row: {
@@ -578,6 +677,31 @@ export type Database = {
         Args: { p_person_id: string; p_request_id: string }
         Returns: Json
       }
+      issue_staff_invitation: {
+        Args: {
+          p_channel: string
+          p_command_id: string
+          p_contact: string
+          p_idempotency_key: string
+          p_organization_id: string
+          p_person_id: string
+          p_proposed_role_code: string
+          p_request_hash: string
+          p_token_hash: string
+          p_token_key_version: number
+        }
+        Returns: {
+          channel: string
+          contact_hint: string
+          expires_at: string
+          invitation_id: string
+          invitation_intent_id: string
+          proposed_role_code: string
+          replayed: boolean
+          reused: boolean
+          status: string
+        }[]
+      }
       load_access_session: {
         Args: {
           p_surface: Database['identity']['Enums']['access_session_surface']
@@ -593,6 +717,18 @@ export type Database = {
           session_id: string
           token_ciphertext: string
           token_version: number
+        }[]
+      }
+      prepare_staff_invitation_delivery: {
+        Args: { p_event_id: string }
+        Returns: {
+          contact: string
+          delivery_state: string
+          expires_at: string
+          invitation_id: string
+          organization_name: string
+          proposed_role_code: string
+          token_key_version: number
         }[]
       }
       process_password_reset_succeeded: {
@@ -718,6 +854,18 @@ export type Database = {
           status: string
         }[]
       }
+      team_invitation_projection: {
+        Args: { p_invitation_id: string }
+        Returns: {
+          channel: string
+          contact_hint: string
+          expires_at: string
+          invitation_id: string
+          invitation_intent_id: string
+          proposed_role_code: string
+          status: string
+        }[]
+      }
       validate_professional_credential_input: {
         Args: {
           p_credential_type_code: string
@@ -735,6 +883,9 @@ export type Database = {
       access_session_surface: 'studio'
       actor_kind: 'anonymous' | 'account' | 'person' | 'professional' | 'worker' | 'support'
       eligibility_result: 'pass' | 'fail' | 'review_required' | 'unknown'
+      invitation_intent_kind: 'membership' | 'service_relationship' | 'program_assignment'
+      invitation_intent_status: 'pending' | 'accepted' | 'rejected' | 'expired'
+      invitation_status: 'pending' | 'claimed' | 'revoked' | 'expired'
       onboarding_status: 'open' | 'activated' | 'ineligible' | 'expired'
       password_reset_receipt_result: 'processed' | 'account_absent'
       person_status: 'active' | 'closed'
@@ -865,6 +1016,9 @@ export const Constants = {
       access_session_surface: ['studio'],
       actor_kind: ['anonymous', 'account', 'person', 'professional', 'worker', 'support'],
       eligibility_result: ['pass', 'fail', 'review_required', 'unknown'],
+      invitation_intent_kind: ['membership', 'service_relationship', 'program_assignment'],
+      invitation_intent_status: ['pending', 'accepted', 'rejected', 'expired'],
+      invitation_status: ['pending', 'claimed', 'revoked', 'expired'],
       onboarding_status: ['open', 'activated', 'ineligible', 'expired'],
       password_reset_receipt_result: ['processed', 'account_absent'],
       person_status: ['active', 'closed'],

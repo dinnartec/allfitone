@@ -1,5 +1,6 @@
 {
   "lockfileVersion": 1,
+  "configVersion": 0,
   "workspaces": {
     "": {
       "name": "allfitone",
@@ -29,6 +30,7 @@
         "@allfitone/auth-provider": "workspace:*",
         "@allfitone/contracts": "workspace:*",
         "@allfitone/db": "workspace:*",
+        "@allfitone/notifications": "workspace:*",
         "@allfitone/queue": "workspace:*",
         "hono": "^4.6.0",
         "postgres": "3.4.9",
@@ -99,7 +101,10 @@
       "dependencies": {
         "@allfitone/auth-provider": "workspace:*",
         "@allfitone/db": "workspace:*",
+        "@allfitone/notifications": "workspace:*",
         "@allfitone/queue": "workspace:*",
+        "hono": "^4.6.0",
+        "postgres": "3.4.9",
       },
     },
     "packages/auth-provider": {
@@ -118,9 +123,16 @@
       "name": "@allfitone/db",
       "version": "0.0.0",
     },
+    "packages/notifications": {
+      "name": "@allfitone/notifications",
+      "version": "0.0.0",
+    },
     "packages/queue": {
       "name": "@allfitone/queue",
       "version": "0.0.0",
+      "dependencies": {
+        "postgres": "3.4.9",
+      },
     },
   },
   "overrides": {
@@ -145,6 +157,8 @@
     "@allfitone/db": ["@allfitone/db@workspace:packages/db"],
 
     "@allfitone/icons": ["@allfitone/icons@0.2.0", "", { "dependencies": { "lucide-react": "^1.25.0" }, "peerDependencies": { "react": ">=19" } }, "sha512-FdZk0SqRaufH4GMlZR3qD47NEYJowIKBrnOnhC2ihetvajRHF4bE1SIlxIEzbYFL4L3EZsaYQXUzV+CXxkmlGQ=="],
+
+    "@allfitone/notifications": ["@allfitone/notifications@workspace:packages/notifications"],
 
     "@allfitone/queue": ["@allfitone/queue@workspace:packages/queue"],
 

@@ -20,8 +20,6 @@ export interface QueueMessage<T = unknown> {
 }
 
 export interface Queue {
-  publish(topic: string, payload: unknown): Promise<void>
-
   /**
    * Claims pending messages for processing.
    *
@@ -31,5 +29,5 @@ export interface Queue {
    */
   claim(topic: string, limit: number): Promise<QueueMessage[]>
   ack(id: string): Promise<void>
-  nack(id: string, reason: string): Promise<void>
+  nack(id: string, reason: string, retryable: boolean): Promise<void>
 }

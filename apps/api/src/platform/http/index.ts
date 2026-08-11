@@ -18,6 +18,8 @@ export type ApiErrorCode =
   | 'invalid-request'
   /** A dependency we do not control did not answer. Retryable. */
   | 'upstream-unavailable'
+  /** A locally controlled feature or delivery path is intentionally unavailable. */
+  | 'service-degraded'
   /** Authenticated account has not completed domain registration. */
   | 'registration-incomplete'
   /** The linked domain person was closed. */
@@ -38,6 +40,7 @@ const STATUS: Record<ApiErrorCode, ContentfulStatusCode> = {
   'wrong-surface': 403,
   'invalid-request': 400,
   'upstream-unavailable': 503,
+  'service-degraded': 503,
   'registration-incomplete': 403,
   'account-closed': 403,
   forbidden: 403,

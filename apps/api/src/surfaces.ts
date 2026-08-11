@@ -16,6 +16,7 @@ import { studioCatalogRoutes } from './domains/catalog/index.js'
 import {
   spaceIdentityRoutes,
   studioIdentityRoutes,
+  studioInvitationRoutes,
   studioOnboardingRoutes,
   studioProfessionalRoutes,
 } from './domains/identity/index.js'
@@ -25,6 +26,7 @@ export function mountSurfaces(app: Hono): void {
   app.route('/studio/v1', studioIdentityRoutes())
   app.route('/studio/v1', studioOnboardingRoutes())
   app.route('/studio/v1', studioProfessionalRoutes())
+  app.route('/studio/v1', studioInvitationRoutes())
   app.route('/studio/v1', studioOrganizationRoutes())
   app.route('/studio/v1', studioCatalogRoutes())
   app.route('/space/v1', spaceIdentityRoutes())

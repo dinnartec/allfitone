@@ -10,6 +10,7 @@ import type {
   IdentityWebhookDatabase,
   IdentityOnboardingDatabase,
   IdentityProfessionalDatabase,
+  IdentityInvitationDatabase,
   ProfessionalCredential,
   ProfessionalProfile,
   StudioProfessionalContext,
@@ -18,6 +19,18 @@ import type {
   StoredAccessSession,
   StoredSessionSecret,
 } from '../domain/index.js'
+
+type InvitationRow = {
+  invitation_id: string
+  invitation_intent_id: string
+  status: 'pending'
+  channel: 'email'
+  contact_hint: string
+  expires_at: Date
+  proposed_role_code: 'admin' | 'coach' | 'staff'
+  reused: boolean
+  replayed: boolean
+}
 
 type AccountRow = { account_id: string; person_id: string | null }
 type SessionRow = {
@@ -398,6 +411,47 @@ export function createIdentityWebhookDatabase(): IdentityWebhookDatabase {
         revokedSessionCount: row.revoked_session_count,
         replayed: row.replayed,
       }
+    },
+  }
+}
+
+export function createIdentityInvitationDatabase(): IdentityInvitationDatabase {
+  const sql = database()
+
+  return {
+    async issue(input) {
+      return sql.begin(async (transaction) => {
+        await setPersonActor(transaction, input.personId, input.commandId)
+        const [row] = await transaction<InvitationRow[]>`
+          select *
+          from identity.issue_staff_invitation(
+            ${input.personId}::uuid,
+            ${input.organizationId}::uuid,
+            ${input.channel},
+            ${input.contact},
+            ${input.proposedRoleCode},
+            ${input.tokenHash},
+            ${input.tokenKeyVersion}::smallint,
+            ${input.idempotencyKey}::uuid,
+            ${input.commandId}::uuid,
+            ${input.requestHash}
+          )
+        `
+        if (!row) throw new Error('PostgreSQL did not issue the team invitation')
+        return {
+          resource: {
+            id: row.invitation_id,
+            intentId: row.invitation_intent_id,
+            status: row.status,
+            channel: row.channel,
+            contactHint: row.contact_hint,
+            expiresAt: new Date(row.expires_at),
+            proposedRoleCode: row.proposed_role_code,
+            reused: row.reused,
+          },
+          replayed: row.replayed,
+        }
+      })
     },
   }
 }
