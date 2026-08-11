@@ -1,5 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "rewrites": [{ "source": "/cron/outbox", "destination": "/api/cron/outbox" }],
+  "framework": "hono",
   "crons": [{ "path": "/cron/outbox", "schedule": "* * * * *" }]
 }
