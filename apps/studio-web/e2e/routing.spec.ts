@@ -149,6 +149,29 @@ test('keeps activation step commands stable and rotates only the edited completi
   expect(thirdCompletion?.headers['command-id']).not.toBe(firstCompletion?.headers['command-id'])
 })
 
+test('keeps the session active after returning from independent space setup twice', async ({
+  page,
+}) => {
+  const fixture = createStudioApiFixture()
+  await installStudioApiMock(page, fixture)
+  await page.goto('/')
+
+  const independent = page.getByRole('button', { name: 'Trabajo por mi cuenta' })
+  for (let visit = 0; visit < 2; visit += 1) {
+    await independent.click()
+    await expect(page.getByRole('heading', { name: 'Dale nombre a tu espacio.' })).toBeVisible()
+    await page.getByRole('button', { name: 'Volver' }).click()
+    await expect(page.getByRole('heading', { name: '¿Cómo trabajas hoy?' })).toBeVisible()
+  }
+
+  expect(
+    fixture.requests.filter(
+      (request) => request.method === 'POST' && request.path === '/studio/v1/auth/logout',
+    ),
+  ).toHaveLength(0)
+  await expect(page.getByRole('button', { name: 'Cerrar sesión' })).toBeVisible()
+})
+
 test('waits without mutations and rechecks an empty membership list', async ({ page }) => {
   const fixture = createStudioApiFixture()
   await installStudioApiMock(page, fixture)

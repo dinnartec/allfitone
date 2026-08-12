@@ -4,6 +4,26 @@ import { activeMembership, createStudioApiFixture, installStudioApiMock } from '
 
 const STUDIO_ORIGIN = 'http://127.0.0.1:3101'
 
+test('ignores a manual logout form submission without explicit button activation', async ({
+  page,
+}) => {
+  const fixture = createStudioApiFixture()
+  await installStudioApiMock(page, fixture)
+  await page.goto('/')
+  await expect(page.getByRole('heading', { name: '¿Cómo trabajas hoy?' })).toBeVisible()
+
+  await page.locator('form:has(input[name="reason"][value="manual"])').evaluate((form) => {
+    ;(form as HTMLFormElement).requestSubmit()
+  })
+
+  await expect(page.getByRole('heading', { name: '¿Cómo trabajas hoy?' })).toBeVisible()
+  expect(
+    fixture.requests.filter(
+      (request) => request.method === 'POST' && request.path === '/studio/v1/auth/logout',
+    ),
+  ).toHaveLength(0)
+})
+
 test('clears the browser session and browser history cannot reveal the workspace', async ({
   page,
 }) => {
