@@ -1,8 +1,19 @@
 'use client'
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@allfitone/react/components/alert-dialog'
 import { Alert, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
 import { Badge } from '@allfitone/react/components/badge'
 import { Button } from '@allfitone/react/components/button'
+import { Spinner } from '@allfitone/react/components/spinner'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useState } from 'react'
 
@@ -38,6 +49,8 @@ export function TeamInvitationList() {
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string>()
   const [revoking, setRevoking] = useState<string>()
+  const [revokeIntent, setRevokeIntent] = useState<InvitationItem>()
+  const [revokeError, setRevokeError] = useState<string>()
 
   const load = useCallback(
     async (cursor?: string) => {
@@ -73,11 +86,17 @@ export function TeamInvitationList() {
     void load()
   }, [load])
 
-  async function revoke(item: InvitationItem) {
+  function requestRevoke(item: InvitationItem) {
     if (revoking || item.status !== 'pending') return
-    if (!window.confirm(`¿Revocar la invitación enviada a ${item.contact}?`)) return
+    setRevokeError(undefined)
+    setRevokeIntent(item)
+  }
+
+  async function revoke() {
+    const item = revokeIntent
+    if (revoking || !item || item.status !== 'pending') return
     setRevoking(item.id)
-    setError(undefined)
+    setRevokeError(undefined)
     try {
       await studioApi.revokeTeamInvitation(current.organization_id, item.id, newCommand())
       setItems((existing) =>
@@ -95,11 +114,12 @@ export function TeamInvitationList() {
             : candidate,
         ),
       )
+      setRevokeIntent(undefined)
     } catch (caught) {
       if (caught instanceof StudioApiError && caught.status === 409) {
-        setError('La invitación fue decidida antes de poder revocarla. Actualiza la lista.')
+        setRevokeError('La invitación ya fue decidida. Cierra este diálogo y actualiza la lista.')
       } else {
-        setError('No pudimos revocar la invitación. Inténtalo de nuevo.')
+        setRevokeError('No pudimos revocar la invitación. Inténtalo de nuevo.')
       }
     } finally {
       setRevoking(undefined)
@@ -188,7 +208,7 @@ export function TeamInvitationList() {
                           size="sm"
                           variant="ghost"
                           disabled={Boolean(revoking)}
-                          onClick={() => void revoke(item)}
+                          onClick={() => requestRevoke(item)}
                         >
                           {revoking === item.id ? 'Revocando…' : 'Revocar'}
                         </Button>
@@ -207,6 +227,45 @@ export function TeamInvitationList() {
           {loadingMore ? 'Cargando…' : 'Ver más'}
         </Button>
       ) : null}
+
+      <AlertDialog
+        open={Boolean(revokeIntent)}
+        onOpenChange={(open) => {
+          if (!open && !revoking) {
+            setRevokeIntent(undefined)
+            setRevokeError(undefined)
+          }
+        }}
+      >
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Revocar esta invitación?</AlertDialogTitle>
+            <AlertDialogDescription>
+              El enlace enviado a <strong>{revokeIntent?.contact}</strong> dejará de funcionar. Esta
+              acción no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {revokeError ? (
+            <Alert variant="danger" live="assertive">
+              <AlertDescription>{revokeError}</AlertDescription>
+            </Alert>
+          ) : null}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={Boolean(revoking)}>Conservar invitación</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={Boolean(revoking)}
+              onClick={(event) => {
+                event.preventDefault()
+                void revoke()
+              }}
+            >
+              {revoking ? <Spinner label="Revocando invitación" /> : null}
+              {revoking ? 'Revocando…' : 'Revocar invitación'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </section>
   )
 }
