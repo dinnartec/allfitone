@@ -55,8 +55,7 @@ create table identity.access_account_mfa_factors (
   created_at timestamptz not null default clock_timestamp(),
   updated_at timestamptz not null default clock_timestamp(),
   constraint pk_access_account_mfa_factors primary key (id),
-  constraint fk_access_account_mfa_factors_access_account foreign key (access_account_id)
-    references identity.access_accounts(id) on delete restrict,
+  constraint fk_access_account_mfa_factors_access_account foreign key (access_account_id) references identity.access_accounts(id) on delete restrict,
   constraint uq_access_account_mfa_factors_provider_factor unique (provider, provider_factor_id),
   constraint ck_access_account_mfa_factors_provider check (provider = 'workos'),
   constraint ck_access_account_mfa_factors_provider_factor_id check (btrim(provider_factor_id) <> ''),
@@ -94,12 +93,9 @@ create table identity.backoffice_authentication_attempts (
   created_at timestamptz not null default clock_timestamp(),
   updated_at timestamptz not null default clock_timestamp(),
   constraint pk_backoffice_authentication_attempts primary key (id),
-  constraint fk_backoffice_authentication_attempts_access_account foreign key (access_account_id)
-    references identity.access_accounts(id) on delete restrict,
-  constraint fk_backoffice_authentication_attempts_factor foreign key (factor_id)
-    references identity.access_account_mfa_factors(id) on delete restrict,
-  constraint fk_backoffice_authentication_attempts_session foreign key (completed_session_id)
-    references identity.access_sessions(id) on delete restrict,
+  constraint fk_backoffice_authentication_attempts_access_account foreign key (access_account_id) references identity.access_accounts(id) on delete restrict,
+  constraint fk_backoffice_authentication_attempts_factor foreign key (factor_id) references identity.access_account_mfa_factors(id) on delete restrict,
+  constraint fk_backoffice_authentication_attempts_session foreign key (completed_session_id) references identity.access_sessions(id) on delete restrict,
   constraint uq_backoffice_authentication_attempts_token unique (attempt_token_hash),
   constraint uq_backoffice_authentication_attempts_provider_session unique (provider_session_id),
   constraint uq_backoffice_authentication_attempts_challenge unique (provider_challenge_id),
@@ -139,14 +135,10 @@ create table identity.mfa_factor_recovery_events (
   ceremony_reference text not null,
   occurred_at timestamptz not null default clock_timestamp(),
   constraint pk_mfa_factor_recovery_events primary key (id),
-  constraint fk_mfa_factor_recovery_events_factor foreign key (factor_id)
-    references identity.access_account_mfa_factors(id) on delete restrict,
-  constraint fk_mfa_factor_recovery_events_subject foreign key (subject_person_id)
-    references identity.people(id) on delete restrict,
-  constraint fk_mfa_factor_recovery_events_requester foreign key (requested_by_person_id)
-    references identity.people(id) on delete restrict,
-  constraint fk_mfa_factor_recovery_events_approver foreign key (approved_by_person_id)
-    references identity.people(id) on delete restrict,
+  constraint fk_mfa_factor_recovery_events_factor foreign key (factor_id) references identity.access_account_mfa_factors(id) on delete restrict,
+  constraint fk_mfa_factor_recovery_events_subject foreign key (subject_person_id) references identity.people(id) on delete restrict,
+  constraint fk_mfa_factor_recovery_events_requester foreign key (requested_by_person_id) references identity.people(id) on delete restrict,
+  constraint fk_mfa_factor_recovery_events_approver foreign key (approved_by_person_id) references identity.people(id) on delete restrict,
   constraint ck_mfa_factor_recovery_events_people check (
     requested_by_person_id <> approved_by_person_id
     and requested_by_person_id <> subject_person_id
@@ -169,12 +161,9 @@ create table support.platform_role_assignments (
   revoked_by_person_id uuid,
   revoked_at timestamptz,
   constraint pk_platform_role_assignments primary key (id),
-  constraint fk_platform_role_assignments_person foreign key (person_id)
-    references identity.people(id) on delete restrict,
-  constraint fk_platform_role_assignments_grantor foreign key (granted_by_person_id)
-    references identity.people(id) on delete restrict,
-  constraint fk_platform_role_assignments_revoker foreign key (revoked_by_person_id)
-    references identity.people(id) on delete restrict,
+  constraint fk_platform_role_assignments_person foreign key (person_id) references identity.people(id) on delete restrict,
+  constraint fk_platform_role_assignments_grantor foreign key (granted_by_person_id) references identity.people(id) on delete restrict,
+  constraint fk_platform_role_assignments_revoker foreign key (revoked_by_person_id) references identity.people(id) on delete restrict,
   constraint ck_platform_role_assignments_role check (platform_role = 'allfit_admin'),
   constraint ck_platform_role_assignments_status check (status in ('active', 'revoked')),
   constraint ck_platform_role_assignments_no_self_grant check (granted_by_person_id <> person_id),
@@ -215,16 +204,11 @@ create table support.platform_duty_assignments (
   created_at timestamptz not null default clock_timestamp(),
   updated_at timestamptz not null default clock_timestamp(),
   constraint pk_platform_duty_assignments primary key (id),
-  constraint fk_platform_duty_assignments_person foreign key (person_id)
-    references identity.people(id) on delete restrict,
-  constraint fk_platform_duty_assignments_grantor foreign key (granted_by_person_id)
-    references identity.people(id) on delete restrict,
-  constraint fk_platform_duty_assignments_recertifier foreign key (recertified_by_person_id)
-    references identity.people(id) on delete restrict,
-  constraint fk_platform_duty_assignments_suspender foreign key (suspended_by_person_id)
-    references identity.people(id) on delete restrict,
-  constraint fk_platform_duty_assignments_revoker foreign key (revoked_by_person_id)
-    references identity.people(id) on delete restrict,
+  constraint fk_platform_duty_assignments_person foreign key (person_id) references identity.people(id) on delete restrict,
+  constraint fk_platform_duty_assignments_grantor foreign key (granted_by_person_id) references identity.people(id) on delete restrict,
+  constraint fk_platform_duty_assignments_recertifier foreign key (recertified_by_person_id) references identity.people(id) on delete restrict,
+  constraint fk_platform_duty_assignments_suspender foreign key (suspended_by_person_id) references identity.people(id) on delete restrict,
+  constraint fk_platform_duty_assignments_revoker foreign key (revoked_by_person_id) references identity.people(id) on delete restrict,
   constraint ck_platform_duty_assignments_duty check (duty_code in (
     'view_platform_metrics', 'diagnose_support_metadata', 'view_billing_metadata',
     'manage_organization_lifecycle', 'request_break_glass', 'verify_professional_credentials',

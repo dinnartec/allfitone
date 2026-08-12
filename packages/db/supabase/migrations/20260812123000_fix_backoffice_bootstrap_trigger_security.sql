@@ -1,5 +1,8 @@
 begin;
 
+set lock_timeout = '5s';
+set statement_timeout = '60s';
+
 -- The deferred duty invariant runs at commit under the workflow role. Keep the
 -- workflow role without direct table access and evaluate the closed invariant
 -- with the function owner instead.
