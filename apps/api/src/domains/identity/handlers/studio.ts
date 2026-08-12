@@ -136,9 +136,11 @@ export function studioIdentityRoutes(injectedService?: StudioSessionService): Ho
 
 async function logoutTrigger(
   body: Promise<Record<string, string | File>>,
-): Promise<'inactivity' | 'manual'> {
+): Promise<'inactivity' | 'manual' | 'recovery'> {
   try {
-    return (await body).reason === 'inactivity' ? 'inactivity' : 'manual'
+    const reason = (await body).reason
+    if (reason === 'inactivity' || reason === 'recovery') return reason
+    return 'manual'
   } catch {
     return 'manual'
   }

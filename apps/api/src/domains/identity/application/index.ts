@@ -1,6 +1,7 @@
 /** Studio session use cases. No HTTP and no direct SQL. */
 
 import { AuthError, type AuthProvider, type SessionTokens } from '@allfitone/auth-provider'
+import { hashInvitationToken } from '@allfitone/notifications'
 
 import type {
   IdentitySessionDatabase,
@@ -51,7 +52,7 @@ export interface StudioLogoutResult {
 export interface StudioOnboardingService {
   startAttempt(
     actor: StudioActor,
-    command: CommandContext,
+    input: CommandContext & { invitationToken?: string },
   ): ReturnType<IdentityOnboardingDatabase['startAttempt']>
   recordAdultEligibility(
     actor: StudioActor,
@@ -305,8 +306,14 @@ export function createStudioOnboardingService(
   database: IdentityOnboardingDatabase,
 ): StudioOnboardingService {
   return {
-    startAttempt: (actor, command) =>
-      database.startAttempt({ accountId: actor.accountId, ...command }),
+    startAttempt: (actor, input) => {
+      const { invitationToken, ...command } = input
+      return database.startAttempt({
+        accountId: actor.accountId,
+        ...command,
+        ...(invitationToken ? { invitationTokenHash: hashInvitationToken(invitationToken) } : {}),
+      })
+    },
     recordAdultEligibility: (actor, input) =>
       database.recordAdultEligibility({ accountId: actor.accountId, ...input }),
     complete: (actor, input) => database.activatePerson({ accountId: actor.accountId, ...input }),

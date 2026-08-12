@@ -18,6 +18,11 @@ export type ProfessionalCredential = AllfitV1Schemas['ProfessionalCredential']
 export type ProfessionalCredentialWrite = AllfitV1Schemas['ProfessionalCredentialWrite']
 export type TeamInvitationCreate = AllfitV1Schemas['TeamInvitationCreate']
 export type TeamInvitation = AllfitV1Schemas['TeamInvitation']
+export type TeamInvitationPresentation = AllfitV1Schemas['TeamInvitationPresentation']
+export type TeamInvitationDecisionCreate = AllfitV1Schemas['TeamInvitationDecisionCreate']
+export type TeamInvitationDecisionResult = AllfitV1Schemas['TeamInvitationDecisionResult']
+export type TeamInvitationPage = AllfitV1Schemas['TeamInvitationPage']
+export type TeamInvitationStatus = AllfitV1Schemas['TeamInvitationStatus']
 
 const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080').replace(/\/$/, '')
 
@@ -37,10 +42,11 @@ export const studioApi = {
 
   session: () => request<StudioSession>('/studio/v1/session'),
 
-  startAttempt: (command: CommandHeaders) =>
+  startAttempt: (command: CommandHeaders, invitationToken?: string) =>
     request<OnboardingAttempt>('/studio/v1/onboarding-attempts', {
       method: 'POST',
       headers: commandHeaders(command),
+      ...(invitationToken ? { body: JSON.stringify({ invitation_token: invitationToken }) } : {}),
     }),
 
   recordAdultEligibility: (attemptId: string, declaredAdult: boolean, command: CommandHeaders) =>
@@ -140,6 +146,43 @@ export const studioApi = {
       headers: commandHeaders(command),
       body: JSON.stringify(body),
     }),
+
+  resolveTeamInvitation: (token: string) =>
+    request<TeamInvitationPresentation>('/studio/v1/invitations/resolve', {
+      method: 'POST',
+      body: JSON.stringify({ token }),
+    }),
+
+  decideTeamInvitation: (body: TeamInvitationDecisionCreate, command: CommandHeaders) =>
+    request<TeamInvitationDecisionResult>('/studio/v1/invitations/decisions', {
+      method: 'POST',
+      headers: commandHeaders(command),
+      body: JSON.stringify(body),
+    }),
+
+  teamInvitations: (
+    organizationId: string,
+    options: { status?: TeamInvitationStatus; limit?: number; cursor?: string } = {},
+  ) => {
+    const query = new URLSearchParams()
+    if (options.status) query.set('status', options.status)
+    if (options.limit) query.set('limit', String(options.limit))
+    if (options.cursor) query.set('cursor', options.cursor)
+    const suffix = query.size ? `?${query.toString()}` : ''
+    return request<TeamInvitationPage>(
+      `/studio/v1/organizations/${organizationId}/invitations${suffix}`,
+    )
+  },
+
+  revokeTeamInvitation: (organizationId: string, invitationId: string, command: CommandHeaders) =>
+    request<AllfitV1Schemas['TeamInvitationRevoked']>(
+      `/studio/v1/organizations/${organizationId}/invitations/${invitationId}/revocation`,
+      {
+        method: 'POST',
+        headers: commandHeaders(command),
+        body: JSON.stringify({}),
+      },
+    ),
 }
 
 export interface CommandHeaders {

@@ -6,6 +6,7 @@ const STUDIO_ORIGIN = 'http://127.0.0.1:3101'
 export interface MockRequest {
   method: string
   path: string
+  search: string
   headers: Record<string, string>
   body: unknown
 }
@@ -349,9 +350,11 @@ function retireCredential(
 }
 
 function toMockRequest(request: Request): MockRequest {
+  const url = new URL(request.url())
   return {
     method: request.method(),
-    path: new URL(request.url()).pathname,
+    path: url.pathname,
+    search: url.search,
     headers: request.headers(),
     body: parseBody(request),
   }

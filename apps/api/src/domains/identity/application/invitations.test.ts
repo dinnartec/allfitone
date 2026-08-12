@@ -3,6 +3,20 @@ import { describe, expect, test } from 'bun:test'
 import type { IdentityInvitationDatabase } from '../domain/index.js'
 import { createStudioInvitationService, StudioInvitationError } from './invitations.js'
 
+function invitationDatabase(
+  overrides: Partial<IdentityInvitationDatabase>,
+): IdentityInvitationDatabase {
+  const unused = async () => Promise.reject(new Error('unexpected invitation database call'))
+  return {
+    issue: unused,
+    resolve: unused,
+    decide: unused,
+    list: unused,
+    revoke: unused,
+    ...overrides,
+  }
+}
+
 const command = {
   organizationId: '0199b000-0000-7000-8000-000000000011',
   channel: 'email' as const,
@@ -15,7 +29,7 @@ const command = {
 
 test('derives the token hash before issuing the database command', async () => {
   let captured: Parameters<IdentityInvitationDatabase['issue']>[0] | undefined
-  const database: IdentityInvitationDatabase = {
+  const database = invitationDatabase({
     issue: async (input) => {
       captured = input
       return {
@@ -32,7 +46,7 @@ test('derives the token hash before issuing the database command', async () => {
         replayed: false,
       }
     },
-  }
+  })
   const service = createStudioInvitationService(database, {
     enabled: true,
     environment: {
@@ -51,7 +65,7 @@ test('derives the token hash before issuing the database command', async () => {
 describe('invitation release gate', () => {
   test('fails closed before touching the database', () => {
     const service = createStudioInvitationService(
-      { issue: async () => Promise.reject(new Error('must not run')) },
+      invitationDatabase({ issue: async () => Promise.reject(new Error('must not run')) }),
       { enabled: false },
     )
     expect(() =>
@@ -60,5 +74,34 @@ describe('invitation release gate', () => {
         command,
       ),
     ).toThrow(new StudioInvitationError('service-degraded'))
+  })
+})
+
+describe('invitation recipient identity', () => {
+  test('rejects an unverified provider email before touching the database', () => {
+    const service = createStudioInvitationService(
+      invitationDatabase({ decide: async () => Promise.reject(new Error('must not run')) }),
+      { enabled: false },
+    )
+
+    expect(() =>
+      service.decide(
+        {
+          actor: {
+            accountId: 'account',
+            personId: '0199b000-0000-7000-8000-000000000001',
+          },
+          identity: { givenName: 'Alex', familyName: 'Rivera', verifiedEmail: null },
+        },
+        {
+          token: 'A'.repeat(43),
+          intentId: '0199b000-0000-7000-8000-000000000041',
+          decision: 'accepted',
+          idempotencyKey: 'b2222222-2222-4222-8222-222222222222',
+          commandId: '0199b000-0000-7000-8000-000000000031',
+          requestHash: new Uint8Array(32),
+        },
+      ),
+    ).toThrow(new StudioInvitationError('forbidden'))
   })
 })

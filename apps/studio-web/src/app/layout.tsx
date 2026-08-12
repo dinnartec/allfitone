@@ -1,8 +1,10 @@
 import type { Metadata } from 'next'
 import { Barlow_Condensed, Manrope } from 'next/font/google'
+import Script from 'next/script'
 import type { ReactNode } from 'react'
 
 import { SessionGuard } from '@/components/session-guard'
+import { invitationTokenCaptureScript } from '@/lib/invitation-token'
 
 import '@allfitone/react/tokens.css'
 import '@allfitone/react/app.css'
@@ -42,6 +44,11 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
   return (
     <html lang="es" data-afo-theme="light" className={`${display.variable} ${body.variable}`}>
       <body>
+        <Script
+          id="studio-invitation-token-capture"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{ __html: invitationTokenCaptureScript() }}
+        />
         <SessionGuard>{children}</SessionGuard>
       </body>
     </html>

@@ -96,7 +96,7 @@ export function identityWebhookService(): IdentityWebhookService {
 
 export function studioInvitationService(): StudioInvitationService {
   cachedInvitations ??= createStudioInvitationService(createIdentityInvitationDatabase(), {
-    enabled: process.env.STAFF_INVITATIONS_ENABLED === 'true',
+    enabled: process.env.STAFF_INVITATION_ISSUANCE_ENABLED === 'true',
   })
   return cachedInvitations
 }

@@ -11,7 +11,8 @@ const INVITATIONS_ENABLED = process.env.NEXT_PUBLIC_STAFF_INVITATIONS_ENABLED ==
 export function OrganizationWorkspace() {
   const router = useRouter()
   const { current } = useOrganizationContext()
-  const canInvite = INVITATIONS_ENABLED && canInviteTeam(current.roles)
+  const canManageInvitations = canInviteTeam(current.roles)
+  const canInvite = INVITATIONS_ENABLED && canManageInvitations
   return (
     <>
       <section data-workspace-welcome>
@@ -55,15 +56,28 @@ export function OrganizationWorkspace() {
               <strong>Invitar al equipo</strong>
               <p>Membresías, roles y aceptación de invitaciones.</p>
             </div>
-            {canInvite ? (
-              <Button
-                size="sm"
-                onClick={() =>
-                  router.push(`/organizations/${current.organization_id}/team/invitations/new`)
-                }
-              >
-                Invitar
-              </Button>
+            {canManageInvitations ? (
+              <div data-workspace-actions>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    router.push(`/organizations/${current.organization_id}/team/invitations`)
+                  }
+                >
+                  Gestionar
+                </Button>
+                {canInvite ? (
+                  <Button
+                    size="sm"
+                    onClick={() =>
+                      router.push(`/organizations/${current.organization_id}/team/invitations/new`)
+                    }
+                  >
+                    Invitar
+                  </Button>
+                ) : null}
+              </div>
             ) : (
               <small>Próximamente</small>
             )}

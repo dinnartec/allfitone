@@ -1,0 +1,232 @@
+'use client'
+
+import { Alert, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
+import { Badge } from '@allfitone/react/components/badge'
+import { Button } from '@allfitone/react/components/button'
+import { useRouter } from 'next/navigation'
+import { useCallback, useEffect, useState } from 'react'
+
+import { useOrganizationContext } from './organization-context'
+import {
+  StudioApiError,
+  newCommand,
+  studioApi,
+  type TeamInvitationPage,
+  type TeamInvitationStatus,
+} from '@/lib/studio-api'
+import { canInviteTeam, invitationRoleLabel } from '@/lib/team-invitations'
+
+type InvitationItem = TeamInvitationPage['data'][number]
+type Filter = TeamInvitationStatus | 'all'
+
+const FILTERS: Array<{ value: Filter; label: string }> = [
+  { value: 'all', label: 'Todas' },
+  { value: 'pending', label: 'Pendientes' },
+  { value: 'completed', label: 'Decididas' },
+  { value: 'revoked', label: 'Revocadas' },
+  { value: 'expired', label: 'Vencidas' },
+]
+const INVITATION_ISSUANCE_ENABLED = process.env.NEXT_PUBLIC_STAFF_INVITATIONS_ENABLED === 'true'
+
+export function TeamInvitationList() {
+  const router = useRouter()
+  const { current } = useOrganizationContext()
+  const [filter, setFilter] = useState<Filter>('all')
+  const [items, setItems] = useState<InvitationItem[]>([])
+  const [nextCursor, setNextCursor] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [error, setError] = useState<string>()
+  const [revoking, setRevoking] = useState<string>()
+
+  const load = useCallback(
+    async (cursor?: string) => {
+      if (cursor) {
+        setLoadingMore(true)
+      } else {
+        setLoading(true)
+      }
+      setError(undefined)
+      try {
+        const page = await studioApi.teamInvitations(current.organization_id, {
+          ...(filter === 'all' ? {} : { status: filter }),
+          limit: 50,
+          ...(cursor ? { cursor } : {}),
+        })
+        setItems((existing) => (cursor ? [...existing, ...page.data] : page.data))
+        setNextCursor(page.page.next_cursor)
+      } catch (caught) {
+        setError(
+          caught instanceof StudioApiError && caught.status === 403
+            ? 'Tu rol actual no permite consultar las invitaciones.'
+            : 'No pudimos cargar las invitaciones del equipo.',
+        )
+      } finally {
+        setLoading(false)
+        setLoadingMore(false)
+      }
+    },
+    [current.organization_id, filter],
+  )
+
+  useEffect(() => {
+    void load()
+  }, [load])
+
+  async function revoke(item: InvitationItem) {
+    if (revoking || item.status !== 'pending') return
+    if (!window.confirm(`¿Revocar la invitación enviada a ${item.contact}?`)) return
+    setRevoking(item.id)
+    setError(undefined)
+    try {
+      await studioApi.revokeTeamInvitation(current.organization_id, item.id, newCommand())
+      setItems((existing) =>
+        existing.map((candidate) =>
+          candidate.id === item.id
+            ? {
+                ...candidate,
+                status: 'revoked',
+                intents: candidate.intents.map((intent) => ({
+                  ...intent,
+                  status: 'revoked',
+                  decided_at: new Date().toISOString(),
+                })),
+              }
+            : candidate,
+        ),
+      )
+    } catch (caught) {
+      if (caught instanceof StudioApiError && caught.status === 409) {
+        setError('La invitación fue decidida antes de poder revocarla. Actualiza la lista.')
+      } else {
+        setError('No pudimos revocar la invitación. Inténtalo de nuevo.')
+      }
+    } finally {
+      setRevoking(undefined)
+    }
+  }
+
+  return (
+    <section data-team-invitation-list aria-labelledby="team-invitations-title">
+      <header data-team-invitation-list-header>
+        <div data-studio-panel-intro>
+          <p data-studio-eyebrow>Tu equipo</p>
+          <h1 id="team-invitations-title">Invitaciones emitidas</h1>
+          <p>Consulta el destino, la propuesta y el estado de cada invitación.</p>
+        </div>
+        {INVITATION_ISSUANCE_ENABLED && canInviteTeam(current.roles) ? (
+          <Button
+            onClick={() =>
+              router.push(`/organizations/${current.organization_id}/team/invitations/new`)
+            }
+          >
+            Nueva invitación
+          </Button>
+        ) : null}
+      </header>
+
+      <div data-team-invitation-filters aria-label="Filtrar invitaciones">
+        {FILTERS.map((option) => (
+          <Button
+            key={option.value}
+            size="sm"
+            variant={filter === option.value ? 'default' : 'outline'}
+            aria-pressed={filter === option.value}
+            onClick={() => setFilter(option.value)}
+          >
+            {option.label}
+          </Button>
+        ))}
+      </div>
+
+      {error ? (
+        <Alert variant="danger" live="polite">
+          <AlertTitle>No se pudo completar la operación</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+          <Button variant="outline" onClick={() => void load()}>
+            Actualizar
+          </Button>
+        </Alert>
+      ) : null}
+
+      {loading ? <p aria-live="polite">Cargando invitaciones…</p> : null}
+      {!loading && items.length === 0 ? (
+        <Alert>
+          <AlertTitle>No hay invitaciones en este estado</AlertTitle>
+          <AlertDescription>Las nuevas invitaciones aparecerán aquí.</AlertDescription>
+        </Alert>
+      ) : null}
+
+      {items.length > 0 ? (
+        <div data-team-invitation-table-wrapper>
+          <table data-team-invitation-table>
+            <thead>
+              <tr>
+                <th scope="col">Correo</th>
+                <th scope="col">Rol</th>
+                <th scope="col">Creada</th>
+                <th scope="col">Vence</th>
+                <th scope="col">Estado</th>
+                <th scope="col">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item) => {
+                const intent = item.intents[0]
+                return (
+                  <tr key={item.id}>
+                    <td>{item.contact}</td>
+                    <td>{intent ? invitationRoleLabel(intent.proposed_role_code) : '—'}</td>
+                    <td>{formatDate(item.created_at)}</td>
+                    <td>{formatDate(item.expires_at)}</td>
+                    <td>
+                      <InvitationStatusBadge status={item.status} />
+                    </td>
+                    <td>
+                      {item.status === 'pending' ? (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={Boolean(revoking)}
+                          onClick={() => void revoke(item)}
+                        >
+                          {revoking === item.id ? 'Revocando…' : 'Revocar'}
+                        </Button>
+                      ) : null}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+
+      {nextCursor ? (
+        <Button variant="outline" disabled={loadingMore} onClick={() => void load(nextCursor)}>
+          {loadingMore ? 'Cargando…' : 'Ver más'}
+        </Button>
+      ) : null}
+    </section>
+  )
+}
+
+function InvitationStatusBadge({ status }: { status: TeamInvitationStatus }) {
+  const labels: Record<TeamInvitationStatus, string> = {
+    pending: 'Pendiente',
+    completed: 'Decidida',
+    revoked: 'Revocada',
+    expired: 'Vencida',
+  }
+  return (
+    <Badge
+      variant={status === 'pending' ? 'warning' : status === 'completed' ? 'success' : 'outline'}
+    >
+      {labels[status]}
+    </Badge>
+  )
+}
+
+function formatDate(value: string): string {
+  return new Intl.DateTimeFormat('es-CO', { dateStyle: 'medium' }).format(new Date(value))
+}

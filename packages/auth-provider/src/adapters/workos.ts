@@ -147,6 +147,9 @@ export function createWorkOSAuthProvider(config: WorkOSConfig): AuthProvider {
       identity: {
         givenName: normalizedName(response.user.firstName),
         familyName: normalizedName(response.user.lastName),
+        verifiedEmail: response.user.emailVerified
+          ? response.user.email.trim().toLowerCase()
+          : null,
       },
       tokens: toSessionTokens(response),
     }

@@ -15,7 +15,7 @@ function fakeProvider(overrides: Partial<AuthProvider> = {}): AuthProvider {
     getLogoutUrl: () => LOGOUT_URL,
     authenticateWithCode: async () => ({
       subject: 'user_01ABC',
-      identity: { givenName: 'Ada', familyName: 'Lovelace' },
+      identity: { givenName: 'Ada', familyName: 'Lovelace', verifiedEmail: 'ada@example.test' },
       tokens: { accessToken: 'at', refreshToken: 'rt', expiresIn: 300 },
     }),
     verifyAccessToken: async () => ({
@@ -53,7 +53,7 @@ function fakeSessions(overrides: Partial<StudioSessionService> = {}): StudioSess
     resolveActor: async () => ({ accountId: 'account_1', personId: 'person_1' }),
     resolveAccountIdentity: async () => ({
       actor: { accountId: 'account_1', personId: 'person_1' },
-      identity: { givenName: 'Ada', familyName: 'Lovelace' },
+      identity: { givenName: 'Ada', familyName: 'Lovelace', verifiedEmail: 'ada@example.test' },
     }),
     logout: async () => ({ redirectUrl: LOGOUT_URL, outcome: 'revoked' }),
     ...overrides,
@@ -238,6 +238,28 @@ describe('POST /auth/logout', () => {
       name: 'studio.auth.logout',
       value: 1,
       dimensions: { trigger: 'inactivity', outcome: 'revoked' },
+    })
+    info.mockRestore()
+  })
+
+  test('records an explicit recovery logout without exposing session details', async () => {
+    const info = spyOn(console, 'info').mockImplementation(() => undefined)
+    const response = await app().request('/studio/v1/auth/logout', {
+      method: 'POST',
+      headers: {
+        origin: 'http://localhost:3000',
+        'content-type': 'application/x-www-form-urlencoded',
+        cookie: 'allfit_studio_session=opaque-session',
+      },
+      body: 'reason=recovery',
+    })
+
+    expect(response.status).toBe(303)
+    expect(JSON.parse(String(info.mock.calls.at(-1)?.[0]))).toEqual({
+      kind: 'counter',
+      name: 'studio.auth.logout',
+      value: 1,
+      dimensions: { trigger: 'recovery', outcome: 'revoked' },
     })
     info.mockRestore()
   })

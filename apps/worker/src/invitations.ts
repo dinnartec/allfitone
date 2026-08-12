@@ -20,6 +20,7 @@ export interface InvitationDelivery {
 
 export interface InvitationDeliveryDatabase {
   prepare(eventId: string): Promise<InvitationDelivery>
+  expire(limit: number): Promise<number>
 }
 
 export interface InvitationBatchResult {
@@ -27,10 +28,21 @@ export interface InvitationBatchResult {
   delivered: number
   deadOrDelayed: number
   skipped: number
+  expired: number
 }
 
 export function createInvitationDeliveryDatabase(sql: postgres.Sql): InvitationDeliveryDatabase {
   return {
+    async expire(limit) {
+      return sql.begin(async (transaction) => {
+        await transaction`select set_config('app.actor_kind', 'worker', true)`
+        const [row] = await transaction<Array<{ expired_count: number }>>`
+          select identity.expire_staff_invitations(${limit}::integer) as expired_count
+        `
+        if (!row) throw new Error('PostgreSQL did not expire team invitations')
+        return row.expired_count
+      })
+    },
     async prepare(eventId) {
       return sql.begin(async (transaction) => {
         await transaction`select set_config('app.actor_kind', 'worker', true)`
@@ -66,11 +78,16 @@ export function createInvitationBatchProcessor(dependencies: {
   email: EmailSender
   publicBaseUrl: string
   environment?: NodeJS.ProcessEnv
+  deliveryEnabled?: boolean
 }) {
-  const baseUrl = trustedPublicBaseUrl(dependencies.publicBaseUrl)
   const environment = dependencies.environment ?? process.env
+  const baseUrl = trustedPublicBaseUrl(dependencies.publicBaseUrl, environment)
 
   return async function processInvitationBatch(): Promise<InvitationBatchResult> {
+    const expired = await dependencies.database.expire(100)
+    if (dependencies.deliveryEnabled === false) {
+      return { claimed: 0, delivered: 0, deadOrDelayed: 0, skipped: 0, expired }
+    }
     const messages = await dependencies.queue.claim('organization.staff_invited.v1', 25)
     const results = await mapWithConcurrency(messages, 5, deliver)
     return {
@@ -78,6 +95,7 @@ export function createInvitationBatchProcessor(dependencies: {
       delivered: results.filter((outcome) => outcome === 'delivered').length,
       deadOrDelayed: results.filter((outcome) => outcome === 'failed').length,
       skipped: results.filter((outcome) => outcome === 'skipped').length,
+      expired,
     }
   }
 
@@ -103,11 +121,12 @@ export function createInvitationBatchProcessor(dependencies: {
         delivery.invitationId,
         invitationTokenKey(delivery.tokenKeyVersion, environment),
       )
-      const invitationUrl = new URL(`invitations/${encodeURIComponent(token)}`, baseUrl).toString()
+      const invitationUrl = new URL('invitations', baseUrl)
+      invitationUrl.hash = `token=${encodeURIComponent(token)}`
       const rendered = renderTeamInvitationEmail({
         organizationName: delivery.organizationName,
         proposedRoleCode: delivery.proposedRoleCode,
-        invitationUrl,
+        invitationUrl: invitationUrl.toString(),
         expiresAt: delivery.expiresAt,
       })
       await dependencies.email.send({
@@ -128,10 +147,20 @@ export function createInvitationBatchProcessor(dependencies: {
   }
 }
 
-function trustedPublicBaseUrl(value: string): URL {
+function trustedPublicBaseUrl(value: string, environment: NodeJS.ProcessEnv): URL {
   const url = new URL(value)
-  if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash) {
-    throw new Error('INVITATION_PUBLIC_BASE_URL must be a trusted HTTPS URL')
+  const loopback =
+    url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '[::1]'
+  const localDevelopment =
+    environment.NODE_ENV !== 'production' && url.protocol === 'http:' && loopback
+  if (
+    (url.protocol !== 'https:' && !localDevelopment) ||
+    url.username ||
+    url.password ||
+    url.search ||
+    url.hash
+  ) {
+    throw new Error('STAFF_INVITATION_PUBLIC_BASE_URL must be a trusted HTTPS URL')
   }
   if (!url.pathname.endsWith('/')) url.pathname += '/'
   return url

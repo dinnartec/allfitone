@@ -47,7 +47,9 @@ export interface AdultEligibilityEvidence {
 }
 
 export interface IdentityOnboardingDatabase {
-  startAttempt(input: CommandContext & { accountId: string }): Promise<OnboardingAttempt>
+  startAttempt(
+    input: CommandContext & { accountId: string; invitationTokenHash?: Uint8Array },
+  ): Promise<OnboardingAttempt>
   recordAdultEligibility(
     input: CommandContext & { accountId: string; attemptId: string; declaredAdult: boolean },
   ): Promise<AdultEligibilityEvidence>
@@ -220,6 +222,59 @@ export interface TeamInvitation {
   reused: boolean
 }
 
+export type TeamInvitationStatus = 'pending' | 'completed' | 'revoked' | 'expired'
+export type TeamInvitationIntentStatus = 'pending' | 'accepted' | 'rejected' | 'revoked' | 'expired'
+
+export interface TeamInvitationPresentation {
+  id: string
+  status: 'pending'
+  organizationId: string
+  organizationDisplayName: string
+  responsibleParty: {
+    party_kind: 'natural_person' | 'legal_entity'
+    party_name: string
+    purpose: 'studio_operations'
+  }
+  expiresAt: Date
+  intent: {
+    id: string
+    kind: 'membership'
+    status: 'pending'
+    proposedRoleCode: TeamInvitationRole
+  }
+}
+
+export interface TeamInvitationDecisionResult {
+  invitationId: string
+  invitationStatus: 'completed'
+  organizationId: string
+  intentId: string
+  intentStatus: 'accepted' | 'rejected'
+  membershipId: string | null
+  proposedRoleCode: TeamInvitationRole
+}
+
+export interface TeamInvitationListItem {
+  id: string
+  status: TeamInvitationStatus
+  channel: 'email'
+  contact: string
+  createdAt: Date
+  expiresAt: Date
+  intent: {
+    id: string
+    kind: 'membership'
+    status: TeamInvitationIntentStatus
+    proposedRoleCode: TeamInvitationRole
+    decidedAt: Date | null
+  }
+}
+
+export interface TeamInvitationPage {
+  items: TeamInvitationListItem[]
+  hasMore: boolean
+}
+
 export interface IdentityInvitationDatabase {
   issue(
     input: CommandContext & {
@@ -232,6 +287,32 @@ export interface IdentityInvitationDatabase {
       tokenKeyVersion: number
     },
   ): Promise<CommandResult<TeamInvitation>>
+  resolve(tokenHash: Uint8Array): Promise<TeamInvitationPresentation | undefined>
+  decide(
+    input: CommandContext & {
+      personId: string
+      verifiedEmail: string
+      tokenHash: Uint8Array
+      intentId: string
+      decision: 'accepted' | 'rejected'
+    },
+  ): Promise<CommandResult<TeamInvitationDecisionResult>>
+  list(input: {
+    personId: string
+    organizationId: string
+    status?: TeamInvitationStatus
+    limit: number
+    cursorCreatedAt?: Date
+    cursorId?: string
+    requestId: string
+  }): Promise<TeamInvitationPage>
+  revoke(
+    input: CommandContext & {
+      personId: string
+      organizationId: string
+      invitationId: string
+    },
+  ): Promise<CommandResult<{ id: string; status: 'revoked' }>>
 }
 
 export interface SessionTokenVault {

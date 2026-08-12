@@ -24,7 +24,7 @@ describe('Studio session token vault', () => {
     }
     const secret = {
       tokens: { accessToken: 'access-secret', refreshToken: 'refresh-secret', expiresIn: 300 },
-      identity: { givenName: 'Ada', familyName: 'Lovelace' },
+      identity: { givenName: 'Ada', familyName: 'Lovelace', verifiedEmail: 'ada@example.test' },
     }
     const ciphertext = vault.seal(secret, context)
 
@@ -63,7 +63,7 @@ describe('Studio session token vault', () => {
 
     expect(vault.open(ciphertext, context)).toEqual({
       tokens: { accessToken: 'access', refreshToken: 'refresh', expiresIn: 300 },
-      identity: { givenName: null, familyName: null },
+      identity: { givenName: null, familyName: null, verifiedEmail: null },
     })
   })
 })
