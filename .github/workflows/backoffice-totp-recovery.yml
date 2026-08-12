@@ -27,7 +27,7 @@ jobs:
   recover:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    environment: backoffice-totp-recovery-production
+    environment: supabase-production
     steps:
       - uses: actions/checkout@v4
       - name: Require main
