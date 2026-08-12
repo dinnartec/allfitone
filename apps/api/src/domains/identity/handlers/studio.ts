@@ -16,7 +16,9 @@ import {
 import { StudioSessionError, type StudioSessionService } from '../application/index.js'
 import { studioSessionService, trustedStudioWebUrl } from '../dependencies.js'
 
-const STATE_COOKIE = 'allfit_oauth_state'
+const LEGACY_STATE_COOKIE = 'allfit_oauth_state'
+const STATE_COOKIE_PREFIX = `${LEGACY_STATE_COOKIE}_`
+const STATE_PATTERN = /^[A-Za-z0-9_-]{43}$/
 export const STUDIO_SESSION_COOKIE = 'allfit_studio_session'
 const STATE_TTL_SECONDS = 600
 const STATE_COOKIE_PATH = '/studio/v1/auth'
@@ -49,7 +51,7 @@ export function studioIdentityRoutes(injectedService?: StudioSessionService): Ho
   routes.get('/auth/start', (c) => {
     c.header('Cache-Control', 'no-store')
     const state = randomBytes(32).toString('base64url')
-    setCookie(c, STATE_COOKIE, state, {
+    setCookie(c, stateCookieName(state), state, {
       httpOnly: true,
       sameSite: 'Lax',
       secure: process.env.NODE_ENV === 'production',
@@ -65,21 +67,39 @@ export function studioIdentityRoutes(injectedService?: StudioSessionService): Ho
     c.header('Cache-Control', 'no-store')
     const code = c.req.query('code')
     const returnedState = c.req.query('state')
-    const expectedState = getCookie(c, STATE_COOKIE)
-    deleteCookie(c, STATE_COOKIE, { path: STATE_COOKIE_PATH })
+    const cookies = getCookie(c)
+    const flowCookie =
+      returnedState && STATE_PATTERN.test(returnedState)
+        ? stateCookieName(returnedState)
+        : undefined
+    const matchingCookie =
+      flowCookie && cookies[flowCookie] === returnedState
+        ? flowCookie
+        : returnedState && cookies[LEGACY_STATE_COOKIE] === returnedState
+          ? LEGACY_STATE_COOKIE
+          : undefined
 
     if (!code) {
+      if (matchingCookie) deleteCookie(c, matchingCookie, { path: STATE_COOKIE_PATH })
       recordStudioAuthCallback('failed', 'missing-code')
       return fail(c, 'invalid-request', 'missing code')
     }
-    if (!expectedState) {
-      recordStudioAuthCallback('failed', 'missing-state-cookie')
-      return fail(c, 'invalid-request', 'missing or expired state cookie')
-    }
-    if (returnedState !== expectedState) {
+    if (!flowCookie) {
       recordStudioAuthCallback('failed', 'state-mismatch')
       return fail(c, 'invalid-request', 'state mismatch')
     }
+    if (!matchingCookie) {
+      const hasAnotherState = Object.keys(cookies).some(
+        (name) => name === LEGACY_STATE_COOKIE || name.startsWith(STATE_COOKIE_PREFIX),
+      )
+      if (hasAnotherState) {
+        recordStudioAuthCallback('failed', 'state-mismatch')
+        return fail(c, 'invalid-request', 'state mismatch')
+      }
+      recordStudioAuthCallback('failed', 'missing-state-cookie')
+      return fail(c, 'invalid-request', 'missing or expired state cookie')
+    }
+    deleteCookie(c, matchingCookie, { path: STATE_COOKIE_PATH })
 
     try {
       const result = await sessions().completeCode(code)
@@ -132,6 +152,10 @@ export function studioIdentityRoutes(injectedService?: StudioSessionService): Ho
   })
 
   return routes
+}
+
+function stateCookieName(state: string): string {
+  return `${STATE_COOKIE_PREFIX}${state}`
 }
 
 async function logoutTrigger(
