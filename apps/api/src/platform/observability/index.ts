@@ -11,13 +11,28 @@ type StudioAuthCallbackFailure =
 
 type StudioMembershipDestination = 'multiple' | 'one' | 'zero'
 
-type StudioLogoutTrigger = 'inactivity' | 'manual'
+type StudioLogoutTrigger = 'inactivity' | 'manual' | 'recovery'
 type StudioLogoutOutcome = 'already-absent' | 'partial' | 'revoked'
 
 export type IdentityPasswordResetWebhookOutcome =
   'account-absent' | 'failed' | 'ignored' | 'invalid' | 'processed' | 'replayed'
 
-type StudioTeamInvitationOutcome = 'created' | 'failed' | 'replayed' | 'reused'
+type StudioTeamInvitationOutcome =
+  | 'created'
+  | 'failed'
+  | 'replayed'
+  | 'reused'
+  | 'resolved'
+  | 'resolve-failed'
+  | 'decided'
+  | 'decision-replayed'
+  | 'decision-failed'
+  | 'listed'
+  | 'list-failed'
+  | 'revoked'
+  | 'revocation-replayed'
+  | 'revocation-failed'
+  | 'rate-limited'
 
 export function recordStudioAuthCallback(
   outcome: 'failed' | 'succeeded',
@@ -51,7 +66,18 @@ export function recordIdentityPasswordResetWebhook(
 }
 
 export function recordStudioTeamInvitation(outcome: StudioTeamInvitationOutcome): void {
-  writeCounter('studio.team_invitation.command', { outcome })
+  const operation = outcome.startsWith('resolve')
+    ? 'resolve'
+    : outcome.startsWith('decision') || outcome === 'decided'
+      ? 'decision'
+      : outcome.startsWith('list')
+        ? 'list'
+        : outcome.startsWith('revocation') || outcome === 'revoked'
+          ? 'revoke'
+          : outcome === 'rate-limited'
+            ? 'rate_limited'
+            : 'command'
+  writeCounter(`studio.team_invitation.${operation}`, { outcome })
 }
 
 function writeCounter(name: string, dimensions: Readonly<Record<string, string>>): void {

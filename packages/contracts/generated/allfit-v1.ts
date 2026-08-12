@@ -347,7 +347,7 @@ export interface paths {
     patch?: never
     trace?: never
   }
-  '/studio/v1/organizations/{organizationId}/invitations': {
+  '/studio/v1/invitations/resolve': {
     parameters: {
       query?: never
       header?: never
@@ -357,10 +357,65 @@ export interface paths {
     get?: never
     put?: never
     /**
+     * Resolve a pending Studio team invitation
+     * @description Resolves a token without exposing its destination contact. Invalid, expired, revoked and completed invitations are indistinguishable.
+     */
+    post: operations['resolveStudioTeamInvitation']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/studio/v1/invitations/decisions': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /** Accept or reject a Studio team invitation */
+    post: operations['decideStudioTeamInvitation']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/studio/v1/organizations/{organizationId}/invitations': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** List team invitations issued by an organization */
+    get: operations['listStudioTeamInvitations']
+    put?: never
+    /**
      * Invite someone to join an organization team
      * @description Creates or reuses a pending email invitation and its membership intent. The command never creates an account, person, profile, or membership and never reveals whether the contact already belongs to Allfit One.
      */
     post: operations['createStudioTeamInvitation']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/studio/v1/organizations/{organizationId}/invitations/{invitationId}/revocation': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /** Revoke a pending Studio team invitation */
+    post: operations['revokeStudioTeamInvitation']
     delete?: never
     options?: never
     head?: never
@@ -732,6 +787,10 @@ export interface components {
     }
     /** @enum {string} */
     StudioOnboardingStatus: 'open' | 'activated' | 'ineligible' | 'expired'
+    StudioOnboardingAttemptStart: {
+      /** @description Optional team-invitation token associated by hash only. */
+      invitation_token?: string
+    }
     /** @enum {string} */
     StudioEligibilityStatus: 'pending' | 'pass' | 'fail'
     StudioOnboardingAttempt: {
@@ -805,6 +864,52 @@ export interface components {
       membership_id: components['schemas']['UuidV7']
       roles: ('owner' | 'admin' | 'coach' | 'staff')[]
     }
+    TeamInvitationToken: {
+      /** @description Opaque token transported in JSON after being removed from the URL fragment. */
+      token: string
+    }
+    /** @enum {string} */
+    TeamInvitationStatus: 'pending' | 'completed' | 'revoked' | 'expired'
+    /** @enum {string} */
+    TeamInvitationIntentStatus: 'pending' | 'accepted' | 'rejected' | 'revoked' | 'expired'
+    TeamInvitationPresentation: {
+      id: components['schemas']['UuidV7']
+      /** @constant */
+      status: 'pending'
+      organization: {
+        id: components['schemas']['UuidV7']
+        display_name: string
+        responsible_party: components['schemas']['ResponsibleParty']
+      }
+      /** Format: date-time */
+      expires_at: string
+      intents: components['schemas']['TeamInvitationIntent'][]
+    }
+    TeamInvitationDecisionCreate: {
+      token: string
+      decisions: {
+        intent_id: components['schemas']['UuidV7']
+        /** @enum {string} */
+        decision: 'accepted' | 'rejected'
+      }[]
+    }
+    TeamInvitationDecisionResult: {
+      invitation_id: components['schemas']['UuidV7']
+      /** @constant */
+      invitation_status: 'completed'
+      organization_id: components['schemas']['UuidV7']
+      intent: {
+        id: components['schemas']['UuidV7']
+        /** @constant */
+        kind: 'membership'
+        /** @enum {string} */
+        status: 'accepted' | 'rejected'
+        /** @enum {string} */
+        proposed_role_code: 'admin' | 'coach' | 'staff'
+        membership_id: components['schemas']['UuidV7'] | null
+      }
+      replayed: boolean
+    }
     TeamInvitationCreate: {
       /** @enum {string} */
       channel: 'email'
@@ -839,6 +944,37 @@ export interface components {
       status: 'pending'
       /** @enum {string} */
       proposed_role_code: 'admin' | 'coach' | 'staff'
+    }
+    TeamInvitationListItem: {
+      id: components['schemas']['UuidV7']
+      status: components['schemas']['TeamInvitationStatus']
+      /** @constant */
+      channel: 'email'
+      /** Format: email */
+      contact: string
+      /** Format: date-time */
+      created_at: string
+      /** Format: date-time */
+      expires_at: string
+      intents: {
+        id: components['schemas']['UuidV7']
+        /** @constant */
+        kind: 'membership'
+        status: components['schemas']['TeamInvitationIntentStatus']
+        /** @enum {string} */
+        proposed_role_code: 'admin' | 'coach' | 'staff'
+        /** Format: date-time */
+        decided_at: string | null
+      }[]
+    }
+    TeamInvitationPage: {
+      data: components['schemas']['TeamInvitationListItem'][]
+      page: components['schemas']['Page']
+    }
+    TeamInvitationRevoked: {
+      id: components['schemas']['UuidV7']
+      /** @constant */
+      status: 'revoked'
     }
     StudioMembership: {
       membership_id: components['schemas']['UuidV7']
@@ -1977,6 +2113,25 @@ export interface components {
         'application/problem+json': components['schemas']['Problem']
       }
     }
+    /** @description A closed abuse-prevention limit rejected the request */
+    RateLimited: {
+      headers: {
+        'Cache-Control': components['headers']['NoStore']
+        'Retry-After': components['headers']['RetryAfter']
+        [name: string]: unknown
+      }
+      content: {
+        /**
+         * @example {
+         *       "type": "https://errors.allfit.invalid/rate-limited",
+         *       "title": "Too many invitation attempts",
+         *       "status": 429,
+         *       "request_id": "01JEXAMPLE0000000000000000"
+         *     }
+         */
+        'application/problem+json': components['schemas']['Problem']
+      }
+    }
     /** @description Required live grant is not effective */
     ScopeRequired: {
       headers: {
@@ -2345,7 +2500,7 @@ export interface operations {
            * @default manual
            * @enum {string}
            */
-          reason?: 'manual' | 'inactivity'
+          reason?: 'manual' | 'inactivity' | 'recovery'
         }
       }
     }
@@ -2624,7 +2779,11 @@ export interface operations {
       path?: never
       cookie?: never
     }
-    requestBody?: never
+    requestBody?: {
+      content: {
+        'application/json': components['schemas']['StudioOnboardingAttemptStart']
+      }
+    }
     responses: {
       /** @description Open onboarding attempt, newly created or resumed */
       200: {
@@ -2798,6 +2957,106 @@ export interface operations {
       503: components['responses']['UpstreamUnavailable']
     }
   }
+  resolveStudioTeamInvitation: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['TeamInvitationToken']
+      }
+    }
+    responses: {
+      /** @description Pending team invitation presentation */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['TeamInvitationPresentation']
+        }
+      }
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      422: components['responses']['ValidationFailed']
+      429: components['responses']['RateLimited']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  decideStudioTeamInvitation: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['TeamInvitationDecisionCreate']
+      }
+    }
+    responses: {
+      /** @description Decision and any membership materialization committed atomically */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['TeamInvitationDecisionResult']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      422: components['responses']['ValidationFailed']
+      429: components['responses']['RateLimited']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listStudioTeamInvitations: {
+    parameters: {
+      query?: {
+        status?: components['schemas']['TeamInvitationStatus']
+        limit?: number
+        cursor?: components['parameters']['Cursor']
+      }
+      header?: never
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Invitation page with full destinations for authorized team members */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['TeamInvitationPage']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
   createStudioTeamInvitation: {
     parameters: {
       query?: never
@@ -2836,6 +3095,47 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['TeamInvitation']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      422: components['responses']['ValidationFailed']
+      429: components['responses']['RateLimited']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  revokeStudioTeamInvitation: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+        invitationId: components['schemas']['UuidV7']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': Record<string, never>
+      }
+    }
+    responses: {
+      /** @description Revoked invitation, including convergent repeated revocations */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['TeamInvitationRevoked']
         }
       }
       400: components['responses']['BadRequest']

@@ -72,10 +72,10 @@ test('renders an invitation without claiming that an account already exists', ()
   const rendered = renderTeamInvitationEmail({
     organizationName: 'Studio Norte',
     proposedRoleCode: 'staff',
-    invitationUrl: 'https://space.allfit.one/invitations/token',
+    invitationUrl: 'https://studio.allfit.one/invitations#token=staff-token',
     expiresAt: new Date('2026-08-18T12:00:00.000Z'),
   })
   expect(rendered.subject).toContain('Studio Norte')
   expect(rendered.text).not.toContain('tu cuenta')
-  expect(rendered.html).toContain('https://space.allfit.one/invitations/token')
+  expect(rendered.html).toContain('https://studio.allfit.one/invitations#token=staff-token')
 })

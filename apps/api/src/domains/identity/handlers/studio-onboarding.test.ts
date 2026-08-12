@@ -23,7 +23,7 @@ function sessions(overrides: Partial<StudioSessionService> = {}): StudioSessionS
     resolveActor: async () => ({ accountId: '0198d000-0000-7000-8000-000000000011' }),
     resolveAccountIdentity: async () => ({
       actor: { accountId: '0198d000-0000-7000-8000-000000000011' },
-      identity: { givenName: 'Ada', familyName: 'Lovelace' },
+      identity: { givenName: 'Ada', familyName: 'Lovelace', verifiedEmail: 'ada@example.test' },
     }),
     logout: async () => ({
       redirectUrl: 'https://studio.example.test',
@@ -76,6 +76,32 @@ describe('Studio onboarding routes', () => {
       terms_version: 'platform_terms_v1',
       privacy_notice_version: 'privacy_notice_v1',
     })
+  })
+
+  test('associates a pending invitation token without treating activation as a decision', async () => {
+    const invitationToken = 'A'.repeat(43)
+    let associatedToken: string | undefined
+    const response = await app(
+      sessions(),
+      onboarding({
+        startAttempt: async (_actor, input) => {
+          associatedToken = input.invitationToken
+          return {
+            id: '0198d000-0000-7000-8000-000000000021',
+            status: 'open',
+            eligibilityStatus: 'pending',
+            expiresAt: new Date('2026-08-10T12:00:00.000Z'),
+          }
+        },
+      }),
+    ).request('/studio/v1/onboarding-attempts', {
+      method: 'POST',
+      headers: COMMAND_HEADERS,
+      body: JSON.stringify({ invitation_token: invitationToken }),
+    })
+
+    expect(response.status).toBe(200)
+    expect(associatedToken).toBe(invitationToken)
   })
 
   test('requires the exact Studio origin for state changes', async () => {
@@ -138,7 +164,7 @@ describe('Studio onboarding routes', () => {
       sessions({
         resolveAccountIdentity: async () => ({
           actor: { accountId: '0198d000-0000-7000-8000-000000000011' },
-          identity: { givenName: null, familyName: null },
+          identity: { givenName: null, familyName: null, verifiedEmail: 'grace@example.test' },
         }),
       }),
       onboarding({

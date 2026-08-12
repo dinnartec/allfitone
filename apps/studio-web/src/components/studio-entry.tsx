@@ -3,7 +3,7 @@
 import { Alert, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
 import { Button } from '@allfitone/react/components/button'
 import { useRouter } from 'next/navigation'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { AccessLanding } from './access-landing'
 import { ActivationForm } from './activation-form'
@@ -12,6 +12,7 @@ import { MembershipSelector } from './membership-selector'
 import { SpaceSetup } from './space-setup'
 import { LoadingStage, StudioFrame } from './studio-frame'
 import { resolveMembershipDestination } from '@/lib/membership-routing'
+import { readPendingInvitationToken } from '@/lib/invitation-token'
 import {
   StudioApiError,
   newCommand,
@@ -34,6 +35,7 @@ type FlowState =
 export function StudioEntry({ logoutPartial = false }: { logoutPartial?: boolean }) {
   const router = useRouter()
   const [flow, setFlow] = useState<FlowState>({ kind: 'loading' })
+  const bootstrapStarted = useRef(false)
 
   const resolveMemberships = useCallback(
     async (fullName?: string, emptyDestination: 'space' | 'waiting' = 'space') => {
@@ -75,6 +77,10 @@ export function StudioEntry({ logoutPartial = false }: { logoutPartial?: boolean
 
   const bootstrap = useCallback(async () => {
     setFlow({ kind: 'loading' })
+    if (readPendingInvitationToken()) {
+      router.replace('/invitations')
+      return
+    }
     try {
       const session = await studioApi.session()
       const fullName = identityName(session.identity)
@@ -97,9 +103,11 @@ export function StudioEntry({ logoutPartial = false }: { logoutPartial?: boolean
             : 'No pudimos determinar el estado de tu cuenta.',
       })
     }
-  }, [resolveMemberships])
+  }, [resolveMemberships, router])
 
   useEffect(() => {
+    if (bootstrapStarted.current) return
+    bootstrapStarted.current = true
     void bootstrap()
   }, [bootstrap])
 

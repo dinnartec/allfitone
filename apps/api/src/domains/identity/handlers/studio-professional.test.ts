@@ -47,7 +47,7 @@ function sessions(overrides: Partial<StudioSessionService> = {}): StudioSessionS
         accountId: '0198d000-0000-7000-8000-000000000011',
         personId: '0198d000-0000-7000-8000-000000000012',
       },
-      identity: { givenName: 'Ada', familyName: 'Lovelace' },
+      identity: { givenName: 'Ada', familyName: 'Lovelace', verifiedEmail: 'ada@example.test' },
     }),
     logout: async () => ({
       redirectUrl: 'https://studio.example.test',

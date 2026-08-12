@@ -278,7 +278,13 @@ function fakeClient(
   const authResponse = {
     accessToken: 'at_1',
     refreshToken: 'rt_1',
-    user: { id: 'user_01FAKE', firstName: 'Ada', lastName: 'Lovelace' },
+    user: {
+      id: 'user_01FAKE',
+      email: 'ada@example.test',
+      emailVerified: true,
+      firstName: 'Ada',
+      lastName: 'Lovelace',
+    },
   }
   const userManagement: WorkOSUserManagement = {
     authenticateWithCode: async (o) => record('authenticateWithCode', o, authResponse),
@@ -353,7 +359,11 @@ describe('authenticateWithCode', () => {
     const result = await provider.authenticateWithCode('code_abc', 'studio')
 
     expect(result.subject).toBe('user_01FAKE')
-    expect(result.identity).toEqual({ givenName: 'Ada', familyName: 'Lovelace' })
+    expect(result.identity).toEqual({
+      givenName: 'Ada',
+      familyName: 'Lovelace',
+      verifiedEmail: 'ada@example.test',
+    })
     expect(result.tokens.accessToken).toBe('at_1')
     expect(result.tokens.refreshToken).toBe('rt_1')
     expect(calls[0]).toEqual({
@@ -368,6 +378,26 @@ describe('authenticateWithCode', () => {
     await provider.authenticateWithCode('code_abc', 'backoffice')
 
     expect(calls[0]?.args).toMatchObject({ clientId: CLIENT_IDS.backoffice })
+  })
+
+  test('does not project an address the provider has not verified', async () => {
+    const { provider } = providerWith({
+      authenticateWithCode: async () => ({
+        accessToken: 'at_1',
+        refreshToken: 'rt_1',
+        user: {
+          id: 'user_01FAKE',
+          email: 'unverified@example.test',
+          emailVerified: false,
+          firstName: 'Ada',
+          lastName: 'Lovelace',
+        },
+      }),
+    })
+
+    const result = await provider.authenticateWithCode('code_abc', 'studio')
+
+    expect(result.identity.verifiedEmail).toBeNull()
   })
 })
 

@@ -19,7 +19,11 @@ export function LogoutForm({
     <form
       action={`${studioApi.apiUrl}/studio/v1/auth/logout`}
       method="post"
-      onSubmit={announceStudioLogout}
+      onSubmit={(event) => {
+        event.preventDefault()
+        announceStudioLogout('manual')
+        event.currentTarget.submit()
+      }}
     >
       <input type="hidden" name="reason" value="manual" />
       <Button type="submit" variant={variant} size={size} disabled={disabled}>

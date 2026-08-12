@@ -18,6 +18,8 @@ import type {
   SessionTokenVault,
   StoredAccessSession,
   StoredSessionSecret,
+  TeamInvitationIntentStatus,
+  TeamInvitationStatus,
 } from '../domain/index.js'
 
 type InvitationRow = {
@@ -30,6 +32,45 @@ type InvitationRow = {
   proposed_role_code: 'admin' | 'coach' | 'staff'
   reused: boolean
   replayed: boolean
+}
+
+type InvitationPresentationRow = {
+  invitation_id: string
+  status: 'pending'
+  organization_id: string
+  organization_display_name: string
+  responsible_party: {
+    party_kind: 'natural_person' | 'legal_entity'
+    party_name: string
+    purpose: 'studio_operations'
+  }
+  expires_at: Date
+  invitation_intent_id: string
+  proposed_role_code: 'admin' | 'coach' | 'staff'
+}
+
+type InvitationDecisionRow = {
+  invitation_id: string
+  invitation_status: 'completed'
+  organization_id: string
+  invitation_intent_id: string
+  intent_status: 'accepted' | 'rejected'
+  membership_id: string | null
+  proposed_role_code: 'admin' | 'coach' | 'staff'
+  replayed: boolean
+}
+
+type InvitationListRow = {
+  invitation_id: string
+  status: TeamInvitationStatus
+  channel: 'email'
+  contact: string
+  created_at: Date
+  expires_at: Date
+  invitation_intent_id: string
+  intent_status: TeamInvitationIntentStatus
+  proposed_role_code: 'admin' | 'coach' | 'staff'
+  decided_at: Date | null
 }
 
 type AccountRow = { account_id: string; person_id: string | null }
@@ -116,6 +157,15 @@ export function createIdentityOnboardingDatabase(): IdentityOnboardingDatabase {
           )
         `
         if (!row) throw new Error('PostgreSQL did not resolve an onboarding attempt')
+        if (input.invitationTokenHash) {
+          await transaction`
+            select identity.associate_onboarding_invitation(
+              ${input.accountId}::uuid,
+              ${row.attempt_id}::uuid,
+              ${input.invitationTokenHash}
+            )
+          `
+        }
         return {
           id: row.attempt_id,
           status: row.status,
@@ -422,6 +472,13 @@ export function createIdentityInvitationDatabase(): IdentityInvitationDatabase {
     async issue(input) {
       return sql.begin(async (transaction) => {
         await setPersonActor(transaction, input.personId, input.commandId)
+        await transaction`
+          select identity.consume_staff_invitation_rate_limit(
+            ${input.personId}::uuid,
+            ${input.organizationId}::uuid,
+            ${input.contact}
+          )
+        `
         const [row] = await transaction<InvitationRow[]>`
           select *
           from identity.issue_staff_invitation(
@@ -453,7 +510,134 @@ export function createIdentityInvitationDatabase(): IdentityInvitationDatabase {
         }
       })
     },
+    async resolve(tokenHash) {
+      return sql.begin(async (transaction) => {
+        await transaction`select set_config('app.actor_kind', 'anonymous', true)`
+        const [row] = await transaction<InvitationPresentationRow[]>`
+          select * from identity.resolve_staff_invitation(${tokenHash})
+        `
+        if (!row) return undefined
+        return {
+          id: row.invitation_id,
+          status: row.status,
+          organizationId: row.organization_id,
+          organizationDisplayName: row.organization_display_name,
+          responsibleParty: row.responsible_party,
+          expiresAt: new Date(row.expires_at),
+          intent: {
+            id: row.invitation_intent_id,
+            kind: 'membership',
+            status: 'pending',
+            proposedRoleCode: row.proposed_role_code,
+          },
+        }
+      })
+    },
+    async decide(input) {
+      return sql.begin(async (transaction) => {
+        await setPersonActorWithVerifiedEmail(
+          transaction,
+          input.personId,
+          input.commandId,
+          input.verifiedEmail,
+        )
+        const [row] = await transaction<InvitationDecisionRow[]>`
+          select * from identity.decide_staff_invitation(
+            ${input.personId}::uuid,
+            ${input.tokenHash},
+            ${input.intentId}::uuid,
+            ${input.decision},
+            ${input.idempotencyKey}::uuid,
+            ${input.commandId}::uuid,
+            ${input.requestHash}
+          )
+        `
+        if (!row) throw new Error('PostgreSQL did not decide the team invitation')
+        return {
+          resource: {
+            invitationId: row.invitation_id,
+            invitationStatus: row.invitation_status,
+            organizationId: row.organization_id,
+            intentId: row.invitation_intent_id,
+            intentStatus: row.intent_status,
+            membershipId: row.membership_id,
+            proposedRoleCode: row.proposed_role_code,
+          },
+          replayed: row.replayed,
+        }
+      })
+    },
+    async list(input) {
+      return sql.begin(async (transaction) => {
+        await setPersonActor(transaction, input.personId, input.requestId)
+        const rows = await transaction<InvitationListRow[]>`
+          select * from identity.list_staff_invitations(
+            ${input.personId}::uuid,
+            ${input.organizationId}::uuid,
+            ${input.status ?? null}::text,
+            ${input.limit + 1}::integer,
+            ${input.cursorCreatedAt ?? null}::timestamptz,
+            ${input.cursorId ?? null}::uuid
+          )
+        `
+        const hasMore = rows.length > input.limit
+        return {
+          hasMore,
+          items: rows.slice(0, input.limit).map((row) => ({
+            id: row.invitation_id,
+            status: row.status,
+            channel: row.channel,
+            contact: row.contact,
+            createdAt: new Date(row.created_at),
+            expiresAt: new Date(row.expires_at),
+            intent: {
+              id: row.invitation_intent_id,
+              kind: 'membership',
+              status: row.intent_status,
+              proposedRoleCode: row.proposed_role_code,
+              decidedAt: row.decided_at ? new Date(row.decided_at) : null,
+            },
+          })),
+        }
+      })
+    },
+    async revoke(input) {
+      return sql.begin(async (transaction) => {
+        await setPersonActor(transaction, input.personId, input.commandId)
+        const [row] = await transaction<
+          Array<{ invitation_id: string; status: 'revoked'; replayed: boolean }>
+        >`
+          select * from identity.revoke_staff_invitation(
+            ${input.personId}::uuid,
+            ${input.organizationId}::uuid,
+            ${input.invitationId}::uuid,
+            ${input.idempotencyKey}::uuid,
+            ${input.commandId}::uuid,
+            ${input.requestHash}
+          )
+        `
+        if (!row) throw new Error('PostgreSQL did not revoke the team invitation')
+        return {
+          resource: { id: row.invitation_id, status: row.status },
+          replayed: row.replayed,
+        }
+      })
+    },
   }
+}
+
+async function setPersonActorWithVerifiedEmail(
+  transaction: postgres.TransactionSql,
+  personId: string,
+  requestId: string,
+  verifiedEmail: string,
+): Promise<void> {
+  await transaction`
+    select set_config('app.actor_kind', 'person', true),
+           set_config('app.actor_person_id', ${personId}, true),
+           set_config('app.actor_verified_email', ${verifiedEmail.trim().toLowerCase()}, true),
+           set_config('app.request_id', ${requestId}, true)
+  `
 }
 
 export function createSessionTokenVaultFromEnv(): SessionTokenVault {
@@ -524,7 +708,7 @@ function sessionSecret(value: unknown): StoredSessionSecret {
   if (!('tokens' in candidate)) {
     return {
       tokens: sessionTokens(value),
-      identity: { givenName: null, familyName: null },
+      identity: { givenName: null, familyName: null, verifiedEmail: null },
     }
   }
 
@@ -538,6 +722,7 @@ function sessionSecret(value: unknown): StoredSessionSecret {
     identity: {
       givenName: sessionIdentityName(names.givenName),
       familyName: sessionIdentityName(names.familyName),
+      verifiedEmail: sessionVerifiedEmail(names.verifiedEmail),
     },
   }
 }
@@ -546,6 +731,14 @@ function sessionIdentityName(value: unknown): string | null {
   if (value === null) return null
   if (typeof value === 'string') return value
   throw new Error('Invalid session identity payload')
+}
+
+function sessionVerifiedEmail(value: unknown): string | null {
+  if (value === undefined || value === null) return null
+  if (typeof value === 'string' && /^[^\s@]+@[^\s@]+$/.test(value)) {
+    return value.trim().toLowerCase()
+  }
+  throw new Error('Invalid verified session email payload')
 }
 
 function storedSession(row: SessionRow): StoredAccessSession {

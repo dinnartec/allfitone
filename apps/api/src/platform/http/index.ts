@@ -34,6 +34,8 @@ export type ApiErrorCode =
   | 'not-found'
   /** A well-formed request violates a closed business schema. */
   | 'validation-failed'
+  /** A closed application or database limit rejected the attempt. */
+  | 'rate-limited'
 
 const STATUS: Record<ApiErrorCode, ContentfulStatusCode> = {
   unauthenticated: 401,
@@ -48,6 +50,7 @@ const STATUS: Record<ApiErrorCode, ContentfulStatusCode> = {
   conflict: 409,
   'not-found': 404,
   'validation-failed': 422,
+  'rate-limited': 429,
 }
 
 /**

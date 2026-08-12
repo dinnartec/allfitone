@@ -114,6 +114,18 @@ export const allfitV1ContractManifest = {
       allfitOperation: 'OP-IDN-025',
     },
     {
+      method: 'POST',
+      path: '/studio/v1/invitations/decisions',
+      operationId: 'decideStudioTeamInvitation',
+      allfitOperation: 'OP-IDN-009',
+    },
+    {
+      method: 'POST',
+      path: '/studio/v1/invitations/resolve',
+      operationId: 'resolveStudioTeamInvitation',
+      allfitOperation: 'OP-IDN-016',
+    },
+    {
       method: 'GET',
       path: '/studio/v1/me',
       operationId: 'getMyStudioProfessionalProfile',
@@ -216,10 +228,22 @@ export const allfitV1ContractManifest = {
       allfitOperation: 'OP-NUT-013',
     },
     {
+      method: 'GET',
+      path: '/studio/v1/organizations/{organizationId}/invitations',
+      operationId: 'listStudioTeamInvitations',
+      allfitOperation: 'OP-ORG-016',
+    },
+    {
       method: 'POST',
       path: '/studio/v1/organizations/{organizationId}/invitations',
       operationId: 'createStudioTeamInvitation',
       allfitOperation: 'OP-ORG-005',
+    },
+    {
+      method: 'POST',
+      path: '/studio/v1/organizations/{organizationId}/invitations/{invitationId}/revocation',
+      operationId: 'revokeStudioTeamInvitation',
+      allfitOperation: 'OP-ORG-006',
     },
     {
       method: 'POST',

@@ -66,6 +66,9 @@ x-allfit-error-catalog:
   - code: account-closed
     status: 403
     description: The person linked to the authenticated account is closed.
+  - code: rate-limited
+    status: 429
+    description: A closed invitation abuse-prevention limit rejected the attempt.
 x-allfit-media-url-policy:
   space_owner:
     delivery: signed_storage_url
@@ -325,7 +328,7 @@ paths:
               properties:
                 reason:
                   type: string
-                  enum: [manual, inactivity]
+                  enum: [manual, inactivity, recovery]
                   default: manual
       responses:
         '303':
@@ -626,6 +629,12 @@ paths:
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
         - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StudioOnboardingAttemptStart'
       responses:
         '200':
           description: Open onboarding attempt, newly created or resumed
@@ -814,7 +823,134 @@ paths:
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
 
+  /studio/v1/invitations/resolve:
+    post:
+      tags: [Studio Identity]
+      operationId: resolveStudioTeamInvitation
+      x-allfit-operation: OP-IDN-016
+      x-allfit-cache: no-store
+      summary: Resolve a pending Studio team invitation
+      security: []
+      description: >-
+        Resolves a token without exposing its destination contact. Invalid,
+        expired, revoked and completed invitations are indistinguishable.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeamInvitationToken'
+      responses:
+        '200':
+          description: Pending team invitation presentation
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamInvitationPresentation'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /studio/v1/invitations/decisions:
+    post:
+      tags: [Studio Identity]
+      operationId: decideStudioTeamInvitation
+      x-allfit-operation: OP-IDN-009
+      x-allfit-cache: no-store
+      summary: Accept or reject a Studio team invitation
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeamInvitationDecisionCreate'
+      responses:
+        '200':
+          description: Decision and any membership materialization committed atomically
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamInvitationDecisionResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
   /studio/v1/organizations/{organizationId}/invitations:
+    get:
+      tags: [Studio Organizations]
+      operationId: listStudioTeamInvitations
+      x-allfit-operation: OP-ORG-016
+      x-allfit-cache: no-store
+      summary: List team invitations issued by an organization
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/TeamInvitationStatus'
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Invitation page with full destinations for authorized team members
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamInvitationPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
     post:
       tags: [Studio Organizations]
       operationId: createStudioTeamInvitation
@@ -856,6 +992,58 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TeamInvitation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /studio/v1/organizations/{organizationId}/invitations/{invitationId}/revocation:
+    post:
+      tags: [Studio Organizations]
+      operationId: revokeStudioTeamInvitation
+      x-allfit-operation: OP-ORG-006
+      x-allfit-cache: no-store
+      summary: Revoke a pending Studio team invitation
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+        - name: invitationId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/UuidV7'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+      responses:
+        '200':
+          description: Revoked invitation, including convergent repeated revocations
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamInvitationRevoked'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1987,6 +2175,22 @@ components:
             title: Authentication is temporarily unavailable
             status: 503
             request_id: 01JEXAMPLE0000000000000000
+    RateLimited:
+      description: A closed abuse-prevention limit rejected the request
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+        Retry-After:
+          $ref: '#/components/headers/RetryAfter'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: https://errors.allfit.invalid/rate-limited
+            title: Too many invitation attempts
+            status: 429
+            request_id: 01JEXAMPLE0000000000000000
     ScopeRequired:
       description: Required live grant is not effective
       headers:
@@ -2214,6 +2418,16 @@ components:
     StudioOnboardingStatus:
       type: string
       enum: [open, activated, ineligible, expired]
+    StudioOnboardingAttemptStart:
+      type: object
+      additionalProperties: false
+      properties:
+        invitation_token:
+          type: string
+          minLength: 43
+          maxLength: 43
+          pattern: '^[A-Za-z0-9_-]{43}$'
+          description: Optional team-invitation token associated by hash only.
     StudioEligibilityStatus:
       type: string
       enum: [pending, pass, fail]
@@ -2374,6 +2588,112 @@ components:
           items:
             type: string
             enum: [owner, admin, coach, staff]
+    TeamInvitationToken:
+      type: object
+      additionalProperties: false
+      required: [token]
+      properties:
+        token:
+          type: string
+          minLength: 43
+          maxLength: 43
+          pattern: '^[A-Za-z0-9_-]{43}$'
+          description: Opaque token transported in JSON after being removed from the URL fragment.
+    TeamInvitationStatus:
+      type: string
+      enum: [pending, completed, revoked, expired]
+    TeamInvitationIntentStatus:
+      type: string
+      enum: [pending, accepted, rejected, revoked, expired]
+    TeamInvitationPresentation:
+      type: object
+      additionalProperties: false
+      required: [id, status, organization, expires_at, intents]
+      properties:
+        id:
+          $ref: '#/components/schemas/UuidV7'
+        status:
+          type: string
+          const: pending
+        organization:
+          type: object
+          additionalProperties: false
+          required: [id, display_name, responsible_party]
+          properties:
+            id:
+              $ref: '#/components/schemas/UuidV7'
+            display_name:
+              type: string
+              minLength: 1
+            responsible_party:
+              $ref: '#/components/schemas/ResponsibleParty'
+        expires_at:
+          type: string
+          format: date-time
+        intents:
+          type: array
+          minItems: 1
+          maxItems: 1
+          items:
+            $ref: '#/components/schemas/TeamInvitationIntent'
+    TeamInvitationDecisionCreate:
+      type: object
+      additionalProperties: false
+      required: [token, decisions]
+      properties:
+        token:
+          type: string
+          minLength: 43
+          maxLength: 43
+          pattern: '^[A-Za-z0-9_-]{43}$'
+        decisions:
+          type: array
+          minItems: 1
+          maxItems: 1
+          items:
+            type: object
+            additionalProperties: false
+            required: [intent_id, decision]
+            properties:
+              intent_id:
+                $ref: '#/components/schemas/UuidV7'
+              decision:
+                type: string
+                enum: [accepted, rejected]
+    TeamInvitationDecisionResult:
+      type: object
+      additionalProperties: false
+      required: [invitation_id, invitation_status, organization_id, intent, replayed]
+      properties:
+        invitation_id:
+          $ref: '#/components/schemas/UuidV7'
+        invitation_status:
+          type: string
+          const: completed
+        organization_id:
+          $ref: '#/components/schemas/UuidV7'
+        intent:
+          type: object
+          additionalProperties: false
+          required: [id, kind, status, proposed_role_code, membership_id]
+          properties:
+            id:
+              $ref: '#/components/schemas/UuidV7'
+            kind:
+              type: string
+              const: membership
+            status:
+              type: string
+              enum: [accepted, rejected]
+            proposed_role_code:
+              type: string
+              enum: [admin, coach, staff]
+            membership_id:
+              oneOf:
+                - $ref: '#/components/schemas/UuidV7'
+                - type: 'null'
+        replayed:
+          type: boolean
     TeamInvitationCreate:
       type: object
       additionalProperties: false
@@ -2447,6 +2767,71 @@ components:
         proposed_role_code:
           type: string
           enum: [admin, coach, staff]
+    TeamInvitationListItem:
+      type: object
+      additionalProperties: false
+      required: [id, status, channel, contact, created_at, expires_at, intents]
+      properties:
+        id:
+          $ref: '#/components/schemas/UuidV7'
+        status:
+          $ref: '#/components/schemas/TeamInvitationStatus'
+        channel:
+          type: string
+          const: email
+        contact:
+          type: string
+          format: email
+          maxLength: 254
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        intents:
+          type: array
+          minItems: 1
+          maxItems: 1
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, kind, status, proposed_role_code, decided_at]
+            properties:
+              id:
+                $ref: '#/components/schemas/UuidV7'
+              kind:
+                type: string
+                const: membership
+              status:
+                $ref: '#/components/schemas/TeamInvitationIntentStatus'
+              proposed_role_code:
+                type: string
+                enum: [admin, coach, staff]
+              decided_at:
+                type: [string, 'null']
+                format: date-time
+    TeamInvitationPage:
+      type: object
+      additionalProperties: false
+      required: [data, page]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/TeamInvitationListItem'
+        page:
+          $ref: '#/components/schemas/Page'
+    TeamInvitationRevoked:
+      type: object
+      additionalProperties: false
+      required: [id, status]
+      properties:
+        id:
+          $ref: '#/components/schemas/UuidV7'
+        status:
+          type: string
+          const: revoked
     StudioMembership:
       type: object
       additionalProperties: false

@@ -7,7 +7,15 @@ const LOGOUT_EVENT = 'allfit:studio-logout'
 
 export type StudioSessionActivity =
   | { version: 1; status: 'active'; lastActivityAt: number }
-  | { version: 1; status: 'ended'; endedAt: number; confirmedAt?: number }
+  | {
+      version: 1
+      status: 'ended'
+      endedAt: number
+      confirmedAt?: number
+      reason?: StudioSessionEndReason
+    }
+
+export type StudioSessionEndReason = 'inactivity' | 'manual' | 'unknown'
 
 export function notifyStudioAuthenticated(): void {
   if (typeof window === 'undefined') return
@@ -22,15 +30,16 @@ export function notifyStudioUnauthenticated(): void {
     status: 'ended',
     endedAt: stored?.status === 'ended' ? stored.endedAt : Date.now(),
     confirmedAt: Date.now(),
+    ...(stored?.status === 'ended' && stored.reason ? { reason: stored.reason } : {}),
   })
   delete document.documentElement.dataset.sessionLocked
   window.dispatchEvent(new Event(UNAUTHENTICATED_EVENT))
 }
 
-export function announceStudioLogout(): void {
+export function announceStudioLogout(reason: StudioSessionEndReason = 'manual'): void {
   if (typeof window === 'undefined') return
   document.documentElement.dataset.sessionLocked = 'true'
-  writeStudioSessionActivity({ version: 1, status: 'ended', endedAt: Date.now() })
+  writeStudioSessionActivity({ version: 1, status: 'ended', endedAt: Date.now(), reason })
   clearStudioSessionCaches()
   window.dispatchEvent(new Event(LOGOUT_EVENT))
 }
@@ -86,6 +95,10 @@ export function parseStudioSessionActivity(raw: string | null): StudioSessionAct
       candidate.status === 'ended' &&
       typeof candidate.endedAt === 'number' &&
       Number.isFinite(candidate.endedAt) &&
+      (candidate.reason === undefined ||
+        candidate.reason === 'inactivity' ||
+        candidate.reason === 'manual' ||
+        candidate.reason === 'unknown') &&
       (candidate.confirmedAt === undefined ||
         (typeof candidate.confirmedAt === 'number' && Number.isFinite(candidate.confirmedAt)))
     ) {
@@ -94,6 +107,7 @@ export function parseStudioSessionActivity(raw: string | null): StudioSessionAct
         status: 'ended',
         endedAt: candidate.endedAt,
         ...(candidate.confirmedAt === undefined ? {} : { confirmedAt: candidate.confirmedAt }),
+        ...(candidate.reason === undefined ? {} : { reason: candidate.reason }),
       }
     }
     return undefined

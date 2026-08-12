@@ -41,6 +41,27 @@ test('clears the browser session and browser history cannot reveal the workspace
   ).toBe(true)
 })
 
+test('shows a non-actionable closing state while manual logout is in flight', async ({ page }) => {
+  const fixture = createStudioApiFixture({ memberships: [activeMembership] })
+  await installStudioApiMock(page, fixture)
+  await page.goto(`/organizations/${activeMembership.organization_id}`)
+  await page.evaluate(() => {
+    HTMLFormElement.prototype.submit = function recordPendingLogout() {
+      document.documentElement.dataset.logoutPending = 'true'
+    }
+  })
+
+  await page.getByRole('button', { name: 'Cerrar sesión' }).click()
+
+  await expect(page.getByRole('heading', { name: 'Cerrando tu sesión' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Cerrando tu sesión' })).toBeFocused()
+  await expect(page.getByRole('button', { name: 'Completar cierre' })).toHaveCount(0)
+  await expect(page.locator('[data-session-closing]')).toBeVisible()
+  await expect(page.locator('html')).toHaveAttribute('data-logout-pending', 'true')
+  await expect(page.locator('[data-session-content]')).toHaveCount(0)
+  await expect(page.getByText(activeMembership.display_name)).toHaveCount(0)
+})
+
 test('a manual logout covers another Studio tab immediately', async ({ context, page }) => {
   const other = await context.newPage()
   let releaseLogout: (() => void) | undefined
@@ -70,9 +91,9 @@ test('a manual logout covers another Studio tab immediately', async ({ context, 
   const logoutNavigation = page.getByRole('button', { name: 'Cerrar sesión' }).click()
   await logoutRequested
 
-  await expect(other.locator('[data-session-lock]')).toBeVisible()
+  await expect(other.locator('[data-session-closing]')).toBeVisible()
   await expect(
-    other.locator('[data-session-lock]').getByRole('link', { name: 'Entrar a Studio' }),
+    other.locator('[data-session-closing]').getByRole('button', { name: 'Completar cierre' }),
   ).toHaveCount(0)
   await expect(other.getByText(activeMembership.display_name)).not.toBeVisible()
 
@@ -80,7 +101,7 @@ test('a manual logout covers another Studio tab immediately', async ({ context, 
   await logoutNavigation
   await expect(other).toHaveURL('/')
   await expect(other.getByRole('link', { name: 'Entrar a Studio' })).toBeVisible()
-  await expect(other.locator('[data-session-lock]')).toHaveCount(0)
+  await expect(other.locator('[data-session-closing]')).toHaveCount(0)
 })
 
 test('locks at thirty minutes and deliberate activity resets the deadline', async ({ page }) => {
@@ -104,12 +125,13 @@ test('locks at thirty minutes and deliberate activity resets the deadline', asyn
   await expect(page.locator('[data-session-lock]')).toHaveCount(0)
 
   await page.clock.fastForward(30 * 60 * 1000)
-  await expect(page.locator('[data-session-lock]')).toBeVisible()
+  await expect(page.locator('[data-session-closing]')).toBeVisible()
   await expect(
-    page.locator('[data-session-lock]').getByRole('link', { name: 'Entrar a Studio' }),
+    page.locator('[data-session-closing]').getByRole('button', { name: 'Completar cierre' }),
   ).toHaveCount(0)
   await expect(page.locator('html')).toHaveAttribute('data-logout-reason', 'inactivity')
-  await expect(page.locator('[data-session-content]')).toHaveAttribute('aria-hidden', 'true')
+  await expect(page.locator('[data-session-content]')).toHaveCount(0)
+  await expect(page.getByText(activeMembership.display_name)).toHaveCount(0)
 })
 
 test('shows a recoverable notice when only the browser logout can be confirmed', async ({
@@ -157,4 +179,134 @@ test('offers reauthentication when a restored page retains the secure logout loc
   await expect
     .poll(() => page.evaluate(() => localStorage.getItem('allfit-studio-session:v1')))
     .toBeNull()
+})
+
+test('requires explicit recovery when a locally ended session is still authenticated', async ({
+  page,
+}) => {
+  const fixture = createStudioApiFixture({ memberships: [activeMembership] })
+  await installStudioApiMock(page, fixture)
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      'allfit-studio-session:v1',
+      JSON.stringify({
+        version: 1,
+        status: 'ended',
+        endedAt: Date.now(),
+      }),
+    )
+  })
+
+  await page.goto(`/organizations/${activeMembership.organization_id}`)
+
+  await expect(page.getByRole('heading', { name: 'Tu sesión está protegida' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Completar cierre' })).toBeVisible()
+  await expect(page.getByText(activeMembership.display_name)).toHaveCount(0)
+
+  await page.getByRole('button', { name: 'Completar cierre' }).click()
+
+  await expect(page).toHaveURL('/')
+  await expect(page.getByRole('link', { name: 'Entrar a Studio' })).toBeVisible()
+  const recovery = fixture.requests.find(
+    (request) => request.method === 'POST' && request.path === '/studio/v1/auth/logout',
+  )
+  expect(recovery?.body).toBe('reason=recovery')
+})
+
+test('keeps recovery visible on verification failure and retries without mounting content', async ({
+  page,
+}) => {
+  let sessionChecks = 0
+  const fixture = createStudioApiFixture({
+    memberships: [activeMembership],
+    intercept: (request) => {
+      if (request.method === 'GET' && request.path === '/studio/v1/session') {
+        sessionChecks += 1
+        if (sessionChecks === 1) {
+          return { status: 503, body: { error: { code: 'upstream-unavailable' } } }
+        }
+      }
+      return undefined
+    },
+  })
+  await installStudioApiMock(page, fixture)
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      'allfit-studio-session:v1',
+      JSON.stringify({
+        version: 1,
+        status: 'ended',
+        endedAt: Date.now(),
+        reason: 'inactivity',
+      }),
+    )
+  })
+
+  await page.goto(`/organizations/${activeMembership.organization_id}`)
+
+  await expect(page.getByRole('button', { name: 'Reintentar' })).toBeVisible()
+  await expect(page.getByText(activeMembership.display_name)).toHaveCount(0)
+  fixture.signedOut = true
+  await page.getByRole('button', { name: 'Reintentar' }).click()
+
+  await expect(page).toHaveURL('/')
+  await expect(page.getByRole('link', { name: 'Entrar a Studio' })).toBeVisible()
+})
+
+test('keeps recovery locked when session verification has no network', async ({ page }) => {
+  const fixture = createStudioApiFixture({ memberships: [activeMembership] })
+  await installStudioApiMock(page, fixture)
+  let abortVerification = true
+  await page.route('http://127.0.0.1:8080/studio/v1/session', async (route) => {
+    if (abortVerification) {
+      abortVerification = false
+      await route.abort('failed')
+      return
+    }
+    await route.fallback()
+  })
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      'allfit-studio-session:v1',
+      JSON.stringify({
+        version: 1,
+        status: 'ended',
+        endedAt: Date.now(),
+        reason: 'manual',
+      }),
+    )
+  })
+
+  await page.goto(`/organizations/${activeMembership.organization_id}`)
+
+  await expect(page.getByRole('heading', { name: 'Tu sesión está protegida' })).toBeVisible()
+  await expect(page.getByText('Solicitaste cerrar la sesión.')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Reintentar' })).toBeVisible()
+  await expect(page.locator('[data-session-content]')).toHaveCount(0)
+  fixture.signedOut = true
+  await page.getByRole('button', { name: 'Reintentar' }).click()
+
+  await expect(page).toHaveURL('/')
+  await expect(page.getByRole('link', { name: 'Entrar a Studio' })).toBeVisible()
+})
+
+test('preserves a pending team invitation while session recovery completes', async ({ page }) => {
+  const invitationToken = 'A'.repeat(43)
+  const fixture = createStudioApiFixture({ memberships: [activeMembership] })
+  await installStudioApiMock(page, fixture)
+  await page.addInitScript((token) => {
+    localStorage.setItem(
+      'allfit-studio-session:v1',
+      JSON.stringify({ version: 1, status: 'ended', endedAt: Date.now() }),
+    )
+    sessionStorage.setItem('allfit-invitation-token:v1', token)
+  }, invitationToken)
+
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Completar cierre' }).click()
+
+  await expect(page).toHaveURL('/invitations')
+  await expect
+    .poll(() => page.evaluate(() => sessionStorage.getItem('allfit-invitation-token:v1')))
+    .toBe(invitationToken)
 })

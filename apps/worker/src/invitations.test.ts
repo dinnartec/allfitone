@@ -24,6 +24,7 @@ test('delivers a ready invitation and acknowledges the event', async () => {
   const process = createInvitationBatchProcessor({
     queue,
     database: {
+      expire: async () => 0,
       prepare: async () => ({
         state: 'ready',
         invitationId: '0199b000-0000-7000-8000-000000000031',
@@ -35,18 +36,41 @@ test('delivers a ready invitation and acknowledges the event', async () => {
       }),
     },
     email,
-    publicBaseUrl: 'https://space.example.test/',
-    environment: { INVITATION_TOKEN_KEY_V1: Buffer.alloc(32, 5).toString('base64') },
+    publicBaseUrl: 'http://localhost:3000/',
+    environment: {
+      NODE_ENV: 'development',
+      INVITATION_TOKEN_KEY_V1: Buffer.alloc(32, 5).toString('base64'),
+    },
   })
   await expect(process()).resolves.toEqual({
     claimed: 1,
     delivered: 1,
     deadOrDelayed: 0,
     skipped: 0,
+    expired: 0,
   })
   expect(acknowledged).toEqual(['event-1'])
   expect(sent[0]?.idempotencyKey).toBe('staff-invitation/event-1')
-  expect(sent[0]?.html).toContain('https://space.example.test/invitations/')
+  expect(sent[0]?.html).toContain('http://localhost:3000/invitations#token=')
+})
+
+test('refuses an HTTP invitation URL in production, including localhost', () => {
+  expect(() =>
+    createInvitationBatchProcessor({
+      queue: {
+        claim: async () => [],
+        ack: async () => undefined,
+        nack: async () => undefined,
+      },
+      database: {
+        expire: async () => 0,
+        prepare: async () => ({ state: 'skipped' }),
+      },
+      email: { send: async () => undefined },
+      publicBaseUrl: 'http://localhost:3000/',
+      environment: { NODE_ENV: 'production' },
+    }),
+  ).toThrow('STAFF_INVITATION_PUBLIC_BASE_URL must be a trusted HTTPS URL')
 })
 
 test('acknowledges an expired invitation without sending email', async () => {
@@ -62,15 +86,45 @@ test('acknowledges an expired invitation without sending email', async () => {
       },
       nack: async () => undefined,
     },
-    database: { prepare: async () => ({ state: 'expired' }) },
+    database: { expire: async () => 1, prepare: async () => ({ state: 'expired' }) },
     email: {
       send: async () => {
         sent = true
       },
     },
-    publicBaseUrl: 'https://space.example.test/',
+    publicBaseUrl: 'https://studio.example.test/',
   })
   await process()
   expect(acknowledged).toBeTrue()
   expect(sent).toBeFalse()
+})
+
+test('expires invitations while delivery is disabled without claiming email events', async () => {
+  let claimed = false
+  const process = createInvitationBatchProcessor({
+    queue: {
+      claim: async () => {
+        claimed = true
+        return []
+      },
+      ack: async () => undefined,
+      nack: async () => undefined,
+    },
+    database: {
+      expire: async () => 4,
+      prepare: async () => Promise.reject(new Error('must not prepare delivery')),
+    },
+    email: { send: async () => Promise.reject(new Error('must not send')) },
+    publicBaseUrl: 'https://studio.example.test/',
+    deliveryEnabled: false,
+  })
+
+  await expect(process()).resolves.toEqual({
+    claimed: 0,
+    delivered: 0,
+    deadOrDelayed: 0,
+    skipped: 0,
+    expired: 4,
+  })
+  expect(claimed).toBeFalse()
 })

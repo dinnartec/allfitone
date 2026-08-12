@@ -16,6 +16,8 @@ export interface WorkOSAuthenticationResponse {
   refreshToken: string
   user: {
     id: string
+    email: string
+    emailVerified: boolean
     firstName: string | null
     lastName: string | null
   }

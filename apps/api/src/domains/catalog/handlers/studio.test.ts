@@ -21,7 +21,7 @@ function sessions(overrides: Partial<StudioSessionService> = {}): StudioSessionS
     resolveActor: async () => ({ accountId: 'account', personId: 'person' }),
     resolveAccountIdentity: async () => ({
       actor: { accountId: 'account', personId: 'person' },
-      identity: { givenName: 'Ada', familyName: 'Lovelace' },
+      identity: { givenName: 'Ada', familyName: 'Lovelace', verifiedEmail: 'ada@example.test' },
     }),
     logout: async () => ({
       redirectUrl: 'https://studio.example.test',

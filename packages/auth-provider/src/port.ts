@@ -26,6 +26,8 @@ export interface SessionTokens {
 export interface AuthenticatedIdentity {
   givenName: string | null
   familyName: string | null
+  /** Server-only address proven by the provider; never expose it in public session DTOs. */
+  verifiedEmail: string | null
 }
 
 export interface AuthResult {

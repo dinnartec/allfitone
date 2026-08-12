@@ -15,9 +15,6 @@ export function createWorkerApp(injectedProcessor?: () => Promise<unknown>): Hon
     if (!secret || !constantTimeBearerMatches(c.req.header('authorization'), secret)) {
       return c.json({ error: { code: 'unauthenticated' } }, 401)
     }
-    if (process.env.STAFF_INVITATIONS_ENABLED !== 'true' && !injectedProcessor) {
-      return c.json({ outcome: 'disabled' })
-    }
     try {
       const result = await (injectedProcessor ?? processorFromEnvironment())()
       console.info(
@@ -51,11 +48,19 @@ function processorFromEnvironment() {
   cachedProcessor = createInvitationBatchProcessor({
     queue: createPostgresQueue(sql, { visibilityTimeoutMs: 120_000, maxAttempts: 5 }),
     database: createInvitationDeliveryDatabase(sql),
-    email: createResendEmailSender({
-      apiKey: required('RESEND_API_KEY'),
-      from: required('RESEND_FROM_EMAIL'),
-    }),
-    publicBaseUrl: required('INVITATION_PUBLIC_BASE_URL'),
+    email:
+      process.env.STAFF_INVITATION_DELIVERY_ENABLED === 'true'
+        ? createResendEmailSender({
+            apiKey: required('RESEND_API_KEY'),
+            from: required('RESEND_FROM_EMAIL'),
+          })
+        : {
+            send: async () => {
+              throw new Error('Invitation delivery is disabled')
+            },
+          },
+    publicBaseUrl: required('STAFF_INVITATION_PUBLIC_BASE_URL'),
+    deliveryEnabled: process.env.STAFF_INVITATION_DELIVERY_ENABLED === 'true',
   })
   return cachedProcessor
 }

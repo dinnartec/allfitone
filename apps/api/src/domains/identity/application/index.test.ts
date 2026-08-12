@@ -12,7 +12,11 @@ import { createStudioSessionService, StudioSessionError } from './index.js'
 const NOW = new Date('2026-08-06T12:00:00.000Z')
 const CURRENT = { accessToken: 'access-current', refreshToken: 'refresh-current', expiresIn: 300 }
 const ROTATED = { accessToken: 'access-rotated', refreshToken: 'refresh-rotated', expiresIn: 300 }
-const IDENTITY = { givenName: 'Ada', familyName: 'Lovelace' }
+const IDENTITY = {
+  givenName: 'Ada',
+  familyName: 'Lovelace',
+  verifiedEmail: 'ada@example.test',
+}
 
 function provider(overrides: Partial<AuthProvider> = {}): AuthProvider {
   return {
@@ -120,7 +124,11 @@ function vault(): SessionTokenVault {
       const [, accessToken, givenName, familyName] = ciphertext.split('.')
       return {
         tokens: accessToken?.includes('rotated') ? ROTATED : CURRENT,
-        identity: { givenName: givenName ?? null, familyName: familyName ?? null },
+        identity: {
+          givenName: givenName ?? null,
+          familyName: familyName ?? null,
+          verifiedEmail: 'ada@example.test',
+        },
       }
     },
   }

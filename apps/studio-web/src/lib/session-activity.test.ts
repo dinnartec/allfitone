@@ -23,6 +23,21 @@ describe('Studio session activity storage', () => {
     ).toEqual({ version: 1, status: 'ended', endedAt: 5678, confirmedAt: 6789 })
     expect(
       parseStudioSessionActivity(
+        JSON.stringify({
+          version: 1,
+          status: 'ended',
+          endedAt: 5678,
+          reason: 'inactivity',
+        }),
+      ),
+    ).toEqual({ version: 1, status: 'ended', endedAt: 5678, reason: 'inactivity' })
+    expect(
+      parseStudioSessionActivity(
+        JSON.stringify({ version: 1, status: 'ended', endedAt: 5678, reason: 'invalid' }),
+      ),
+    ).toBe(undefined)
+    expect(
+      parseStudioSessionActivity(
         JSON.stringify({ version: 1, status: 'active', lastActivityAt: 1234, token: 'secret' }),
       ),
     ).toEqual({ version: 1, status: 'active', lastActivityAt: 1234 })

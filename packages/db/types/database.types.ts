@@ -643,6 +643,22 @@ export type Database = {
         }
         Returns: string
       }
+      associate_onboarding_invitation: {
+        Args: {
+          p_account_id: string
+          p_attempt_id: string
+          p_token_hash: string
+        }
+        Returns: undefined
+      }
+      consume_staff_invitation_rate_limit: {
+        Args: {
+          p_contact: string
+          p_organization_id: string
+          p_person_id: string
+        }
+        Returns: undefined
+      }
       create_access_session: {
         Args: {
           p_access_account_id: string
@@ -653,6 +669,27 @@ export type Database = {
           p_token_hash: string
         }
         Returns: string
+      }
+      decide_staff_invitation: {
+        Args: {
+          p_command_id: string
+          p_decision: string
+          p_idempotency_key: string
+          p_intent_id: string
+          p_person_id: string
+          p_request_hash: string
+          p_token_hash: string
+        }
+        Returns: {
+          intent_status: string
+          invitation_id: string
+          invitation_intent_id: string
+          invitation_status: string
+          membership_id: string
+          organization_id: string
+          proposed_role_code: string
+          replayed: boolean
+        }[]
       }
       declare_professional_credential: {
         Args: {
@@ -673,6 +710,7 @@ export type Database = {
           replayed: boolean
         }[]
       }
+      expire_staff_invitations: { Args: { p_limit?: number }; Returns: number }
       get_my_professional_context: {
         Args: { p_person_id: string; p_request_id: string }
         Returns: Json
@@ -699,6 +737,28 @@ export type Database = {
           proposed_role_code: string
           replayed: boolean
           reused: boolean
+          status: string
+        }[]
+      }
+      list_staff_invitations: {
+        Args: {
+          p_cursor_created_at: string
+          p_cursor_id: string
+          p_limit: number
+          p_organization_id: string
+          p_person_id: string
+          p_status: string
+        }
+        Returns: {
+          channel: string
+          contact: string
+          created_at: string
+          decided_at: string
+          expires_at: string
+          intent_status: string
+          invitation_id: string
+          invitation_intent_id: string
+          proposed_role_code: string
           status: string
         }[]
       }
@@ -794,6 +854,19 @@ export type Database = {
           person_id: string
         }[]
       }
+      resolve_staff_invitation: {
+        Args: { p_token_hash: string }
+        Returns: {
+          expires_at: string
+          invitation_id: string
+          invitation_intent_id: string
+          organization_display_name: string
+          organization_id: string
+          proposed_role_code: string
+          responsible_party: Json
+          status: string
+        }[]
+      }
       retire_professional_credential: {
         Args: {
           p_command_id: string
@@ -830,6 +903,21 @@ export type Database = {
       revoke_access_session: {
         Args: { p_session_id: string }
         Returns: boolean
+      }
+      revoke_staff_invitation: {
+        Args: {
+          p_command_id: string
+          p_idempotency_key: string
+          p_invitation_id: string
+          p_organization_id: string
+          p_person_id: string
+          p_request_hash: string
+        }
+        Returns: {
+          invitation_id: string
+          replayed: boolean
+          status: string
+        }[]
       }
       rotate_access_session: {
         Args: {
@@ -884,8 +972,8 @@ export type Database = {
       actor_kind: 'anonymous' | 'account' | 'person' | 'professional' | 'worker' | 'support'
       eligibility_result: 'pass' | 'fail' | 'review_required' | 'unknown'
       invitation_intent_kind: 'membership' | 'service_relationship' | 'program_assignment'
-      invitation_intent_status: 'pending' | 'accepted' | 'rejected' | 'expired'
-      invitation_status: 'pending' | 'claimed' | 'revoked' | 'expired'
+      invitation_intent_status: 'pending' | 'accepted' | 'rejected' | 'revoked' | 'expired'
+      invitation_status: 'pending' | 'completed' | 'revoked' | 'expired'
       onboarding_status: 'open' | 'activated' | 'ineligible' | 'expired'
       password_reset_receipt_result: 'processed' | 'account_absent'
       person_status: 'active' | 'closed'
@@ -1017,8 +1105,8 @@ export const Constants = {
       actor_kind: ['anonymous', 'account', 'person', 'professional', 'worker', 'support'],
       eligibility_result: ['pass', 'fail', 'review_required', 'unknown'],
       invitation_intent_kind: ['membership', 'service_relationship', 'program_assignment'],
-      invitation_intent_status: ['pending', 'accepted', 'rejected', 'expired'],
-      invitation_status: ['pending', 'claimed', 'revoked', 'expired'],
+      invitation_intent_status: ['pending', 'accepted', 'rejected', 'revoked', 'expired'],
+      invitation_status: ['pending', 'completed', 'revoked', 'expired'],
       onboarding_status: ['open', 'activated', 'ineligible', 'expired'],
       password_reset_receipt_result: ['processed', 'account_absent'],
       person_status: ['active', 'closed'],

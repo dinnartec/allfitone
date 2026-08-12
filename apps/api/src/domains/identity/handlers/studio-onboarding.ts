@@ -43,13 +43,18 @@ export function studioOnboardingRoutes(
   routes.post('/onboarding-attempts', async (c) => {
     c.header('Cache-Control', 'no-store')
     if (!hasTrustedOrigin(c, studioOrigin)) return fail(c, 'forbidden', 'origin is not allowed')
-    const command = commandContext(c, {})
+    const body = await readOptionalJson(c)
+    if (!isAttemptCreate(body)) return fail(c, 'validation-failed')
+    const command = commandContext(c, body)
     if (!command) return fail(c, 'invalid-request', 'valid command headers are required')
 
     try {
       const actor = await authenticatedActor(c, sessions())
       if (actor instanceof Response) return actor
-      const attempt = await onboarding().startAttempt(actor, command)
+      const attempt = await onboarding().startAttempt(actor, {
+        ...command,
+        ...(body.invitation_token ? { invitationToken: body.invitation_token } : {}),
+      })
       return c.json({
         id: attempt.id,
         status: attempt.status,
@@ -188,6 +193,15 @@ async function readJson(c: Context): Promise<unknown> {
   }
 }
 
+async function readOptionalJson(c: Context): Promise<unknown> {
+  try {
+    const body = await c.req.text()
+    return body.trim() ? JSON.parse(body) : {}
+  } catch {
+    return undefined
+  }
+}
+
 function canonicalJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`
   if (value && typeof value === 'object') {
@@ -202,6 +216,18 @@ function canonicalJson(value: unknown): string {
 function isEvidenceCreate(value: unknown): value is EvidenceCreate {
   return (
     isObject(value) && Object.keys(value).length === 1 && typeof value.declared_adult === 'boolean'
+  )
+}
+
+function isAttemptCreate(value: unknown): value is { invitation_token?: string } {
+  if (!isObject(value)) return false
+  const keys = Object.keys(value)
+  return (
+    keys.length === 0 ||
+    (keys.length === 1 &&
+      keys[0] === 'invitation_token' &&
+      typeof value.invitation_token === 'string' &&
+      /^[A-Za-z0-9_-]{43}$/.test(value.invitation_token))
   )
 }
 
