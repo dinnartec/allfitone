@@ -1,0 +1,71 @@
+name: Bootstrap Backoffice administrators
+
+on:
+  workflow_dispatch:
+    inputs:
+      person_a:
+        description: Active person UUID for administrator A
+        required: true
+      workos_subject_a:
+        description: WorkOS user subject for administrator A
+        required: true
+      person_b:
+        description: Active person UUID for administrator B
+        required: true
+      workos_subject_b:
+        description: WorkOS user subject for administrator B
+        required: true
+      workos_issuer:
+        description: Exact WorkOS issuer stored in access_accounts
+        required: true
+      duty_valid_to:
+        description: Temporary duty expiry as ISO-8601 (maximum 90 days)
+        required: true
+      ceremony_reference:
+        description: Approved ticket or ceremony reference without PII
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backoffice-bootstrap-production
+  cancel-in-progress: false
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: backoffice-bootstrap-production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require main
+        run: test "$GITHUB_REF_NAME" = main
+      - name: Validate protected credential
+        env:
+          SUPABASE_ADMIN_DATABASE_URL: ${{ secrets.SUPABASE_ADMIN_DATABASE_URL }}
+        run: test -n "$SUPABASE_ADMIN_DATABASE_URL"
+      - name: Run cross-administrator bootstrap ceremony
+        env:
+          SUPABASE_ADMIN_DATABASE_URL: ${{ secrets.SUPABASE_ADMIN_DATABASE_URL }}
+          PERSON_A: ${{ inputs.person_a }}
+          SUBJECT_A: ${{ inputs.workos_subject_a }}
+          PERSON_B: ${{ inputs.person_b }}
+          SUBJECT_B: ${{ inputs.workos_subject_b }}
+          WORKOS_ISSUER_INPUT: ${{ inputs.workos_issuer }}
+          DUTY_VALID_TO: ${{ inputs.duty_valid_to }}
+          CEREMONY_REFERENCE: ${{ inputs.ceremony_reference }}
+        run: |
+          psql "$SUPABASE_ADMIN_DATABASE_URL" --set=ON_ERROR_STOP=1 \
+            --set=person_a="$PERSON_A" --set=subject_a="$SUBJECT_A" \
+            --set=person_b="$PERSON_B" --set=subject_b="$SUBJECT_B" \
+            --set=issuer="$WORKOS_ISSUER_INPUT" --set=valid_to="$DUTY_VALID_TO" \
+            --set=ceremony="$CEREMONY_REFERENCE" <<'SQL'
+          begin;
+          set local role allfit_migrator;
+          select support.bootstrap_backoffice_administrators(
+            :'person_a'::uuid, :'subject_a', :'person_b'::uuid, :'subject_b',
+            :'issuer', :'valid_to'::timestamptz, :'ceremony'
+          );
+          commit;
+          SQL

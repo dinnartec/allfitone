@@ -6,6 +6,7 @@ describe('Studio surface CORS', () => {
   test('allows command headers on onboarding preflight through the assembled application', async () => {
     process.env.API_PUBLIC_URL = 'https://api.example.test'
     process.env.STUDIO_WEB_URL = 'https://studio.example.test'
+    process.env.BACKOFFICE_WEB_URL = 'https://backoffice.example.test'
 
     const response = await createApp().request('/studio/v1/onboarding-attempts', {
       method: 'OPTIONS',
@@ -32,6 +33,7 @@ describe('Studio surface CORS', () => {
   test('allows profile PUT and catalogue revalidation headers through the assembled application', async () => {
     process.env.API_PUBLIC_URL = 'https://api.example.test'
     process.env.STUDIO_WEB_URL = 'https://studio.example.test'
+    process.env.BACKOFFICE_WEB_URL = 'https://backoffice.example.test'
 
     const profile = await createApp().request('/studio/v1/me/professional-profile', {
       method: 'OPTIONS',

@@ -17,6 +17,8 @@ servers:
 tags:
   - name: Studio Identity
     description: Hosted authentication and opaque browser sessions for Allfit Studio.
+  - name: Backoffice Identity
+    description: Password and TOTP authentication with application-owned AAL2 sessions.
   - name: Studio Organizations
     description: Studio entry context, organization creation and membership resolution.
   - name: Studio Catalog
@@ -87,6 +89,227 @@ x-allfit-media-url-policy:
     failure_without_effective_access: 404
 
 paths:
+  /backoffice/v1/auth/password:
+    post:
+      tags: [Backoffice Identity]
+      operationId: startBackofficePasswordAuthentication
+      x-allfit-operation: OP-IDN-032
+      x-allfit-cache: no-store
+      summary: Validate Backoffice password credentials and start a TOTP attempt
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BackofficePasswordRequest'
+      responses:
+        '200':
+          description: TOTP challenge or first-factor enrollment is ready
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Set-Cookie:
+              $ref: '#/components/headers/SetCookie'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackofficeAuthenticationAttempt'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/auth/attempt:
+    get:
+      tags: [Backoffice Identity]
+      operationId: getBackofficeAuthenticationAttempt
+      x-allfit-operation: OP-IDN-033
+      x-allfit-cache: no-store
+      summary: Recover the non-terminal TOTP attempt from its HttpOnly cookie
+      security:
+        - backofficeAttemptAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+      responses:
+        '200':
+          description: Current challenge or enrollment presentation
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackofficeAuthenticationAttempt'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/auth/totp/verification:
+    post:
+      tags: [Backoffice Identity]
+      operationId: verifyBackofficeTotp
+      x-allfit-operation: OP-IDN-034
+      x-allfit-cache: no-store
+      summary: Verify TOTP and atomically materialize an AAL2 Backoffice session
+      security:
+        - backofficeAttemptAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [code]
+              properties:
+                code:
+                  type: string
+                  pattern: '^\d{6}$'
+      responses:
+        '204':
+          description: AAL2 session created and temporary attempt cookie removed
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Set-Cookie:
+              $ref: '#/components/headers/SetCookie'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/session:
+    get:
+      tags: [Backoffice Identity]
+      operationId: getBackofficeSession
+      x-allfit-operation: OP-IDN-035
+      x-allfit-cache: no-store
+      summary: Revalidate and return the minimal AAL2 Backoffice session
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+      responses:
+        '200':
+          description: Active AAL2 Backoffice session
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackofficeSession'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/auth/logout:
+    post:
+      tags: [Backoffice Identity]
+      operationId: logoutBackofficeSession
+      x-allfit-operation: OP-IDN-036
+      x-allfit-cache: no-store
+      summary: Revoke the local session and its WorkOS sid without hosted logout
+      security:
+        - backofficeCookieAuth: []
+        - {}
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+      requestBody:
+        required: false
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                reason:
+                  type: string
+                  enum: [manual, inactivity, recovery]
+                  default: manual
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                reason:
+                  type: string
+                  enum: [manual, inactivity, recovery]
+                  default: manual
+      responses:
+        '204':
+          description: Session is absent or revoked and the cookie is cleared
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Set-Cookie:
+              $ref: '#/components/headers/SetCookie'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /backoffice/v1/auth/password-resets:
+    post:
+      tags: [Backoffice Identity]
+      operationId: requestBackofficePasswordReset
+      x-allfit-operation: OP-IDN-037
+      x-allfit-cache: no-store
+      summary: Ask WorkOS to send its uniform hosted password-recovery email
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  maxLength: 320
+      responses:
+        '202':
+          description: Uniform response regardless of account existence or provider outcome
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+
   /space/v1/auth/registrations:
     post:
       tags: [Space Identity]
@@ -1878,6 +2101,16 @@ components:
       scheme: bearer
       bearerFormat: JWT
       description: WorkOS AuthKit access token validated for the selected surface.
+    backofficeAttemptAuth:
+      type: apiKey
+      in: cookie
+      name: allfit_backoffice_auth_attempt
+      description: Opaque, host-only, HttpOnly temporary Backoffice authentication attempt.
+    backofficeCookieAuth:
+      type: apiKey
+      in: cookie
+      name: allfit_backoffice_session
+      description: Opaque, host-only, HttpOnly AAL2 Backoffice session.
 
   parameters:
     OnboardingAttemptId:
@@ -2318,6 +2551,88 @@ components:
             request_id: 01JEXAMPLE0000000000000000
 
   schemas:
+    BackofficePasswordRequest:
+      type: object
+      additionalProperties: false
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 320
+        password:
+          type: string
+          minLength: 1
+          maxLength: 4096
+          writeOnly: true
+    BackofficeAuthenticationAttempt:
+      type: object
+      additionalProperties: false
+      required: [next, expires_at]
+      properties:
+        next:
+          type: string
+          enum: [totp-challenge, totp-enrollment]
+        expires_at:
+          type: string
+          format: date-time
+        enrollment:
+          type: object
+          additionalProperties: false
+          required: [qr_code, manual_key]
+          properties:
+            qr_code:
+              type: string
+              minLength: 1
+              writeOnly: true
+            manual_key:
+              type: string
+              minLength: 1
+              writeOnly: true
+      description: Enrollment secrets are present only for a first-factor attempt.
+    BackofficeSession:
+      type: object
+      additionalProperties: false
+      required:
+        - authenticated
+        - assurance_level
+        - authentication_method
+        - operator
+        - assurance_verified_at
+        - inactivity_expires_at
+        - absolute_expires_at
+      properties:
+        authenticated:
+          type: boolean
+          const: true
+        assurance_level:
+          type: integer
+          const: 2
+        authentication_method:
+          type: string
+          const: password_totp
+        operator:
+          type: object
+          additionalProperties: false
+          required: [given_name, family_name]
+          properties:
+            given_name:
+              type: string
+              minLength: 1
+              maxLength: 100
+            family_name:
+              type: string
+              minLength: 1
+              maxLength: 100
+        assurance_verified_at:
+          type: string
+          format: date-time
+        inactivity_expires_at:
+          type: string
+          format: date-time
+        absolute_expires_at:
+          type: string
+          format: date-time
     SpaceRegistrationCreate:
       type: object
       additionalProperties: false

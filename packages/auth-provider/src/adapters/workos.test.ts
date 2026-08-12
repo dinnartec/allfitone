@@ -15,7 +15,12 @@ import { SignJWT, exportJWK, generateKeyPair, type JWK, type KeyObject } from 'j
 import { createWorkOSAuthProvider } from './workos.js'
 import { AuthError } from '../errors.js'
 import type { AuthProvider, Surface } from '../port.js'
-import type { WorkOSEvent, WorkOSUserManagement, WorkOSWebhooks } from './workos-client.js'
+import type {
+  WorkOSEvent,
+  WorkOSMultiFactorAuth,
+  WorkOSUserManagement,
+  WorkOSWebhooks,
+} from './workos-client.js'
 
 const CLIENT_IDS: Record<Surface, string> = {
   space: 'client_space_test',
@@ -269,6 +274,7 @@ describe('configuration', () => {
 function fakeClient(
   overrides: Partial<WorkOSUserManagement> = {},
   webhookOverrides: Partial<WorkOSWebhooks> = {},
+  mfaOverrides: Partial<WorkOSMultiFactorAuth> = {},
 ) {
   const calls: { method: string; args: unknown }[] = []
   const record = <T>(method: string, args: unknown, result: T): T => {
@@ -291,6 +297,11 @@ function fakeClient(
     authenticateWithPassword: async (o) => record('authenticateWithPassword', o, authResponse),
     authenticateWithRefreshToken: async (o) =>
       record('authenticateWithRefreshToken', o, authResponse),
+    createPasswordReset: async (o) =>
+      record('createPasswordReset', o, {
+        passwordResetToken: 'must-not-escape',
+        passwordResetUrl: 'https://example.test/must-not-escape',
+      }),
     createUser: async (o) => record('createUser', o, { id: 'user_01NEW' }),
     listUsers: async (o) =>
       record('listUsers', o, { data: [{ id: 'user_01FAKE', emailVerified: false }] }),
@@ -320,6 +331,27 @@ function fakeClient(
       ),
     ...overrides,
   }
+  const multiFactorAuth: WorkOSMultiFactorAuth = {
+    enrollFactor: async (o) =>
+      record('enrollFactor', o, {
+        id: 'factor_01FAKE',
+        totp: {
+          issuer: o.issuer,
+          user: o.user,
+          qrCode: 'data:image/png;base64,secret',
+          secret: 'MANUALKEY',
+          uri: 'otpauth://totp/secret',
+        },
+      }),
+    challengeFactor: async (o) =>
+      record('challengeFactor', o, {
+        id: 'challenge_01FAKE',
+        expiresAt: '2026-08-12T12:10:00.000Z',
+      }),
+    verifyChallenge: async (o) => record('verifyChallenge', o, { valid: true }),
+    deleteFactor: async (id) => record('deleteFactor', id, undefined),
+    ...mfaOverrides,
+  }
   const webhooks: WorkOSWebhooks = {
     constructEvent: async (options) => {
       calls.push({ method: 'constructEvent', args: options })
@@ -333,14 +365,15 @@ function fakeClient(
           }
     },
   }
-  return { client: { userManagement, webhooks }, calls }
+  return { client: { userManagement, multiFactorAuth, webhooks }, calls }
 }
 
 function providerWith(
   overrides: Partial<WorkOSUserManagement> = {},
   webhookOverrides: Partial<WorkOSWebhooks> = {},
+  mfaOverrides: Partial<WorkOSMultiFactorAuth> = {},
 ) {
-  const { client, calls } = fakeClient(overrides, webhookOverrides)
+  const { client, calls } = fakeClient(overrides, webhookOverrides, mfaOverrides)
   const provider = createWorkOSAuthProvider({
     credentials: CREDENTIALS,
     issuer: ISSUER,
@@ -351,6 +384,96 @@ function providerWith(
   })
   return { provider, calls }
 }
+
+describe('backoffice MFA', () => {
+  test('enrolls TOTP through the Backoffice client and returns only required enrollment data', async () => {
+    const { provider, calls } = providerWith()
+
+    const enrollment = await provider.enrollTotp('ada@example.test', 'backoffice')
+
+    expect(enrollment).toEqual({
+      factorId: 'factor_01FAKE',
+      qrCode: 'data:image/png;base64,secret',
+      manualKey: 'MANUALKEY',
+    })
+    expect(calls[0]).toEqual({
+      method: 'enrollFactor',
+      args: { type: 'totp', issuer: 'Allfit Backoffice', user: 'ada@example.test' },
+    })
+  })
+
+  test('challenges and verifies a persisted factor', async () => {
+    const { provider, calls } = providerWith()
+
+    const challenge = await provider.challengeTotp('factor_01FAKE', 'backoffice')
+    const verification = await provider.verifyTotp(challenge.challengeId, '123456', 'backoffice')
+
+    expect(challenge).toEqual({
+      challengeId: 'challenge_01FAKE',
+      expiresAt: '2026-08-12T12:10:00.000Z',
+    })
+    expect(verification).toEqual({ valid: true, alreadyVerified: false })
+    expect(calls.map((call) => call.method)).toEqual(['challengeFactor', 'verifyChallenge'])
+  })
+
+  test('recognizes a retry of an already verified challenge without leaking the provider error', async () => {
+    const error = Object.assign(new Error('already verified'), {
+      status: 422,
+      code: 'authentication_challenge_previously_verified',
+    })
+    const { provider } = providerWith(
+      {},
+      {},
+      {
+        verifyChallenge: async () => {
+          throw error
+        },
+      },
+    )
+
+    await expect(provider.verifyTotp('challenge_01FAKE', '123456', 'backoffice')).resolves.toEqual({
+      valid: true,
+      alreadyVerified: true,
+    })
+  })
+
+  test('deletes abandoned factors and revokes one provider session', async () => {
+    const { provider, calls } = providerWith()
+
+    await provider.deleteAuthenticationFactor('factor_01FAKE', 'backoffice')
+    await provider.revokeSession('session_01FAKE', 'backoffice')
+
+    expect(calls).toEqual([
+      { method: 'deleteFactor', args: 'factor_01FAKE' },
+      { method: 'revokeSession', args: { sessionId: 'session_01FAKE' } },
+    ])
+  })
+
+  test('requests password recovery but never returns its token or URL', async () => {
+    const { provider, calls } = providerWith()
+
+    const result = await provider.requestPasswordReset('ada@example.test', 'backoffice')
+
+    expect(result).toBeUndefined()
+    expect(calls[0]).toEqual({
+      method: 'createPasswordReset',
+      args: { email: 'ada@example.test' },
+    })
+  })
+
+  test('answers an unknown reset address as accepted', async () => {
+    const notFound = Object.assign(new Error('not found'), { status: 404 })
+    const { provider } = providerWith({
+      createPasswordReset: async () => {
+        throw notFound
+      },
+    })
+
+    await expect(
+      provider.requestPasswordReset('missing@example.test', 'backoffice'),
+    ).resolves.toBeUndefined()
+  })
+})
 
 describe('authenticateWithCode', () => {
   test('returns the subject and tokens, and uses the surface client_id', async () => {

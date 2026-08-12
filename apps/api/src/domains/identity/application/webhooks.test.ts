@@ -26,6 +26,18 @@ function provider(verifyWebhookEvent: AuthProvider['verifyWebhookEvent']): AuthP
     },
     verifyWebhookEvent,
     updateEmail: async () => undefined,
+    enrollTotp: async () => {
+      throw new Error('not used')
+    },
+    challengeTotp: async () => {
+      throw new Error('not used')
+    },
+    verifyTotp: async () => {
+      throw new Error('not used')
+    },
+    deleteAuthenticationFactor: async () => undefined,
+    requestPasswordReset: async () => undefined,
+    revokeSession: async () => undefined,
     revokeSessions: async () => undefined,
   }
 }

@@ -3,7 +3,7 @@
   "framework": "hono",
   "functions": {
     "src/index.ts": {
-      "includeFiles": "../../packages/{notifications,queue}/**"
+      "includeFiles": "../../packages/{auth-provider,notifications,queue}/**"
     }
   },
   "crons": [{ "path": "/cron/outbox", "schedule": "* * * * *" }]

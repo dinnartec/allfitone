@@ -2,6 +2,10 @@
 
 import { authProvider } from '../../platform/auth/index.js'
 import {
+  createBackofficeAuthenticationService,
+  type BackofficeAuthenticationService,
+} from './application/backoffice.js'
+import {
   createStudioInvitationService,
   type StudioInvitationService,
 } from './application/invitations.js'
@@ -27,6 +31,7 @@ import {
   createIdentitySessionDatabase,
   createIdentityWebhookDatabase,
   createIdentityInvitationDatabase,
+  createBackofficeAuthenticationDatabase,
   createSessionTokenVaultFromEnv,
 } from './infrastructure/index.js'
 
@@ -36,6 +41,7 @@ let cachedProfessional: StudioProfessionalService | undefined
 let cachedRegistrations: SpaceRegistrationService | undefined
 let cachedWebhooks: IdentityWebhookService | undefined
 let cachedInvitations: StudioInvitationService | undefined
+let cachedBackoffice: BackofficeAuthenticationService | undefined
 
 export function studioSessionService(): StudioSessionService {
   if (cached) return cached
@@ -99,6 +105,38 @@ export function studioInvitationService(): StudioInvitationService {
     enabled: process.env.STAFF_INVITATION_ISSUANCE_ENABLED === 'true',
   })
   return cachedInvitations
+}
+
+export function backofficeAuthenticationService(): BackofficeAuthenticationService {
+  if (cachedBackoffice) return cachedBackoffice
+  const issuer = process.env.WORKOS_ISSUER
+  if (!issuer) throw new Error('WORKOS_ISSUER is not set')
+  cachedBackoffice = createBackofficeAuthenticationService({
+    authProvider: authProvider(),
+    database: createBackofficeAuthenticationDatabase(),
+    tokenVault: createSessionTokenVaultFromEnv(),
+    issuer,
+  })
+  return cachedBackoffice
+}
+
+/** Test seam. Undefined restores environment-backed construction. */
+export function setBackofficeAuthenticationService(
+  service: BackofficeAuthenticationService | undefined,
+): void {
+  cachedBackoffice = service
+}
+
+export function trustedBackofficeWebUrl(): string {
+  const configured = process.env.BACKOFFICE_WEB_URL
+  if (!configured) throw new Error('BACKOFFICE_WEB_URL is not set')
+  const url = new URL(configured)
+  if (url.username || url.password || url.search || url.hash) {
+    throw new Error(
+      'BACKOFFICE_WEB_URL must be a trusted URL without credentials, query or fragment',
+    )
+  }
+  return url.toString().replace(/\/$/, '')
 }
 
 /** Test seam. Undefined restores environment-backed construction. */

@@ -23,6 +23,10 @@ export type Database = {
         Returns: boolean
       }
       has_membership: { Args: { p_organization_id: string }; Returns: boolean }
+      has_platform_duty: {
+        Args: { p_duty_code: string; p_person_id: string; p_session_id: string }
+        Returns: boolean
+      }
       is_self: { Args: { target_person_id: string }; Returns: boolean }
       owns_membership: { Args: { p_membership_id: string }; Returns: boolean }
       person: { Args: never; Returns: string }
@@ -36,6 +40,56 @@ export type Database = {
   }
   identity: {
     Tables: {
+      access_account_mfa_factors: {
+        Row: {
+          access_account_id: string
+          created_at: string
+          factor_kind: string
+          id: string
+          provider: string
+          provider_factor_id: string
+          revoked_at: string | null
+          status: Database['identity']['Enums']['mfa_factor_status']
+          superseded_at: string | null
+          updated_at: string
+          verified_at: string | null
+        }
+        Insert: {
+          access_account_id: string
+          created_at?: string
+          factor_kind?: string
+          id?: string
+          provider?: string
+          provider_factor_id: string
+          revoked_at?: string | null
+          status?: Database['identity']['Enums']['mfa_factor_status']
+          superseded_at?: string | null
+          updated_at?: string
+          verified_at?: string | null
+        }
+        Update: {
+          access_account_id?: string
+          created_at?: string
+          factor_kind?: string
+          id?: string
+          provider?: string
+          provider_factor_id?: string
+          revoked_at?: string | null
+          status?: Database['identity']['Enums']['mfa_factor_status']
+          superseded_at?: string | null
+          updated_at?: string
+          verified_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_access_account_mfa_factors_access_account'
+            columns: ['access_account_id']
+            isOneToOne: false
+            referencedRelation: 'access_accounts'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       access_accounts: {
         Row: {
           created_at: string
@@ -79,10 +133,15 @@ export type Database = {
       }
       access_sessions: {
         Row: {
+          absolute_expires_at: string | null
           access_account_id: string
           access_token_expires_at: string
+          assurance_level: number
+          assurance_verified_at: string | null
+          authentication_method: string | null
           created_at: string
           id: string
+          last_activity_at: string | null
           provider_session_id: string
           revoked_at: string | null
           surface: Database['identity']['Enums']['access_session_surface']
@@ -92,10 +151,15 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          absolute_expires_at?: string | null
           access_account_id: string
           access_token_expires_at: string
+          assurance_level?: number
+          assurance_verified_at?: string | null
+          authentication_method?: string | null
           created_at?: string
           id?: string
+          last_activity_at?: string | null
           provider_session_id: string
           revoked_at?: string | null
           surface: Database['identity']['Enums']['access_session_surface']
@@ -105,10 +169,15 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          absolute_expires_at?: string | null
           access_account_id?: string
           access_token_expires_at?: string
+          assurance_level?: number
+          assurance_verified_at?: string | null
+          authentication_method?: string | null
           created_at?: string
           id?: string
+          last_activity_at?: string | null
           provider_session_id?: string
           revoked_at?: string | null
           surface?: Database['identity']['Enums']['access_session_surface']
@@ -123,6 +192,88 @@ export type Database = {
             columns: ['access_account_id']
             isOneToOne: false
             referencedRelation: 'access_accounts'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      backoffice_authentication_attempts: {
+        Row: {
+          access_account_id: string
+          access_token_expires_at: string
+          attempt_token_hash: string
+          completed_session_id: string | null
+          created_at: string
+          expires_at: string
+          factor_id: string
+          id: string
+          invalid_code_count: number
+          provider_challenge_id: string
+          provider_session_id: string
+          secret_ciphertext: string | null
+          status: Database['identity']['Enums']['backoffice_authentication_attempt_status']
+          terminal_at: string | null
+          updated_at: string
+          verification_command_id: string | null
+          verification_idempotency_key: string | null
+        }
+        Insert: {
+          access_account_id: string
+          access_token_expires_at: string
+          attempt_token_hash: string
+          completed_session_id?: string | null
+          created_at?: string
+          expires_at: string
+          factor_id: string
+          id?: string
+          invalid_code_count?: number
+          provider_challenge_id: string
+          provider_session_id: string
+          secret_ciphertext?: string | null
+          status: Database['identity']['Enums']['backoffice_authentication_attempt_status']
+          terminal_at?: string | null
+          updated_at?: string
+          verification_command_id?: string | null
+          verification_idempotency_key?: string | null
+        }
+        Update: {
+          access_account_id?: string
+          access_token_expires_at?: string
+          attempt_token_hash?: string
+          completed_session_id?: string | null
+          created_at?: string
+          expires_at?: string
+          factor_id?: string
+          id?: string
+          invalid_code_count?: number
+          provider_challenge_id?: string
+          provider_session_id?: string
+          secret_ciphertext?: string | null
+          status?: Database['identity']['Enums']['backoffice_authentication_attempt_status']
+          terminal_at?: string | null
+          updated_at?: string
+          verification_command_id?: string | null
+          verification_idempotency_key?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_backoffice_authentication_attempts_access_account'
+            columns: ['access_account_id']
+            isOneToOne: false
+            referencedRelation: 'access_accounts'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'fk_backoffice_authentication_attempts_factor'
+            columns: ['factor_id']
+            isOneToOne: false
+            referencedRelation: 'access_account_mfa_factors'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'fk_backoffice_authentication_attempts_session'
+            columns: ['completed_session_id']
+            isOneToOne: false
+            referencedRelation: 'access_sessions'
             referencedColumns: ['id']
           },
         ]
@@ -259,6 +410,68 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      mfa_factor_recovery_events: {
+        Row: {
+          approved_by_person_id: string
+          ceremony_reference: string
+          factor_id: string
+          id: string
+          occurred_at: string
+          reason_code: string
+          requested_by_person_id: string
+          subject_person_id: string
+        }
+        Insert: {
+          approved_by_person_id: string
+          ceremony_reference: string
+          factor_id: string
+          id?: string
+          occurred_at?: string
+          reason_code: string
+          requested_by_person_id: string
+          subject_person_id: string
+        }
+        Update: {
+          approved_by_person_id?: string
+          ceremony_reference?: string
+          factor_id?: string
+          id?: string
+          occurred_at?: string
+          reason_code?: string
+          requested_by_person_id?: string
+          subject_person_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_mfa_factor_recovery_events_approver'
+            columns: ['approved_by_person_id']
+            isOneToOne: false
+            referencedRelation: 'people'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'fk_mfa_factor_recovery_events_factor'
+            columns: ['factor_id']
+            isOneToOne: false
+            referencedRelation: 'access_account_mfa_factors'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'fk_mfa_factor_recovery_events_requester'
+            columns: ['requested_by_person_id']
+            isOneToOne: false
+            referencedRelation: 'people'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'fk_mfa_factor_recovery_events_subject'
+            columns: ['subject_person_id']
+            isOneToOne: false
+            referencedRelation: 'people'
+            referencedColumns: ['id']
+          },
+        ]
       }
       onboarding_attempts: {
         Row: {
@@ -651,6 +864,28 @@ export type Database = {
         }
         Returns: undefined
       }
+      bind_backoffice_totp_verification: {
+        Args: {
+          p_attempt_token_hash: string
+          p_command_id: string
+          p_idempotency_key: string
+        }
+        Returns: undefined
+      }
+      complete_backoffice_authentication: {
+        Args: {
+          p_access_token_expires_at: string
+          p_attempt_token_hash: string
+          p_command_id: string
+          p_idempotency_key: string
+          p_session_token_ciphertext: string
+          p_session_token_hash: string
+        }
+        Returns: {
+          replayed: boolean
+          session_id: string
+        }[]
+      }
       consume_staff_invitation_rate_limit: {
         Args: {
           p_contact: string
@@ -709,6 +944,10 @@ export type Database = {
           credential: Json
           replayed: boolean
         }[]
+      }
+      expire_backoffice_authentication_attempts: {
+        Args: { p_limit: number }
+        Returns: number
       }
       expire_staff_invitations: { Args: { p_limit?: number }; Returns: number }
       get_my_professional_context: {
@@ -779,6 +1018,65 @@ export type Database = {
           token_version: number
         }[]
       }
+      load_backoffice_access_session: {
+        Args: { p_token_hash: string }
+        Returns: {
+          absolute_expires_at: string
+          access_token_expires_at: string
+          account_id: string
+          assurance_level: number
+          assurance_verified_at: string
+          authentication_method: string
+          external_subject: string
+          family_name: string
+          given_name: string
+          last_activity_at: string
+          person_id: string
+          provider_session_id: string
+          session_id: string
+          token_ciphertext: string
+          token_version: number
+        }[]
+      }
+      load_backoffice_authentication_attempt: {
+        Args: { p_attempt_token_hash: string }
+        Returns: {
+          access_token_expires_at: string
+          account_id: string
+          attempt_id: string
+          attempt_status: Database['identity']['Enums']['backoffice_authentication_attempt_status']
+          completed_session_id: string
+          expires_at: string
+          external_subject: string
+          factor_id: string
+          factor_status: Database['identity']['Enums']['mfa_factor_status']
+          family_name: string
+          given_name: string
+          invalid_code_count: number
+          person_id: string
+          provider_challenge_id: string
+          provider_factor_id: string
+          provider_session_id: string
+          secret_ciphertext: string
+          verification_command_id: string
+          verification_idempotency_key: string
+        }[]
+      }
+      logout_backoffice_access_session: {
+        Args: { p_token_hash: string }
+        Returns: {
+          outcome: string
+          provider_session_id: string
+        }[]
+      }
+      prepare_backoffice_auth_cleanup: {
+        Args: { p_event_id: string }
+        Returns: {
+          cleanup_state: string
+          provider_factor_id: string
+          provider_session_id: string
+        }[]
+      }
       prepare_staff_invitation_delivery: {
         Args: { p_event_id: string }
         Returns: {
@@ -843,9 +1141,36 @@ export type Database = {
           result: string
         }[]
       }
+      record_backoffice_totp_failure: {
+        Args: { p_attempt_token_hash: string }
+        Returns: {
+          remaining_attempts: number
+          terminal: boolean
+        }[]
+      }
+      recover_backoffice_totp_factor: {
+        Args: {
+          p_approved_by_person_id: string
+          p_ceremony_reference: string
+          p_requested_by_person_id: string
+          p_subject_person_id: string
+        }
+        Returns: string
+      }
       require_professional_actor: {
         Args: { p_person_id: string }
         Returns: undefined
+      }
+      resolve_backoffice_account: {
+        Args: { p_issuer: string; p_provider: string; p_subject: string }
+        Returns: {
+          account_id: string
+          factor_id: string
+          family_name: string
+          given_name: string
+          person_id: string
+          provider_factor_id: string
+        }[]
       }
       resolve_or_create_access_account: {
         Args: { p_issuer: string; p_provider: string; p_subject: string }
@@ -928,6 +1253,26 @@ export type Database = {
         }
         Returns: boolean
       }
+      start_backoffice_authentication_attempt: {
+        Args: {
+          p_access_account_id: string
+          p_access_token_expires_at: string
+          p_attempt_token_hash: string
+          p_expires_at: string
+          p_new_factor: boolean
+          p_provider_challenge_id: string
+          p_provider_factor_id: string
+          p_provider_session_id: string
+          p_secret_ciphertext: string
+          p_status: Database['identity']['Enums']['backoffice_authentication_attempt_status']
+        }
+        Returns: {
+          attempt_id: string
+          expires_at: string
+          factor_id: string
+          status: Database['identity']['Enums']['backoffice_authentication_attempt_status']
+        }[]
+      }
       start_onboarding_attempt: {
         Args: {
           p_account_id: string
@@ -968,12 +1313,15 @@ export type Database = {
       }
     }
     Enums: {
-      access_session_surface: 'studio'
+      access_session_surface: 'studio' | 'backoffice'
       actor_kind: 'anonymous' | 'account' | 'person' | 'professional' | 'worker' | 'support'
+      backoffice_authentication_attempt_status:
+        'pending_enrollment' | 'pending_challenge' | 'completed' | 'failed' | 'expired'
       eligibility_result: 'pass' | 'fail' | 'review_required' | 'unknown'
       invitation_intent_kind: 'membership' | 'service_relationship' | 'program_assignment'
       invitation_intent_status: 'pending' | 'accepted' | 'rejected' | 'revoked' | 'expired'
       invitation_status: 'pending' | 'completed' | 'revoked' | 'expired'
+      mfa_factor_status: 'pending' | 'active' | 'revoked' | 'superseded'
       onboarding_status: 'open' | 'activated' | 'ineligible' | 'expired'
       password_reset_receipt_result: 'processed' | 'account_absent'
       person_status: 'active' | 'closed'
@@ -1101,12 +1449,20 @@ export const Constants = {
   },
   identity: {
     Enums: {
-      access_session_surface: ['studio'],
+      access_session_surface: ['studio', 'backoffice'],
       actor_kind: ['anonymous', 'account', 'person', 'professional', 'worker', 'support'],
+      backoffice_authentication_attempt_status: [
+        'pending_enrollment',
+        'pending_challenge',
+        'completed',
+        'failed',
+        'expired',
+      ],
       eligibility_result: ['pass', 'fail', 'review_required', 'unknown'],
       invitation_intent_kind: ['membership', 'service_relationship', 'program_assignment'],
       invitation_intent_status: ['pending', 'accepted', 'rejected', 'revoked', 'expired'],
       invitation_status: ['pending', 'completed', 'revoked', 'expired'],
+      mfa_factor_status: ['pending', 'active', 'revoked', 'superseded'],
       onboarding_status: ['open', 'activated', 'ineligible', 'expired'],
       password_reset_receipt_result: ['processed', 'account_absent'],
       person_status: ['active', 'closed'],

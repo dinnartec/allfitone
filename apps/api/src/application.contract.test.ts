@@ -31,6 +31,7 @@ describe('OpenAPI route gate', () => {
   test('covers every implemented Hono route and keeps every exclusion live', () => {
     process.env.API_PUBLIC_URL = 'https://api.example.test'
     process.env.STUDIO_WEB_URL = 'https://studio.example.test'
+    process.env.BACKOFFICE_WEB_URL = 'https://backoffice.example.test'
     const routes = createApp().routes.map(({ method, path }) => ({ method, path }))
 
     expect(contractDrift(routes, allfitV1ContractManifest.exclusions)).toEqual({

@@ -1,6 +1,6 @@
 /** Identity persistence and token encryption. */
 
-import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto'
+import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes } from 'node:crypto'
 import type { SessionTokens } from '@allfitone/auth-provider'
 import type postgres from 'postgres'
 
@@ -11,6 +11,8 @@ import type {
   IdentityOnboardingDatabase,
   IdentityProfessionalDatabase,
   IdentityInvitationDatabase,
+  BackofficeAuthenticationDatabase,
+  BackofficeAttemptSecret,
   ProfessionalCredential,
   ProfessionalProfile,
   StudioProfessionalContext,
@@ -84,6 +86,46 @@ type SessionRow = {
   access_token_expires_at: Date
   token_version: number
   person_status: 'active' | 'closed' | null
+}
+
+type BackofficeAttemptRow = {
+  attempt_id: string
+  account_id: string
+  person_id: string
+  external_subject: string
+  given_name: string
+  family_name: string
+  factor_id: string
+  factor_status: 'pending' | 'active' | 'revoked' | 'superseded'
+  provider_factor_id: string
+  provider_session_id: string
+  provider_challenge_id: string
+  secret_ciphertext: string | null
+  access_token_expires_at: Date
+  attempt_status: 'pending_enrollment' | 'pending_challenge' | 'completed' | 'failed' | 'expired'
+  invalid_code_count: number
+  verification_idempotency_key: string | null
+  verification_command_id: string | null
+  completed_session_id: string | null
+  expires_at: Date
+}
+
+type BackofficeSessionRow = {
+  session_id: string
+  account_id: string
+  person_id: string
+  external_subject: string
+  provider_session_id: string
+  token_ciphertext: string
+  access_token_expires_at: Date
+  token_version: number
+  given_name: string
+  family_name: string
+  assurance_level: 2
+  authentication_method: 'password_totp'
+  assurance_verified_at: Date
+  last_activity_at: Date
+  absolute_expires_at: Date
 }
 
 type RawProfessionalCredential = {
@@ -434,6 +476,157 @@ export function createIdentitySessionDatabase(): IdentitySessionDatabase {
   }
 }
 
+export function createBackofficeAuthenticationDatabase(): BackofficeAuthenticationDatabase {
+  const sql = database()
+
+  return {
+    async resolveEligibleAccount(issuer, subject) {
+      const [row] = await sql<
+        Array<{
+          account_id: string
+          person_id: string
+          given_name: string
+          family_name: string
+          factor_id: string | null
+          provider_factor_id: string | null
+        }>
+      >`select * from identity.resolve_backoffice_account('workos', ${issuer}, ${subject})`
+      if (!row) return undefined
+      return {
+        accountId: row.account_id,
+        personId: row.person_id,
+        givenName: row.given_name,
+        familyName: row.family_name,
+        ...(row.factor_id && row.provider_factor_id
+          ? { factorId: row.factor_id, providerFactorId: row.provider_factor_id }
+          : {}),
+      }
+    },
+
+    async startAttempt(input) {
+      await sql`
+        select * from identity.start_backoffice_authentication_attempt(
+          ${input.accountId}::uuid,
+          ${input.providerFactorId},
+          ${input.newFactor},
+          ${input.providerSessionId},
+          ${input.providerChallengeId},
+          ${input.attemptTokenHash},
+          ${input.secretCiphertext},
+          ${input.accessTokenExpiresAt}::timestamptz,
+          ${input.status}::identity.backoffice_authentication_attempt_status,
+          ${input.expiresAt}::timestamptz
+        )
+      `
+    },
+
+    async loadAttempt(attemptTokenHash) {
+      const [row] = await sql<BackofficeAttemptRow[]>`
+        select * from identity.load_backoffice_authentication_attempt(${attemptTokenHash})
+      `
+      if (!row) return undefined
+      return {
+        attemptId: row.attempt_id,
+        accountId: row.account_id,
+        personId: row.person_id,
+        externalSubject: row.external_subject,
+        givenName: row.given_name,
+        familyName: row.family_name,
+        factorId: row.factor_id,
+        factorStatus: row.factor_status,
+        providerFactorId: row.provider_factor_id,
+        providerSessionId: row.provider_session_id,
+        providerChallengeId: row.provider_challenge_id,
+        secretCiphertext: row.secret_ciphertext,
+        accessTokenExpiresAt: new Date(row.access_token_expires_at),
+        status: row.attempt_status,
+        invalidCodeCount: row.invalid_code_count,
+        verificationIdempotencyKey: row.verification_idempotency_key,
+        verificationCommandId: row.verification_command_id,
+        completedSessionId: row.completed_session_id,
+        expiresAt: new Date(row.expires_at),
+      }
+    },
+
+    async recordTotpFailure(attemptTokenHash) {
+      const [row] = await sql<Array<{ remaining_attempts: number; terminal: boolean }>>`
+        select * from identity.record_backoffice_totp_failure(${attemptTokenHash})
+      `
+      if (!row) throw new Error('PostgreSQL did not record the TOTP failure')
+      return { remainingAttempts: row.remaining_attempts, terminal: row.terminal }
+    },
+
+    async bindTotpVerification(input) {
+      await sql`
+        select identity.bind_backoffice_totp_verification(
+          ${input.attemptTokenHash},
+          ${input.idempotencyKey}::uuid,
+          ${input.commandId}::uuid
+        )
+      `
+    },
+
+    async completeAuthentication(input) {
+      const [row] = await sql<Array<{ session_id: string; replayed: boolean }>>`
+        select * from identity.complete_backoffice_authentication(
+          ${input.attemptTokenHash},
+          ${input.idempotencyKey}::uuid,
+          ${input.commandId}::uuid,
+          ${input.sessionTokenHash},
+          ${input.sessionTokenCiphertext},
+          ${input.accessTokenExpiresAt}::timestamptz
+        )
+      `
+      if (!row) throw new Error('PostgreSQL did not complete Backoffice authentication')
+      return { sessionId: row.session_id, replayed: row.replayed }
+    },
+
+    async loadSession(sessionTokenHash) {
+      const [row] = await sql<BackofficeSessionRow[]>`
+        select * from identity.load_backoffice_access_session(${sessionTokenHash})
+      `
+      if (!row) return undefined
+      return {
+        sessionId: row.session_id,
+        accountId: row.account_id,
+        personId: row.person_id,
+        externalSubject: row.external_subject,
+        providerSessionId: row.provider_session_id,
+        tokenCiphertext: row.token_ciphertext,
+        accessTokenExpiresAt: new Date(row.access_token_expires_at),
+        tokenVersion: row.token_version,
+        givenName: row.given_name,
+        familyName: row.family_name,
+        assuranceLevel: row.assurance_level,
+        authenticationMethod: row.authentication_method,
+        assuranceVerifiedAt: new Date(row.assurance_verified_at),
+        lastActivityAt: new Date(row.last_activity_at),
+        absoluteExpiresAt: new Date(row.absolute_expires_at),
+      }
+    },
+
+    async rotateSession(input) {
+      const [row] = await sql<Array<{ rotated: boolean }>>`
+        select identity.rotate_access_session(
+          ${input.sessionId}::uuid,
+          ${input.expectedTokenVersion},
+          ${input.tokenCiphertext},
+          ${input.accessTokenExpiresAt}::timestamptz
+        ) as rotated
+      `
+      return row?.rotated ?? false
+    },
+
+    async logout(sessionTokenHash) {
+      const [row] = await sql<
+        Array<{ outcome: 'already-absent' | 'revoked'; provider_session_id: string | null }>
+      >`select * from identity.logout_backoffice_access_session(${sessionTokenHash})`
+      if (!row) throw new Error('PostgreSQL did not close the Backoffice session')
+      return { outcome: row.outcome, providerSessionId: row.provider_session_id }
+    },
+  }
+}
+
 export function createIdentityWebhookDatabase(): IdentityWebhookDatabase {
   const sql = database()
 
@@ -648,32 +841,38 @@ export function createSessionTokenVaultFromEnv(): SessionTokenVault {
 
   return {
     generateOpaqueToken: () => randomBytes(32).toString('base64url'),
+    deriveOpaqueToken: (token, purpose) =>
+      createHmac('sha256', key).update(`${purpose}\u0000${token}`, 'utf8').digest('base64url'),
     hashOpaqueToken: (token) => createHash('sha256').update(token).digest(),
-    seal(secret, context) {
-      const nonce = randomBytes(12)
-      const cipher = createCipheriv('aes-256-gcm', key, nonce)
-      cipher.setAAD(aad(context))
-      const encrypted = Buffer.concat([
-        cipher.update(JSON.stringify(secret), 'utf8'),
-        cipher.final(),
-      ])
-      return `v1.${nonce.toString('base64url')}.${encrypted.toString('base64url')}.${cipher.getAuthTag().toString('base64url')}`
-    },
-    open(ciphertext, context) {
-      const [version, nonceValue, encryptedValue, tagValue] = ciphertext.split('.')
-      if (version !== 'v1' || !nonceValue || !encryptedValue || !tagValue) {
-        throw new Error('Unsupported session ciphertext')
-      }
-      const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(nonceValue, 'base64url'))
-      decipher.setAAD(aad(context))
-      decipher.setAuthTag(Buffer.from(tagValue, 'base64url'))
-      const plaintext = Buffer.concat([
-        decipher.update(Buffer.from(encryptedValue, 'base64url')),
-        decipher.final(),
-      ]).toString('utf8')
-      return sessionSecret(JSON.parse(plaintext) as unknown)
-    },
+    seal: (secret, context) => sealPayload(secret, context, key),
+    open: (ciphertext, context) => sessionSecret(openPayload(ciphertext, context, key)),
+    sealBackofficeAttempt: (secret, context) => sealPayload(secret, context, key),
+    openBackofficeAttempt: (ciphertext, context) =>
+      backofficeAttemptSecret(openPayload(ciphertext, context, key)),
   }
+}
+
+function sealPayload(value: unknown, context: SessionCipherContext, key: Buffer): string {
+  const nonce = randomBytes(12)
+  const cipher = createCipheriv('aes-256-gcm', key, nonce)
+  cipher.setAAD(aad(context))
+  const encrypted = Buffer.concat([cipher.update(JSON.stringify(value), 'utf8'), cipher.final()])
+  return `v1.${nonce.toString('base64url')}.${encrypted.toString('base64url')}.${cipher.getAuthTag().toString('base64url')}`
+}
+
+function openPayload(ciphertext: string, context: SessionCipherContext, key: Buffer): unknown {
+  const [version, nonceValue, encryptedValue, tagValue] = ciphertext.split('.')
+  if (version !== 'v1' || !nonceValue || !encryptedValue || !tagValue) {
+    throw new Error('Unsupported session ciphertext')
+  }
+  const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(nonceValue, 'base64url'))
+  decipher.setAAD(aad(context))
+  decipher.setAuthTag(Buffer.from(tagValue, 'base64url'))
+  const plaintext = Buffer.concat([
+    decipher.update(Buffer.from(encryptedValue, 'base64url')),
+    decipher.final(),
+  ]).toString('utf8')
+  return JSON.parse(plaintext) as unknown
 }
 
 function aad(context: SessionCipherContext): Buffer {
@@ -724,6 +923,25 @@ function sessionSecret(value: unknown): StoredSessionSecret {
       familyName: sessionIdentityName(names.familyName),
       verifiedEmail: sessionVerifiedEmail(names.verifiedEmail),
     },
+  }
+}
+
+function backofficeAttemptSecret(value: unknown): BackofficeAttemptSecret {
+  if (typeof value !== 'object' || value === null) {
+    throw new Error('Invalid Backoffice attempt secret payload')
+  }
+  const candidate = value as Record<string, unknown>
+  const parsed = sessionSecret({ tokens: candidate.tokens, identity: candidate.identity })
+  const enrollment = candidate.enrollment
+  if (enrollment === null) return { ...parsed, enrollment: null }
+  if (typeof enrollment !== 'object') throw new Error('Invalid TOTP enrollment payload')
+  const fields = enrollment as Record<string, unknown>
+  if (typeof fields.qrCode !== 'string' || typeof fields.manualKey !== 'string') {
+    throw new Error('Invalid TOTP enrollment payload')
+  }
+  return {
+    ...parsed,
+    enrollment: { qrCode: fields.qrCode, manualKey: fields.manualKey },
   }
 }
 

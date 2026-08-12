@@ -19,7 +19,16 @@ const body = Manrope({
 
 export const metadata: Metadata = {
   title: 'Allfit Backoffice',
-  description: 'Operación interna de Allfit One.',
+  description: 'Operación interna protegida de Allfit One.',
+  icons: {
+    icon: [
+      {
+        url: '/brand/allfit-one/favicon/allfit-one-favicon-ink.svg',
+        type: 'image/svg+xml',
+      },
+    ],
+    shortcut: '/brand/allfit-one/favicon/allfit-one-favicon-ink.svg',
+  },
   robots: {
     index: false,
     follow: false,

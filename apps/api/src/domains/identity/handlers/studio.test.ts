@@ -37,6 +37,18 @@ function fakeProvider(overrides: Partial<AuthProvider> = {}): AuthProvider {
       throw new Error('not used')
     },
     updateEmail: async () => undefined,
+    enrollTotp: async () => {
+      throw new Error('not used')
+    },
+    challengeTotp: async () => {
+      throw new Error('not used')
+    },
+    verifyTotp: async () => {
+      throw new Error('not used')
+    },
+    deleteAuthenticationFactor: async () => undefined,
+    requestPasswordReset: async () => undefined,
+    revokeSession: async () => undefined,
     revokeSessions: async () => undefined,
     ...overrides,
   }

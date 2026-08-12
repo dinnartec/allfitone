@@ -1,5 +1,14 @@
 import type { AuthenticatedIdentity, SessionTokens } from '@allfitone/auth-provider'
 
+export type {
+  BackofficeAttemptSecret,
+  BackofficeAttemptState,
+  BackofficeAuthenticationDatabase,
+  EligibleBackofficeAccount,
+  StoredBackofficeAttempt,
+  StoredBackofficeSession,
+} from './backoffice.js'
+
 export type RegistrationStatus = 'complete' | 'registration_incomplete'
 
 export interface AccessAccount {
@@ -317,9 +326,18 @@ export interface IdentityInvitationDatabase {
 
 export interface SessionTokenVault {
   generateOpaqueToken(): string
+  deriveOpaqueToken(token: string, purpose: 'backoffice-session'): string
   hashOpaqueToken(token: string): Uint8Array
   seal(secret: StoredSessionSecret, context: SessionCipherContext): string
   open(ciphertext: string, context: SessionCipherContext): StoredSessionSecret
+  sealBackofficeAttempt(
+    secret: import('./backoffice.js').BackofficeAttemptSecret,
+    context: SessionCipherContext,
+  ): string
+  openBackofficeAttempt(
+    ciphertext: string,
+    context: SessionCipherContext,
+  ): import('./backoffice.js').BackofficeAttemptSecret
 }
 
 export interface StoredSessionSecret {
@@ -330,5 +348,5 @@ export interface StoredSessionSecret {
 export interface SessionCipherContext {
   accountId: string
   providerSessionId: string
-  surface: 'studio'
+  surface: 'studio' | 'backoffice'
 }

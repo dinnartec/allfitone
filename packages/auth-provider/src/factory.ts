@@ -21,6 +21,11 @@ import type { WorkOSClient } from './adapters/workos-client.js'
 /** Only what this package reads. Passing `process.env` satisfies it. */
 export type ProviderEnv = Record<string, string | undefined>
 
+export interface BackofficeAuthMaintenance {
+  deleteAuthenticationFactor(factorId: string): Promise<void>
+  revokeSession(sessionId: string): Promise<void>
+}
+
 const SURFACES = ['space', 'studio', 'backoffice'] as const
 
 const VAR_SUFFIX: Record<Surface, string> = {
@@ -52,6 +57,35 @@ export function createAuthProviderFromEnv(env: ProviderEnv = process.env): AuthP
     webhookSecret: required(env, 'WORKOS_WEBHOOK_SECRET'),
     clients,
   })
+}
+
+/** Narrow worker client: cleanup needs only the Backoffice Application API key. */
+export function createBackofficeAuthMaintenanceFromEnv(
+  env: ProviderEnv = process.env,
+): BackofficeAuthMaintenance {
+  const client = new WorkOS({ apiKey: required(env, 'WORKOS_API_KEY_BACKOFFICE') })
+  return {
+    async deleteAuthenticationFactor(factorId) {
+      try {
+        await client.multiFactorAuth.deleteFactor(factorId)
+      } catch (error) {
+        if (!isNotFound(error)) throw error
+      }
+    },
+    async revokeSession(sessionId) {
+      try {
+        await client.userManagement.revokeSession({ sessionId })
+      } catch (error) {
+        if (!isNotFound(error)) throw error
+      }
+    },
+  }
+}
+
+function isNotFound(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false
+  const candidate = error as { status?: unknown; statusCode?: unknown }
+  return (candidate.status ?? candidate.statusCode) === 404
 }
 
 function required(env: ProviderEnv, name: string): string {

@@ -43,6 +43,18 @@ function provider(overrides: Partial<AuthProvider> = {}): AuthProvider {
       throw new Error('not used')
     },
     updateEmail: async () => undefined,
+    enrollTotp: async () => {
+      throw new Error('not used')
+    },
+    challengeTotp: async () => {
+      throw new Error('not used')
+    },
+    verifyTotp: async () => {
+      throw new Error('not used')
+    },
+    deleteAuthenticationFactor: async () => undefined,
+    requestPasswordReset: async () => undefined,
+    revokeSession: async () => undefined,
     revokeSessions: async () => undefined,
     ...overrides,
   }
@@ -118,6 +130,7 @@ function vault(): SessionTokenVault {
   return {
     generateOpaqueToken: () => 'opaque',
     hashOpaqueToken: () => new Uint8Array(32).fill(1),
+    deriveOpaqueToken: () => 'derived',
     seal: (secret) =>
       `v1.${secret.tokens.accessToken}.${secret.identity.givenName}.${secret.identity.familyName}`,
     open: (ciphertext) => {
@@ -130,6 +143,10 @@ function vault(): SessionTokenVault {
           verifiedEmail: 'ada@example.test',
         },
       }
+    },
+    sealBackofficeAttempt: () => 'not-used',
+    openBackofficeAttempt: () => {
+      throw new Error('not used')
     },
   }
 }
