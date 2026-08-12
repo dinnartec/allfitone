@@ -233,12 +233,18 @@ test('lists, filters, paginates and revokes a pending team invitation', async ({
     .poll(() => fixture.requests.some((request) => request.search.includes('status=pending')))
     .toBe(true)
 
-  page.once('dialog', (dialog) => void dialog.accept())
   await page
     .getByRole('row')
     .filter({ hasText: 'person@example.test' })
     .getByRole('button', { name: 'Revocar' })
     .click()
+
+  const revokeDialog = page.getByRole('alertdialog', { name: '¿Revocar esta invitación?' })
+  await expect(revokeDialog).toContainText('person@example.test')
+  await expect(revokeDialog).toContainText('Esta acción no se puede deshacer.')
+  await revokeDialog.getByRole('button', { name: 'Revocar invitación' }).click()
+
+  await expect(revokeDialog).not.toBeVisible()
   await expect(page.getByRole('table')).toContainText('Revocada')
   const revocation = fixture.requests.find((request) => request.path.endsWith('/revocation'))
   expect(revocation?.headers['idempotency-key']).toMatch(/^[0-9a-f-]{36}$/)
