@@ -14,6 +14,7 @@ import { Input } from '@allfitone/react/components/input'
 import { useState, type FormEvent } from 'react'
 
 import { StudioFrame } from './studio-frame'
+import { createCommandIntentManager } from '@/lib/command-intent'
 import {
   StudioApiError,
   newCommand,
@@ -40,8 +41,8 @@ export function ActivationForm({
   const [adult, setAdult] = useState(false)
   const [terms, setTerms] = useState(false)
   const [privacy, setPrivacy] = useState(false)
-  const [evidenceCommand] = useState(newCommand)
-  const [completionCommand] = useState(newCommand)
+  const [evidenceCommandIntent] = useState(() => createCommandIntentManager(newCommand))
+  const [completionCommandIntent] = useState(() => createCommandIntentManager(newCommand))
   const [submitting, setSubmitting] = useState(false)
   const [retrying, setRetrying] = useState(false)
   const [expired, setExpired] = useState(() => new Date(attempt.expires_at).getTime() <= Date.now())
@@ -60,8 +61,22 @@ export function ActivationForm({
     setSubmitting(true)
     setError(undefined)
     try {
+      const evidenceBody = { declared_adult: true }
+      const completion = completionBody()
+      const evidenceCommand = evidenceCommandIntent.commandFor({
+        operation: 'onboarding:eligibility-evidence',
+        resourceId: attempt.id,
+        payload: evidenceBody,
+      })
+      const completionCommand = completionCommandIntent.commandFor({
+        operation: 'onboarding:complete',
+        resourceId: attempt.id,
+        payload: completion,
+      })
       await studioApi.recordAdultEligibility(attempt.id, true, evidenceCommand)
-      await studioApi.completeOnboarding(attempt.id, completionBody(), completionCommand)
+      await studioApi.completeOnboarding(attempt.id, completion, completionCommand)
+      evidenceCommandIntent.reset()
+      completionCommandIntent.reset()
       onComplete(`${givenName.trim()} ${familyName.trim()}`)
     } catch (caught) {
       if (caught instanceof StudioApiError && caught.status === 401) {
@@ -69,6 +84,8 @@ export function ActivationForm({
         return
       }
       if (caught instanceof StudioApiError && caught.status === 409) {
+        evidenceCommandIntent.reset()
+        completionCommandIntent.reset()
         onComplete(`${givenName.trim()} ${familyName.trim()}`)
         return
       }

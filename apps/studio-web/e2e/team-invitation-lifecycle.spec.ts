@@ -123,6 +123,43 @@ test('rejects without creating a membership and clears the terminal token', asyn
   expect(await page.evaluate(() => Object.values(sessionStorage))).not.toContain(TOKEN)
 })
 
+test('reuses a failed decision command and rotates it when the decision changes', async ({
+  page,
+}) => {
+  let decisionAttempts = 0
+  const fixture = createStudioApiFixture({
+    intercept: (request) => {
+      if (request.method === 'POST' && request.path === '/studio/v1/invitations/decisions') {
+        decisionAttempts += 1
+        if (decisionAttempts <= 2) {
+          return { status: 503, body: error('upstream-unavailable') }
+        }
+        return invitationIntercept(request, 'rejected')
+      }
+      return invitationIntercept(request)
+    },
+  })
+  await installStudioApiMock(page, fixture)
+  await page.goto(`/invitations#token=${TOKEN}`)
+
+  await page.getByRole('button', { name: /Aceptar invitaci/ }).click()
+  await page.getByRole('button', { name: 'Reintentar' }).click()
+  await page.getByRole('button', { name: /Aceptar invitaci/ }).click()
+  await expect.poll(() => decisionWrites(fixture).length).toBe(2)
+
+  const [first, second] = decisionWrites(fixture)
+  expect(second?.headers['idempotency-key']).toBe(first?.headers['idempotency-key'])
+  expect(second?.headers['command-id']).toBe(first?.headers['command-id'])
+
+  await page.getByRole('button', { name: 'Reintentar' }).click()
+  await page.getByRole('button', { name: 'Rechazar', exact: true }).click()
+  await expect(page.getByText(/Rechazaste la invitaci/)).toBeVisible()
+
+  const third = decisionWrites(fixture)[2]
+  expect(third?.headers['idempotency-key']).not.toBe(first?.headers['idempotency-key'])
+  expect(third?.headers['command-id']).not.toBe(first?.headers['command-id'])
+})
+
 test('keeps the token for account switching without revealing the invited email', async ({
   page,
 }) => {
@@ -357,3 +394,9 @@ test('does not append a stale page after the filter changes', async ({ page }) =
   await expect(page.getByRole('table')).toContainText('filtered@example.test')
   await expect(page.getByRole('table')).not.toContainText('stale-page@example.test')
 })
+
+function decisionWrites(fixture: ReturnType<typeof createStudioApiFixture>) {
+  return fixture.requests.filter(
+    (request) => request.method === 'POST' && request.path === '/studio/v1/invitations/decisions',
+  )
+}

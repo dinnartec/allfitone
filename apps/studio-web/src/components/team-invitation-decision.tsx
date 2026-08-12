@@ -10,6 +10,7 @@ import { ActivationForm } from './activation-form'
 import { LogoutForm } from './logout-form'
 import { LoadingStage, StudioFrame } from './studio-frame'
 import { clearPendingInvitationToken, readPendingInvitationToken } from '@/lib/invitation-token'
+import { createCommandIntentManager } from '@/lib/command-intent'
 import { prepareStudioAuthentication } from '@/lib/session-activity'
 import {
   StudioApiError,
@@ -40,6 +41,7 @@ export function TeamInvitationDecision() {
   const router = useRouter()
   const [flow, setFlow] = useState<Flow>({ kind: 'loading' })
   const [deciding, setDeciding] = useState<'accepted' | 'rejected'>()
+  const [decisionCommandIntent] = useState(() => createCommandIntentManager(newCommand))
   const bootstrapStarted = useRef(false)
 
   const bootstrap = useCallback(async () => {
@@ -106,13 +108,17 @@ export function TeamInvitationDecision() {
     try {
       const intent = flow.invitation.intents[0]
       if (!intent) throw new Error('Invitation has no membership intent')
-      const result = await studioApi.decideTeamInvitation(
-        {
-          token: flow.token,
-          decisions: [{ intent_id: intent.id, decision }],
-        },
-        newCommand(),
-      )
+      const body = {
+        token: flow.token,
+        decisions: [{ intent_id: intent.id, decision }],
+      }
+      const command = decisionCommandIntent.commandFor({
+        operation: 'invitation:decide',
+        resourceId: intent.id,
+        payload: body,
+      })
+      const result = await studioApi.decideTeamInvitation(body, command)
+      decisionCommandIntent.reset()
       clearPendingInvitationToken()
       if (result.intent.status === 'accepted') {
         router.replace(`/organizations/${result.organization_id}`)
@@ -121,8 +127,10 @@ export function TeamInvitationDecision() {
       setFlow({ kind: 'rejected', organizationName: flow.invitation.organization.display_name })
     } catch (error) {
       if (error instanceof StudioApiError && error.status === 403) {
+        decisionCommandIntent.reset()
         setFlow({ kind: 'mismatch', invitation: flow.invitation })
       } else if (error instanceof StudioApiError && error.status === 404) {
+        decisionCommandIntent.reset()
         clearPendingInvitationToken()
         setFlow({ kind: 'invalid' })
       } else {
