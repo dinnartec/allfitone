@@ -39,6 +39,22 @@ export interface WorkOSSession {
   id: string
 }
 
+export interface WorkOSMultiFactorAuth {
+  enrollFactor(options: { type: 'totp'; issuer: string; user: string }): Promise<{
+    id: string
+    totp?: { qrCode: string; secret: string; uri: string; issuer: string; user: string }
+  }>
+  challengeFactor(options: { authenticationFactorId: string }): Promise<{
+    id: string
+    expiresAt?: string
+  }>
+  verifyChallenge(options: {
+    authenticationChallengeId: string
+    code: string
+  }): Promise<{ valid: boolean }>
+  deleteFactor(id: string): Promise<void>
+}
+
 /** Common event envelope returned after the SDK verifies and deserializes it. */
 export interface WorkOSEvent {
   id: string
@@ -72,6 +88,8 @@ export interface WorkOSUserManagement {
     refreshToken: string
     clientId: string
   }): Promise<WorkOSAuthenticationResponse>
+
+  createPasswordReset(options: { email: string }): Promise<unknown>
 
   createUser(options: { email: string; password: string }): Promise<{ id: string }>
 
@@ -115,5 +133,6 @@ export interface WorkOSUserManagement {
 
 export interface WorkOSClient {
   userManagement: WorkOSUserManagement
+  multiFactorAuth: WorkOSMultiFactorAuth
   webhooks: WorkOSWebhooks
 }

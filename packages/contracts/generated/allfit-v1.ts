@@ -4,6 +4,108 @@
  */
 
 export interface paths {
+  '/backoffice/v1/auth/password': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /** Validate Backoffice password credentials and start a TOTP attempt */
+    post: operations['startBackofficePasswordAuthentication']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/auth/attempt': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** Recover the non-terminal TOTP attempt from its HttpOnly cookie */
+    get: operations['getBackofficeAuthenticationAttempt']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/auth/totp/verification': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /** Verify TOTP and atomically materialize an AAL2 Backoffice session */
+    post: operations['verifyBackofficeTotp']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/session': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** Revalidate and return the minimal AAL2 Backoffice session */
+    get: operations['getBackofficeSession']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/auth/logout': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /** Revoke the local session and its WorkOS sid without hosted logout */
+    post: operations['logoutBackofficeSession']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/auth/password-resets': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /** Ask WorkOS to send its uniform hosted password-recovery email */
+    post: operations['requestBackofficePasswordReset']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/space/v1/auth/registrations': {
     parameters: {
       query?: never
@@ -738,6 +840,40 @@ export interface paths {
 export type webhooks = Record<string, never>
 export interface components {
   schemas: {
+    BackofficePasswordRequest: {
+      /** Format: email */
+      email: string
+      password: string
+    }
+    /** @description Enrollment secrets are present only for a first-factor attempt. */
+    BackofficeAuthenticationAttempt: {
+      /** @enum {string} */
+      next: 'totp-challenge' | 'totp-enrollment'
+      /** Format: date-time */
+      expires_at: string
+      enrollment?: {
+        qr_code: string
+        manual_key: string
+      }
+    }
+    BackofficeSession: {
+      /** @constant */
+      authenticated: true
+      /** @constant */
+      assurance_level: 2
+      /** @constant */
+      authentication_method: 'password_totp'
+      operator: {
+        given_name: string
+        family_name: string
+      }
+      /** Format: date-time */
+      assurance_verified_at: string
+      /** Format: date-time */
+      inactivity_expires_at: string
+      /** Format: date-time */
+      absolute_expires_at: string
+    }
     SpaceRegistrationCreate: {
       /**
        * Format: email
@@ -2343,6 +2479,200 @@ export interface components {
 }
 export type $defs = Record<string, never>
 export interface operations {
+  startBackofficePasswordAuthentication: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['BackofficePasswordRequest']
+      }
+    }
+    responses: {
+      /** @description TOTP challenge or first-factor enrollment is ready */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Set-Cookie': components['headers']['SetCookie']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['BackofficeAuthenticationAttempt']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      429: components['responses']['TooManyRequests']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  getBackofficeAuthenticationAttempt: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Current challenge or enrollment presentation */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['BackofficeAuthenticationAttempt']
+        }
+      }
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  verifyBackofficeTotp: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': {
+          code: string
+        }
+      }
+    }
+    responses: {
+      /** @description AAL2 session created and temporary attempt cookie removed */
+      204: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Set-Cookie': components['headers']['SetCookie']
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      409: components['responses']['Conflict']
+      429: components['responses']['TooManyRequests']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  getBackofficeSession: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Active AAL2 Backoffice session */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['BackofficeSession']
+        }
+      }
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  logoutBackofficeSession: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody?: {
+      content: {
+        'application/x-www-form-urlencoded': {
+          /**
+           * @default manual
+           * @enum {string}
+           */
+          reason?: 'manual' | 'inactivity' | 'recovery'
+        }
+        'application/json': {
+          /**
+           * @default manual
+           * @enum {string}
+           */
+          reason?: 'manual' | 'inactivity' | 'recovery'
+        }
+      }
+    }
+    responses: {
+      /** @description Session is absent or revoked and the cookie is cleared */
+      204: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Set-Cookie': components['headers']['SetCookie']
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      403: components['responses']['Forbidden']
+    }
+  }
+  requestBackofficePasswordReset: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': {
+          /** Format: email */
+          email: string
+        }
+      }
+    }
+    responses: {
+      /** @description Uniform response regardless of account existence or provider outcome */
+      202: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      400: components['responses']['BadRequest']
+      403: components['responses']['Forbidden']
+      429: components['responses']['TooManyRequests']
+    }
+  }
   startSpaceRegistration: {
     parameters: {
       query?: never

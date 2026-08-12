@@ -1,0 +1,56 @@
+name: Recover Backoffice TOTP factor
+
+on:
+  workflow_dispatch:
+    inputs:
+      subject_person:
+        description: Person UUID whose authenticator was lost
+        required: true
+      requested_by_person:
+        description: First approving administrator person UUID
+        required: true
+      approved_by_person:
+        description: Second approving administrator person UUID
+        required: true
+      ceremony_reference:
+        description: Approved recovery ticket or ceremony reference without PII
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backoffice-totp-recovery-production
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: supabase-production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require main
+        run: test "$GITHUB_REF_NAME" = main
+      - name: Validate protected credential
+        env:
+          SUPABASE_ADMIN_DATABASE_URL: ${{ secrets.SUPABASE_ADMIN_DATABASE_URL }}
+        run: test -n "$SUPABASE_ADMIN_DATABASE_URL"
+      - name: Revoke factor, attempts and sessions
+        env:
+          SUPABASE_ADMIN_DATABASE_URL: ${{ secrets.SUPABASE_ADMIN_DATABASE_URL }}
+          SUBJECT_PERSON: ${{ inputs.subject_person }}
+          REQUESTED_BY_PERSON: ${{ inputs.requested_by_person }}
+          APPROVED_BY_PERSON: ${{ inputs.approved_by_person }}
+          CEREMONY_REFERENCE: ${{ inputs.ceremony_reference }}
+        run: |
+          psql "$SUPABASE_ADMIN_DATABASE_URL" --set=ON_ERROR_STOP=1 \
+            --set=subject_person="$SUBJECT_PERSON" --set=requested_by="$REQUESTED_BY_PERSON" \
+            --set=approved_by="$APPROVED_BY_PERSON" --set=ceremony="$CEREMONY_REFERENCE" <<'SQL'
+          begin;
+          set local role allfit_migrator;
+          select identity.recover_backoffice_totp_factor(
+            :'subject_person'::uuid, :'requested_by'::uuid, :'approved_by'::uuid, :'ceremony'
+          );
+          commit;
+          SQL

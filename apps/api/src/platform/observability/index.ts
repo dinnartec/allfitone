@@ -14,6 +14,19 @@ type StudioMembershipDestination = 'multiple' | 'one' | 'zero'
 type StudioLogoutTrigger = 'inactivity' | 'manual' | 'recovery'
 type StudioLogoutOutcome = 'already-absent' | 'partial' | 'revoked'
 
+type BackofficeAuthOperation =
+  | 'password'
+  | 'enrollment'
+  | 'challenge'
+  | 'verification'
+  | 'session'
+  | 'logout'
+  | 'password_reset'
+  | 'rate_limited'
+
+type BackofficeAuthOutcome =
+  'succeeded' | 'failed' | 'accepted' | 'already-absent' | 'partial' | 'revoked'
+
 export type IdentityPasswordResetWebhookOutcome =
   'account-absent' | 'failed' | 'ignored' | 'invalid' | 'processed' | 'replayed'
 
@@ -57,6 +70,17 @@ export function recordStudioLogout(
   outcome: StudioLogoutOutcome,
 ): void {
   writeCounter('studio.auth.logout', { trigger, outcome })
+}
+
+export function recordBackofficeAuth(
+  operation: BackofficeAuthOperation,
+  outcome: BackofficeAuthOutcome,
+  trigger?: StudioLogoutTrigger,
+): void {
+  writeCounter(`backoffice.auth.${operation}`, {
+    outcome,
+    ...(trigger ? { trigger } : {}),
+  })
 }
 
 export function recordIdentityPasswordResetWebhook(

@@ -1,9 +1,14 @@
 import { createResendEmailSender, constantTimeBearerMatches } from '@allfitone/notifications'
+import { createBackofficeAuthMaintenanceFromEnv } from '@allfitone/auth-provider'
 import { createPostgresQueue } from '@allfitone/queue'
 import { Hono, type Context } from 'hono'
 import postgres from 'postgres'
 
 import { createInvitationBatchProcessor, createInvitationDeliveryDatabase } from './invitations.js'
+import {
+  createBackofficeAuthBatchProcessor,
+  createBackofficeAuthCleanupDatabase,
+} from './backoffice-auth.js'
 
 let cachedProcessor: (() => Promise<unknown>) | undefined
 
@@ -20,14 +25,14 @@ export function createWorkerApp(injectedProcessor?: () => Promise<unknown>): Hon
       console.info(
         JSON.stringify({
           kind: 'counter',
-          name: 'worker.team_invitation.batch',
+          name: 'worker.outbox.batch',
           value: 1,
           dimensions: { outcome: 'completed' },
         }),
       )
       return c.json(result)
     } catch {
-      console.error('[worker-invitations] batch failed')
+      console.error('[worker-outbox] batch failed')
       return c.json({ error: { code: 'upstream-unavailable' } }, 503)
     }
   }
@@ -45,8 +50,9 @@ function processorFromEnvironment() {
     idle_timeout: 20,
     connect_timeout: 10,
   })
-  cachedProcessor = createInvitationBatchProcessor({
-    queue: createPostgresQueue(sql, { visibilityTimeoutMs: 120_000, maxAttempts: 5 }),
+  const queue = createPostgresQueue(sql, { visibilityTimeoutMs: 120_000, maxAttempts: 5 })
+  const invitations = createInvitationBatchProcessor({
+    queue,
     database: createInvitationDeliveryDatabase(sql),
     email:
       process.env.STAFF_INVITATION_DELIVERY_ENABLED === 'true'
@@ -61,6 +67,15 @@ function processorFromEnvironment() {
           },
     publicBaseUrl: required('STAFF_INVITATION_PUBLIC_BASE_URL'),
     deliveryEnabled: process.env.STAFF_INVITATION_DELIVERY_ENABLED === 'true',
+  })
+  const backofficeAuthentication = createBackofficeAuthBatchProcessor({
+    queue,
+    database: createBackofficeAuthCleanupDatabase(sql),
+    provider: createBackofficeAuthMaintenanceFromEnv(),
+  })
+  cachedProcessor = async () => ({
+    invitations: await invitations(),
+    backofficeAuthentication: await backofficeAuthentication(),
   })
   return cachedProcessor
 }

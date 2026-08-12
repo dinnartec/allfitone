@@ -67,6 +67,23 @@ export interface PasswordCredentials {
   password: string
 }
 
+export interface TotpEnrollment {
+  factorId: string
+  qrCode: string
+  manualKey: string
+}
+
+export interface TotpChallenge {
+  challengeId: string
+  expiresAt: string | null
+}
+
+export interface TotpVerification {
+  valid: boolean
+  /** A retry after WorkOS accepted the same single-use challenge. */
+  alreadyVerified: boolean
+}
+
 export interface AuthorizationRequest {
   surface: Surface
   /** Where the provider sends the person back. Must match what is registered. */
@@ -157,6 +174,24 @@ export interface AuthProvider {
 
   /** Direct login. Used by Space, which has its own native screens. */
   authenticateWithPassword(credentials: PasswordCredentials, surface: Surface): Promise<AuthResult>
+
+  /** Enrolls a TOTP factor. The returned secret must never be logged. */
+  enrollTotp(label: string, surface: Surface): Promise<TotpEnrollment>
+
+  /** Creates a single-use challenge for a persisted TOTP factor. */
+  challengeTotp(factorId: string, surface: Surface): Promise<TotpChallenge>
+
+  /** Verifies one challenge without projecting provider-specific errors. */
+  verifyTotp(challengeId: string, code: string, surface: Surface): Promise<TotpVerification>
+
+  /** Deletes an abandoned provider factor after its local attempt expires. */
+  deleteAuthenticationFactor(factorId: string, surface: Surface): Promise<void>
+
+  /** Requests provider-hosted password recovery without returning its secret URL. */
+  requestPasswordReset(email: string, surface: Surface): Promise<void>
+
+  /** Revokes exactly one provider session. */
+  revokeSession(sessionId: string, surface: Surface): Promise<void>
 
   /** Code exchange for the hosted flow. Used by Studio and Backoffice. */
   authenticateWithCode(code: string, surface: Surface): Promise<AuthResult>

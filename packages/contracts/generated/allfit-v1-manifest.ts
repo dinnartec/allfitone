@@ -7,6 +7,42 @@ export const allfitV1ContractManifest = {
   operations: [
     {
       method: 'GET',
+      path: '/backoffice/v1/auth/attempt',
+      operationId: 'getBackofficeAuthenticationAttempt',
+      allfitOperation: 'OP-IDN-033',
+    },
+    {
+      method: 'POST',
+      path: '/backoffice/v1/auth/logout',
+      operationId: 'logoutBackofficeSession',
+      allfitOperation: 'OP-IDN-036',
+    },
+    {
+      method: 'POST',
+      path: '/backoffice/v1/auth/password-resets',
+      operationId: 'requestBackofficePasswordReset',
+      allfitOperation: 'OP-IDN-037',
+    },
+    {
+      method: 'POST',
+      path: '/backoffice/v1/auth/password',
+      operationId: 'startBackofficePasswordAuthentication',
+      allfitOperation: 'OP-IDN-032',
+    },
+    {
+      method: 'POST',
+      path: '/backoffice/v1/auth/totp/verification',
+      operationId: 'verifyBackofficeTotp',
+      allfitOperation: 'OP-IDN-034',
+    },
+    {
+      method: 'GET',
+      path: '/backoffice/v1/session',
+      operationId: 'getBackofficeSession',
+      allfitOperation: 'OP-IDN-035',
+    },
+    {
+      method: 'GET',
       path: '/space/v1/agenda',
       operationId: 'listMyAgenda',
       allfitOperation: 'OP-PLN-016',

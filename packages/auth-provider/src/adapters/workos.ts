@@ -349,6 +349,85 @@ export function createWorkOSAuthProvider(config: WorkOSConfig): AuthProvider {
       )
     },
 
+    async enrollTotp(label: string, surface: Surface) {
+      try {
+        const factor = await requireClient(surface).multiFactorAuth.enrollFactor({
+          type: 'totp',
+          issuer: 'Allfit Backoffice',
+          user: label,
+        })
+        if (!factor.id || !factor.totp?.qrCode || !factor.totp.secret) {
+          throw new AuthError('provider_unavailable', 'TOTP enrollment response was incomplete')
+        }
+        return {
+          factorId: factor.id,
+          qrCode: factor.totp.qrCode,
+          manualKey: factor.totp.secret,
+        }
+      } catch (cause) {
+        throw cause instanceof AuthError ? cause : translate(cause)
+      }
+    },
+
+    async challengeTotp(factorId: string, surface: Surface) {
+      try {
+        const challenge = await requireClient(surface).multiFactorAuth.challengeFactor({
+          authenticationFactorId: factorId,
+        })
+        if (!challenge.id) {
+          throw new AuthError('provider_unavailable', 'TOTP challenge response was incomplete')
+        }
+        return { challengeId: challenge.id, expiresAt: challenge.expiresAt ?? null }
+      } catch (cause) {
+        throw cause instanceof AuthError ? cause : translate(cause)
+      }
+    },
+
+    async verifyTotp(challengeId: string, code: string, surface: Surface) {
+      try {
+        const result = await requireClient(surface).multiFactorAuth.verifyChallenge({
+          authenticationChallengeId: challengeId,
+          code,
+        })
+        return { valid: result.valid, alreadyVerified: false }
+      } catch (cause) {
+        if (providerErrorCodes(cause).includes('authentication_challenge_previously_verified')) {
+          return { valid: true, alreadyVerified: true }
+        }
+        throw translate(cause)
+      }
+    },
+
+    async deleteAuthenticationFactor(factorId: string, surface: Surface): Promise<void> {
+      try {
+        await requireClient(surface).multiFactorAuth.deleteFactor(factorId)
+      } catch (cause) {
+        // Cleanup is idempotent: an absent provider factor is already deleted.
+        if (statusOf(cause) === 404) return
+        throw translate(cause)
+      }
+    },
+
+    async requestPasswordReset(email: string, surface: Surface): Promise<void> {
+      try {
+        // The SDK returns a reset token and URL. Deliberately discard both here.
+        await requireClient(surface).userManagement.createPasswordReset({ email })
+      } catch (cause) {
+        // Unknown and known addresses must receive the same public response.
+        if (statusOf(cause) === 404) return
+        throw asAdminFailure(cause)
+      }
+    },
+
+    async revokeSession(sessionId: string, surface: Surface): Promise<void> {
+      try {
+        await requireClient(surface).userManagement.revokeSession({ sessionId })
+      } catch (cause) {
+        if (statusOf(cause) === 404) return
+        throw translate(cause)
+      }
+    },
+
     async authenticateWithCode(code: string, surface: Surface): Promise<AuthResult> {
       return authenticate(surface, (c, clientId) =>
         c.userManagement.authenticateWithCode({ code, clientId }),

@@ -5,18 +5,23 @@
   "type": "module",
   "scripts": {
     "dev": "next dev --port 3001",
+    "dev:e2e": "next dev --hostname 127.0.0.1 --port 3102",
     "build": "next build",
     "start": "next start --port 3001",
-    "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "lint": "eslint . --ignore-pattern .next-e2e --ignore-pattern .next-build --ignore-pattern playwright-report --ignore-pattern test-results",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test src",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
-    "@allfitone/react": "0.7.1",
+    "@allfitone/contracts": "workspace:*",
+    "@allfitone/react": "0.7.2",
     "next": "16.2.11",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },
   "devDependencies": {
+    "@playwright/test": "1.62.1",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.4"
   }
