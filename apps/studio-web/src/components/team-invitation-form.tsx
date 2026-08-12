@@ -216,7 +216,14 @@ export function TeamInvitationForm() {
           <Button type="submit" size="lg" disabled={submitting || !contact.trim()}>
             {submitting ? 'Enviando…' : 'Enviar invitación'}
           </Button>
-          <Button type="button" variant="ghost" disabled={submitting} onClick={() => router.back()}>
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={submitting}
+            onClick={() =>
+              router.replace(`/organizations/${current.organization_id}/team/invitations`)
+            }
+          >
             Cancelar
           </Button>
         </div>

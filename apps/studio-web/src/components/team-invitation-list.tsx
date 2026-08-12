@@ -15,7 +15,7 @@ import { Badge } from '@allfitone/react/components/badge'
 import { Button } from '@allfitone/react/components/button'
 import { Spinner } from '@allfitone/react/components/spinner'
 import { useRouter } from 'next/navigation'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { useOrganizationContext } from './organization-context'
 import {
@@ -51,32 +51,51 @@ export function TeamInvitationList() {
   const [revoking, setRevoking] = useState<string>()
   const [revokeIntent, setRevokeIntent] = useState<InvitationItem>()
   const [revokeError, setRevokeError] = useState<string>()
+  const requestId = useRef(0)
+  const requestController = useRef<AbortController | null>(null)
 
   const load = useCallback(
     async (cursor?: string) => {
+      requestController.current?.abort()
+      const controller = new AbortController()
+      const currentRequest = requestId.current + 1
+      requestId.current = currentRequest
+      requestController.current = controller
       if (cursor) {
         setLoadingMore(true)
       } else {
         setLoading(true)
+        setLoadingMore(false)
+        setItems([])
+        setNextCursor(null)
       }
       setError(undefined)
       try {
-        const page = await studioApi.teamInvitations(current.organization_id, {
-          ...(filter === 'all' ? {} : { status: filter }),
-          limit: 50,
-          ...(cursor ? { cursor } : {}),
-        })
+        const page = await studioApi.teamInvitations(
+          current.organization_id,
+          {
+            ...(filter === 'all' ? {} : { status: filter }),
+            limit: 50,
+            ...(cursor ? { cursor } : {}),
+          },
+          controller.signal,
+        )
+        if (controller.signal.aborted || currentRequest !== requestId.current) return
         setItems((existing) => (cursor ? [...existing, ...page.data] : page.data))
         setNextCursor(page.page.next_cursor)
       } catch (caught) {
+        if (controller.signal.aborted || currentRequest !== requestId.current) return
         setError(
           caught instanceof StudioApiError && caught.status === 403
             ? 'Tu rol actual no permite consultar las invitaciones.'
             : 'No pudimos cargar las invitaciones del equipo.',
         )
       } finally {
-        setLoading(false)
-        setLoadingMore(false)
+        if (!controller.signal.aborted && currentRequest === requestId.current) {
+          requestController.current = null
+          setLoading(false)
+          setLoadingMore(false)
+        }
       }
     },
     [current.organization_id, filter],
@@ -84,7 +103,23 @@ export function TeamInvitationList() {
 
   useEffect(() => {
     void load()
+    return () => {
+      requestId.current += 1
+      requestController.current?.abort()
+    }
   }, [load])
+
+  function changeFilter(nextFilter: Filter) {
+    if (nextFilter === filter) return
+    requestId.current += 1
+    requestController.current?.abort()
+    setItems([])
+    setNextCursor(null)
+    setError(undefined)
+    setLoading(true)
+    setLoadingMore(false)
+    setFilter(nextFilter)
+  }
 
   function requestRevoke(item: InvitationItem) {
     if (revoking || item.status !== 'pending') return
@@ -152,7 +187,7 @@ export function TeamInvitationList() {
             size="sm"
             variant={filter === option.value ? 'default' : 'outline'}
             aria-pressed={filter === option.value}
-            onClick={() => setFilter(option.value)}
+            onClick={() => changeFilter(option.value)}
           >
             {option.label}
           </Button>

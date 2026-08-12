@@ -250,3 +250,110 @@ test('lists, filters, paginates and revokes a pending team invitation', async ({
   expect(revocation?.headers['idempotency-key']).toMatch(/^[0-9a-f-]{36}$/)
   expect(revocation?.headers['command-id']).toMatch(/^[0-9a-f-]{36}$/)
 })
+
+test('ignores a stale invitation response after the filter changes', async ({ page }) => {
+  const staleItem = {
+    id: INVITATION_ID,
+    status: 'completed',
+    channel: 'email',
+    contact: 'stale@example.test',
+    created_at: '2026-08-11T12:00:00.000Z',
+    expires_at: '2030-08-18T12:00:00.000Z',
+    intents: presentation.intents.map((intent) => ({
+      ...intent,
+      status: 'accepted',
+      decided_at: '2026-08-12T12:00:00.000Z',
+    })),
+  }
+  const pendingItem = {
+    ...staleItem,
+    id: '01991600-7000-7000-8000-000000000010',
+    status: 'pending',
+    contact: 'pending@example.test',
+    intents: presentation.intents.map((intent) => ({ ...intent, decided_at: null })),
+  }
+  const fixture = createStudioApiFixture({
+    memberships: [activeMembership],
+    intercept: async (request) => {
+      if (
+        request.method !== 'GET' ||
+        request.path !== `/studio/v1/organizations/${activeMembership.organization_id}/invitations`
+      ) {
+        return undefined
+      }
+      if (request.search.includes('status=pending')) {
+        return { status: 200, body: { data: [pendingItem], page: { next_cursor: null } } }
+      }
+      await new Promise((resolve) => setTimeout(resolve, 250))
+      return { status: 200, body: { data: [staleItem], page: { next_cursor: null } } }
+    },
+  })
+  await installStudioApiMock(page, fixture)
+  await page.goto(`/organizations/${activeMembership.organization_id}/team/invitations`)
+  await expect.poll(() => fixture.requests.some((request) => request.search === '')).toBe(true)
+
+  await page.getByRole('button', { name: 'Pendientes' }).click()
+  await expect(page.getByRole('table')).toContainText('pending@example.test')
+  await page.waitForTimeout(300)
+
+  await expect(page.getByRole('table')).toContainText('pending@example.test')
+  await expect(page.getByRole('table')).not.toContainText('stale@example.test')
+})
+
+test('does not append a stale page after the filter changes', async ({ page }) => {
+  const firstItem = {
+    id: INVITATION_ID,
+    status: 'pending',
+    channel: 'email',
+    contact: 'first@example.test',
+    created_at: '2026-08-11T12:00:00.000Z',
+    expires_at: '2030-08-18T12:00:00.000Z',
+    intents: presentation.intents.map((intent) => ({ ...intent, decided_at: null })),
+  }
+  const filteredItem = {
+    ...firstItem,
+    id: '01991600-7000-7000-8000-000000000011',
+    contact: 'filtered@example.test',
+  }
+  const stalePageItem = {
+    ...firstItem,
+    id: '01991600-7000-7000-8000-000000000012',
+    contact: 'stale-page@example.test',
+  }
+  const fixture = createStudioApiFixture({
+    memberships: [activeMembership],
+    intercept: async (request) => {
+      if (
+        request.method !== 'GET' ||
+        request.path !== `/studio/v1/organizations/${activeMembership.organization_id}/invitations`
+      ) {
+        return undefined
+      }
+      if (request.search.includes('cursor=')) {
+        await new Promise((resolve) => setTimeout(resolve, 250))
+        return { status: 200, body: { data: [stalePageItem], page: { next_cursor: null } } }
+      }
+      if (request.search.includes('status=pending')) {
+        return { status: 200, body: { data: [filteredItem], page: { next_cursor: null } } }
+      }
+      return {
+        status: 200,
+        body: { data: [firstItem], page: { next_cursor: 'stale-page' } },
+      }
+    },
+  })
+  await installStudioApiMock(page, fixture)
+  await page.goto(`/organizations/${activeMembership.organization_id}/team/invitations`)
+  await expect(page.getByRole('table')).toContainText('first@example.test')
+
+  await page.getByRole('button', { name: /Ver/ }).click()
+  await expect
+    .poll(() => fixture.requests.some((request) => request.search.includes('cursor=')))
+    .toBe(true)
+  await page.getByRole('button', { name: 'Pendientes' }).click()
+  await expect(page.getByRole('table')).toContainText('filtered@example.test')
+  await page.waitForTimeout(300)
+
+  await expect(page.getByRole('table')).toContainText('filtered@example.test')
+  await expect(page.getByRole('table')).not.toContainText('stale-page@example.test')
+})
