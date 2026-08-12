@@ -123,10 +123,12 @@ export function createInvitationBatchProcessor(dependencies: {
       )
       const invitationUrl = new URL('invitations', baseUrl)
       invitationUrl.hash = `token=${encodeURIComponent(token)}`
+      const brandAssetUrl = new URL('email/allfit-one-lockup-on-light.png', baseUrl)
       const rendered = renderTeamInvitationEmail({
         organizationName: delivery.organizationName,
         proposedRoleCode: delivery.proposedRoleCode,
         invitationUrl: invitationUrl.toString(),
+        brandAssetUrl: brandAssetUrl.toString(),
         expiresAt: delivery.expiresAt,
       })
       await dependencies.email.send({

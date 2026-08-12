@@ -52,6 +52,7 @@ test('delivers a ready invitation and acknowledges the event', async () => {
   expect(acknowledged).toEqual(['event-1'])
   expect(sent[0]?.idempotencyKey).toBe('staff-invitation/event-1')
   expect(sent[0]?.html).toContain('http://localhost:3000/invitations#token=')
+  expect(sent[0]?.html).toContain('http://localhost:3000/email/allfit-one-lockup-on-light.png')
 })
 
 test('refuses an HTTP invitation URL in production, including localhost', () => {

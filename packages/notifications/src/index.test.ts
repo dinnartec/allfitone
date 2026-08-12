@@ -68,14 +68,63 @@ describe('Resend adapter', () => {
   })
 })
 
-test('renders an invitation without claiming that an account already exists', () => {
-  const rendered = renderTeamInvitationEmail({
-    organizationName: 'Studio Norte',
-    proposedRoleCode: 'staff',
-    invitationUrl: 'https://studio.allfit.one/invitations#token=staff-token',
-    expiresAt: new Date('2026-08-18T12:00:00.000Z'),
+describe('team invitation email', () => {
+  test('renders a branded, email-safe invitation with the decision details up front', () => {
+    const rendered = renderTeamInvitationEmail({
+      organizationName: 'Studio Norte',
+      proposedRoleCode: 'staff',
+      invitationUrl: 'https://studio.allfit.one/invitations#token=staff-token',
+      brandAssetUrl: 'https://studio.allfit.one/email/allfit-one-lockup-on-light.png',
+      expiresAt: new Date('2026-08-18T12:00:00.000Z'),
+    })
+
+    expect(rendered.subject).toBe('Studio Norte te invitó a su equipo en Allfit One')
+    expect(rendered.text).toContain('Rol propuesto: staff')
+    expect(rendered.text).toContain('Válida hasta: 18 de agosto de 2026')
+    expect(rendered.text).not.toContain('tu cuenta')
+    expect(rendered.html).toStartWith('<!doctype html>')
+    expect(rendered.html).toContain('role="presentation"')
+    expect(rendered.html).toContain('max-width:600px')
+    expect(rendered.html).toContain('ROL PROPUESTO')
+    expect(rendered.html).toContain('VÁLIDA HASTA')
+    expect(rendered.html).toContain('Revisar invitación')
+    expect(rendered.html).toContain('https://studio.allfit.one/invitations#token=staff-token')
+    expect(rendered.html).toContain(
+      '<img src="https://studio.allfit.one/email/allfit-one-lockup-on-light.png"',
+    )
+    expect(rendered.html).toContain('alt="Allfit One"')
+    expect(rendered.html).not.toContain('ALLFIT <span')
   })
-  expect(rendered.subject).toContain('Studio Norte')
-  expect(rendered.text).not.toContain('tu cuenta')
-  expect(rendered.html).toContain('https://studio.allfit.one/invitations#token=staff-token')
+
+  test('uses the canonical light email palette and typography fallbacks from the design system', () => {
+    const { html } = renderTeamInvitationEmail({
+      organizationName: 'Allfit Gym',
+      proposedRoleCode: 'coach',
+      invitationUrl: 'https://studio.allfit.one/invitations#token=coach-token',
+      brandAssetUrl: 'https://studio.allfit.one/email/allfit-one-lockup-on-light.png',
+      expiresAt: new Date('2026-08-19T12:00:00.000Z'),
+    })
+
+    expect(html).toContain('#EDF6F6')
+    expect(html).toContain('#FFFFFF')
+    expect(html).toContain('#030713')
+    expect(html).toContain('#55EFFB')
+    expect(html).toContain("'Barlow Condensed','Arial Narrow',Arial,sans-serif")
+    expect(html).toContain("'Manrope',Arial,sans-serif")
+  })
+
+  test('escapes organization and URL content in every HTML context', () => {
+    const { html } = renderTeamInvitationEmail({
+      organizationName: '<North & South>',
+      proposedRoleCode: 'admin',
+      invitationUrl: 'https://studio.allfit.one/invitations?next=one&source="email"',
+      brandAssetUrl: 'https://studio.allfit.one/email/lockup.png?source="email"&mode=light',
+      expiresAt: new Date('2026-08-20T12:00:00.000Z'),
+    })
+
+    expect(html).toContain('&lt;North &amp; South&gt;')
+    expect(html).not.toContain('<North & South>')
+    expect(html).toContain('next=one&amp;source=&quot;email&quot;')
+    expect(html).toContain('lockup.png?source=&quot;email&quot;&amp;mode=light')
+  })
 })
