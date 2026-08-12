@@ -163,6 +163,7 @@ export const studioApi = {
   teamInvitations: (
     organizationId: string,
     options: { status?: TeamInvitationStatus; limit?: number; cursor?: string } = {},
+    signal?: AbortSignal,
   ) => {
     const query = new URLSearchParams()
     if (options.status) query.set('status', options.status)
@@ -171,6 +172,7 @@ export const studioApi = {
     const suffix = query.size ? `?${query.toString()}` : ''
     return request<TeamInvitationPage>(
       `/studio/v1/organizations/${organizationId}/invitations${suffix}`,
+      signal ? { signal } : {},
     )
   },
 

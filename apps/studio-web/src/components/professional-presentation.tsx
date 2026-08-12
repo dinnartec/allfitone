@@ -32,8 +32,8 @@ import { Textarea } from '@allfitone/react/components/textarea'
 import { toast } from '@allfitone/react/components/sonner'
 import { useMemo, useRef, useState, type FormEvent } from 'react'
 
+import { createCommandIntentManager } from '@/lib/command-intent'
 import {
-  createCommandIntentManager,
   hasErrors,
   mergeSpecialtyCatalog,
   validateProfile,

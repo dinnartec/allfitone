@@ -26,6 +26,129 @@ test('offers creation or an explicit invitation wait without professional setup'
   await expect(page.getByText(/práctica/i)).toHaveCount(0)
 })
 
+test('reuses organization commands for unchanged retries and rotates after editing', async ({
+  page,
+}) => {
+  let attempts = 0
+  const fixture = createStudioApiFixture({
+    intercept: (request) => {
+      if (request.method !== 'POST' || request.path !== '/studio/v1/organizations') {
+        return undefined
+      }
+      attempts += 1
+      return attempts <= 2 ? { status: 503, body: error('upstream-unavailable') } : undefined
+    },
+  })
+  await installStudioApiMock(page, fixture)
+  await page.goto('/')
+  await page.getByRole('button', { name: /Trabajo por mi cuenta/ }).click()
+
+  const name = page.getByLabel('Nombre visible')
+  const create = page.getByRole('button', { name: /Crear mi espacio/ })
+  await create.click()
+  await expect(page.getByText(/No pudimos crear el espacio/)).toBeVisible()
+  await create.click()
+  await expect.poll(() => organizationWrites(fixture).length).toBe(2)
+
+  const [first, second] = organizationWrites(fixture)
+  expect(second?.headers['idempotency-key']).toBe(first?.headers['idempotency-key'])
+  expect(second?.headers['command-id']).toBe(first?.headers['command-id'])
+
+  await name.fill('Espacio de rendimiento')
+  await create.click()
+  await expect.poll(() => organizationWrites(fixture).length).toBe(3)
+
+  const third = organizationWrites(fixture)[2]
+  expect(third?.headers['idempotency-key']).not.toBe(first?.headers['idempotency-key'])
+  expect(third?.headers['command-id']).not.toBe(first?.headers['command-id'])
+})
+
+test('keeps activation step commands stable and rotates only the edited completion', async ({
+  page,
+}) => {
+  let completionAttempts = 0
+  const fixture = createStudioApiFixture({
+    session: {
+      authenticated: true,
+      registration_status: 'registration_incomplete',
+      identity: {},
+    },
+    intercept: (request) => {
+      if (request.method === 'POST' && request.path === '/studio/v1/onboarding-attempts') {
+        return {
+          status: 201,
+          body: {
+            id: '01991600-4000-7000-8000-000000000001',
+            status: 'open',
+            eligibility_status: 'pending',
+            expires_at: '2030-08-18T12:00:00.000Z',
+            terms_version: 'platform_terms_v1',
+            privacy_notice_version: 'privacy_notice_v1',
+          },
+        }
+      }
+      if (request.method === 'POST' && request.path.endsWith('/eligibility-evidence')) {
+        return {
+          status: 201,
+          body: {
+            result: 'pass',
+            evaluated_at: '2026-08-12T12:00:00.000Z',
+            policy: {
+              code: 'adult_eligibility',
+              version: 1,
+              minimum_age: 18,
+              jurisdiction: 'CO',
+              evidence_kind: 'self_declaration',
+            },
+          },
+        }
+      }
+      if (request.method === 'POST' && request.path.endsWith('/completion')) {
+        completionAttempts += 1
+        return completionAttempts <= 2
+          ? { status: 503, body: error('upstream-unavailable') }
+          : { status: 200, body: { registration_status: 'complete' } }
+      }
+      return undefined
+    },
+  })
+  await installStudioApiMock(page, fixture)
+  await page.goto('/')
+
+  const givenName = page.getByLabel('Nombres')
+  await givenName.fill('Ada')
+  await page.getByLabel('Apellidos').fill('Lovelace')
+  for (const checkbox of await page.getByRole('checkbox').all()) await checkbox.check()
+  const complete = page.getByRole('button', { name: /Confirmar mi identidad/ })
+
+  await complete.click()
+  await expect(page.getByText(/No pudimos guardar/)).toBeVisible()
+  await complete.click()
+  await expect.poll(() => completionWrites(fixture).length).toBe(2)
+
+  const [firstEvidence, secondEvidence] = eligibilityWrites(fixture)
+  const [firstCompletion, secondCompletion] = completionWrites(fixture)
+  expect(secondEvidence?.headers['idempotency-key']).toBe(firstEvidence?.headers['idempotency-key'])
+  expect(secondEvidence?.headers['command-id']).toBe(firstEvidence?.headers['command-id'])
+  expect(secondCompletion?.headers['idempotency-key']).toBe(
+    firstCompletion?.headers['idempotency-key'],
+  )
+  expect(secondCompletion?.headers['command-id']).toBe(firstCompletion?.headers['command-id'])
+
+  await givenName.fill('Adriana')
+  await complete.click()
+  await expect.poll(() => completionWrites(fixture).length).toBe(3)
+
+  const thirdEvidence = eligibilityWrites(fixture)[2]
+  const thirdCompletion = completionWrites(fixture)[2]
+  expect(thirdEvidence?.headers['idempotency-key']).toBe(firstEvidence?.headers['idempotency-key'])
+  expect(thirdEvidence?.headers['command-id']).toBe(firstEvidence?.headers['command-id'])
+  expect(thirdCompletion?.headers['idempotency-key']).not.toBe(
+    firstCompletion?.headers['idempotency-key'],
+  )
+  expect(thirdCompletion?.headers['command-id']).not.toBe(firstCompletion?.headers['command-id'])
+})
+
 test('keeps the session active after returning from independent space setup twice', async ({
   page,
 }) => {
@@ -409,3 +532,21 @@ test.describe('organization context on mobile', () => {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   })
 })
+
+function organizationWrites(fixture: ReturnType<typeof createStudioApiFixture>) {
+  return fixture.requests.filter(
+    (request) => request.method === 'POST' && request.path === '/studio/v1/organizations',
+  )
+}
+
+function eligibilityWrites(fixture: ReturnType<typeof createStudioApiFixture>) {
+  return fixture.requests.filter(
+    (request) => request.method === 'POST' && request.path.endsWith('/eligibility-evidence'),
+  )
+}
+
+function completionWrites(fixture: ReturnType<typeof createStudioApiFixture>) {
+  return fixture.requests.filter(
+    (request) => request.method === 'POST' && request.path.endsWith('/completion'),
+  )
+}

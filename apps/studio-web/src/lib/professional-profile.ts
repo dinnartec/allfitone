@@ -1,46 +1,9 @@
 import type {
-  CommandHeaders,
   ProfessionalCatalogItem,
   ProfessionalCredential,
   ProfessionalCredentialWrite,
   ProfessionalProfilePut,
 } from './studio-api.js'
-
-export type ProfessionalCommandOperation =
-  'profile:update' | 'credential:declare' | 'credential:revise' | 'credential:retire'
-
-export interface CommandIntentRequest {
-  operation: ProfessionalCommandOperation
-  resourceId: string | null
-  payload: unknown
-}
-
-export interface CommandIntentManager {
-  commandFor: (request: CommandIntentRequest) => CommandHeaders
-  reset: () => void
-}
-
-export function createCommandIntentManager(
-  createCommand: () => CommandHeaders,
-): CommandIntentManager {
-  let currentKey: string | undefined
-  let currentCommand: CommandHeaders | undefined
-
-  return {
-    commandFor(request) {
-      const nextKey = stableSerialize([request.operation, request.resourceId, request.payload])
-      if (!currentCommand || currentKey !== nextKey) {
-        currentKey = nextKey
-        currentCommand = createCommand()
-      }
-      return currentCommand
-    },
-    reset() {
-      currentKey = undefined
-      currentCommand = undefined
-    },
-  }
-}
 
 export type ProfileField = 'headline' | 'bio' | 'practice_started_year' | 'specialty_codes'
 export type ProfileErrors = Partial<Record<ProfileField, string>>
@@ -182,19 +145,4 @@ function isSafeHttpsUrl(value: string): boolean {
   } catch {
     return false
   }
-}
-
-function stableSerialize(value: unknown): string {
-  if (value === null) return 'null'
-  if (Array.isArray(value)) return `[${value.map(stableSerialize).join(',')}]`
-  if (typeof value === 'object') {
-    const record = value as Record<string, unknown>
-    return `{${Object.keys(record)
-      .filter((key) => record[key] !== undefined)
-      .sort()
-      .map((key) => `${JSON.stringify(key)}:${stableSerialize(record[key])}`)
-      .join(',')}}`
-  }
-  const serialized = JSON.stringify(value)
-  return serialized ?? 'null'
 }

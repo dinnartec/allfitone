@@ -8,6 +8,8 @@ import { studioIdentityRoutes } from './studio.js'
 
 const AUTHORIZE_URL = 'https://api.workos.com/user_management/authorize?client_id=client_studio'
 const LOGOUT_URL = 'https://api.workos.com/user_management/sessions/logout?session_id=sid'
+const LEGACY_STATE_COOKIE = 'allfit_oauth_state'
+const STATE_COOKIE_PREFIX = `${LEGACY_STATE_COOKIE}_`
 
 function fakeProvider(overrides: Partial<AuthProvider> = {}): AuthProvider {
   return {
@@ -82,9 +84,14 @@ function app(
   return instance
 }
 
-function stateFrom(response: Response): string {
+function stateCookieFrom(response: Response): { name: string; state: string; value: string } {
   const cookie = response.headers.get('set-cookie') ?? ''
-  return /allfit_oauth_state=([^;]+)/.exec(cookie)?.[1] ?? ''
+  const match = new RegExp(`(${STATE_COOKIE_PREFIX}([A-Za-z0-9_-]{43}))=([^;]+)`).exec(cookie)
+  return {
+    name: match?.[1] ?? '',
+    state: match?.[2] ?? '',
+    value: match?.[3] ?? '',
+  }
 }
 
 beforeEach(() => {
@@ -97,10 +104,12 @@ afterEach(() => setAuthProvider(undefined))
 describe('GET /auth/start', () => {
   test('redirects to WorkOS with a 256-bit state cookie', async () => {
     const response = await app().request('/studio/v1/auth/start')
+    const cookie = stateCookieFrom(response)
     expect(response.status).toBe(302)
     expect(response.headers.get('cache-control')).toBe('no-store')
     expect(response.headers.get('location')).toBe(AUTHORIZE_URL)
-    expect(Buffer.from(stateFrom(response), 'base64url')).toHaveLength(32)
+    expect(Buffer.from(cookie.state, 'base64url')).toHaveLength(32)
+    expect(cookie.value).toBe(cookie.state)
   })
 
   test('protects and scopes the state cookie', async () => {
@@ -113,20 +122,25 @@ describe('GET /auth/start', () => {
     expect(cookie.toLowerCase()).toContain('secure')
     expect(cookie).toContain('SameSite=Lax')
     expect(cookie).toContain('Path=/studio/v1/auth')
+    expect(cookie).toContain('Max-Age=600')
   })
 })
 
 describe('GET /auth/callback', () => {
   test('creates an opaque session and redirects without leaking tokens', async () => {
     const instance = app()
-    const state = stateFrom(await instance.request('/studio/v1/auth/start'))
-    const response = await instance.request(`/studio/v1/auth/callback?code=secret&state=${state}`, {
-      headers: { cookie: `allfit_oauth_state=${state}` },
-    })
+    const stateCookie = stateCookieFrom(await instance.request('/studio/v1/auth/start'))
+    const response = await instance.request(
+      `/studio/v1/auth/callback?code=secret&state=${stateCookie.state}`,
+      {
+        headers: { cookie: `${stateCookie.name}=${stateCookie.value}` },
+      },
+    )
 
     expect(response.status).toBe(303)
     expect(response.headers.get('location')).toBe('http://localhost:3000')
     const cookie = response.headers.get('set-cookie') ?? ''
+    expect(cookie).toContain(`${stateCookie.name}=;`)
     expect(cookie).toContain('allfit_studio_session=opaque-session')
     const sessionCookie = cookie
       .split(/,\s*/)
@@ -137,16 +151,77 @@ describe('GET /auth/callback', () => {
     expect(response.headers.get('location')).not.toContain('secret')
   })
 
-  test('rejects missing or mismatched state and consumes the state cookie', async () => {
-    const response = await app().request('/studio/v1/auth/callback?code=abc&state=attacker', {
-      headers: { cookie: 'allfit_oauth_state=victim' },
+  test('completes concurrent browser flows independently in either callback order', async () => {
+    const instance = app()
+    const first = stateCookieFrom(await instance.request('/studio/v1/auth/start'))
+    const second = stateCookieFrom(await instance.request('/studio/v1/auth/start'))
+    const browserCookies = `${first.name}=${first.value}; ${second.name}=${second.value}`
+
+    expect(first.name).not.toBe(second.name)
+
+    const secondCallback = await instance.request(
+      `/studio/v1/auth/callback?code=second&state=${second.state}`,
+      { headers: { cookie: browserCookies } },
+    )
+    expect(secondCallback.status).toBe(303)
+    expect(secondCallback.headers.get('set-cookie')).toContain(`${second.name}=;`)
+    expect(secondCallback.headers.get('set-cookie')).not.toContain(`${first.name}=;`)
+
+    const firstCallback = await instance.request(
+      `/studio/v1/auth/callback?code=first&state=${first.state}`,
+      { headers: { cookie: `${first.name}=${first.value}` } },
+    )
+    expect(firstCallback.status).toBe(303)
+    expect(firstCallback.headers.get('set-cookie')).toContain(`${first.name}=;`)
+  })
+
+  test('rejects an unknown state without consuming another active flow', async () => {
+    const instance = app()
+    const active = stateCookieFrom(await instance.request('/studio/v1/auth/start'))
+    const unknown = active.state === 'A'.repeat(43) ? 'B'.repeat(43) : 'A'.repeat(43)
+    const response = await instance.request(`/studio/v1/auth/callback?code=abc&state=${unknown}`, {
+      headers: { cookie: `${active.name}=${active.value}` },
     })
+
     expect(response.status).toBe(400)
-    expect(response.headers.get('set-cookie')).toContain('allfit_oauth_state=;')
+    expect(response.headers.get('set-cookie') ?? '').not.toContain(`${active.name}=;`)
+  })
+
+  test('rejects malformed and replayed states without consuming active flows', async () => {
+    const instance = app()
+    const active = stateCookieFrom(await instance.request('/studio/v1/auth/start'))
+    const malformed = await instance.request('/studio/v1/auth/callback?code=abc&state=not-base64', {
+      headers: { cookie: `${active.name}=${active.value}` },
+    })
+    expect(malformed.status).toBe(400)
+    expect(malformed.headers.get('set-cookie') ?? '').not.toContain(`${active.name}=;`)
+
+    const valid = await instance.request(
+      `/studio/v1/auth/callback?code=abc&state=${active.state}`,
+      {
+        headers: { cookie: `${active.name}=${active.value}` },
+      },
+    )
+    expect(valid.status).toBe(303)
+
+    const replay = await instance.request(`/studio/v1/auth/callback?code=abc&state=${active.state}`)
+    expect(replay.status).toBe(400)
+  })
+
+  test('accepts and consumes the legacy state cookie during rollout', async () => {
+    const state = 'B'.repeat(43)
+    const response = await app().request(`/studio/v1/auth/callback?code=abc&state=${state}`, {
+      headers: { cookie: `${LEGACY_STATE_COOKIE}=${state}` },
+    })
+
+    expect(response.status).toBe(303)
+    expect(response.headers.get('set-cookie')).toContain(`${LEGACY_STATE_COOKIE}=;`)
   })
 
   test('rejects a missing state cookie as an expired flow', async () => {
-    const response = await app().request('/studio/v1/auth/callback?code=abc&state=expired')
+    const response = await app().request(
+      `/studio/v1/auth/callback?code=abc&state=${'C'.repeat(43)}`,
+    )
     expect(response.status).toBe(400)
     await expect(response.json()).resolves.toMatchObject({
       error: { code: 'invalid-request', detail: 'missing or expired state cookie' },

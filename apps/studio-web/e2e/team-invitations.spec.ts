@@ -20,3 +20,15 @@ test('owner proposes a staff invitation without exposing contact in the URL', as
   expect(command?.headers['idempotency-key']).toMatch(/^[0-9a-f-]{36}$/)
   expect(command?.headers['command-id']).toMatch(/^[0-9a-f-]{36}$/)
 })
+
+test('cancel returns a directly opened form to the invitation list', async ({ page }) => {
+  const fixture = createStudioApiFixture({ memberships: [activeMembership] })
+  await installStudioApiMock(page, fixture)
+  await page.goto(`/organizations/${activeMembership.organization_id}/team/invitations/new`)
+
+  await page.getByRole('button', { name: 'Cancelar' }).click()
+
+  await expect(page).toHaveURL(
+    `/organizations/${activeMembership.organization_id}/team/invitations`,
+  )
+})

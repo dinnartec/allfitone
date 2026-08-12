@@ -62,8 +62,8 @@ import { Spinner } from '@allfitone/react/components/spinner'
 import { toast } from '@allfitone/react/components/sonner'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 
+import { createCommandIntentManager } from '@/lib/command-intent'
 import {
-  createCommandIntentManager,
   credentialStateLabel,
   credentialStateVariant,
   groupCredentials,

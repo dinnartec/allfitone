@@ -21,6 +21,7 @@ import {
 import { useState, type FormEvent } from 'react'
 
 import { StudioFrame } from './studio-frame'
+import { createCommandIntentManager } from '@/lib/command-intent'
 import { StudioApiError, newCommand, studioApi, type OrganizationType } from '@/lib/studio-api'
 
 type StartMode = 'individual' | 'team'
@@ -110,7 +111,7 @@ function SpaceForm({
   )
   const [responsibleKind, setResponsibleKind] = useState<ResponsibleKind>('natural_person')
   const [responsibleName, setResponsibleName] = useState('')
-  const [command] = useState(newCommand)
+  const [commandIntent] = useState(() => createCommandIntentManager(newCommand))
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string>()
 
@@ -124,20 +125,24 @@ function SpaceForm({
     setSubmitting(true)
     setError(undefined)
     try {
-      const created = await studioApi.createOrganization(
-        {
-          display_name: displayName.trim(),
-          type_code: mode === 'individual' ? 'professional_practice' : typeCode,
-          responsible_party: {
-            kind: mode === 'individual' ? 'natural_person' : responsibleKind,
-            name:
-              mode === 'individual' || responsibleKind === 'natural_person'
-                ? (fullName ?? 'Titular autenticado')
-                : responsibleName.trim(),
-          },
+      const body = {
+        display_name: displayName.trim(),
+        type_code: mode === 'individual' ? ('professional_practice' as const) : typeCode,
+        responsible_party: {
+          kind: mode === 'individual' ? ('natural_person' as const) : responsibleKind,
+          name:
+            mode === 'individual' || responsibleKind === 'natural_person'
+              ? (fullName ?? 'Titular autenticado')
+              : responsibleName.trim(),
         },
-        command,
-      )
+      }
+      const command = commandIntent.commandFor({
+        operation: 'organization:create',
+        resourceId: null,
+        payload: body,
+      })
+      const created = await studioApi.createOrganization(body, command)
+      commandIntent.reset()
       onCreated(created.id)
     } catch (caught) {
       if (caught instanceof StudioApiError && caught.status === 401) {
