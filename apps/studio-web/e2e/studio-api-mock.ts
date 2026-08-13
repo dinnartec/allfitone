@@ -20,6 +20,8 @@ export interface MockResponse {
 export interface StudioApiFixture {
   session: unknown
   memberships: unknown[]
+  organizationMemberships: unknown[]
+  organizationRoles: unknown[]
   organizationTypes: unknown[]
   me: { profile: Record<string, unknown> | null; memberships: unknown[] }
   specialties: Array<{ code: string; name: string; description: string | null }>
@@ -64,6 +66,111 @@ export const terminatedMembership = {
   ended_at: '2025-06-01T00:00:00.000Z',
   roles: ['staff'],
 }
+
+export const activeTeamMember = {
+  membership_id: '01991600-7000-7000-8000-000000000001',
+  display_name: 'Ada Lovelace',
+  status: 'active',
+  joined_at: '2025-01-15T00:00:00.000Z',
+  ended_at: null,
+  roles: ['owner'],
+}
+
+export const terminatedTeamMember = {
+  membership_id: '01991600-7000-7000-8000-000000000002',
+  display_name: 'Camila Torres',
+  status: 'terminated',
+  joined_at: '2024-02-10T00:00:00.000Z',
+  ended_at: '2026-07-30T00:00:00.000Z',
+  roles: ['staff'],
+}
+
+const capabilityNames = {
+  invite: 'Invitar al equipo',
+  manage_organization: 'Mantener los datos de la organización',
+  manage_sites: 'Administrar sedes',
+  manage_memberships: 'Administrar membresías del equipo',
+  manage_roles: 'Administrar roles',
+  invite_clients: 'Invitar clientes',
+  view_directory: 'Consultar directorios organizacionales sin datos fitness',
+  manage_relationships: 'Administrar relaciones de servicio',
+  assign_professionals: 'Asignar profesionales responsables',
+  terminate_relationships: 'Terminar relaciones de servicio',
+  manage_plans: 'Administrar planes comerciales',
+  manage_billing: 'Administrar cobros y suscripciones',
+  manage_historical_access: 'Administrar casos históricos sin conceder lectura',
+  connect_billing_account: 'Conectar la cuenta de cobro',
+  close_organization: 'Cerrar la organización',
+  view_assigned_directory: 'Únicamente personas asignadas',
+  manage_content: 'Crear y publicar contenido de entrenamiento',
+  assign_programs: 'Asignar programas',
+  exercise_grants: 'Ejercer grants solo con relación, asignación y grant vigentes',
+  observe_training: 'Observar ejecuciones autorizadas',
+  propose_corrections: 'Proponer correcciones de entrenamiento',
+  guide_nutrition: 'Orientar nutrición únicamente con credencial verificada',
+} as const
+
+const adminCapabilities = [
+  'invite',
+  'manage_organization',
+  'manage_sites',
+  'manage_memberships',
+  'manage_roles',
+  'invite_clients',
+  'view_directory',
+  'manage_relationships',
+  'assign_professionals',
+  'terminate_relationships',
+  'manage_plans',
+  'manage_billing',
+  'manage_historical_access',
+] as const
+
+const coachCapabilities = [
+  'invite_clients',
+  'view_assigned_directory',
+  'manage_content',
+  'assign_programs',
+  'exercise_grants',
+  'observe_training',
+  'propose_corrections',
+  'guide_nutrition',
+] as const
+
+function capabilities(codes: readonly (keyof typeof capabilityNames)[]) {
+  return codes.map((code) => ({ code, name: capabilityNames[code] }))
+}
+
+export const organizationRoleCatalog = [
+  {
+    code: 'owner',
+    name: 'Propietario',
+    capabilities: capabilities([
+      ...adminCapabilities,
+      'connect_billing_account',
+      'close_organization',
+    ]),
+    fitness_data_access_policy: 'not_granted_by_role',
+  },
+  {
+    code: 'admin',
+    name: 'Administrador',
+    capabilities: capabilities(adminCapabilities),
+    fitness_data_access_policy: 'not_granted_by_role',
+  },
+  {
+    code: 'coach',
+    name: 'Coach',
+    capabilities: capabilities(coachCapabilities),
+    fitness_data_access_policy: 'requires_relationship_assignment_and_grant',
+  },
+  {
+    code: 'staff',
+    name: 'Staff',
+    capabilities: capabilities(['invite', 'invite_clients', 'view_directory']),
+    fitness_data_access_policy: 'not_granted_by_role',
+  },
+]
 
 export const professionalProfile = {
   id: '01991600-2000-7000-8000-000000000001',
@@ -115,6 +222,8 @@ export function createStudioApiFixture(
       identity: { given_name: 'Ada', family_name: 'Lovelace' },
     },
     memberships: [],
+    organizationMemberships: [activeTeamMember, terminatedTeamMember],
+    organizationRoles: organizationRoleCatalog,
     organizationTypes: [
       { code: 'professional_practice', name: 'Profesional independiente', description: null },
       { code: 'gym', name: 'Gimnasio', description: null },
@@ -177,6 +286,32 @@ function defaultResponse(
   }
   if (request.method === 'GET' && request.path === '/studio/v1/me/memberships') {
     return { status: 200, body: { items: fixture.memberships } }
+  }
+  if (
+    request.method === 'GET' &&
+    /^\/studio\/v1\/organizations\/[^/]+\/memberships$/.test(request.path)
+  ) {
+    const status = new URLSearchParams(request.search).get('status')
+    const data = status
+      ? fixture.organizationMemberships.filter(
+          (membership) =>
+            typeof membership === 'object' &&
+            membership !== null &&
+            'status' in membership &&
+            membership.status === status,
+        )
+      : fixture.organizationMemberships
+    return { status: 200, body: { data, page: { has_more: false, next_cursor: null } } }
+  }
+  if (
+    request.method === 'GET' &&
+    /^\/studio\/v1\/organizations\/[^/]+\/roles$/.test(request.path)
+  ) {
+    return {
+      status: 200,
+      body: { items: fixture.organizationRoles },
+      headers: { ETag: '"organization-roles-v1"' },
+    }
   }
   if (request.method === 'GET' && request.path === '/studio/v1/organization-types') {
     return { status: 200, body: { items: fixture.organizationTypes } }

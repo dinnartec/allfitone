@@ -31,7 +31,7 @@ test('clears the browser session and browser history cannot reveal the workspace
   await installStudioApiMock(page, fixture)
 
   await page.goto(`/organizations/${activeMembership.organization_id}`)
-  await expect(page.getByRole('heading', { name: 'Tu espacio está listo.' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Inicio', level: 1 })).toBeVisible()
 
   await page.getByRole('button', { name: 'Cerrar sesión' }).click()
 
@@ -106,7 +106,7 @@ test('a manual logout covers another Studio tab immediately', async ({ context, 
   await installStudioApiMock(other, fixture)
   await page.goto(`/organizations/${activeMembership.organization_id}`)
   await other.goto(`/organizations/${activeMembership.organization_id}`)
-  await expect(other.getByText(activeMembership.display_name)).toBeVisible()
+  await expect(other.getByRole('heading', { name: 'Inicio', level: 1 })).toBeVisible()
 
   const logoutNavigation = page.getByRole('button', { name: 'Cerrar sesión' }).click()
   await logoutRequested
@@ -129,7 +129,7 @@ test('locks at thirty minutes and deliberate activity resets the deadline', asyn
   const fixture = createStudioApiFixture({ memberships: [activeMembership] })
   await installStudioApiMock(page, fixture)
   await page.goto(`/organizations/${activeMembership.organization_id}`)
-  await expect(page.getByText(activeMembership.display_name)).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Inicio', level: 1 })).toBeVisible()
   await page.evaluate(() => {
     HTMLFormElement.prototype.requestSubmit = function recordIdleLogout() {
       const reason = new FormData(this).get('reason')

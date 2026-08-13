@@ -132,7 +132,7 @@ export function StudioEntry({ logoutPartial = false }: { logoutPartial?: boolean
       <SpaceSetup
         organizationTypes={flow.organizationTypes}
         fullName={flow.fullName}
-        onCreated={(organizationId) => router.replace(`/organizations/${organizationId}`)}
+        onCreated={(organizationId) => router.replace(`/organizations/${organizationId}/ready`)}
         onWait={() => setFlow({ kind: 'waiting' })}
         onSessionExpired={() => setFlow({ kind: 'access' })}
       />

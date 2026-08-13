@@ -14,16 +14,22 @@ import {
   trustedStudioWebUrl,
 } from '../../identity/index.js'
 import { fail } from '../../../platform/http/index.js'
-import { recordStudioMembershipDestination } from '../../../platform/observability/index.js'
+import {
+  recordStudioMembershipDestination,
+  recordStudioOrganizationQuery,
+} from '../../../platform/observability/index.js'
 import { StudioOrganizationError, type StudioOrganizationService } from '../application/index.js'
 import { studioOrganizationService } from '../dependencies.js'
-import type { OrganizationTypeCode } from '../domain/index.js'
+import type { OrganizationMembershipStatus, OrganizationTypeCode } from '../domain/index.js'
 
 type OrganizationCreate = AllfitV1Schemas['OrganizationCreate']
 
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const UUID_V7 = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const ORGANIZATION_TYPES = new Set<OrganizationTypeCode>(['professional_practice', 'gym', 'studio'])
+const MEMBERSHIP_STATUSES = new Set<OrganizationMembershipStatus>(['active', 'terminated'])
+const ROLE_CATALOG_CACHE_CONTROL = 'private, max-age=0, must-revalidate'
 
 export function studioOrganizationRoutes(
   injectedService?: StudioOrganizationService,
@@ -41,6 +47,7 @@ export function studioOrganizationRoutes(
       credentials: true,
       allowMethods: ['GET', 'POST', 'PUT', 'OPTIONS'],
       allowHeaders: ['Content-Type', 'Idempotency-Key', 'Command-Id', 'If-None-Match'],
+      exposeHeaders: ['ETag'],
     }),
   )
   routes.use('*', async (c, next) => {
@@ -82,6 +89,92 @@ export function studioOrganizationRoutes(
       if (actor instanceof Response) return actor
       return c.json({ items: await organizations().listTypes(actor) })
     } catch (error) {
+      return operationFailure(c, error)
+    }
+  })
+
+  routes.get('/organizations/:organizationId/memberships', async (c) => {
+    c.header('Cache-Control', 'private, no-store')
+    if (c.req.header('origin') !== studioOrigin) {
+      return fail(c, 'forbidden', 'origin is not allowed')
+    }
+    const organizationId = c.req.param('organizationId')
+    if (!UUID.test(organizationId)) return fail(c, 'invalid-request')
+    const statusValue = c.req.query('status')
+    const status =
+      statusValue && MEMBERSHIP_STATUSES.has(statusValue as OrganizationMembershipStatus)
+        ? (statusValue as OrganizationMembershipStatus)
+        : undefined
+    if (statusValue && !status) return fail(c, 'validation-failed')
+    const limit = parseLimit(c.req.query('limit'))
+    if (!limit) return fail(c, 'validation-failed')
+    const cursor = parseMembershipCursor(c.req.query('cursor'), status)
+    if (cursor === null) return fail(c, 'validation-failed')
+
+    try {
+      const actor = await studioActor(c, sessions())
+      if (actor instanceof Response) return actor
+      const result = await organizations().listOrganizationMemberships(actor, {
+        organizationId,
+        ...(status ? { status } : {}),
+        limit,
+        ...(cursor ?? {}),
+      })
+      const last = result.items.at(-1)
+      recordStudioOrganizationQuery('memberships', result.items.length === 0 ? 'empty' : 'listed')
+      return c.json({
+        data: result.items.map((membership) => ({
+          membership_id: membership.membershipId,
+          display_name: membership.displayName,
+          status: membership.status,
+          joined_at: membership.joinedAt.toISOString(),
+          ended_at: membership.endedAt?.toISOString() ?? null,
+          roles: membership.roles,
+        })),
+        page: {
+          has_more: result.hasMore,
+          next_cursor:
+            result.hasMore && last
+              ? encodeMembershipCursor(last.status, last.sortDisplayName, last.membershipId, status)
+              : null,
+        },
+      })
+    } catch (error) {
+      recordStudioOrganizationQuery('memberships', 'failed')
+      return operationFailure(c, error)
+    }
+  })
+
+  routes.get('/organizations/:organizationId/roles', async (c) => {
+    c.header('Cache-Control', ROLE_CATALOG_CACHE_CONTROL)
+    if (c.req.header('origin') !== studioOrigin) {
+      return fail(c, 'forbidden', 'origin is not allowed')
+    }
+    const organizationId = c.req.param('organizationId')
+    if (!UUID.test(organizationId)) return fail(c, 'invalid-request')
+
+    try {
+      const actor = await studioActor(c, sessions())
+      if (actor instanceof Response) return actor
+      const items = await organizations().listRoleCatalog(actor, organizationId)
+      const body = {
+        items: items.map((role) => ({
+          code: role.code,
+          name: role.name,
+          capabilities: role.capabilities,
+          fitness_data_access_policy: role.fitnessDataAccessPolicy,
+        })),
+      }
+      const etag = `"${createHash('sha256').update(JSON.stringify(body)).digest('base64url')}"`
+      c.header('ETag', etag)
+      if (c.req.header('if-none-match') === etag) {
+        recordStudioOrganizationQuery('roles', 'not-modified')
+        return c.body(null, 304)
+      }
+      recordStudioOrganizationQuery('roles', items.length === 0 ? 'empty' : 'listed')
+      return c.json(body)
+    } catch (error) {
+      recordStudioOrganizationQuery('roles', 'failed')
       return operationFailure(c, error)
     }
   })
@@ -165,6 +258,70 @@ function canonicalJson(value: unknown): string {
       .join(',')}}`
   }
   return JSON.stringify(value)
+}
+
+function parseLimit(value: string | undefined): number | undefined {
+  if (value === undefined) return 50
+  if (!/^[1-9][0-9]*$/.test(value)) return undefined
+  const parsed = Number(value)
+  return parsed <= 100 ? parsed : undefined
+}
+
+function parseMembershipCursor(
+  value: string | undefined,
+  filterStatus: OrganizationMembershipStatus | undefined,
+):
+  | {
+      cursorStatus: OrganizationMembershipStatus
+      cursorDisplayName: string
+      cursorMembershipId: string
+    }
+  | undefined
+  | null {
+  if (!value) return undefined
+  if (value.length > 1024 || !/^[A-Za-z0-9_-]+$/.test(value)) return null
+  try {
+    const parsed = JSON.parse(Buffer.from(value, 'base64url').toString('utf8')) as unknown
+    if (
+      !isObject(parsed) ||
+      parsed.v !== 1 ||
+      parsed.filter_status !== (filterStatus ?? null) ||
+      typeof parsed.status !== 'string' ||
+      !MEMBERSHIP_STATUSES.has(parsed.status as OrganizationMembershipStatus) ||
+      (filterStatus !== undefined && parsed.status !== filterStatus) ||
+      typeof parsed.display_name !== 'string' ||
+      parsed.display_name.length === 0 ||
+      parsed.display_name.length > 240 ||
+      typeof parsed.membership_id !== 'string' ||
+      !UUID.test(parsed.membership_id)
+    ) {
+      return null
+    }
+    return {
+      cursorStatus: parsed.status as OrganizationMembershipStatus,
+      cursorDisplayName: parsed.display_name,
+      cursorMembershipId: parsed.membership_id,
+    }
+  } catch {
+    return null
+  }
+}
+
+function encodeMembershipCursor(
+  status: OrganizationMembershipStatus,
+  displayName: string,
+  membershipId: string,
+  filterStatus: OrganizationMembershipStatus | undefined,
+): string {
+  return Buffer.from(
+    JSON.stringify({
+      v: 1,
+      filter_status: filterStatus ?? null,
+      status,
+      display_name: displayName,
+      membership_id: membershipId,
+    }),
+  ).toString('base64url')
 }
 
 function isOrganizationCreate(value: unknown): value is OrganizationCreate {

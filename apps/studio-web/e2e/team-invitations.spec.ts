@@ -7,7 +7,7 @@ test('owner proposes a staff invitation without exposing contact in the URL', as
   await installStudioApiMock(page, fixture)
   await page.goto(`/organizations/${activeMembership.organization_id}`)
 
-  await page.getByRole('button', { name: 'Invitar', exact: true }).click()
+  await page.getByRole('link', { name: 'Invitar integrante', exact: true }).click()
   await expect(page).toHaveURL(/\/team\/invitations\/new$/)
   await page.getByLabel('Correo electrónico').fill('person@example.test')
   await page.getByRole('button', { name: 'Enviar invitación' }).click()

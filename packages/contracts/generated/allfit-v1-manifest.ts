@@ -282,6 +282,12 @@ export const allfitV1ContractManifest = {
       allfitOperation: 'OP-ORG-006',
     },
     {
+      method: 'GET',
+      path: '/studio/v1/organizations/{organizationId}/memberships',
+      operationId: 'listStudioOrganizationMemberships',
+      allfitOperation: 'OP-ORG-015',
+    },
+    {
       method: 'POST',
       path: '/studio/v1/organizations/{organizationId}/programs/{programId}/versions',
       operationId: 'publishProgramVersion',
@@ -292,6 +298,12 @@ export const allfitV1ContractManifest = {
       path: '/studio/v1/organizations/{organizationId}/relationships/{relationshipId}/assignments',
       operationId: 'assignProgramVersion',
       allfitOperation: 'OP-PLN-010',
+    },
+    {
+      method: 'GET',
+      path: '/studio/v1/organizations/{organizationId}/roles',
+      operationId: 'listStudioOrganizationRoles',
+      allfitOperation: 'OP-ORG-017',
     },
     {
       method: 'GET',

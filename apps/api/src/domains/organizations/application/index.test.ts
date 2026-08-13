@@ -15,6 +15,14 @@ describe('Studio organization registration boundary', () => {
         databaseCalls += 1
         return []
       },
+      listOrganizationMemberships: async () => {
+        databaseCalls += 1
+        return { items: [], hasMore: false }
+      },
+      listRoleCatalog: async () => {
+        databaseCalls += 1
+        return []
+      },
       create: async () => {
         databaseCalls += 1
         throw new Error('must not be reached')
@@ -35,6 +43,15 @@ describe('Studio organization registration boundary', () => {
       new StudioOrganizationError('registration-incomplete'),
     )
     expect(() => service.listMemberships(accountOnlyActor)).toThrow(
+      new StudioOrganizationError('registration-incomplete'),
+    )
+    expect(() =>
+      service.listOrganizationMemberships(accountOnlyActor, {
+        organizationId: 'organization-id',
+        limit: 50,
+      }),
+    ).toThrow(new StudioOrganizationError('registration-incomplete'))
+    expect(() => service.listRoleCatalog(accountOnlyActor, 'organization-id')).toThrow(
       new StudioOrganizationError('registration-incomplete'),
     )
     expect(() => service.create(accountOnlyActor, command)).toThrow(

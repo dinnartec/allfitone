@@ -17,7 +17,7 @@ const generator = Bun.spawn(
     'typescript',
     '--local',
     '--schema',
-    'identity,access_control',
+    'identity,access_control,organizations',
     '--workdir',
     'packages/db',
   ],

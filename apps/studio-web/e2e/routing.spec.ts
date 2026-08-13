@@ -63,6 +63,54 @@ test('reuses organization commands for unchanged retries and rotates after editi
   expect(third?.headers['command-id']).not.toBe(first?.headers['command-id'])
 })
 
+test('finishes a new organization in a dedicated ready step before entering the workspace', async ({
+  page,
+}) => {
+  const createdOrganizationId = '01991600-5000-7000-8000-000000000001'
+  const fixture = createStudioApiFixture({
+    intercept: (request, currentFixture) => {
+      if (request.method !== 'POST' || request.path !== '/studio/v1/organizations') {
+        return undefined
+      }
+      currentFixture.memberships = [
+        {
+          ...activeMembership,
+          organization_id: createdOrganizationId,
+          display_name: 'Espacio de Ada Lovelace',
+          type_code: 'professional_practice',
+        },
+      ]
+      return {
+        status: 201,
+        body: {
+          id: createdOrganizationId,
+          display_name: 'Espacio de Ada Lovelace',
+          type_code: 'professional_practice',
+          status: 'active',
+          membership_id: activeMembership.membership_id,
+          role: 'owner',
+        },
+      }
+    },
+  })
+  await installStudioApiMock(page, fixture)
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Trabajo por mi cuenta' }).click()
+  await page.getByRole('button', { name: 'Crear mi espacio' }).click()
+
+  await expect(page).toHaveURL(`/organizations/${createdOrganizationId}/ready`)
+  await expect(page.getByRole('heading', { name: 'Tu espacio está listo.' })).toBeVisible()
+  await expect(page.getByText(/no es obligatorio/i)).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Puedes hacerlo después' })).toBeVisible()
+
+  await page.getByRole('button', { name: 'Entrar al workspace' }).click()
+  await expect(page).toHaveURL(`/organizations/${createdOrganizationId}`)
+  await expect(page.getByRole('heading', { name: 'Studio está listo para operar' })).toBeVisible()
+
+  await page.goBack()
+  await expect(page).not.toHaveURL(`/organizations/${createdOrganizationId}/ready`)
+})
+
 test('keeps activation step commands stable and rotates only the edited completion', async ({
   page,
 }) => {
@@ -207,7 +255,12 @@ test('enters a newly active membership from the invitation wait', async ({ page 
   await page.getByRole('button', { name: 'Comprobar de nuevo' }).click()
 
   await expect(page).toHaveURL(`/organizations/${activeMembership.organization_id}`)
-  await expect(page.getByText(activeMembership.display_name)).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Inicio', level: 1 })).toBeVisible()
+  await expect(
+    page.locator('[data-sidebar-organization]').getByText(activeMembership.display_name, {
+      exact: true,
+    }),
+  ).toBeVisible()
 })
 
 test('opens the selector when multiple memberships arrive during the wait', async ({ page }) => {
@@ -278,9 +331,14 @@ test('routes one active membership directly and ignores terminated history', asy
   await page.goto('/')
 
   await expect(page).toHaveURL(`/organizations/${activeMembership.organization_id}`)
-  await expect(page.getByRole('heading', { name: 'Tu espacio está listo.' })).toBeVisible()
-  await expect(page.getByText(activeMembership.display_name)).toBeVisible()
-  await expect(page.getByRole('link', { name: 'Mi cuenta', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: 'Studio está listo para operar' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Inicio', level: 1 })).toBeVisible()
+  await expect(
+    page.locator('[data-sidebar-organization]').getByText(activeMembership.display_name, {
+      exact: true,
+    }),
+  ).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Mi cuenta', exact: true })).toBeVisible()
   await expect(page.getByText(/perfil profesional/i)).toHaveCount(0)
 })
 
@@ -307,11 +365,13 @@ test('keeps the active organization and its roles visible in the workspace', asy
 
   await page.goto(`/organizations/${activeMembership.organization_id}`)
 
+  await expect(page.getByRole('heading', { name: 'Inicio', level: 1 })).toBeVisible()
+  const organizationContext = page.locator('[data-sidebar-organization]')
   await expect(
-    page.getByRole('heading', { name: activeMembership.display_name, level: 1 }),
+    organizationContext.getByText(activeMembership.display_name, { exact: true }),
   ).toBeVisible()
-  await expect(page.getByText('Gimnasio', { exact: true })).toBeVisible()
-  await expect(page.getByText('Propietario', { exact: true })).toBeVisible()
+  await expect(organizationContext.getByText('Gimnasio', { exact: true })).toBeVisible()
+  await expect(organizationContext.getByText('Propietario', { exact: true })).toBeVisible()
   await expect(page.getByLabel('Cambiar de organización')).toBeVisible()
   await expect(page.getByText(terminatedMembership.display_name)).toHaveCount(0)
 })
@@ -338,15 +398,16 @@ test('replaces the organization context without retaining the previous workspace
   await page.getByLabel('Cambiar de organización').click()
   await page.getByRole('option', { name: `${secondActiveMembership.display_name} · Coach` }).click()
 
-  await expect(
-    page.getByRole('heading', { name: activeMembership.display_name, level: 1 }),
-  ).toHaveCount(0)
   await expect(page).toHaveURL(`/organizations/${secondActiveMembership.organization_id}`)
+  const organizationContext = page.locator('[data-sidebar-organization]')
   await expect(
-    page.getByRole('heading', { name: secondActiveMembership.display_name, level: 1 }),
+    organizationContext.getByText(secondActiveMembership.display_name, { exact: true }),
   ).toBeVisible()
-  await expect(page.getByText('Coach', { exact: true })).toBeVisible()
-  await expect(page.getByText('Propietario', { exact: true })).toHaveCount(0)
+  await expect(
+    organizationContext.getByText(activeMembership.display_name, { exact: true }),
+  ).toHaveCount(0)
+  await expect(organizationContext.getByText('Coach', { exact: true })).toBeVisible()
+  await expect(organizationContext.getByText('Propietario', { exact: true })).toHaveCount(0)
 
   const storage = await page.evaluate(() => ({
     local: Object.entries(localStorage),
@@ -375,9 +436,7 @@ test('revalidates a restored workspace and blocks a membership that ended', asyn
   })
   await installStudioApiMock(page, fixture)
   await page.goto(`/organizations/${activeMembership.organization_id}`)
-  await expect(
-    page.getByRole('heading', { name: activeMembership.display_name, level: 1 }),
-  ).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Inicio', level: 1 })).toBeVisible()
 
   fixture.memberships = [
     { ...activeMembership, status: 'terminated', ended_at: '2026-08-10T12:00:00.000Z' },
@@ -386,9 +445,7 @@ test('revalidates a restored workspace and blocks a membership that ended', asyn
   await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pageshow')))
 
   await expect(page.getByText('Este espacio no está disponible')).toBeVisible()
-  await expect(
-    page.getByRole('heading', { name: activeMembership.display_name, level: 1 }),
-  ).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: 'Inicio', level: 1 })).toHaveCount(0)
 })
 
 test('recovers from a temporary organization context failure without exposing content', async ({
@@ -410,9 +467,7 @@ test('recovers from a temporary organization context failure without exposing co
 
   available = true
   await page.getByRole('button', { name: 'Reintentar' }).click()
-  await expect(
-    page.getByRole('heading', { name: activeMembership.display_name, level: 1 }),
-  ).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Inicio', level: 1 })).toBeVisible()
 })
 
 test('returns an expired organization session to the access landing', async ({ page }) => {
@@ -525,8 +580,11 @@ test.describe('organization context on mobile', () => {
     await installStudioApiMock(page, fixture)
     await page.goto(`/organizations/${activeMembership.organization_id}`)
 
+    await page.getByRole('button', { name: /Abrir o cerrar navegación/ }).click()
     await expect(
-      page.getByRole('heading', { name: activeMembership.display_name, level: 1 }),
+      page.locator('[data-sidebar-organization]').getByText(activeMembership.display_name, {
+        exact: true,
+      }),
     ).toBeVisible()
     await expect(page.getByLabel('Cambiar de organización')).toBeVisible()
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
