@@ -6,6 +6,7 @@ dist/
 .next/
 .next-e2e/
 .next-build/
+.next-local/
 *.tsbuildinfo
 
 .env

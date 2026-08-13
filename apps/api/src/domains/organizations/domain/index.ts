@@ -1,4 +1,8 @@
 export type OrganizationTypeCode = 'professional_practice' | 'gym' | 'studio'
+export type OrganizationRoleCode = 'owner' | 'admin' | 'coach' | 'staff'
+export type OrganizationMembershipStatus = 'active' | 'terminated'
+export type FitnessDataAccessPolicy =
+  'not_granted_by_role' | 'requires_relationship_assignment_and_grant'
 
 export interface OrganizationType {
   code: OrganizationTypeCode
@@ -13,7 +17,34 @@ export interface StudioMembership {
   status: 'active' | 'terminated'
   joinedAt: Date
   endedAt?: Date
-  roles: Array<'owner' | 'admin' | 'coach' | 'staff'>
+  roles: OrganizationRoleCode[]
+}
+
+export interface OrganizationMembershipListItem {
+  membershipId: string
+  displayName: string
+  status: OrganizationMembershipStatus
+  joinedAt: Date
+  endedAt: Date | null
+  roles: OrganizationRoleCode[]
+  sortDisplayName: string
+}
+
+export interface OrganizationMembershipPage {
+  items: OrganizationMembershipListItem[]
+  hasMore: boolean
+}
+
+export interface OrganizationCapability {
+  code: string
+  name: string
+}
+
+export interface OrganizationRole {
+  code: OrganizationRoleCode
+  name: string
+  capabilities: OrganizationCapability[]
+  fitnessDataAccessPolicy: FitnessDataAccessPolicy
 }
 
 export interface CreatedOrganization {
@@ -33,6 +64,16 @@ export interface OrganizationCommand {
 export interface OrganizationDatabase {
   listTypes(personId: string): Promise<OrganizationType[]>
   listMemberships(personId: string): Promise<StudioMembership[]>
+  listOrganizationMemberships(input: {
+    personId: string
+    organizationId: string
+    status?: OrganizationMembershipStatus
+    limit: number
+    cursorStatus?: OrganizationMembershipStatus
+    cursorDisplayName?: string
+    cursorMembershipId?: string
+  }): Promise<OrganizationMembershipPage>
+  listRoleCatalog(personId: string, organizationId: string): Promise<OrganizationRole[]>
   create(
     input: OrganizationCommand & {
       personId: string

@@ -1,15 +1,16 @@
 'use client'
 
+import { ProductLockup } from '@allfitone/react/brand'
 import { Alert, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
-import { Badge } from '@allfitone/react/components/badge'
 import { Button } from '@allfitone/react/components/button'
+import { Spinner } from '@allfitone/react/components/spinner'
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@allfitone/react/components/select'
+  WorkspaceActions,
+  WorkspaceContent,
+  WorkspaceHeader,
+  WorkspaceMain,
+  WorkspaceShell,
+} from '@allfitone/react/components/workspace-shell'
 import { useRouter } from 'next/navigation'
 import {
   createContext,
@@ -21,10 +22,8 @@ import {
   useState,
 } from 'react'
 
-import { organizationTypeLabel } from './membership-selector'
-import { LoadingStage, StudioFrame } from './studio-frame'
+import { LogoutForm } from './logout-form'
 import { resolveOrganizationContext } from '@/lib/membership-routing'
-import { membershipRoleSummary } from '@/lib/membership-roles'
 import { StudioApiError, studioApi, type Membership } from '@/lib/studio-api'
 
 interface OrganizationContextValue {
@@ -112,11 +111,20 @@ export function OrganizationContextBoundary({
     [organizationId, router],
   )
 
-  if (state.kind === 'loading') return <LoadingStage label={state.label} />
+  if (state.kind === 'loading') {
+    return (
+      <OrganizationStateFrame>
+        <div data-organization-state role="status" aria-live="polite">
+          <Spinner label={state.label} />
+          <p>{state.label}</p>
+        </div>
+      </OrganizationStateFrame>
+    )
+  }
   if (state.kind === 'forbidden') {
     return (
-      <StudioFrame step="ready">
-        <div data-studio-error-stage>
+      <OrganizationStateFrame>
+        <div data-organization-state>
           <Alert variant="warning">
             <AlertTitle>Este espacio no está disponible</AlertTitle>
             <AlertDescription>
@@ -125,13 +133,13 @@ export function OrganizationContextBoundary({
             <Button onClick={() => router.replace('/')}>Elegir otro espacio</Button>
           </Alert>
         </div>
-      </StudioFrame>
+      </OrganizationStateFrame>
     )
   }
   if (state.kind === 'error') {
     return (
-      <StudioFrame step="ready">
-        <div data-studio-error-stage>
+      <OrganizationStateFrame>
+        <div data-organization-state>
           <Alert variant="danger" live="assertive">
             <AlertTitle>No pudimos comprobar tu acceso</AlertTitle>
             <AlertDescription>
@@ -141,7 +149,7 @@ export function OrganizationContextBoundary({
             <Button onClick={() => void load()}>Reintentar</Button>
           </Alert>
         </div>
-      </StudioFrame>
+      </OrganizationStateFrame>
     )
   }
 
@@ -153,19 +161,8 @@ export function OrganizationContextBoundary({
   }
 
   return (
-    <OrganizationContext value={value}>
-      <StudioFrame step="ready">
-        <article data-workspace>
-          <OrganizationContextHeader
-            current={state.current}
-            memberships={state.memberships}
-            onSwitch={switchOrganization}
-          />
-          <div key={state.current.organization_id} data-workspace-content>
-            {children}
-          </div>
-        </article>
-      </StudioFrame>
+    <OrganizationContext value={value} key={state.current.organization_id}>
+      {children}
     </OrganizationContext>
   )
 }
@@ -176,54 +173,24 @@ export function useOrganizationContext(): OrganizationContextValue {
   return value
 }
 
-function OrganizationContextHeader({
-  current,
-  memberships,
-  onSwitch,
-}: {
-  current: Membership
-  memberships: Membership[]
-  onSwitch: (organizationId: string) => void
-}) {
+function OrganizationStateFrame({ children }: { children: ReactNode }) {
   return (
-    <header data-workspace-heading aria-label={`Organización activa: ${current.display_name}`}>
-      <div>
-        <p data-studio-eyebrow>{organizationTypeLabel(current.type_code)}</p>
-        <h1>{current.display_name}</h1>
-        <p>Estás trabajando en esta organización.</p>
-      </div>
-      <div data-workspace-context-controls>
-        <div data-workspace-identity aria-label="Roles en la organización activa">
-          <Badge variant="success">Organización activa</Badge>
-          <Badge variant="sport">{membershipRoleSummary(current.roles)}</Badge>
-        </div>
-        {memberships.length > 1 ? (
-          <div data-workspace-switcher>
-            <label htmlFor="organization-switcher">Cambiar de organización</label>
-            <Select
-              value={current.organization_id}
-              onValueChange={(value) => {
-                if (value !== null) onSwitch(value)
-              }}
-              items={memberships.map((membership) => ({
-                label: `${membership.display_name} · ${membershipRoleSummary(membership.roles)}`,
-                value: membership.organization_id,
-              }))}
-            >
-              <SelectTrigger id="organization-switcher" data-studio-select-trigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent align="end">
-                {memberships.map((membership) => (
-                  <SelectItem key={membership.membership_id} value={membership.organization_id}>
-                    {membership.display_name} · {membershipRoleSummary(membership.roles)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        ) : null}
-      </div>
-    </header>
+    <WorkspaceShell data-organization-state-shell>
+      <WorkspaceMain>
+        <WorkspaceHeader>
+          <ProductLockup
+            product="studio"
+            surface="light"
+            title="Allfit Studio"
+            width={169}
+            height={40}
+          />
+          <WorkspaceActions>
+            <LogoutForm />
+          </WorkspaceActions>
+        </WorkspaceHeader>
+        <WorkspaceContent>{children}</WorkspaceContent>
+      </WorkspaceMain>
+    </WorkspaceShell>
   )
 }

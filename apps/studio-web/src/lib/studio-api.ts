@@ -22,7 +22,14 @@ export type TeamInvitationPresentation = AllfitV1Schemas['TeamInvitationPresenta
 export type TeamInvitationDecisionCreate = AllfitV1Schemas['TeamInvitationDecisionCreate']
 export type TeamInvitationDecisionResult = AllfitV1Schemas['TeamInvitationDecisionResult']
 export type TeamInvitationPage = AllfitV1Schemas['TeamInvitationPage']
+export type TeamInvitationListItem = AllfitV1Schemas['TeamInvitationListItem']
 export type TeamInvitationStatus = AllfitV1Schemas['TeamInvitationStatus']
+export type OrganizationMembership = AllfitV1Schemas['OrganizationMembershipListItem']
+export type OrganizationMembershipPage = AllfitV1Schemas['OrganizationMembershipPage']
+export type OrganizationMembershipStatus = AllfitV1Schemas['OrganizationMembershipStatus']
+export type OrganizationRole = AllfitV1Schemas['OrganizationRole']
+export type OrganizationRoleCatalog = AllfitV1Schemas['OrganizationRoleCatalog']
+export type OrganizationRoleCode = AllfitV1Schemas['OrganizationRoleCode']
 
 const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080').replace(/\/$/, '')
 
@@ -176,6 +183,32 @@ export const studioApi = {
     )
   },
 
+  organizationMemberships: (
+    organizationId: string,
+    options: { status?: OrganizationMembershipStatus; limit?: number; cursor?: string } = {},
+    signal?: AbortSignal,
+  ) => {
+    const query = new URLSearchParams()
+    if (options.status) query.set('status', options.status)
+    if (options.limit) query.set('limit', String(options.limit))
+    if (options.cursor) query.set('cursor', options.cursor)
+    const suffix = query.size ? `?${query.toString()}` : ''
+    return request<OrganizationMembershipPage>(
+      `/studio/v1/organizations/${organizationId}/memberships${suffix}`,
+      {
+        cache: 'no-store',
+        ...(signal ? { signal } : {}),
+      },
+    )
+  },
+
+  organizationRoles: (organizationId: string, signal?: AbortSignal) =>
+    catalogRequest<OrganizationRoleCatalog>(
+      `/studio/v1/organizations/${organizationId}/roles`,
+      'organization-roles',
+      signal,
+    ),
+
   revokeTeamInvitation: (organizationId: string, invitationId: string, command: CommandHeaders) =>
     request<AllfitV1Schemas['TeamInvitationRevoked']>(
       `/studio/v1/organizations/${organizationId}/invitations/${invitationId}/revocation`,
@@ -223,14 +256,21 @@ interface CatalogCache<T> {
   payload: T
 }
 
-async function catalogRequest<T>(path: string, cacheName: string): Promise<T> {
+async function catalogRequest<T>(
+  path: string,
+  cacheName: string,
+  signal?: AbortSignal,
+): Promise<T> {
   const cacheKey = `allfit-studio:${cacheName}:v${CATALOG_CACHE_VERSION}`
   const cached = readCatalogCache<T>(cacheKey)
-  let response = await fetchApi(path, cached ? { headers: { 'If-None-Match': cached.etag } } : {})
+  let response = await fetchApi(path, {
+    ...(cached ? { headers: { 'If-None-Match': cached.etag } } : {}),
+    ...(signal ? { signal } : {}),
+  })
 
   if (response.status === 304) {
     if (cached) return cached.payload
-    response = await fetchApi(path)
+    response = await fetchApi(path, signal ? { signal } : {})
   }
   if (!response.ok) throw await responseError(response)
 

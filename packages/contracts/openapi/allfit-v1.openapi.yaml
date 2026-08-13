@@ -1046,6 +1046,99 @@ paths:
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
 
+  /studio/v1/organizations/{organizationId}/memberships:
+    get:
+      tags: [Studio Organizations]
+      operationId: listStudioOrganizationMemberships
+      x-allfit-operation: OP-ORG-015
+      x-allfit-cache: private-no-store
+      summary: List current and past team memberships for an organization
+      description: >-
+        Returns the minimum team identity projection required by Studio. The response
+        never contains person identifiers, contacts, client state, professional profile,
+        Fitness ID, or fitness data.
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/OrganizationMembershipStatus'
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Authorized organization team membership page
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/PrivateNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationMembershipPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /studio/v1/organizations/{organizationId}/roles:
+    get:
+      tags: [Studio Organizations]
+      operationId: listStudioOrganizationRoles
+      x-allfit-operation: OP-ORG-017
+      x-allfit-cache: private-revalidate
+      summary: List the governed V1 organization roles and capabilities
+      description: >-
+        Capabilities describe the governed V1 authorization model, not deployment
+        availability. No organization role grants fitness data access by itself.
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: The four governed V1 roles and their capabilities
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/PrivateRevalidate'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationRoleCatalog'
+        '304':
+          description: The role catalogue has not changed
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/PrivateRevalidate'
+            ETag:
+              $ref: '#/components/headers/ETag'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
   /studio/v1/invitations/resolve:
     post:
       tags: [Studio Identity]
@@ -3189,6 +3282,101 @@ components:
           maxItems: 100
           items:
             $ref: '#/components/schemas/StudioMembership'
+    OrganizationRoleCode:
+      type: string
+      enum: [owner, admin, coach, staff]
+    OrganizationMembershipStatus:
+      type: string
+      enum: [active, terminated]
+    OrganizationMembershipListItem:
+      type: object
+      additionalProperties: false
+      required: [membership_id, display_name, status, joined_at, ended_at, roles]
+      properties:
+        membership_id:
+          $ref: '#/components/schemas/UuidV7'
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 240
+          description: Minimum team identity projection; not a Fitness ID or contact.
+        status:
+          $ref: '#/components/schemas/OrganizationMembershipStatus'
+        joined_at:
+          type: string
+          format: date-time
+        ended_at:
+          type: [string, 'null']
+          format: date-time
+        roles:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          description: >-
+            Current roles for an active membership, or roles effective at termination
+            for a terminated membership.
+          items:
+            $ref: '#/components/schemas/OrganizationRoleCode'
+    OrganizationMembershipPage:
+      type: object
+      additionalProperties: false
+      required: [data, page]
+      properties:
+        data:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/OrganizationMembershipListItem'
+        page:
+          $ref: '#/components/schemas/Page'
+    OrganizationCapability:
+      type: object
+      additionalProperties: false
+      required: [code, name]
+      properties:
+        code:
+          type: string
+          pattern: '^[a-z][a-z0-9_]{1,63}$'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 160
+    FitnessDataAccessPolicy:
+      type: string
+      description: >-
+        A role never grants fitness data by itself. Coach still requires an active
+        relationship, assignment, compatible grant, membership, role, and credentials.
+      enum: [not_granted_by_role, requires_relationship_assignment_and_grant]
+    OrganizationRole:
+      type: object
+      additionalProperties: false
+      required: [code, name, capabilities, fitness_data_access_policy]
+      properties:
+        code:
+          $ref: '#/components/schemas/OrganizationRoleCode'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        capabilities:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/OrganizationCapability'
+        fitness_data_access_policy:
+          $ref: '#/components/schemas/FitnessDataAccessPolicy'
+    OrganizationRoleCatalog:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          minItems: 4
+          maxItems: 4
+          items:
+            $ref: '#/components/schemas/OrganizationRole'
     ProfessionalCatalogItem:
       type: object
       additionalProperties: false

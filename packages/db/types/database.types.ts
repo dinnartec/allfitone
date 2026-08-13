@@ -1330,6 +1330,387 @@ export type Database = {
       [_ in never]: never
     }
   }
+  organizations: {
+    Tables: {
+      membership_events: {
+        Row: {
+          after: Json | null
+          before: Json | null
+          created_at: string
+          event_type: string
+          id: string
+          membership_id: string
+          snapshot_schema_version: number
+        }
+        Insert: {
+          after?: Json | null
+          before?: Json | null
+          created_at?: string
+          event_type: string
+          id?: string
+          membership_id: string
+          snapshot_schema_version?: number
+        }
+        Update: {
+          after?: Json | null
+          before?: Json | null
+          created_at?: string
+          event_type?: string
+          id?: string
+          membership_id?: string
+          snapshot_schema_version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_membership_events_membership'
+            columns: ['membership_id']
+            isOneToOne: false
+            referencedRelation: 'organization_memberships'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      membership_roles: {
+        Row: {
+          id: string
+          membership_id: string
+          role_code: string
+          valid_from: string
+          valid_to: string | null
+        }
+        Insert: {
+          id?: string
+          membership_id: string
+          role_code: string
+          valid_from?: string
+          valid_to?: string | null
+        }
+        Update: {
+          id?: string
+          membership_id?: string
+          role_code?: string
+          valid_from?: string
+          valid_to?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_membership_roles_membership'
+            columns: ['membership_id']
+            isOneToOne: false
+            referencedRelation: 'organization_memberships'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'fk_membership_roles_role'
+            columns: ['role_code']
+            isOneToOne: false
+            referencedRelation: 'organization_roles'
+            referencedColumns: ['code']
+          },
+        ]
+      }
+      organization_capabilities: {
+        Row: {
+          code: string
+          name: string
+        }
+        Insert: {
+          code: string
+          name: string
+        }
+        Update: {
+          code?: string
+          name?: string
+        }
+        Relationships: []
+      }
+      organization_events: {
+        Row: {
+          actor_membership_id: string | null
+          after_snapshot: Json | null
+          before_snapshot: Json | null
+          event_type: string
+          id: string
+          occurred_at: string
+          organization_id: string
+          snapshot_schema_version: number
+        }
+        Insert: {
+          actor_membership_id?: string | null
+          after_snapshot?: Json | null
+          before_snapshot?: Json | null
+          event_type: string
+          id?: string
+          occurred_at?: string
+          organization_id: string
+          snapshot_schema_version?: number
+        }
+        Update: {
+          actor_membership_id?: string | null
+          after_snapshot?: Json | null
+          before_snapshot?: Json | null
+          event_type?: string
+          id?: string
+          occurred_at?: string
+          organization_id?: string
+          snapshot_schema_version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_organization_events_actor_membership'
+            columns: ['actor_membership_id', 'organization_id']
+            isOneToOne: false
+            referencedRelation: 'organization_memberships'
+            referencedColumns: ['id', 'organization_id']
+          },
+          {
+            foreignKeyName: 'fk_organization_events_organization'
+            columns: ['organization_id']
+            isOneToOne: false
+            referencedRelation: 'organizations'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      organization_memberships: {
+        Row: {
+          created_at: string
+          ended_at: string | null
+          id: string
+          joined_at: string
+          organization_id: string
+          person_id: string
+          status: Database['organizations']['Enums']['membership_status']
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          ended_at?: string | null
+          id?: string
+          joined_at?: string
+          organization_id: string
+          person_id: string
+          status?: Database['organizations']['Enums']['membership_status']
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          ended_at?: string | null
+          id?: string
+          joined_at?: string
+          organization_id?: string
+          person_id?: string
+          status?: Database['organizations']['Enums']['membership_status']
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_organization_memberships_organization'
+            columns: ['organization_id']
+            isOneToOne: false
+            referencedRelation: 'organizations'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      organization_roles: {
+        Row: {
+          code: string
+          id: string
+          name: string
+        }
+        Insert: {
+          code: string
+          id?: string
+          name: string
+        }
+        Update: {
+          code?: string
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
+      organization_types: {
+        Row: {
+          active: boolean
+          code: string
+          id: string
+          name: string
+          sort_order: number
+        }
+        Insert: {
+          active?: boolean
+          code: string
+          id?: string
+          name: string
+          sort_order: number
+        }
+        Update: {
+          active?: boolean
+          code?: string
+          id?: string
+          name?: string
+          sort_order?: number
+        }
+        Relationships: []
+      }
+      organizations: {
+        Row: {
+          created_at: string
+          display_name: string
+          id: string
+          legal_name: string | null
+          responsible_party: Json
+          responsible_party_schema_version: number
+          status: Database['organizations']['Enums']['organization_status']
+          type_code: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          display_name: string
+          id?: string
+          legal_name?: string | null
+          responsible_party: Json
+          responsible_party_schema_version?: number
+          status?: Database['organizations']['Enums']['organization_status']
+          type_code: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string
+          id?: string
+          legal_name?: string | null
+          responsible_party?: Json
+          responsible_party_schema_version?: number
+          status?: Database['organizations']['Enums']['organization_status']
+          type_code?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_organizations_type'
+            columns: ['type_code']
+            isOneToOne: false
+            referencedRelation: 'organization_types'
+            referencedColumns: ['code']
+          },
+        ]
+      }
+      role_capabilities: {
+        Row: {
+          capability_code: string
+          role_code: string
+        }
+        Insert: {
+          capability_code: string
+          role_code: string
+        }
+        Update: {
+          capability_code?: string
+          role_code?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_role_capabilities_capability'
+            columns: ['capability_code']
+            isOneToOne: false
+            referencedRelation: 'organization_capabilities'
+            referencedColumns: ['code']
+          },
+          {
+            foreignKeyName: 'fk_role_capabilities_role'
+            columns: ['role_code']
+            isOneToOne: false
+            referencedRelation: 'organization_roles'
+            referencedColumns: ['code']
+          },
+        ]
+      }
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      create_organization: {
+        Args: {
+          p_command_id: string
+          p_display_name: string
+          p_idempotency_key: string
+          p_person_id: string
+          p_request_hash: string
+          p_responsible_party_kind: string
+          p_responsible_party_name: string
+          p_type_code: string
+        }
+        Returns: {
+          display_name: string
+          membership_id: string
+          organization_id: string
+          role_code: string
+          type_code: string
+        }[]
+      }
+      list_my_memberships: {
+        Args: { p_person_id: string }
+        Returns: {
+          display_name: string
+          ended_at: string
+          joined_at: string
+          membership_id: string
+          organization_id: string
+          roles: string[]
+          status: string
+          type_code: string
+        }[]
+      }
+      list_organization_memberships: {
+        Args: {
+          p_cursor_display_name: string
+          p_cursor_membership_id: string
+          p_cursor_status: string
+          p_limit: number
+          p_organization_id: string
+          p_person_id: string
+          p_status: string
+        }
+        Returns: {
+          display_name: string
+          ended_at: string
+          joined_at: string
+          membership_id: string
+          roles: string[]
+          sort_display_name: string
+          status: string
+        }[]
+      }
+      list_organization_roles: {
+        Args: { p_organization_id: string; p_person_id: string }
+        Returns: {
+          capability_code: string
+          capability_name: string
+          role_code: string
+          role_name: string
+        }[]
+      }
+      list_organization_types: {
+        Args: never
+        Returns: {
+          code: string
+          name: string
+        }[]
+      }
+    }
+    Enums: {
+      membership_status: 'active' | 'terminated'
+      organization_status: 'active' | 'closed'
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
 }
 
 type DatabaseWithoutInternals = Omit<Database, '__InternalSupabase'>
@@ -1466,6 +1847,12 @@ export const Constants = {
       onboarding_status: ['open', 'activated', 'ineligible', 'expired'],
       password_reset_receipt_result: ['processed', 'account_absent'],
       person_status: ['active', 'closed'],
+    },
+  },
+  organizations: {
+    Enums: {
+      membership_status: ['active', 'terminated'],
+      organization_status: ['active', 'closed'],
     },
   },
 } as const

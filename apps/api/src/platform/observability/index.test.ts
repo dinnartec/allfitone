@@ -5,6 +5,7 @@ import {
   recordStudioAuthCallback,
   recordStudioLogout,
   recordStudioMembershipDestination,
+  recordStudioOrganizationQuery,
   recordStudioRegistrationIncomplete,
 } from './index.js'
 
@@ -57,6 +58,29 @@ describe('Studio operational counters', () => {
       value: 1,
       dimensions: { trigger: 'inactivity', outcome: 'partial' },
     })
+    info.mockRestore()
+  })
+
+  test('emits closed organization query dimensions without organization or person details', () => {
+    const info = spyOn(console, 'info').mockImplementation(() => undefined)
+
+    recordStudioOrganizationQuery('memberships', 'listed')
+    recordStudioOrganizationQuery('roles', 'not-modified')
+
+    expect(info.mock.calls.map(([payload]) => JSON.parse(String(payload)))).toEqual([
+      {
+        kind: 'counter',
+        name: 'studio.organization.memberships',
+        value: 1,
+        dimensions: { outcome: 'listed' },
+      },
+      {
+        kind: 'counter',
+        name: 'studio.organization.roles',
+        value: 1,
+        dimensions: { outcome: 'not-modified' },
+      },
+    ])
     info.mockRestore()
   })
 

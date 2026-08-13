@@ -22,7 +22,13 @@ import { useState, type FormEvent } from 'react'
 
 import { StudioFrame } from './studio-frame'
 import { createCommandIntentManager } from '@/lib/command-intent'
-import { StudioApiError, newCommand, studioApi, type OrganizationType } from '@/lib/studio-api'
+import {
+  StudioApiError,
+  newCommand,
+  studioApi,
+  type OrganizationCreated,
+  type OrganizationType,
+} from '@/lib/studio-api'
 
 type StartMode = 'individual' | 'team'
 type ResponsibleKind = 'natural_person' | 'legal_entity'
@@ -36,7 +42,7 @@ export function SpaceSetup({
 }: {
   organizationTypes: OrganizationType[]
   fullName?: string | undefined
-  onCreated: (organizationId: string) => void
+  onCreated: (organization: OrganizationCreated) => void
   onWait: () => void
   onSessionExpired: () => void
 }) {
@@ -100,7 +106,7 @@ function SpaceForm({
   organizationTypes: OrganizationType[]
   fullName?: string | undefined
   onBack: () => void
-  onCreated: (organizationId: string) => void
+  onCreated: (organization: OrganizationCreated) => void
   onSessionExpired: () => void
 }) {
   const [displayName, setDisplayName] = useState(
@@ -143,7 +149,7 @@ function SpaceForm({
       })
       const created = await studioApi.createOrganization(body, command)
       commandIntent.reset()
-      onCreated(created.id)
+      onCreated(created)
     } catch (caught) {
       if (caught instanceof StudioApiError && caught.status === 401) {
         onSessionExpired()

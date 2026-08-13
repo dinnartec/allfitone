@@ -141,6 +141,73 @@ describe('professional profile API', () => {
   })
 })
 
+describe('organization team API', () => {
+  test('lists memberships with the contract query, cookies, and caller cancellation', async () => {
+    let capturedUrl = ''
+    let capturedInit: RequestInit | undefined
+    globalThis.fetch = (async (input, init) => {
+      capturedUrl = String(input)
+      capturedInit = init
+      return Response.json({ data: [], page: { has_more: false, next_cursor: null } })
+    }) as typeof fetch
+    const controller = new AbortController()
+
+    await studioApi.organizationMemberships(
+      '01991600-1000-7000-8000-000000000002',
+      { status: 'terminated', limit: 50, cursor: 'next-page' },
+      controller.signal,
+    )
+
+    const url = new URL(capturedUrl)
+    expect(url.pathname).toBe(
+      '/studio/v1/organizations/01991600-1000-7000-8000-000000000002/memberships',
+    )
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      status: 'terminated',
+      limit: '50',
+      cursor: 'next-page',
+    })
+    expect(capturedInit?.credentials).toBe('include')
+    expect(capturedInit?.cache).toBe('no-store')
+    expect(capturedInit?.signal).toBe(controller.signal)
+  })
+
+  test('revalidates the global role catalog per organization and never serves it after 403', async () => {
+    Object.defineProperty(globalThis, 'sessionStorage', {
+      configurable: true,
+      value: memoryStorage(),
+    })
+    const requests: Array<{ url: string; init: RequestInit }> = []
+    globalThis.fetch = (async (input, init) => {
+      const request = { url: String(input), init: init ?? {} }
+      requests.push(request)
+      if (requests.length === 1) {
+        return Response.json(roleCatalogResponse(), { headers: { ETag: '"roles-v1"' } })
+      }
+      if (requests.length === 2) return new Response(null, { status: 304 })
+      return Response.json({ error: { code: 'forbidden' } }, { status: 403 })
+    }) as typeof fetch
+
+    const first = await studioApi.organizationRoles('organization-one')
+    const second = await studioApi.organizationRoles('organization-two')
+    const forbidden = await studioApi
+      .organizationRoles('organization-three')
+      .catch((error) => error)
+
+    expect(second).toEqual(first)
+    expect(requests.map(({ url }) => new URL(url).pathname)).toEqual([
+      '/studio/v1/organizations/organization-one/roles',
+      '/studio/v1/organizations/organization-two/roles',
+      '/studio/v1/organizations/organization-three/roles',
+    ])
+    expect(new Headers(requests[0]?.init.headers).has('If-None-Match')).toBe(false)
+    expect(new Headers(requests[1]?.init.headers).get('If-None-Match')).toBe('"roles-v1"')
+    expect(new Headers(requests[2]?.init.headers).get('If-None-Match')).toBe('"roles-v1"')
+    expect(forbidden).toBeInstanceOf(StudioApiError)
+    expect((forbidden as StudioApiError).status).toBe(403)
+  })
+})
+
 function memoryStorage(): Storage {
   const values = new Map<string, string>()
   return {
@@ -176,5 +243,36 @@ function credentialResponse() {
       valid_to: null,
       effective: false,
     },
+  }
+}
+
+function roleCatalogResponse() {
+  return {
+    items: [
+      {
+        code: 'owner',
+        name: 'Propietario',
+        capabilities: [{ code: 'invite', name: 'Invitar al equipo' }],
+        fitness_data_access_policy: 'not_granted_by_role',
+      },
+      {
+        code: 'admin',
+        name: 'Administrador',
+        capabilities: [{ code: 'invite', name: 'Invitar al equipo' }],
+        fitness_data_access_policy: 'not_granted_by_role',
+      },
+      {
+        code: 'coach',
+        name: 'Coach',
+        capabilities: [{ code: 'observe_training', name: 'Observar entrenamiento' }],
+        fitness_data_access_policy: 'requires_relationship_assignment_and_grant',
+      },
+      {
+        code: 'staff',
+        name: 'Staff',
+        capabilities: [{ code: 'view_directory', name: 'Consultar directorio' }],
+        fitness_data_access_policy: 'not_granted_by_role',
+      },
+    ],
   }
 }

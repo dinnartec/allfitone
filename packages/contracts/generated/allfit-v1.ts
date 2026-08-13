@@ -449,6 +449,46 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/studio/v1/organizations/{organizationId}/memberships': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * List current and past team memberships for an organization
+     * @description Returns the minimum team identity projection required by Studio. The response never contains person identifiers, contacts, client state, professional profile, Fitness ID, or fitness data.
+     */
+    get: operations['listStudioOrganizationMemberships']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/studio/v1/organizations/{organizationId}/roles': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * List the governed V1 organization roles and capabilities
+     * @description Capabilities describe the governed V1 authorization model, not deployment availability. No organization role grants fitness data access by itself.
+     */
+    get: operations['listStudioOrganizationRoles']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/studio/v1/invitations/resolve': {
     parameters: {
       query?: never
@@ -1134,6 +1174,44 @@ export interface components {
     }
     StudioMembershipList: {
       items: components['schemas']['StudioMembership'][]
+    }
+    /** @enum {string} */
+    OrganizationRoleCode: 'owner' | 'admin' | 'coach' | 'staff'
+    /** @enum {string} */
+    OrganizationMembershipStatus: 'active' | 'terminated'
+    OrganizationMembershipListItem: {
+      membership_id: components['schemas']['UuidV7']
+      /** @description Minimum team identity projection; not a Fitness ID or contact. */
+      display_name: string
+      status: components['schemas']['OrganizationMembershipStatus']
+      /** Format: date-time */
+      joined_at: string
+      /** Format: date-time */
+      ended_at: string | null
+      /** @description Current roles for an active membership, or roles effective at termination for a terminated membership. */
+      roles: components['schemas']['OrganizationRoleCode'][]
+    }
+    OrganizationMembershipPage: {
+      data: components['schemas']['OrganizationMembershipListItem'][]
+      page: components['schemas']['Page']
+    }
+    OrganizationCapability: {
+      code: string
+      name: string
+    }
+    /**
+     * @description A role never grants fitness data by itself. Coach still requires an active relationship, assignment, compatible grant, membership, role, and credentials.
+     * @enum {string}
+     */
+    FitnessDataAccessPolicy: 'not_granted_by_role' | 'requires_relationship_assignment_and_grant'
+    OrganizationRole: {
+      code: components['schemas']['OrganizationRoleCode']
+      name: string
+      capabilities: components['schemas']['OrganizationCapability'][]
+      fitness_data_access_policy: components['schemas']['FitnessDataAccessPolicy']
+    }
+    OrganizationRoleCatalog: {
+      items: components['schemas']['OrganizationRole'][]
     }
     ProfessionalCatalogItem: {
       code: string
@@ -3284,6 +3362,77 @@ export interface operations {
       401: components['responses']['Unauthenticated']
       403: components['responses']['Forbidden']
       409: components['responses']['Conflict']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listStudioOrganizationMemberships: {
+    parameters: {
+      query?: {
+        status?: components['schemas']['OrganizationMembershipStatus']
+        limit?: number
+        cursor?: components['parameters']['Cursor']
+      }
+      header?: never
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Authorized organization team membership page */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['PrivateNoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['OrganizationMembershipPage']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listStudioOrganizationRoles: {
+    parameters: {
+      query?: never
+      header?: {
+        'If-None-Match'?: components['parameters']['IfNoneMatch']
+      }
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The four governed V1 roles and their capabilities */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['PrivateRevalidate']
+          ETag: components['headers']['ETag']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['OrganizationRoleCatalog']
+        }
+      }
+      /** @description The role catalogue has not changed */
+      304: {
+        headers: {
+          'Cache-Control': components['headers']['PrivateRevalidate']
+          ETag: components['headers']['ETag']
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
       503: components['responses']['UpstreamUnavailable']
     }
   }

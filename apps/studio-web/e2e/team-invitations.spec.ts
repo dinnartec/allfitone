@@ -5,9 +5,13 @@ import { activeMembership, createStudioApiFixture, installStudioApiMock } from '
 test('owner proposes a staff invitation without exposing contact in the URL', async ({ page }) => {
   const fixture = createStudioApiFixture({ memberships: [activeMembership] })
   await installStudioApiMock(page, fixture)
+  // Issuing an invitation starts from the team directory. The workspace home
+  // reports the organization's state and links to the section that acts.
   await page.goto(`/organizations/${activeMembership.organization_id}`)
+  await page.getByRole('link', { name: 'Ver equipo', exact: true }).click()
+  await expect(page).toHaveURL(/\/team$/)
 
-  await page.getByRole('button', { name: 'Invitar', exact: true }).click()
+  await page.getByRole('link', { name: 'Invitar integrante', exact: true }).click()
   await expect(page).toHaveURL(/\/team\/invitations\/new$/)
   await page.getByLabel('Correo electrónico').fill('person@example.test')
   await page.getByRole('button', { name: 'Enviar invitación' }).click()
@@ -16,7 +20,11 @@ test('owner proposes a staff invitation without exposing contact in the URL', as
   await expect(page.getByText('p***@example.test')).toBeVisible()
   await expect(page).not.toHaveURL(/person%40example\.test|person@example\.test/)
 
-  const command = fixture.requests.find((request) => request.path.endsWith('/invitations'))
+  // The workspace home reads pending invitations, so match the command itself
+  // rather than the first request that happens to touch the collection.
+  const command = fixture.requests.find(
+    (request) => request.method === 'POST' && request.path.endsWith('/invitations'),
+  )
   expect(command?.headers['idempotency-key']).toMatch(/^[0-9a-f-]{36}$/)
   expect(command?.headers['command-id']).toMatch(/^[0-9a-f-]{36}$/)
 })

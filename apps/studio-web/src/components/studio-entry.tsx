@@ -9,6 +9,7 @@ import { AccessLanding } from './access-landing'
 import { ActivationForm } from './activation-form'
 import { InvitationWaiting } from './invitation-waiting'
 import { MembershipSelector } from './membership-selector'
+import { OrganizationReadyScreen } from './organization-ready-screen'
 import { SpaceSetup } from './space-setup'
 import { LoadingStage, StudioFrame } from './studio-frame'
 import { resolveMembershipDestination } from '@/lib/membership-routing'
@@ -18,6 +19,7 @@ import {
   newCommand,
   studioApi,
   type Membership,
+  type OrganizationCreated,
   type OnboardingAttempt,
   type OrganizationType,
   type StudioSession,
@@ -28,6 +30,7 @@ type FlowState =
   | { kind: 'access' }
   | { kind: 'activation'; attempt: OnboardingAttempt; identity: StudioSession['identity'] }
   | { kind: 'space'; organizationTypes: OrganizationType[]; fullName?: string }
+  | { kind: 'ready'; organization: OrganizationCreated }
   | { kind: 'waiting' }
   | { kind: 'select'; memberships: Membership[] }
   | { kind: 'error'; message: string }
@@ -132,9 +135,17 @@ export function StudioEntry({ logoutPartial = false }: { logoutPartial?: boolean
       <SpaceSetup
         organizationTypes={flow.organizationTypes}
         fullName={flow.fullName}
-        onCreated={(organizationId) => router.replace(`/organizations/${organizationId}`)}
+        onCreated={(organization) => setFlow({ kind: 'ready', organization })}
         onWait={() => setFlow({ kind: 'waiting' })}
         onSessionExpired={() => setFlow({ kind: 'access' })}
+      />
+    )
+  }
+  if (flow.kind === 'ready') {
+    return (
+      <OrganizationReadyScreen
+        organization={flow.organization}
+        onEnter={() => router.replace(`/organizations/${flow.organization.id}`)}
       />
     )
   }

@@ -1,0 +1,194 @@
+'use client'
+
+import { Alert, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
+import { Badge } from '@allfitone/react/components/badge'
+import { Button } from '@allfitone/react/components/button'
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@allfitone/react/components/collapsible'
+import { Spinner } from '@allfitone/react/components/spinner'
+import { FoundationIcon } from '@allfitone/react/icons'
+import { useCallback, useEffect, useRef, useState } from 'react'
+
+import { useOrganizationContext } from './organization-context'
+import { WorkspacePageHeader } from './workspace-page-header'
+import { StudioApiError, studioApi, type OrganizationRole } from '@/lib/studio-api'
+
+type CatalogState =
+  | { kind: 'loading' }
+  | { kind: 'ready'; roles: OrganizationRole[] }
+  | { kind: 'forbidden' }
+  | { kind: 'error' }
+
+const EXPECTED_ROLE_CODES = ['owner', 'admin', 'coach', 'staff'] as const
+
+export function OrganizationRoleCatalog() {
+  const { current } = useOrganizationContext()
+  const [state, setState] = useState<CatalogState>({ kind: 'loading' })
+  const requestId = useRef(0)
+  const requestController = useRef<AbortController | null>(null)
+
+  const load = useCallback(async () => {
+    requestController.current?.abort()
+    const controller = new AbortController()
+    const currentRequest = requestId.current + 1
+    requestId.current = currentRequest
+    requestController.current = controller
+    setState({ kind: 'loading' })
+
+    try {
+      const catalog = await studioApi.organizationRoles(current.organization_id, controller.signal)
+      if (controller.signal.aborted || currentRequest !== requestId.current) return
+      setState(
+        hasExpectedRoles(catalog.items)
+          ? { kind: 'ready', roles: catalog.items }
+          : { kind: 'error' },
+      )
+    } catch (caught) {
+      if (controller.signal.aborted || currentRequest !== requestId.current) return
+      setState(
+        caught instanceof StudioApiError && caught.status === 403
+          ? { kind: 'forbidden' }
+          : { kind: 'error' },
+      )
+    }
+  }, [current.organization_id])
+
+  useEffect(() => {
+    void load()
+    return () => {
+      requestId.current += 1
+      requestController.current?.abort()
+    }
+  }, [load])
+
+  return (
+    <section data-team-page data-role-page aria-label="Roles y permisos">
+      <WorkspacePageHeader
+        description={`Consulta para qué sirve cada rol antes de decidir cómo debe participar una persona en ${current.display_name}.`}
+      />
+
+      <div data-role-catalog-summary>
+        <div>
+          <Badge variant="code">4 roles fijos</Badge>
+          <Badge variant="outline">Solo consulta</Badge>
+        </div>
+        <p>Desde esta pantalla no se cambian roles.</p>
+      </div>
+
+      {state.kind === 'loading' ? (
+        <div data-role-catalog-state role="status" aria-live="polite">
+          <Spinner label="Cargando roles y permisos" />
+          <p>Cargando roles y permisos…</p>
+        </div>
+      ) : null}
+
+      {state.kind === 'forbidden' ? (
+        <Alert variant="warning">
+          <AlertTitle>No puedes consultar estos roles</AlertTitle>
+          <AlertDescription>
+            La organización o tu membresía ya no están disponibles.
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
+      {state.kind === 'error' ? (
+        <Alert variant="danger" live="polite">
+          <AlertTitle>No pudimos cargar los roles</AlertTitle>
+          <AlertDescription>
+            La conexión falló de forma temporal. El catálogo permanecerá oculto hasta comprobarlo de
+            nuevo.
+          </AlertDescription>
+          <Button variant="outline" onClick={() => void load()}>
+            Reintentar
+          </Button>
+        </Alert>
+      ) : null}
+
+      {state.kind === 'ready' ? (
+        <div data-role-register>
+          {state.roles.map((role) => (
+            <RoleRegisterItem key={role.code} role={role} />
+          ))}
+        </div>
+      ) : null}
+    </section>
+  )
+}
+
+function RoleRegisterItem({ role }: { role: OrganizationRole }) {
+  const [open, setOpen] = useState(false)
+  const policy = fitnessPolicy(role)
+  return (
+    <Collapsible open={open} onOpenChange={setOpen} data-role-card={role.code}>
+      <article data-role-register-item>
+        <header>
+          <div data-role-register-title>
+            <span data-role-code>{role.code}</span>
+            <div>
+              <h2>{role.name}</h2>
+              <p>{rolePurpose(role.code)}</p>
+            </div>
+          </div>
+          <Badge variant="code">{role.capabilities.length} capacidades</Badge>
+        </header>
+
+        <div data-fitness-boundary={role.fitness_data_access_policy}>
+          <FoundationIcon name="permissions" decorative />
+          <div>
+            <strong>{policy.summary}</strong>
+            <p>{policy.detail}</p>
+          </div>
+        </div>
+
+        <CollapsibleTrigger render={<Button variant="ghost" size="sm" />}>
+          {open ? 'Ocultar capacidades' : 'Ver capacidades'}
+          <FoundationIcon name={open ? 'collapse' : 'expand'} decorative />
+        </CollapsibleTrigger>
+
+        <CollapsibleContent>
+          <ul data-role-capability-list>
+            {role.capabilities.map((capability) => (
+              <li key={capability.code}>
+                <FoundationIcon name="check" size="sm" decorative />
+                <span>{capability.name}</span>
+              </li>
+            ))}
+          </ul>
+        </CollapsibleContent>
+      </article>
+    </Collapsible>
+  )
+}
+
+function rolePurpose(code: OrganizationRole['code']): string {
+  if (code === 'owner') return 'Control total, propiedad y decisiones críticas de la organización.'
+  if (code === 'admin') return 'Operación, equipo, relaciones y cobros sin transferir propiedad.'
+  if (code === 'coach') {
+    return 'Planificación y acompañamiento sujetos a relación, asignación y grants.'
+  }
+  return 'Invitaciones y consulta del directorio sin acceso a datos fitness.'
+}
+
+function fitnessPolicy(role: OrganizationRole): { summary: string; detail: string } {
+  if (role.code === 'coach') {
+    return {
+      summary: 'Acceso fitness condicionado',
+      detail:
+        'El rol por sí solo no basta: requiere relación, asignación, grant y condiciones profesionales vigentes.',
+    }
+  }
+  return {
+    summary: 'Sin acceso fitness por rol',
+    detail: 'El rol no concede acceso a datos fitness.',
+  }
+}
+
+function hasExpectedRoles(roles: OrganizationRole[]): boolean {
+  return (
+    roles.length === EXPECTED_ROLE_CODES.length &&
+    roles.every((role, index) => role.code === EXPECTED_ROLE_CODES[index])
+  )
+}

@@ -47,6 +47,9 @@ type StudioTeamInvitationOutcome =
   | 'revocation-failed'
   | 'rate-limited'
 
+type StudioOrganizationQuery = 'memberships' | 'roles'
+type StudioOrganizationQueryOutcome = 'empty' | 'failed' | 'listed' | 'not-modified'
+
 export function recordStudioAuthCallback(
   outcome: 'failed' | 'succeeded',
   reason?: StudioAuthCallbackFailure,
@@ -102,6 +105,13 @@ export function recordStudioTeamInvitation(outcome: StudioTeamInvitationOutcome)
             ? 'rate_limited'
             : 'command'
   writeCounter(`studio.team_invitation.${operation}`, { outcome })
+}
+
+export function recordStudioOrganizationQuery(
+  query: StudioOrganizationQuery,
+  outcome: StudioOrganizationQueryOutcome,
+): void {
+  writeCounter(`studio.organization.${query}`, { outcome })
 }
 
 function writeCounter(name: string, dimensions: Readonly<Record<string, string>>): void {

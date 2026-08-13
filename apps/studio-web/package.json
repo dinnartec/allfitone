@@ -8,14 +8,14 @@
     "dev:e2e": "next dev --hostname 127.0.0.1 --port 3101",
     "build": "next build",
     "start": "next start --port 3000",
-    "lint": "eslint . --ignore-pattern .next-e2e --ignore-pattern .next-build --ignore-pattern playwright-report --ignore-pattern test-results",
+    "lint": "eslint . --ignore-pattern .next-local --ignore-pattern .next-e2e --ignore-pattern .next-build --ignore-pattern playwright-report --ignore-pattern test-results",
     "typecheck": "tsc --noEmit",
     "test": "bun test src",
     "test:e2e": "playwright test"
   },
   "dependencies": {
     "@allfitone/contracts": "workspace:*",
-    "@allfitone/react": "0.7.2",
+    "@allfitone/react": "0.8.0",
     "next": "16.2.11",
     "react": "19.2.8",
     "react-dom": "19.2.8"
