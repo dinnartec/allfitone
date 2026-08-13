@@ -13,6 +13,7 @@ import { FoundationIcon } from '@allfitone/react/icons'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { useOrganizationContext } from './organization-context'
+import { WorkspacePageHeader } from './workspace-page-header'
 import { StudioApiError, studioApi, type OrganizationRole } from '@/lib/studio-api'
 
 type CatalogState =
@@ -65,12 +66,9 @@ export function OrganizationRoleCatalog() {
 
   return (
     <section data-team-page data-role-page aria-label="Roles y permisos">
-      <div data-team-page-heading>
-        <p>
-          Consulta para qué sirve cada rol antes de decidir cómo debe participar una persona en{' '}
-          {current.display_name}.
-        </p>
-      </div>
+      <WorkspacePageHeader
+        description={`Consulta para qué sirve cada rol antes de decidir cómo debe participar una persona en ${current.display_name}.`}
+      />
 
       <div data-role-catalog-summary>
         <div>

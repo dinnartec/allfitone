@@ -77,16 +77,21 @@ test('coach sees only the governed role catalog and never requests the team dire
   await installStudioApiMock(page, fixture)
   await page.goto(`/organizations/${coachMembership.organization_id}/team`)
 
+  // The section exists for everyone and explains the denial in place; hiding
+  // the destination made the same sidebar label resolve to a different page per
+  // person. The directory itself is still never requested.
   await expect(page.getByText('No tienes acceso a este directorio')).toBeVisible()
-  await expect(page.getByRole('navigation', { name: 'Secciones del equipo' })).toHaveCount(0)
+  const sectionNavigation = page.getByRole('navigation', { name: 'Secciones del equipo' })
+  await expect(sectionNavigation.getByRole('link', { name: 'Integrantes' })).toBeVisible()
+  await expect(sectionNavigation.getByRole('link', { name: 'Roles y permisos' })).toBeVisible()
+  await expect(sectionNavigation.getByRole('link', { name: 'Invitaciones' })).toHaveCount(0)
   await expect(
     page.locator('[data-organization-sidebar]').getByRole('link', { name: 'Equipo' }),
-  ).toHaveAttribute('href', `/organizations/${coachMembership.organization_id}/team/roles`)
+  ).toHaveAttribute('href', `/organizations/${coachMembership.organization_id}/team`)
   expect(fixture.requests.filter(isOrganizationMembershipRequest)).toHaveLength(0)
 
   await page.getByRole('link', { name: 'Ver roles y permisos' }).click()
   await expect(page.getByRole('heading', { name: 'Roles y permisos', level: 1 })).toBeVisible()
-  await expect(page.getByRole('navigation', { name: 'Secciones del equipo' })).toHaveCount(0)
   const cards = page.locator('[data-role-card]')
   await expect(cards).toHaveCount(4)
   expect(
@@ -302,9 +307,15 @@ for (const viewport of [
       await installStudioApiMock(page, fixture)
       await page.goto(`/organizations/${activeMembership.organization_id}/team`)
 
-      await expect(
-        page.getByRole('region', { name: 'Tabla de integrantes de la organización' }),
-      ).toBeVisible()
+      // Below 720px the five-column table is replaced by cards, so the
+      // directory is readable without a horizontal scroll that nothing signals.
+      const directory =
+        viewport.width <= 720
+          ? page.getByLabel('Integrantes').first()
+          : page.getByRole('region', { name: 'Tabla de integrantes de la organización' })
+      await expect(directory).toBeVisible()
+      await expect(page.getByText('Ada Lovelace', { exact: true })).toBeVisible()
+      await expect(page.getByText('Propietario', { exact: true }).first()).toBeVisible()
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
         true,
       )

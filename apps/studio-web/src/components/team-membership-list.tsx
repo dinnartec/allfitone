@@ -4,6 +4,12 @@ import { Alert, AlertDescription, AlertTitle } from '@allfitone/react/components
 import { Avatar, AvatarFallback } from '@allfitone/react/components/avatar'
 import { Badge } from '@allfitone/react/components/badge'
 import { Button, buttonVariants } from '@allfitone/react/components/button'
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyTitle,
+} from '@allfitone/react/components/empty'
 import { Spinner } from '@allfitone/react/components/spinner'
 import {
   Table,
@@ -20,8 +26,10 @@ import Link from 'next/link'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { useOrganizationContext } from './organization-context'
+import { WorkspacePageHeader } from './workspace-page-header'
 import { canViewTeamDirectory, memberInitials, organizationRoleLabel } from '@/lib/team-directory'
 import { canInviteTeam } from '@/lib/team-invitations'
+import { useCompactViewport } from '@/lib/use-compact-viewport'
 import {
   StudioApiError,
   studioApi,
@@ -44,6 +52,7 @@ const FILTERS: ReadonlyArray<{ value: MembershipFilter; label: string }> = [
 
 export function TeamMembershipList() {
   const { current } = useOrganizationContext()
+  const compact = useCompactViewport()
   const canViewDirectory = canViewTeamDirectory(current.roles)
   const [filter, setFilter] = useState<MembershipFilter>('all')
   const [items, setItems] = useState<OrganizationMembership[]>([])
@@ -135,7 +144,7 @@ export function TeamMembershipList() {
   if (!canViewDirectory) {
     return (
       <section data-team-page aria-label="Directorio de integrantes">
-        <TeamPageHeading description="El directorio del equipo está disponible para quienes administran membresías o pueden consultar el directorio." />
+        <WorkspacePageHeader description="El directorio del equipo está disponible para quienes administran membresías o pueden consultarlo." />
         <Alert variant="warning">
           <AlertTitle>No tienes acceso a este directorio</AlertTitle>
           <AlertDescription>
@@ -175,7 +184,13 @@ export function TeamMembershipList() {
               </Button>
             ),
           }
-        : undefined
+        : items.length === 0
+          ? {
+              state: 'empty' as const,
+              title: emptyTitle(filter),
+              description: 'Cambia el filtro para consultar otro estado de membresía.',
+            }
+          : undefined
   const soloOwner =
     !loading &&
     !error &&
@@ -187,20 +202,19 @@ export function TeamMembershipList() {
 
   return (
     <section data-team-page aria-label="Directorio de integrantes">
-      <header data-team-page-header>
-        <TeamPageHeading
-          description={`Consulta las membresías activas y finalizadas de ${current.display_name}.`}
-        />
-        {INVITATIONS_ENABLED && canInviteTeam(current.roles) ? (
-          <Link
-            data-team-header-action
-            href={`/organizations/${current.organization_id}/team/invitations/new`}
-            className={buttonVariants()}
-          >
-            Invitar integrante
-          </Link>
-        ) : null}
-      </header>
+      <WorkspacePageHeader
+        description={`Consulta las membresías activas y finalizadas de ${current.display_name}.`}
+        actions={
+          INVITATIONS_ENABLED && canInviteTeam(current.roles) ? (
+            <Link
+              href={`/organizations/${current.organization_id}/team/invitations/new`}
+              className={buttonVariants()}
+            >
+              Invitar integrante
+            </Link>
+          ) : null
+        }
+      />
 
       {soloOwner ? (
         <aside data-solo-owner-note>
@@ -224,39 +238,60 @@ export function TeamMembershipList() {
         ))}
       </ToggleGroup>
 
-      <Table
-        aria-label="Integrantes"
-        aria-busy={loading || loadingMore || undefined}
-        scrollAreaLabel="Tabla de integrantes de la organización"
-      >
-        <TableCaption>
-          Esta vista presenta membresías organizacionales y no expone información de clientes ni
-          datos fitness.
-        </TableCaption>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Integrante</TableHead>
-            <TableHead>Estado</TableHead>
-            <TableHead>Roles</TableHead>
-            <TableHead>Ingreso</TableHead>
-            <TableHead>Finalización</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
+      {/* Five columns do not fit a phone, so narrow viewports get the same data
+          as cards. Only one presentation is rendered — see useCompactViewport. */}
+      {compact ? (
+        <div data-team-directory-cards aria-label="Integrantes" aria-busy={loading || undefined}>
           {tableState ? (
-            <TableState colSpan={5} {...tableState} />
-          ) : items.length === 0 ? (
-            <TableState
-              colSpan={5}
-              state="empty"
-              title={emptyTitle(filter)}
-              description="Cambia el filtro para consultar otro estado de membresía."
-            />
+            <Empty>
+              <EmptyTitle>{tableState.title}</EmptyTitle>
+              <EmptyDescription>{tableState.description}</EmptyDescription>
+              {'action' in tableState && tableState.action ? (
+                <EmptyContent>{tableState.action}</EmptyContent>
+              ) : null}
+            </Empty>
           ) : (
-            items.map((item) => <MembershipRow key={item.membership_id} item={item} />)
+            <ul data-team-directory-card-list>
+              {items.map((item) => (
+                <li key={item.membership_id}>
+                  <MembershipCard item={item} />
+                </li>
+              ))}
+            </ul>
           )}
-        </TableBody>
-      </Table>
+          <p data-team-directory-note>
+            Esta vista presenta membresías organizacionales y no expone información de clientes ni
+            datos fitness.
+          </p>
+        </div>
+      ) : (
+        <Table
+          aria-label="Integrantes"
+          aria-busy={loading || loadingMore || undefined}
+          scrollAreaLabel="Tabla de integrantes de la organización"
+        >
+          <TableCaption>
+            Esta vista presenta membresías organizacionales y no expone información de clientes ni
+            datos fitness.
+          </TableCaption>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Integrante</TableHead>
+              <TableHead>Estado</TableHead>
+              <TableHead>Roles</TableHead>
+              <TableHead>Ingreso</TableHead>
+              <TableHead>Finalización</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {tableState ? (
+              <TableState colSpan={5} {...tableState} />
+            ) : (
+              items.map((item) => <MembershipRow key={item.membership_id} item={item} />)
+            )}
+          </TableBody>
+        </Table>
+      )}
 
       {error === 'stale-cursor' || (error === 'unavailable' && items.length > 0) ? (
         <Alert variant={error === 'stale-cursor' ? 'info' : 'danger'} live="polite">
@@ -286,11 +321,38 @@ export function TeamMembershipList() {
   )
 }
 
-function TeamPageHeading({ description }: { description: string }) {
+function MembershipCard({ item }: { item: OrganizationMembership }) {
   return (
-    <div data-team-page-heading>
-      <p>{description}</p>
-    </div>
+    <article data-team-member-card>
+      <div data-team-member-identity>
+        <Avatar decorative>
+          <AvatarFallback>{memberInitials(item.display_name)}</AvatarFallback>
+        </Avatar>
+        <strong>{item.display_name}</strong>
+        <Badge variant={item.status === 'active' ? 'success' : 'outline'}>
+          {item.status === 'active' ? 'Activo' : 'Terminado'}
+        </Badge>
+      </div>
+      <div data-team-role-badges>
+        {item.roles.map((role) => (
+          <Badge key={role} variant="secondary">
+            {organizationRoleLabel(role)}
+          </Badge>
+        ))}
+      </div>
+      <dl data-team-member-dates>
+        <div>
+          <dt>Ingreso</dt>
+          <dd>{formatDate(item.joined_at)}</dd>
+        </div>
+        {item.ended_at ? (
+          <div>
+            <dt>Finalización</dt>
+            <dd>{formatDate(item.ended_at)}</dd>
+          </div>
+        ) : null}
+      </dl>
+    </article>
   )
 }
 

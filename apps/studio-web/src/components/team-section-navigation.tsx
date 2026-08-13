@@ -10,17 +10,17 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
 import { useOrganizationContext } from './organization-context'
-import { canViewTeamDirectory } from '@/lib/team-directory'
 import { canInviteTeam } from '@/lib/team-invitations'
 
 export function TeamSectionNavigation() {
   const pathname = usePathname()
   const { current } = useOrganizationContext()
   const basePath = `/organizations/${current.organization_id}/team`
+  // Integrantes is listed for every role. Hiding it made the same sidebar label
+  // resolve to different pages per person; the directory itself explains the
+  // denial in place, and authorization still fails closed on the server.
   const destinations = [
-    ...(canViewTeamDirectory(current.roles)
-      ? [{ href: basePath, label: 'Integrantes', active: pathname === basePath }]
-      : []),
+    { href: basePath, label: 'Integrantes', active: pathname === basePath },
     ...(canInviteTeam(current.roles)
       ? [
           {
@@ -36,8 +36,6 @@ export function TeamSectionNavigation() {
       active: pathname === `${basePath}/roles`,
     },
   ]
-
-  if (destinations.length <= 1) return null
 
   return (
     <nav data-team-section-navigation aria-label="Secciones del equipo">

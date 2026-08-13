@@ -22,6 +22,7 @@ export type TeamInvitationPresentation = AllfitV1Schemas['TeamInvitationPresenta
 export type TeamInvitationDecisionCreate = AllfitV1Schemas['TeamInvitationDecisionCreate']
 export type TeamInvitationDecisionResult = AllfitV1Schemas['TeamInvitationDecisionResult']
 export type TeamInvitationPage = AllfitV1Schemas['TeamInvitationPage']
+export type TeamInvitationListItem = AllfitV1Schemas['TeamInvitationListItem']
 export type TeamInvitationStatus = AllfitV1Schemas['TeamInvitationStatus']
 export type OrganizationMembership = AllfitV1Schemas['OrganizationMembershipListItem']
 export type OrganizationMembershipPage = AllfitV1Schemas['OrganizationMembershipPage']

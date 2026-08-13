@@ -105,7 +105,10 @@ test('finishes a new organization in a dedicated ready step before entering the 
 
   await page.getByRole('button', { name: 'Entrar al workspace' }).click()
   await expect(page).toHaveURL(`/organizations/${createdOrganizationId}`)
-  await expect(page.getByRole('heading', { name: 'Studio está listo para operar' })).toBeVisible()
+  // The workspace opens on the organization's own state, not on a second copy
+  // of the "your space is ready" message the person just dismissed.
+  await expect(page.getByRole('heading', { name: 'Equipo reciente' })).toBeVisible()
+  await expect(page.getByText('Studio está listo para operar')).toHaveCount(0)
 
   await page.goBack()
   await expect(page).not.toHaveURL(`/organizations/${createdOrganizationId}/ready`)
@@ -331,7 +334,7 @@ test('routes one active membership directly and ignores terminated history', asy
   await page.goto('/')
 
   await expect(page).toHaveURL(`/organizations/${activeMembership.organization_id}`)
-  await expect(page.getByRole('heading', { name: 'Studio está listo para operar' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Equipo reciente' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Inicio', level: 1 })).toBeVisible()
   await expect(
     page.locator('[data-sidebar-organization]').getByText(activeMembership.display_name, {
