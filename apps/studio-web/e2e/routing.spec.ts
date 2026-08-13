@@ -98,10 +98,13 @@ test('finishes a new organization in a dedicated ready step before entering the 
   await page.getByRole('button', { name: 'Trabajo por mi cuenta' }).click()
   await page.getByRole('button', { name: 'Crear mi espacio' }).click()
 
-  await expect(page).toHaveURL(`/organizations/${createdOrganizationId}/ready`)
+  // The closing step is state in the creation flow, not a place. It stays on
+  // the entry URL, so it cannot be reached again once the space exists.
+  await expect(page).toHaveURL('/')
   await expect(page.getByRole('heading', { name: 'Tu espacio está listo.' })).toBeVisible()
   await expect(page.getByText(/no es obligatorio/i)).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Puedes hacerlo después' })).toBeVisible()
+  await expect(page.getByText('Espacio de Ada Lovelace')).toBeVisible()
 
   await page.getByRole('button', { name: 'Entrar al workspace' }).click()
   await expect(page).toHaveURL(`/organizations/${createdOrganizationId}`)
@@ -110,8 +113,8 @@ test('finishes a new organization in a dedicated ready step before entering the 
   await expect(page.getByRole('heading', { name: 'Equipo reciente' })).toBeVisible()
   await expect(page.getByText('Studio está listo para operar')).toHaveCount(0)
 
-  await page.goBack()
-  await expect(page).not.toHaveURL(`/organizations/${createdOrganizationId}/ready`)
+  await page.goto(`/organizations/${createdOrganizationId}/ready`)
+  await expect(page.getByRole('heading', { name: 'Tu espacio está listo.' })).toHaveCount(0)
 })
 
 test('keeps activation step commands stable and rotates only the edited completion', async ({

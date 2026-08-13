@@ -1,17 +1,28 @@
 'use client'
 
+/**
+ * Closing step of organization creation.
+ *
+ * It is a step, not a place: it has no route of its own. Living at
+ * /organizations/[id]/ready made it addressable forever, so the URL kept
+ * announcing that a space had just been created long after it had, and claimed
+ * to be a sub-resource of the organization when it belongs to the flow that
+ * creates one. The other steps of this flow are state too.
+ */
 import { Badge } from '@allfitone/react/components/badge'
 import { Button } from '@allfitone/react/components/button'
 import { FoundationIcon } from '@allfitone/react/icons'
-import { useRouter } from 'next/navigation'
 
-import { useOrganizationContext } from './organization-context'
 import { StudioFrame } from './studio-frame'
+import type { OrganizationCreated } from '@/lib/studio-api'
 
-export function OrganizationReadyScreen() {
-  const router = useRouter()
-  const { current } = useOrganizationContext()
-
+export function OrganizationReadyScreen({
+  organization,
+  onEnter,
+}: {
+  organization: OrganizationCreated
+  onEnter: () => void
+}) {
   return (
     <StudioFrame step="ready">
       <article data-studio-panel="ready" aria-labelledby="organization-ready-title">
@@ -29,13 +40,10 @@ export function OrganizationReadyScreen() {
             </span>
             <span>
               <FoundationIcon name="success" decorative />
-              {current.display_name} está activo
+              {organization.display_name} está activo
             </span>
           </div>
-          <Button
-            size="lg"
-            onClick={() => router.replace(`/organizations/${current.organization_id}`)}
-          >
+          <Button size="lg" onClick={onEnter}>
             Entrar al workspace
           </Button>
         </div>
