@@ -2250,3 +2250,18 @@ input {
   font-weight: var(--afo-font-weight-bold);
   line-height: var(--afo-line-height-compact);
 }
+
+/* Icon rail. The design system collapses its own menu buttons; the header and
+   footer this product composes are ours to fold. The organization block and the
+   logout label cannot survive 3.5rem, and clipping them mid-word reads as a
+   broken layout rather than a compact one. Both return on expand, and logout
+   stays one click away under Mi cuenta. */
+[data-slot='sidebar'][data-collapsible='icon'] [data-sidebar-organization],
+[data-slot='sidebar'][data-collapsible='icon'] [data-slot='sidebar-footer'] form {
+  display: none;
+}
+
+[data-slot='sidebar'][data-collapsible='icon'] [data-organization-brand] {
+  display: grid;
+  justify-items: center;
+}

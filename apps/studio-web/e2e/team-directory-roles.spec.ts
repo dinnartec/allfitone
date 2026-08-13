@@ -314,8 +314,8 @@ for (const viewport of [
           ? page.getByLabel('Integrantes').first()
           : page.getByRole('region', { name: 'Tabla de integrantes de la organización' })
       await expect(directory).toBeVisible()
-      await expect(page.getByText('Ada Lovelace', { exact: true })).toBeVisible()
-      await expect(page.getByText('Propietario', { exact: true }).first()).toBeVisible()
+      await expect(directory.getByText('Ada Lovelace', { exact: true })).toBeVisible()
+      await expect(directory.getByText('Propietario', { exact: true })).toBeVisible()
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
         true,
       )

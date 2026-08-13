@@ -1,6 +1,6 @@
 'use client'
 
-import { ProductLockup } from '@allfitone/react/brand'
+import { BrandLogo, ProductLockup } from '@allfitone/react/brand'
 import {
   Select,
   SelectContent,
@@ -47,7 +47,9 @@ export function OrganizationWorkspaceShell({ children }: { children: ReactNode }
   const route = resolveWorkspaceRoute(pathname, current.organization_id)
 
   return (
-    <WorkspaceShell data-organization-shell>
+    // Below 1100px the expanded rail takes a fifth of the viewport from the
+    // content it frames, and the offcanvas drawer is still premature there.
+    <WorkspaceShell data-organization-shell collapseBelow={1100}>
       <OrganizationSidebar basePath={basePath} pathname={pathname} />
       <WorkspaceMain data-organization-main>
         <WorkspaceHeader data-organization-header>
@@ -64,7 +66,10 @@ export function OrganizationWorkspaceShell({ children }: { children: ReactNode }
 
 function OrganizationSidebar({ basePath, pathname }: { basePath: string; pathname: string }) {
   const { current, memberships, switchOrganization } = useOrganizationContext()
-  const { setOpenMobile } = useSidebar()
+  const { setOpenMobile, state, isMobile } = useSidebar()
+  // On the icon rail the wordmark does not fit. Swapping to the mark keeps the
+  // brand legible instead of clipping the lockup mid-letter.
+  const railed = state === 'collapsed' && !isMobile
   const teamHref = `${basePath}/team`
   const teamActive = pathname.startsWith(teamHref)
 
@@ -73,7 +78,7 @@ function OrganizationSidebar({ basePath, pathname }: { basePath: string; pathnam
   }
 
   return (
-    <Sidebar collapsible="offcanvas" data-organization-sidebar>
+    <Sidebar collapsible="icon" data-organization-sidebar>
       <SidebarHeader>
         <Link
           href={basePath}
@@ -81,13 +86,17 @@ function OrganizationSidebar({ basePath, pathname }: { basePath: string; pathnam
           data-organization-brand
           onClick={closeMobileNavigation}
         >
-          <ProductLockup
-            product="studio"
-            surface="dark"
-            title="Allfit Studio"
-            width={169}
-            height={40}
-          />
+          {railed ? (
+            <BrandLogo variant="cyan" title="Allfit Studio" width={32} height={32} />
+          ) : (
+            <ProductLockup
+              product="studio"
+              surface="dark"
+              title="Allfit Studio"
+              width={169}
+              height={40}
+            />
+          )}
         </Link>
         {/* The organization is named once. It used to appear in a static block,
             again inside the switcher, again in the header bar and again on the
