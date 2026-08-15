@@ -23,6 +23,25 @@ test('uses UUIDv4 for HTTP idempotency and UUIDv7 for durable command identity',
   )
 })
 
+test('loads the combined Studio entry context in one credentialed request', async () => {
+  const calls: Array<{ url: string; init: RequestInit }> = []
+  globalThis.fetch = (async (input, init) => {
+    calls.push({ url: String(input), init: init ?? {} })
+    return Response.json({
+      authenticated: true,
+      registration_status: 'complete',
+      identity: { name: 'Ada Lovelace', email: 'ada@example.test' },
+      memberships: [],
+    })
+  }) as typeof fetch
+
+  await studioApi.entryContext()
+
+  expect(calls).toHaveLength(1)
+  expect(new URL(calls[0]?.url ?? '').pathname).toBe('/studio/v1/entry-context')
+  expect(calls[0]?.init.credentials).toBe('include')
+})
+
 describe('professional profile API', () => {
   test('uses the personal profile routes and HTTP methods from the contract', async () => {
     const calls: Array<{ url: string; init: RequestInit }> = []

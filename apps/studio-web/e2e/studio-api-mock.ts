@@ -276,6 +276,26 @@ function defaultResponse(
   request: MockRequest,
   fixture: StudioApiFixture,
 ): MockResponse | undefined {
+  if (request.method === 'GET' && request.path === '/studio/v1/entry-context') {
+    if (fixture.signedOut) return { status: 401, body: error('unauthenticated') }
+    const session = objectValue(fixture.session)
+    const identity = objectValue(session.identity)
+    const givenName = typeof identity.given_name === 'string' ? identity.given_name : null
+    const familyName = typeof identity.family_name === 'string' ? identity.family_name : null
+    return {
+      status: 200,
+      body: {
+        authenticated: true,
+        registration_status:
+          session.registration_status === 'registration_incomplete' ? 'incomplete' : 'complete',
+        identity: {
+          name: givenName && familyName ? `${givenName} ${familyName}` : null,
+          email: null,
+        },
+        memberships: fixture.memberships,
+      },
+    }
+  }
   if (request.method === 'GET' && request.path === '/studio/v1/session') {
     if (fixture.signedOut) return { status: 401, body: error('unauthenticated') }
     return { status: 200, body: fixture.session }
@@ -519,6 +539,12 @@ async function fulfill(route: Route, response: MockResponse): Promise<void> {
       ...response.headers,
     },
   })
+}
+
+function objectValue(value: unknown): Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {}
 }
 
 export function error(code: string, detail?: string): { error: { code: string; detail?: string } } {

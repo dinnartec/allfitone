@@ -1691,6 +1691,24 @@ input {
   color: var(--afo-color-neutral-ink-soft);
 }
 
+[data-organization-protected-content] {
+  min-height: 100svh;
+}
+
+[data-organization-verification-overlay] {
+  position: fixed;
+  z-index: 100;
+  display: grid;
+  inset: 0;
+  padding: clamp(20px, 4vw, 48px);
+  place-items: center;
+  background: var(--afo-color-background-canvas);
+}
+
+[data-organization-verification-overlay] [data-organization-state] {
+  width: min(560px, 100%);
+}
+
 [data-studio-panel='ready'] {
   display: grid;
   overflow: hidden;

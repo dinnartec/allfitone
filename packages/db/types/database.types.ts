@@ -1161,6 +1161,13 @@ export type Database = {
         Args: { p_person_id: string }
         Returns: undefined
       }
+      resolve_actor_registration: {
+        Args: { p_account_id: string }
+        Returns: {
+          person_id: string
+          person_status: string
+        }[]
+      }
       resolve_backoffice_account: {
         Args: { p_issuer: string; p_provider: string; p_subject: string }
         Returns: {

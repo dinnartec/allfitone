@@ -62,7 +62,7 @@ function provider(overrides: Partial<AuthProvider> = {}): AuthProvider {
 
 class MemoryDatabase implements IdentitySessionDatabase {
   session: StoredAccessSession | undefined
-  registration: ActorRegistration = {}
+  registration: ActorRegistration | undefined = {}
   revoked = false
   rotations = 0
   accountResolutions = 0
@@ -224,6 +224,16 @@ describe('readSession', () => {
   test('fails closed when a linked person cannot be resolved as active', async () => {
     const database = new MemoryDatabase()
     database.registration = { personId: 'person_1' }
+    await service(database).completeCode('code')
+    await expect(service(database).readSession('opaque')).rejects.toEqual(
+      new StudioSessionError('unauthenticated'),
+    )
+    expect(database.revoked).toBeTrue()
+  })
+
+  test('revokes a session when its account cannot be resolved through RLS', async () => {
+    const database = new MemoryDatabase()
+    database.registration = undefined
     await service(database).completeCode('code')
     await expect(service(database).readSession('opaque')).rejects.toEqual(
       new StudioSessionError('unauthenticated'),

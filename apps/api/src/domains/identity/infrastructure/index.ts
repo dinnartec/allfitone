@@ -5,6 +5,7 @@ import type { SessionTokens } from '@allfitone/auth-provider'
 import type postgres from 'postgres'
 
 import { database } from '../../../platform/db/index.js'
+import { measureStudioRequestPhase } from '../../../platform/observability/index.js'
 import type {
   IdentitySessionDatabase,
   IdentityWebhookDatabase,
@@ -424,53 +425,50 @@ export function createIdentitySessionDatabase(): IdentitySessionDatabase {
     },
 
     async loadSession(tokenHash) {
-      const [row] = await sql<SessionRow[]>`
-        select *
-        from identity.load_access_session(${tokenHash}, 'studio'::identity.access_session_surface)
-      `
-      return row ? storedSession(row) : undefined
+      return measureStudioRequestPhase('session-db', async () => {
+        const [row] = await sql<SessionRow[]>`
+          select *
+          from identity.load_access_session(${tokenHash}, 'studio'::identity.access_session_surface)
+        `
+        return row ? storedSession(row) : undefined
+      })
     },
 
     async rotateSession(input) {
-      const [row] = await sql<{ rotated: boolean }[]>`
-        select identity.rotate_access_session(
-          ${input.sessionId}::uuid,
-          ${input.expectedTokenVersion},
-          ${input.tokenCiphertext},
-          ${input.accessTokenExpiresAt}
-        ) as rotated
-      `
-      return row?.rotated ?? false
+      return measureStudioRequestPhase('session-db', async () => {
+        const [row] = await sql<{ rotated: boolean }[]>`
+          select identity.rotate_access_session(
+            ${input.sessionId}::uuid,
+            ${input.expectedTokenVersion},
+            ${input.tokenCiphertext},
+            ${input.accessTokenExpiresAt}
+          ) as rotated
+        `
+        return row?.rotated ?? false
+      })
     },
 
     async revokeSession(sessionId) {
-      const [row] = await sql<{ revoked: boolean }[]>`
-        select identity.revoke_access_session(${sessionId}::uuid) as revoked
-      `
-      return row?.revoked ?? false
+      return measureStudioRequestPhase('session-db', async () => {
+        const [row] = await sql<{ revoked: boolean }[]>`
+          select identity.revoke_access_session(${sessionId}::uuid) as revoked
+        `
+        return row?.revoked ?? false
+      })
     },
 
     async resolveRegistration(accountId) {
-      return sql.begin(async (transaction) => {
-        await transaction`
-          select set_config('app.actor_kind', 'account', true),
-                 set_config('app.actor_account_id', ${accountId}, true)
+      return measureStudioRequestPhase('actor-db', async () => {
+        const [row] = await sql<
+          Array<{ person_id: string | null; person_status: 'active' | 'closed' | null }>
+        >`
+          select * from identity.resolve_actor_registration(${accountId}::uuid)
         `
-        const [account] = await transaction<{ person_id: string | null }[]>`
-          select person_id from identity.access_accounts where id = ${accountId}::uuid
-        `
-        if (!account?.person_id) return {}
-
-        await transaction`
-          select set_config('app.actor_kind', 'person', true),
-                 set_config('app.actor_person_id', ${account.person_id}, true)
-        `
-        const [person] = await transaction<{ status: 'active' | 'closed' }[]>`
-          select status from identity.people where id = ${account.person_id}::uuid
-        `
-        return person
-          ? { personId: account.person_id, personStatus: person.status }
-          : { personId: account.person_id }
+        if (!row) return undefined
+        return {
+          ...(row.person_id ? { personId: row.person_id } : {}),
+          ...(row.person_status ? { personStatus: row.person_status } : {}),
+        }
       })
     },
   }

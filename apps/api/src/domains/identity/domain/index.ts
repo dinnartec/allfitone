@@ -197,7 +197,7 @@ export interface IdentitySessionDatabase {
     accessTokenExpiresAt: Date
   }): Promise<boolean>
   revokeSession(sessionId: string): Promise<boolean>
-  resolveRegistration(accountId: string): Promise<ActorRegistration>
+  resolveRegistration(accountId: string): Promise<ActorRegistration | undefined>
 }
 
 export type PasswordResetDatabaseOutcome = 'account-absent' | 'processed'

@@ -1,6 +1,7 @@
 import type postgres from 'postgres'
 
 import { database } from '../../../platform/db/index.js'
+import { measureStudioRequestPhase } from '../../../platform/observability/index.js'
 import type { ProfessionalCatalogDatabase, ProfessionalCatalogItem } from '../domain/index.js'
 
 export function createProfessionalCatalogDatabase(): ProfessionalCatalogDatabase {
@@ -8,19 +9,23 @@ export function createProfessionalCatalogDatabase(): ProfessionalCatalogDatabase
 
   return {
     listSpecialties: (personId) =>
-      sql.begin(async (transaction) => {
-        await setPersonActor(transaction, personId)
-        return transaction<ProfessionalCatalogItem[]>`
-          select * from catalog.list_professional_specialties()
-        `
-      }),
+      measureStudioRequestPhase('business-db', () =>
+        sql.begin(async (transaction) => {
+          await setPersonActor(transaction, personId)
+          return transaction<ProfessionalCatalogItem[]>`
+            select * from catalog.list_professional_specialties()
+          `
+        }),
+      ),
     listCredentialTypes: (personId) =>
-      sql.begin(async (transaction) => {
-        await setPersonActor(transaction, personId)
-        return transaction<ProfessionalCatalogItem[]>`
-          select * from catalog.list_professional_credential_types()
-        `
-      }),
+      measureStudioRequestPhase('business-db', () =>
+        sql.begin(async (transaction) => {
+          await setPersonActor(transaction, personId)
+          return transaction<ProfessionalCatalogItem[]>`
+            select * from catalog.list_professional_credential_types()
+          `
+        }),
+      ),
   }
 }
 

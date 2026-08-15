@@ -2,7 +2,7 @@
 
 import { Alert, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
 import { Button } from '@allfitone/react/components/button'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { AccessLanding } from './access-landing'
@@ -11,6 +11,7 @@ import { InvitationWaiting } from './invitation-waiting'
 import { MembershipSelector } from './membership-selector'
 import { OrganizationReadyScreen } from './organization-ready-screen'
 import { SpaceSetup } from './space-setup'
+import { useStudioEntryContext } from './studio-entry-context'
 import { LoadingStage, StudioFrame } from './studio-frame'
 import { resolveMembershipDestination } from '@/lib/membership-routing'
 import { readPendingInvitationToken } from '@/lib/invitation-token'
@@ -23,28 +24,36 @@ import {
   type OrganizationCreated,
   type OnboardingAttempt,
   type OrganizationType,
-  type StudioSession,
+  type StudioEntryContext,
 } from '@/lib/studio-api'
 
 type FlowState =
   | { kind: 'loading' }
   | { kind: 'access' }
-  | { kind: 'activation'; attempt: OnboardingAttempt; identity: StudioSession['identity'] }
+  | { kind: 'activation'; attempt: OnboardingAttempt; identity: StudioEntryContext['identity'] }
   | { kind: 'space'; organizationTypes: OrganizationType[]; fullName?: string }
   | { kind: 'ready'; organization: OrganizationCreated }
   | { kind: 'waiting' }
   | { kind: 'select'; memberships: Membership[] }
   | { kind: 'error'; message: string }
 
-export function StudioEntry({ logoutPartial = false }: { logoutPartial?: boolean }) {
+export function StudioEntry() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const logoutPartial = searchParams.get('logout') === 'partial'
+  const entryContext = useStudioEntryContext()
   const [flow, setFlow] = useState<FlowState>({ kind: 'loading' })
   const bootstrapStarted = useRef(false)
 
   const resolveMemberships = useCallback(
-    async (fullName?: string, emptyDestination: 'space' | 'waiting' = 'space') => {
-      const membershipList = await studioApi.memberships()
-      const destination = resolveMembershipDestination(membershipList.items)
+    async (
+      fullName?: string,
+      emptyDestination: 'space' | 'waiting' = 'space',
+      suppliedMemberships?: Membership[],
+    ) => {
+      const memberships = suppliedMemberships ?? (await studioApi.memberships()).items
+      entryContext.storeMemberships(memberships)
+      const destination = resolveMembershipDestination(memberships)
       if (destination.kind === 'organization') {
         router.replace(`/organizations/${destination.organizationId}`)
         return
@@ -64,7 +73,7 @@ export function StudioEntry({ logoutPartial = false }: { logoutPartial?: boolean
         ...(fullName ? { fullName } : {}),
       })
     },
-    [router],
+    [entryContext, router],
   )
 
   const checkWaitingMemberships = useCallback(async () => {
@@ -93,14 +102,15 @@ export function StudioEntry({ logoutPartial = false }: { logoutPartial?: boolean
       return
     }
     try {
-      const session = await studioApi.session()
-      const fullName = identityName(session.identity)
-      if (session.registration_status === 'registration_incomplete') {
+      const context = await studioApi.entryContext()
+      entryContext.storeEntry(context)
+      const fullName = context.identity.name ?? undefined
+      if (context.registration_status === 'incomplete') {
         const attempt = await studioApi.startAttempt(newCommand())
-        setFlow({ kind: 'activation', attempt, identity: session.identity })
+        setFlow({ kind: 'activation', attempt, identity: context.identity })
         return
       }
-      await resolveMemberships(fullName)
+      await resolveMemberships(fullName, 'space', context.memberships)
     } catch (caught) {
       if (caught instanceof StudioApiError && caught.status === 401) {
         setFlow({ kind: 'access' })
@@ -114,7 +124,7 @@ export function StudioEntry({ logoutPartial = false }: { logoutPartial?: boolean
             : 'No pudimos determinar el estado de tu cuenta.',
       })
     }
-  }, [resolveMemberships, router])
+  }, [entryContext, resolveMemberships, router])
 
   useEffect(() => {
     if (bootstrapStarted.current) return
@@ -179,9 +189,4 @@ export function StudioEntry({ logoutPartial = false }: { logoutPartial?: boolean
       </div>
     </StudioFrame>
   )
-}
-
-function identityName(identity: StudioSession['identity']): string | undefined {
-  const fullName = [identity.given_name, identity.family_name].filter(Boolean).join(' ').trim()
-  return fullName || undefined
 }

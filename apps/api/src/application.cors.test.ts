@@ -25,6 +25,10 @@ describe('Studio surface CORS', () => {
     expect(response.status).toBe(204)
     expect(response.headers.get('access-control-allow-origin')).toBe('https://studio.example.test')
     expect(response.headers.get('access-control-allow-credentials')).toBe('true')
+    expect(response.headers.get('access-control-max-age')).toBe('600')
+    expect(response.headers.get('access-control-expose-headers')?.toLowerCase()).toContain(
+      'server-timing',
+    )
     expect(allowedHeaders).toEqual(
       expect.arrayContaining(['content-type', 'idempotency-key', 'command-id']),
     )

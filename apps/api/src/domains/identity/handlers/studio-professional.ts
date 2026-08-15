@@ -50,6 +50,8 @@ export function studioProfessionalRoutes(
       credentials: true,
       allowMethods: ['GET', 'PUT', 'POST', 'OPTIONS'],
       allowHeaders: ['Content-Type', 'Idempotency-Key', 'Command-Id', 'If-None-Match'],
+      exposeHeaders: ['ETag', 'Server-Timing'],
+      maxAge: 600,
     }),
   )
   routes.use('*', async (c, next) => {

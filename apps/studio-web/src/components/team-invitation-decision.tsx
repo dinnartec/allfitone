@@ -17,7 +17,7 @@ import {
   newCommand,
   studioApi,
   type OnboardingAttempt,
-  type StudioSession,
+  type StudioEntryContext,
   type TeamInvitationPresentation,
 } from '@/lib/studio-api'
 import { invitationRoleLabel } from '@/lib/team-invitations'
@@ -31,7 +31,7 @@ type Flow =
       token: string
       invitation: TeamInvitationPresentation
       attempt: OnboardingAttempt
-      identity: StudioSession['identity']
+      identity: StudioEntryContext['identity']
     }
   | { kind: 'mismatch'; invitation: TeamInvitationPresentation }
   | { kind: 'rejected'; organizationName: string }
@@ -70,12 +70,16 @@ export function TeamInvitationDecision() {
       }
       if (sessionResult.session.registration_status === 'registration_incomplete') {
         const attempt = await studioApi.startAttempt(newCommand(), token)
+        const { given_name: givenName, family_name: familyName } = sessionResult.session.identity
         setFlow({
           kind: 'activation',
           token,
           invitation,
           attempt,
-          identity: sessionResult.session.identity,
+          identity: {
+            name: givenName && familyName ? `${givenName} ${familyName}` : null,
+            email: null,
+          },
         })
         return
       }

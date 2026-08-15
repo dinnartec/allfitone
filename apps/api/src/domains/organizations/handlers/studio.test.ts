@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { Hono } from 'hono'
 
-import type { StudioSessionService } from '../../identity/index.js'
+import { StudioSessionError, type StudioSessionService } from '../../identity/index.js'
 import { StudioOrganizationError, type StudioOrganizationService } from '../application/index.js'
 import { studioOrganizationRoutes } from './studio.js'
 
@@ -72,6 +72,109 @@ beforeEach(() => {
 })
 
 describe('Studio organization routes', () => {
+  test('resolves the complete Studio entry context with one session and membership read', async () => {
+    let sessionCalls = 0
+    let membershipCalls = 0
+    const response = await app(
+      organizations({
+        listMemberships: async () => {
+          membershipCalls += 1
+          return [
+            {
+              membershipId: '0198d000-0000-7000-8000-000000000022',
+              organizationId: '0198d000-0000-7000-8000-000000000021',
+              displayName: 'Ada Entrena',
+              typeCode: 'professional_practice',
+              status: 'active',
+              joinedAt: new Date('2026-08-09T12:00:00.000Z'),
+              roles: ['owner'],
+            },
+          ]
+        },
+      }),
+      sessions({
+        resolveAccountIdentity: async () => {
+          sessionCalls += 1
+          return {
+            actor: {
+              accountId: '0198d000-0000-7000-8000-000000000011',
+              personId: '0198d000-0000-7000-8000-000000000012',
+            },
+            identity: {
+              givenName: 'Ada',
+              familyName: 'Lovelace',
+              verifiedEmail: 'ada@example.test',
+            },
+          }
+        },
+      }),
+    ).request('/studio/v1/entry-context', { headers: HEADERS })
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('cache-control')).toBe('private, no-store')
+    expect(sessionCalls).toBe(1)
+    expect(membershipCalls).toBe(1)
+    await expect(response.json()).resolves.toMatchObject({
+      authenticated: true,
+      registration_status: 'complete',
+      identity: { name: 'Ada Lovelace', email: 'ada@example.test' },
+      memberships: [{ display_name: 'Ada Entrena', roles: ['owner'] }],
+    })
+  })
+
+  test('returns an empty entry context without reading memberships for incomplete registration', async () => {
+    let membershipCalls = 0
+    const response = await app(
+      organizations({
+        listMemberships: async () => {
+          membershipCalls += 1
+          return []
+        },
+      }),
+      sessions({
+        resolveAccountIdentity: async () => ({
+          actor: { accountId: '0198d000-0000-7000-8000-000000000011' },
+          identity: { givenName: null, familyName: null, verifiedEmail: null },
+        }),
+      }),
+    ).request('/studio/v1/entry-context', { headers: HEADERS })
+
+    expect(response.status).toBe(200)
+    expect(membershipCalls).toBe(0)
+    await expect(response.json()).resolves.toEqual({
+      authenticated: true,
+      registration_status: 'incomplete',
+      identity: { name: null, email: null },
+      memberships: [],
+    })
+  })
+
+  test('keeps entry context authentication and account closure fail-closed', async () => {
+    const missing = await app().request('/studio/v1/entry-context', {
+      headers: { origin: HEADERS.origin },
+    })
+    const closed = await app(
+      organizations(),
+      sessions({
+        resolveAccountIdentity: async () => {
+          throw new StudioSessionError('account-closed')
+        },
+      }),
+    ).request('/studio/v1/entry-context', { headers: HEADERS })
+    const unavailable = await app(
+      organizations(),
+      sessions({
+        resolveAccountIdentity: async () => {
+          throw new Error('database unavailable')
+        },
+      }),
+    ).request('/studio/v1/entry-context', { headers: HEADERS })
+
+    expect(missing.status).toBe(401)
+    expect(closed.status).toBe(403)
+    expect(unavailable.status).toBe(503)
+  })
+
   test('returns only the governed active organization types', async () => {
     const response = await app().request('/studio/v1/organization-types', { headers: HEADERS })
     expect(response.status).toBe(200)

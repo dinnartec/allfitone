@@ -5,12 +5,7 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   async headers() {
     const noStore = [{ key: 'Cache-Control', value: 'private, no-store, max-age=0' }]
-    return [
-      { source: '/', headers: noStore },
-      { source: '/account', headers: noStore },
-      { source: '/profile', headers: noStore },
-      { source: '/organizations/:path*', headers: noStore },
-    ]
+    return [{ source: '/organizations/:path*', headers: noStore }]
   },
 }
 
