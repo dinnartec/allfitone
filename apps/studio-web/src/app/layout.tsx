@@ -6,6 +6,7 @@ import type { ReactNode } from 'react'
 import { SessionGuard } from '@/components/session-guard'
 import { AnalyticsControls } from '@/components/analytics-controls'
 import { StudioEntryContextProvider } from '@/components/studio-entry-context'
+import { StudioQueryProvider } from '@/components/studio-query-provider'
 import { invitationTokenCaptureScript } from '@/lib/invitation-token'
 
 import '@allfitone/react/tokens.css'
@@ -51,9 +52,11 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
           strategy="beforeInteractive"
           dangerouslySetInnerHTML={{ __html: invitationTokenCaptureScript() }}
         />
-        <StudioEntryContextProvider>
-          <SessionGuard>{children}</SessionGuard>
-        </StudioEntryContextProvider>
+        <StudioQueryProvider>
+          <StudioEntryContextProvider>
+            <SessionGuard>{children}</SessionGuard>
+          </StudioEntryContextProvider>
+        </StudioQueryProvider>
         <AnalyticsControls />
       </body>
     </html>

@@ -138,6 +138,33 @@ test('a solo owner is told that inviting a team is optional', async ({ page }) =
   await expect(page.getByRole('link', { name: 'Invitar integrante' })).toBeVisible()
 })
 
+test('reuses the fresh active-membership query when opening the matching filter', async ({
+  page,
+}) => {
+  const fixture = createStudioApiFixture({
+    memberships: [activeMembership],
+    organizationMemberships: [activeTeamMember, terminatedTeamMember],
+  })
+  await installStudioApiMock(page, fixture)
+  await page.goto(`/organizations/${activeMembership.organization_id}`)
+  await expect(page.getByText('Ada Lovelace', { exact: true })).toBeVisible()
+
+  const activeRequestsBeforeNavigation = fixture.requests.filter((request) => {
+    if (!isOrganizationMembershipRequest(request)) return false
+    return new URLSearchParams(request.search).get('status') === 'active'
+  }).length
+
+  await page.getByRole('link', { name: 'Ver equipo', exact: true }).click()
+  await page.getByRole('button', { name: 'Activos' }).click()
+  await expect(page.getByText('Ada Lovelace', { exact: true })).toBeVisible()
+
+  const activeRequestsAfterNavigation = fixture.requests.filter((request) => {
+    if (!isOrganizationMembershipRequest(request)) return false
+    return new URLSearchParams(request.search).get('status') === 'active'
+  }).length
+  expect(activeRequestsAfterNavigation).toBe(activeRequestsBeforeNavigation)
+})
+
 test('coach with staff role regains the directory destinations', async ({ page }) => {
   const combinedMembership = { ...secondActiveMembership, roles: ['coach', 'staff'] }
   const fixture = createStudioApiFixture({ memberships: [combinedMembership] })

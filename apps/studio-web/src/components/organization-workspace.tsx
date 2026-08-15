@@ -22,8 +22,8 @@ import {
 import { Skeleton } from '@allfitone/react/components/skeleton'
 import { StatStrip, StatStripItem } from '@allfitone/react/components/stat-strip'
 import { FoundationIcon } from '@allfitone/react/icons'
+import { useInfiniteQuery } from '@tanstack/react-query'
 import Link from 'next/link'
-import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { useOrganizationContext } from './organization-context'
 import {
@@ -31,29 +31,20 @@ import {
   formatTotal,
   invitationsExpiringWithin,
   recentMembers,
-  type CountedTotal,
 } from '@/lib/organization-overview'
 import { canViewTeamDirectory, memberInitials, organizationRoleLabel } from '@/lib/team-directory'
 import { canInviteTeam } from '@/lib/team-invitations'
+import { StudioApiError, type Membership } from '@/lib/studio-api'
 import {
-  studioApi,
-  type Membership,
-  type OrganizationMembership,
-  type TeamInvitationListItem,
-} from '@/lib/studio-api'
+  organizationInvitationsQueryOptions,
+  organizationMembershipsQueryOptions,
+} from '@/lib/studio-query'
 
 const INVITATIONS_ENABLED = process.env.NEXT_PUBLIC_STAFF_INVITATIONS_ENABLED === 'true'
 const OVERVIEW_PAGE_SIZE = 50
 const RECENT_MEMBER_LIMIT = 5
 const EXPIRY_WINDOW_DAYS = 7
 const DATE_FORMATTER = new Intl.DateTimeFormat('es-CO', { dateStyle: 'medium' })
-
-interface Overview {
-  members: { total: CountedTotal; recent: OrganizationMembership[] } | null
-  invitations: { total: CountedTotal; attention: TeamInvitationListItem[] } | null
-}
-
-type Status = 'loading' | 'ready' | 'error'
 
 export function OrganizationWorkspace() {
   const { current } = useOrganizationContext()
@@ -62,71 +53,44 @@ export function OrganizationWorkspace() {
   const readsSomething = canSeeDirectory || canSeeInvitations
   const teamPath = `/organizations/${current.organization_id}/team`
 
-  const [overview, setOverview] = useState<Overview>({ members: null, invitations: null })
-  const [status, setStatus] = useState<Status>(readsSomething ? 'loading' : 'ready')
-  const requestId = useRef(0)
-  const requestController = useRef<AbortController | null>(null)
+  const membersQuery = useInfiniteQuery({
+    ...organizationMembershipsQueryOptions(current.organization_id, 'active', OVERVIEW_PAGE_SIZE),
+    enabled: canSeeDirectory,
+  })
+  const invitationsQuery = useInfiniteQuery({
+    ...organizationInvitationsQueryOptions(current.organization_id, 'pending', OVERVIEW_PAGE_SIZE),
+    enabled: canSeeInvitations,
+  })
+  const membersForbidden =
+    membersQuery.error instanceof StudioApiError && membersQuery.error.status === 403
+  const invitationsForbidden =
+    invitationsQuery.error instanceof StudioApiError && invitationsQuery.error.status === 403
+  const memberPage = canSeeDirectory && !membersForbidden ? membersQuery.data?.pages[0] : undefined
+  const invitationPage =
+    canSeeInvitations && !invitationsForbidden ? invitationsQuery.data?.pages[0] : undefined
+  const loading =
+    (canSeeDirectory && membersQuery.isPending) || (canSeeInvitations && invitationsQuery.isPending)
+  const error = !loading && !memberPage && !invitationPage
+  const refreshing =
+    Boolean(memberPage || invitationPage) &&
+    (membersQuery.isFetching || invitationsQuery.isFetching)
+  const members = memberPage
+    ? {
+        total: countPage(memberPage),
+        recent: recentMembers(memberPage.data, RECENT_MEMBER_LIMIT),
+      }
+    : null
+  const invitations = invitationPage
+    ? {
+        total: countPage(invitationPage),
+        attention: invitationsExpiringWithin(invitationPage.data, EXPIRY_WINDOW_DAYS, new Date()),
+      }
+    : null
 
-  const load = useCallback(async () => {
-    if (!readsSomething) return
-    requestController.current?.abort()
-    const controller = new AbortController()
-    const currentRequest = requestId.current + 1
-    requestId.current = currentRequest
-    requestController.current = controller
-    setStatus('loading')
-
-    // Each source degrades on its own. One unavailable endpoint must not blank
-    // out the reading that did arrive; only losing everything is an error.
-    const [members, invitations] = await Promise.allSettled([
-      canSeeDirectory
-        ? studioApi.organizationMemberships(
-            current.organization_id,
-            { status: 'active', limit: OVERVIEW_PAGE_SIZE },
-            controller.signal,
-          )
-        : Promise.resolve(null),
-      canSeeInvitations
-        ? studioApi.teamInvitations(
-            current.organization_id,
-            { status: 'pending', limit: OVERVIEW_PAGE_SIZE },
-            controller.signal,
-          )
-        : Promise.resolve(null),
-    ])
-    if (controller.signal.aborted || currentRequest !== requestId.current) return
-
-    const memberPage = members.status === 'fulfilled' ? members.value : null
-    const invitationPage = invitations.status === 'fulfilled' ? invitations.value : null
-
-    setOverview({
-      members: memberPage
-        ? {
-            total: countPage(memberPage),
-            recent: recentMembers(memberPage.data, RECENT_MEMBER_LIMIT),
-          }
-        : null,
-      invitations: invitationPage
-        ? {
-            total: countPage(invitationPage),
-            attention: invitationsExpiringWithin(
-              invitationPage.data,
-              EXPIRY_WINDOW_DAYS,
-              new Date(),
-            ),
-          }
-        : null,
-    })
-    setStatus(memberPage || invitationPage ? 'ready' : 'error')
-  }, [canSeeDirectory, canSeeInvitations, current.organization_id, readsSomething])
-
-  useEffect(() => {
-    void load()
-    return () => {
-      requestId.current += 1
-      requestController.current?.abort()
-    }
-  }, [load])
+  function retry(): void {
+    if (canSeeDirectory) void membersQuery.refetch()
+    if (canSeeInvitations) void invitationsQuery.refetch()
+  }
 
   if (!readsSomething) {
     return <OrientationPanel roles={current.roles} teamPath={teamPath} />
@@ -135,29 +99,26 @@ export function OrganizationWorkspace() {
   return (
     <div data-organization-overview>
       <section data-overview-signals aria-label={`Estado de ${current.display_name}`}>
-        {status === 'loading' ? (
+        {loading ? (
           <Skeleton data-overview-signals-placeholder />
-        ) : status === 'error' ? (
+        ) : error ? (
           <Alert variant="danger" live="polite">
             <AlertTitle>No pudimos cargar el estado de tu organización</AlertTitle>
             <AlertDescription>
               La conexión falló de forma temporal. Los datos siguen intactos.
             </AlertDescription>
-            <Button size="sm" variant="outline" onClick={() => void load()}>
+            <Button size="sm" variant="outline" onClick={retry}>
               Reintentar
             </Button>
           </Alert>
         ) : (
           <StatStrip>
-            {overview.members ? (
-              <StatStripItem
-                value={formatTotal(overview.members.total)}
-                label="Integrantes activos"
-              />
+            {members ? (
+              <StatStripItem value={formatTotal(members.total)} label="Integrantes activos" />
             ) : null}
-            {overview.invitations ? (
+            {invitations ? (
               <StatStripItem
-                value={formatTotal(overview.invitations.total)}
+                value={formatTotal(invitations.total)}
                 label="Invitaciones pendientes"
               />
             ) : null}
@@ -165,16 +126,22 @@ export function OrganizationWorkspace() {
         )}
       </section>
 
-      {status === 'ready' && overview.invitations && overview.invitations.attention.length > 0 ? (
+      {refreshing ? (
+        <p data-query-refreshing role="status" aria-live="polite">
+          Actualizando el estado de la organización…
+        </p>
+      ) : null}
+
+      {!loading && invitations && invitations.attention.length > 0 ? (
         <Card data-overview-attention>
           <CardHeader>
             <CardTitle role="heading" aria-level={2}>
               Requiere atención
             </CardTitle>
             <CardDescription>
-              {overview.invitations.attention.length === 1
+              {invitations.attention.length === 1
                 ? 'Una invitación vence en los próximos días.'
-                : `${overview.invitations.attention.length} invitaciones vencen en los próximos días.`}
+                : `${invitations.attention.length} invitaciones vencen en los próximos días.`}
             </CardDescription>
             <CardAction>
               <Link
@@ -187,7 +154,7 @@ export function OrganizationWorkspace() {
           </CardHeader>
           <CardContent>
             <ul data-overview-attention-list>
-              {overview.invitations.attention.map((invitation) => (
+              {invitations.attention.map((invitation) => (
                 <li key={invitation.id}>
                   <span data-overview-attention-contact>{invitation.contact}</span>
                   <span data-overview-attention-expiry>
@@ -200,7 +167,7 @@ export function OrganizationWorkspace() {
         </Card>
       ) : null}
 
-      {overview.members || status === 'loading' ? (
+      {members || loading ? (
         <Card data-overview-team>
           <CardHeader>
             <CardTitle role="heading" aria-level={2}>
@@ -216,15 +183,15 @@ export function OrganizationWorkspace() {
             </CardAction>
           </CardHeader>
           <CardContent>
-            {status === 'loading' ? (
+            {loading ? (
               <div data-overview-team-placeholder>
                 <Skeleton />
                 <Skeleton />
                 <Skeleton />
               </div>
-            ) : overview.members && overview.members.recent.length > 0 ? (
+            ) : members && members.recent.length > 0 ? (
               <ul data-overview-team-list>
-                {overview.members.recent.map((member) => (
+                {members.recent.map((member) => (
                   <li key={member.membership_id}>
                     <Avatar decorative>
                       <AvatarFallback>{memberInitials(member.display_name)}</AvatarFallback>

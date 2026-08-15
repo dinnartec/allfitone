@@ -95,21 +95,26 @@ export const studioApi = {
       signal ? { signal } : {},
     ),
 
-  organizationTypes: () =>
-    request<AllfitV1Schemas['OrganizationTypeList']>('/studio/v1/organization-types'),
+  organizationTypes: (signal?: AbortSignal) =>
+    request<AllfitV1Schemas['OrganizationTypeList']>(
+      '/studio/v1/organization-types',
+      signal ? { signal } : {},
+    ),
 
-  me: () => request<StudioMe>('/studio/v1/me'),
+  me: (signal?: AbortSignal) => request<StudioMe>('/studio/v1/me', signal ? { signal } : {}),
 
-  professionalSpecialties: () =>
+  professionalSpecialties: (signal?: AbortSignal) =>
     catalogRequest<AllfitV1Schemas['ProfessionalSpecialtyList']>(
       '/studio/v1/professional-specialties',
       'professional-specialties',
+      signal,
     ),
 
-  professionalCredentialTypes: () =>
+  professionalCredentialTypes: (signal?: AbortSignal) =>
     catalogRequest<AllfitV1Schemas['ProfessionalCredentialTypeList']>(
       '/studio/v1/professional-credential-types',
       'professional-credential-types',
+      signal,
     ),
 
   updateProfessionalProfile: (body: ProfessionalProfilePut, command: CommandHeaders) =>

@@ -43,6 +43,33 @@ test('loads the combined Studio entry context in one credentialed request', asyn
 })
 
 describe('professional profile API', () => {
+  test('forwards caller cancellation through every cache-managed account read', async () => {
+    Object.defineProperty(globalThis, 'sessionStorage', {
+      configurable: true,
+      value: memoryStorage(),
+    })
+    const requests: RequestInit[] = []
+    globalThis.fetch = (async (input, init) => {
+      requests.push(init ?? {})
+      const pathname = new URL(String(input)).pathname
+      if (pathname === '/studio/v1/me') {
+        return Response.json({ profile: null, memberships: [] })
+      }
+      return Response.json({ items: [] })
+    }) as typeof fetch
+    const controller = new AbortController()
+
+    await Promise.all([
+      studioApi.me(controller.signal),
+      studioApi.organizationTypes(controller.signal),
+      studioApi.professionalSpecialties(controller.signal),
+      studioApi.professionalCredentialTypes(controller.signal),
+    ])
+
+    expect(requests).toHaveLength(4)
+    expect(requests.every((request) => request.signal === controller.signal)).toBe(true)
+  })
+
   test('uses the personal profile routes and HTTP methods from the contract', async () => {
     const calls: Array<{ url: string; init: RequestInit }> = []
     globalThis.fetch = (async (input, init) => {

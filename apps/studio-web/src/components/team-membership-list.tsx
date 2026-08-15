@@ -29,8 +29,9 @@ import {
   TableState,
 } from '@allfitone/react/components/table'
 import { ToggleGroup, ToggleGroupItem } from '@allfitone/react/components/toggle-group'
+import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query'
 import Link from 'next/link'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 
 import { useOrganizationContext } from './organization-context'
 import { WorkspacePageHeader } from './workspace-page-header'
@@ -39,10 +40,10 @@ import { canInviteTeam } from '@/lib/team-invitations'
 import { useCompactViewport } from '@/lib/use-compact-viewport'
 import {
   StudioApiError,
-  studioApi,
   type OrganizationMembership,
   type OrganizationMembershipStatus,
 } from '@/lib/studio-api'
+import { flattenMembershipPages, organizationMembershipsQueryOptions } from '@/lib/studio-query'
 
 type MembershipFilter = 'all' | OrganizationMembershipStatus
 type LoadError = 'forbidden' | 'stale-cursor' | 'unavailable'
@@ -60,91 +61,37 @@ const FILTERS: ReadonlyArray<{ value: MembershipFilter; label: string }> = [
 export function TeamMembershipList() {
   const { current } = useOrganizationContext()
   const compact = useCompactViewport()
+  const queryClient = useQueryClient()
   const canViewDirectory = canViewTeamDirectory(current.roles)
   const [filter, setFilter] = useState<MembershipFilter>('all')
-  const [items, setItems] = useState<OrganizationMembership[]>([])
-  const [nextCursor, setNextCursor] = useState<string | null>(null)
-  const [loading, setLoading] = useState(canViewDirectory)
-  const [loadingMore, setLoadingMore] = useState(false)
-  const [error, setError] = useState<LoadError | undefined>()
-  const requestId = useRef(0)
-  const requestController = useRef<AbortController | null>(null)
+  const options = organizationMembershipsQueryOptions(current.organization_id, filter, PAGE_SIZE)
+  const query = useInfiniteQuery({ ...options, enabled: canViewDirectory })
+  const forbidden = query.error instanceof StudioApiError && query.error.status === 403
+  const items = forbidden ? [] : flattenMembershipPages(query.data)
+  const loading = canViewDirectory && query.isPending
+  const loadingMore = query.isFetchingNextPage
+  const nextCursor = query.hasNextPage ? (query.data?.pages.at(-1)?.page.next_cursor ?? null) : null
+  const error: LoadError | undefined = forbidden
+    ? 'forbidden'
+    : query.isFetchNextPageError &&
+        query.error instanceof StudioApiError &&
+        query.error.status === 422
+      ? 'stale-cursor'
+      : query.isError
+        ? 'unavailable'
+        : undefined
 
-  const load = useCallback(
-    async (cursor?: string) => {
-      if (!canViewDirectory) return
-      requestController.current?.abort()
-      const controller = new AbortController()
-      const currentRequest = requestId.current + 1
-      requestId.current = currentRequest
-      requestController.current = controller
-      setError(undefined)
-      if (cursor) setLoadingMore(true)
-      else setLoading(true)
-
-      try {
-        const page = await studioApi.organizationMemberships(
-          current.organization_id,
-          {
-            ...(filter === 'all' ? {} : { status: filter }),
-            limit: PAGE_SIZE,
-            ...(cursor ? { cursor } : {}),
-          },
-          controller.signal,
-        )
-        if (controller.signal.aborted || currentRequest !== requestId.current) return
-
-        setItems((existing) => (cursor ? appendUnique(existing, page.data) : page.data))
-        setNextCursor(page.page.next_cursor)
-      } catch (caught) {
-        if (controller.signal.aborted || currentRequest !== requestId.current) return
-        if (caught instanceof StudioApiError && caught.status === 403) {
-          setItems([])
-          setNextCursor(null)
-          setError('forbidden')
-        } else if (cursor && caught instanceof StudioApiError && caught.status === 422) {
-          setNextCursor(null)
-          setError('stale-cursor')
-        } else {
-          setError('unavailable')
-        }
-      } finally {
-        if (!controller.signal.aborted && currentRequest === requestId.current) {
-          setLoading(false)
-          setLoadingMore(false)
-        }
-      }
-    },
-    [canViewDirectory, current.organization_id, filter],
-  )
-
-  useEffect(() => {
-    if (!canViewDirectory) {
-      requestId.current += 1
-      requestController.current?.abort()
-      setLoading(false)
+  async function retry(): Promise<void> {
+    if (error === 'stale-cursor') {
+      await queryClient.resetQueries({ queryKey: options.queryKey, exact: true })
       return
     }
-    setItems([])
-    setNextCursor(null)
-    setError(undefined)
-    void load()
-    return () => {
-      requestId.current += 1
-      requestController.current?.abort()
-    }
-  }, [canViewDirectory, load])
+    await query.refetch()
+  }
 
   function changeFilter(values: MembershipFilter[]) {
     const nextFilter = values[0]
     if (!nextFilter || nextFilter === filter) return
-    requestId.current += 1
-    requestController.current?.abort()
-    setItems([])
-    setNextCursor(null)
-    setError(undefined)
-    setLoading(true)
-    setLoadingMore(false)
     setFilter(nextFilter)
   }
 
@@ -186,7 +133,7 @@ export function TeamMembershipList() {
             title: 'No pudimos cargar el equipo',
             description: 'La conexión falló de forma temporal. Inténtalo de nuevo.',
             action: (
-              <Button size="sm" variant="outline" onClick={() => void load()}>
+              <Button size="sm" variant="outline" onClick={() => void retry()}>
                 Reintentar
               </Button>
             ),
@@ -244,6 +191,12 @@ export function TeamMembershipList() {
           </ToggleGroupItem>
         ))}
       </ToggleGroup>
+
+      {query.isFetching && !loading && !loadingMore ? (
+        <p data-query-refreshing role="status" aria-live="polite">
+          Actualizando integrantes…
+        </p>
+      ) : null}
 
       {/* Five columns do not fit a phone, so narrow viewports get the same data
           as cards. Only one presentation is rendered — see useCompactViewport. */}
@@ -310,7 +263,7 @@ export function TeamMembershipList() {
               ? 'Actualiza la lista para verla desde el inicio.'
               : 'Los integrantes que ya cargaste permanecen visibles.'}
           </AlertDescription>
-          <Button size="sm" variant="outline" onClick={() => void load()}>
+          <Button size="sm" variant="outline" onClick={() => void retry()}>
             {error === 'stale-cursor' ? 'Actualizar la lista' : 'Reintentar'}
           </Button>
         </Alert>
@@ -318,7 +271,11 @@ export function TeamMembershipList() {
 
       {nextCursor ? (
         <div data-team-pagination>
-          <Button variant="outline" disabled={loadingMore} onClick={() => void load(nextCursor)}>
+          <Button
+            variant="outline"
+            disabled={loadingMore}
+            onClick={() => void query.fetchNextPage()}
+          >
             {loadingMore ? <Spinner label="Cargando más integrantes" /> : null}
             {loadingMore ? 'Cargando…' : 'Ver más'}
           </Button>
@@ -398,14 +355,6 @@ function MembershipRow({ item }: { item: OrganizationMembership }) {
       <TableCell>{item.ended_at ? formatDate(item.ended_at) : '—'}</TableCell>
     </TableRow>
   )
-}
-
-function appendUnique(
-  existing: OrganizationMembership[],
-  incoming: OrganizationMembership[],
-): OrganizationMembership[] {
-  const ids = new Set(existing.map((item) => item.membership_id))
-  return [...existing, ...incoming.filter((item) => !ids.has(item.membership_id))]
 }
 
 function formatDate(value: string): string {
