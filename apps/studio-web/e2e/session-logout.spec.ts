@@ -61,10 +61,19 @@ test('clears the browser session and browser history cannot reveal the workspace
   ).toBe(true)
 })
 
-test('shows a non-actionable closing state while manual logout is in flight', async ({ page }) => {
+/**
+ * The person pressing this button is present and knows what they asked for, so the
+ * workspace stays in place instead of being replaced by an explanatory screen. What it
+ * must not do is stay usable or stay readable: `inert` removes it from reach and the
+ * veil removes it from legibility until the redirect lands.
+ */
+test('keeps the workspace inert and illegible in place while a manual logout is in flight', async ({
+  page,
+}) => {
   const fixture = createStudioApiFixture({ memberships: [activeMembership] })
   await installStudioApiMock(page, fixture)
   await page.goto(`/organizations/${activeMembership.organization_id}`)
+  await expect(page.getByRole('heading', { name: 'Inicio', level: 1 })).toBeVisible()
   await page.evaluate(() => {
     HTMLFormElement.prototype.submit = function recordPendingLogout() {
       document.documentElement.dataset.logoutPending = 'true'
@@ -73,13 +82,38 @@ test('shows a non-actionable closing state while manual logout is in flight', as
 
   await page.getByRole('button', { name: 'Cerrar sesión' }).click()
 
-  await expect(page.getByRole('heading', { name: 'Cerrando tu sesión' })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Cerrando tu sesión' })).toBeFocused()
-  await expect(page.getByRole('button', { name: 'Completar cierre' })).toHaveCount(0)
-  await expect(page.locator('[data-session-closing]')).toBeVisible()
   await expect(page.locator('html')).toHaveAttribute('data-logout-pending', 'true')
-  await expect(page.locator('[data-session-content]')).toHaveCount(0)
-  await expect(page.getByText(activeMembership.display_name)).toHaveCount(0)
+  await expect(page.locator('[data-session-ending]')).toHaveAttribute('inert', '')
+  await expect(page.locator('[data-session-ending]')).toHaveCSS('filter', /blur\(7px\)/)
+  await expect(page.locator('[data-session-ending] form button')).toBeDisabled()
+  await expect(page.getByRole('status')).toHaveText('Cerrando tu sesión…')
+  await expect(page.locator('[data-session-closing]')).toHaveCount(0)
+  await expect(page.locator('html')).not.toHaveAttribute('data-session-locked', 'true')
+})
+
+/**
+ * Any request that resolves while the logout POST is already navigating answers 401.
+ * Treating that as "the session ended, go home" would replace the location and cancel
+ * the navigation, leaving the provider session alive.
+ */
+test('a background 401 during a manual logout does not cancel the navigation', async ({ page }) => {
+  const fixture = createStudioApiFixture({ memberships: [activeMembership] })
+  await installStudioApiMock(page, fixture)
+  const workspace = `/organizations/${activeMembership.organization_id}`
+  await page.goto(workspace)
+  await expect(page.getByRole('heading', { name: 'Inicio', level: 1 })).toBeVisible()
+  await page.evaluate(() => {
+    HTMLFormElement.prototype.submit = function recordPendingLogout() {
+      document.documentElement.dataset.logoutPending = 'true'
+    }
+  })
+
+  await page.getByRole('button', { name: 'Cerrar sesión' }).click()
+  await expect(page.locator('[data-session-ending]')).toBeVisible()
+  await page.evaluate(() => window.dispatchEvent(new Event('allfit:studio-unauthenticated')))
+
+  await expect(page).toHaveURL(workspace)
+  await expect(page.locator('[data-session-ending]')).toBeVisible()
 })
 
 test('a manual logout covers another Studio tab immediately', async ({ context, page }) => {
@@ -111,7 +145,9 @@ test('a manual logout covers another Studio tab immediately', async ({ context, 
   const logoutNavigation = page.getByRole('button', { name: 'Cerrar sesión' }).click()
   await logoutRequested
 
+  // The tab that did not ask is the one that gets told what changed.
   await expect(other.locator('[data-session-closing]')).toBeVisible()
+  await expect(other.getByText('Cerraste la sesión en otra pestaña de Studio.')).toBeVisible()
   await expect(
     other.locator('[data-session-closing]').getByRole('button', { name: 'Completar cierre' }),
   ).toHaveCount(0)

@@ -98,7 +98,11 @@ export function AccessLanding({
         <AccessPanel aria-labelledby="studio-panel-title">
           <AccessPanelHeader>
             <AccessPanelEyebrow>
-              {closing ? 'Cierre seguro' : recovery ? 'Sesión protegida' : 'Tu espacio de trabajo'}
+              {closing
+                ? 'Sesión finalizada'
+                : recovery
+                  ? 'Sesión protegida'
+                  : 'Tu espacio de trabajo'}
             </AccessPanelEyebrow>
             <AccessPanelTitle
               ref={secureTitleRef}
@@ -109,7 +113,7 @@ export function AccessLanding({
             </AccessPanelTitle>
             <AccessPanelDescription>
               {closing
-                ? 'Studio ya ocultó tu espacio. Estamos terminando el cierre con el proveedor de acceso.'
+                ? closingDescription(closing.reason)
                 : recovery
                   ? 'Completa el cierre antes de volver a autenticarte en este equipo.'
                   : 'Accede de forma segura para continuar con tus espacios, equipo y actividad.'}
@@ -117,12 +121,6 @@ export function AccessLanding({
           </AccessPanelHeader>
 
           <AccessPanelContent>
-            {closing ? (
-              <Alert variant="info" live="polite">
-                <AlertTitle>El espacio de trabajo ya está protegido</AlertTitle>
-                <AlertDescription>{closingDescription(closing.reason)}</AlertDescription>
-              </Alert>
-            ) : null}
             {recovery ? (
               <Alert variant="warning" live="assertive">
                 <AlertTitle>El espacio de trabajo permanece oculto</AlertTitle>
@@ -138,9 +136,7 @@ export function AccessLanding({
                 </AlertDescription>
               </Alert>
             ) : null}
-            {closing ? (
-              <ClosingSignal />
-            ) : (
+            {closing ? null : (
               <AccessPanelAction>
                 {recovery ? (
                   <>
@@ -175,7 +171,7 @@ export function AccessLanding({
           <AccessPanelNote>
             <FoundationIcon name="permissions" decorative />
             {closing
-              ? 'Volverás a la pantalla de acceso cuando el cierre termine.'
+              ? 'Volverás a la pantalla de acceso en un momento.'
               : recovery
                 ? 'No mostraremos información anterior hasta que vuelvas a autenticarte.'
                 : 'El inicio de sesión se completa con el proveedor de identidad de Allfit One.'}
@@ -201,30 +197,16 @@ export function AccessLanding({
   )
 }
 
-function ClosingSignal() {
-  return (
-    <div data-session-closing-signal role="status" aria-live="polite" aria-atomic="true">
-      <div data-closing-step="complete">
-        <span aria-hidden="true" />
-        <strong>Espacio oculto</strong>
-      </div>
-      <i aria-hidden="true" />
-      <div data-closing-step="current">
-        <span aria-hidden="true" />
-        <strong>Confirmando cierre</strong>
-      </div>
-    </div>
-  )
-}
-
+// This state only reaches somebody who did not ask for it — an idle timeout, or a
+// logout pressed in another tab — so it names the cause instead of narrating progress.
 function closingDescription(reason: StudioSessionEndReason): string {
   if (reason === 'inactivity') {
-    return 'El tiempo de inactividad terminó. Estamos cerrando el acceso de forma segura.'
+    return 'Tu sesión terminó por inactividad.'
   }
   if (reason === 'manual') {
-    return 'Solicitaste cerrar la sesión. No necesitas hacer nada más.'
+    return 'Cerraste la sesión en otra pestaña de Studio.'
   }
-  return 'Studio está terminando el cierre seguro en este equipo.'
+  return 'Esta sesión terminó en otro lugar.'
 }
 
 function recoveryDescription(reason: StudioSessionEndReason): string {
