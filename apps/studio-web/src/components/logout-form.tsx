@@ -1,7 +1,7 @@
 'use client'
 
 import { Button } from '@allfitone/react/components/button'
-import { useRef, type ComponentProps } from 'react'
+import { useRef, useState, type ComponentProps } from 'react'
 
 import { announceStudioLogout } from '@/lib/session-activity'
 import { studioApi } from '@/lib/studio-api'
@@ -16,10 +16,12 @@ export function LogoutForm({
   disabled?: boolean
 }) {
   const formRef = useRef<HTMLFormElement>(null)
+  const [pending, setPending] = useState(false)
 
   function submitLogout() {
     const form = formRef.current
-    if (!form) return
+    if (!form || pending) return
+    setPending(true)
     announceStudioLogout('manual')
     form.submit()
   }
@@ -39,10 +41,11 @@ export function LogoutForm({
         type="button"
         variant={variant}
         size={size}
-        disabled={disabled}
+        disabled={disabled || pending}
+        aria-busy={pending || undefined}
         onClick={submitLogout}
       >
-        {'Cerrar sesi\u00f3n'}
+        {pending ? 'Cerrando sesión…' : 'Cerrar sesión'}
       </Button>
     </form>
   )

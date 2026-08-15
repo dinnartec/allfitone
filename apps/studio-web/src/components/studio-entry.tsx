@@ -14,6 +14,7 @@ import { SpaceSetup } from './space-setup'
 import { LoadingStage, StudioFrame } from './studio-frame'
 import { resolveMembershipDestination } from '@/lib/membership-routing'
 import { readPendingInvitationToken } from '@/lib/invitation-token'
+import { studioSessionConfirmedEnded } from '@/lib/session-activity'
 import {
   StudioApiError,
   newCommand,
@@ -82,6 +83,13 @@ export function StudioEntry({ logoutPartial = false }: { logoutPartial?: boolean
     setFlow({ kind: 'loading' })
     if (readPendingInvitationToken()) {
       router.replace('/invitations')
+      return
+    }
+    // The guard has already had a 401 answered for this session. Asking again would add
+    // a round trip behind a loading screen to reach the screen we know is coming. This
+    // stays below the invitation check: a pending invitation outlives the session.
+    if (studioSessionConfirmedEnded()) {
+      setFlow({ kind: 'access' })
       return
     }
     try {

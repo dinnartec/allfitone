@@ -15,16 +15,27 @@ import {
 } from '@/lib/session-activity'
 import { StudioApiError, studioApi } from '@/lib/studio-api'
 
+/**
+ * `ending` and `closing` are the same fact seen from two places. `ending` belongs to
+ * the tab where somebody just pressed the logout button: that person knows what they
+ * asked for, so the workspace stays in place, inert and illegible, until the redirect
+ * lands. `closing` belongs to every other surface — a second tab, or an idle timeout —
+ * where the change was not requested and has to be explained.
+ */
 type GuardState =
-  | { kind: 'checking' }
+  // `silent` marks the checks that run on the way out of a session. "Preparando tu
+  // espacio…" under the full Studio chrome is the wrong promise there: a bare canvas
+  // says nothing rather than saying the opposite of what is about to happen.
+  | { kind: 'checking'; silent: boolean }
   | { kind: 'ready' }
+  | { kind: 'ending' }
   | { kind: 'closing'; reason: StudioSessionEndReason }
   | { kind: 'locked'; reason: StudioSessionEndReason; retryable: boolean }
 
 const CLOSING_RECOVERY_DELAY_MS = 10_000
 
 export function SessionGuard({ children }: { children: ReactNode }) {
-  const [guard, setGuard] = useState<GuardState>({ kind: 'checking' })
+  const [guard, setGuard] = useState<GuardState>({ kind: 'checking', silent: false })
   const activityRef = useRef<StudioSessionActivity | undefined>(undefined)
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const closingRecoveryRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
@@ -38,6 +49,7 @@ export function SessionGuard({ children }: { children: ReactNode }) {
   useEffect(() => {
     let disposed = false
     let verificationSequence = 0
+    let logoutNavigationInFlight = false
 
     function commit(next: GuardState) {
       if (!disposed) setGuard(next)
@@ -64,6 +76,12 @@ export function SessionGuard({ children }: { children: ReactNode }) {
       commit({ kind: 'locked', reason, retryable })
     }
 
+    function scheduleClosingRecovery(record: Extract<StudioSessionActivity, { status: 'ended' }>) {
+      closingRecoveryRef.current = setTimeout(() => {
+        void verifyEndedSession(record, false)
+      }, CLOSING_RECOVERY_DELAY_MS)
+    }
+
     function closeInProgress(
       reason: StudioSessionEndReason,
       record?: Extract<StudioSessionActivity, { status: 'ended' }>,
@@ -72,11 +90,16 @@ export function SessionGuard({ children }: { children: ReactNode }) {
       clearClosingRecovery()
       coverImmediately()
       commit({ kind: 'closing', reason })
-      if (record) {
-        closingRecoveryRef.current = setTimeout(() => {
-          void verifyEndedSession(record, false)
-        }, CLOSING_RECOVERY_DELAY_MS)
-      }
+      if (record) scheduleClosingRecovery(record)
+    }
+
+    function endHere(record?: Extract<StudioSessionActivity, { status: 'ended' }>) {
+      clearTimer()
+      clearClosingRecovery()
+      commit({ kind: 'ending' })
+      // The workspace stays on screen here, so a redirect that never lands must not
+      // leave it visible forever: verification turns it into the recovery lock.
+      if (record) scheduleClosingRecovery(record)
     }
 
     function publicEntryIsCurrent() {
@@ -92,7 +115,7 @@ export function SessionGuard({ children }: { children: ReactNode }) {
         return
       }
       coverImmediately()
-      commit({ kind: 'checking' })
+      commit({ kind: 'checking', silent: true })
       window.location.replace('/')
     }
 
@@ -122,7 +145,7 @@ export function SessionGuard({ children }: { children: ReactNode }) {
       const verification = ++verificationSequence
       if (showChecking) {
         coverImmediately()
-        commit({ kind: 'checking' })
+        commit({ kind: 'checking', silent: true })
       }
       try {
         await studioApi.session()
@@ -159,6 +182,10 @@ export function SessionGuard({ children }: { children: ReactNode }) {
     }
 
     function activateFromAuthentication() {
+      // The workspace stays mounted through a manual logout, so its in-flight requests
+      // keep answering. Neither a 200 nor a 401 may move the guard while the logout
+      // navigation is running: only the recovery verification below decides.
+      if (logoutNavigationInFlight) return
       const stored = readStudioSessionActivity()
       if (stored?.status === 'ended') {
         activityRef.current = stored
@@ -178,6 +205,9 @@ export function SessionGuard({ children }: { children: ReactNode }) {
     }
 
     function confirmUnauthenticated() {
+      // Replacing the location because a background request happened to see 401 would
+      // cancel the logout navigation mid-flight and leave the provider session alive.
+      if (logoutNavigationInFlight) return
       verificationSequence += 1
       revealUnauthenticatedEntry()
     }
@@ -207,7 +237,13 @@ export function SessionGuard({ children }: { children: ReactNode }) {
     function closeFromLocalLogout() {
       const stored = readStudioSessionActivity()
       activityRef.current = stored
-      closeInProgress(stored?.status === 'ended' ? (stored.reason ?? 'unknown') : 'unknown')
+      const record = stored?.status === 'ended' ? stored : undefined
+      logoutNavigationInFlight = true
+      if (record?.reason === 'manual') {
+        endHere(record)
+        return
+      }
+      closeInProgress(record?.reason ?? 'unknown', record)
     }
 
     function handleVisibility() {
@@ -246,15 +282,26 @@ export function SessionGuard({ children }: { children: ReactNode }) {
 
   return (
     <>
-      {guard.kind === 'checking' ? (
-        <div data-session-checking>
-          <LoadingStage />
+      {/* `ready` and `ending` must resolve to the same element in the same slot. A
+          different branch would remount the whole workspace, restarting every request
+          it makes at the exact moment the session is being torn down. */}
+      {guard.kind === 'ready' || guard.kind === 'ending' ? (
+        <div
+          data-session-content
+          data-session-ending={guard.kind === 'ending' ? '' : undefined}
+          inert={guard.kind === 'ending'}
+        >
+          {children}
+        </div>
+      ) : guard.kind === 'checking' ? (
+        <div data-session-checking data-session-blank={guard.silent ? '' : undefined}>
+          {guard.silent ? null : <LoadingStage />}
         </div>
       ) : guard.kind === 'closing' ? (
         <div data-session-closing>
           <AccessLanding closing={{ reason: guard.reason }} />
         </div>
-      ) : guard.kind === 'locked' ? (
+      ) : (
         <div data-session-lock>
           <AccessLanding
             recovery={{
@@ -264,9 +311,13 @@ export function SessionGuard({ children }: { children: ReactNode }) {
             }}
           />
         </div>
-      ) : (
-        <div data-session-content>{children}</div>
       )}
+      {guard.kind === 'ending' ? (
+        <p data-session-ending-status role="status" aria-live="polite">
+          <span aria-hidden="true" />
+          Cerrando tu sesión…
+        </p>
+      ) : null}
       <form
         ref={inactivityFormRef}
         action={`${studioApi.apiUrl}/studio/v1/auth/logout`}

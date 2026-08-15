@@ -38,10 +38,23 @@ export function notifyStudioUnauthenticated(): void {
 
 export function announceStudioLogout(reason: StudioSessionEndReason = 'manual'): void {
   if (typeof window === 'undefined') return
-  document.documentElement.dataset.sessionLocked = 'true'
+  // A manual logout is the present person's own request on their own screen, so the
+  // workspace goes inert and illegible instead of vanishing. Every other reason means
+  // nobody asked and nobody may be watching: hide the content outright.
+  if (reason !== 'manual') document.documentElement.dataset.sessionLocked = 'true'
   writeStudioSessionActivity({ version: 1, status: 'ended', endedAt: Date.now(), reason })
   clearStudioSessionCaches()
   window.dispatchEvent(new Event(LOGOUT_EVENT))
+}
+
+/**
+ * True once the API itself has answered 401 for this ended session. `confirmedAt` is
+ * only ever written from a real unauthorized response, so this is an established fact
+ * rather than an assumption, and acting on it can only ever show the access screen.
+ */
+export function studioSessionConfirmedEnded(): boolean {
+  const stored = readStudioSessionActivity()
+  return stored?.status === 'ended' && stored.confirmedAt !== undefined
 }
 
 export function prepareStudioAuthentication(): void {
