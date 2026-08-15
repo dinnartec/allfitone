@@ -131,7 +131,7 @@ async function sample(path) {
     status: response.status,
     durationMs,
     usedWorkos: /(?:^|,)\s*workos-refresh;dur=/.test(response.headers.get('server-timing') ?? ''),
-    region: response.headers.get('x-vercel-id')?.split('::', 1)[0],
+    region: vercelExecutionRegion(response.headers.get('x-vercel-id')),
   }
 }
 
@@ -168,3 +168,4 @@ function positiveInteger(value, fallback) {
   return parsed
 }
 import { setTimeout as delay } from 'node:timers/promises'
+import { vercelExecutionRegion } from './vercel-region.mjs'
