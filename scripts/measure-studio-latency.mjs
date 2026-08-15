@@ -32,71 +32,77 @@ const endpoints = [
 
 let failed = false
 const observedRegions = new Set()
-for (const endpoint of endpoints) {
-  for (let index = 0; index < warmups; index += 1) await sample(endpoint.path)
+const sampler = createStudioHttp2Sampler({ apiUrl, sessionCookie, studioOrigin })
+try {
+  for (const endpoint of endpoints) {
+    for (let index = 0; index < warmups; index += 1) await sampler.sample(endpoint.path)
 
-  const normalDurations = []
-  const workosDurations = []
-  let errors = 0
-  for (let index = 0; index < samples; index += 1) {
-    const result = await sample(endpoint.path)
-    if (result.region) observedRegions.add(result.region)
-    if (result.status < 200 || result.status >= 400) errors += 1
-    const target = result.usedWorkos ? workosDurations : normalDurations
-    target.push(result.durationMs)
-  }
-
-  const summary = summarize(normalDurations)
-  const accepted = errors === 0 && summary.p95 <= 500 && summary.p99 <= 800 && summary.max <= 1_000
-  failed ||= !accepted
-  console.log(
-    JSON.stringify({
-      endpoint: endpoint.name,
-      samples: normalDurations.length,
-      workos_samples: workosDurations.length,
-      errors,
-      ...summary,
-      workos: { samples: workosDurations.length, ...summarize(workosDurations) },
-      accepted,
-    }),
-  )
-
-  if (
-    endpoint.name === 'session' ||
-    endpoint.name === 'entry-context' ||
-    endpoint.name === 'my-memberships'
-  ) {
-    const idleDurations = []
-    const idleWorkosDurations = []
-    let idleErrors = 0
-    for (let index = 0; index < idleCycles; index += 1) {
-      await delay(idleMs)
-      const result = await sample(endpoint.path)
+    const normalDurations = []
+    const workosDurations = []
+    let errors = 0
+    for (let index = 0; index < samples; index += 1) {
+      const result = await sampler.sample(endpoint.path)
       if (result.region) observedRegions.add(result.region)
-      if (result.status < 200 || result.status >= 400) idleErrors += 1
-      const target = result.usedWorkos ? idleWorkosDurations : idleDurations
+      if (result.status < 200 || result.status >= 400) errors += 1
+      const target = result.usedWorkos ? workosDurations : normalDurations
       target.push(result.durationMs)
     }
-    const idleSummary = summarize(idleDurations)
-    const idleAccepted =
-      idleErrors === 0 &&
-      idleDurations.length > 0 &&
-      idleSummary.p95 <= 500 &&
-      idleSummary.p99 <= 800 &&
-      idleSummary.max <= 1_000
-    failed ||= !idleAccepted
+
+    const summary = summarize(normalDurations)
+    const accepted =
+      errors === 0 && summary.p95 <= 500 && summary.p99 <= 800 && summary.max <= 1_000
+    failed ||= !accepted
     console.log(
       JSON.stringify({
         endpoint: endpoint.name,
-        cohort: 'after-idle',
-        samples: idleDurations.length,
-        errors: idleErrors,
-        ...idleSummary,
-        workos: { samples: idleWorkosDurations.length, ...summarize(idleWorkosDurations) },
-        accepted: idleAccepted,
+        samples: normalDurations.length,
+        workos_samples: workosDurations.length,
+        errors,
+        ...summary,
+        workos: { samples: workosDurations.length, ...summarize(workosDurations) },
+        accepted,
       }),
     )
+
+    if (
+      endpoint.name === 'session' ||
+      endpoint.name === 'entry-context' ||
+      endpoint.name === 'my-memberships'
+    ) {
+      const idleDurations = []
+      const idleWorkosDurations = []
+      let idleErrors = 0
+      for (let index = 0; index < idleCycles; index += 1) {
+        await delay(idleMs)
+        const result = await sampler.sample(endpoint.path)
+        if (result.region) observedRegions.add(result.region)
+        if (result.status < 200 || result.status >= 400) idleErrors += 1
+        const target = result.usedWorkos ? idleWorkosDurations : idleDurations
+        target.push(result.durationMs)
+      }
+      const idleSummary = summarize(idleDurations)
+      const idleAccepted =
+        idleErrors === 0 &&
+        idleDurations.length > 0 &&
+        idleSummary.p95 <= 500 &&
+        idleSummary.p99 <= 800 &&
+        idleSummary.max <= 1_000
+      failed ||= !idleAccepted
+      console.log(
+        JSON.stringify({
+          endpoint: endpoint.name,
+          cohort: 'after-idle',
+          samples: idleDurations.length,
+          errors: idleErrors,
+          ...idleSummary,
+          workos: { samples: idleWorkosDurations.length, ...summarize(idleWorkosDurations) },
+          accepted: idleAccepted,
+        }),
+      )
+    }
   }
+} finally {
+  await sampler.close()
 }
 
 if (!organizationId) {
@@ -116,26 +122,6 @@ if (expectedRegion) {
   )
 }
 if (failed) process.exitCode = 1
-
-async function sample(path) {
-  const startedAt = globalThis.performance.now()
-  const response = await globalThis.fetch(`${apiUrl}${path}`, {
-    headers: {
-      Accept: 'application/json',
-      Cookie: sessionCookie,
-      Origin: studioOrigin,
-    },
-    redirect: 'manual',
-  })
-  const durationMs = globalThis.performance.now() - startedAt
-  await response.arrayBuffer()
-  return {
-    status: response.status,
-    durationMs,
-    usedWorkos: /(?:^|,)\s*workos-refresh;dur=/.test(response.headers.get('server-timing') ?? ''),
-    region: vercelExecutionRegion(response.headers.get('x-vercel-id')),
-  }
-}
 
 function summarize(values) {
   if (values.length === 0) return { p50: 0, p95: 0, p99: 0, max: 0 }
@@ -171,4 +157,4 @@ function positiveInteger(value, fallback) {
 }
 import { setTimeout as delay } from 'node:timers/promises'
 import { URL } from 'node:url'
-import { vercelExecutionRegion } from './vercel-region.mjs'
+import { createStudioHttp2Sampler } from './studio-http2-sampler.mjs'
