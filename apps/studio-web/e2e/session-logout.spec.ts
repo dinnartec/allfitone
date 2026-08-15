@@ -92,6 +92,28 @@ test('keeps the workspace inert and illegible in place while a manual logout is 
 })
 
 /**
+ * Coming back from the provider used to cost two 401s behind two loading screens: the
+ * guard verifying the ended session, then the entry screen bootstrapping from scratch.
+ * The first answer is the whole answer.
+ */
+test('returning from a manual logout verifies the session once', async ({ page }) => {
+  const fixture = createStudioApiFixture({ memberships: [activeMembership] })
+  await installStudioApiMock(page, fixture)
+  await page.goto(`/organizations/${activeMembership.organization_id}`)
+  await expect(page.getByRole('heading', { name: 'Inicio', level: 1 })).toBeVisible()
+  fixture.requests.length = 0
+
+  await page.getByRole('button', { name: 'Cerrar sesión' }).click()
+
+  await expect(page.getByRole('link', { name: 'Entrar a Studio' })).toBeVisible()
+  expect(
+    fixture.requests.filter(
+      (request) => request.method === 'GET' && request.path === '/studio/v1/session',
+    ),
+  ).toHaveLength(1)
+})
+
+/**
  * Any request that resolves while the logout POST is already navigating answers 401.
  * Treating that as "the session ended, go home" would replace the location and cancel
  * the navigation, leaving the provider session alive.

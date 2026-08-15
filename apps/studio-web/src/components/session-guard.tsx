@@ -23,7 +23,10 @@ import { StudioApiError, studioApi } from '@/lib/studio-api'
  * where the change was not requested and has to be explained.
  */
 type GuardState =
-  | { kind: 'checking' }
+  // `silent` marks the checks that run on the way out of a session. "Preparando tu
+  // espacio…" under the full Studio chrome is the wrong promise there: a bare canvas
+  // says nothing rather than saying the opposite of what is about to happen.
+  | { kind: 'checking'; silent: boolean }
   | { kind: 'ready' }
   | { kind: 'ending' }
   | { kind: 'closing'; reason: StudioSessionEndReason }
@@ -32,7 +35,7 @@ type GuardState =
 const CLOSING_RECOVERY_DELAY_MS = 10_000
 
 export function SessionGuard({ children }: { children: ReactNode }) {
-  const [guard, setGuard] = useState<GuardState>({ kind: 'checking' })
+  const [guard, setGuard] = useState<GuardState>({ kind: 'checking', silent: false })
   const activityRef = useRef<StudioSessionActivity | undefined>(undefined)
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const closingRecoveryRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
@@ -112,7 +115,7 @@ export function SessionGuard({ children }: { children: ReactNode }) {
         return
       }
       coverImmediately()
-      commit({ kind: 'checking' })
+      commit({ kind: 'checking', silent: true })
       window.location.replace('/')
     }
 
@@ -142,7 +145,7 @@ export function SessionGuard({ children }: { children: ReactNode }) {
       const verification = ++verificationSequence
       if (showChecking) {
         coverImmediately()
-        commit({ kind: 'checking' })
+        commit({ kind: 'checking', silent: true })
       }
       try {
         await studioApi.session()
@@ -291,8 +294,8 @@ export function SessionGuard({ children }: { children: ReactNode }) {
           {children}
         </div>
       ) : guard.kind === 'checking' ? (
-        <div data-session-checking>
-          <LoadingStage />
+        <div data-session-checking data-session-blank={guard.silent ? '' : undefined}>
+          {guard.silent ? null : <LoadingStage />}
         </div>
       ) : guard.kind === 'closing' ? (
         <div data-session-closing>

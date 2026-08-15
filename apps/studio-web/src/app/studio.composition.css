@@ -12,6 +12,12 @@ html[data-session-locked='true']::after {
 [data-session-lock] [data-slot='access-panel-action'] {
   gap: var(--afo-space-3);
 }
+[data-session-blank] {
+  position: fixed;
+  inset: 0;
+  background: var(--afo-color-neutral-canvas-light);
+}
+
 /* The workspace a person is leaving on purpose. The blur has to defeat reading, not
    just soften it — this is health data — while the layout stays put so the logout
    reads as one continuous act rather than a screen change. */

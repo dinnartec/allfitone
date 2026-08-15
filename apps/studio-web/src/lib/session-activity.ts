@@ -47,6 +47,16 @@ export function announceStudioLogout(reason: StudioSessionEndReason = 'manual'):
   window.dispatchEvent(new Event(LOGOUT_EVENT))
 }
 
+/**
+ * True once the API itself has answered 401 for this ended session. `confirmedAt` is
+ * only ever written from a real unauthorized response, so this is an established fact
+ * rather than an assumption, and acting on it can only ever show the access screen.
+ */
+export function studioSessionConfirmedEnded(): boolean {
+  const stored = readStudioSessionActivity()
+  return stored?.status === 'ended' && stored.confirmedAt !== undefined
+}
+
 export function prepareStudioAuthentication(): void {
   clearStudioSessionActivity()
 }
