@@ -135,6 +135,9 @@ jobs:
       - name: Install
         run: bun install --frozen-lockfile
 
+      - name: Build Studio workspace dependencies
+        run: bun run --cwd packages/telemetry build
+
       - name: Install Chromium
         run: bunx playwright install --with-deps chromium
 
