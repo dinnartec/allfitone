@@ -44,6 +44,8 @@ export function studioInvitationRoutes(
       credentials: true,
       allowMethods: ['GET', 'POST', 'OPTIONS'],
       allowHeaders: ['Content-Type', 'Idempotency-Key', 'Command-Id'],
+      exposeHeaders: ['ETag', 'Server-Timing'],
+      maxAge: 600,
     }),
   )
   routes.use('*', async (c, next) => {

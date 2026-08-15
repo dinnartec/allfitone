@@ -4,6 +4,7 @@ import Script from 'next/script'
 import type { ReactNode } from 'react'
 
 import { SessionGuard } from '@/components/session-guard'
+import { StudioEntryContextProvider } from '@/components/studio-entry-context'
 import { invitationTokenCaptureScript } from '@/lib/invitation-token'
 
 import '@allfitone/react/tokens.css'
@@ -49,7 +50,9 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
           strategy="beforeInteractive"
           dangerouslySetInnerHTML={{ __html: invitationTokenCaptureScript() }}
         />
-        <SessionGuard>{children}</SessionGuard>
+        <StudioEntryContextProvider>
+          <SessionGuard>{children}</SessionGuard>
+        </StudioEntryContextProvider>
       </body>
     </html>
   )

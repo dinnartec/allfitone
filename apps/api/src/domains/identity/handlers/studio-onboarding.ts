@@ -145,6 +145,8 @@ function corsPolicy(origin: string) {
     credentials: true,
     allowMethods: ['GET', 'POST', 'PUT', 'OPTIONS'],
     allowHeaders: ['Content-Type', 'Idempotency-Key', 'Command-Id', 'If-None-Match'],
+    exposeHeaders: ['ETag', 'Server-Timing'],
+    maxAge: 600,
   })
 }
 

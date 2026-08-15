@@ -3,6 +3,7 @@ import type { AllfitV1Schemas } from '@allfitone/contracts'
 import { notifyStudioAuthenticated, notifyStudioUnauthenticated } from './session-activity'
 
 export type StudioSession = AllfitV1Schemas['StudioSession']
+export type StudioEntryContext = AllfitV1Schemas['StudioEntryContext']
 export type OnboardingAttempt = AllfitV1Schemas['StudioOnboardingAttempt']
 export type AdultEligibilityEvidence = AllfitV1Schemas['AdultEligibilityEvidence']
 export type Membership = AllfitV1Schemas['StudioMembership']
@@ -48,6 +49,8 @@ export const studioApi = {
   apiUrl: API_URL,
 
   session: () => request<StudioSession>('/studio/v1/session'),
+
+  entryContext: () => request<StudioEntryContext>('/studio/v1/entry-context'),
 
   startAttempt: (command: CommandHeaders, invitationToken?: string) =>
     request<OnboardingAttempt>('/studio/v1/onboarding-attempts', {

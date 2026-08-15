@@ -981,6 +981,32 @@ paths:
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
 
+  /studio/v1/entry-context:
+    get:
+      tags: [Studio Organizations]
+      operationId: getStudioEntryContext
+      x-allfit-operation: OP-ORG-020
+      x-allfit-cache: private-no-store
+      summary: Resolve the authenticated Studio entry context in one request
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Registration state, account identity, and memberships for Studio routing
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/PrivateNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudioEntryContext'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/AccountClosed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
   /studio/v1/organization-types:
     get:
       tags: [Studio Organizations]
@@ -2810,6 +2836,34 @@ components:
           $ref: '#/components/schemas/StudioRegistrationStatus'
         identity:
           $ref: '#/components/schemas/StudioAccountIdentity'
+    StudioEntryContext:
+      type: object
+      additionalProperties: false
+      required: [authenticated, registration_status, identity, memberships]
+      properties:
+        authenticated:
+          type: boolean
+          const: true
+        registration_status:
+          type: string
+          enum: [complete, incomplete]
+        identity:
+          type: object
+          additionalProperties: false
+          required: [name, email]
+          properties:
+            name:
+              type: [string, 'null']
+              minLength: 1
+              maxLength: 201
+            email:
+              type: [string, 'null']
+              format: email
+        memberships:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/StudioMembership'
     StudioAccountIdentity:
       type: object
       additionalProperties: false

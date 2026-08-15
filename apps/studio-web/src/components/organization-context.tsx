@@ -18,11 +18,13 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react'
 
 import { LogoutForm } from './logout-form'
+import { useStudioEntryContext } from './studio-entry-context'
 import { resolveOrganizationContext } from '@/lib/membership-routing'
 import { StudioApiError, studioApi, type Membership } from '@/lib/studio-api'
 
@@ -33,9 +35,16 @@ interface OrganizationContextValue {
   switchOrganization: (organizationId: string) => void
 }
 
+type VerificationState = 'idle' | 'checking' | 'error'
+
 type OrganizationContextState =
   | { kind: 'loading'; label: string }
-  | { kind: 'ready'; current: Membership; memberships: Membership[] }
+  | {
+      kind: 'ready'
+      current: Membership
+      memberships: Membership[]
+      verification: VerificationState
+    }
   | { kind: 'forbidden' }
   | { kind: 'error' }
 
@@ -49,48 +58,91 @@ export function OrganizationContextBoundary({
   children: ReactNode
 }) {
   const router = useRouter()
-  const [state, setState] = useState<OrganizationContextState>({
-    kind: 'loading',
-    label: 'Comprobando tu acceso…',
-  })
-  const requestId = useRef(0)
+  const entryContext = useStudioEntryContext()
+  const [state, setState] = useState<OrganizationContextState>(() =>
+    stateFromSnapshot(entryContext.freshMemberships(), organizationId),
+  )
+  const mounted = useRef(true)
   const requestController = useRef<AbortController | null>(null)
+  const inFlight = useRef<Promise<void> | null>(null)
+  const lastVerifiedAt = useRef(0)
+  const loadedOrganizationId = useRef(organizationId)
 
-  const load = useCallback(async () => {
-    requestController.current?.abort()
+  const load = useCallback((): Promise<void> => {
+    if (inFlight.current) return inFlight.current
+
     const controller = new AbortController()
-    const currentRequest = requestId.current + 1
-    requestId.current = currentRequest
     requestController.current = controller
-    setState({ kind: 'loading', label: 'Comprobando tu acceso…' })
+    setState((current) =>
+      current.kind === 'ready'
+        ? { ...current, verification: 'checking' }
+        : { kind: 'loading', label: 'Comprobando tu acceso…' },
+    )
 
-    try {
-      const { items } = await studioApi.memberships(controller.signal)
-      if (controller.signal.aborted || currentRequest !== requestId.current) return
-      setState(resolveOrganizationContext(items, organizationId))
-    } catch (caught) {
-      if (controller.signal.aborted || currentRequest !== requestId.current) return
-      if (caught instanceof StudioApiError && caught.status === 401) {
-        router.replace('/')
-        return
+    const request = (async () => {
+      try {
+        const { items } = await studioApi.memberships(controller.signal)
+        if (!mounted.current || controller.signal.aborted) return
+        entryContext.storeMemberships(items)
+        lastVerifiedAt.current = Date.now()
+        const resolved = resolveOrganizationContext(items, organizationId)
+        setState(
+          resolved.kind === 'ready' ? { ...resolved, verification: 'idle' } : { kind: 'forbidden' },
+        )
+      } catch (caught) {
+        if (!mounted.current || controller.signal.aborted) return
+        if (caught instanceof StudioApiError && caught.status === 401) {
+          router.replace('/')
+          return
+        }
+        setState((current) =>
+          current.kind === 'ready' ? { ...current, verification: 'error' } : { kind: 'error' },
+        )
       }
-      setState({ kind: 'error' })
-    }
-  }, [organizationId, router])
+    })()
+
+    inFlight.current = request
+    void request.finally(() => {
+      if (inFlight.current === request) inFlight.current = null
+      if (requestController.current === controller) requestController.current = null
+    })
+    return request
+  }, [entryContext, organizationId, router])
 
   useEffect(() => {
-    void load()
-    return () => {
-      requestId.current += 1
+    mounted.current = true
+    if (loadedOrganizationId.current !== organizationId) {
+      loadedOrganizationId.current = organizationId
       requestController.current?.abort()
+      requestController.current = null
+      inFlight.current = null
     }
-  }, [load])
+    const cached = resolveFreshOrganization(entryContext.freshMemberships(), organizationId)
+    if (cached) {
+      lastVerifiedAt.current = Date.now()
+      setState({ ...cached, verification: 'idle' })
+    } else void load()
+
+    return () => {
+      mounted.current = false
+      queueMicrotask(() => {
+        if (mounted.current) return
+        requestController.current?.abort()
+        requestController.current = null
+        inFlight.current = null
+      })
+    }
+  }, [entryContext, load, organizationId])
 
   useEffect(() => {
-    const onVisibilityChange = () => {
-      if (document.visibilityState === 'visible') void load()
+    const revalidate = () => {
+      if (Date.now() - lastVerifiedAt.current < 1_000) return
+      void load()
     }
-    const onPageShow = () => void load()
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') revalidate()
+    }
+    const onPageShow = () => revalidate()
 
     document.addEventListener('visibilitychange', onVisibilityChange)
     window.addEventListener('pageshow', onPageShow)
@@ -103,12 +155,26 @@ export function OrganizationContextBoundary({
   const switchOrganization = useCallback(
     (nextOrganizationId: string) => {
       if (nextOrganizationId === organizationId) return
-      requestId.current += 1
       requestController.current?.abort()
+      requestController.current = null
+      inFlight.current = null
       setState({ kind: 'loading', label: 'Cambiando de organización…' })
       router.replace(`/organizations/${nextOrganizationId}`)
     },
     [organizationId, router],
+  )
+
+  const value = useMemo<OrganizationContextValue | undefined>(
+    () =>
+      state.kind === 'ready'
+        ? {
+            current: state.current,
+            memberships: state.memberships,
+            reload: () => void load(),
+            switchOrganization,
+          }
+        : undefined,
+    [load, state, switchOrganization],
   )
 
   if (state.kind === 'loading') {
@@ -139,30 +205,36 @@ export function OrganizationContextBoundary({
   if (state.kind === 'error') {
     return (
       <OrganizationStateFrame>
-        <div data-organization-state>
-          <Alert variant="danger" live="assertive">
-            <AlertTitle>No pudimos comprobar tu acceso</AlertTitle>
-            <AlertDescription>
-              La conexión falló de forma temporal. El contenido permanecerá bloqueado hasta
-              comprobar nuevamente tu membresía.
-            </AlertDescription>
-            <Button onClick={() => void load()}>Reintentar</Button>
-          </Alert>
-        </div>
+        <OrganizationVerificationError onRetry={() => void load()} />
       </OrganizationStateFrame>
     )
   }
+  if (!value) return null
 
-  const value: OrganizationContextValue = {
-    current: state.current,
-    memberships: state.memberships,
-    reload: () => void load(),
-    switchOrganization,
-  }
-
+  const blocked = state.verification !== 'idle'
   return (
-    <OrganizationContext value={value} key={state.current.organization_id}>
-      {children}
+    <OrganizationContext value={value}>
+      <div data-organization-context-root>
+        <div
+          data-organization-protected-content
+          inert={blocked ? true : undefined}
+          aria-hidden={blocked ? true : undefined}
+        >
+          {children}
+        </div>
+        {blocked ? (
+          <div data-organization-verification-overlay>
+            {state.verification === 'checking' ? (
+              <div data-organization-state role="status" aria-live="polite">
+                <Spinner label="Comprobando tu acceso…" />
+                <p>Comprobando tu acceso…</p>
+              </div>
+            ) : (
+              <OrganizationVerificationError onRetry={() => void load()} />
+            )}
+          </div>
+        ) : null}
+      </div>
     </OrganizationContext>
   )
 }
@@ -171,6 +243,40 @@ export function useOrganizationContext(): OrganizationContextValue {
   const value = useContext(OrganizationContext)
   if (!value) throw new Error('useOrganizationContext requires OrganizationContextBoundary')
   return value
+}
+
+function stateFromSnapshot(
+  memberships: Membership[] | undefined,
+  organizationId: string,
+): OrganizationContextState {
+  const ready = resolveFreshOrganization(memberships, organizationId)
+  return ready
+    ? { ...ready, verification: 'idle' }
+    : { kind: 'loading', label: 'Comprobando tu acceso…' }
+}
+
+function resolveFreshOrganization(
+  memberships: Membership[] | undefined,
+  organizationId: string,
+): Extract<OrganizationContextState, { kind: 'ready' }> | undefined {
+  if (!memberships) return undefined
+  const resolved = resolveOrganizationContext(memberships, organizationId)
+  return resolved.kind === 'ready' ? { ...resolved, verification: 'idle' } : undefined
+}
+
+function OrganizationVerificationError({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div data-organization-state>
+      <Alert variant="danger" live="assertive">
+        <AlertTitle>No pudimos comprobar tu acceso</AlertTitle>
+        <AlertDescription>
+          La conexión falló de forma temporal. El contenido permanecerá bloqueado hasta comprobar
+          nuevamente tu membresía.
+        </AlertDescription>
+        <Button onClick={onRetry}>Reintentar</Button>
+      </Alert>
+    </div>
+  )
 }
 
 function OrganizationStateFrame({ children }: { children: ReactNode }) {

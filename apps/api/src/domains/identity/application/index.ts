@@ -2,6 +2,7 @@
 
 import { AuthError, type AuthProvider, type SessionTokens } from '@allfitone/auth-provider'
 import { hashInvitationToken } from '@allfitone/notifications'
+import { measureStudioRequestPhase } from '../../../platform/observability/index.js'
 
 import type {
   IdentitySessionDatabase,
@@ -202,6 +203,10 @@ export function createStudioSessionService(
   async function resolveAccountIdentity(opaqueToken: string): Promise<StudioAccountIdentity> {
     const { session, secret } = await authenticatedSession(opaqueToken, true)
     const registration = await dependencies.database.resolveRegistration(session.accountId)
+    if (!registration) {
+      await dependencies.database.revokeSession(session.sessionId)
+      throw new StudioSessionError('unauthenticated')
+    }
     if (registration.personStatus === 'closed') {
       await dependencies.database.revokeSession(session.sessionId)
       throw new StudioSessionError('account-closed')
@@ -240,7 +245,9 @@ export function createStudioSessionService(
     if (session.accessTokenExpiresAt.getTime() <= now().getTime() + REFRESH_WINDOW_MS) {
       let refreshed: SessionTokens
       try {
-        refreshed = await dependencies.authProvider.refresh(secret.tokens.refreshToken, 'studio')
+        refreshed = await measureStudioRequestPhase('workos-refresh', () =>
+          dependencies.authProvider.refresh(secret.tokens.refreshToken, 'studio'),
+        )
       } catch (error) {
         if (error instanceof AuthError && error.retryable) {
           if (session.accessTokenExpiresAt.getTime() <= now().getTime()) {
@@ -276,7 +283,9 @@ export function createStudioSessionService(
 
   async function verify(accessToken: string, session: StoredAccessSession): Promise<void> {
     try {
-      const verified = await dependencies.authProvider.verifyAccessToken(accessToken, 'studio')
+      const verified = await measureStudioRequestPhase('token-local', () =>
+        dependencies.authProvider.verifyAccessToken(accessToken, 'studio'),
+      )
       if (
         verified.subject !== session.externalSubject ||
         verified.sessionId !== session.providerSessionId ||

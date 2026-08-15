@@ -415,6 +415,23 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/studio/v1/entry-context': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** Resolve the authenticated Studio entry context in one request */
+    get: operations['getStudioEntryContext']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/studio/v1/organization-types': {
     parameters: {
       query?: never
@@ -956,6 +973,18 @@ export interface components {
       authenticated: true
       registration_status: components['schemas']['StudioRegistrationStatus']
       identity: components['schemas']['StudioAccountIdentity']
+    }
+    StudioEntryContext: {
+      /** @constant */
+      authenticated: true
+      /** @enum {string} */
+      registration_status: 'complete' | 'incomplete'
+      identity: {
+        name: string | null
+        /** Format: email */
+        email: string | null
+      }
+      memberships: components['schemas']['StudioMembership'][]
     }
     StudioAccountIdentity: {
       given_name: string | null
@@ -3303,6 +3332,30 @@ export interface operations {
       }
       401: components['responses']['Unauthenticated']
       403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  getStudioEntryContext: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Registration state, account identity, and memberships for Studio routing */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['PrivateNoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['StudioEntryContext']
+        }
+      }
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['AccountClosed']
       503: components['responses']['UpstreamUnavailable']
     }
   }

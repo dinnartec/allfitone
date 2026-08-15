@@ -150,6 +150,12 @@ export const allfitV1ContractManifest = {
       allfitOperation: 'OP-IDN-025',
     },
     {
+      method: 'GET',
+      path: '/studio/v1/entry-context',
+      operationId: 'getStudioEntryContext',
+      allfitOperation: 'OP-ORG-020',
+    },
+    {
       method: 'POST',
       path: '/studio/v1/invitations/decisions',
       operationId: 'decideStudioTeamInvitation',

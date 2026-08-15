@@ -45,6 +45,8 @@ export function studioIdentityRoutes(injectedService?: StudioSessionService): Ho
       // Mounted Studio handlers share one middleware chain, so this policy can answer
       // preflights for onboarding and organizations before their own policies.
       allowHeaders: ['Content-Type', 'Idempotency-Key', 'Command-Id', 'If-None-Match'],
+      exposeHeaders: ['ETag', 'Server-Timing'],
+      maxAge: 600,
     }),
   )
 

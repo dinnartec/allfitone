@@ -35,7 +35,8 @@ export function studioCatalogRoutes(
       credentials: true,
       allowMethods: ['GET', 'POST', 'PUT', 'OPTIONS'],
       allowHeaders: ['Content-Type', 'Idempotency-Key', 'Command-Id', 'If-None-Match'],
-      exposeHeaders: ['ETag'],
+      exposeHeaders: ['ETag', 'Server-Timing'],
+      maxAge: 600,
     }),
   )
   routes.use('*', async (c, next) => {

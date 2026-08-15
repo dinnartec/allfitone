@@ -47,12 +47,39 @@ export function studioOrganizationRoutes(
       credentials: true,
       allowMethods: ['GET', 'POST', 'PUT', 'OPTIONS'],
       allowHeaders: ['Content-Type', 'Idempotency-Key', 'Command-Id', 'If-None-Match'],
-      exposeHeaders: ['ETag'],
+      exposeHeaders: ['ETag', 'Server-Timing'],
+      maxAge: 600,
     }),
   )
   routes.use('*', async (c, next) => {
     await next()
     c.header('Vary', 'Origin')
+  })
+
+  routes.get('/entry-context', async (c) => {
+    c.header('Cache-Control', 'private, no-store')
+    try {
+      const token = getCookie(c, STUDIO_SESSION_COOKIE)
+      if (!token) return fail(c, 'unauthenticated', 'missing session cookie')
+      const context = await sessions().resolveAccountIdentity(token)
+      const memberships = context.actor.personId
+        ? await organizations().listMemberships(context.actor)
+        : []
+      const { givenName, familyName, verifiedEmail } = context.identity
+      return c.json({
+        authenticated: true as const,
+        registration_status: context.actor.personId
+          ? ('complete' as const)
+          : ('incomplete' as const),
+        identity: {
+          name: givenName && familyName ? `${givenName} ${familyName}` : null,
+          email: verifiedEmail,
+        },
+        memberships: memberships.map(membershipPresentation),
+      })
+    } catch (error) {
+      return operationFailure(c, error)
+    }
   })
 
   routes.get('/me/memberships', async (c) => {
@@ -66,16 +93,7 @@ export function studioOrganizationRoutes(
         activeCount === 0 ? 'zero' : activeCount === 1 ? 'one' : 'multiple',
       )
       return c.json({
-        items: items.map((membership) => ({
-          membership_id: membership.membershipId,
-          organization_id: membership.organizationId,
-          display_name: membership.displayName,
-          type_code: membership.typeCode,
-          status: membership.status,
-          joined_at: membership.joinedAt.toISOString(),
-          ...(membership.endedAt ? { ended_at: membership.endedAt.toISOString() } : {}),
-          roles: membership.roles,
-        })),
+        items: items.map(membershipPresentation),
       })
     } catch (error) {
       return operationFailure(c, error)
@@ -217,6 +235,28 @@ export function studioOrganizationRoutes(
   })
 
   return routes
+}
+
+function membershipPresentation(membership: {
+  membershipId: string
+  organizationId: string
+  displayName: string
+  typeCode: OrganizationTypeCode
+  status: OrganizationMembershipStatus
+  joinedAt: Date
+  endedAt?: Date
+  roles: Array<'owner' | 'admin' | 'coach' | 'staff'>
+}) {
+  return {
+    membership_id: membership.membershipId,
+    organization_id: membership.organizationId,
+    display_name: membership.displayName,
+    type_code: membership.typeCode,
+    status: membership.status,
+    joined_at: membership.joinedAt.toISOString(),
+    ...(membership.endedAt ? { ended_at: membership.endedAt.toISOString() } : {}),
+    roles: membership.roles,
+  }
 }
 
 async function studioActor(c: Context, sessions: StudioSessionService) {

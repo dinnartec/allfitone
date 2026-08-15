@@ -248,7 +248,7 @@ test('waits without mutations and rechecks an empty membership list', async ({ p
     fixture.requests.filter(
       (request) => request.method === 'GET' && request.path === '/studio/v1/me/memberships',
     ),
-  ).toHaveLength(2)
+  ).toHaveLength(1)
 })
 
 test('enters a newly active membership from the invitation wait', async ({ page }) => {
@@ -291,7 +291,7 @@ test('returns an expired waiting session to the access landing', async ({ page }
         return undefined
       }
       membershipReads += 1
-      return membershipReads === 2 ? { status: 401, body: error('unauthenticated') } : undefined
+      return membershipReads === 1 ? { status: 401, body: error('unauthenticated') } : undefined
     },
   })
   await installStudioApiMock(page, fixture)
@@ -311,7 +311,7 @@ test('recovers when checking memberships fails temporarily', async ({ page }) =>
         return undefined
       }
       membershipReads += 1
-      return membershipReads === 2
+      return membershipReads === 1
         ? { status: 503, body: error('upstream-unavailable') }
         : undefined
     },
@@ -346,6 +346,18 @@ test('routes one active membership directly and ignores terminated history', asy
   ).toBeVisible()
   await expect(page.getByRole('link', { name: 'Mi cuenta', exact: true })).toBeVisible()
   await expect(page.getByText(/perfil profesional/i)).toHaveCount(0)
+  expect(
+    fixture.requests.filter(
+      (request) => request.method === 'GET' && request.path === '/studio/v1/entry-context',
+    ),
+  ).toHaveLength(1)
+  expect(
+    fixture.requests.filter(
+      (request) =>
+        request.method === 'GET' &&
+        (request.path === '/studio/v1/session' || request.path === '/studio/v1/me/memberships'),
+    ),
+  ).toHaveLength(0)
 })
 
 test('shows the organization selector only for multiple active memberships', async ({ page }) => {
@@ -361,6 +373,43 @@ test('shows the organization selector only for multiple active memberships', asy
   await expect(page.getByText(secondActiveMembership.display_name)).toBeVisible()
   await expect(page.getByText(terminatedMembership.display_name)).toHaveCount(0)
   await expect(page.getByRole('link', { name: 'Mi cuenta', exact: true })).toHaveCount(0)
+})
+
+test('revalidates memberships after the in-memory entry snapshot expires', async ({ page }) => {
+  await page.addInitScript(() => {
+    const clock = window as Window & { __studioTestNow?: number }
+    clock.__studioTestNow = 1_800_000_000_000
+    Date.now = () => clock.__studioTestNow ?? 0
+  })
+  const fixture = createStudioApiFixture({
+    memberships: [activeMembership, secondActiveMembership],
+  })
+  await installStudioApiMock(page, fixture)
+  await page.goto('/')
+
+  await page
+    .locator('[data-membership-card]')
+    .filter({ hasText: activeMembership.display_name })
+    .getByRole('button', { name: 'Entrar al espacio' })
+    .click()
+  await expect(page).toHaveURL(`/organizations/${activeMembership.organization_id}`)
+  expect(
+    fixture.requests.filter((request) => request.path === '/studio/v1/me/memberships'),
+  ).toHaveLength(0)
+
+  await page.evaluate(() => {
+    const clock = window as Window & { __studioTestNow?: number }
+    clock.__studioTestNow = (clock.__studioTestNow ?? 0) + 31_000
+  })
+  await page.getByLabel('Cambiar de organización').click()
+  await page.getByRole('option', { name: `${secondActiveMembership.display_name} · Coach` }).click()
+  await expect(page).toHaveURL(`/organizations/${secondActiveMembership.organization_id}`)
+  await expect
+    .poll(
+      () =>
+        fixture.requests.filter((request) => request.path === '/studio/v1/me/memberships').length,
+    )
+    .toBe(1)
 })
 
 test('keeps the active organization and its roles visible in the workspace', async ({ page }) => {
@@ -444,6 +493,7 @@ test('revalidates a restored workspace and blocks a membership that ended', asyn
   await page.goto(`/organizations/${activeMembership.organization_id}`)
   await expect(page.getByRole('heading', { name: 'Inicio', level: 1 })).toBeVisible()
 
+  await page.waitForTimeout(1_100)
   fixture.memberships = [
     { ...activeMembership, status: 'terminated', ended_at: '2026-08-10T12:00:00.000Z' },
     secondActiveMembership,
@@ -452,6 +502,46 @@ test('revalidates a restored workspace and blocks a membership that ended', asyn
 
   await expect(page.getByText('Este espacio no está disponible')).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Inicio', level: 1 })).toHaveCount(0)
+})
+
+test('blocks revalidation without remounting the workspace state', async ({ page }) => {
+  let delayRevalidation = false
+  let releaseRevalidation: (() => void) | undefined
+  const fixture = createStudioApiFixture({
+    memberships: [activeMembership],
+    intercept: async (request) => {
+      if (
+        delayRevalidation &&
+        request.method === 'GET' &&
+        request.path === '/studio/v1/me/memberships'
+      ) {
+        await new Promise<void>((resolve) => {
+          releaseRevalidation = resolve
+        })
+      }
+      return undefined
+    },
+  })
+  await installStudioApiMock(page, fixture)
+  await page.goto(`/organizations/${activeMembership.organization_id}/team`)
+
+  const terminatedFilter = page.getByRole('button', { name: 'Finalizados' })
+  await terminatedFilter.click()
+  await expect(page.getByText('Camila Torres')).toBeVisible()
+
+  await page.waitForTimeout(1_100)
+  delayRevalidation = true
+  await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pageshow')))
+
+  const protectedContent = page.locator('[data-organization-protected-content]')
+  await expect(protectedContent).toHaveAttribute('inert', '')
+  await expect(protectedContent).toHaveAttribute('aria-hidden', 'true')
+  await expect(page.locator('[data-organization-verification-overlay]')).toBeVisible()
+
+  releaseRevalidation?.()
+  await expect(page.locator('[data-organization-verification-overlay]')).toHaveCount(0)
+  await expect(terminatedFilter).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByText('Camila Torres')).toBeVisible()
 })
 
 test('recovers from a temporary organization context failure without exposing content', async ({
@@ -480,7 +570,8 @@ test('returns an expired organization session to the access landing', async ({ p
   const fixture = createStudioApiFixture({
     memberships: [activeMembership],
     intercept: (request) =>
-      request.method === 'GET' && request.path === '/studio/v1/me/memberships'
+      request.method === 'GET' &&
+      (request.path === '/studio/v1/me/memberships' || request.path === '/studio/v1/entry-context')
         ? { status: 401, body: error('unauthenticated') }
         : undefined,
   })
@@ -548,7 +639,7 @@ test('routes incomplete and expired sessions through the existing entry flow', a
 test('returns unauthenticated sessions to the access landing', async ({ page }) => {
   const fixture = createStudioApiFixture({
     intercept: (request) =>
-      request.path === '/studio/v1/session'
+      request.path === '/studio/v1/entry-context'
         ? { status: 401, body: error('unauthenticated') }
         : undefined,
   })

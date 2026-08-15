@@ -1,12 +1,15 @@
 import { describe, expect, spyOn, test } from 'bun:test'
+import { Hono } from 'hono'
 
 import {
+  measureStudioRequestPhase,
   recordIdentityPasswordResetWebhook,
   recordStudioAuthCallback,
   recordStudioLogout,
   recordStudioMembershipDestination,
   recordStudioOrganizationQuery,
   recordStudioRegistrationIncomplete,
+  studioRequestTiming,
 } from './index.js'
 
 describe('Studio operational counters', () => {
@@ -96,5 +99,60 @@ describe('Studio operational counters', () => {
       dimensions: { outcome: 'account-absent' },
     })
     info.mockRestore()
+  })
+})
+
+describe('Studio request timing', () => {
+  test('emits safe phase timings and a route template', async () => {
+    const app = new Hono()
+    const info = spyOn(console, 'info').mockImplementation(() => undefined)
+    try {
+      app.use('/studio/v1/*', studioRequestTiming())
+      app.get('/studio/v1/organizations/:organizationId', async (c) => {
+        await measureStudioRequestPhase('session-db', async () => Promise.resolve())
+        return c.json({ ok: true })
+      })
+
+      const response = await app.request(
+        '/studio/v1/organizations/0199c000-0000-7000-8000-000000000099',
+      )
+      const timing = response.headers.get('server-timing') ?? ''
+      const message = String(info.mock.calls[0]?.[0])
+      expect(timing).toContain('session-db;dur=')
+      expect(timing).toContain('total;dur=')
+      expect(info).toHaveBeenCalledTimes(1)
+      expect(message).toContain('/studio/v1/organizations/:organizationId')
+      expect(message).not.toContain('0199c000-0000-7000-8000-000000000099')
+    } finally {
+      info.mockRestore()
+    }
+  })
+
+  test('emits the closed slow-request alert above one second', async () => {
+    const app = new Hono()
+    const info = spyOn(console, 'info').mockImplementation(() => undefined)
+    const warn = spyOn(console, 'warn').mockImplementation(() => undefined)
+    const moments = [0, 1_001]
+    const now = spyOn(globalThis.performance, 'now').mockImplementation(
+      () => moments.shift() ?? 1_001,
+    )
+    try {
+      app.use('/studio/v1/*', studioRequestTiming())
+      app.get('/studio/v1/session', (c) => c.json({ ok: true }))
+
+      await app.request('/studio/v1/session')
+
+      expect(warn).toHaveBeenCalledTimes(1)
+      expect(JSON.parse(String(warn.mock.calls[0]?.[0]))).toEqual({
+        kind: 'alert',
+        name: 'studio.http.slow_request',
+        value_ms: 1_001,
+        dimensions: { operation: '/studio/v1/session', outcome: 'success', region: 'local' },
+      })
+    } finally {
+      now.mockRestore()
+      warn.mockRestore()
+      info.mockRestore()
+    }
   })
 })

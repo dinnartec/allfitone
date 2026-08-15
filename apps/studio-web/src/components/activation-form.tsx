@@ -20,7 +20,7 @@ import {
   newCommand,
   studioApi,
   type OnboardingAttempt,
-  type StudioSession,
+  type StudioEntryContext,
 } from '@/lib/studio-api'
 
 export function ActivationForm({
@@ -31,13 +31,13 @@ export function ActivationForm({
   onRetryAttempt,
 }: {
   attempt: OnboardingAttempt
-  identity: StudioSession['identity']
+  identity: StudioEntryContext['identity']
   onComplete: (fullName: string) => void
   onSessionExpired: () => void
   onRetryAttempt: () => Promise<void>
 }) {
-  const [givenName, setGivenName] = useState(identity.given_name ?? '')
-  const [familyName, setFamilyName] = useState(identity.family_name ?? '')
+  const [givenName, setGivenName] = useState('')
+  const [familyName, setFamilyName] = useState('')
   const [adult, setAdult] = useState(false)
   const [terms, setTerms] = useState(false)
   const [privacy, setPrivacy] = useState(false)
@@ -48,8 +48,9 @@ export function ActivationForm({
   const [expired, setExpired] = useState(() => new Date(attempt.expires_at).getTime() <= Date.now())
   const [error, setError] = useState<string>()
 
-  const valid =
-    givenName.trim().length > 0 && familyName.trim().length > 0 && adult && terms && privacy
+  const completeName =
+    identity.name !== null || (givenName.trim().length > 0 && familyName.trim().length > 0)
+  const valid = completeName && adult && terms && privacy
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -77,7 +78,7 @@ export function ActivationForm({
       await studioApi.completeOnboarding(attempt.id, completion, completionCommand)
       evidenceCommandIntent.reset()
       completionCommandIntent.reset()
-      onComplete(`${givenName.trim()} ${familyName.trim()}`)
+      onComplete(identity.name ?? `${givenName.trim()} ${familyName.trim()}`)
     } catch (caught) {
       if (caught instanceof StudioApiError && caught.status === 401) {
         onSessionExpired()
@@ -86,7 +87,7 @@ export function ActivationForm({
       if (caught instanceof StudioApiError && caught.status === 409) {
         evidenceCommandIntent.reset()
         completionCommandIntent.reset()
-        onComplete(`${givenName.trim()} ${familyName.trim()}`)
+        onComplete(identity.name ?? `${givenName.trim()} ${familyName.trim()}`)
         return
       }
       if (caught instanceof StudioApiError && caught.status === 400) {
@@ -105,8 +106,7 @@ export function ActivationForm({
 
   function completionBody() {
     return {
-      ...(identity.given_name ? {} : { given_name: givenName.trim() }),
-      ...(identity.family_name ? {} : { family_name: familyName.trim() }),
+      ...(identity.name ? {} : { given_name: givenName.trim(), family_name: familyName.trim() }),
       terms_accepted: true as const,
       privacy_notice_accepted: true as const,
     }
@@ -143,42 +143,38 @@ export function ActivationForm({
 
         <form data-studio-form onSubmit={submit} noValidate>
           <FieldGroup>
-            {identity.given_name && identity.family_name ? (
+            {identity.name ? (
               <div data-studio-identity-summary>
                 <span>Nombre de tu cuenta</span>
-                <strong>{`${givenName.trim()} ${familyName.trim()}`}</strong>
+                <strong>{identity.name}</strong>
                 <p>Usaremos este nombre para crear tu identidad personal en Allfit One.</p>
               </div>
             ) : (
               <div data-studio-field-grid>
-                {!identity.given_name ? (
-                  <Field>
-                    <FieldLabel htmlFor="given-name">Nombres</FieldLabel>
-                    <Input
-                      id="given-name"
-                      name="givenName"
-                      autoComplete="given-name"
-                      maxLength={100}
-                      value={givenName}
-                      onChange={(event) => setGivenName(event.target.value)}
-                      required
-                    />
-                  </Field>
-                ) : null}
-                {!identity.family_name ? (
-                  <Field>
-                    <FieldLabel htmlFor="family-name">Apellidos</FieldLabel>
-                    <Input
-                      id="family-name"
-                      name="familyName"
-                      autoComplete="family-name"
-                      maxLength={100}
-                      value={familyName}
-                      onChange={(event) => setFamilyName(event.target.value)}
-                      required
-                    />
-                  </Field>
-                ) : null}
+                <Field>
+                  <FieldLabel htmlFor="given-name">Nombres</FieldLabel>
+                  <Input
+                    id="given-name"
+                    name="givenName"
+                    autoComplete="given-name"
+                    maxLength={100}
+                    value={givenName}
+                    onChange={(event) => setGivenName(event.target.value)}
+                    required
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="family-name">Apellidos</FieldLabel>
+                  <Input
+                    id="family-name"
+                    name="familyName"
+                    autoComplete="family-name"
+                    maxLength={100}
+                    value={familyName}
+                    onChange={(event) => setFamilyName(event.target.value)}
+                    required
+                  />
+                </Field>
               </div>
             )}
 
