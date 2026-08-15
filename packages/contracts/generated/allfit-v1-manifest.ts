@@ -43,6 +43,12 @@ export const allfitV1ContractManifest = {
     },
     {
       method: 'GET',
+      path: '/backoffice/v1/telemetry-config',
+      operationId: 'getBackofficeTelemetryConfig',
+      allfitOperation: 'OP-SYS-011',
+    },
+    {
+      method: 'GET',
       path: '/space/v1/agenda',
       operationId: 'listMyAgenda',
       allfitOperation: 'OP-PLN-016',
@@ -130,6 +136,12 @@ export const allfitV1ContractManifest = {
       path: '/space/v1/planned-sessions/{plannedSessionId}/attempts',
       operationId: 'startPlannedSessionAttempt',
       allfitOperation: 'OP-EXE-001',
+    },
+    {
+      method: 'GET',
+      path: '/space/v1/telemetry-config',
+      operationId: 'getSpaceTelemetryConfig',
+      allfitOperation: 'OP-SYS-011',
     },
     {
       method: 'GET',
@@ -328,6 +340,12 @@ export const allfitV1ContractManifest = {
       path: '/studio/v1/session',
       operationId: 'getStudioSession',
       allfitOperation: 'OP-IDN-027',
+    },
+    {
+      method: 'GET',
+      path: '/studio/v1/telemetry-config',
+      operationId: 'getStudioTelemetryConfig',
+      allfitOperation: 'OP-SYS-011',
     },
   ],
   exclusions: [

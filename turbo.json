@@ -4,7 +4,18 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "env": ["NEXT_PUBLIC_API_URL", "NEXT_PUBLIC_STAFF_INVITATIONS_ENABLED"],
+      "env": [
+        "NEXT_PUBLIC_API_URL",
+        "NEXT_PUBLIC_STAFF_INVITATIONS_ENABLED",
+        "NEXT_PUBLIC_POSTHOG_KEY",
+        "NEXT_PUBLIC_POSTHOG_HOST",
+        "NEXT_PUBLIC_ANALYTICS_ENVIRONMENT",
+        "NEXT_PUBLIC_APP_RELEASE",
+        "EXPO_PUBLIC_POSTHOG_KEY",
+        "EXPO_PUBLIC_POSTHOG_HOST",
+        "EXPO_PUBLIC_ANALYTICS_ENVIRONMENT",
+        "EXPO_PUBLIC_APP_RELEASE"
+      ],
       "outputs": ["dist/**", ".next/**", "!.next/cache/**", ".vercel/output/**"]
     },
     "dev": {

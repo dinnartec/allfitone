@@ -76,6 +76,7 @@ export function studioOrganizationRoutes(
           email: verifiedEmail,
         },
         memberships: memberships.map(membershipPresentation),
+        analytics: context.analytics ?? { distinct_id: null },
       })
     } catch (error) {
       return operationFailure(c, error)

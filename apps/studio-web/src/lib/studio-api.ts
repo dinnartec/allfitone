@@ -1,6 +1,8 @@
 import type { AllfitV1Schemas } from '@allfitone/contracts'
+import type { ClientOperation } from '@allfitone/telemetry'
 
 import { notifyStudioAuthenticated, notifyStudioUnauthenticated } from './session-activity'
+import { captureStudioApiRequest, setStudioTelemetryIdentity } from './telemetry'
 
 export type StudioSession = AllfitV1Schemas['StudioSession']
 export type StudioEntryContext = AllfitV1Schemas['StudioEntryContext']
@@ -48,9 +50,17 @@ export class StudioApiError extends Error {
 export const studioApi = {
   apiUrl: API_URL,
 
-  session: () => request<StudioSession>('/studio/v1/session'),
+  session: async () => {
+    const session = await request<StudioSession>('/studio/v1/session')
+    setStudioTelemetryIdentity(session.analytics?.distinct_id ?? null)
+    return session
+  },
 
-  entryContext: () => request<StudioEntryContext>('/studio/v1/entry-context'),
+  entryContext: async () => {
+    const context = await request<StudioEntryContext>('/studio/v1/entry-context')
+    setStudioTelemetryIdentity(context.analytics?.distinct_id ?? null)
+    return context
+  },
 
   startAttempt: (command: CommandHeaders, invitationToken?: string) =>
     request<OnboardingAttempt>('/studio/v1/onboarding-attempts', {
@@ -284,18 +294,91 @@ async function catalogRequest<T>(
 }
 
 async function fetchApi(path: string, init: RequestInit = {}): Promise<Response> {
-  const response = await fetch(`${API_URL}${path}`, {
-    ...init,
-    credentials: 'include',
-    headers: {
-      Accept: 'application/json',
-      ...(init.body ? { 'Content-Type': 'application/json' } : {}),
-      ...init.headers,
-    },
-  })
-  if (response.status === 401) notifyStudioUnauthenticated()
-  else if (response.ok) notifyStudioAuthenticated()
-  return response
+  const startedAt = performance.now()
+  const method = requestMethod(init.method)
+  const operation = studioOperation(path, method)
+  let response: Response | undefined
+  try {
+    response = await fetch(`${API_URL}${path}`, {
+      ...init,
+      credentials: 'include',
+      headers: {
+        Accept: 'application/json',
+        ...(init.body ? { 'Content-Type': 'application/json' } : {}),
+        ...init.headers,
+      },
+    })
+    if (response.status === 401) {
+      setStudioTelemetryIdentity(null)
+      notifyStudioUnauthenticated()
+    } else if (response.ok) {
+      notifyStudioAuthenticated()
+    }
+    return response
+  } finally {
+    if (operation) {
+      captureStudioApiRequest({
+        operation,
+        method,
+        durationMs: performance.now() - startedAt,
+        ...(response ? { response } : {}),
+      })
+    }
+  }
+}
+
+function requestMethod(method: string | undefined): 'DELETE' | 'GET' | 'PATCH' | 'POST' | 'PUT' {
+  return method === 'DELETE' || method === 'PATCH' || method === 'POST' || method === 'PUT'
+    ? method
+    : 'GET'
+}
+
+function studioOperation(
+  path: string,
+  method: 'DELETE' | 'GET' | 'PATCH' | 'POST' | 'PUT',
+): ClientOperation | undefined {
+  const pathname = path.split('?')[0] ?? ''
+  const exact: Record<string, ClientOperation> = {
+    '/studio/v1/session': 'studio.session',
+    '/studio/v1/entry-context': 'studio.entry_context',
+    '/studio/v1/onboarding-attempts': 'studio.onboarding.start',
+    '/studio/v1/me/memberships': 'studio.memberships',
+    '/studio/v1/organization-types': 'studio.catalog.organization_types',
+    '/studio/v1/me': 'studio.me',
+    '/studio/v1/professional-specialties': 'studio.catalog.professional_specialties',
+    '/studio/v1/professional-credential-types': 'studio.catalog.credential_types',
+    '/studio/v1/me/professional-profile': 'studio.professional.profile_update',
+    '/studio/v1/me/professional-credentials': 'studio.professional.credential_declare',
+    '/studio/v1/organizations': 'studio.organization.create',
+    '/studio/v1/invitations/resolve': 'studio.invitation.resolve',
+    '/studio/v1/invitations/decisions': 'studio.invitation.decide',
+  }
+  if (exact[pathname]) return exact[pathname]
+  if (/^\/studio\/v1\/onboarding-attempts\/[^/]+\/eligibility-evidence$/.test(pathname)) {
+    return 'studio.onboarding.eligibility'
+  }
+  if (/^\/studio\/v1\/onboarding-attempts\/[^/]+\/completion$/.test(pathname)) {
+    return 'studio.onboarding.complete'
+  }
+  if (/^\/studio\/v1\/me\/professional-credentials\/[^/]+\/revisions$/.test(pathname)) {
+    return 'studio.professional.credential_revise'
+  }
+  if (/^\/studio\/v1\/me\/professional-credentials\/[^/]+\/retirement$/.test(pathname)) {
+    return 'studio.professional.credential_retire'
+  }
+  if (/^\/studio\/v1\/organizations\/[^/]+\/memberships$/.test(pathname)) {
+    return 'studio.organization.memberships'
+  }
+  if (/^\/studio\/v1\/organizations\/[^/]+\/roles$/.test(pathname)) {
+    return 'studio.catalog.organization_roles'
+  }
+  if (/^\/studio\/v1\/organizations\/[^/]+\/invitations\/[^/]+\/revocation$/.test(pathname)) {
+    return 'studio.invitation.revoke'
+  }
+  if (/^\/studio\/v1\/organizations\/[^/]+\/invitations$/.test(pathname)) {
+    return method === 'POST' ? 'studio.invitation.create' : 'studio.invitation.list'
+  }
+  return undefined
 }
 
 async function responseError(response: Response): Promise<StudioApiError> {

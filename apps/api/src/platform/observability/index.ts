@@ -7,18 +7,26 @@
  */
 
 import { AsyncLocalStorage } from 'node:async_hooks'
+import type {
+  TelemetryEnvironment,
+  TelemetryEventFor,
+  TelemetryOutcome,
+  TelemetrySurface,
+} from '@allfitone/telemetry'
 import type { MiddlewareHandler } from 'hono'
 import { matchedRoutes } from 'hono/route'
+import { serverOperationalLogs, serverTelemetry } from '../telemetry/server.js'
 
-export type StudioRequestPhase =
+export type RequestPhase =
   'session-db' | 'token-local' | 'workos-refresh' | 'actor-db' | 'business-db'
+export type StudioRequestPhase = RequestPhase
 
-interface StudioRequestTimingStore {
-  durations: Partial<Record<StudioRequestPhase, number>>
+interface RequestTimingStore {
+  durations: Partial<Record<RequestPhase, number>>
 }
 
-const studioRequestTimings = new AsyncLocalStorage<StudioRequestTimingStore>()
-const STUDIO_SLOW_REQUEST_MS = 1_000
+const requestTimings = new AsyncLocalStorage<RequestTimingStore>()
+const SLOW_REQUEST_MS = 1_000
 
 type StudioAuthCallbackFailure =
   'authentication-failed' | 'missing-code' | 'missing-state-cookie' | 'state-mismatch'
@@ -128,17 +136,25 @@ export function recordStudioOrganizationQuery(
   writeCounter(`studio.organization.${query}`, { outcome })
 }
 
-export function studioRequestTiming(): MiddlewareHandler {
+export function requestTiming(surface: Exclude<TelemetrySurface, 'system'>): MiddlewareHandler {
   return async (c, next) => {
     const startedAt = performance.now()
-    const store: StudioRequestTimingStore = { durations: {} }
+    const store: RequestTimingStore = { durations: {} }
+    let requestFailed = false
+    let requestError: unknown
 
-    await studioRequestTimings.run(store, async () => {
-      await next()
+    await requestTimings.run(store, async () => {
+      try {
+        await next()
+      } catch (error) {
+        requestFailed = true
+        requestError = error
+      }
     })
 
     const totalMs = performance.now() - startedAt
-    const phaseEntries = Object.entries(store.durations) as Array<[StudioRequestPhase, number]>
+    const status = requestFailed ? 500 : c.res.status
+    const phaseEntries = Object.entries(store.durations) as Array<[RequestPhase, number]>
     const timingHeader = [
       ...phaseEntries.map(([phase, duration]) => `${phase};dur=${duration.toFixed(1)}`),
       `total;dur=${totalMs.toFixed(1)}`,
@@ -150,17 +166,17 @@ export function studioRequestTiming(): MiddlewareHandler {
         .toReversed()
         .find((route) => route.method === c.req.method && !route.path.includes('*'))?.path ??
       'unmatched'
-    const outcome = requestOutcome(c.res.status)
-    const externalDependency = store.durations['workos-refresh'] ? 'workos' : 'none'
+    const outcome = requestOutcome(status)
+    const externalDependency = store.durations['workos-refresh'] === undefined ? 'none' : 'workos'
     console.info(
       JSON.stringify({
         kind: 'distribution',
-        name: 'studio.http.duration',
+        name: `${surface}.http.duration`,
         value_ms: roundDuration(totalMs),
         dimensions: {
           operation,
           method: c.req.method,
-          status: String(c.res.status),
+          status: String(status),
           outcome,
           region: process.env.VERCEL_REGION ?? 'local',
           external_dependency: externalDependency,
@@ -171,28 +187,69 @@ export function studioRequestTiming(): MiddlewareHandler {
       }),
     )
 
-    if (externalDependency === 'none' && totalMs > STUDIO_SLOW_REQUEST_MS) {
+    const method = telemetryMethod(c.req.method)
+    if (method) {
+      const event: TelemetryEventFor<'server.http_request.completed.v1'> = {
+        event: 'server.http_request.completed.v1',
+        properties: {
+          surface,
+          service: 'allfit-api',
+          environment: telemetryEnvironment(),
+          release: telemetryRelease(),
+          platform: 'node',
+          operation,
+          method,
+          status,
+          outcome,
+          duration_ms: roundDuration(totalMs),
+          external_dependency: externalDependency,
+          region: safeRegion(),
+          ...phaseProperties(store.durations),
+        },
+      }
+      serverTelemetry().capture(event)
+      if (status >= 500) {
+        serverOperationalLogs().emit('failure', event)
+      } else if (externalDependency === 'none' && totalMs > SLOW_REQUEST_MS) {
+        serverOperationalLogs().emit('slow-request', event)
+      }
+    }
+
+    if (externalDependency === 'none' && totalMs > SLOW_REQUEST_MS) {
       console.warn(
         JSON.stringify({
           kind: 'alert',
-          name: 'studio.http.slow_request',
+          name: `${surface}.http.slow_request`,
           value_ms: roundDuration(totalMs),
           dimensions: { operation, outcome, region: process.env.VERCEL_REGION ?? 'local' },
         }),
       )
     }
+
+    if (requestFailed) throw requestError
   }
 }
 
+export function studioRequestTiming(): MiddlewareHandler {
+  return requestTiming('studio')
+}
+
 export async function measureStudioRequestPhase<T>(
-  phase: StudioRequestPhase,
+  phase: RequestPhase,
+  operation: () => Promise<T>,
+): Promise<T> {
+  return measureRequestPhase(phase, operation)
+}
+
+export async function measureRequestPhase<T>(
+  phase: RequestPhase,
   operation: () => Promise<T>,
 ): Promise<T> {
   const startedAt = performance.now()
   try {
     return await operation()
   } finally {
-    const store = studioRequestTimings.getStore()
+    const store = requestTimings.getStore()
     if (store) {
       store.durations[phase] =
         (store.durations[phase] ?? 0) + Math.max(0, performance.now() - startedAt)
@@ -200,14 +257,64 @@ export async function measureStudioRequestPhase<T>(
   }
 }
 
-function requestOutcome(
-  status: number,
-): 'success' | 'unauthenticated' | 'forbidden' | 'unavailable' | 'error' {
+function requestOutcome(status: number): TelemetryOutcome {
   if (status < 400) return 'success'
   if (status === 401) return 'unauthenticated'
   if (status === 403) return 'forbidden'
+  if (status === 429) return 'rate-limited'
   if (status === 503) return 'unavailable'
-  return 'error'
+  return status < 500 ? 'invalid-request' : 'error'
+}
+
+function telemetryMethod(method: string): 'DELETE' | 'GET' | 'PATCH' | 'POST' | 'PUT' | undefined {
+  return ['DELETE', 'GET', 'PATCH', 'POST', 'PUT'].includes(method)
+    ? (method as 'DELETE' | 'GET' | 'PATCH' | 'POST' | 'PUT')
+    : undefined
+}
+
+function telemetryEnvironment(): TelemetryEnvironment {
+  if (process.env.VERCEL_ENV === 'production' || process.env.NODE_ENV === 'production') {
+    return 'production'
+  }
+  if (process.env.VERCEL_ENV === 'preview') return 'preview'
+  return 'development'
+}
+
+function telemetryRelease(): string {
+  const raw = process.env.VERCEL_GIT_COMMIT_SHA ?? process.env.RELEASE ?? 'local'
+  const safe = raw.replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 80)
+  return safe || 'local'
+}
+
+function safeRegion(): string {
+  const raw = process.env.VERCEL_REGION ?? 'local'
+  const safe = raw.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 32)
+  return safe || 'local'
+}
+
+function phaseProperties(
+  durations: Partial<Record<RequestPhase, number>>,
+): Pick<
+  TelemetryEventFor<'server.http_request.completed.v1'>['properties'],
+  'actor_db_ms' | 'business_db_ms' | 'session_db_ms' | 'token_local_ms' | 'workos_refresh_ms'
+> {
+  return {
+    ...(durations['session-db'] === undefined
+      ? {}
+      : { session_db_ms: roundDuration(durations['session-db']) }),
+    ...(durations['token-local'] === undefined
+      ? {}
+      : { token_local_ms: roundDuration(durations['token-local']) }),
+    ...(durations['workos-refresh'] === undefined
+      ? {}
+      : { workos_refresh_ms: roundDuration(durations['workos-refresh']) }),
+    ...(durations['actor-db'] === undefined
+      ? {}
+      : { actor_db_ms: roundDuration(durations['actor-db']) }),
+    ...(durations['business-db'] === undefined
+      ? {}
+      : { business_db_ms: roundDuration(durations['business-db']) }),
+  }
 }
 
 function roundDuration(duration: number): number {

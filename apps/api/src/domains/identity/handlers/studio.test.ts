@@ -63,6 +63,7 @@ function fakeSessions(overrides: Partial<StudioSessionService> = {}): StudioSess
       authenticated: true,
       registration_status: 'complete',
       identity: { given_name: 'Ada', family_name: 'Lovelace' },
+      analytics: { distinct_id: null },
     }),
     resolveActor: async () => ({ accountId: 'account_1', personId: 'person_1' }),
     resolveAccountIdentity: async () => ({
@@ -240,6 +241,7 @@ describe('GET /session', () => {
       authenticated: true,
       registration_status: 'complete',
       identity: { given_name: 'Ada', family_name: 'Lovelace' },
+      analytics: { distinct_id: null },
     })
   })
 

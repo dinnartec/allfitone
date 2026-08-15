@@ -146,6 +146,7 @@ describe('Studio organization routes', () => {
       registration_status: 'incomplete',
       identity: { name: null, email: null },
       memberships: [],
+      analytics: { distinct_id: null },
     })
   })
 

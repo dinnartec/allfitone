@@ -20,10 +20,22 @@ import {
   studioInvitationRoutes,
   studioOnboardingRoutes,
   studioProfessionalRoutes,
+  trustedBackofficeWebUrl,
+  trustedStudioWebUrl,
 } from './domains/identity/index.js'
 import { studioOrganizationRoutes } from './domains/organizations/index.js'
+import { clientTelemetryConfigRoutes } from './platform/telemetry/client-config.js'
 
 export function mountSurfaces(app: Hono): void {
+  app.route(
+    '/studio/v1',
+    clientTelemetryConfigRoutes('studio', new URL(trustedStudioWebUrl()).origin),
+  )
+  app.route(
+    '/backoffice/v1',
+    clientTelemetryConfigRoutes('backoffice', new URL(trustedBackofficeWebUrl()).origin),
+  )
+  app.route('/space/v1', clientTelemetryConfigRoutes('space'))
   app.route('/studio/v1', studioIdentityRoutes())
   app.route('/studio/v1', studioOnboardingRoutes())
   app.route('/studio/v1', studioProfessionalRoutes())

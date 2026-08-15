@@ -191,6 +191,7 @@ describe('POST /space/v1/auth/registrations/verification', () => {
       accessToken: 'at_1',
       refreshToken: 'rt_1',
       expiresIn: 300,
+      analytics: { distinct_id: null },
     })
   })
 

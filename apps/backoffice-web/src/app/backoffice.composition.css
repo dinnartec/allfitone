@@ -1,0 +1,37 @@
+[data-analytics-controls] {
+  position: fixed;
+  z-index: 100;
+  right: 16px;
+  bottom: 16px;
+  max-width: min(390px, calc(100vw - 32px));
+}
+
+[data-analytics-controls][data-expanded='true'] {
+  top: 16px;
+  right: auto;
+  bottom: auto;
+  left: 16px;
+}
+
+[data-analytics-panel] {
+  display: grid;
+  padding: 16px;
+  gap: 10px;
+  border: 1px solid var(--afo-color-neutral-ink-muted);
+  border-radius: var(--afo-radius-xl);
+  background: var(--afo-color-neutral-ink);
+  box-shadow: var(--afo-shadow-lg);
+  color: var(--afo-color-neutral-white);
+}
+
+[data-analytics-panel] p {
+  margin: 0;
+  font-size: var(--afo-font-size-sm);
+  line-height: var(--afo-line-height-relaxed);
+}
+
+[data-analytics-actions] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

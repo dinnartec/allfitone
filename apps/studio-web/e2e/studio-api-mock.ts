@@ -2,6 +2,7 @@ import type { Page, Request, Route } from '@playwright/test'
 
 const API_ORIGIN = 'http://127.0.0.1:8080'
 const STUDIO_ORIGIN = 'http://127.0.0.1:3101'
+export const TEST_ANALYTICS_ID = `a1_${'A'.repeat(43)}`
 
 export interface MockRequest {
   method: string
@@ -220,6 +221,7 @@ export function createStudioApiFixture(
       authenticated: true,
       registration_status: 'complete',
       identity: { given_name: 'Ada', family_name: 'Lovelace' },
+      analytics: { distinct_id: TEST_ANALYTICS_ID },
     },
     memberships: [],
     organizationMemberships: [activeTeamMember, terminatedTeamMember],
@@ -252,7 +254,19 @@ export function createStudioApiFixture(
   }
 }
 
-export async function installStudioApiMock(page: Page, fixture: StudioApiFixture): Promise<void> {
+export async function installStudioApiMock(
+  page: Page,
+  fixture: StudioApiFixture,
+  options: { consent?: 'denied' | 'undecided' } = {},
+): Promise<void> {
+  if (options.consent !== 'undecided') {
+    await page.addInitScript(() => {
+      localStorage.setItem(
+        'allfit.analytics-v1',
+        JSON.stringify({ decision: 'denied', notice_version: 'analytics-v1' }),
+      )
+    })
+  }
   await page.route(`${API_ORIGIN}/studio/v1/**`, async (route) => {
     const request = toMockRequest(route.request())
     if (request.method === 'OPTIONS') {
@@ -276,6 +290,13 @@ function defaultResponse(
   request: MockRequest,
   fixture: StudioApiFixture,
 ): MockResponse | undefined {
+  if (request.method === 'GET' && request.path === '/studio/v1/telemetry-config') {
+    return {
+      status: 200,
+      body: { enabled: true, notice_version: 'analytics-v1' },
+      headers: { 'Cache-Control': 'public, max-age=300' },
+    }
+  }
   if (request.method === 'GET' && request.path === '/studio/v1/entry-context') {
     if (fixture.signedOut) return { status: 401, body: error('unauthenticated') }
     const session = objectValue(fixture.session)
@@ -293,6 +314,7 @@ function defaultResponse(
           email: null,
         },
         memberships: fixture.memberships,
+        analytics: objectValue(session.analytics),
       },
     }
   }

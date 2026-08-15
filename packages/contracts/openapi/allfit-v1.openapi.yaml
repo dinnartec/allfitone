@@ -15,6 +15,8 @@ info:
 servers:
   - url: /
 tags:
+  - name: Platform Telemetry
+    description: Public, non-identifying client telemetry gates for each product surface.
   - name: Studio Identity
     description: Hosted authentication and opaque browser sessions for Allfit Studio.
   - name: Backoffice Identity
@@ -89,6 +91,27 @@ x-allfit-media-url-policy:
     failure_without_effective_access: 404
 
 paths:
+  /backoffice/v1/telemetry-config:
+    get:
+      tags: [Platform Telemetry]
+      operationId: getBackofficeTelemetryConfig
+      x-allfit-operation: OP-SYS-011
+      x-allfit-cache: public-300
+      summary: Read the public Backoffice telemetry gate
+      security: []
+      responses:
+        '200':
+          description: Current Backoffice client telemetry gate and notice version
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                const: public, max-age=300
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TelemetryClientConfig'
+
   /backoffice/v1/auth/password:
     post:
       tags: [Backoffice Identity]
@@ -310,6 +333,27 @@ paths:
         '429':
           $ref: '#/components/responses/TooManyRequests'
 
+  /space/v1/telemetry-config:
+    get:
+      tags: [Platform Telemetry]
+      operationId: getSpaceTelemetryConfig
+      x-allfit-operation: OP-SYS-011
+      x-allfit-cache: public-300
+      summary: Read the public Space telemetry gate
+      security: []
+      responses:
+        '200':
+          description: Current Space client telemetry gate and notice version
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                const: public, max-age=300
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TelemetryClientConfig'
+
   /space/v1/auth/registrations:
     post:
       tags: [Space Identity]
@@ -436,6 +480,27 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
+
+  /studio/v1/telemetry-config:
+    get:
+      tags: [Platform Telemetry]
+      operationId: getStudioTelemetryConfig
+      x-allfit-operation: OP-SYS-011
+      x-allfit-cache: public-300
+      summary: Read the public Studio telemetry gate
+      security: []
+      responses:
+        '200':
+          description: Current Studio client telemetry gate and notice version
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                const: public, max-age=300
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TelemetryClientConfig'
 
   /studio/v1/auth/start:
     get:
@@ -2717,6 +2782,7 @@ components:
         - assurance_level
         - authentication_method
         - operator
+        - analytics
         - assurance_verified_at
         - inactivity_expires_at
         - absolute_expires_at
@@ -2743,6 +2809,8 @@ components:
               type: string
               minLength: 1
               maxLength: 100
+        analytics:
+          $ref: '#/components/schemas/AnalyticsIdentity'
         assurance_verified_at:
           type: string
           format: date-time
@@ -2806,7 +2874,7 @@ components:
     SpaceSessionTokens:
       type: object
       additionalProperties: false
-      required: [accessToken, refreshToken, expiresIn]
+      required: [accessToken, refreshToken, expiresIn, analytics]
       properties:
         accessToken:
           type: string
@@ -2821,13 +2889,15 @@ components:
           type: integer
           minimum: 1
           description: Seconds until the access token expires.
+        analytics:
+          $ref: '#/components/schemas/AnalyticsIdentity'
     StudioRegistrationStatus:
       type: string
       enum: [complete, registration_incomplete]
     StudioSession:
       type: object
       additionalProperties: false
-      required: [authenticated, registration_status, identity]
+      required: [authenticated, registration_status, identity, analytics]
       properties:
         authenticated:
           type: boolean
@@ -2836,10 +2906,12 @@ components:
           $ref: '#/components/schemas/StudioRegistrationStatus'
         identity:
           $ref: '#/components/schemas/StudioAccountIdentity'
+        analytics:
+          $ref: '#/components/schemas/AnalyticsIdentity'
     StudioEntryContext:
       type: object
       additionalProperties: false
-      required: [authenticated, registration_status, identity, memberships]
+      required: [authenticated, registration_status, identity, memberships, analytics]
       properties:
         authenticated:
           type: boolean
@@ -2864,6 +2936,29 @@ components:
           maxItems: 100
           items:
             $ref: '#/components/schemas/StudioMembership'
+        analytics:
+          $ref: '#/components/schemas/AnalyticsIdentity'
+    AnalyticsIdentity:
+      type: object
+      additionalProperties: false
+      required: [distinct_id]
+      properties:
+        distinct_id:
+          type: [string, 'null']
+          pattern: '^a[1-9][0-9]*_[A-Za-z0-9_-]{43}$'
+          description: >-
+            Versioned HMAC pseudonym used only after local analytics consent.
+            It is never accepted as authentication or domain identity.
+    TelemetryClientConfig:
+      type: object
+      additionalProperties: false
+      required: [enabled, notice_version]
+      properties:
+        enabled:
+          type: boolean
+        notice_version:
+          type: string
+          const: analytics-v1
     StudioAccountIdentity:
       type: object
       additionalProperties: false

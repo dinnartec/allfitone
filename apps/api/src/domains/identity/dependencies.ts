@@ -79,7 +79,9 @@ export function setStudioSessionService(service: StudioSessionService | undefine
  */
 export function spaceRegistrationService(): SpaceRegistrationService {
   if (cachedRegistrations) return cachedRegistrations
-  cachedRegistrations = createSpaceRegistrationService({ authProvider: authProvider() })
+  const issuer = process.env.WORKOS_ISSUER
+  if (!issuer) throw new Error('WORKOS_ISSUER is not set')
+  cachedRegistrations = createSpaceRegistrationService({ authProvider: authProvider(), issuer })
   return cachedRegistrations
 }
 

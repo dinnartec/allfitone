@@ -1,0 +1,56 @@
+{
+  "name": "@allfitone/telemetry",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Closed telemetry contracts, privacy guards and provider-neutral ports",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "bun": "./src/index.ts",
+      "import": "./dist/index.js"
+    },
+    "./node": {
+      "types": "./src/node.ts",
+      "bun": "./src/node.ts",
+      "import": "./dist/node.js"
+    },
+    "./posthog-node": {
+      "types": "./src/posthog-node.ts",
+      "bun": "./src/posthog-node.ts",
+      "import": "./dist/posthog-node.js"
+    },
+    "./posthog-browser": {
+      "types": "./src/posthog-browser.ts",
+      "bun": "./src/posthog-browser.ts",
+      "import": "./dist/posthog-browser.js"
+    },
+    "./posthog-react-native": {
+      "types": "./src/posthog-react-native.ts",
+      "bun": "./src/posthog-react-native.ts",
+      "import": "./dist/posthog-react-native.js"
+    },
+    "./posthog-otlp-logs": {
+      "types": "./src/posthog-otlp-logs.ts",
+      "bun": "./src/posthog-otlp-logs.ts",
+      "import": "./dist/posthog-otlp-logs.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test src"
+  },
+  "dependencies": {
+    "@opentelemetry/api-logs": "0.221.0",
+    "@opentelemetry/exporter-logs-otlp-http": "0.221.0",
+    "@opentelemetry/resources": "2.10.0",
+    "@opentelemetry/sdk-logs": "0.221.0",
+    "posthog-js": "1.417.1",
+    "posthog-node": "5.49.1",
+    "posthog-react-native": "4.63.2"
+  }
+}

@@ -51,6 +51,12 @@ export async function mockBackofficeApi(
   context: BrowserContext,
   fixture: BackofficeFixture,
 ): Promise<void> {
+  await context.addInitScript(() => {
+    localStorage.setItem(
+      'allfit.analytics-v1',
+      JSON.stringify({ decision: 'denied', notice_version: 'analytics-v1' }),
+    )
+  })
   await context.route('http://127.0.0.1:8080/backoffice/v1/**', async (route) => {
     const request = toMockRequest(route)
     fixture.requests.push(request)

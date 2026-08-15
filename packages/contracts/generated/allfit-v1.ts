@@ -4,6 +4,23 @@
  */
 
 export interface paths {
+  '/backoffice/v1/telemetry-config': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** Read the public Backoffice telemetry gate */
+    get: operations['getBackofficeTelemetryConfig']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/backoffice/v1/auth/password': {
     parameters: {
       query?: never
@@ -106,6 +123,23 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/space/v1/telemetry-config': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** Read the public Space telemetry gate */
+    get: operations['getSpaceTelemetryConfig']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/space/v1/auth/registrations': {
     parameters: {
       query?: never
@@ -154,6 +188,23 @@ export interface paths {
      *     Rate limiting is mandatory here: a six-digit code is brute-forceable in minutes otherwise.
      */
     post: operations['verifySpaceRegistration']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/studio/v1/telemetry-config': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** Read the public Studio telemetry gate */
+    get: operations['getStudioTelemetryConfig']
+    put?: never
+    post?: never
     delete?: never
     options?: never
     head?: never
@@ -924,6 +975,7 @@ export interface components {
         given_name: string
         family_name: string
       }
+      analytics: components['schemas']['AnalyticsIdentity']
       /** Format: date-time */
       assurance_verified_at: string
       /** Format: date-time */
@@ -965,6 +1017,7 @@ export interface components {
       refreshToken: string
       /** @description Seconds until the access token expires. */
       expiresIn: number
+      analytics: components['schemas']['AnalyticsIdentity']
     }
     /** @enum {string} */
     StudioRegistrationStatus: 'complete' | 'registration_incomplete'
@@ -973,6 +1026,7 @@ export interface components {
       authenticated: true
       registration_status: components['schemas']['StudioRegistrationStatus']
       identity: components['schemas']['StudioAccountIdentity']
+      analytics: components['schemas']['AnalyticsIdentity']
     }
     StudioEntryContext: {
       /** @constant */
@@ -985,6 +1039,16 @@ export interface components {
         email: string | null
       }
       memberships: components['schemas']['StudioMembership'][]
+      analytics: components['schemas']['AnalyticsIdentity']
+    }
+    AnalyticsIdentity: {
+      /** @description Versioned HMAC pseudonym used only after local analytics consent. It is never accepted as authentication or domain identity. */
+      distinct_id: string | null
+    }
+    TelemetryClientConfig: {
+      enabled: boolean
+      /** @constant */
+      notice_version: 'analytics-v1'
     }
     StudioAccountIdentity: {
       given_name: string | null
@@ -2586,6 +2650,27 @@ export interface components {
 }
 export type $defs = Record<string, never>
 export interface operations {
+  getBackofficeTelemetryConfig: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Current Backoffice client telemetry gate and notice version */
+      200: {
+        headers: {
+          'Cache-Control'?: 'public, max-age=300'
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['TelemetryClientConfig']
+        }
+      }
+    }
+  }
   startBackofficePasswordAuthentication: {
     parameters: {
       query?: never
@@ -2780,6 +2865,27 @@ export interface operations {
       429: components['responses']['TooManyRequests']
     }
   }
+  getSpaceTelemetryConfig: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Current Space client telemetry gate and notice version */
+      200: {
+        headers: {
+          'Cache-Control'?: 'public, max-age=300'
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['TelemetryClientConfig']
+        }
+      }
+    }
+  }
   startSpaceRegistration: {
     parameters: {
       query?: never
@@ -2845,6 +2951,27 @@ export interface operations {
       }
       429: components['responses']['TooManyRequests']
       503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  getStudioTelemetryConfig: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Current Studio client telemetry gate and notice version */
+      200: {
+        headers: {
+          'Cache-Control'?: 'public, max-age=300'
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['TelemetryClientConfig']
+        }
+      }
     }
   }
   startStudioAuthentication: {

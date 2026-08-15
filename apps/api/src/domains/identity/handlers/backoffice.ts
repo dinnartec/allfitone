@@ -40,6 +40,8 @@ export function backofficeIdentityRoutes(injectedService?: BackofficeAuthenticat
       credentials: true,
       allowMethods: ['GET', 'POST', 'OPTIONS'],
       allowHeaders: ['Content-Type', 'Idempotency-Key', 'Command-Id'],
+      exposeHeaders: ['Server-Timing'],
+      maxAge: 600,
     }),
   )
 
@@ -120,7 +122,7 @@ export function backofficeIdentityRoutes(injectedService?: BackofficeAuthenticat
     try {
       const result = await service().readSession(token)
       recordBackofficeAuth('session', 'succeeded')
-      return c.json(result)
+      return c.json({ ...result, analytics: result.analytics ?? { distinct_id: null } })
     } catch (error) {
       recordBackofficeAuth('session', 'failed')
       if (terminalAuthenticationError(error)) clearSession(c)

@@ -27,6 +27,8 @@ import { StatusBar } from 'expo-status-bar'
 import { useColorScheme } from 'react-native'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 
+import { AnalyticsControls } from '../src/components/analytics-controls'
+
 export default function RootLayout() {
   const { loaded, error } = useAllfitFonts()
   const scheme = useColorScheme()
@@ -51,6 +53,7 @@ export default function RootLayout() {
         >
           <Stack.Screen name="welcome" options={{ animation: 'fade', animationDuration: 260 }} />
         </Stack>
+        <AnalyticsControls />
       </ThemeProvider>
     </SafeAreaProvider>
   )
