@@ -1,4 +1,5 @@
 const apiUrl = requiredEnvironment('STUDIO_API_URL').replace(/\/$/, '')
+const studioOrigin = new URL(process.env.STUDIO_WEB_URL ?? 'https://studio.allfit.one').origin
 const sessionCookie = requiredEnvironment('STUDIO_SESSION_COOKIE')
 const organizationId = process.env.STUDIO_TECHNICAL_ORGANIZATION_ID
 const expectedRegion = process.env.STUDIO_EXPECTED_VERCEL_REGION
@@ -122,6 +123,7 @@ async function sample(path) {
     headers: {
       Accept: 'application/json',
       Cookie: sessionCookie,
+      Origin: studioOrigin,
     },
     redirect: 'manual',
   })
@@ -168,4 +170,5 @@ function positiveInteger(value, fallback) {
   return parsed
 }
 import { setTimeout as delay } from 'node:timers/promises'
+import { URL } from 'node:url'
 import { vercelExecutionRegion } from './vercel-region.mjs'
