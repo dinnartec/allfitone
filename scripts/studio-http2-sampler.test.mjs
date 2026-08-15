@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { createServer } from 'node:http2'
 
-import { createStudioHttp2Sampler } from './studio-http2-sampler.mjs'
+import { assertStudioBenchmarkAccess, createStudioHttp2Sampler } from './studio-http2-sampler.mjs'
 
 describe('createStudioHttp2Sampler', () => {
   let apiUrl
@@ -54,5 +54,21 @@ describe('createStudioHttp2Sampler', () => {
     expect(requests[0].cookie).toBe('allfit_studio_session=test-cookie')
     expect(requests[0].origin).toBe('https://studio.allfit.one')
     expect(sessionCount).toBe(1)
+  })
+})
+
+describe('assertStudioBenchmarkAccess', () => {
+  test('fails immediately when the technical session is no longer usable', () => {
+    expect(() => assertStudioBenchmarkAccess('session', { status: 401 })).toThrow(
+      'Studio technical session is no longer valid while measuring session',
+    )
+    expect(() => assertStudioBenchmarkAccess('organization-roles', { status: 403 })).toThrow(
+      'Studio technical account is forbidden while measuring organization-roles',
+    )
+  })
+
+  test('leaves other statuses for the benchmark error count', () => {
+    expect(() => assertStudioBenchmarkAccess('session', { status: 200 })).not.toThrow()
+    expect(() => assertStudioBenchmarkAccess('session', { status: 503 })).not.toThrow()
   })
 })

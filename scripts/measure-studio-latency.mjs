@@ -35,7 +35,9 @@ const observedRegions = new Set()
 const sampler = createStudioHttp2Sampler({ apiUrl, sessionCookie, studioOrigin })
 try {
   for (const endpoint of endpoints) {
-    for (let index = 0; index < warmups; index += 1) await sampler.sample(endpoint.path)
+    for (let index = 0; index < warmups; index += 1) {
+      assertStudioBenchmarkAccess(endpoint.name, await sampler.sample(endpoint.path))
+    }
 
     const normalDurations = []
     const workosDurations = []
@@ -43,7 +45,11 @@ try {
     for (let index = 0; index < samples; index += 1) {
       const result = await sampler.sample(endpoint.path)
       if (result.region) observedRegions.add(result.region)
-      if (result.status < 200 || result.status >= 400) errors += 1
+      assertStudioBenchmarkAccess(endpoint.name, result)
+      if (result.status < 200 || result.status >= 400) {
+        errors += 1
+        continue
+      }
       const target = result.usedWorkos ? workosDurations : normalDurations
       target.push(result.durationMs)
     }
@@ -76,7 +82,11 @@ try {
         await delay(idleMs)
         const result = await sampler.sample(endpoint.path)
         if (result.region) observedRegions.add(result.region)
-        if (result.status < 200 || result.status >= 400) idleErrors += 1
+        assertStudioBenchmarkAccess(endpoint.name, result)
+        if (result.status < 200 || result.status >= 400) {
+          idleErrors += 1
+          continue
+        }
         const target = result.usedWorkos ? idleWorkosDurations : idleDurations
         target.push(result.durationMs)
       }
@@ -157,4 +167,4 @@ function positiveInteger(value, fallback) {
 }
 import { setTimeout as delay } from 'node:timers/promises'
 import { URL } from 'node:url'
-import { createStudioHttp2Sampler } from './studio-http2-sampler.mjs'
+import { assertStudioBenchmarkAccess, createStudioHttp2Sampler } from './studio-http2-sampler.mjs'

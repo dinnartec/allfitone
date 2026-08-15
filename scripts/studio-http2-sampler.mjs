@@ -58,6 +58,19 @@ export function createStudioHttp2Sampler({ apiUrl, sessionCookie, studioOrigin }
   return { sample, close }
 }
 
+export function assertStudioBenchmarkAccess(endpointName, result) {
+  if (result.status === 401) {
+    throw new Error(
+      `Studio technical session is no longer valid while measuring ${endpointName}; sign in again and replace STUDIO_SESSION_COOKIE.`,
+    )
+  }
+  if (result.status === 403) {
+    throw new Error(
+      `Studio technical account is forbidden while measuring ${endpointName}; verify its organization membership and STUDIO_WEB_URL.`,
+    )
+  }
+}
+
 function request(session, path, extraHeaders) {
   return new Promise((resolve, reject) => {
     const stream = session.request({
