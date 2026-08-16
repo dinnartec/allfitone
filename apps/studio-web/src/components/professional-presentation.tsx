@@ -280,7 +280,7 @@ export function ProfessionalPresentation({
         <CardHeader>
           <CardTitle>{profile ? 'Trayectoria declarada' : 'Vista previa'}</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent data-trajectory-body>
           <StatStrip>
             <StatStripItem
               label={profile ? 'Comenzaste a ejercer en' : 'Año de inicio'}

@@ -4,7 +4,15 @@ import { ProductWordmark } from '@allfitone/react/brand'
 import { Alert, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
 import { Badge } from '@allfitone/react/components/badge'
 import { Button } from '@allfitone/react/components/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@allfitone/react/components/card'
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '@allfitone/react/components/card'
 import { Spinner } from '@allfitone/react/components/spinner'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@allfitone/react/components/tabs'
 import { Toaster } from '@allfitone/react/components/sonner'
@@ -13,7 +21,6 @@ import {
   WorkspaceContent,
   WorkspaceEyebrow,
   WorkspaceHeader,
-  WorkspaceHeading,
   WorkspaceMain,
   WorkspaceShell,
   WorkspaceTitle,
@@ -188,59 +195,58 @@ function AccountOverview({
   const activeSpaces = me.memberships.filter((membership) => membership.status === 'active').length
   return (
     <>
-      <WorkspaceHeading data-profile-heading data-account-heading>
-        <div>
+      <header data-profile-heading>
+        <div data-profile-heading-text>
           <WorkspaceEyebrow>Mi cuenta</WorkspaceEyebrow>
           <WorkspaceTitle>Tu cuenta de Studio</WorkspaceTitle>
-          <p>
+          <p data-page-header-description>
             Administra tus espacios. Si también entrenas o prestas servicios, puedes crear un perfil
             profesional separado cuando lo necesites.
           </p>
         </div>
         <Badge variant="success">Cuenta activa</Badge>
-      </WorkspaceHeading>
+      </header>
 
       <section data-account-map aria-label="Opciones de mi cuenta">
-        <Card data-account-track="spaces">
+        <Card data-account-track>
           <CardHeader>
-            <div>
-              <p data-profile-kicker>Siempre disponible</p>
-              <CardTitle>Mis espacios</CardTitle>
-            </div>
-            <Badge variant="outline">
-              {activeSpaces} {activeSpaces === 1 ? 'activo' : 'activos'}
-            </Badge>
+            <CardDescription>Siempre disponible</CardDescription>
+            <CardTitle role="heading" aria-level={2}>
+              Mis espacios
+            </CardTitle>
+            <CardAction>
+              <Badge variant="outline">
+                {activeSpaces} {activeSpaces === 1 ? 'activo' : 'activos'}
+              </Badge>
+            </CardAction>
           </CardHeader>
-          <CardContent>
+          <CardContent data-account-body>
             <p>Consulta las organizaciones donde participas y tu historial de vinculaciones.</p>
-            <div data-account-signal aria-hidden="true">
-              <span />
-              <i />
-              <strong>Activo</strong>
-            </div>
           </CardContent>
+          <CardFooter>
+            <Badge variant="success">Activo</Badge>
+          </CardFooter>
         </Card>
 
-        <Card data-account-track="professional">
+        <Card data-account-track>
           <CardHeader>
-            <div>
-              <p data-profile-kicker>Solo si prestas servicios</p>
-              <CardTitle>Perfil profesional</CardTitle>
-            </div>
-            <Badge variant="outline">Opcional</Badge>
+            <CardDescription>Solo si prestas servicios</CardDescription>
+            <CardTitle role="heading" aria-level={2}>
+              Perfil profesional
+            </CardTitle>
+            <CardAction>
+              <Badge variant="outline">Opcional</Badge>
+            </CardAction>
           </CardHeader>
-          <CardContent>
+          <CardContent data-account-body>
             <p>
               Presenta tu experiencia y, si quieres, declara credenciales. Administrar un espacio no
               requiere completar esta información.
             </p>
-            <div data-account-signal data-dormant aria-hidden="true">
-              <span />
-              <i />
-              <strong>Sin iniciar</strong>
-            </div>
-            <Button onClick={onStartProfessionalSetup}>Configurar perfil profesional</Button>
           </CardContent>
+          <CardFooter>
+            <Button onClick={onStartProfessionalSetup}>Configurar perfil profesional</Button>
+          </CardFooter>
         </Card>
       </section>
 
@@ -273,17 +279,17 @@ function ProfessionalArea({
   if (!profile && setupStarted) {
     return (
       <>
-        <WorkspaceHeading data-profile-heading data-professional-setup-heading>
-          <div>
+        <header data-profile-heading>
+          <div data-profile-heading-text>
             <WorkspaceEyebrow>Opcional · Personal</WorkspaceEyebrow>
             <WorkspaceTitle>Configura tu perfil profesional</WorkspaceTitle>
-            <p>
+            <p data-page-header-description>
               Hazlo únicamente si entrenas o prestas servicios. Este perfil es tuyo y no cambia
               roles, permisos ni membresías.
             </p>
           </div>
           <Badge variant="outline">Sin publicar</Badge>
-        </WorkspaceHeading>
+        </header>
         <div data-profile-setup-actions>
           <Button variant="ghost" onClick={onCancelSetup}>
             Volver a mi cuenta
@@ -303,17 +309,17 @@ function ProfessionalArea({
 
   return (
     <>
-      <WorkspaceHeading data-profile-heading>
-        <div>
+      <header data-profile-heading>
+        <div data-profile-heading-text>
           <WorkspaceEyebrow>Perfil profesional</WorkspaceEyebrow>
           <WorkspaceTitle>{profile.headline}</WorkspaceTitle>
-          <p>
+          <p data-page-header-description>
             Tu presentación personal viaja contigo entre espacios. Sus credenciales son opcionales y
             nunca cambian tus permisos.
           </p>
         </div>
         <Badge variant="success">Perfil creado</Badge>
-      </WorkspaceHeading>
+      </header>
 
       <Tabs defaultValue="presentation" data-profile-tabs>
         <TabsList variant="line" aria-label="Secciones de mi cuenta">

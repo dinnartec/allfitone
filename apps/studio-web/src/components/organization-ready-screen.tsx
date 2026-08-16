@@ -11,7 +11,13 @@
  */
 import { Badge } from '@allfitone/react/components/badge'
 import { Button } from '@allfitone/react/components/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@allfitone/react/components/card'
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from '@allfitone/react/components/card'
 import {
   SetupPanel,
   SetupPanelActions,
@@ -21,6 +27,7 @@ import {
   SetupPanelIntro,
   SetupPanelTitle,
 } from '@allfitone/react/components/setup-shell'
+import { WorkspaceEyebrow, WorkspaceTitle } from '@allfitone/react/components/workspace-shell'
 import { FoundationIcon } from '@allfitone/react/icons'
 
 import { StudioFrame } from './studio-frame'
@@ -61,28 +68,38 @@ export function OrganizationReadyScreen({
         </SetupPanelIntro>
 
         <SetupPanelContent data-ready-later aria-labelledby="ready-later-title">
-          <div>
-            <SetupPanelEyebrow>Sin bloqueos</SetupPanelEyebrow>
-            <h2 id="ready-later-title">Puedes hacerlo después</h2>
-          </div>
+          <header data-ready-later-heading>
+            <WorkspaceEyebrow>Sin bloqueos</WorkspaceEyebrow>
+            <WorkspaceTitle as="h2" id="ready-later-title">
+              Puedes hacerlo después
+            </WorkspaceTitle>
+          </header>
           <Card>
             <CardHeader>
               <CardTitle>Sumar al equipo</CardTitle>
-              <Badge variant="outline">Opcional</Badge>
+              <CardAction>
+                <Badge variant="outline">Opcional</Badge>
+              </CardAction>
             </CardHeader>
-            <CardContent data-ready-later-item>
-              <FoundationIcon name="people" decorative />
-              <p>Invita integrantes únicamente cuando vayas a trabajar con otras personas.</p>
+            <CardContent>
+              <div data-ready-later-item>
+                <FoundationIcon name="people" decorative />
+                <p>Invita integrantes únicamente cuando vayas a trabajar con otras personas.</p>
+              </div>
             </CardContent>
           </Card>
           <Card>
             <CardHeader>
               <CardTitle>Configurar la operación</CardTitle>
-              <Badge variant="outline">Opcional</Badge>
+              <CardAction>
+                <Badge variant="outline">Opcional</Badge>
+              </CardAction>
             </CardHeader>
-            <CardContent data-ready-later-item>
-              <FoundationIcon name="operation" decorative />
-              <p>Podrás definir disciplinas, sedes y preferencias desde el workspace.</p>
+            <CardContent>
+              <div data-ready-later-item>
+                <FoundationIcon name="operation" decorative />
+                <p>Podrás definir disciplinas, sedes y preferencias desde el workspace.</p>
+              </div>
             </CardContent>
           </Card>
         </SetupPanelContent>

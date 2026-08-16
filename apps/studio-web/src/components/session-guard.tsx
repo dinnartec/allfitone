@@ -316,7 +316,7 @@ export function SessionGuard({ children }: { children: ReactNode }) {
       )}
       {guard.kind === 'ending' ? (
         <Card data-session-ending-status>
-          <CardContent role="status" aria-live="polite">
+          <CardContent data-session-ending-body role="status" aria-live="polite">
             <Spinner role={undefined} aria-hidden="true" />
             <p>Cerrando tu sesión…</p>
           </CardContent>

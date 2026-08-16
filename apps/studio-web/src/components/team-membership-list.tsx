@@ -4,7 +4,13 @@ import { Alert, AlertDescription, AlertTitle } from '@allfitone/react/components
 import { Avatar, AvatarFallback } from '@allfitone/react/components/avatar'
 import { Badge } from '@allfitone/react/components/badge'
 import { Button, buttonVariants } from '@allfitone/react/components/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@allfitone/react/components/card'
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from '@allfitone/react/components/card'
 import {
   Empty,
   EmptyContent,
@@ -218,13 +224,13 @@ export function TeamMembershipList() {
       />
 
       {soloOwner ? (
-        <aside data-solo-owner-note>
-          <div>
-            <strong>Tu espacio ya está listo para trabajar contigo.</strong>
-            <p>Invita a alguien solo cuando vayas a sumar equipo.</p>
-          </div>
-          <Badge variant="outline">Opcional</Badge>
-        </aside>
+        <Alert variant="info">
+          <AlertTitle>Tu espacio ya está listo para trabajar contigo.</AlertTitle>
+          <AlertDescription data-solo-owner-note>
+            Invita a alguien solo cuando vayas a sumar equipo.
+            <Badge variant="outline">Opcional</Badge>
+          </AlertDescription>
+        </Alert>
       ) : null}
 
       <ToggleGroup
@@ -325,14 +331,18 @@ export function TeamMembershipList() {
 function MembershipCard({ item }: { item: OrganizationMembership }) {
   return (
     <Card data-team-member-card>
-      <CardHeader data-team-member-identity>
-        <Avatar decorative>
-          <AvatarFallback>{memberInitials(item.display_name)}</AvatarFallback>
-        </Avatar>
-        <CardTitle>{item.display_name}</CardTitle>
-        <Badge variant={item.status === 'active' ? 'success' : 'outline'}>
-          {item.status === 'active' ? 'Activo' : 'Terminado'}
-        </Badge>
+      <CardHeader>
+        <div data-team-member-identity>
+          <Avatar decorative>
+            <AvatarFallback>{memberInitials(item.display_name)}</AvatarFallback>
+          </Avatar>
+          <CardTitle>{item.display_name}</CardTitle>
+        </div>
+        <CardAction>
+          <Badge variant={item.status === 'active' ? 'success' : 'outline'}>
+            {item.status === 'active' ? 'Activo' : 'Terminado'}
+          </Badge>
+        </CardAction>
       </CardHeader>
       <CardContent>
         <div data-team-role-badges>

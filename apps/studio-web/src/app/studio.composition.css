@@ -1,11 +1,88 @@
 /* Studio owns only product composition. Component chrome, typography, focus,
-   motion and semantic color belong to @allfitone/react. */
+   motion and semantic color belong to @allfitone/react.
+
+   One rule governs this file: never change how a Design System component lays
+   itself out. Every selector below targets an element Studio renders itself, or
+   sets placement (grid-column, width, margin) on a component Studio placed in
+   its own grid. Setting `display` or `align-items` on a component root is what
+   turned Cards into rows and pinned the workspace title to the top of its bar. */
+
+:root {
+  /* One measure for reading, one for the workspace canvas. Without them the
+     product stretches a single sentence across 1400px on a wide display. */
+  --studio-measure: 58rem;
+  --studio-canvas: 82rem;
+}
+
+/* ---------------------------------------------------------------- canvases */
+
+[data-organization-content] > *,
+[data-profile-content] > * {
+  width: min(100%, var(--studio-canvas));
+  margin-inline: auto;
+}
+
+/* WorkspaceContent is a padded block with no rhythm of its own, so sections
+   stacked flush against each other. */
+[data-organization-content] > * + *,
+[data-profile-content] > * + * {
+  margin-block-start: var(--afo-space-6);
+}
+
+[data-studio-stage],
+[data-organization-content],
+[data-profile-content],
+[data-team-section-content],
+[data-organization-shell],
+[data-organization-context-root],
+[data-profile-canvas],
+[data-organization-protected-content],
+[data-profile-editor],
+[data-profile-section-heading] {
+  min-width: 0;
+}
+
+/* --------------------------------------------------------------- page head */
+
+[data-page-header],
+[data-profile-heading] {
+  display: flex;
+  min-width: 0;
+  justify-content: space-between;
+  gap: var(--afo-space-4);
+}
+
+/* A sentence beside a control reads as one row; a title stack beside a badge
+   does not. */
+[data-page-header] {
+  align-items: center;
+}
+
+[data-profile-heading] {
+  align-items: flex-start;
+}
+
+[data-profile-heading-text] {
+  display: grid;
+  min-width: 0;
+  gap: var(--afo-space-2);
+}
+
+[data-page-header-description] {
+  max-width: var(--studio-measure);
+  margin: 0;
+}
+
+[data-profile-section-heading],
+[data-ready-later-heading] {
+  display: grid;
+  gap: var(--afo-space-2);
+}
 
 [data-studio-header-actions],
 [data-page-header-actions],
 [data-profile-setup-actions],
 [data-team-invitation-actions],
-[data-invitation-actions],
 [data-credential-actions],
 [data-profile-form-actions] {
   display: flex;
@@ -14,22 +91,47 @@
   gap: var(--afo-space-3);
 }
 
-[data-studio-stage],
-[data-organization-content],
-[data-profile-content],
-[data-team-section-content] {
+[data-credential-actions] {
+  justify-content: flex-end;
+}
+
+/* ----------------------------------------------------------------- sidebar */
+
+[data-organization-brand] {
+  display: flex;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+}
+
+[data-sidebar-organization],
+[data-sidebar-switcher] {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--afo-space-2);
+}
+
+[data-sidebar-organization-meta] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--afo-space-2);
+  margin: 0;
+  padding-inline: var(--afo-space-2);
+}
+
+[data-sidebar-organization-name],
+[data-sidebar-organization-label] {
   min-width: 0;
 }
 
-[data-studio-choice-grid] {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--afo-space-4);
+/* The rule is inset from both sides; full width overshoots the rail by its
+   own inline margin. */
+[data-sidebar-rule] {
+  width: auto;
 }
 
-[data-studio-choice-grid] > :last-child {
-  grid-column: 1 / -1;
-}
+/* --------------------------------------------------------------- sequences */
 
 [data-studio-form],
 [data-invitation-waiting],
@@ -37,49 +139,11 @@
 [data-profile-section],
 [data-profile-state],
 [data-organization-state],
-[data-team-invitation-result] > div {
+[data-team-invitation-result] {
   display: flex;
   min-width: 0;
   flex-direction: column;
   gap: var(--afo-space-5);
-}
-
-[data-studio-field-grid],
-[data-profile-field-grid],
-[data-membership-context-grid],
-[data-credential-grid] {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--afo-space-4);
-}
-
-[data-studio-responsible-options],
-[data-team-role-badges],
-[data-ready-confirmations],
-[data-role-catalog-summary] > div,
-[data-profile-tabs],
-[data-team-section-navigation] {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--afo-space-3);
-}
-
-[data-studio-loading],
-[data-studio-error-stage],
-[data-team-invitation-state],
-[data-organization-state-shell] {
-  width: min(100%, 42rem);
-  margin-inline: auto;
-}
-
-[data-studio-loading] > div,
-[data-role-catalog-state] > div,
-[data-session-ending-status] > div {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--afo-space-3);
 }
 
 [data-membership-list],
@@ -93,14 +157,52 @@
   gap: var(--afo-space-5);
 }
 
-[data-ready-later-item],
-[data-role-register-title],
-[data-fitness-boundary],
-[data-team-member-identity],
-[data-overview-team-identity],
-[data-account-track] {
+[data-studio-loading],
+[data-studio-error-stage],
+[data-team-invitation-state],
+[data-organization-state-shell] {
+  width: min(100%, 42rem);
+  margin-inline: auto;
+}
+
+[data-studio-loading-body],
+[data-role-catalog-state],
+[data-session-ending-body] {
   display: flex;
-  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  gap: var(--afo-space-3);
+}
+
+/* ------------------------------------------------------------------- grids */
+
+[data-studio-choice-grid] {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--afo-space-4);
+}
+
+[data-studio-choice-grid] > :last-child {
+  grid-column: 1 / -1;
+}
+
+[data-studio-field-grid],
+[data-profile-field-grid],
+[data-membership-context-grid],
+[data-credential-grid] {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--afo-space-4);
+}
+
+[data-team-role-badges],
+[data-ready-confirmations],
+[data-team-section-navigation],
+[data-overview-team-roles],
+[data-overview-orientation-roles],
+[data-role-disclosure] {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--afo-space-3);
 }
@@ -113,6 +215,21 @@
   display: inline-flex;
   align-items: center;
   gap: var(--afo-space-2);
+}
+
+[data-ready-later-item],
+[data-team-member-identity],
+[data-overview-team-identity] {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--afo-space-3);
+}
+
+/* `data-account-track` marks a Card, so it may only place it — never lay it
+   out. As a row rule it collapsed the Card's header to a centred 67px column. */
+[data-account-track] {
+  min-width: 0;
 }
 
 [data-team-invitation-summary],
@@ -136,103 +253,32 @@
   margin-inline: 0;
 }
 
-[data-organization-shell],
-[data-organization-context-root],
-[data-profile-canvas] {
-  min-width: 0;
-}
+/* ---------------------------------------------------------------- overview */
 
-[data-organization-brand] {
-  display: flex;
-  min-height: 2.75rem;
-  align-items: center;
-  justify-content: center;
-}
+/* One column. A two-column grid left the whole right half empty whenever the
+   organization had a single card to show, which is the common case.
 
-[data-sidebar-organization],
-[data-sidebar-switcher] {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: var(--afo-space-2);
-}
-
-[data-sidebar-organization-meta] {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--afo-space-2);
-  margin: 0;
-}
-
-[data-organization-header],
-[data-profile-header],
-[data-page-header] {
-  display: flex;
-  min-width: 0;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--afo-space-4);
-}
-
-[data-page-header-description] {
-  max-width: 64rem;
-}
-
-[data-organization-content],
-[data-profile-content] {
-  width: 100%;
-}
-
-[data-organization-protected-content] {
-  min-width: 0;
-}
-
-[data-organization-protected-content][aria-hidden='true'] {
-  visibility: hidden;
-}
-
-[data-organization-verification-overlay] {
-  position: fixed;
-  inset: 0;
-  z-index: 50;
-  display: grid;
-  place-items: center;
-  padding: var(--afo-space-6);
-}
-
-[data-session-ending-status] {
-  position: fixed;
-  inset-inline: 0;
-  bottom: var(--afo-space-6);
-  z-index: 60;
-  width: min(100% - 2rem, 28rem);
-  margin-inline: auto;
-}
-
-[data-session-checking],
-[data-session-closing],
-[data-session-lock] {
-  min-height: 100svh;
-}
-
-[data-session-blank] {
-  display: none;
-}
-
-[data-session-content][data-session-ending] {
-  pointer-events: none;
-  filter: blur(7px);
-  user-select: none;
-}
-
+   The overview summarises; it is not a register. At the full canvas width its
+   rows put a name at one edge and a badge at the other with 700px between. */
 [data-organization-overview] {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: min(100%, 64rem);
+  grid-template-columns: minmax(0, 1fr);
 }
 
+/* The strip sizes to its stats. Stretched across the canvas, a single count
+   floated alone in the middle of 1400px. Both axes are set because these sit
+   in a grid on the overview and in a flex column on the account page. */
 [data-overview-signals],
-[data-overview-attention],
-[data-overview-orientation] {
-  grid-column: 1 / -1;
+[data-profile-signals] {
+  justify-self: start;
+  align-self: flex-start;
+  min-width: min(100%, 28rem);
+  max-width: 100%;
+}
+
+[data-overview-signals-placeholder] {
+  height: 4.5rem;
+  width: min(100%, 24rem);
 }
 
 [data-overview-attention-list],
@@ -273,10 +319,12 @@
 
 [data-solo-owner-note] {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--afo-space-4);
+  gap: var(--afo-space-3);
 }
+
+/* -------------------------------------------------------------------- team */
 
 [data-team-directory-cards] {
   display: grid;
@@ -289,7 +337,7 @@
 
 [data-team-member-identity] {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr);
 }
 
 [data-team-role-badges] {
@@ -301,30 +349,44 @@
   justify-content: center;
 }
 
-[data-role-catalog-summary] > div {
-  justify-content: space-between;
+[data-team-directory-note] {
+  max-width: var(--studio-measure);
+  margin: 0;
 }
 
-[data-role-register-item] > div {
+/* ------------------------------------------------------------------- roles */
+
+[data-role-register] {
+  grid-template-columns: repeat(auto-fit, minmax(24rem, 1fr));
+}
+
+/* Roles read as a matrix, so paired cards end on the same line and their
+   disclosure rows sit on one baseline whatever the policy note costs. */
+[data-role-card] {
   display: grid;
-  gap: var(--afo-space-4);
 }
 
-[data-role-code] {
-  flex: none;
+[data-role-card-body] {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+}
+
+[data-role-disclosure] {
+  justify-content: space-between;
+  margin-block-start: auto;
+  padding-block-start: var(--afo-space-4);
 }
 
 [data-role-capability-list] {
   padding-block: var(--afo-space-3);
 }
 
+/* ----------------------------------------------------------------- profile */
+
 [data-profile-presentation] {
   grid-template-columns: minmax(0, 1.35fr) minmax(18rem, 0.65fr);
   align-items: start;
-}
-
-[data-profile-editor] {
-  min-width: 0;
 }
 
 [data-trajectory-panel] {
@@ -332,7 +394,7 @@
   top: var(--afo-space-5);
 }
 
-[data-trajectory-panel] > div {
+[data-trajectory-body] {
   display: grid;
   gap: var(--afo-space-4);
 }
@@ -341,10 +403,6 @@
   display: grid;
   min-width: 0;
   gap: var(--afo-space-1);
-}
-
-[data-credential-actions] {
-  justify-content: flex-end;
 }
 
 [data-credential-evidence] {
@@ -359,19 +417,59 @@
 }
 
 [data-account-map] {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr));
 }
 
-[data-account-heading],
-[data-profile-heading],
-[data-profile-section-heading] {
-  min-width: 0;
+/* Two cards of unequal copy still have to end on the same line, so the body
+   absorbs the difference and the footers stay aligned. */
+[data-account-body] {
+  flex: 1;
 }
+
+/* ----------------------------------------------------------------- session */
+
+[data-organization-protected-content][aria-hidden='true'] {
+  visibility: hidden;
+}
+
+[data-organization-verification-overlay] {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: var(--afo-space-6);
+}
+
+[data-session-ending-status] {
+  position: fixed;
+  inset-inline: 0;
+  bottom: var(--afo-space-6);
+  z-index: 60;
+  width: min(100% - 2rem, 28rem);
+  margin-inline: auto;
+}
+
+[data-session-checking],
+[data-session-closing],
+[data-session-lock] {
+  min-height: 100svh;
+}
+
+[data-session-blank] {
+  display: none;
+}
+
+[data-session-content][data-session-ending] {
+  pointer-events: none;
+  filter: blur(7px);
+  user-select: none;
+}
+
+/* ------------------------------------------------------------- responsive */
 
 @media (max-width: 900px) {
-  [data-organization-overview],
-  [data-profile-presentation],
-  [data-account-map] {
+  [data-profile-presentation] {
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -400,24 +498,16 @@
     grid-column: auto;
   }
 
-  [data-studio-header],
-  [data-organization-header],
-  [data-profile-header],
-  [data-page-header] {
-    align-items: stretch;
-  }
-
   [data-page-header],
-  [data-solo-owner-note],
-  [data-role-catalog-summary] > div {
+  [data-profile-heading] {
     flex-direction: column;
+    align-items: stretch;
   }
 
   [data-studio-header-actions],
   [data-page-header-actions],
   [data-profile-setup-actions],
-  [data-team-invitation-actions],
-  [data-invitation-actions] {
+  [data-team-invitation-actions] {
     width: 100%;
   }
 
@@ -425,9 +515,19 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
-  [data-overview-attention-list] > li,
-  [data-overview-team-list] > li {
+  [data-overview-attention-list] > li {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  /* The avatar belongs beside the name, not stranded on a line of its own. */
+  [data-overview-team-list] > li {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+  }
+
+  [data-overview-team-list] > li > [data-overview-team-roles] {
+    grid-column: 1 / -1;
   }
 }

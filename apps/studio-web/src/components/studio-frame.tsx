@@ -70,7 +70,7 @@ export function LoadingStage({ label = 'Preparando tu espacio…' }: { label?: s
   return (
     <StudioFrame step="identity" showLogout={false}>
       <Card data-studio-loading>
-        <CardContent>
+        <CardContent data-studio-loading-body>
           <Spinner label={label} />
           <p>{label}</p>
         </CardContent>

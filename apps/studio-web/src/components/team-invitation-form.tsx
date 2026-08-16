@@ -3,7 +3,14 @@
 import { Alert, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
 import { Badge } from '@allfitone/react/components/badge'
 import { Button } from '@allfitone/react/components/button'
-import { Card, CardContent } from '@allfitone/react/components/card'
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@allfitone/react/components/card'
 import {
   Field,
   FieldDescription,
@@ -12,6 +19,7 @@ import {
   FieldLabel,
 } from '@allfitone/react/components/field'
 import { Input } from '@allfitone/react/components/input'
+import { FoundationIcon } from '@allfitone/react/icons'
 import {
   SetupPanel,
   SetupPanelActions,
@@ -113,19 +121,24 @@ export function TeamInvitationForm() {
   if (created) {
     const intent = created.intents[0]
     return (
-      <Card data-team-invitation-result aria-live="polite">
-        <CardContent>
-          <div>
-            <p data-studio-eyebrow>
-              {created.reused ? 'Invitación actualizada' : 'Invitación creada'}
-            </p>
-            <h2>La propuesta quedó pendiente.</h2>
-            <p>
-              Enviamos la invitación a <strong>{created.contact_hint}</strong>. La membresía solo se
-              creará si la persona acepta.
-            </p>
-          </div>
-          <dl>
+      <Card aria-live="polite">
+        <CardHeader>
+          <CardDescription>
+            {created.reused ? 'Invitación actualizada' : 'Invitación creada'}
+          </CardDescription>
+          <CardTitle role="heading" aria-level={2}>
+            La propuesta quedó pendiente.
+          </CardTitle>
+          <CardAction>
+            <Badge variant="warning">Pendiente</Badge>
+          </CardAction>
+        </CardHeader>
+        <CardContent data-team-invitation-result>
+          <p>
+            Enviamos la invitación a <strong>{created.contact_hint}</strong>. La membresía solo se
+            creará si la persona acepta.
+          </p>
+          <dl data-team-invitation-summary>
             <div>
               <dt>Rol propuesto</dt>
               <dd>{intent ? invitationRoleLabel(intent.proposed_role_code) : 'Staff'}</dd>
@@ -136,12 +149,6 @@ export function TeamInvitationForm() {
                 {new Intl.DateTimeFormat('es-CO', { dateStyle: 'long' }).format(
                   new Date(created.expires_at),
                 )}
-              </dd>
-            </div>
-            <div>
-              <dt>Estado</dt>
-              <dd>
-                <Badge variant="warning">Pendiente</Badge>
               </dd>
             </div>
           </dl>
@@ -177,7 +184,7 @@ export function TeamInvitationForm() {
           aceptación.
         </SetupPanelDescription>
         <SetupPanelNote>
-          <span>7</span>
+          <FoundationIcon name="time" decorative />
           <p>La invitación estará disponible durante siete días.</p>
         </SetupPanelNote>
       </SetupPanelIntro>

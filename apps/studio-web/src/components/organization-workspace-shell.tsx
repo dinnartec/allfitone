@@ -1,6 +1,7 @@
 'use client'
 
 import { BrandLogo, ProductWordmark } from '@allfitone/react/brand'
+import { Badge } from '@allfitone/react/components/badge'
 import {
   Select,
   SelectContent,
@@ -14,10 +15,12 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
+  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarSeparator,
   SidebarTrigger,
   useSidebar,
 } from '@allfitone/react/components/sidebar'
@@ -100,12 +103,21 @@ function OrganizationSidebar({ basePath, pathname }: { basePath: string; pathnam
         </Link>
         {/* The organization is named once. It used to appear in a static block,
             again inside the switcher, again in the header bar and again on the
-            page, competing with the content for attention. */}
+            page, competing with the content for attention.
+
+            Every label here comes from a Design System component: the sidebar
+            wrapper resolves `text-sidebar-foreground` against the light theme,
+            so a bare element would inherit ink-on-ink and disappear. */}
         {!railed ? (
           <div data-sidebar-organization>
             {memberships.length > 1 ? (
               <div data-sidebar-switcher>
-                <label htmlFor="workspace-organization-switcher">Cambiar de organización</label>
+                <SidebarGroupLabel
+                  render={<label htmlFor="workspace-organization-switcher" />}
+                  data-sidebar-organization-label
+                >
+                  Cambiar de organización
+                </SidebarGroupLabel>
                 <Select
                   value={current.organization_id}
                   onValueChange={(value) => {
@@ -131,16 +143,19 @@ function OrganizationSidebar({ basePath, pathname }: { basePath: string; pathnam
                 </Select>
               </div>
             ) : (
-              <strong>{current.display_name}</strong>
+              <SidebarGroupLabel data-sidebar-organization-name>
+                {current.display_name}
+              </SidebarGroupLabel>
             )}
             <p data-sidebar-organization-meta>
-              <span>{organizationTypeLabel(current.type_code)}</span>
-              <span aria-hidden="true">·</span>
-              <span>{membershipRoleSummary(current.roles)}</span>
+              <Badge variant="secondary">{organizationTypeLabel(current.type_code)}</Badge>
+              <Badge variant="secondary">{membershipRoleSummary(current.roles)}</Badge>
             </p>
           </div>
         ) : null}
       </SidebarHeader>
+
+      <SidebarSeparator data-sidebar-rule />
 
       <SidebarContent>
         <SidebarGroup>

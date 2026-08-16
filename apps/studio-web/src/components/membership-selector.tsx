@@ -1,9 +1,11 @@
 'use client'
 
+import { Badge } from '@allfitone/react/components/badge'
 import { Button } from '@allfitone/react/components/button'
 import {
   Card,
-  CardContent,
+  CardAction,
+  CardDescription,
   CardFooter,
   CardHeader,
   CardTitle,
@@ -42,12 +44,14 @@ export function MembershipSelector({
           {memberships.map((membership) => (
             <Card key={membership.membership_id} data-membership-card>
               <CardHeader>
-                <CardTitle>{organizationTypeLabel(membership.type_code)}</CardTitle>
-                <h2>{membership.display_name}</h2>
+                <CardDescription>{organizationTypeLabel(membership.type_code)}</CardDescription>
+                <CardTitle role="heading" aria-level={2}>
+                  {membership.display_name}
+                </CardTitle>
+                <CardAction>
+                  <Badge variant="secondary">{membershipRoleSummary(membership.roles)}</Badge>
+                </CardAction>
               </CardHeader>
-              <CardContent>
-                <p>{membershipRoleSummary(membership.roles)}</p>
-              </CardContent>
               <CardFooter>
                 <Button onClick={() => onSelect(membership.organization_id)}>
                   Entrar al espacio
