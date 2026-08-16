@@ -1,0 +1,16 @@
+$kind: http-request
+id: 655d60ee-3d8a-4e1a-a4d8-b96027cd87e1
+description: Unauthenticated and non-mutating production-safe check.
+url: "{{baseUrl}}/health"
+method: GET
+headers:
+  Accept: application/json
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status is 200", () => pm.response.to.have.status(200));
+      pm.test("Response is JSON", () => pm.expect((pm.response.headers.get("Content-Type") || "").toLowerCase()).to.include("application/json"));
+      pm.test("Response never sets cookies", () => pm.expect(pm.response.headers.has("Set-Cookie")).to.equal(false));
+      pm.test("Health response shape is exact", () => pm.expect(pm.response.json()).to.deep.equal({ status: "ok" }));
+    language: text/javascript
+order: 1000

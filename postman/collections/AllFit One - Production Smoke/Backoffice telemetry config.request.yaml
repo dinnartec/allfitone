@@ -1,0 +1,22 @@
+$kind: http-request
+id: 826c985c-bc30-470d-ac28-3360384195ed
+description: Unauthenticated and non-mutating production-safe check.
+url: "{{baseUrl}}/backoffice/v1/telemetry-config"
+method: GET
+headers:
+  Accept: application/json
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status is 200", () => pm.response.to.have.status(200));
+      pm.test("Response is JSON", () => pm.expect((pm.response.headers.get("Content-Type") || "").toLowerCase()).to.include("application/json"));
+      pm.test("Response never sets cookies", () => pm.expect(pm.response.headers.has("Set-Cookie")).to.equal(false));
+      pm.test("Telemetry cache policy is public for five minutes", () => pm.expect(pm.response.headers.get("Cache-Control")).to.equal("public, max-age=300"));
+      pm.test("Telemetry response shape is closed", () => {
+        const payload = pm.response.json();
+        pm.expect(Object.keys(payload).sort()).to.eql(["enabled", "notice_version"]);
+        pm.expect(payload.enabled).to.be.a("boolean");
+        pm.expect(payload.notice_version).to.equal("analytics-v1");
+      });
+    language: text/javascript
+order: 2000

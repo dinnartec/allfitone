@@ -143,3 +143,64 @@ jobs:
 
       - name: Test Studio interactions
         run: bun run --cwd apps/studio-web test:e2e
+
+  postman:
+    name: Postman
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.16
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Validate Native Git artifacts and sensitive-data policy
+        run: bun run check:postman
+
+      - name: Lint Local Journeys
+        uses: postmanlabs/postman-cli-action@v1
+        with:
+          command: 'collection lint "postman/collections/AllFit One - Local Journeys" --fail-severity warning'
+
+      - name: Lint Production Smoke
+        uses: postmanlabs/postman-cli-action@v1
+        with:
+          command: 'collection lint "postman/collections/AllFit One - Production Smoke" --fail-severity warning'
+
+      - name: Run smoke collection against the local fixture
+        run: bun run test:postman:smoke
+
+  postman-publish:
+    name: Publish Postman Cloud View
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [verify, database, studio-e2e, postman]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.16
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Publish local resources without deleting cloud-only resources
+        uses: postmanlabs/postman-cli-action@v1
+        with:
+          command: 'workspace push --yes'
+          api-key: ${{ secrets.POSTMAN_API_KEY }}
+
+      - name: Sync the canonical spec to the contract collection
+        env:
+          POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
+          POSTMAN_CONTRACT_COLLECTION_UID: ${{ vars.POSTMAN_CONTRACT_COLLECTION_UID }}
+          POSTMAN_SPEC_ID: ${{ vars.POSTMAN_SPEC_ID }}
+        run: bun run sync:postman:contract

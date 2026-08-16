@@ -18,3 +18,4 @@ dist/
 coverage/
 playwright-report/
 test-results/
+.postman-generated/

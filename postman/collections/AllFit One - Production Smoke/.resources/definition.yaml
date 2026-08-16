@@ -1,0 +1,11 @@
+$kind: collection
+id: 8f932b05-9c2f-443b-a2fb-b1ea461eabd9
+name: AllFit One — Production Smoke
+description: |-
+  Read-only production smoke suite. It performs exactly four unauthenticated GET requests and never creates, updates, deletes, or stores domain data.
+
+  Run manually or through workflow_dispatch with the Production environment. Do not add authentication, cookies, examples, response bodies, or a schedule.
+auth:
+  - id: ""
+    type: noauth
+    name: No Auth

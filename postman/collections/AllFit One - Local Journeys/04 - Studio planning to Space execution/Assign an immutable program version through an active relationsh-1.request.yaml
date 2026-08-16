@@ -1,0 +1,61 @@
+$kind: http-request
+id: fe18200c-88e4-4dd4-a31f-4c9606b3bcd8
+name: Assign an immutable program version through an active relationship — replay same intent
+description: |-
+  OpenAPI operation: assignProgramVersion.
+
+  Run only against Local with synthetic data unless the canonical runbook explicitly says otherwise.
+url: "{{baseUrl}}/studio/v1/organizations/{{organizationId}}/relationships/{{relationshipId}}/assignments"
+method: POST
+headers:
+  Accept: application/json, application/problem+json
+  Idempotency-Key: "{{idem_assignProgramVersion}}"
+  Command-Id: "{{command_assignProgramVersion}}"
+  Content-Type: application/json
+  Authorization: Bearer {{$vault:studioAccessToken}}
+  Origin: "{{studioOrigin}}"
+body:
+  type: json
+  content: |-
+    {
+      "program_version_id": "018f6f8d-2b00-7a00-8000-000000000201",
+      "starts_on": "2026-07-27",
+      "timezone": "America/Bogota"
+    }
+scripts:
+  - type: beforeRequest
+    code: |-
+      if (!pm.variables.has("idem_assignProgramVersion")) pm.variables.set("idem_assignProgramVersion", pm.variables.replaceIn("{{$guid}}"));
+      if (!pm.variables.has("command_assignProgramVersion")) pm.variables.set("command_assignProgramVersion", pm.variables.replaceIn("{{$guid}}"));
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test("Status is 201", () => pm.response.to.have.status(201));
+      const contentType = (pm.response.headers.get("Content-Type") || "").toLowerCase();
+      if (pm.response.code >= 400) {
+        pm.test("Errors use application/problem+json", () => pm.expect(contentType).to.include("application/problem+json"));
+        pm.test("Problem Details has the governed shape", () => {
+          const problem = pm.response.json();
+          pm.expect(problem).to.have.property("type");
+          pm.expect(problem).to.have.property("title");
+          pm.expect(problem).to.have.property("status", pm.response.code);
+        });
+      }
+      pm.test("Success response is JSON", () => pm.expect(contentType).to.include("application/json"));
+      const responseEtag = pm.response.headers.get("ETag");
+      if (responseEtag) pm.variables.set("etag", responseEtag);
+      if (contentType.includes("json") && pm.response.text()) {
+        const payload = pm.response.json();
+        const captures = {"attempt_id":"attemptId","credential_id":"credentialId","etag":"etag","execution_id":"executionId","goal_version_id":"goalVersionId","grant_id":"grantId","invitation_id":"invitationId","meal_id":"mealId","organization_id":"organizationId","person_id":"personId","planned_session_id":"plannedSessionId","program_id":"programId","relationship_id":"relationshipId","version_id":"programVersionId"};
+        const visit = (value) => {
+          if (!value || typeof value !== "object") return;
+          for (const [key, child] of Object.entries(value)) {
+            if (captures[key] && typeof child === "string") pm.variables.set(captures[key], child);
+            visit(child);
+          }
+        };
+        visit(payload);
+      }
+      pm.test("Replay returned the same governed success status", () => pm.expect(pm.response.code).to.equal(201));
+    language: text/javascript
+order: 4000

@@ -1,0 +1,48 @@
+$kind: http-request
+id: ccdb0e94-a205-45e0-a0da-29ba14a2e232
+description: |-
+  OpenAPI operation: deleteNutritionMeal.
+
+  Run only against Local with synthetic data unless the canonical runbook explicitly says otherwise.
+url: "{{baseUrl}}/space/v1/nutrition/meals/{{mealId}}"
+method: DELETE
+headers:
+  Accept: application/json, application/problem+json
+  Idempotency-Key: "{{idem_deleteNutritionMeal}}"
+  Command-Id: "{{command_deleteNutritionMeal}}"
+  Authorization: Bearer {{$vault:spaceAccessToken}}
+scripts:
+  - type: beforeRequest
+    code: |-
+      if (!pm.variables.has("idem_deleteNutritionMeal")) pm.variables.set("idem_deleteNutritionMeal", pm.variables.replaceIn("{{$guid}}"));
+      if (!pm.variables.has("command_deleteNutritionMeal")) pm.variables.set("command_deleteNutritionMeal", pm.variables.replaceIn("{{$guid}}"));
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test("Status is 204", () => pm.response.to.have.status(204));
+      const contentType = (pm.response.headers.get("Content-Type") || "").toLowerCase();
+      if (pm.response.code >= 400) {
+        pm.test("Errors use application/problem+json", () => pm.expect(contentType).to.include("application/problem+json"));
+        pm.test("Problem Details has the governed shape", () => {
+          const problem = pm.response.json();
+          pm.expect(problem).to.have.property("type");
+          pm.expect(problem).to.have.property("title");
+          pm.expect(problem).to.have.property("status", pm.response.code);
+        });
+      }
+      const responseEtag = pm.response.headers.get("ETag");
+      if (responseEtag) pm.variables.set("etag", responseEtag);
+      if (contentType.includes("json") && pm.response.text()) {
+        const payload = pm.response.json();
+        const captures = {"attempt_id":"attemptId","credential_id":"credentialId","etag":"etag","execution_id":"executionId","goal_version_id":"goalVersionId","grant_id":"grantId","invitation_id":"invitationId","meal_id":"mealId","organization_id":"organizationId","person_id":"personId","planned_session_id":"plannedSessionId","program_id":"programId","relationship_id":"relationshipId","version_id":"programVersionId"};
+        const visit = (value) => {
+          if (!value || typeof value !== "object") return;
+          for (const [key, child] of Object.entries(value)) {
+            if (captures[key] && typeof child === "string") pm.variables.set(captures[key], child);
+            visit(child);
+          }
+        };
+        visit(payload);
+      }
+    language: text/javascript
+order: 16000

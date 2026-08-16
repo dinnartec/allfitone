@@ -24,7 +24,7 @@ Be aware of the actual state before you start:
 | `apps/space`             | Not scaffolded. README only                                                                                |
 | `packages/auth-provider` | Working. Token verification, code exchange, sessions revocation                                            |
 | `packages/queue`         | Port defined; the Postgres adapter throws until `system.outbox_events` exists                              |
-| `packages/contracts`     | Canonical OpenAPI with 18 paths. `generated/` not produced yet                                             |
+| `packages/contracts`     | Canonical OpenAPI with 53 paths and deterministic generated DTOs                                           |
 | `packages/db`            | PostgreSQL-only Supabase stack with identity, access-account and Studio-session migrations and pgTAP tests |
 
 Studio sign-in resolves or creates the external access account and establishes a
@@ -87,19 +87,25 @@ Studio runs at `http://localhost:3000` and Backoffice at
 Run from the repository root. Turbo runs each task across the workspaces and
 caches results, so repeat runs are near-instant.
 
-| Command                   | What it does                                          |
-| ------------------------- | ----------------------------------------------------- |
-| `bun run dev`             | Starts every app in watch mode                        |
-| `bun run test`            | Runs tests (`bun test`)                               |
-| `bun run lint`            | ESLint, including the boundary rules                  |
-| `bun run typecheck`       | `tsc --noEmit` across workspaces                      |
-| `bun run build`           | Builds every deployable                               |
-| `bun run format`          | Prettier over the repository                          |
-| `bun run check:openapi`   | Validates the canonical OpenAPI with Redocly          |
-| `bun run check:db-policy` | Validates migration history, names, seeds and secrets |
-| `bun run db:reset`        | Rebuilds the local database from migrations           |
-| `bun run db:test`         | Runs the database pgTAP suite                         |
-| `bun run check:db-types`  | Verifies generated database types                     |
+| Command                      | What it does                                          |
+| ---------------------------- | ----------------------------------------------------- |
+| `bun run dev`                | Starts every app in watch mode                        |
+| `bun run test`               | Runs tests (`bun test`)                               |
+| `bun run lint`               | ESLint, including the boundary rules                  |
+| `bun run typecheck`          | `tsc --noEmit` across workspaces                      |
+| `bun run build`              | Builds every deployable                               |
+| `bun run format`             | Prettier over the repository                          |
+| `bun run check:openapi`      | Validates the canonical OpenAPI with Redocly          |
+| `bun run check:postman`      | Validates Native Git artifacts and privacy rules      |
+| `bun run test:postman:smoke` | Runs the safe smoke against a local fixture           |
+| `bun run check:db-policy`    | Validates migration history, names, seeds and secrets |
+| `bun run db:reset`           | Rebuilds the local database from migrations           |
+| `bun run db:test`            | Runs the database pgTAP suite                         |
+| `bun run check:db-types`     | Verifies generated database types                     |
+
+Postman resources and concise local guidance live in [`postman/`](./postman/README.md).
+The canonical operating procedure is in
+[`allfitone-docs/platform/api/POSTMAN_RUNBOOK.md`](https://github.com/dinnartec/allfitone-docs/blob/main/platform/api/POSTMAN_RUNBOOK.md).
 
 For a single workspace, use a filter:
 

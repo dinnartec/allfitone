@@ -1,0 +1,42 @@
+$kind: http-request
+id: 8fa16ac1-e8f1-4a43-a70a-95901e99a7a3
+description: |-
+  OpenAPI operation: listStudioOrganizationRoles.
+
+  Run only against Local with synthetic data unless the canonical runbook explicitly says otherwise.
+url: "{{baseUrl}}/studio/v1/organizations/{{organizationId}}/roles"
+method: GET
+headers:
+  Accept: application/json, application/problem+json
+  If-None-Match: synthetic_If-None-Match
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status is 200", () => pm.response.to.have.status(200));
+      const contentType = (pm.response.headers.get("Content-Type") || "").toLowerCase();
+      if (pm.response.code >= 400) {
+        pm.test("Errors use application/problem+json", () => pm.expect(contentType).to.include("application/problem+json"));
+        pm.test("Problem Details has the governed shape", () => {
+          const problem = pm.response.json();
+          pm.expect(problem).to.have.property("type");
+          pm.expect(problem).to.have.property("title");
+          pm.expect(problem).to.have.property("status", pm.response.code);
+        });
+      }
+      pm.test("Success response is JSON", () => pm.expect(contentType).to.include("application/json"));
+      const responseEtag = pm.response.headers.get("ETag");
+      if (responseEtag) pm.variables.set("etag", responseEtag);
+      if (contentType.includes("json") && pm.response.text()) {
+        const payload = pm.response.json();
+        const captures = {"attempt_id":"attemptId","credential_id":"credentialId","etag":"etag","execution_id":"executionId","goal_version_id":"goalVersionId","grant_id":"grantId","invitation_id":"invitationId","meal_id":"mealId","organization_id":"organizationId","person_id":"personId","planned_session_id":"plannedSessionId","program_id":"programId","relationship_id":"relationshipId","version_id":"programVersionId"};
+        const visit = (value) => {
+          if (!value || typeof value !== "object") return;
+          for (const [key, child] of Object.entries(value)) {
+            if (captures[key] && typeof child === "string") pm.variables.set(captures[key], child);
+            visit(child);
+          }
+        };
+        visit(payload);
+      }
+    language: text/javascript
+order: 12000

@@ -1,0 +1,12 @@
+workspace:
+  id: 0ea60379-cfe3-4d6b-8b48-0be8b689fb56
+
+cloudResources:
+  collections:
+    '../postman/collections/AllFit One - Local Journeys': 57465418-703aa818-d895-4b27-9eb0-f5fd639bdfa7
+    '../postman/collections/AllFit One - Production Smoke': 57465418-fcdfb055-3a68-44b7-8ef6-bb56ccd7ca8a
+  environments:
+    '../postman/environments/Local.postman_environment.json': 57465418-f89c8e65-7334-40cf-9d19-ecc8538c8a03
+    '../postman/environments/Production.postman_environment.json': 57465418-1213e992-e27a-4c3d-9db5-4fa0b7ac89c9
+  specs:
+    '../packages/contracts/openapi/allfit-v1.openapi.yaml': 34e1f771-367d-40b9-8911-10e1e3b084b0

@@ -1,0 +1,4 @@
+$kind: collection
+id: a04f014c-33e1-4adb-a9ab-6cbfa0405047
+description: Run requests in order. IDs and ETags are held in run-local variables and are never shared to Postman Cloud.
+order: 6000
