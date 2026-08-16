@@ -37,11 +37,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@allfitone/react/components/select'
+import { useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
 import { type FormEvent, useState } from 'react'
 
 import { useOrganizationContext } from './organization-context'
-import { StudioApiError, newCommand, studioApi, type TeamInvitation } from '@/lib/studio-api'
+import { useStudioSessionMutation } from './studio-query-provider'
+import {
+  StudioApiError,
+  newCommand,
+  studioApi,
+  type CommandHeaders,
+  type TeamInvitation,
+  type TeamInvitationCreate,
+} from '@/lib/studio-api'
+import { isStudioQuerySessionCancelled, studioQueryKeys } from '@/lib/studio-query'
 import {
   canInviteTeam,
   invitationRoleLabel,
@@ -53,14 +63,26 @@ const INVITATIONS_ENABLED = process.env.NEXT_PUBLIC_STAFF_INVITATIONS_ENABLED ==
 
 export function TeamInvitationForm() {
   const router = useRouter()
+  const queryClient = useQueryClient()
   const { current } = useOrganizationContext()
   const roleOptions = invitationRoleOptions(current.roles)
   const [contact, setContact] = useState('')
   const [role, setRole] = useState<TeamInvitationRole>(roleOptions[0]?.value ?? 'staff')
   const [command, setCommand] = useState(newCommand)
-  const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string>()
   const [created, setCreated] = useState<TeamInvitation>()
+  const createMutation = useStudioSessionMutation({
+    mutationFn: (
+      { body, command }: { body: TeamInvitationCreate; command: CommandHeaders },
+      signal,
+    ) => studioApi.createTeamInvitation(current.organization_id, body, command, signal),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: studioQueryKeys.organizationInvitationsRoot(current.organization_id),
+      })
+    },
+  })
+  const submitting = createMutation.isPending
 
   if (!INVITATIONS_ENABLED || !canInviteTeam(current.roles)) {
     return (
@@ -93,28 +115,28 @@ export function TeamInvitationForm() {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (submitting || !contact.trim()) return
-    setSubmitting(true)
     setError(undefined)
     try {
-      const invitation = await studioApi.createTeamInvitation(
-        current.organization_id,
-        {
+      const invitation = await createMutation.mutateAsync({
+        body: {
           channel: 'email',
           contact: contact.trim().toLowerCase(),
           intents: [{ kind: 'membership', proposed_role_code: role }],
         },
         command,
-      )
+      })
       setCreated(invitation)
     } catch (caught) {
+      if (isStudioQuerySessionCancelled(caught)) {
+        setCommand(newCommand())
+        return
+      }
       if (caught instanceof StudioApiError) setError(invitationError(caught))
       else {
         setError(
           'No pudimos enviar la invitación. Conservamos el intento para que puedas reintentar.',
         )
       }
-    } finally {
-      setSubmitting(false)
     }
   }
 

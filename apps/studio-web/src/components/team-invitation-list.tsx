@@ -25,18 +25,29 @@ import {
   TableState,
 } from '@allfitone/react/components/table'
 import { ToggleGroup, ToggleGroupItem } from '@allfitone/react/components/toggle-group'
+import { useInfiniteQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query'
 import Link from 'next/link'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 
 import { useOrganizationContext } from './organization-context'
+import { useStudioSessionMutation } from './studio-query-provider'
 import { WorkspacePageHeader } from './workspace-page-header'
+import { createCommandIntentManager } from '@/lib/command-intent'
 import {
   StudioApiError,
   newCommand,
   studioApi,
+  type CommandHeaders,
   type TeamInvitationPage,
   type TeamInvitationStatus,
 } from '@/lib/studio-api'
+import {
+  flattenInvitationPages,
+  isStudioQuerySessionCancelled,
+  organizationInvitationsQueryOptions,
+  removeInvitationFromPages,
+  studioQueryKeys,
+} from '@/lib/studio-query'
 import { canInviteTeam, invitationRoleLabel } from '@/lib/team-invitations'
 
 type InvitationItem = TeamInvitationPage['data'][number]
@@ -53,88 +64,62 @@ const INVITATION_ISSUANCE_ENABLED = process.env.NEXT_PUBLIC_STAFF_INVITATIONS_EN
 
 export function TeamInvitationList() {
   const { current } = useOrganizationContext()
+  const queryClient = useQueryClient()
   const [filter, setFilter] = useState<Filter>('all')
-  const [items, setItems] = useState<InvitationItem[]>([])
-  const [nextCursor, setNextCursor] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [loadingMore, setLoadingMore] = useState(false)
-  const [error, setError] = useState<string>()
-  const [revoking, setRevoking] = useState<string>()
   const [revokeIntent, setRevokeIntent] = useState<InvitationItem>()
   const [revokeError, setRevokeError] = useState<string>()
-  const requestId = useRef(0)
-  const requestController = useRef<AbortController | null>(null)
-
-  const load = useCallback(
-    async (cursor?: string) => {
-      requestController.current?.abort()
-      const controller = new AbortController()
-      const currentRequest = requestId.current + 1
-      requestId.current = currentRequest
-      requestController.current = controller
-      if (cursor) {
-        setLoadingMore(true)
-      } else {
-        setLoading(true)
-        setLoadingMore(false)
-        setItems([])
-        setNextCursor(null)
-      }
-      setError(undefined)
-      try {
-        const page = await studioApi.teamInvitations(
-          current.organization_id,
-          {
-            ...(filter === 'all' ? {} : { status: filter }),
-            limit: 50,
-            ...(cursor ? { cursor } : {}),
-          },
-          controller.signal,
-        )
-        if (controller.signal.aborted || currentRequest !== requestId.current) return
-        setItems((existing) => (cursor ? [...existing, ...page.data] : page.data))
-        setNextCursor(page.page.next_cursor)
-      } catch (caught) {
-        if (controller.signal.aborted || currentRequest !== requestId.current) return
-        setError(
-          caught instanceof StudioApiError && caught.status === 403
-            ? 'Tu rol actual no permite consultar las invitaciones.'
-            : 'La conexión falló de forma temporal. Inténtalo de nuevo.',
-        )
-      } finally {
-        if (!controller.signal.aborted && currentRequest === requestId.current) {
-          requestController.current = null
-          setLoading(false)
-          setLoadingMore(false)
-        }
-      }
+  const [revokeCommandIntent] = useState(() => createCommandIntentManager(newCommand))
+  const options = organizationInvitationsQueryOptions(current.organization_id, filter, 50)
+  const query = useInfiniteQuery(options)
+  const forbidden = query.error instanceof StudioApiError && query.error.status === 403
+  const staleCursor =
+    query.isFetchNextPageError &&
+    query.error instanceof StudioApiError &&
+    query.error.status === 422
+  const items = forbidden ? [] : flattenInvitationPages(query.data)
+  const loading = query.isPending
+  const loadingMore = query.isFetchingNextPage
+  const nextCursor =
+    !staleCursor && query.hasNextPage ? (query.data?.pages.at(-1)?.page.next_cursor ?? null) : null
+  const error = forbidden
+    ? 'Tu rol actual no permite consultar las invitaciones.'
+    : query.isError
+      ? 'La conexión falló de forma temporal. Inténtalo de nuevo.'
+      : undefined
+  const revokeMutation = useStudioSessionMutation({
+    mutationFn: (
+      { invitationId, command }: { invitationId: string; command: CommandHeaders },
+      signal,
+    ) => studioApi.revokeTeamInvitation(current.organization_id, invitationId, command, signal),
+    onSuccess: (_result, variables) => {
+      queryClient.setQueriesData<InfiniteData<TeamInvitationPage, unknown>>(
+        { queryKey: studioQueryKeys.organizationInvitationsRoot(current.organization_id) },
+        (cached) => removeInvitationFromPages(cached, variables.invitationId),
+      )
+      return queryClient.invalidateQueries({
+        queryKey: studioQueryKeys.organizationInvitationsRoot(current.organization_id),
+      })
     },
-    [current.organization_id, filter],
-  )
+  })
+  const revoking = revokeMutation.isPending ? revokeMutation.variables?.invitationId : undefined
 
-  useEffect(() => {
-    void load()
-    return () => {
-      requestId.current += 1
-      requestController.current?.abort()
+  async function retryList(): Promise<void> {
+    if (staleCursor) {
+      await queryClient.resetQueries({ queryKey: options.queryKey, exact: true })
+      return
     }
-  }, [load])
+    await query.refetch()
+  }
 
   function changeFilter(values: Filter[]) {
     const nextFilter = values[0]
     if (!nextFilter || nextFilter === filter) return
-    requestId.current += 1
-    requestController.current?.abort()
-    setItems([])
-    setNextCursor(null)
-    setError(undefined)
-    setLoading(true)
-    setLoadingMore(false)
     setFilter(nextFilter)
   }
 
   function requestRevoke(item: InvitationItem) {
     if (revoking || item.status !== 'pending') return
+    revokeCommandIntent.reset()
     setRevokeError(undefined)
     setRevokeIntent(item)
   }
@@ -142,34 +127,29 @@ export function TeamInvitationList() {
   async function revoke() {
     const item = revokeIntent
     if (revoking || !item || item.status !== 'pending') return
-    setRevoking(item.id)
     setRevokeError(undefined)
+    const command = revokeCommandIntent.commandFor({
+      operation: 'invitation:revoke',
+      resourceId: item.id,
+      payload: null,
+    })
     try {
-      await studioApi.revokeTeamInvitation(current.organization_id, item.id, newCommand())
-      setItems((existing) =>
-        existing.map((candidate) =>
-          candidate.id === item.id
-            ? {
-                ...candidate,
-                status: 'revoked',
-                intents: candidate.intents.map((intent) => ({
-                  ...intent,
-                  status: 'revoked',
-                  decided_at: new Date().toISOString(),
-                })),
-              }
-            : candidate,
-        ),
-      )
+      await revokeMutation.mutateAsync({ invitationId: item.id, command })
+      revokeCommandIntent.reset()
       setRevokeIntent(undefined)
     } catch (caught) {
+      if (isStudioQuerySessionCancelled(caught)) {
+        revokeCommandIntent.reset()
+        setRevokeIntent(undefined)
+        return
+      }
       if (caught instanceof StudioApiError && caught.status === 409) {
+        revokeCommandIntent.reset()
+        void queryClient.invalidateQueries({ queryKey: options.queryKey, exact: true })
         setRevokeError('La invitación ya fue decidida. Cierra este diálogo y actualiza la lista.')
       } else {
         setRevokeError('No pudimos revocar la invitación. Inténtalo de nuevo.')
       }
-    } finally {
-      setRevoking(undefined)
     }
   }
 
@@ -182,13 +162,13 @@ export function TeamInvitationList() {
         title: 'Cargando invitaciones',
         description: 'Estamos comprobando las invitaciones de esta organización.',
       }
-    : error
+    : error && items.length === 0
       ? {
           state: 'error' as const,
           title: 'No pudimos cargar las invitaciones',
           description: error,
           action: (
-            <Button size="sm" variant="outline" onClick={() => void load()}>
+            <Button size="sm" variant="outline" onClick={() => void retryList()}>
               Reintentar
             </Button>
           ),
@@ -229,6 +209,12 @@ export function TeamInvitationList() {
         ))}
       </ToggleGroup>
 
+      {query.isFetching && !loading && !loadingMore ? (
+        <p data-query-refreshing role="status" aria-live="polite">
+          Actualizando invitaciones…
+        </p>
+      ) : null}
+
       <Table
         aria-label="Invitaciones"
         aria-busy={loading || loadingMore || undefined}
@@ -263,9 +249,26 @@ export function TeamInvitationList() {
         </TableBody>
       </Table>
 
+      {staleCursor || (error && items.length > 0) ? (
+        <Alert variant={staleCursor ? 'info' : 'danger'} live="polite">
+          <AlertDescription>
+            {staleCursor
+              ? 'Las invitaciones cambiaron. Actualiza la lista para verla desde el inicio.'
+              : 'No pudimos actualizar la lista. Las invitaciones cargadas siguen visibles.'}
+          </AlertDescription>
+          <Button size="sm" variant="outline" onClick={() => void retryList()}>
+            {staleCursor ? 'Actualizar la lista' : 'Reintentar'}
+          </Button>
+        </Alert>
+      ) : null}
+
       {nextCursor ? (
         <div data-team-pagination>
-          <Button variant="outline" disabled={loadingMore} onClick={() => void load(nextCursor)}>
+          <Button
+            variant="outline"
+            disabled={loadingMore}
+            onClick={() => void query.fetchNextPage()}
+          >
             {loadingMore ? <Spinner label="Cargando más invitaciones" /> : null}
             {loadingMore ? 'Cargando…' : 'Ver más'}
           </Button>
@@ -276,6 +279,7 @@ export function TeamInvitationList() {
         open={Boolean(revokeIntent)}
         onOpenChange={(open) => {
           if (!open && !revoking) {
+            revokeCommandIntent.reset()
             setRevokeIntent(undefined)
             setRevokeError(undefined)
           }

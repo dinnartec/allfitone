@@ -31,9 +31,11 @@ import { Spinner } from '@allfitone/react/components/spinner'
 import { StatStrip, StatStripItem } from '@allfitone/react/components/stat-strip'
 import { Textarea } from '@allfitone/react/components/textarea'
 import { toast } from '@allfitone/react/components/sonner'
+import { useQueryClient } from '@tanstack/react-query'
 import { useMemo, useRef, useState, type FormEvent } from 'react'
 
 import { createCommandIntentManager } from '@/lib/command-intent'
+import { useStudioSessionMutation } from './studio-query-provider'
 import {
   hasErrors,
   mergeSpecialtyCatalog,
@@ -44,10 +46,17 @@ import {
   StudioApiError,
   newCommand,
   studioApi,
+  type CommandHeaders,
   type ProfessionalCatalogItem,
   type ProfessionalProfile,
   type ProfessionalProfilePut,
+  type StudioMe,
 } from '@/lib/studio-api'
+import {
+  isStudioQuerySessionCancelled,
+  studioQueryKeys,
+  updateProfessionalProfileInMe,
+} from '@/lib/studio-query'
 
 type SpecialtyOption = ProfessionalCatalogItem & { available: boolean }
 
@@ -62,12 +71,29 @@ export function ProfessionalPresentation({
   onSaved: (profile: ProfessionalProfile) => void
   onSessionFailure: (error: unknown) => boolean
 }) {
+  const queryClient = useQueryClient()
   const [draft, setDraft] = useState<ProfessionalProfilePut>(() => profileDraft(profile))
   const [errors, setErrors] = useState<ProfileErrors>({})
   const [remoteError, setRemoteError] = useState<string>()
-  const [submitting, setSubmitting] = useState(false)
   const submissionLock = useRef(false)
   const [commandIntent] = useState(() => createCommandIntentManager(newCommand))
+  const saveMutation = useStudioSessionMutation({
+    mutationFn: (
+      {
+        payload,
+        command,
+      }: {
+        payload: ProfessionalProfilePut
+        command: CommandHeaders
+      },
+      signal,
+    ) => studioApi.updateProfessionalProfile(payload, command, signal),
+    onSuccess: (saved) => {
+      queryClient.setQueryData<StudioMe>(studioQueryKeys.me(), (current) =>
+        updateProfessionalProfileInMe(current, saved),
+      )
+    },
+  })
   const options = useMemo(
     () => mergeSpecialtyCatalog(specialties, profile?.specialties ?? []),
     [profile?.specialties, specialties],
@@ -96,7 +122,6 @@ export function ProfessionalPresentation({
     setRemoteError(undefined)
     if (hasErrors(validation)) return
     submissionLock.current = true
-    setSubmitting(true)
     const payload = {
       headline: draft.headline.trim(),
       bio: draft.bio.trim(),
@@ -109,12 +134,16 @@ export function ProfessionalPresentation({
       payload,
     })
     try {
-      const saved = await studioApi.updateProfessionalProfile(payload, command)
+      const saved = await saveMutation.mutateAsync({ payload, command })
       onSaved(saved)
       setDraft(profileDraft(saved))
       commandIntent.reset()
       toast.success('Tu presentación profesional quedó actualizada.')
     } catch (error) {
+      if (isStudioQuerySessionCancelled(error)) {
+        commandIntent.reset()
+        return
+      }
       if (onSessionFailure(error)) {
         commandIntent.reset()
         return
@@ -131,7 +160,6 @@ export function ProfessionalPresentation({
       }
     } finally {
       submissionLock.current = false
-      setSubmitting(false)
     }
   }
 
@@ -262,9 +290,13 @@ export function ProfessionalPresentation({
             ) : null}
 
             <div data-profile-form-actions>
-              <Button type="submit" size="lg" disabled={submitting}>
-                {submitting ? <Spinner label="Guardando presentación" /> : null}
-                {submitting ? 'Guardando…' : profile ? 'Guardar cambios' : 'Crear mi perfil'}
+              <Button type="submit" size="lg" disabled={saveMutation.isPending}>
+                {saveMutation.isPending ? <Spinner label="Guardando presentación" /> : null}
+                {saveMutation.isPending
+                  ? 'Guardando…'
+                  : profile
+                    ? 'Guardar cambios'
+                    : 'Crear mi perfil'}
               </Button>
               <p>Tu perfil no cambia roles, permisos ni membresías.</p>
             </div>

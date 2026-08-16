@@ -25,6 +25,7 @@ import {
   WorkspaceShell,
   WorkspaceTitle,
 } from '@allfitone/react/components/workspace-shell'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useState } from 'react'
 
@@ -32,30 +33,17 @@ import { LogoutForm } from './logout-form'
 import { ProfessionalCredentials } from './professional-credentials'
 import { ProfessionalMemberships } from './professional-memberships'
 import { ProfessionalPresentation } from './professional-presentation'
+import { StudioApiError, type ProfessionalCatalogItem, type StudioMe } from '@/lib/studio-api'
 import {
-  StudioApiError,
-  studioApi,
-  type ProfessionalCatalogItem,
-  type StudioMe,
-} from '@/lib/studio-api'
-
-type AccountState =
-  { kind: 'loading' } | { kind: 'ready'; me: StudioMe } | { kind: 'error'; retryable: boolean }
-
-type CatalogState =
-  | { kind: 'idle' }
-  | { kind: 'loading' }
-  | {
-      kind: 'ready'
-      specialties: ProfessionalCatalogItem[]
-      credentialTypes: ProfessionalCatalogItem[]
-    }
-  | { kind: 'error'; retryable: boolean }
+  professionalCredentialTypesQueryOptions,
+  professionalSpecialtiesQueryOptions,
+  studioMeQueryOptions,
+  studioQueryKeys,
+} from '@/lib/studio-query'
 
 export function ProfessionalProfileScreen() {
   const router = useRouter()
-  const [state, setState] = useState<AccountState>({ kind: 'loading' })
-  const [catalogs, setCatalogs] = useState<CatalogState>({ kind: 'idle' })
+  const queryClient = useQueryClient()
   const [setupStarted, setSetupStarted] = useState(false)
 
   const routeSessionFailure = useCallback(
@@ -72,108 +60,101 @@ export function ProfessionalProfileScreen() {
     [router],
   )
 
-  const loadAccount = useCallback(async () => {
-    setState({ kind: 'loading' })
-    try {
-      setState({ kind: 'ready', me: await studioApi.me() })
-    } catch (error) {
-      if (routeSessionFailure(error)) return
-      setState({
-        kind: 'error',
-        retryable: error instanceof StudioApiError && error.status === 503,
-      })
-    }
-  }, [routeSessionFailure])
+  const meQuery = useQuery(studioMeQueryOptions())
+  const catalogsEnabled = Boolean(meQuery.data?.profile || setupStarted)
+  const specialtiesQuery = useQuery({
+    ...professionalSpecialtiesQueryOptions(),
+    enabled: catalogsEnabled,
+  })
+  const credentialTypesQuery = useQuery({
+    ...professionalCredentialTypesQueryOptions(),
+    enabled: catalogsEnabled,
+  })
+  const catalogError = specialtiesQuery.error ?? credentialTypesQuery.error
+  const catalogsReady = specialtiesQuery.data && credentialTypesQuery.data
 
-  const loadProfessionalCatalogs = useCallback(async () => {
-    setCatalogs({ kind: 'loading' })
-    try {
-      const [specialtyList, credentialTypeList] = await Promise.all([
-        studioApi.professionalSpecialties(),
-        studioApi.professionalCredentialTypes(),
-      ])
-      setCatalogs({
-        kind: 'ready',
-        specialties: specialtyList.items,
-        credentialTypes: credentialTypeList.items,
-      })
-    } catch (error) {
-      if (routeSessionFailure(error)) return
-      setCatalogs({
-        kind: 'error',
-        retryable: error instanceof StudioApiError && error.status === 503,
-      })
-    }
-  }, [routeSessionFailure])
+  useEffect(() => {
+    const error = meQuery.error ?? catalogError
+    if (error) routeSessionFailure(error)
+  }, [catalogError, meQuery.error, routeSessionFailure])
 
   const refreshMe = useCallback(async (): Promise<StudioMe | undefined> => {
+    await queryClient.invalidateQueries({ queryKey: studioQueryKeys.me(), exact: true })
     try {
-      const me = await studioApi.me()
-      setState((current) => (current.kind === 'ready' ? { ...current, me } : current))
-      return me
+      return await queryClient.fetchQuery({ ...studioMeQueryOptions(), staleTime: 0 })
     } catch (error) {
       if (!routeSessionFailure(error)) throw error
       return undefined
     }
-  }, [routeSessionFailure])
+  }, [queryClient, routeSessionFailure])
 
-  useEffect(() => {
-    void loadAccount()
-  }, [loadAccount])
-
-  useEffect(() => {
-    if (state.kind === 'ready' && state.me.profile && catalogs.kind === 'idle') {
-      void loadProfessionalCatalogs()
-    }
-  }, [catalogs.kind, loadProfessionalCatalogs, state])
+  function retryCatalogs(): void {
+    void specialtiesQuery.refetch()
+    void credentialTypesQuery.refetch()
+  }
 
   return (
     <AccountShell onSpaces={() => router.push('/')}>
-      {state.kind === 'loading' ? (
+      {(meQuery.isFetching && !meQuery.isPending) ||
+      (catalogsEnabled && (specialtiesQuery.isFetching || credentialTypesQuery.isFetching)) ? (
+        <p data-query-refreshing role="status" aria-live="polite">
+          Actualizando tu cuenta…
+        </p>
+      ) : null}
+      {meQuery.isError && meQuery.data ? (
+        <Alert variant="danger" live="polite">
+          <AlertTitle>No pudimos actualizar tu cuenta</AlertTitle>
+          <AlertDescription>La información cargada permanece visible.</AlertDescription>
+          <Button onClick={() => void meQuery.refetch()}>Reintentar</Button>
+        </Alert>
+      ) : null}
+      {catalogError && catalogsReady ? (
+        <Alert variant="danger" live="polite">
+          <AlertTitle>No pudimos actualizar los catálogos profesionales</AlertTitle>
+          <AlertDescription>Los datos cargados permanecen disponibles.</AlertDescription>
+          <Button onClick={retryCatalogs}>Reintentar</Button>
+        </Alert>
+      ) : null}
+      {meQuery.isPending ? (
         <div data-profile-state role="status" aria-live="polite">
           <Spinner label="Cargando tu cuenta" />
           <p>Reuniendo tus espacios y opciones personales…</p>
         </div>
-      ) : state.kind === 'error' ? (
+      ) : !meQuery.data ? (
         <div data-profile-state>
           <Alert variant="danger" live="assertive">
             <AlertTitle>No pudimos abrir tu cuenta</AlertTitle>
             <AlertDescription>
-              {state.retryable
+              {meQuery.error instanceof StudioApiError && meQuery.error.status === 503
                 ? 'El servicio no está disponible en este momento. Puedes reintentar.'
                 : 'Ocurrió un error al reunir la información de tu cuenta.'}
             </AlertDescription>
-            <Button onClick={() => void loadAccount()}>Reintentar</Button>
+            <Button onClick={() => void meQuery.refetch()}>Reintentar</Button>
           </Alert>
         </div>
-      ) : !state.me.profile && !setupStarted ? (
+      ) : !meQuery.data.profile && !setupStarted ? (
         <AccountOverview
-          me={state.me}
+          me={meQuery.data}
           onStartProfessionalSetup={() => {
             setSetupStarted(true)
-            if (catalogs.kind === 'idle' || catalogs.kind === 'error') {
-              void loadProfessionalCatalogs()
-            }
           }}
         />
-      ) : catalogs.kind === 'ready' ? (
+      ) : catalogsReady ? (
         <ProfessionalArea
-          me={state.me}
-          specialties={catalogs.specialties}
-          credentialTypes={catalogs.credentialTypes}
+          me={meQuery.data}
+          specialties={specialtiesQuery.data.items}
+          credentialTypes={credentialTypesQuery.data.items}
           setupStarted={setupStarted}
           onCancelSetup={() => setSetupStarted(false)}
           onSessionFailure={routeSessionFailure}
           onRefreshMe={refreshMe}
-          onMeChange={(me) =>
-            setState((current) => (current.kind === 'ready' ? { ...current, me } : current))
-          }
+          onMeChange={(me) => queryClient.setQueryData(studioQueryKeys.me(), me)}
         />
-      ) : catalogs.kind === 'error' ? (
+      ) : catalogError ? (
         <ProfessionalCatalogError
-          retryable={catalogs.retryable}
-          onRetry={() => void loadProfessionalCatalogs()}
-          onBack={!state.me.profile ? () => setSetupStarted(false) : undefined}
+          retryable={catalogError instanceof StudioApiError && catalogError.status === 503}
+          onRetry={retryCatalogs}
+          onBack={!meQuery.data.profile ? () => setSetupStarted(false) : undefined}
         />
       ) : (
         <div data-profile-state role="status" aria-live="polite">

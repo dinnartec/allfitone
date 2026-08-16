@@ -95,41 +95,57 @@ export const studioApi = {
       signal ? { signal } : {},
     ),
 
-  organizationTypes: () =>
-    request<AllfitV1Schemas['OrganizationTypeList']>('/studio/v1/organization-types'),
+  organizationTypes: (signal?: AbortSignal) =>
+    request<AllfitV1Schemas['OrganizationTypeList']>(
+      '/studio/v1/organization-types',
+      signal ? { signal } : {},
+    ),
 
-  me: () => request<StudioMe>('/studio/v1/me'),
+  me: (signal?: AbortSignal) => request<StudioMe>('/studio/v1/me', signal ? { signal } : {}),
 
-  professionalSpecialties: () =>
+  professionalSpecialties: (signal?: AbortSignal) =>
     catalogRequest<AllfitV1Schemas['ProfessionalSpecialtyList']>(
       '/studio/v1/professional-specialties',
       'professional-specialties',
+      signal,
     ),
 
-  professionalCredentialTypes: () =>
+  professionalCredentialTypes: (signal?: AbortSignal) =>
     catalogRequest<AllfitV1Schemas['ProfessionalCredentialTypeList']>(
       '/studio/v1/professional-credential-types',
       'professional-credential-types',
+      signal,
     ),
 
-  updateProfessionalProfile: (body: ProfessionalProfilePut, command: CommandHeaders) =>
+  updateProfessionalProfile: (
+    body: ProfessionalProfilePut,
+    command: CommandHeaders,
+    signal?: AbortSignal,
+  ) =>
     request<ProfessionalProfile>('/studio/v1/me/professional-profile', {
       method: 'PUT',
       headers: commandHeaders(command),
       body: JSON.stringify(body),
+      ...(signal ? { signal } : {}),
     }),
 
-  declareProfessionalCredential: (body: ProfessionalCredentialWrite, command: CommandHeaders) =>
+  declareProfessionalCredential: (
+    body: ProfessionalCredentialWrite,
+    command: CommandHeaders,
+    signal?: AbortSignal,
+  ) =>
     request<ProfessionalCredential>('/studio/v1/me/professional-credentials', {
       method: 'POST',
       headers: commandHeaders(command),
       body: JSON.stringify(body),
+      ...(signal ? { signal } : {}),
     }),
 
   reviseProfessionalCredential: (
     credentialId: string,
     body: ProfessionalCredentialWrite,
     command: CommandHeaders,
+    signal?: AbortSignal,
   ) =>
     request<ProfessionalCredential>(
       `/studio/v1/me/professional-credentials/${credentialId}/revisions`,
@@ -137,15 +153,21 @@ export const studioApi = {
         method: 'POST',
         headers: commandHeaders(command),
         body: JSON.stringify(body),
+        ...(signal ? { signal } : {}),
       },
     ),
 
-  retireProfessionalCredential: (credentialId: string, command: CommandHeaders) =>
+  retireProfessionalCredential: (
+    credentialId: string,
+    command: CommandHeaders,
+    signal?: AbortSignal,
+  ) =>
     request<ProfessionalCredential>(
       `/studio/v1/me/professional-credentials/${credentialId}/retirement`,
       {
         method: 'POST',
         headers: commandHeaders(command),
+        ...(signal ? { signal } : {}),
       },
     ),
 
@@ -160,11 +182,13 @@ export const studioApi = {
     organizationId: string,
     body: TeamInvitationCreate,
     command: CommandHeaders,
+    signal?: AbortSignal,
   ) =>
     request<TeamInvitation>(`/studio/v1/organizations/${organizationId}/invitations`, {
       method: 'POST',
       headers: commandHeaders(command),
       body: JSON.stringify(body),
+      ...(signal ? { signal } : {}),
     }),
 
   resolveTeamInvitation: (token: string) =>
@@ -226,13 +250,19 @@ export const studioApi = {
       signal,
     ),
 
-  revokeTeamInvitation: (organizationId: string, invitationId: string, command: CommandHeaders) =>
+  revokeTeamInvitation: (
+    organizationId: string,
+    invitationId: string,
+    command: CommandHeaders,
+    signal?: AbortSignal,
+  ) =>
     request<AllfitV1Schemas['TeamInvitationRevoked']>(
       `/studio/v1/organizations/${organizationId}/invitations/${invitationId}/revocation`,
       {
         method: 'POST',
         headers: commandHeaders(command),
         body: JSON.stringify({}),
+        ...(signal ? { signal } : {}),
       },
     ),
 }

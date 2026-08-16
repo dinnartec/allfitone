@@ -43,6 +43,33 @@ test('loads the combined Studio entry context in one credentialed request', asyn
 })
 
 describe('professional profile API', () => {
+  test('forwards caller cancellation through every cache-managed account read', async () => {
+    Object.defineProperty(globalThis, 'sessionStorage', {
+      configurable: true,
+      value: memoryStorage(),
+    })
+    const requests: RequestInit[] = []
+    globalThis.fetch = (async (input, init) => {
+      requests.push(init ?? {})
+      const pathname = new URL(String(input)).pathname
+      if (pathname === '/studio/v1/me') {
+        return Response.json({ profile: null, memberships: [] })
+      }
+      return Response.json({ items: [] })
+    }) as typeof fetch
+    const controller = new AbortController()
+
+    await Promise.all([
+      studioApi.me(controller.signal),
+      studioApi.organizationTypes(controller.signal),
+      studioApi.professionalSpecialties(controller.signal),
+      studioApi.professionalCredentialTypes(controller.signal),
+    ])
+
+    expect(requests).toHaveLength(4)
+    expect(requests.every((request) => request.signal === controller.signal)).toBe(true)
+  })
+
   test('uses the personal profile routes and HTTP methods from the contract', async () => {
     const calls: Array<{ url: string; init: RequestInit }> = []
     globalThis.fetch = (async (input, init) => {
@@ -77,6 +104,53 @@ describe('professional profile API', () => {
     expect(calls[1]?.init.body).toBe(JSON.stringify(profile))
     expect(calls[2]?.init.body).toBe(JSON.stringify(credential))
     expect(calls[3]?.init.body).toBeUndefined()
+  })
+
+  test('forwards caller cancellation through every cache-managed write', async () => {
+    const requests: RequestInit[] = []
+    globalThis.fetch = (async (_input, init) => {
+      requests.push(init ?? {})
+      return Response.json({})
+    }) as typeof fetch
+    const controller = new AbortController()
+    const command = newCommand()
+    const profile = {
+      headline: 'Entrenador de fuerza',
+      bio: 'Acompañamiento profesional.',
+      practice_started_year: 2020,
+      specialty_codes: ['strength_conditioning'],
+    }
+    const credential = {
+      credential_type_code: 'professional_certification',
+      issuer: 'Allfit Academy',
+      name: 'Fuerza aplicada',
+    }
+
+    await Promise.all([
+      studioApi.updateProfessionalProfile(profile, command, controller.signal),
+      studioApi.declareProfessionalCredential(credential, command, controller.signal),
+      studioApi.reviseProfessionalCredential(
+        'credential-1',
+        credential,
+        command,
+        controller.signal,
+      ),
+      studioApi.retireProfessionalCredential('credential-1', command, controller.signal),
+      studioApi.createTeamInvitation(
+        'organization-1',
+        {
+          channel: 'email',
+          contact: 'person@example.test',
+          intents: [{ kind: 'membership', proposed_role_code: 'staff' }],
+        },
+        command,
+        controller.signal,
+      ),
+      studioApi.revokeTeamInvitation('organization-1', 'invitation-1', command, controller.signal),
+    ])
+
+    expect(requests).toHaveLength(6)
+    expect(requests.every((request) => request.signal === controller.signal)).toBe(true)
   })
 
   test('sends exact credential revision route, body, cookies and command headers', async () => {

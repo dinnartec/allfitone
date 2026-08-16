@@ -18,11 +18,13 @@ import {
 } from '@allfitone/react/components/collapsible'
 import { Spinner } from '@allfitone/react/components/spinner'
 import { FoundationIcon } from '@allfitone/react/icons'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { useState } from 'react'
 
 import { useOrganizationContext } from './organization-context'
 import { WorkspacePageHeader } from './workspace-page-header'
-import { StudioApiError, studioApi, type OrganizationRole } from '@/lib/studio-api'
+import { StudioApiError, type OrganizationRole } from '@/lib/studio-api'
+import { organizationRolesQueryOptions } from '@/lib/studio-query'
 
 type CatalogState =
   | { kind: 'loading' }
@@ -34,43 +36,19 @@ const EXPECTED_ROLE_CODES = ['owner', 'admin', 'coach', 'staff'] as const
 
 export function OrganizationRoleCatalog() {
   const { current } = useOrganizationContext()
-  const [state, setState] = useState<CatalogState>({ kind: 'loading' })
-  const requestId = useRef(0)
-  const requestController = useRef<AbortController | null>(null)
-
-  const load = useCallback(async () => {
-    requestController.current?.abort()
-    const controller = new AbortController()
-    const currentRequest = requestId.current + 1
-    requestId.current = currentRequest
-    requestController.current = controller
-    setState({ kind: 'loading' })
-
-    try {
-      const catalog = await studioApi.organizationRoles(current.organization_id, controller.signal)
-      if (controller.signal.aborted || currentRequest !== requestId.current) return
-      setState(
-        hasExpectedRoles(catalog.items)
-          ? { kind: 'ready', roles: catalog.items }
-          : { kind: 'error' },
-      )
-    } catch (caught) {
-      if (controller.signal.aborted || currentRequest !== requestId.current) return
-      setState(
-        caught instanceof StudioApiError && caught.status === 403
-          ? { kind: 'forbidden' }
-          : { kind: 'error' },
-      )
-    }
-  }, [current.organization_id])
-
-  useEffect(() => {
-    void load()
-    return () => {
-      requestId.current += 1
-      requestController.current?.abort()
-    }
-  }, [load])
+  const query = useQuery(organizationRolesQueryOptions(current.organization_id))
+  const forbidden = query.error instanceof StudioApiError && query.error.status === 403
+  const roles =
+    !forbidden && query.data?.items && hasExpectedRoles(query.data.items)
+      ? query.data.items
+      : undefined
+  const state: CatalogState = forbidden
+    ? { kind: 'forbidden' }
+    : roles
+      ? { kind: 'ready', roles }
+      : query.isPending
+        ? { kind: 'loading' }
+        : { kind: 'error' }
 
   return (
     <section data-team-page data-role-page aria-label="Roles y permisos">
@@ -82,6 +60,22 @@ export function OrganizationRoleCatalog() {
         <AlertTitle>Cuatro roles fijos, solo consulta</AlertTitle>
         <AlertDescription>Desde esta pantalla no se cambian roles.</AlertDescription>
       </Alert>
+
+      {query.isFetching && state.kind === 'ready' ? (
+        <p data-query-refreshing role="status" aria-live="polite">
+          Actualizando roles y permisos…
+        </p>
+      ) : null}
+
+      {query.isError && state.kind === 'ready' ? (
+        <Alert variant="danger" live="polite">
+          <AlertTitle>No pudimos actualizar los roles</AlertTitle>
+          <AlertDescription>El catálogo cargado permanece visible.</AlertDescription>
+          <Button variant="outline" onClick={() => void query.refetch()}>
+            Reintentar
+          </Button>
+        </Alert>
+      ) : null}
 
       {state.kind === 'loading' ? (
         <Card>
@@ -108,7 +102,7 @@ export function OrganizationRoleCatalog() {
             La conexión falló de forma temporal. El catálogo permanecerá oculto hasta comprobarlo de
             nuevo.
           </AlertDescription>
-          <Button variant="outline" onClick={() => void load()}>
+          <Button variant="outline" onClick={() => void query.refetch()}>
             Reintentar
           </Button>
         </Alert>

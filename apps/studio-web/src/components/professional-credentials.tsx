@@ -60,9 +60,11 @@ import {
 } from '@allfitone/react/components/select'
 import { Spinner } from '@allfitone/react/components/spinner'
 import { toast } from '@allfitone/react/components/sonner'
+import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 
 import { createCommandIntentManager } from '@/lib/command-intent'
+import { useStudioSessionMutation } from './studio-query-provider'
 import {
   credentialStateLabel,
   credentialStateVariant,
@@ -75,13 +77,25 @@ import {
   StudioApiError,
   newCommand,
   studioApi,
+  type CommandHeaders,
   type ProfessionalCatalogItem,
   type ProfessionalCredential,
   type ProfessionalCredentialWrite,
   type StudioMe,
 } from '@/lib/studio-api'
+import {
+  isStudioQuerySessionCancelled,
+  prependCredentialToMe,
+  replaceCredentialInMe,
+  studioQueryKeys,
+} from '@/lib/studio-query'
 
 type CredentialIntent = { kind: 'declare' } | { kind: 'revise'; credential: ProfessionalCredential }
+type CredentialMutationVariables = {
+  intent: CredentialIntent
+  payload: ProfessionalCredentialWrite
+  command: CommandHeaders
+}
 
 export function ProfessionalCredentials({
   credentials,
@@ -98,18 +112,30 @@ export function ProfessionalCredentials({
   onRefreshMe: () => Promise<StudioMe | undefined>
   onSessionFailure: (error: unknown) => boolean
 }) {
+  const queryClient = useQueryClient()
   const { active, retired } = groupCredentials(credentials)
   const [intent, setIntent] = useState<CredentialIntent>()
   const [retireIntent, setRetireIntent] = useState<{ credential: ProfessionalCredential }>()
-  const [retiring, setRetiring] = useState(false)
   const retirementLock = useRef(false)
   const [retireError, setRetireError] = useState<string>()
   const [retireCommandIntent] = useState(() => createCommandIntentManager(newCommand))
+  const retireMutation = useStudioSessionMutation({
+    mutationFn: (
+      { credentialId, command }: { credentialId: string; command: CommandHeaders },
+      signal,
+    ) => studioApi.retireProfessionalCredential(credentialId, command, signal),
+    onSuccess: (updated) => {
+      queryClient.setQueryData<StudioMe>(studioQueryKeys.me(), (current) =>
+        replaceCredentialInMe(current, updated),
+      )
+      void queryClient.invalidateQueries({ queryKey: studioQueryKeys.me(), exact: true })
+    },
+  })
+  const retiring = retireMutation.isPending
 
   async function retire() {
     if (!retireIntent || retirementLock.current) return
     retirementLock.current = true
-    setRetiring(true)
     setRetireError(undefined)
     const command = retireCommandIntent.commandFor({
       operation: 'credential:retire',
@@ -117,10 +143,10 @@ export function ProfessionalCredentials({
       payload: null,
     })
     try {
-      const updated = await studioApi.retireProfessionalCredential(
-        retireIntent.credential.id,
+      const updated = await retireMutation.mutateAsync({
+        credentialId: retireIntent.credential.id,
         command,
-      )
+      })
       onCredentialsChange(
         credentials.map((credential) => (credential.id === updated.id ? updated : credential)),
       )
@@ -128,6 +154,10 @@ export function ProfessionalCredentials({
       setRetireIntent(undefined)
       toast.success('La credencial pasó al historial.')
     } catch (error) {
+      if (isStudioQuerySessionCancelled(error)) {
+        retireCommandIntent.reset()
+        return
+      }
       if (onSessionFailure(error)) {
         retireCommandIntent.reset()
         return
@@ -144,7 +174,6 @@ export function ProfessionalCredentials({
       }
     } finally {
       retirementLock.current = false
-      setRetiring(false)
     }
   }
 
@@ -380,11 +409,33 @@ function CredentialDialog({
   onStale: () => Promise<void>
   onSessionFailure: (error: unknown) => boolean
 }) {
+  const queryClient = useQueryClient()
   const [errors, setErrors] = useState<CredentialErrors>({})
   const [remoteError, setRemoteError] = useState<string>()
-  const [submitting, setSubmitting] = useState(false)
   const submissionLock = useRef(false)
   const [commandIntent] = useState(() => createCommandIntentManager(newCommand))
+  const credentialMutation = useStudioSessionMutation({
+    mutationFn: (
+      { intent: activeIntent, payload, command }: CredentialMutationVariables,
+      signal,
+    ) =>
+      activeIntent.kind === 'declare'
+        ? studioApi.declareProfessionalCredential(payload, command, signal)
+        : studioApi.reviseProfessionalCredential(
+            activeIntent.credential.id,
+            payload,
+            command,
+            signal,
+          ),
+    onSuccess: (saved, variables) => {
+      if (variables.intent.kind !== 'declare') return
+      queryClient.setQueryData<StudioMe>(studioQueryKeys.me(), (current) =>
+        prependCredentialToMe(current, saved),
+      )
+      void queryClient.invalidateQueries({ queryKey: studioQueryKeys.me(), exact: true })
+    },
+  })
+  const submitting = credentialMutation.isPending
   const publishedCodes = new Set(credentialTypes.map((item) => item.code))
   const intentKey = intent
     ? intent.kind === 'declare'
@@ -395,7 +446,6 @@ function CredentialDialog({
   useEffect(() => {
     setErrors({})
     setRemoteError(undefined)
-    setSubmitting(false)
     submissionLock.current = false
     commandIntent.reset()
   }, [commandIntent, intentKey])
@@ -434,7 +484,6 @@ function CredentialDialog({
               setRemoteError(undefined)
               if (hasErrors(validation) || submissionLock.current) return
               submissionLock.current = true
-              setSubmitting(true)
               const payload = normalizedCredential(value)
               const command = commandIntent.commandFor({
                 operation: intent.kind === 'declare' ? 'credential:declare' : 'credential:revise',
@@ -442,22 +491,21 @@ function CredentialDialog({
                 payload,
               })
               try {
+                const saved = await credentialMutation.mutateAsync({ intent, payload, command })
                 if (intent.kind === 'declare') {
-                  const declared = await studioApi.declareProfessionalCredential(payload, command)
                   commandIntent.reset()
-                  onDeclared(declared)
+                  onDeclared(saved)
                   toast.success('Credencial declarada como no verificada.')
                 } else {
-                  await studioApi.reviseProfessionalCredential(
-                    intent.credential.id,
-                    payload,
-                    command,
-                  )
                   commandIntent.reset()
                   await onRevised()
                   toast.success('Creamos una nueva versión de la credencial.')
                 }
               } catch (error) {
+                if (isStudioQuerySessionCancelled(error)) {
+                  commandIntent.reset()
+                  return
+                }
                 if (onSessionFailure(error)) {
                   commandIntent.reset()
                   return
@@ -481,7 +529,6 @@ function CredentialDialog({
                 }
               } finally {
                 submissionLock.current = false
-                setSubmitting(false)
               }
             }}
           />
