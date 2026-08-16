@@ -25,16 +25,12 @@ import {
   TableState,
 } from '@allfitone/react/components/table'
 import { ToggleGroup, ToggleGroupItem } from '@allfitone/react/components/toggle-group'
-import {
-  useInfiniteQuery,
-  useMutation,
-  useQueryClient,
-  type InfiniteData,
-} from '@tanstack/react-query'
+import { useInfiniteQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query'
 import Link from 'next/link'
 import { useState } from 'react'
 
 import { useOrganizationContext } from './organization-context'
+import { useStudioSessionMutation } from './studio-query-provider'
 import { WorkspacePageHeader } from './workspace-page-header'
 import { createCommandIntentManager } from '@/lib/command-intent'
 import {
@@ -47,8 +43,9 @@ import {
 } from '@/lib/studio-api'
 import {
   flattenInvitationPages,
-  markInvitationRevoked,
+  isStudioQuerySessionCancelled,
   organizationInvitationsQueryOptions,
+  removeInvitationFromPages,
   studioQueryKeys,
 } from '@/lib/studio-query'
 import { canInviteTeam, invitationRoleLabel } from '@/lib/team-invitations'
@@ -82,24 +79,25 @@ export function TeamInvitationList() {
   const items = forbidden ? [] : flattenInvitationPages(query.data)
   const loading = query.isPending
   const loadingMore = query.isFetchingNextPage
-  const nextCursor = query.hasNextPage ? (query.data?.pages.at(-1)?.page.next_cursor ?? null) : null
+  const nextCursor =
+    !staleCursor && query.hasNextPage ? (query.data?.pages.at(-1)?.page.next_cursor ?? null) : null
   const error = forbidden
     ? 'Tu rol actual no permite consultar las invitaciones.'
     : query.isError
       ? 'La conexión falló de forma temporal. Inténtalo de nuevo.'
       : undefined
-  const revokeMutation = useMutation({
-    mutationFn: ({ invitationId, command }: { invitationId: string; command: CommandHeaders }) =>
-      studioApi.revokeTeamInvitation(current.organization_id, invitationId, command),
+  const revokeMutation = useStudioSessionMutation({
+    mutationFn: (
+      { invitationId, command }: { invitationId: string; command: CommandHeaders },
+      signal,
+    ) => studioApi.revokeTeamInvitation(current.organization_id, invitationId, command, signal),
     onSuccess: (_result, variables) => {
-      const decidedAt = new Date().toISOString()
       queryClient.setQueriesData<InfiniteData<TeamInvitationPage, unknown>>(
         { queryKey: studioQueryKeys.organizationInvitationsRoot(current.organization_id) },
-        (cached) => markInvitationRevoked(cached, variables.invitationId, decidedAt),
+        (cached) => removeInvitationFromPages(cached, variables.invitationId),
       )
-      void queryClient.invalidateQueries({
+      return queryClient.invalidateQueries({
         queryKey: studioQueryKeys.organizationInvitationsRoot(current.organization_id),
-        refetchType: 'none',
       })
     },
   })
@@ -140,6 +138,11 @@ export function TeamInvitationList() {
       revokeCommandIntent.reset()
       setRevokeIntent(undefined)
     } catch (caught) {
+      if (isStudioQuerySessionCancelled(caught)) {
+        revokeCommandIntent.reset()
+        setRevokeIntent(undefined)
+        return
+      }
       if (caught instanceof StudioApiError && caught.status === 409) {
         revokeCommandIntent.reset()
         void queryClient.invalidateQueries({ queryKey: options.queryKey, exact: true })

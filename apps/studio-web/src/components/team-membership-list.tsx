@@ -70,12 +70,15 @@ export function TeamMembershipList() {
   const items = forbidden ? [] : flattenMembershipPages(query.data)
   const loading = canViewDirectory && query.isPending
   const loadingMore = query.isFetchingNextPage
-  const nextCursor = query.hasNextPage ? (query.data?.pages.at(-1)?.page.next_cursor ?? null) : null
+  const staleCursor =
+    query.isFetchNextPageError &&
+    query.error instanceof StudioApiError &&
+    query.error.status === 422
+  const nextCursor =
+    !staleCursor && query.hasNextPage ? (query.data?.pages.at(-1)?.page.next_cursor ?? null) : null
   const error: LoadError | undefined = forbidden
     ? 'forbidden'
-    : query.isFetchNextPageError &&
-        query.error instanceof StudioApiError &&
-        query.error.status === 422
+    : staleCursor
       ? 'stale-cursor'
       : query.isError
         ? 'unavailable'

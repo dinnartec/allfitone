@@ -293,20 +293,21 @@ test('pending pagination cannot append after the filter changes', async ({ page 
 test('an expired cursor keeps visible members and offers a first-page refresh', async ({
   page,
 }) => {
+  let firstPageRequests = 0
   const fixture = createStudioApiFixture({
     memberships: [activeMembership],
     intercept: (request) => {
       if (!isOrganizationMembershipRequest(request)) return undefined
       const cursor = new URLSearchParams(request.search).get('cursor')
-      return cursor
-        ? { status: 422, body: { error: { code: 'invalid-cursor' } } }
-        : {
-            status: 200,
-            body: {
-              data: [activeTeamMember],
-              page: { has_more: true, next_cursor: 'expired-page' },
-            },
-          }
+      if (cursor) return { status: 422, body: { error: { code: 'invalid-cursor' } } }
+      firstPageRequests += 1
+      return {
+        status: 200,
+        body: {
+          data: [activeTeamMember],
+          page: { has_more: true, next_cursor: 'expired-page' },
+        },
+      }
     },
   })
   await installStudioApiMock(page, fixture)
@@ -315,8 +316,11 @@ test('an expired cursor keeps visible members and offers a first-page refresh', 
   await page.getByRole('button', { name: 'Ver más' }).click()
   await expect(page.getByText('El equipo cambió')).toBeVisible()
   await expect(page.getByText('Ada Lovelace', { exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Ver más' })).toHaveCount(0)
+  const requestsBeforeRefresh = firstPageRequests
   await page.getByRole('button', { name: 'Actualizar la lista' }).click()
   await expect(page.getByText('El equipo cambió')).toHaveCount(0)
+  expect(firstPageRequests).toBe(requestsBeforeRefresh + 1)
 })
 
 for (const viewport of [

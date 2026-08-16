@@ -31,10 +31,11 @@ import { Spinner } from '@allfitone/react/components/spinner'
 import { StatStrip, StatStripItem } from '@allfitone/react/components/stat-strip'
 import { Textarea } from '@allfitone/react/components/textarea'
 import { toast } from '@allfitone/react/components/sonner'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 import { useMemo, useRef, useState, type FormEvent } from 'react'
 
 import { createCommandIntentManager } from '@/lib/command-intent'
+import { useStudioSessionMutation } from './studio-query-provider'
 import {
   hasErrors,
   mergeSpecialtyCatalog,
@@ -51,7 +52,11 @@ import {
   type ProfessionalProfilePut,
   type StudioMe,
 } from '@/lib/studio-api'
-import { studioQueryKeys, updateProfessionalProfileInMe } from '@/lib/studio-query'
+import {
+  isStudioQuerySessionCancelled,
+  studioQueryKeys,
+  updateProfessionalProfileInMe,
+} from '@/lib/studio-query'
 
 type SpecialtyOption = ProfessionalCatalogItem & { available: boolean }
 
@@ -72,14 +77,17 @@ export function ProfessionalPresentation({
   const [remoteError, setRemoteError] = useState<string>()
   const submissionLock = useRef(false)
   const [commandIntent] = useState(() => createCommandIntentManager(newCommand))
-  const saveMutation = useMutation({
-    mutationFn: ({
-      payload,
-      command,
-    }: {
-      payload: ProfessionalProfilePut
-      command: CommandHeaders
-    }) => studioApi.updateProfessionalProfile(payload, command),
+  const saveMutation = useStudioSessionMutation({
+    mutationFn: (
+      {
+        payload,
+        command,
+      }: {
+        payload: ProfessionalProfilePut
+        command: CommandHeaders
+      },
+      signal,
+    ) => studioApi.updateProfessionalProfile(payload, command, signal),
     onSuccess: (saved) => {
       queryClient.setQueryData<StudioMe>(studioQueryKeys.me(), (current) =>
         updateProfessionalProfileInMe(current, saved),
@@ -132,6 +140,10 @@ export function ProfessionalPresentation({
       commandIntent.reset()
       toast.success('Tu presentación profesional quedó actualizada.')
     } catch (error) {
+      if (isStudioQuerySessionCancelled(error)) {
+        commandIntent.reset()
+        return
+      }
       if (onSessionFailure(error)) {
         commandIntent.reset()
         return

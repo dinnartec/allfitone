@@ -1,11 +1,13 @@
 import { describe, expect, test } from 'bun:test'
 
 import {
+  createStudioQueryRuntime,
   flattenMembershipPages,
   createStudioQueryClient,
-  markInvitationRevoked,
+  isStudioQuerySessionCancelled,
   nextPageCursor,
   prependCredentialToMe,
+  removeInvitationFromPages,
   replaceCredentialInMe,
   shouldRetryStudioQuery,
   studioQueryKeys,
@@ -97,6 +99,66 @@ describe('Studio query client cache', () => {
   })
 })
 
+describe('Studio query session runtime', () => {
+  test('aborts pending mutations and reports a session cancellation on stop', async () => {
+    const client = createStudioQueryClient()
+    const runtime = createStudioQueryRuntime(client)
+    let observedSignal: AbortSignal | undefined
+    const pending = runtime.runMutation(
+      (signal) =>
+        new Promise<string>((_resolve, reject) => {
+          observedSignal = signal
+          signal.addEventListener('abort', () => reject(signal.reason), { once: true })
+        }),
+    )
+    const rejection = pending.catch((error: unknown) => error)
+
+    runtime.stop()
+
+    expect(observedSignal?.aborted).toBe(true)
+    expect(isStudioQuerySessionCancelled(await rejection)).toBe(true)
+    expect(client.getQueryCache().getAll()).toHaveLength(0)
+    expect(client.getMutationCache().getAll()).toHaveLength(0)
+  })
+
+  test('rejects a late mutation response even when the transport ignores abort', async () => {
+    const client = createStudioQueryClient()
+    const runtime = createStudioQueryRuntime(client)
+    const deferred = createDeferred<{ profile: string }>()
+    const pending = runtime
+      .runMutation(() => deferred.promise)
+      .then((value) => {
+        client.setQueryData(['studio', 'me'], value)
+      })
+    const rejection = pending.catch((error: unknown) => error)
+
+    runtime.stop()
+    deferred.resolve({ profile: 'previous-session' })
+
+    expect(isStudioQuerySessionCancelled(await rejection)).toBe(true)
+    expect(client.getQueryData(['studio', 'me'])).toBeUndefined()
+  })
+
+  test('opens a clean generation without accepting an older response', async () => {
+    const client = createStudioQueryClient()
+    const runtime = createStudioQueryRuntime(client)
+    const previous = createDeferred<string>()
+    const stale = runtime.runMutation(() => previous.promise)
+    const staleRejection = stale.catch((error: unknown) => error)
+
+    runtime.stop()
+    runtime.stop()
+    runtime.start()
+    client.setQueryData(['studio', 'me'], 'current-session')
+    runtime.start()
+    previous.resolve('previous-session')
+
+    expect(isStudioQuerySessionCancelled(await staleRejection)).toBe(true)
+    expect(await runtime.runMutation(async () => 'current-session')).toBe('current-session')
+    expect(client.getQueryData<string>(['studio', 'me'])).toBe('current-session')
+  })
+})
+
 describe('Studio infinite query data', () => {
   test('returns the next cursor and deduplicates memberships across pages', () => {
     const first = membershipPage([membership('membership-a')], 'next-page')
@@ -111,20 +173,23 @@ describe('Studio infinite query data', () => {
     ).toEqual(['membership-a', 'membership-b'])
   })
 
-  test('marks a revoked invitation in every cached page', () => {
-    const page = invitationPage([invitation('invitation-a'), invitation('invitation-b')])
-    const decidedAt = '2026-08-15T15:00:00.000Z'
-    const updated = markInvitationRevoked(
-      { pages: [page], pageParams: [null] },
-      'invitation-a',
-      decidedAt,
-    )
-    const revoked = updated?.pages[0]?.data[0]
+  test('removes a revoked invitation from every cached page without changing other rows', () => {
+    const first = invitationPage([invitation('invitation-a'), invitation('invitation-b')])
+    const second = invitationPage([invitation('invitation-c'), invitation('invitation-a')])
+    const current = { pages: [first, second], pageParams: [null, 'next-page'] }
+    const updated = removeInvitationFromPages(current, 'invitation-a')
 
-    expect(revoked?.status).toBe('revoked')
-    expect(revoked?.intents[0]?.status).toBe('revoked')
-    expect(revoked?.intents[0]?.decided_at).toBe(decidedAt)
-    expect(updated?.pages[0]?.data[1]?.status).toBe('pending')
+    expect(updated?.pages.flatMap((page) => page.data).map((item) => item.id)).toEqual([
+      'invitation-b',
+      'invitation-c',
+    ])
+    expect(updated?.pages[0]?.data[0]).toBe(first.data[1])
+    expect(current.pages.flatMap((page) => page.data).map((item) => item.id)).toEqual([
+      'invitation-a',
+      'invitation-b',
+      'invitation-c',
+      'invitation-a',
+    ])
   })
 })
 
@@ -239,4 +304,18 @@ function professionalProfile(overrides: Partial<ProfessionalProfile> = {}): Prof
 
 function me(profile: ProfessionalProfile | null = professionalProfile()): StudioMe {
   return { profile, memberships: [] }
+}
+
+function createDeferred<T>(): {
+  promise: Promise<T>
+  resolve: (value: T) => void
+} {
+  let resolve: ((value: T) => void) | undefined
+  const promise = new Promise<T>((complete) => {
+    resolve = complete
+  })
+  return {
+    promise,
+    resolve: (value) => resolve?.(value),
+  }
 }

@@ -65,6 +65,78 @@ export function createStudioQueryClient(): QueryClient {
   })
 }
 
+export interface StudioQueryRuntime {
+  readonly queryClient: QueryClient
+  start(): void
+  stop(): void
+  runMutation<T>(operation: (signal: AbortSignal) => Promise<T>): Promise<T>
+}
+
+export class StudioQuerySessionCancelledError extends Error {
+  constructor() {
+    super('studio-query-session-cancelled')
+    this.name = 'StudioQuerySessionCancelledError'
+  }
+}
+
+export function isStudioQuerySessionCancelled(
+  error: unknown,
+): error is StudioQuerySessionCancelledError {
+  return error instanceof StudioQuerySessionCancelledError
+}
+
+export function createStudioQueryRuntime(
+  queryClient: QueryClient = createStudioQueryClient(),
+): StudioQueryRuntime {
+  let active = true
+  let generation = 0
+  const controllers = new Set<AbortController>()
+
+  return {
+    queryClient,
+    start() {
+      if (active) return
+      generation += 1
+      queryClient.clear()
+      active = true
+    },
+    stop() {
+      if (active) {
+        active = false
+        generation += 1
+      }
+      for (const controller of controllers) controller.abort()
+      controllers.clear()
+      queryClient.clear()
+    },
+    async runMutation<T>(operation: (signal: AbortSignal) => Promise<T>): Promise<T> {
+      if (!active) throw new StudioQuerySessionCancelledError()
+      const operationGeneration = generation
+      const controller = new AbortController()
+      controllers.add(controller)
+      try {
+        const result = await operation(controller.signal)
+        if (!active || operationGeneration !== generation || controller.signal.aborted) {
+          throw new StudioQuerySessionCancelledError()
+        }
+        return result
+      } catch (error) {
+        if (
+          !active ||
+          operationGeneration !== generation ||
+          controller.signal.aborted ||
+          isStudioQuerySessionCancelled(error)
+        ) {
+          throw new StudioQuerySessionCancelledError()
+        }
+        throw error
+      } finally {
+        controllers.delete(controller)
+      }
+    },
+  }
+}
+
 export function shouldRetryStudioQuery(failureCount: number, error: Error): boolean {
   if (failureCount >= 1) return false
   if (error instanceof StudioApiError) return error.status === 503
@@ -228,29 +300,16 @@ export function replaceCredentialInMe(
   }
 }
 
-export function markInvitationRevoked(
+export function removeInvitationFromPages(
   current: InfiniteData<TeamInvitationPage, unknown> | undefined,
   invitationId: string,
-  decidedAt: string,
 ): InfiniteData<TeamInvitationPage, unknown> | undefined {
   if (!current) return current
   return {
     ...current,
     pages: current.pages.map((page) => ({
       ...page,
-      data: page.data.map((invitation) =>
-        invitation.id === invitationId
-          ? {
-              ...invitation,
-              status: 'revoked',
-              intents: invitation.intents.map((intent) => ({
-                ...intent,
-                status: 'revoked',
-                decided_at: decidedAt,
-              })),
-            }
-          : invitation,
-      ),
+      data: page.data.filter((invitation) => invitation.id !== invitationId),
     })),
   }
 }

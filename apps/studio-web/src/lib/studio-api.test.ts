@@ -106,6 +106,53 @@ describe('professional profile API', () => {
     expect(calls[3]?.init.body).toBeUndefined()
   })
 
+  test('forwards caller cancellation through every cache-managed write', async () => {
+    const requests: RequestInit[] = []
+    globalThis.fetch = (async (_input, init) => {
+      requests.push(init ?? {})
+      return Response.json({})
+    }) as typeof fetch
+    const controller = new AbortController()
+    const command = newCommand()
+    const profile = {
+      headline: 'Entrenador de fuerza',
+      bio: 'Acompañamiento profesional.',
+      practice_started_year: 2020,
+      specialty_codes: ['strength_conditioning'],
+    }
+    const credential = {
+      credential_type_code: 'professional_certification',
+      issuer: 'Allfit Academy',
+      name: 'Fuerza aplicada',
+    }
+
+    await Promise.all([
+      studioApi.updateProfessionalProfile(profile, command, controller.signal),
+      studioApi.declareProfessionalCredential(credential, command, controller.signal),
+      studioApi.reviseProfessionalCredential(
+        'credential-1',
+        credential,
+        command,
+        controller.signal,
+      ),
+      studioApi.retireProfessionalCredential('credential-1', command, controller.signal),
+      studioApi.createTeamInvitation(
+        'organization-1',
+        {
+          channel: 'email',
+          contact: 'person@example.test',
+          intents: [{ kind: 'membership', proposed_role_code: 'staff' }],
+        },
+        command,
+        controller.signal,
+      ),
+      studioApi.revokeTeamInvitation('organization-1', 'invitation-1', command, controller.signal),
+    ])
+
+    expect(requests).toHaveLength(6)
+    expect(requests.every((request) => request.signal === controller.signal)).toBe(true)
+  })
+
   test('sends exact credential revision route, body, cookies and command headers', async () => {
     let capturedUrl = ''
     let capturedInit: RequestInit | undefined

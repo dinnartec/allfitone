@@ -37,11 +37,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@allfitone/react/components/select'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
 import { type FormEvent, useState } from 'react'
 
 import { useOrganizationContext } from './organization-context'
+import { useStudioSessionMutation } from './studio-query-provider'
 import {
   StudioApiError,
   newCommand,
@@ -50,7 +51,7 @@ import {
   type TeamInvitation,
   type TeamInvitationCreate,
 } from '@/lib/studio-api'
-import { studioQueryKeys } from '@/lib/studio-query'
+import { isStudioQuerySessionCancelled, studioQueryKeys } from '@/lib/studio-query'
 import {
   canInviteTeam,
   invitationRoleLabel,
@@ -70,9 +71,11 @@ export function TeamInvitationForm() {
   const [command, setCommand] = useState(newCommand)
   const [error, setError] = useState<string>()
   const [created, setCreated] = useState<TeamInvitation>()
-  const createMutation = useMutation({
-    mutationFn: ({ body, command }: { body: TeamInvitationCreate; command: CommandHeaders }) =>
-      studioApi.createTeamInvitation(current.organization_id, body, command),
+  const createMutation = useStudioSessionMutation({
+    mutationFn: (
+      { body, command }: { body: TeamInvitationCreate; command: CommandHeaders },
+      signal,
+    ) => studioApi.createTeamInvitation(current.organization_id, body, command, signal),
     onSuccess: () => {
       void queryClient.invalidateQueries({
         queryKey: studioQueryKeys.organizationInvitationsRoot(current.organization_id),
@@ -124,6 +127,10 @@ export function TeamInvitationForm() {
       })
       setCreated(invitation)
     } catch (caught) {
+      if (isStudioQuerySessionCancelled(caught)) {
+        setCommand(newCommand())
+        return
+      }
       if (caught instanceof StudioApiError) setError(invitationError(caught))
       else {
         setError(

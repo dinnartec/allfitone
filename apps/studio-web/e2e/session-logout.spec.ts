@@ -1,6 +1,11 @@
 import { expect, test } from '@playwright/test'
 
-import { activeMembership, createStudioApiFixture, installStudioApiMock } from './studio-api-mock'
+import {
+  activeMembership,
+  activeTeamMember,
+  createStudioApiFixture,
+  installStudioApiMock,
+} from './studio-api-mock'
 
 const STUDIO_ORIGIN = 'http://127.0.0.1:3101'
 
@@ -180,6 +185,56 @@ test('a manual logout covers another Studio tab immediately', async ({ context, 
   await expect(other).toHaveURL('/')
   await expect(other.getByRole('link', { name: 'Entrar a Studio' })).toBeVisible()
   await expect(other.locator('[data-session-closing]')).toHaveCount(0)
+})
+
+test('a new cross-tab session cannot reuse the previous session query cache', async ({
+  context,
+  page,
+}) => {
+  const other = await context.newPage()
+  const fixture = createStudioApiFixture({
+    memberships: [activeMembership],
+    organizationMemberships: [activeTeamMember],
+  })
+  await installStudioApiMock(page, fixture)
+  await installStudioApiMock(other, fixture)
+  await page.goto('/')
+  await other.goto(`/organizations/${activeMembership.organization_id}/team`)
+  await expect(other.getByText('Ada Lovelace', { exact: true })).toBeVisible()
+  const requestsBeforeSessionChange = fixture.requests.filter(
+    (request) => request.method === 'GET' && request.path.endsWith('/memberships'),
+  ).length
+
+  await page.evaluate(() => {
+    localStorage.setItem(
+      'allfit-studio-session:v1',
+      JSON.stringify({ version: 1, status: 'ended', endedAt: Date.now(), reason: 'manual' }),
+    )
+  })
+  await expect(other.locator('[data-session-closing]')).toBeVisible()
+
+  fixture.organizationMemberships = [
+    { ...activeTeamMember, membership_id: 'new-session-member', display_name: 'Grace Hopper' },
+  ]
+  fixture.session = {
+    authenticated: true,
+    registration_status: 'complete',
+    identity: { given_name: 'Grace', family_name: 'Hopper' },
+  }
+  await page.evaluate(() => {
+    localStorage.setItem(
+      'allfit-studio-session:v1',
+      JSON.stringify({ version: 1, status: 'active', lastActivityAt: Date.now() }),
+    )
+  })
+
+  await expect(other.getByText('Grace Hopper', { exact: true })).toBeVisible()
+  await expect(other.getByText('Ada Lovelace', { exact: true })).toHaveCount(0)
+  expect(
+    fixture.requests.filter(
+      (request) => request.method === 'GET' && request.path.endsWith('/memberships'),
+    ).length,
+  ).toBeGreaterThan(requestsBeforeSessionChange)
 })
 
 test('locks at thirty minutes and deliberate activity resets the deadline', async ({ page }) => {

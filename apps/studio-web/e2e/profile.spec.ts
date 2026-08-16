@@ -136,6 +136,74 @@ test('collapses synchronous double submission into one profile mutation', async 
   expect(profileWrites(fixture)).toHaveLength(1)
 })
 
+test('a delayed profile mutation cannot update a new cross-tab session', async ({
+  context,
+  page,
+}) => {
+  const controller = await context.newPage()
+  let releaseWrite: (() => void) | undefined
+  let observeWrite: (() => void) | undefined
+  let completeWrite: (() => void) | undefined
+  const writeReleased = new Promise<void>((resolve) => {
+    releaseWrite = resolve
+  })
+  const writeObserved = new Promise<void>((resolve) => {
+    observeWrite = resolve
+  })
+  const writeCompleted = new Promise<void>((resolve) => {
+    completeWrite = resolve
+  })
+  const fixture = createStudioApiFixture({
+    me: { profile: { ...professionalProfile }, memberships: [] },
+    intercept: async (request) => {
+      if (request.method !== 'PUT' || request.path !== '/studio/v1/me/professional-profile') {
+        return undefined
+      }
+      observeWrite?.()
+      await writeReleased
+      completeWrite?.()
+      return {
+        status: 200,
+        body: { ...professionalProfile, headline: 'Respuesta de la sesión anterior' },
+      }
+    },
+  })
+  await installStudioApiMock(controller, fixture)
+  await installStudioApiMock(page, fixture)
+  await controller.goto('/')
+  await page.goto('/account')
+  await page.getByLabel('Titular profesional').fill('Cambio todavía pendiente')
+  await page.getByRole('button', { name: 'Guardar cambios' }).click()
+  await writeObserved
+
+  await controller.evaluate(() => {
+    localStorage.setItem(
+      'allfit-studio-session:v1',
+      JSON.stringify({ version: 1, status: 'ended', endedAt: Date.now(), reason: 'manual' }),
+    )
+  })
+  await expect(page.locator('[data-session-closing]')).toBeVisible()
+
+  fixture.me = {
+    profile: { ...professionalProfile, id: 'new-session-profile', headline: 'Nueva identidad' },
+    memberships: [],
+  }
+  await controller.evaluate(() => {
+    localStorage.setItem(
+      'allfit-studio-session:v1',
+      JSON.stringify({ version: 1, status: 'active', lastActivityAt: Date.now() }),
+    )
+  })
+  await expect(page.getByLabel('Titular profesional')).toHaveValue('Nueva identidad')
+
+  releaseWrite?.()
+  await writeCompleted
+
+  await expect(page.getByLabel('Titular profesional')).toHaveValue('Nueva identidad')
+  await expect(page.getByText('Respuesta de la sesión anterior')).toHaveCount(0)
+  await expect(page.getByText('Tu presentación profesional quedó actualizada.')).toHaveCount(0)
+})
+
 test.describe('mobile and reduced motion', () => {
   test.use({ viewport: { width: 390, height: 844 } })
 

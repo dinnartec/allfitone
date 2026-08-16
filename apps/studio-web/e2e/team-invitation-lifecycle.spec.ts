@@ -223,6 +223,7 @@ test('associates the token during personal activation without accepting it', asy
 })
 
 test('lists, filters, paginates and revokes a pending team invitation', async ({ page }) => {
+  let revoked = false
   const firstItem = {
     id: INVITATION_ID,
     status: 'pending',
@@ -244,15 +245,42 @@ test('lists, filters, paginates and revokes a pending team invitation', async ({
         request.method === 'GET' &&
         request.path === `/studio/v1/organizations/${activeMembership.organization_id}/invitations`
       ) {
+        const query = new URLSearchParams(request.search)
+        const status = query.get('status')
+        const revokedItem = {
+          ...firstItem,
+          status: 'revoked',
+          intents: firstItem.intents.map((intent) => ({
+            ...intent,
+            status: 'revoked',
+            decided_at: '2026-08-12T12:00:00.000Z',
+          })),
+        }
+        if (status === 'pending') {
+          return {
+            status: 200,
+            body: { data: revoked ? [] : [firstItem], page: { next_cursor: null } },
+          }
+        }
+        if (status === 'revoked') {
+          return {
+            status: 200,
+            body: { data: revoked ? [revokedItem] : [], page: { next_cursor: null } },
+          }
+        }
         if (request.search.includes('cursor=')) {
           return { status: 200, body: { data: [secondItem], page: { next_cursor: null } } }
         }
         return {
           status: 200,
-          body: { data: [firstItem], page: { next_cursor: 'next-page' } },
+          body: {
+            data: [revoked ? revokedItem : firstItem],
+            page: { next_cursor: 'next-page' },
+          },
         }
       }
       if (request.method === 'POST' && request.path.endsWith('/revocation')) {
+        revoked = true
         return { status: 200, body: { id: INVITATION_ID, status: 'revoked' } }
       }
       return undefined
@@ -282,7 +310,11 @@ test('lists, filters, paginates and revokes a pending team invitation', async ({
   await revokeDialog.getByRole('button', { name: 'Revocar invitación' }).click()
 
   await expect(revokeDialog).not.toBeVisible()
-  await expect(page.getByRole('table')).toContainText('Revocada')
+  await expect(page.getByRole('table')).not.toContainText('person@example.test')
+  await expect(page.getByRole('table')).not.toContainText('Revocada')
+  await page.getByRole('button', { name: 'Todas' }).click()
+  const revokedRow = page.getByRole('row').filter({ hasText: 'person@example.test' })
+  await expect(revokedRow).toContainText('Revocada')
   const revocation = fixture.requests.find((request) => request.path.endsWith('/revocation'))
   expect(revocation?.headers['idempotency-key']).toMatch(/^[0-9a-f-]{36}$/)
   expect(revocation?.headers['command-id']).toMatch(/^[0-9a-f-]{36}$/)
@@ -393,6 +425,52 @@ test('does not append a stale page after the filter changes', async ({ page }) =
 
   await expect(page.getByRole('table')).toContainText('filtered@example.test')
   await expect(page.getByRole('table')).not.toContainText('stale-page@example.test')
+})
+
+test('an expired invitation cursor hides pagination until a first-page refresh', async ({
+  page,
+}) => {
+  let firstPageRequests = 0
+  const item = {
+    id: INVITATION_ID,
+    status: 'pending',
+    channel: 'email',
+    contact: 'cursor@example.test',
+    created_at: '2026-08-11T12:00:00.000Z',
+    expires_at: '2030-08-18T12:00:00.000Z',
+    intents: presentation.intents.map((intent) => ({ ...intent, decided_at: null })),
+  }
+  const fixture = createStudioApiFixture({
+    memberships: [activeMembership],
+    intercept: (request) => {
+      if (
+        request.method !== 'GET' ||
+        request.path !== `/studio/v1/organizations/${activeMembership.organization_id}/invitations`
+      ) {
+        return undefined
+      }
+      const cursor = new URLSearchParams(request.search).get('cursor')
+      if (cursor) return { status: 422, body: { error: { code: 'invalid-cursor' } } }
+      firstPageRequests += 1
+      return {
+        status: 200,
+        body: { data: [item], page: { has_more: true, next_cursor: 'expired-page' } },
+      }
+    },
+  })
+  await installStudioApiMock(page, fixture)
+  await page.goto(`/organizations/${activeMembership.organization_id}/team/invitations`)
+
+  await page.getByRole('button', { name: 'Ver más' }).click()
+  await expect(page.getByText('Las invitaciones cambiaron')).toBeVisible()
+  await expect(page.getByText('cursor@example.test')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Ver más' })).toHaveCount(0)
+  const requestsBeforeRefresh = firstPageRequests
+
+  await page.getByRole('button', { name: 'Actualizar la lista' }).click()
+
+  await expect(page.getByText('Las invitaciones cambiaron')).toHaveCount(0)
+  expect(firstPageRequests).toBe(requestsBeforeRefresh + 1)
 })
 
 function decisionWrites(fixture: ReturnType<typeof createStudioApiFixture>) {
