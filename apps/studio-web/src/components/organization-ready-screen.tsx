@@ -11,6 +11,23 @@
  */
 import { Badge } from '@allfitone/react/components/badge'
 import { Button } from '@allfitone/react/components/button'
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from '@allfitone/react/components/card'
+import {
+  SetupPanel,
+  SetupPanelActions,
+  SetupPanelContent,
+  SetupPanelDescription,
+  SetupPanelEyebrow,
+  SetupPanelIntro,
+  SetupPanelTitle,
+} from '@allfitone/react/components/setup-shell'
+import { WorkspaceEyebrow, WorkspaceTitle } from '@allfitone/react/components/workspace-shell'
 import { FoundationIcon } from '@allfitone/react/icons'
 
 import { StudioFrame } from './studio-frame'
@@ -25,14 +42,14 @@ export function OrganizationReadyScreen({
 }) {
   return (
     <StudioFrame step="ready">
-      <article data-studio-panel="ready" aria-labelledby="organization-ready-title">
-        <div data-ready-primary>
-          <p data-studio-eyebrow>Configuración completada</p>
-          <h1 id="organization-ready-title">Tu espacio está listo.</h1>
-          <p>
+      <SetupPanel aria-labelledby="organization-ready-title">
+        <SetupPanelIntro>
+          <SetupPanelEyebrow>Configuración completada</SetupPanelEyebrow>
+          <SetupPanelTitle id="organization-ready-title">Tu espacio está listo.</SetupPanelTitle>
+          <SetupPanelDescription>
             Ya puedes entrar a Studio. Invitar integrantes y configurar la operación no es
             obligatorio; puedes hacerlo después.
-          </p>
+          </SetupPanelDescription>
           <div data-ready-confirmations aria-label="Configuración completada">
             <span>
               <FoundationIcon name="success" decorative />
@@ -43,34 +60,50 @@ export function OrganizationReadyScreen({
               {organization.display_name} está activo
             </span>
           </div>
-          <Button size="lg" onClick={onEnter}>
-            Entrar al workspace
-          </Button>
-        </div>
+          <SetupPanelActions>
+            <Button size="lg" onClick={onEnter}>
+              Entrar al workspace
+            </Button>
+          </SetupPanelActions>
+        </SetupPanelIntro>
 
-        <aside data-ready-later aria-labelledby="ready-later-title">
-          <div>
-            <p data-studio-eyebrow>Sin bloqueos</p>
-            <h2 id="ready-later-title">Puedes hacerlo después</h2>
-          </div>
-          <div data-ready-later-item>
-            <FoundationIcon name="people" decorative />
-            <div>
-              <strong>Sumar al equipo</strong>
-              <p>Invita integrantes únicamente cuando vayas a trabajar con otras personas.</p>
-            </div>
-            <Badge variant="outline">Opcional</Badge>
-          </div>
-          <div data-ready-later-item>
-            <FoundationIcon name="operation" decorative />
-            <div>
-              <strong>Configurar la operación</strong>
-              <p>Podrás definir disciplinas, sedes y preferencias desde el workspace.</p>
-            </div>
-            <Badge variant="outline">Opcional</Badge>
-          </div>
-        </aside>
-      </article>
+        <SetupPanelContent data-ready-later aria-labelledby="ready-later-title">
+          <header data-ready-later-heading>
+            <WorkspaceEyebrow>Sin bloqueos</WorkspaceEyebrow>
+            <WorkspaceTitle as="h2" id="ready-later-title">
+              Puedes hacerlo después
+            </WorkspaceTitle>
+          </header>
+          <Card>
+            <CardHeader>
+              <CardTitle>Sumar al equipo</CardTitle>
+              <CardAction>
+                <Badge variant="outline">Opcional</Badge>
+              </CardAction>
+            </CardHeader>
+            <CardContent>
+              <div data-ready-later-item>
+                <FoundationIcon name="people" decorative />
+                <p>Invita integrantes únicamente cuando vayas a trabajar con otras personas.</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Configurar la operación</CardTitle>
+              <CardAction>
+                <Badge variant="outline">Opcional</Badge>
+              </CardAction>
+            </CardHeader>
+            <CardContent>
+              <div data-ready-later-item>
+                <FoundationIcon name="operation" decorative />
+                <p>Podrás definir disciplinas, sedes y preferencias desde el workspace.</p>
+              </div>
+            </CardContent>
+          </Card>
+        </SetupPanelContent>
+      </SetupPanel>
     </StudioFrame>
   )
 }

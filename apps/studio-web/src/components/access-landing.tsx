@@ -1,6 +1,6 @@
 'use client'
 
-import { ProductLockup } from '@allfitone/react/brand'
+import { ProductWordmark } from '@allfitone/react/brand'
 import { Alert, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
 import {
   AccessDescription,
@@ -73,12 +73,12 @@ export function AccessLanding({
   return (
     <AccessShell>
       <AccessHeader>
-        <ProductLockup
+        <ProductWordmark
           product="studio"
           surface="light"
           title="Allfit Studio"
-          width={169}
-          height={40}
+          width={138}
+          height={28}
         />
       </AccessHeader>
 

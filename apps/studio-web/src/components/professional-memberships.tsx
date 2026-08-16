@@ -1,5 +1,12 @@
 import { Badge } from '@allfitone/react/components/badge'
-import { Card, CardContent, CardHeader, CardTitle } from '@allfitone/react/components/card'
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@allfitone/react/components/card'
 import { Button } from '@allfitone/react/components/button'
 import {
   Collapsible,
@@ -14,6 +21,8 @@ import {
   EmptyTitle,
 } from '@allfitone/react/components/empty'
 import { StatStrip, StatStripItem } from '@allfitone/react/components/stat-strip'
+import { WorkspaceEyebrow, WorkspaceTitle } from '@allfitone/react/components/workspace-shell'
+import { FoundationIcon } from '@allfitone/react/icons'
 
 import { organizationTypeLabel } from './membership-selector'
 import { membershipRoleSummary } from '@/lib/membership-roles'
@@ -31,21 +40,27 @@ export function ProfessionalMemberships({ memberships }: { memberships: Membersh
     })
   return (
     <section data-profile-section aria-labelledby="memberships-title">
-      <div data-profile-section-heading>
-        <div>
-          <p data-profile-kicker>Actividad en Studio</p>
-          <h2 id="memberships-title">Mis espacios</h2>
-          <p>Consulta tus vinculaciones. Esta vista no cambia roles ni permisos.</p>
-        </div>
+      <header data-profile-section-heading>
+        <WorkspaceEyebrow data-profile-kicker>Actividad en Studio</WorkspaceEyebrow>
+        <WorkspaceTitle as="h2" id="memberships-title">
+          Mis espacios
+        </WorkspaceTitle>
+        <p data-page-header-description>
+          Consulta tus vinculaciones. Esta vista no cambia roles ni permisos.
+        </p>
+      </header>
+      <div data-profile-signals>
+        <StatStrip>
+          <StatStripItem value={active.length} label="Espacios activos" />
+          <StatStripItem value={terminated.length} label="Vinculaciones finalizadas" />
+        </StatStrip>
       </div>
-      <StatStrip>
-        <StatStripItem value={active.length} label="Espacios activos" />
-        <StatStripItem value={terminated.length} label="Vinculaciones finalizadas" />
-      </StatStrip>
       {active.length === 0 ? (
         <Empty>
           <EmptyHeader>
-            <EmptyMedia variant="icon">00</EmptyMedia>
+            <EmptyMedia variant="icon">
+              <FoundationIcon name="organization" decorative />
+            </EmptyMedia>
             <EmptyTitle>Aún no tienes espacios</EmptyTitle>
             <EmptyDescription>
               Puedes crear una organización o aceptar una invitación cuando lo necesites.
@@ -57,11 +72,13 @@ export function ProfessionalMemberships({ memberships }: { memberships: Membersh
           {active.map((membership) => (
             <Card key={membership.membership_id}>
               <CardHeader>
-                <div>
-                  <p data-profile-kicker>{organizationTypeLabel(membership.type_code)}</p>
-                  <CardTitle>{membership.display_name}</CardTitle>
-                </div>
-                <Badge variant="outline">{membershipRoleSummary(membership.roles)}</Badge>
+                <CardDescription data-profile-kicker>
+                  {organizationTypeLabel(membership.type_code)}
+                </CardDescription>
+                <CardTitle>{membership.display_name}</CardTitle>
+                <CardAction>
+                  <Badge variant="outline">{membershipRoleSummary(membership.roles)}</Badge>
+                </CardAction>
               </CardHeader>
               <CardContent>
                 <p>Vinculación activa desde {formatDate(membership.joined_at)}.</p>
@@ -80,11 +97,13 @@ export function ProfessionalMemberships({ memberships }: { memberships: Membersh
               {terminated.map((membership) => (
                 <Card key={membership.membership_id} data-membership-terminated>
                   <CardHeader>
-                    <div>
-                      <p data-profile-kicker>{organizationTypeLabel(membership.type_code)}</p>
-                      <CardTitle>{membership.display_name}</CardTitle>
-                    </div>
-                    <Badge variant="outline">Finalizada</Badge>
+                    <CardDescription data-profile-kicker>
+                      {organizationTypeLabel(membership.type_code)}
+                    </CardDescription>
+                    <CardTitle>{membership.display_name}</CardTitle>
+                    <CardAction>
+                      <Badge variant="outline">Finalizada</Badge>
+                    </CardAction>
                   </CardHeader>
                   <CardContent>
                     <p>

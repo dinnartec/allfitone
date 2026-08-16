@@ -1,6 +1,23 @@
 'use client'
 
+import { Badge } from '@allfitone/react/components/badge'
 import { Button } from '@allfitone/react/components/button'
+import {
+  Card,
+  CardAction,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '@allfitone/react/components/card'
+import {
+  SetupPanel,
+  SetupPanelContent,
+  SetupPanelDescription,
+  SetupPanelEyebrow,
+  SetupPanelIntro,
+  SetupPanelTitle,
+} from '@allfitone/react/components/setup-shell'
 
 import { StudioFrame } from './studio-frame'
 import { membershipRoleSummary } from '@/lib/membership-roles'
@@ -15,27 +32,35 @@ export function MembershipSelector({
 }) {
   return (
     <StudioFrame step="ready">
-      <article data-studio-panel="selector">
-        <div data-studio-panel-intro>
-          <p data-studio-eyebrow>Selecciona un espacio</p>
-          <h1>¿Dónde quieres trabajar hoy?</h1>
-          <p>Tu identidad tiene acceso activo a más de una organización.</p>
-        </div>
-        <div data-membership-list>
+      <SetupPanel>
+        <SetupPanelIntro>
+          <SetupPanelEyebrow>Selecciona un espacio</SetupPanelEyebrow>
+          <SetupPanelTitle>¿Dónde quieres trabajar hoy?</SetupPanelTitle>
+          <SetupPanelDescription>
+            Tu identidad tiene acceso activo a más de una organización.
+          </SetupPanelDescription>
+        </SetupPanelIntro>
+        <SetupPanelContent data-membership-list>
           {memberships.map((membership) => (
-            <section key={membership.membership_id} data-membership-card>
-              <div>
-                <span data-membership-type>{organizationTypeLabel(membership.type_code)}</span>
-                <h2>{membership.display_name}</h2>
-                <p>{membershipRoleSummary(membership.roles)}</p>
-              </div>
-              <Button onClick={() => onSelect(membership.organization_id)}>
-                Entrar al espacio
-              </Button>
-            </section>
+            <Card key={membership.membership_id} data-membership-card>
+              <CardHeader>
+                <CardDescription>{organizationTypeLabel(membership.type_code)}</CardDescription>
+                <CardTitle role="heading" aria-level={2}>
+                  {membership.display_name}
+                </CardTitle>
+                <CardAction>
+                  <Badge variant="secondary">{membershipRoleSummary(membership.roles)}</Badge>
+                </CardAction>
+              </CardHeader>
+              <CardFooter>
+                <Button onClick={() => onSelect(membership.organization_id)}>
+                  Entrar al espacio
+                </Button>
+              </CardFooter>
+            </Card>
           ))}
-        </div>
-      </article>
+        </SetupPanelContent>
+      </SetupPanel>
     </StudioFrame>
   )
 }

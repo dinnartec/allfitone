@@ -4,6 +4,14 @@ import { Alert, AlertDescription, AlertTitle } from '@allfitone/react/components
 import { Badge } from '@allfitone/react/components/badge'
 import { Button } from '@allfitone/react/components/button'
 import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@allfitone/react/components/card'
+import {
   Field,
   FieldDescription,
   FieldError,
@@ -11,6 +19,17 @@ import {
   FieldLabel,
 } from '@allfitone/react/components/field'
 import { Input } from '@allfitone/react/components/input'
+import { FoundationIcon } from '@allfitone/react/icons'
+import {
+  SetupPanel,
+  SetupPanelActions,
+  SetupPanelContent,
+  SetupPanelDescription,
+  SetupPanelEyebrow,
+  SetupPanelIntro,
+  SetupPanelNote,
+  SetupPanelTitle,
+} from '@allfitone/react/components/setup-shell'
 import {
   Select,
   SelectContent,
@@ -102,133 +121,136 @@ export function TeamInvitationForm() {
   if (created) {
     const intent = created.intents[0]
     return (
-      <section data-team-invitation-result aria-live="polite">
-        <div>
-          <p data-studio-eyebrow>
+      <Card aria-live="polite">
+        <CardHeader>
+          <CardDescription>
             {created.reused ? 'Invitación actualizada' : 'Invitación creada'}
-          </p>
-          <h2>La propuesta quedó pendiente.</h2>
+          </CardDescription>
+          <CardTitle role="heading" aria-level={2}>
+            La propuesta quedó pendiente.
+          </CardTitle>
+          <CardAction>
+            <Badge variant="warning">Pendiente</Badge>
+          </CardAction>
+        </CardHeader>
+        <CardContent data-team-invitation-result>
           <p>
             Enviamos la invitación a <strong>{created.contact_hint}</strong>. La membresía solo se
             creará si la persona acepta.
           </p>
-        </div>
-        <dl>
-          <div>
-            <dt>Rol propuesto</dt>
-            <dd>{intent ? invitationRoleLabel(intent.proposed_role_code) : 'Staff'}</dd>
+          <dl data-team-invitation-summary>
+            <div>
+              <dt>Rol propuesto</dt>
+              <dd>{intent ? invitationRoleLabel(intent.proposed_role_code) : 'Staff'}</dd>
+            </div>
+            <div>
+              <dt>Vence</dt>
+              <dd>
+                {new Intl.DateTimeFormat('es-CO', { dateStyle: 'long' }).format(
+                  new Date(created.expires_at),
+                )}
+              </dd>
+            </div>
+          </dl>
+          <div data-team-invitation-actions>
+            <Button
+              onClick={() => {
+                setContact('')
+                setCreated(undefined)
+                setCommand(newCommand())
+              }}
+            >
+              Invitar a alguien más
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => router.replace(`/organizations/${current.organization_id}`)}
+            >
+              Volver al espacio
+            </Button>
           </div>
-          <div>
-            <dt>Vence</dt>
-            <dd>
-              {new Intl.DateTimeFormat('es-CO', { dateStyle: 'long' }).format(
-                new Date(created.expires_at),
-              )}
-            </dd>
-          </div>
-          <div>
-            <dt>Estado</dt>
-            <dd>
-              <Badge variant="warning">Pendiente</Badge>
-            </dd>
-          </div>
-        </dl>
-        <div data-team-invitation-actions>
-          <Button
-            onClick={() => {
-              setContact('')
-              setCreated(undefined)
-              setCommand(newCommand())
-            }}
-          >
-            Invitar a alguien más
-          </Button>
-          <Button
-            variant="ghost"
-            onClick={() => router.replace(`/organizations/${current.organization_id}`)}
-          >
-            Volver al espacio
-          </Button>
-        </div>
-      </section>
+        </CardContent>
+      </Card>
     )
   }
 
   return (
-    <article data-studio-panel="team-invitation">
-      <div data-studio-panel-intro>
-        <p data-studio-eyebrow>Tu equipo</p>
-        <h1>Invita con una propuesta clara.</h1>
-        <p>
+    <SetupPanel>
+      <SetupPanelIntro>
+        <SetupPanelEyebrow>Tu equipo</SetupPanelEyebrow>
+        <SetupPanelTitle as="h2">Invita con una propuesta clara.</SetupPanelTitle>
+        <SetupPanelDescription>
           Define el correo y el rol. No crearemos una cuenta ni una membresía antes de la
           aceptación.
-        </p>
-        <div data-studio-signal-note>
-          <span>7</span>
+        </SetupPanelDescription>
+        <SetupPanelNote>
+          <FoundationIcon name="time" decorative />
           <p>La invitación estará disponible durante siete días.</p>
-        </div>
-      </div>
+        </SetupPanelNote>
+      </SetupPanelIntro>
 
-      <form data-studio-form onSubmit={submit}>
-        <FieldGroup>
-          <Field>
-            <FieldLabel htmlFor="invitation-email">Correo electrónico</FieldLabel>
-            <Input
-              id="invitation-email"
-              name="email"
-              type="email"
-              autoComplete="email"
-              maxLength={254}
-              value={contact}
-              onChange={(event) => changeContact(event.target.value)}
-              required
-            />
-            <FieldDescription>Solo se usará para entregar esta invitación.</FieldDescription>
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="invitation-role">Rol propuesto</FieldLabel>
-            <Select
-              value={role}
-              onValueChange={(value) => {
-                if (value === 'admin' || value === 'coach' || value === 'staff') changeRole(value)
-              }}
-              items={roleOptions}
+      <SetupPanelContent>
+        <form data-studio-form onSubmit={submit}>
+          <FieldGroup>
+            <Field>
+              <FieldLabel htmlFor="invitation-email">Correo electrónico</FieldLabel>
+              <Input
+                id="invitation-email"
+                name="email"
+                type="email"
+                autoComplete="email"
+                maxLength={254}
+                value={contact}
+                onChange={(event) => changeContact(event.target.value)}
+                required
+              />
+              <FieldDescription>Solo se usará para entregar esta invitación.</FieldDescription>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="invitation-role">Rol propuesto</FieldLabel>
+              <Select
+                value={role}
+                onValueChange={(value) => {
+                  if (value === 'admin' || value === 'coach' || value === 'staff') changeRole(value)
+                }}
+                items={roleOptions}
+              >
+                <SelectTrigger id="invitation-role" data-studio-select-trigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent align="start">
+                  {roleOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FieldDescription>
+                La persona podrá revisar esta propuesta antes de aceptarla.
+              </FieldDescription>
+            </Field>
+          </FieldGroup>
+
+          {error ? <FieldError>{error}</FieldError> : null}
+          <SetupPanelActions>
+            <Button type="submit" size="lg" disabled={submitting || !contact.trim()}>
+              {submitting ? 'Enviando…' : 'Enviar invitación'}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={submitting}
+              onClick={() =>
+                router.replace(`/organizations/${current.organization_id}/team/invitations`)
+              }
             >
-              <SelectTrigger id="invitation-role" data-studio-select-trigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent align="start">
-                {roleOptions.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <FieldDescription>
-              La persona podrá revisar esta propuesta antes de aceptarla.
-            </FieldDescription>
-          </Field>
-        </FieldGroup>
-
-        {error ? <FieldError>{error}</FieldError> : null}
-        <div data-studio-form-actions>
-          <Button type="submit" size="lg" disabled={submitting || !contact.trim()}>
-            {submitting ? 'Enviando…' : 'Enviar invitación'}
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            disabled={submitting}
-            onClick={() =>
-              router.replace(`/organizations/${current.organization_id}/team/invitations`)
-            }
-          >
-            Cancelar
-          </Button>
-        </div>
-      </form>
-    </article>
+              Cancelar
+            </Button>
+          </SetupPanelActions>
+        </form>
+      </SetupPanelContent>
+    </SetupPanel>
   )
 }
 

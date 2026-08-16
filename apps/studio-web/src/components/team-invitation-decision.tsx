@@ -3,6 +3,16 @@
 import { Alert, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
 import { Badge } from '@allfitone/react/components/badge'
 import { Button, buttonVariants } from '@allfitone/react/components/button'
+import { Card, CardContent } from '@allfitone/react/components/card'
+import {
+  SetupPanel,
+  SetupPanelActions,
+  SetupPanelContent,
+  SetupPanelDescription,
+  SetupPanelEyebrow,
+  SetupPanelIntro,
+  SetupPanelTitle,
+} from '@allfitone/react/components/setup-shell'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 
@@ -213,59 +223,67 @@ export function TeamInvitationDecision() {
   const intent = flow.invitation.intents[0]
   return (
     <StudioFrame step="identity" showLogout={flow.authenticated}>
-      <article data-studio-panel="invitation-decision">
-        <div data-studio-panel-intro>
-          <p data-studio-eyebrow>Invitación de equipo</p>
-          <h1>{flow.invitation.organization.display_name} quiere sumarte a su equipo.</h1>
-          <p>
+      <SetupPanel>
+        <SetupPanelIntro>
+          <SetupPanelEyebrow>Invitación de equipo</SetupPanelEyebrow>
+          <SetupPanelTitle>
+            {flow.invitation.organization.display_name} quiere sumarte a su equipo.
+          </SetupPanelTitle>
+          <SetupPanelDescription>
             Revisa la propuesta antes de decidir. Aceptarla crea solo una membresía de equipo en
             Studio.
-          </p>
-        </div>
-        <dl data-team-invitation-summary>
-          <div>
-            <dt>Organización</dt>
-            <dd>{flow.invitation.organization.display_name}</dd>
-          </div>
-          <div>
-            <dt>Responsable</dt>
-            <dd>{flow.invitation.organization.responsible_party.name}</dd>
-          </div>
-          <div>
-            <dt>Rol propuesto</dt>
-            <dd>{intent ? invitationRoleLabel(intent.proposed_role_code) : 'Equipo'}</dd>
-          </div>
-          <div>
-            <dt>Vigencia</dt>
-            <dd>{formatDate(flow.invitation.expires_at)}</dd>
-          </div>
-        </dl>
-        {flow.authenticated ? (
-          <div data-team-invitation-actions>
-            <Button onClick={() => void decide('accepted')} disabled={Boolean(deciding)}>
-              {deciding === 'accepted' ? 'Aceptando…' : 'Aceptar invitación'}
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => void decide('rejected')}
-              disabled={Boolean(deciding)}
-            >
-              {deciding === 'rejected' ? 'Rechazando…' : 'Rechazar'}
-            </Button>
-          </div>
-        ) : (
-          <div data-team-invitation-actions>
-            <a
-              className={buttonVariants({ size: 'lg' })}
-              href={`${studioApi.apiUrl}/studio/v1/auth/start`}
-              onClick={prepareStudioAuthentication}
-            >
-              Entrar para decidir
-            </a>
-            <Badge variant="warning">Debes usar el correo invitado</Badge>
-          </div>
-        )}
-      </article>
+          </SetupPanelDescription>
+        </SetupPanelIntro>
+        <SetupPanelContent>
+          <Card>
+            <CardContent>
+              <dl data-team-invitation-summary>
+                <div>
+                  <dt>Organización</dt>
+                  <dd>{flow.invitation.organization.display_name}</dd>
+                </div>
+                <div>
+                  <dt>Responsable</dt>
+                  <dd>{flow.invitation.organization.responsible_party.name}</dd>
+                </div>
+                <div>
+                  <dt>Rol propuesto</dt>
+                  <dd>{intent ? invitationRoleLabel(intent.proposed_role_code) : 'Equipo'}</dd>
+                </div>
+                <div>
+                  <dt>Vigencia</dt>
+                  <dd>{formatDate(flow.invitation.expires_at)}</dd>
+                </div>
+              </dl>
+            </CardContent>
+          </Card>
+          {flow.authenticated ? (
+            <SetupPanelActions>
+              <Button onClick={() => void decide('accepted')} disabled={Boolean(deciding)}>
+                {deciding === 'accepted' ? 'Aceptando…' : 'Aceptar invitación'}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => void decide('rejected')}
+                disabled={Boolean(deciding)}
+              >
+                {deciding === 'rejected' ? 'Rechazando…' : 'Rechazar'}
+              </Button>
+            </SetupPanelActions>
+          ) : (
+            <SetupPanelActions>
+              <a
+                className={buttonVariants({ size: 'lg' })}
+                href={`${studioApi.apiUrl}/studio/v1/auth/start`}
+                onClick={prepareStudioAuthentication}
+              >
+                Entrar para decidir
+              </a>
+              <Badge variant="warning">Debes usar el correo invitado</Badge>
+            </SetupPanelActions>
+          )}
+        </SetupPanelContent>
+      </SetupPanel>
     </StudioFrame>
   )
 }

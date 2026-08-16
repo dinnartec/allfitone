@@ -17,11 +17,11 @@
   display: grid;
   padding: 16px;
   gap: 10px;
-  border: 1px solid var(--afo-color-neutral-ink-muted);
+  border: 1px solid var(--afo-color-border-strong);
   border-radius: var(--afo-radius-xl);
-  background: var(--afo-color-neutral-ink);
+  background: var(--afo-color-background-inverse);
   box-shadow: var(--afo-shadow-lg);
-  color: var(--afo-color-neutral-white);
+  color: var(--afo-color-text-inverse);
 }
 
 [data-analytics-panel] p {
