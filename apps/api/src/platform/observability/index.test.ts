@@ -3,6 +3,8 @@ import { Hono } from 'hono'
 
 import {
   measureStudioRequestPhase,
+  measureRequestPhase,
+  requestTiming,
   recordIdentityPasswordResetWebhook,
   recordStudioAuthCallback,
   recordStudioLogout,
@@ -152,6 +154,35 @@ describe('Studio request timing', () => {
     } finally {
       now.mockRestore()
       warn.mockRestore()
+      info.mockRestore()
+    }
+  })
+})
+
+describe('shared request timing', () => {
+  test('classifies direct WorkOS phases separately on Backoffice', async () => {
+    const app = new Hono()
+    const info = spyOn(console, 'info').mockImplementation(() => undefined)
+    try {
+      app.use('/backoffice/v1/*', requestTiming('backoffice'))
+      app.post('/backoffice/v1/auth/password', async (c) => {
+        await measureRequestPhase('workos-refresh', async () => Promise.resolve())
+        return c.json({ ok: true })
+      })
+
+      const response = await app.request('/backoffice/v1/auth/password', { method: 'POST' })
+      const message = JSON.parse(String(info.mock.calls[0]?.[0])) as {
+        dimensions: { external_dependency: string; operation: string }
+      }
+
+      expect(response.headers.get('server-timing')).toContain('workos-refresh;dur=')
+      expect(message.dimensions).toEqual(
+        expect.objectContaining({
+          external_dependency: 'workos',
+          operation: '/backoffice/v1/auth/password',
+        }),
+      )
+    } finally {
       info.mockRestore()
     }
   })

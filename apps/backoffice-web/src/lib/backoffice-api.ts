@@ -1,4 +1,7 @@
 import type { AllfitV1Schemas } from '@allfitone/contracts'
+import type { ClientOperation } from '@allfitone/telemetry'
+
+import { captureBackofficeApiRequest, setBackofficeTelemetryIdentity } from './telemetry'
 
 export type BackofficeAuthenticationAttempt = AllfitV1Schemas['BackofficeAuthenticationAttempt']
 export type BackofficeSession = AllfitV1Schemas['BackofficeSession']
@@ -51,14 +54,22 @@ export const backofficeApi = {
       body: JSON.stringify({ code }),
     }),
 
-  session: (signal?: AbortSignal) =>
-    requestJson<BackofficeSession>('/backoffice/v1/session', signal ? { signal } : {}),
+  session: async (signal?: AbortSignal) => {
+    const session = await requestJson<BackofficeSession>(
+      '/backoffice/v1/session',
+      signal ? { signal } : {},
+    )
+    setBackofficeTelemetryIdentity(session.analytics?.distinct_id ?? null)
+    return session
+  },
 
-  logout: (reason: BackofficeLogoutReason) =>
-    requestVoid('/backoffice/v1/auth/logout', {
+  logout: async (reason: BackofficeLogoutReason) => {
+    await requestVoid('/backoffice/v1/auth/logout', {
       method: 'POST',
       body: JSON.stringify({ reason }),
-    }),
+    })
+    setBackofficeTelemetryIdentity(null)
+  },
 
   passwordReset: (email: string) =>
     requestVoid('/backoffice/v1/auth/password-resets', {
@@ -111,6 +122,9 @@ async function requestVoid(
 }
 
 async function fetchApi(path: string, init: RequestInit): Promise<Response> {
+  const startedAt = performance.now()
+  const method = requestMethod(init.method)
+  const operation = backofficeOperation(path)
   let response: Response
   try {
     response = await fetch(`${API_URL}${path}`, {
@@ -123,11 +137,43 @@ async function fetchApi(path: string, init: RequestInit): Promise<Response> {
       },
     })
   } catch (error) {
+    captureBackofficeApiRequest({
+      operation,
+      method,
+      durationMs: performance.now() - startedAt,
+    })
     if (error instanceof DOMException && error.name === 'AbortError') throw error
     throw new BackofficeNetworkError()
   }
-  if (!response.ok) throw await responseError(response)
+  captureBackofficeApiRequest({
+    operation,
+    method,
+    durationMs: performance.now() - startedAt,
+    response,
+  })
+  if (!response.ok) {
+    if (response.status === 401) setBackofficeTelemetryIdentity(null)
+    throw await responseError(response)
+  }
   return response
+}
+
+function requestMethod(method: string | undefined): 'DELETE' | 'GET' | 'PATCH' | 'POST' | 'PUT' {
+  return method === 'DELETE' || method === 'PATCH' || method === 'POST' || method === 'PUT'
+    ? method
+    : 'GET'
+}
+
+function backofficeOperation(path: string): ClientOperation {
+  const operations: Record<string, ClientOperation> = {
+    '/backoffice/v1/auth/password': 'backoffice.auth.password',
+    '/backoffice/v1/auth/attempt': 'backoffice.auth.attempt',
+    '/backoffice/v1/auth/totp/verification': 'backoffice.auth.totp_verification',
+    '/backoffice/v1/session': 'backoffice.session',
+    '/backoffice/v1/auth/logout': 'backoffice.auth.logout',
+    '/backoffice/v1/auth/password-resets': 'backoffice.auth.password_reset',
+  }
+  return operations[path] ?? 'backoffice.session'
 }
 
 async function responseError(response: Response): Promise<BackofficeApiError> {

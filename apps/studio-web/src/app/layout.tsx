@@ -4,6 +4,7 @@ import Script from 'next/script'
 import type { ReactNode } from 'react'
 
 import { SessionGuard } from '@/components/session-guard'
+import { AnalyticsControls } from '@/components/analytics-controls'
 import { StudioEntryContextProvider } from '@/components/studio-entry-context'
 import { invitationTokenCaptureScript } from '@/lib/invitation-token'
 
@@ -53,6 +54,7 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
         <StudioEntryContextProvider>
           <SessionGuard>{children}</SessionGuard>
         </StudioEntryContextProvider>
+        <AnalyticsControls />
       </body>
     </html>
   )

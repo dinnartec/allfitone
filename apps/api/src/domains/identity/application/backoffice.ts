@@ -6,6 +6,11 @@ import {
   type PasswordCredentials,
   type SessionTokens,
 } from '@allfitone/auth-provider'
+import {
+  analyticsIdentityForSurfaceFromEnvironment,
+  type AnalyticsIdentity,
+} from '@allfitone/telemetry/node'
+import { measureRequestPhase } from '../../../platform/observability/index.js'
 
 import type {
   BackofficeAuthenticationDatabase,
@@ -45,6 +50,8 @@ export interface BackofficeSessionPresentation {
   assurance_verified_at: string
   inactivity_expires_at: string
   absolute_expires_at: string
+  /** Optional only for injected test seams; production session resolution always sets it. */
+  analytics?: AnalyticsIdentity
 }
 
 export interface BackofficeAuthenticationService {
@@ -77,9 +84,8 @@ export function createBackofficeAuthenticationService(dependencies: {
     async startPassword(credentials) {
       let authenticated
       try {
-        authenticated = await dependencies.authProvider.authenticateWithPassword(
-          credentials,
-          'backoffice',
+        authenticated = await measureRequestPhase('workos-refresh', () =>
+          dependencies.authProvider.authenticateWithPassword(credentials, 'backoffice'),
         )
       } catch (error) {
         throw authenticationFailure(error)
@@ -87,9 +93,11 @@ export function createBackofficeAuthenticationService(dependencies: {
 
       let verified
       try {
-        verified = await dependencies.authProvider.verifyAccessToken(
-          authenticated.tokens.accessToken,
-          'backoffice',
+        verified = await measureRequestPhase('token-local', () =>
+          dependencies.authProvider.verifyAccessToken(
+            authenticated.tokens.accessToken,
+            'backoffice',
+          ),
         )
       } catch (error) {
         throw authenticationFailure(error)
@@ -98,10 +106,10 @@ export function createBackofficeAuthenticationService(dependencies: {
         await safeRevoke(verified.sessionId)
         throw new BackofficeAuthenticationError('unauthenticated')
       }
+      const verifiedEmail = authenticated.identity.verifiedEmail
 
-      const account = await dependencies.database.resolveEligibleAccount(
-        dependencies.issuer,
-        verified.subject,
+      const account = await measureRequestPhase('actor-db', () =>
+        dependencies.database.resolveEligibleAccount(dependencies.issuer, verified.subject),
       )
       if (!account) {
         await safeRevoke(verified.sessionId)
@@ -113,36 +121,40 @@ export function createBackofficeAuthenticationService(dependencies: {
       let newFactor = false
       try {
         if (!providerFactorId) {
-          const created = await dependencies.authProvider.enrollTotp(
-            authenticated.identity.verifiedEmail,
-            'backoffice',
+          const created = await measureRequestPhase('workos-refresh', () =>
+            dependencies.authProvider.enrollTotp(verifiedEmail, 'backoffice'),
           )
           providerFactorId = created.factorId
           enrollment = { qrCode: created.qrCode, manualKey: created.manualKey }
           newFactor = true
         }
-        const challenge = await dependencies.authProvider.challengeTotp(
-          providerFactorId,
-          'backoffice',
+        const activeProviderFactorId = providerFactorId
+        if (!activeProviderFactorId) {
+          throw new BackofficeAuthenticationError('upstream-unavailable')
+        }
+        const challenge = await measureRequestPhase('workos-refresh', () =>
+          dependencies.authProvider.challengeTotp(activeProviderFactorId, 'backoffice'),
         )
         const attemptToken = dependencies.tokenVault.generateOpaqueToken()
         const expiresAt = new Date(now().getTime() + ATTEMPT_TTL_MS)
         const context = cipherContext(account.accountId, verified.sessionId)
-        await dependencies.database.startAttempt({
-          accountId: account.accountId,
-          providerFactorId,
-          newFactor,
-          providerSessionId: verified.sessionId,
-          providerChallengeId: challenge.challengeId,
-          attemptTokenHash: dependencies.tokenVault.hashOpaqueToken(attemptToken),
-          secretCiphertext: dependencies.tokenVault.sealBackofficeAttempt(
-            { tokens: authenticated.tokens, identity: authenticated.identity, enrollment },
-            context,
-          ),
-          accessTokenExpiresAt: expiresAtFor(authenticated.tokens, now()),
-          status: newFactor ? 'pending_enrollment' : 'pending_challenge',
-          expiresAt,
-        })
+        await measureRequestPhase('business-db', () =>
+          dependencies.database.startAttempt({
+            accountId: account.accountId,
+            providerFactorId: activeProviderFactorId,
+            newFactor,
+            providerSessionId: verified.sessionId,
+            providerChallengeId: challenge.challengeId,
+            attemptTokenHash: dependencies.tokenVault.hashOpaqueToken(attemptToken),
+            secretCiphertext: dependencies.tokenVault.sealBackofficeAttempt(
+              { tokens: authenticated.tokens, identity: authenticated.identity, enrollment },
+              context,
+            ),
+            accessTokenExpiresAt: expiresAtFor(authenticated.tokens, now()),
+            status: newFactor ? 'pending_enrollment' : 'pending_challenge',
+            expiresAt,
+          }),
+        )
         return { attemptToken, presentation: attemptPresentation(expiresAt, enrollment) }
       } catch (error) {
         await safeRevoke(verified.sessionId)
@@ -156,8 +168,8 @@ export function createBackofficeAuthenticationService(dependencies: {
     },
 
     async readAttempt(attemptToken) {
-      const attempt = await dependencies.database.loadAttempt(
-        dependencies.tokenVault.hashOpaqueToken(attemptToken),
+      const attempt = await measureRequestPhase('session-db', () =>
+        dependencies.database.loadAttempt(dependencies.tokenVault.hashOpaqueToken(attemptToken)),
       )
       if (!attempt || attempt.status === 'completed' || !attempt.secretCiphertext) {
         throw new BackofficeAuthenticationError('unauthenticated')
@@ -175,7 +187,9 @@ export function createBackofficeAuthenticationService(dependencies: {
 
     async verifyTotp(input) {
       const attemptHash = dependencies.tokenVault.hashOpaqueToken(input.attemptToken)
-      const attempt = await dependencies.database.loadAttempt(attemptHash)
+      const attempt = await measureRequestPhase('session-db', () =>
+        dependencies.database.loadAttempt(attemptHash),
+      )
       if (!attempt) throw new BackofficeAuthenticationError('unauthenticated')
 
       const sessionToken = dependencies.tokenVault.deriveOpaqueToken(
@@ -196,31 +210,39 @@ export function createBackofficeAuthenticationService(dependencies: {
       }
 
       try {
-        await dependencies.database.bindTotpVerification({
-          attemptTokenHash: attemptHash,
-          idempotencyKey: input.idempotencyKey,
-          commandId: input.commandId,
-        })
+        await measureRequestPhase('business-db', () =>
+          dependencies.database.bindTotpVerification({
+            attemptTokenHash: attemptHash,
+            idempotencyKey: input.idempotencyKey,
+            commandId: input.commandId,
+          }),
+        )
       } catch {
         throw new BackofficeAuthenticationError('conflict')
       }
 
       let verification
       try {
-        verification = await dependencies.authProvider.verifyTotp(
-          attempt.providerChallengeId,
-          input.code,
-          'backoffice',
+        verification = await measureRequestPhase('workos-refresh', () =>
+          dependencies.authProvider.verifyTotp(
+            attempt.providerChallengeId,
+            input.code,
+            'backoffice',
+          ),
         )
       } catch (error) {
         if (error instanceof AuthError && error.retryable) {
           throw new BackofficeAuthenticationError('upstream-unavailable')
         }
-        const failure = await dependencies.database.recordTotpFailure(attemptHash)
+        const failure = await measureRequestPhase('business-db', () =>
+          dependencies.database.recordTotpFailure(attemptHash),
+        )
         throw new BackofficeAuthenticationError('unauthenticated', failure.terminal)
       }
       if (!verification.valid) {
-        const failure = await dependencies.database.recordTotpFailure(attemptHash)
+        const failure = await measureRequestPhase('business-db', () =>
+          dependencies.database.recordTotpFailure(attemptHash),
+        )
         throw new BackofficeAuthenticationError('unauthenticated', failure.terminal)
       }
 
@@ -233,17 +255,19 @@ export function createBackofficeAuthenticationService(dependencies: {
       } catch {
         throw new BackofficeAuthenticationError('unauthenticated')
       }
-      await dependencies.database.completeAuthentication({
-        attemptTokenHash: attemptHash,
-        idempotencyKey: input.idempotencyKey,
-        commandId: input.commandId,
-        sessionTokenHash: dependencies.tokenVault.hashOpaqueToken(sessionToken),
-        sessionTokenCiphertext: dependencies.tokenVault.seal(
-          { tokens: secret.tokens, identity: secret.identity },
-          cipherContext(attempt.accountId, attempt.providerSessionId),
-        ),
-        accessTokenExpiresAt: attempt.accessTokenExpiresAt,
-      })
+      await measureRequestPhase('business-db', () =>
+        dependencies.database.completeAuthentication({
+          attemptTokenHash: attemptHash,
+          idempotencyKey: input.idempotencyKey,
+          commandId: input.commandId,
+          sessionTokenHash: dependencies.tokenVault.hashOpaqueToken(sessionToken),
+          sessionTokenCiphertext: dependencies.tokenVault.seal(
+            { tokens: secret.tokens, identity: secret.identity },
+            cipherContext(attempt.accountId, attempt.providerSessionId),
+          ),
+          accessTokenExpiresAt: attempt.accessTokenExpiresAt,
+        }),
+      )
       return { sessionToken }
     },
 
@@ -263,6 +287,11 @@ export function createBackofficeAuthenticationService(dependencies: {
           resolved.session.lastActivityAt.getTime() + 15 * 60 * 1000,
         ).toISOString(),
         absolute_expires_at: resolved.session.absoluteExpiresAt.toISOString(),
+        analytics: analyticsIdentityForSurfaceFromEnvironment(
+          'backoffice',
+          dependencies.issuer,
+          resolved.session.externalSubject,
+        ),
       }
     },
 
@@ -270,15 +299,18 @@ export function createBackofficeAuthenticationService(dependencies: {
       if (!sessionToken) return 'already-absent'
       let result
       try {
-        result = await dependencies.database.logout(
-          dependencies.tokenVault.hashOpaqueToken(sessionToken),
+        result = await measureRequestPhase('session-db', () =>
+          dependencies.database.logout(dependencies.tokenVault.hashOpaqueToken(sessionToken)),
         )
       } catch {
         return 'partial'
       }
       if (!result.providerSessionId) return result.outcome
+      const providerSessionId = result.providerSessionId
       try {
-        await dependencies.authProvider.revokeSession(result.providerSessionId, 'backoffice')
+        await measureRequestPhase('workos-refresh', () =>
+          dependencies.authProvider.revokeSession(providerSessionId, 'backoffice'),
+        )
         return result.outcome
       } catch {
         return 'partial'
@@ -287,9 +319,8 @@ export function createBackofficeAuthenticationService(dependencies: {
 
     async requestPasswordReset(email) {
       try {
-        await dependencies.authProvider.requestPasswordReset(
-          email.trim().toLowerCase(),
-          'backoffice',
+        await measureRequestPhase('workos-refresh', () =>
+          dependencies.authProvider.requestPasswordReset(email.trim().toLowerCase(), 'backoffice'),
         )
       } catch (error) {
         throw authenticationFailure(error)
@@ -301,7 +332,9 @@ export function createBackofficeAuthenticationService(dependencies: {
     tokenHash: Uint8Array,
     reloadAfterRace: boolean,
   ): Promise<{ session: StoredBackofficeSession; secret: StoredSessionSecret }> {
-    const session = await dependencies.database.loadSession(tokenHash)
+    const session = await measureRequestPhase('session-db', () =>
+      dependencies.database.loadSession(tokenHash),
+    )
     if (!session) throw new BackofficeAuthenticationError('unauthenticated')
     const context = cipherContext(session.accountId, session.providerSessionId)
     let secret: StoredSessionSecret
@@ -315,9 +348,8 @@ export function createBackofficeAuthenticationService(dependencies: {
     if (session.accessTokenExpiresAt.getTime() <= now().getTime() + REFRESH_WINDOW_MS) {
       let refreshed: SessionTokens
       try {
-        refreshed = await dependencies.authProvider.refresh(
-          secret.tokens.refreshToken,
-          'backoffice',
+        refreshed = await measureRequestPhase('workos-refresh', () =>
+          dependencies.authProvider.refresh(secret.tokens.refreshToken, 'backoffice'),
         )
       } catch (error) {
         if (error instanceof AuthError && error.retryable) {
@@ -331,15 +363,17 @@ export function createBackofficeAuthenticationService(dependencies: {
         throw new BackofficeAuthenticationError('unauthenticated')
       }
       await verifyAccessToken(refreshed.accessToken, session, tokenHash)
-      const rotated = await dependencies.database.rotateSession({
-        sessionId: session.sessionId,
-        expectedTokenVersion: session.tokenVersion,
-        tokenCiphertext: dependencies.tokenVault.seal(
-          { tokens: refreshed, identity: secret.identity },
-          context,
-        ),
-        accessTokenExpiresAt: expiresAtFor(refreshed, now()),
-      })
+      const rotated = await measureRequestPhase('session-db', () =>
+        dependencies.database.rotateSession({
+          sessionId: session.sessionId,
+          expectedTokenVersion: session.tokenVersion,
+          tokenCiphertext: dependencies.tokenVault.seal(
+            { tokens: refreshed, identity: secret.identity },
+            context,
+          ),
+          accessTokenExpiresAt: expiresAtFor(refreshed, now()),
+        }),
+      )
       if (!rotated) {
         if (!reloadAfterRace) throw new BackofficeAuthenticationError('upstream-unavailable')
         return authenticatedSession(tokenHash, false)
@@ -356,7 +390,9 @@ export function createBackofficeAuthenticationService(dependencies: {
     tokenHash: Uint8Array,
   ): Promise<void> {
     try {
-      const verified = await dependencies.authProvider.verifyAccessToken(accessToken, 'backoffice')
+      const verified = await measureRequestPhase('token-local', () =>
+        dependencies.authProvider.verifyAccessToken(accessToken, 'backoffice'),
+      )
       if (
         verified.subject !== session.externalSubject ||
         verified.sessionId !== session.providerSessionId ||
@@ -378,7 +414,9 @@ export function createBackofficeAuthenticationService(dependencies: {
   }
 
   async function safeRevoke(sessionId: string): Promise<void> {
-    await dependencies.authProvider.revokeSession(sessionId, 'backoffice').catch(() => undefined)
+    await measureRequestPhase('workos-refresh', () =>
+      dependencies.authProvider.revokeSession(sessionId, 'backoffice'),
+    ).catch(() => undefined)
   }
 }
 

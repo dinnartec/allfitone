@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 
-import { StudioApiError, newCommand, studioApi } from './studio-api.js'
+import { StudioApiError, invitationDecisionFlowStep, newCommand, studioApi } from './studio-api.js'
 
 const originalFetch = globalThis.fetch
 const originalSessionStorage = globalThis.sessionStorage
@@ -161,6 +161,13 @@ describe('professional profile API', () => {
 })
 
 describe('organization team API', () => {
+  test('maps invitation decisions to their explicit telemetry flow steps', () => {
+    expect(invitationDecisionFlowStep('accepted')).toBe('invitation_accepted')
+    expect(invitationDecisionFlowStep('rejected')).toBe('invitation_rejected')
+    expect(invitationDecisionFlowStep(undefined)).toBeUndefined()
+    expect(invitationDecisionFlowStep('unexpected')).toBeUndefined()
+  })
+
   test('lists memberships with the contract query, cookies, and caller cancellation', async () => {
     let capturedUrl = ''
     let capturedInit: RequestInit | undefined

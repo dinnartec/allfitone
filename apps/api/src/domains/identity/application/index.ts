@@ -2,6 +2,10 @@
 
 import { AuthError, type AuthProvider, type SessionTokens } from '@allfitone/auth-provider'
 import { hashInvitationToken } from '@allfitone/notifications'
+import {
+  analyticsIdentityForSurfaceFromEnvironment,
+  type AnalyticsIdentity,
+} from '@allfitone/telemetry/node'
 import { measureStudioRequestPhase } from '../../../platform/observability/index.js'
 
 import type {
@@ -37,6 +41,7 @@ export interface StudioSessionService {
     authenticated: true
     registration_status: RegistrationStatus
     identity: { given_name: string | null; family_name: string | null }
+    analytics?: AnalyticsIdentity
   }>
   resolveActor(opaqueToken: string): Promise<StudioActor>
   resolveAccountIdentity(opaqueToken: string): Promise<StudioAccountIdentity>
@@ -145,6 +150,7 @@ export function createStudioSessionService(
           given_name: context.identity.givenName,
           family_name: context.identity.familyName,
         },
+        analytics: context.analytics ?? { distinct_id: null },
       }
     },
 
@@ -221,6 +227,11 @@ export function createStudioSessionService(
         ...(registration.personId ? { personId: registration.personId } : {}),
       },
       identity: secret.identity,
+      analytics: analyticsIdentityForSurfaceFromEnvironment(
+        'studio',
+        dependencies.issuer,
+        session.externalSubject,
+      ),
     }
   }
 

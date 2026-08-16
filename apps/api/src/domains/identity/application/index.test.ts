@@ -199,7 +199,36 @@ describe('readSession', () => {
       authenticated: true,
       registration_status: 'registration_incomplete',
       identity: { given_name: 'Ada', family_name: 'Lovelace' },
+      analytics: { distinct_id: null },
     })
+  })
+
+  test('returns only a versioned pseudonym when analytics is configured', async () => {
+    const previousVersion = process.env.ANALYTICS_PSEUDONYM_ACTIVE_VERSION
+    const previousKey = process.env.ANALYTICS_PSEUDONYM_KEY_V1
+    const previousGate = process.env.ANALYTICS_STUDIO_CLIENT_ENABLED
+    const previousVercelEnv = process.env.VERCEL_ENV
+    process.env.ANALYTICS_PSEUDONYM_ACTIVE_VERSION = '1'
+    process.env.ANALYTICS_PSEUDONYM_KEY_V1 = Buffer.alloc(32, 7).toString('base64')
+    process.env.ANALYTICS_STUDIO_CLIENT_ENABLED = 'true'
+    process.env.VERCEL_ENV = 'production'
+    try {
+      const database = new MemoryDatabase()
+      await service(database).completeCode('code')
+      const result = await service(database).readSession('opaque')
+
+      expect(result.analytics?.distinct_id).toMatch(/^a1_[A-Za-z0-9_-]{43}$/)
+      expect(JSON.stringify(result.analytics)).not.toContain('user_1')
+    } finally {
+      if (previousVersion === undefined) delete process.env.ANALYTICS_PSEUDONYM_ACTIVE_VERSION
+      else process.env.ANALYTICS_PSEUDONYM_ACTIVE_VERSION = previousVersion
+      if (previousKey === undefined) delete process.env.ANALYTICS_PSEUDONYM_KEY_V1
+      else process.env.ANALYTICS_PSEUDONYM_KEY_V1 = previousKey
+      if (previousGate === undefined) delete process.env.ANALYTICS_STUDIO_CLIENT_ENABLED
+      else process.env.ANALYTICS_STUDIO_CLIENT_ENABLED = previousGate
+      if (previousVercelEnv === undefined) delete process.env.VERCEL_ENV
+      else process.env.VERCEL_ENV = previousVercelEnv
+    }
   })
 
   test('reports complete only for an active linked person', async () => {

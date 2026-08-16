@@ -8,12 +8,14 @@
     "ios": "expo run:ios --device",
     "android": "expo run:android --device",
     "build": "expo export --platform all --output-dir dist",
+    "test": "bun test src/client/session-operations.test.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@allfitone/contracts": "workspace:*",
     "@allfitone/react-native": "0.5.1",
+    "@allfitone/telemetry": "workspace:*",
     "expo": "57.0.11",
     "expo-blur": "57.0.2",
     "expo-constants": "57.0.9",

@@ -13,6 +13,11 @@
  */
 
 import { AuthError, type AuthProvider } from '@allfitone/auth-provider'
+import {
+  analyticsIdentityForSurfaceFromEnvironment,
+  type AnalyticsIdentity,
+} from '@allfitone/telemetry/node'
+import { measureRequestPhase } from '../../../platform/observability/index.js'
 
 /**
  * How long the client is told a code remains valid.
@@ -44,6 +49,8 @@ export interface SessionIssued {
   accessToken: string
   refreshToken: string
   expiresIn: number
+  /** Optional only for injected test seams; production verification always sets it. */
+  analytics?: AnalyticsIdentity
 }
 
 export interface SpaceRegistrationService {
@@ -57,6 +64,7 @@ export interface SpaceRegistrationService {
 
 export interface SpaceRegistrationDependencies {
   authProvider: AuthProvider
+  issuer: string
   now?: () => Date
 }
 
@@ -72,7 +80,9 @@ export function createSpaceRegistrationService(
         // ignored: acting on it is exactly the disclosure HU-SP-001 criterion 3
         // forbids, and the port documents the flag as being for server-side
         // metrics only.
-        await dependencies.authProvider.register({ email, password })
+        await measureRequestPhase('workos-refresh', () =>
+          dependencies.authProvider.register({ email, password }),
+        )
       } catch (cause) {
         throw toRegistrationError(cause)
       }
@@ -82,15 +92,18 @@ export function createSpaceRegistrationService(
 
     async verify(email, password, code) {
       try {
-        const result = await dependencies.authProvider.verifyEmail(
-          { email, password },
-          code,
-          'space',
+        const result = await measureRequestPhase('workos-refresh', () =>
+          dependencies.authProvider.verifyEmail({ email, password }, code, 'space'),
         )
         return {
           accessToken: result.tokens.accessToken,
           refreshToken: result.tokens.refreshToken,
           expiresIn: result.tokens.expiresIn,
+          analytics: analyticsIdentityForSurfaceFromEnvironment(
+            'space',
+            dependencies.issuer,
+            result.subject,
+          ),
         }
       } catch (cause) {
         throw toRegistrationError(cause)

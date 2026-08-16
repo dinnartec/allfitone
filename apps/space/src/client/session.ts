@@ -12,33 +12,17 @@
 
 import * as SecureStore from 'expo-secure-store'
 
-const ACCESS_TOKEN = 'allfit.accessToken'
-const REFRESH_TOKEN = 'allfit.refreshToken'
+import { ANALYTICS_IDENTITY_KEY, setSpaceTelemetryIdentity } from './telemetry'
+import { createSessionOperations } from './session-operations'
 
-export interface StoredSession {
-  accessToken: string
-  refreshToken: string
-}
+export type { StoredSession } from './session-operations'
 
-export async function storeSession(session: StoredSession): Promise<void> {
-  await Promise.all([
-    SecureStore.setItemAsync(ACCESS_TOKEN, session.accessToken),
-    SecureStore.setItemAsync(REFRESH_TOKEN, session.refreshToken),
-  ])
-}
+const operations = createSessionOperations({
+  storage: SecureStore,
+  analyticsIdentityKey: ANALYTICS_IDENTITY_KEY,
+  setTelemetryIdentity: setSpaceTelemetryIdentity,
+})
 
-export async function readSession(): Promise<StoredSession | null> {
-  const [accessToken, refreshToken] = await Promise.all([
-    SecureStore.getItemAsync(ACCESS_TOKEN),
-    SecureStore.getItemAsync(REFRESH_TOKEN),
-  ])
-  if (!accessToken || !refreshToken) return null
-  return { accessToken, refreshToken }
-}
-
-export async function clearSession(): Promise<void> {
-  await Promise.all([
-    SecureStore.deleteItemAsync(ACCESS_TOKEN),
-    SecureStore.deleteItemAsync(REFRESH_TOKEN),
-  ])
-}
+export const storeSession = operations.storeSession
+export const readSession = operations.readSession
+export const clearSession = operations.clearSession

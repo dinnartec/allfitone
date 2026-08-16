@@ -18,6 +18,8 @@
     "@allfitone/db": "workspace:*",
     "@allfitone/notifications": "workspace:*",
     "@allfitone/queue": "workspace:*",
+    "@allfitone/telemetry": "workspace:*",
+    "@vercel/functions": "3.9.3",
     "hono": "^4.6.0",
     "postgres": "3.4.9"
   },

@@ -67,7 +67,7 @@ export function spaceIdentityRoutes(injectedService?: SpaceRegistrationService):
 
     try {
       const session = await registrations().verify(email, password, code)
-      return c.json(session, 200)
+      return c.json({ ...session, analytics: session.analytics ?? { distinct_id: null } }, 200)
     } catch (cause) {
       return failRegistration(c, cause)
     }

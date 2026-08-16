@@ -2,9 +2,12 @@ import type { Metadata } from 'next'
 import { Barlow_Condensed, Manrope } from 'next/font/google'
 import type { ReactNode } from 'react'
 
+import { AnalyticsControls } from '@/components/analytics-controls'
+
 import '@allfitone/react/tokens.css'
 import '@allfitone/react/app.css'
 import '@allfitone/react/styles.css'
+import './backoffice.composition.css'
 
 const display = Barlow_Condensed({
   subsets: ['latin'],
@@ -38,7 +41,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   return (
     <html lang="es" data-afo-theme="dark" className={`${display.variable} ${body.variable}`}>
-      <body>{children}</body>
+      <body>
+        {children}
+        <AnalyticsControls />
+      </body>
     </html>
   )
 }

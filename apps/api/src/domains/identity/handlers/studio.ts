@@ -124,7 +124,7 @@ export function studioIdentityRoutes(injectedService?: StudioSessionService): Ho
       if (session.registration_status === 'registration_incomplete') {
         recordStudioRegistrationIncomplete()
       }
-      return c.json(session)
+      return c.json({ ...session, analytics: session.analytics ?? { distinct_id: null } })
     } catch (error) {
       if (error instanceof StudioSessionError && error.code !== 'upstream-unavailable') {
         deleteCookie(c, STUDIO_SESSION_COOKIE, { path: SESSION_COOKIE_PATH })

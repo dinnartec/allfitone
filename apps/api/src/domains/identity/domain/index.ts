@@ -1,4 +1,5 @@
 import type { AuthenticatedIdentity, SessionTokens } from '@allfitone/auth-provider'
+import type { AnalyticsIdentity } from '@allfitone/telemetry/node'
 
 export type {
   BackofficeAttemptSecret,
@@ -41,6 +42,8 @@ export interface StudioActor {
 export interface StudioAccountIdentity {
   actor: StudioActor
   identity: AuthenticatedIdentity
+  /** Optional only for injected test seams; production session resolution always sets it. */
+  analytics?: AnalyticsIdentity
 }
 
 export interface OnboardingAttempt {

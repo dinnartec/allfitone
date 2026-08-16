@@ -32,6 +32,8 @@ import Constants from 'expo-constants'
 
 import type { AllfitV1Schemas } from '@allfitone/contracts'
 
+import { captureSpaceApiRequest, captureSpaceTelemetry, spaceTelemetryCommon } from './telemetry'
+
 export type RegistrationAccepted = AllfitV1Schemas['SpaceRegistrationAccepted']
 export type SessionTokens = AllfitV1Schemas['SpaceSessionTokens']
 
@@ -81,9 +83,14 @@ function timeoutSignal(ms: number): { signal: AbortSignal; done: () => void } {
   return { signal: controller.signal, done: () => clearTimeout(timer) }
 }
 
-async function post<T>(path: string, body: unknown): Promise<T> {
+async function post<T>(
+  path: string,
+  body: unknown,
+  operation: 'space.auth.registration' | 'space.auth.registration_verification',
+): Promise<T> {
   const { signal, done } = timeoutSignal(TIMEOUT_MS)
-  let response: Response
+  const startedAt = Date.now()
+  let response: Response | undefined
   try {
     response = await fetch(`${BASE_URL}${path}`, {
       method: 'POST',
@@ -97,6 +104,11 @@ async function post<T>(path: string, body: unknown): Promise<T> {
     throw new ApiError('unavailable')
   } finally {
     done()
+    captureSpaceApiRequest({
+      operation,
+      durationMs: Date.now() - startedAt,
+      ...(response ? { response } : {}),
+    })
   }
 
   if (!response.ok) throw new ApiError(failureFor(response.status))
@@ -112,17 +124,46 @@ function failureFor(status: number): ApiFailure {
 }
 
 export function register(email: string, password: string): Promise<RegistrationAccepted> {
-  return post<RegistrationAccepted>('/space/v1/auth/registrations', { email, password })
+  const startedAt = Date.now()
+  return post<RegistrationAccepted>(
+    '/space/v1/auth/registrations',
+    { email, password },
+    'space.auth.registration',
+  ).then((result) => {
+    captureSpaceTelemetry({
+      event: 'product.flow_step.completed.v1',
+      properties: {
+        ...spaceTelemetryCommon(),
+        flow: 'space.registration',
+        step: 'registration_requested',
+        outcome: 'success',
+        duration_ms: Date.now() - startedAt,
+      },
+    })
+    return result
+  })
 }
 
-export function verifyRegistration(
+export async function verifyRegistration(
   email: string,
   password: string,
   code: string,
 ): Promise<SessionTokens> {
-  return post<SessionTokens>('/space/v1/auth/registrations/verification', {
-    email,
-    password,
-    code,
+  const startedAt = Date.now()
+  const result = await post<SessionTokens>(
+    '/space/v1/auth/registrations/verification',
+    { email, password, code },
+    'space.auth.registration_verification',
+  )
+  captureSpaceTelemetry({
+    event: 'product.flow_step.completed.v1',
+    properties: {
+      ...spaceTelemetryCommon(),
+      flow: 'space.registration',
+      step: 'session_issued',
+      outcome: 'success',
+      duration_ms: Date.now() - startedAt,
+    },
   })
+  return result
 }
