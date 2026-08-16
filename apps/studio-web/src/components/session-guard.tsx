@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { Card, CardContent } from '@allfitone/react/components/card'
+import { Spinner } from '@allfitone/react/components/spinner'
 
 import { AccessLanding } from './access-landing'
 import { LoadingStage } from './studio-frame'
@@ -313,10 +315,12 @@ export function SessionGuard({ children }: { children: ReactNode }) {
         </div>
       )}
       {guard.kind === 'ending' ? (
-        <p data-session-ending-status role="status" aria-live="polite">
-          <span aria-hidden="true" />
-          Cerrando tu sesión…
-        </p>
+        <Card data-session-ending-status>
+          <CardContent role="status" aria-live="polite">
+            <Spinner role={undefined} aria-hidden="true" />
+            <p>Cerrando tu sesión…</p>
+          </CardContent>
+        </Card>
       ) : null}
       <form
         ref={inactivityFormRef}

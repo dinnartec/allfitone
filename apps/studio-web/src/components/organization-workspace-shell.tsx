@@ -1,6 +1,6 @@
 'use client'
 
-import { BrandLogo, ProductLockup } from '@allfitone/react/brand'
+import { BrandLogo, ProductWordmark } from '@allfitone/react/brand'
 import {
   Select,
   SelectContent,
@@ -78,7 +78,7 @@ function OrganizationSidebar({ basePath, pathname }: { basePath: string; pathnam
   }
 
   return (
-    <Sidebar collapsible="icon" data-organization-sidebar>
+    <Sidebar collapsible="icon" data-afo-theme="dark" data-organization-sidebar>
       <SidebarHeader>
         <Link
           href={basePath}
@@ -89,55 +89,57 @@ function OrganizationSidebar({ basePath, pathname }: { basePath: string; pathnam
           {railed ? (
             <BrandLogo variant="cyan" title="Allfit Studio" width={32} height={32} />
           ) : (
-            <ProductLockup
+            <ProductWordmark
               product="studio"
               surface="dark"
               title="Allfit Studio"
-              width={169}
-              height={40}
+              width={138}
+              height={28}
             />
           )}
         </Link>
         {/* The organization is named once. It used to appear in a static block,
             again inside the switcher, again in the header bar and again on the
             page, competing with the content for attention. */}
-        <div data-sidebar-organization>
-          {memberships.length > 1 ? (
-            <div data-sidebar-switcher>
-              <label htmlFor="workspace-organization-switcher">Cambiar de organización</label>
-              <Select
-                value={current.organization_id}
-                onValueChange={(value) => {
-                  if (value === null) return
-                  setOpenMobile(false)
-                  switchOrganization(value)
-                }}
-                items={memberships.map((membership) => ({
-                  label: membership.display_name,
-                  value: membership.organization_id,
-                }))}
-              >
-                <SelectTrigger id="workspace-organization-switcher">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent align="start">
-                  {memberships.map((membership) => (
-                    <SelectItem key={membership.membership_id} value={membership.organization_id}>
-                      {membership.display_name} · {membershipRoleSummary(membership.roles)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          ) : (
-            <strong>{current.display_name}</strong>
-          )}
-          <p data-sidebar-organization-meta>
-            <span>{organizationTypeLabel(current.type_code)}</span>
-            <span aria-hidden="true">·</span>
-            <span>{membershipRoleSummary(current.roles)}</span>
-          </p>
-        </div>
+        {!railed ? (
+          <div data-sidebar-organization>
+            {memberships.length > 1 ? (
+              <div data-sidebar-switcher>
+                <label htmlFor="workspace-organization-switcher">Cambiar de organización</label>
+                <Select
+                  value={current.organization_id}
+                  onValueChange={(value) => {
+                    if (value === null) return
+                    setOpenMobile(false)
+                    switchOrganization(value)
+                  }}
+                  items={memberships.map((membership) => ({
+                    label: membership.display_name,
+                    value: membership.organization_id,
+                  }))}
+                >
+                  <SelectTrigger id="workspace-organization-switcher">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent align="start">
+                    {memberships.map((membership) => (
+                      <SelectItem key={membership.membership_id} value={membership.organization_id}>
+                        {membership.display_name} · {membershipRoleSummary(membership.roles)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : (
+              <strong>{current.display_name}</strong>
+            )}
+            <p data-sidebar-organization-meta>
+              <span>{organizationTypeLabel(current.type_code)}</span>
+              <span aria-hidden="true">·</span>
+              <span>{membershipRoleSummary(current.roles)}</span>
+            </p>
+          </div>
+        ) : null}
       </SidebarHeader>
 
       <SidebarContent>
@@ -178,7 +180,7 @@ function OrganizationSidebar({ basePath, pathname }: { basePath: string; pathnam
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
-        <LogoutForm variant="outline" />
+        {!railed ? <LogoutForm variant="outline" /> : null}
       </SidebarFooter>
     </Sidebar>
   )

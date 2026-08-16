@@ -4,6 +4,7 @@ import { Alert, AlertDescription, AlertTitle } from '@allfitone/react/components
 import { Avatar, AvatarFallback } from '@allfitone/react/components/avatar'
 import { Badge } from '@allfitone/react/components/badge'
 import { Button, buttonVariants } from '@allfitone/react/components/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@allfitone/react/components/card'
 import {
   Empty,
   EmptyContent,
@@ -323,36 +324,38 @@ export function TeamMembershipList() {
 
 function MembershipCard({ item }: { item: OrganizationMembership }) {
   return (
-    <article data-team-member-card>
-      <div data-team-member-identity>
+    <Card data-team-member-card>
+      <CardHeader data-team-member-identity>
         <Avatar decorative>
           <AvatarFallback>{memberInitials(item.display_name)}</AvatarFallback>
         </Avatar>
-        <strong>{item.display_name}</strong>
+        <CardTitle>{item.display_name}</CardTitle>
         <Badge variant={item.status === 'active' ? 'success' : 'outline'}>
           {item.status === 'active' ? 'Activo' : 'Terminado'}
         </Badge>
-      </div>
-      <div data-team-role-badges>
-        {item.roles.map((role) => (
-          <Badge key={role} variant="secondary">
-            {organizationRoleLabel(role)}
-          </Badge>
-        ))}
-      </div>
-      <dl data-team-member-dates>
-        <div>
-          <dt>Ingreso</dt>
-          <dd>{formatDate(item.joined_at)}</dd>
+      </CardHeader>
+      <CardContent>
+        <div data-team-role-badges>
+          {item.roles.map((role) => (
+            <Badge key={role} variant="secondary">
+              {organizationRoleLabel(role)}
+            </Badge>
+          ))}
         </div>
-        {item.ended_at ? (
+        <dl data-team-member-dates>
           <div>
-            <dt>Finalización</dt>
-            <dd>{formatDate(item.ended_at)}</dd>
+            <dt>Ingreso</dt>
+            <dd>{formatDate(item.joined_at)}</dd>
           </div>
-        ) : null}
-      </dl>
-    </article>
+          {item.ended_at ? (
+            <div>
+              <dt>Finalización</dt>
+              <dd>{formatDate(item.ended_at)}</dd>
+            </div>
+          ) : null}
+        </dl>
+      </CardContent>
+    </Card>
   )
 }
 

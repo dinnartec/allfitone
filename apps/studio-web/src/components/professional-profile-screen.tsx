@@ -1,6 +1,6 @@
 'use client'
 
-import { ProductLockup } from '@allfitone/react/brand'
+import { ProductWordmark } from '@allfitone/react/brand'
 import { Alert, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
 import { Badge } from '@allfitone/react/components/badge'
 import { Button } from '@allfitone/react/components/button'
@@ -383,12 +383,12 @@ function AccountShell({ children, onSpaces }: { children: React.ReactNode; onSpa
     <WorkspaceShell>
       <WorkspaceMain data-profile-canvas>
         <WorkspaceHeader data-profile-header>
-          <ProductLockup
+          <ProductWordmark
             product="studio"
             surface="light"
             title="Allfit Studio"
-            width={169}
-            height={40}
+            width={138}
+            height={28}
           />
           <WorkspaceActions>
             <Button variant="ghost" size="sm" onClick={onSpaces}>

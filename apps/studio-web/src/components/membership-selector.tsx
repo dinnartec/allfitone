@@ -1,6 +1,21 @@
 'use client'
 
 import { Button } from '@allfitone/react/components/button'
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '@allfitone/react/components/card'
+import {
+  SetupPanel,
+  SetupPanelContent,
+  SetupPanelDescription,
+  SetupPanelEyebrow,
+  SetupPanelIntro,
+  SetupPanelTitle,
+} from '@allfitone/react/components/setup-shell'
 
 import { StudioFrame } from './studio-frame'
 import { membershipRoleSummary } from '@/lib/membership-roles'
@@ -15,27 +30,33 @@ export function MembershipSelector({
 }) {
   return (
     <StudioFrame step="ready">
-      <article data-studio-panel="selector">
-        <div data-studio-panel-intro>
-          <p data-studio-eyebrow>Selecciona un espacio</p>
-          <h1>¿Dónde quieres trabajar hoy?</h1>
-          <p>Tu identidad tiene acceso activo a más de una organización.</p>
-        </div>
-        <div data-membership-list>
+      <SetupPanel>
+        <SetupPanelIntro>
+          <SetupPanelEyebrow>Selecciona un espacio</SetupPanelEyebrow>
+          <SetupPanelTitle>¿Dónde quieres trabajar hoy?</SetupPanelTitle>
+          <SetupPanelDescription>
+            Tu identidad tiene acceso activo a más de una organización.
+          </SetupPanelDescription>
+        </SetupPanelIntro>
+        <SetupPanelContent data-membership-list>
           {memberships.map((membership) => (
-            <section key={membership.membership_id} data-membership-card>
-              <div>
-                <span data-membership-type>{organizationTypeLabel(membership.type_code)}</span>
+            <Card key={membership.membership_id} data-membership-card>
+              <CardHeader>
+                <CardTitle>{organizationTypeLabel(membership.type_code)}</CardTitle>
                 <h2>{membership.display_name}</h2>
+              </CardHeader>
+              <CardContent>
                 <p>{membershipRoleSummary(membership.roles)}</p>
-              </div>
-              <Button onClick={() => onSelect(membership.organization_id)}>
-                Entrar al espacio
-              </Button>
-            </section>
+              </CardContent>
+              <CardFooter>
+                <Button onClick={() => onSelect(membership.organization_id)}>
+                  Entrar al espacio
+                </Button>
+              </CardFooter>
+            </Card>
           ))}
-        </div>
-      </article>
+        </SetupPanelContent>
+      </SetupPanel>
     </StudioFrame>
   )
 }

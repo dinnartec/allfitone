@@ -28,6 +28,7 @@ import {
 } from '@allfitone/react/components/field'
 import { Input } from '@allfitone/react/components/input'
 import { Spinner } from '@allfitone/react/components/spinner'
+import { StatStrip, StatStripItem } from '@allfitone/react/components/stat-strip'
 import { Textarea } from '@allfitone/react/components/textarea'
 import { toast } from '@allfitone/react/components/sonner'
 import { useMemo, useRef, useState, type FormEvent } from 'react'
@@ -271,37 +272,36 @@ export function ProfessionalPresentation({
         </CardContent>
       </Card>
 
-      <aside
+      <Card
         data-trajectory-panel
         data-trajectory-state={profile ? 'active' : 'preview'}
         aria-label="Trayectoria profesional"
       >
-        <p data-profile-kicker>{profile ? 'Trayectoria declarada' : 'Vista previa'}</p>
-        <div data-trajectory-line aria-hidden="true">
-          <span />
-          <i />
-          <span />
-        </div>
-        <div data-trajectory-copy>
-          <div>
-            <small>{profile ? 'Comenzaste a ejercer en' : 'Año de inicio'}</small>
-            <strong>{hasValidTrajectoryYear ? draft.practice_started_year : '—'}</strong>
-          </div>
-          <div>
-            <small>{profile ? 'Hoy' : 'Experiencia calculada'}</small>
-            <strong>
-              {previewExperienceYears === undefined
-                ? '—'
-                : `${previewExperienceYears} ${previewExperienceYears === 1 ? 'año' : 'años'}`}
-            </strong>
-          </div>
-        </div>
-        <p>
-          {profile
-            ? 'Los años se derivan del año en que comenzaste y se actualizan automáticamente.'
-            : 'Esta línea se activa cuando guardas tu perfil. Nada se publica mientras completas el formulario.'}
-        </p>
-      </aside>
+        <CardHeader>
+          <CardTitle>{profile ? 'Trayectoria declarada' : 'Vista previa'}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <StatStrip>
+            <StatStripItem
+              label={profile ? 'Comenzaste a ejercer en' : 'Año de inicio'}
+              value={hasValidTrajectoryYear ? draft.practice_started_year : '—'}
+            />
+            <StatStripItem
+              label={profile ? 'Hoy' : 'Experiencia calculada'}
+              value={
+                previewExperienceYears === undefined
+                  ? '—'
+                  : `${previewExperienceYears} ${previewExperienceYears === 1 ? 'año' : 'años'}`
+              }
+            />
+          </StatStrip>
+          <p>
+            {profile
+              ? 'Los años se derivan del año en que comenzaste y se actualizan automáticamente.'
+              : 'Esta línea se activa cuando guardas tu perfil. Nada se publica mientras completas el formulario.'}
+          </p>
+        </CardContent>
+      </Card>
     </div>
   )
 }

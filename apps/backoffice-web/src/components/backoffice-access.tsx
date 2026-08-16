@@ -1,6 +1,6 @@
 'use client'
 
-import { ProductLockup } from '@allfitone/react/brand'
+import { ProductWordmark } from '@allfitone/react/brand'
 import {
   AccessDescription,
   AccessEyebrow,
@@ -442,12 +442,12 @@ function AccessFrame({ children, currentStep }: { children: ReactNode; currentSt
     <DeviceGate>
       <DeviceGateFallback aria-labelledby="backoffice-device-gate-title">
         <DeviceGateHeader>
-          <ProductLockup
+          <ProductWordmark
             product="backoffice"
             surface="dark"
             title="Allfit Backoffice"
-            width={180}
-            height={42}
+            width={150}
+            height={30}
           />
         </DeviceGateHeader>
         <DeviceGateMain>
@@ -466,12 +466,12 @@ function AccessFrame({ children, currentStep }: { children: ReactNode; currentSt
       <DeviceGateContent>
         <AccessShell>
           <AccessHeader>
-            <ProductLockup
+            <ProductWordmark
               product="backoffice"
               surface="dark"
               title="Allfit Backoffice"
-              width={180}
-              height={42}
+              width={150}
+              height={30}
             />
           </AccessHeader>
           <AccessMain>

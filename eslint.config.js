@@ -34,6 +34,51 @@ const NO_QUEUE_SDK = {
 // package. Foundations and implementation libraries remain private to the DS.
 const UI_APPS = ['studio-web', 'backoffice-web']
 
+const allfitonePlugin = {
+  rules: {
+    'no-visible-native-controls': {
+      meta: {
+        type: 'problem',
+        schema: [],
+        messages: {
+          nativeControl:
+            'Visible native {{name}} controls are forbidden. Use the public Design System component.',
+        },
+      },
+      create(context) {
+        return {
+          JSXOpeningElement(node) {
+            if (node.name.type !== 'JSXIdentifier') return
+
+            const name = node.name.name
+            const forbidden = new Set(['button', 'select', 'textarea', 'table', 'dialog'])
+            if (forbidden.has(name)) {
+              context.report({ node, messageId: 'nativeControl', data: { name } })
+              return
+            }
+
+            if (name !== 'input') return
+            const type = node.attributes.find(
+              (attribute) =>
+                attribute.type === 'JSXAttribute' &&
+                attribute.name.type === 'JSXIdentifier' &&
+                attribute.name.name === 'type',
+            )
+            const hidden =
+              type?.type === 'JSXAttribute' &&
+              type.value?.type === 'Literal' &&
+              type.value.value === 'hidden'
+
+            if (!hidden) {
+              context.report({ node, messageId: 'nativeControl', data: { name } })
+            }
+          },
+        }
+      },
+    },
+  },
+}
+
 const NO_REACT_ROOT = {
   name: '@allfitone/react',
   message: 'Use an explicit public @allfitone/react subpath.',
@@ -205,7 +250,11 @@ export default tseslint.config(
   })),
   {
     files: UI_APPS.flatMap((app) => [`apps/${app}/**/*.{ts,tsx}`]),
+    plugins: {
+      allfitone: allfitonePlugin,
+    },
     rules: {
+      'allfitone/no-visible-native-controls': 'error',
       'no-restricted-syntax': [
         'error',
         {
