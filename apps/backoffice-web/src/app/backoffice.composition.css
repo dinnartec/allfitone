@@ -21,13 +21,25 @@
   border-radius: var(--afo-radius-xl);
   background: var(--afo-color-background-inverse);
   box-shadow: var(--afo-shadow-lg);
-  color: var(--afo-color-text-inverse);
+  color: var(--afo-color-text-accent);
 }
 
 [data-analytics-panel] p {
   margin: 0;
   font-size: var(--afo-font-size-sm);
   line-height: var(--afo-line-height-relaxed);
+}
+
+[data-analytics-notice-link] {
+  display: inline-flex;
+  min-height: 44px;
+  width: fit-content;
+  align-items: center;
+  color: var(--afo-color-text-inverse);
+  font-size: var(--afo-font-size-sm);
+  font-weight: var(--afo-font-weight-semibold);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 [data-analytics-actions] {

@@ -2,10 +2,12 @@
 
 import {
   TELEMETRY_NOTICE_VERSION,
+  createClientTelemetryRuntime,
   type AnalyticsConsentRecord,
   type ClientOperation,
   type TelemetryEnvironment,
   type TelemetryEvent,
+  type TelemetryFlowStep,
   type TelemetryOutcome,
 } from '@allfitone/telemetry'
 import { createPostHogBrowserTelemetry } from '@allfitone/telemetry/posthog-browser'
@@ -35,10 +37,13 @@ const SERVER_STATE: StudioTelemetryState = {
 }
 let initialized = false
 let distinctId: string | null = null
-let startInFlight: Promise<void> | undefined
-let gateCache: { enabled: boolean; expiresAt: number } | undefined
 const listeners = new Set<() => void>()
-const pendingEvents: TelemetryEvent[] = []
+const runtime = createClientTelemetryRuntime({
+  adapter: client,
+  gateUrl: `${API_URL}/studio/v1/telemetry-config`,
+  noticeVersion: TELEMETRY_NOTICE_VERSION,
+})
+runtime.subscribe(syncRuntimeState)
 
 export function initializeStudioTelemetry(): void {
   if (initialized || typeof window === 'undefined') return
@@ -50,7 +55,7 @@ export function initializeStudioTelemetry(): void {
     decision: privacySignalDenied ? 'denied' : readConsent(),
   }
   emit()
-  void maybeStart()
+  reconcileRuntime()
 }
 
 export function setStudioAnalyticsConsent(decision: 'denied' | 'granted'): void {
@@ -63,38 +68,23 @@ export function setStudioAnalyticsConsent(decision: 'denied' | 'granted'): void 
   try {
     window.localStorage.setItem(CONSENT_KEY, JSON.stringify(record))
   } catch {
-    // Storage failures remain fail-closed.
+    state = { ...state, active: false, decision: 'undecided' }
+    emit()
+    reconcileRuntime()
+    return
   }
   state = { ...state, active: false, decision: effectiveDecision }
-  if (effectiveDecision === 'denied') {
-    pendingEvents.length = 0
-    client.resetIdentity()
-  }
   emit()
-  void maybeStart()
+  reconcileRuntime()
 }
 
 export function setStudioTelemetryIdentity(value: string | null): void {
   distinctId = value
-  if (!value) {
-    pendingEvents.length = 0
-    client.resetIdentity()
-    if (state.active) {
-      state = { ...state, active: false }
-      emit()
-    }
-    return
-  }
-  client.identify(value)
-  void maybeStart()
+  reconcileRuntime()
 }
 
 export function captureStudioTelemetry(event: TelemetryEvent): void {
-  if (state.active) {
-    client.capture(event)
-    return
-  }
-  if (state.decision === 'granted' && pendingEvents.length < 20) pendingEvents.push(event)
+  runtime.capture(event)
 }
 
 export function studioTelemetryCommon() {
@@ -111,6 +101,7 @@ export function captureStudioApiRequest(input: {
   operation: ClientOperation
   method: 'DELETE' | 'GET' | 'PATCH' | 'POST' | 'PUT'
   durationMs: number
+  flowStep?: TelemetryFlowStep
   response?: Response
 }): void {
   const status = input.response?.status
@@ -138,7 +129,7 @@ export function captureStudioApiRequest(input: {
           : 'none',
     },
   })
-  const flow = studioFlow(input.operation)
+  const flow = studioFlow(input.operation, input.flowStep)
   if (flow) {
     captureStudioTelemetry({
       event: 'product.flow_step.completed.v1',
@@ -163,7 +154,10 @@ export function captureStudioApiRequest(input: {
   }
 }
 
-function studioFlow(operation: ClientOperation):
+function studioFlow(
+  operation: ClientOperation,
+  explicitStep?: TelemetryFlowStep,
+):
   | {
       flow:
         | 'studio.authentication'
@@ -181,6 +175,7 @@ function studioFlow(operation: ClientOperation):
         | 'eligibility_recorded'
         | 'invitation_accepted'
         | 'invitation_created'
+        | 'invitation_rejected'
         | 'invitation_resolved'
         | 'invitation_revoked'
         | 'memberships_viewed'
@@ -191,6 +186,12 @@ function studioFlow(operation: ClientOperation):
         | 'session_confirmed'
     }
   | undefined {
+  if (
+    operation === 'studio.invitation.decide' &&
+    (explicitStep === 'invitation_accepted' || explicitStep === 'invitation_rejected')
+  ) {
+    return { flow: 'studio.invitation', step: explicitStep }
+  }
   const flows: Partial<Record<ClientOperation, { flow: string; step: string }>> = {
     'studio.session': { flow: 'studio.authentication', step: 'session_confirmed' },
     'studio.entry_context': { flow: 'studio.organization', step: 'memberships_viewed' },
@@ -216,7 +217,6 @@ function studioFlow(operation: ClientOperation):
     },
     'studio.invitation.create': { flow: 'studio.invitation', step: 'invitation_created' },
     'studio.invitation.resolve': { flow: 'studio.invitation', step: 'invitation_resolved' },
-    'studio.invitation.decide': { flow: 'studio.invitation', step: 'invitation_accepted' },
     'studio.invitation.revoke': { flow: 'studio.invitation', step: 'invitation_revoked' },
     'studio.organization.memberships': {
       flow: 'studio.team_management',
@@ -240,42 +240,18 @@ export function studioTelemetryServerSnapshot(): StudioTelemetryState {
   return SERVER_STATE
 }
 
-async function maybeStart(): Promise<void> {
-  if (state.decision !== 'granted' || state.privacySignalDenied || !distinctId || startInFlight) {
-    return
-  }
-  const currentId = distinctId
-  startInFlight = (async () => {
-    const enabled = await telemetryGate()
-    if (!enabled || state.decision !== 'granted' || distinctId !== currentId) return
-    const active = await client.start(currentId)
-    if (active && distinctId === currentId && state.decision === 'granted') {
-      state = { ...state, active: true }
-      emit()
-      for (const event of pendingEvents.splice(0)) client.capture(event)
-    }
-  })().finally(() => {
-    startInFlight = undefined
+function reconcileRuntime(): void {
+  runtime.reconcile({
+    allowed: state.decision === 'granted' && !state.privacySignalDenied,
+    distinctId,
   })
-  await startInFlight
 }
 
-async function telemetryGate(): Promise<boolean> {
-  if (gateCache && gateCache.expiresAt > Date.now()) return gateCache.enabled
-  try {
-    const response = await fetch(`${API_URL}/studio/v1/telemetry-config`, {
-      credentials: 'omit',
-    })
-    if (!response.ok) return false
-    const value: unknown = await response.json()
-    const enabled =
-      isRecord(value) && value.enabled === true && value.notice_version === TELEMETRY_NOTICE_VERSION
-    gateCache = { enabled, expiresAt: Date.now() + 5 * 60_000 }
-    return enabled
-  } catch {
-    gateCache = { enabled: false, expiresAt: Date.now() + 5 * 60_000 }
-    return false
-  }
+function syncRuntimeState(): void {
+  const { active } = runtime.snapshot()
+  if (state.active === active) return
+  state = { ...state, active }
+  emit()
 }
 
 function readConsent(): StudioTelemetryState['decision'] {

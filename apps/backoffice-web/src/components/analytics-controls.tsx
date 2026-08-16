@@ -1,6 +1,7 @@
 'use client'
 
 import { Button } from '@allfitone/react/components/button'
+import { ANALYTICS_PRIVACY_NOTICE_URL } from '@allfitone/telemetry'
 import { useReportWebVitals } from 'next/web-vitals'
 import { useEffect, useState, useSyncExternalStore } from 'react'
 
@@ -58,6 +59,14 @@ export function AnalyticsControls() {
             Ayúdanos a medir rendimiento y uso con un identificador seudónimo. No capturamos
             contenido, credenciales, nombres ni correos.
           </p>
+          <a
+            data-analytics-notice-link
+            href={ANALYTICS_PRIVACY_NOTICE_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Leer el aviso completo
+          </a>
           {telemetry.privacySignalDenied ? (
             <p>La señal de privacidad de este dispositivo mantiene la analítica desactivada.</p>
           ) : (

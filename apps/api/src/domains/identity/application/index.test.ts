@@ -207,9 +207,11 @@ describe('readSession', () => {
     const previousVersion = process.env.ANALYTICS_PSEUDONYM_ACTIVE_VERSION
     const previousKey = process.env.ANALYTICS_PSEUDONYM_KEY_V1
     const previousGate = process.env.ANALYTICS_STUDIO_CLIENT_ENABLED
+    const previousVercelEnv = process.env.VERCEL_ENV
     process.env.ANALYTICS_PSEUDONYM_ACTIVE_VERSION = '1'
     process.env.ANALYTICS_PSEUDONYM_KEY_V1 = Buffer.alloc(32, 7).toString('base64')
     process.env.ANALYTICS_STUDIO_CLIENT_ENABLED = 'true'
+    process.env.VERCEL_ENV = 'production'
     try {
       const database = new MemoryDatabase()
       await service(database).completeCode('code')
@@ -224,6 +226,8 @@ describe('readSession', () => {
       else process.env.ANALYTICS_PSEUDONYM_KEY_V1 = previousKey
       if (previousGate === undefined) delete process.env.ANALYTICS_STUDIO_CLIENT_ENABLED
       else process.env.ANALYTICS_STUDIO_CLIENT_ENABLED = previousGate
+      if (previousVercelEnv === undefined) delete process.env.VERCEL_ENV
+      else process.env.VERCEL_ENV = previousVercelEnv
     }
   })
 

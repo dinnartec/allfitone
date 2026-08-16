@@ -9,6 +9,7 @@ import { postHogUsHost } from './posthog-host.js'
 
 export interface BrowserTelemetry extends TelemetryPort {
   start(distinctId: string): Promise<boolean>
+  stop(): Promise<void>
 }
 
 export interface BrowserTelemetryOptions {
@@ -22,18 +23,25 @@ export function createPostHogBrowserTelemetry(options: BrowserTelemetryOptions):
   let starting: Promise<boolean> | undefined
   let pendingDistinctId: string | undefined
   let activeDistinctId: string | undefined
+  let generation = 0
 
   return {
     start(distinctId) {
+      if (!validDistinctId(distinctId)) return Promise.resolve(false)
       pendingDistinctId = distinctId
       if (client) {
-        activeDistinctId = distinctId
-        return Promise.resolve(true)
+        try {
+          client.opt_in_capturing()
+          activeDistinctId = distinctId
+          return Promise.resolve(true)
+        } catch {
+          return Promise.resolve(false)
+        }
       }
-      if (!validDistinctId(distinctId)) return Promise.resolve(false)
       if (starting) return starting
       const host = postHogUsHost(options.host)
       if (!options.apiKey || !host) return Promise.resolve(false)
+      const startGeneration = generation
 
       starting = import('posthog-js')
         .then(
@@ -61,8 +69,15 @@ export function createPostHogBrowserTelemetry(options: BrowserTelemetryOptions):
                     if (settled) return
                     settled = true
                     window.clearTimeout(timeout)
+                    const identity = pendingDistinctId
+                    if (generation !== startGeneration || !identity || !validDistinctId(identity)) {
+                      loadedClient.opt_out_capturing()
+                      loadedClient.reset(false)
+                      resolve(false)
+                      return
+                    }
                     loadedClient.opt_in_capturing()
-                    activeDistinctId = pendingDistinctId ?? distinctId
+                    activeDistinctId = identity
                     client = loadedClient
                     resolve(true)
                   },
@@ -129,6 +144,17 @@ export function createPostHogBrowserTelemetry(options: BrowserTelemetryOptions):
       pendingDistinctId = undefined
       activeDistinctId = undefined
       try {
+        client?.reset(false)
+      } catch {
+        // Client telemetry never changes product behavior.
+      }
+    },
+    async stop() {
+      generation += 1
+      pendingDistinctId = undefined
+      activeDistinctId = undefined
+      try {
+        client?.opt_out_capturing()
         client?.reset(false)
       } catch {
         // Client telemetry never changes product behavior.

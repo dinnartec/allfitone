@@ -4,6 +4,7 @@ import { resourceFromAttributes } from '@opentelemetry/resources'
 import {
   BatchLogRecordProcessor,
   LoggerProvider,
+  type LogRecordExporter,
   SimpleLogRecordProcessor,
 } from '@opentelemetry/sdk-logs'
 
@@ -15,21 +16,28 @@ export interface OperationalLogAdapter {
   shutdown(): Promise<void>
 }
 
-export function createPostHogOtlpLogs(options: {
+export interface OperationalLogOptions {
   apiKey?: string | undefined
+  exporterFactory?:
+    ((config: { url: string; headers: Record<string, string> }) => LogRecordExporter) | undefined
   host?: string | undefined
   immediate?: boolean
   schedule?: ((work: Promise<unknown>) => void) | undefined
   serviceName: 'allfit-api' | 'allfit-worker'
-}): OperationalLogAdapter {
+}
+
+export function createPostHogOtlpLogs(options: OperationalLogOptions): OperationalLogAdapter {
   const host = postHogUsHost(options.host)
   if (!options.apiKey || !host) return disabledAdapter()
   let provider: LoggerProvider
   try {
-    const exporter = new OTLPLogExporter({
+    const exporterConfig = {
       url: `${host}/i/v1/logs`,
       headers: { Authorization: `Bearer ${options.apiKey}` },
-    })
+    }
+    const exporter = options.exporterFactory
+      ? options.exporterFactory(exporterConfig)
+      : new OTLPLogExporter(exporterConfig)
     const processor = options.immediate
       ? new SimpleLogRecordProcessor({ exporter })
       : new BatchLogRecordProcessor({ exporter })

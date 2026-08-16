@@ -8,6 +8,7 @@ describe('public telemetry gates', () => {
       studio: process.env.ANALYTICS_STUDIO_CLIENT_ENABLED,
       space: process.env.ANALYTICS_SPACE_CLIENT_ENABLED,
       backoffice: process.env.ANALYTICS_BACKOFFICE_CLIENT_ENABLED,
+      vercelEnv: process.env.VERCEL_ENV,
     }
     process.env.API_PUBLIC_URL = 'https://api.example.test'
     process.env.STUDIO_WEB_URL = 'https://studio.example.test'
@@ -15,6 +16,7 @@ describe('public telemetry gates', () => {
     delete process.env.ANALYTICS_STUDIO_CLIENT_ENABLED
     process.env.ANALYTICS_SPACE_CLIENT_ENABLED = 'true'
     process.env.ANALYTICS_BACKOFFICE_CLIENT_ENABLED = 'false'
+    process.env.VERCEL_ENV = 'production'
 
     try {
       const app = createApp()
@@ -35,6 +37,7 @@ describe('public telemetry gates', () => {
       restore('ANALYTICS_STUDIO_CLIENT_ENABLED', previous.studio)
       restore('ANALYTICS_SPACE_CLIENT_ENABLED', previous.space)
       restore('ANALYTICS_BACKOFFICE_CLIENT_ENABLED', previous.backoffice)
+      restore('VERCEL_ENV', previous.vercelEnv)
     }
   })
 

@@ -4,6 +4,7 @@ import {
   analyticsIdentityForSurfaceFromEnvironment,
   analyticsIdentityFromEnvironment,
   deriveAnalyticsDistinctId,
+  telemetryEnvironmentFromRuntime,
 } from './node.js'
 
 const KEY = Buffer.alloc(32, 9).toString('base64')
@@ -51,6 +52,7 @@ describe('analytics pseudonyms', () => {
 
   test('returns no client identity while its surface gate is disabled', () => {
     const environment = {
+      VERCEL_ENV: 'production',
       ANALYTICS_PSEUDONYM_ACTIVE_VERSION: '1',
       ANALYTICS_PSEUDONYM_KEY_V1: KEY,
       ANALYTICS_STUDIO_CLIENT_ENABLED: 'false',
@@ -65,5 +67,36 @@ describe('analytics pseudonyms', () => {
       analyticsIdentityForSurfaceFromEnvironment('studio', 'issuer', 'subject', environment)
         .distinct_id,
     ).toMatch(/^a1_[A-Za-z0-9_-]{43}$/)
+  })
+
+  test('allows client identities only in production', () => {
+    const environment = {
+      VERCEL_ENV: 'preview',
+      NODE_ENV: 'production',
+      ANALYTICS_PSEUDONYM_ACTIVE_VERSION: '1',
+      ANALYTICS_PSEUDONYM_KEY_V1: KEY,
+      ANALYTICS_STUDIO_CLIENT_ENABLED: 'true',
+    }
+
+    expect(
+      analyticsIdentityForSurfaceFromEnvironment('studio', 'issuer', 'subject', environment),
+    ).toEqual({ distinct_id: null })
+  })
+})
+
+describe('telemetry runtime environments', () => {
+  test('gives Vercel environment precedence over NODE_ENV', () => {
+    expect(telemetryEnvironmentFromRuntime({ VERCEL_ENV: 'preview', NODE_ENV: 'production' })).toBe(
+      'preview',
+    )
+    expect(
+      telemetryEnvironmentFromRuntime({ VERCEL_ENV: 'development', NODE_ENV: 'production' }),
+    ).toBe('development')
+  })
+
+  test('falls back to production NODE_ENV and otherwise development', () => {
+    expect(telemetryEnvironmentFromRuntime({ NODE_ENV: 'production' })).toBe('production')
+    expect(telemetryEnvironmentFromRuntime({ NODE_ENV: 'test' })).toBe('development')
+    expect(telemetryEnvironmentFromRuntime({ VERCEL_ENV: 'unexpected' })).toBe('development')
   })
 })

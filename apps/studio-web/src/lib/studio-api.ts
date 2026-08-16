@@ -174,11 +174,15 @@ export const studioApi = {
     }),
 
   decideTeamInvitation: (body: TeamInvitationDecisionCreate, command: CommandHeaders) =>
-    request<TeamInvitationDecisionResult>('/studio/v1/invitations/decisions', {
-      method: 'POST',
-      headers: commandHeaders(command),
-      body: JSON.stringify(body),
-    }),
+    request<TeamInvitationDecisionResult>(
+      '/studio/v1/invitations/decisions',
+      {
+        method: 'POST',
+        headers: commandHeaders(command),
+        body: JSON.stringify(body),
+      },
+      telemetryContext(invitationDecisionFlowStep(body.decisions[0]?.decision)),
+    ),
 
   teamInvitations: (
     organizationId: string,
@@ -255,8 +259,16 @@ function uuidV7(): string {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
 }
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetchApi(path, init)
+interface RequestTelemetryContext {
+  flowStep?: 'invitation_accepted' | 'invitation_rejected'
+}
+
+async function request<T>(
+  path: string,
+  init: RequestInit = {},
+  telemetry: RequestTelemetryContext = {},
+): Promise<T> {
+  const response = await fetchApi(path, init, telemetry)
   if (!response.ok) throw await responseError(response)
   return (await response.json()) as T
 }
@@ -293,7 +305,11 @@ async function catalogRequest<T>(
   return payload
 }
 
-async function fetchApi(path: string, init: RequestInit = {}): Promise<Response> {
+async function fetchApi(
+  path: string,
+  init: RequestInit = {},
+  telemetry: RequestTelemetryContext = {},
+): Promise<Response> {
   const startedAt = performance.now()
   const method = requestMethod(init.method)
   const operation = studioOperation(path, method)
@@ -321,10 +337,23 @@ async function fetchApi(path: string, init: RequestInit = {}): Promise<Response>
         operation,
         method,
         durationMs: performance.now() - startedAt,
+        ...telemetry,
         ...(response ? { response } : {}),
       })
     }
   }
+}
+
+export function invitationDecisionFlowStep(
+  decision: string | undefined,
+): RequestTelemetryContext['flowStep'] {
+  if (decision === 'accepted') return 'invitation_accepted'
+  if (decision === 'rejected') return 'invitation_rejected'
+  return undefined
+}
+
+function telemetryContext(flowStep: RequestTelemetryContext['flowStep']): RequestTelemetryContext {
+  return flowStep ? { flowStep } : {}
 }
 
 function requestMethod(method: string | undefined): 'DELETE' | 'GET' | 'PATCH' | 'POST' | 'PUT' {

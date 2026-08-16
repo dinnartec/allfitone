@@ -564,6 +564,18 @@
   line-height: var(--afo-line-height-relaxed);
 }
 
+[data-analytics-notice-link] {
+  display: inline-flex;
+  min-height: 44px;
+  width: fit-content;
+  align-items: center;
+  color: var(--afo-color-text-accent);
+  font-size: var(--afo-font-size-sm);
+  font-weight: var(--afo-font-weight-semibold);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 [data-analytics-actions] {
   display: flex;
   flex-wrap: wrap;

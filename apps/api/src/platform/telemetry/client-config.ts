@@ -1,4 +1,5 @@
 import { TELEMETRY_NOTICE_VERSION } from '@allfitone/telemetry'
+import { telemetryEnvironmentFromRuntime } from '@allfitone/telemetry/node'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 
@@ -28,7 +29,9 @@ export function clientTelemetryConfigRoutes(surface: ClientSurface, allowedOrigi
   routes.get('/telemetry-config', (c) => {
     c.header('Cache-Control', 'public, max-age=300')
     return c.json({
-      enabled: process.env[ENABLED_ENVIRONMENT_VARIABLE[surface]] === 'true',
+      enabled:
+        telemetryEnvironmentFromRuntime() === 'production' &&
+        process.env[ENABLED_ENVIRONMENT_VARIABLE[surface]] === 'true',
       notice_version: TELEMETRY_NOTICE_VERSION,
     })
   })

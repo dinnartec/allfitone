@@ -2,6 +2,7 @@
 
 import {
   TELEMETRY_NOTICE_VERSION,
+  createClientTelemetryRuntime,
   type AnalyticsConsentRecord,
   type ClientOperation,
   type TelemetryEnvironment,
@@ -35,10 +36,13 @@ const SERVER_STATE: BackofficeTelemetryState = {
 }
 let initialized = false
 let distinctId: string | null = null
-let startInFlight: Promise<void> | undefined
-let gateCache: { enabled: boolean; expiresAt: number } | undefined
 const listeners = new Set<() => void>()
-const pendingEvents: TelemetryEvent[] = []
+const runtime = createClientTelemetryRuntime({
+  adapter: client,
+  gateUrl: `${API_URL}/backoffice/v1/telemetry-config`,
+  noticeVersion: TELEMETRY_NOTICE_VERSION,
+})
+runtime.subscribe(syncRuntimeState)
 
 export function initializeBackofficeTelemetry(): void {
   if (initialized || typeof window === 'undefined') return
@@ -46,7 +50,7 @@ export function initializeBackofficeTelemetry(): void {
   const denied = privacySignal()
   state = { ...state, privacySignalDenied: denied, decision: denied ? 'denied' : readConsent() }
   emit()
-  void maybeStart()
+  reconcileRuntime()
 }
 
 export function setBackofficeAnalyticsConsent(decision: 'denied' | 'granted'): void {
@@ -58,36 +62,23 @@ export function setBackofficeAnalyticsConsent(decision: 'denied' | 'granted'): v
       JSON.stringify({ decision: effectiveDecision, notice_version: TELEMETRY_NOTICE_VERSION }),
     )
   } catch {
-    // Storage failures remain fail-closed.
+    state = { ...state, active: false, decision: 'undecided' }
+    emit()
+    reconcileRuntime()
+    return
   }
   state = { ...state, active: false, decision: effectiveDecision }
-  if (effectiveDecision === 'denied') {
-    pendingEvents.length = 0
-    client.resetIdentity()
-  }
   emit()
-  void maybeStart()
+  reconcileRuntime()
 }
 
 export function setBackofficeTelemetryIdentity(value: string | null): void {
   distinctId = value
-  if (!value) {
-    pendingEvents.length = 0
-    client.resetIdentity()
-    state = { ...state, active: false }
-    emit()
-    return
-  }
-  client.identify(value)
-  void maybeStart()
+  reconcileRuntime()
 }
 
 export function captureBackofficeTelemetry(event: TelemetryEvent): void {
-  if (state.active) {
-    client.capture(event)
-    return
-  }
-  if (state.decision === 'granted' && pendingEvents.length < 20) pendingEvents.push(event)
+  runtime.capture(event)
 }
 
 export function backofficeTelemetryCommon() {
@@ -197,39 +188,18 @@ export function backofficeTelemetryServerSnapshot(): BackofficeTelemetryState {
   return SERVER_STATE
 }
 
-async function maybeStart(): Promise<void> {
-  if (state.decision !== 'granted' || state.privacySignalDenied || !distinctId || startInFlight)
-    return
-  const currentId = distinctId
-  startInFlight = (async () => {
-    if (!(await telemetryGate()) || state.decision !== 'granted' || distinctId !== currentId) return
-    const active = await client.start(currentId)
-    if (active && distinctId === currentId && state.decision === 'granted') {
-      state = { ...state, active: true }
-      emit()
-      for (const event of pendingEvents.splice(0)) client.capture(event)
-    }
-  })().finally(() => {
-    startInFlight = undefined
+function reconcileRuntime(): void {
+  runtime.reconcile({
+    allowed: state.decision === 'granted' && !state.privacySignalDenied,
+    distinctId,
   })
-  await startInFlight
 }
 
-async function telemetryGate(): Promise<boolean> {
-  if (gateCache && gateCache.expiresAt > Date.now()) return gateCache.enabled
-  try {
-    const response = await fetch(`${API_URL}/backoffice/v1/telemetry-config`, {
-      credentials: 'omit',
-    })
-    const value: unknown = response.ok ? await response.json() : null
-    const enabled =
-      isRecord(value) && value.enabled === true && value.notice_version === TELEMETRY_NOTICE_VERSION
-    gateCache = { enabled, expiresAt: Date.now() + 5 * 60_000 }
-    return enabled
-  } catch {
-    gateCache = { enabled: false, expiresAt: Date.now() + 5 * 60_000 }
-    return false
-  }
+function syncRuntimeState(): void {
+  const { active } = runtime.snapshot()
+  if (state.active === active) return
+  state = { ...state, active }
+  emit()
 }
 
 function readConsent(): BackofficeTelemetryState['decision'] {

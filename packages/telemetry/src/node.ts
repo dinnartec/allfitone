@@ -1,5 +1,7 @@
 import { createHmac } from 'node:crypto'
 
+import type { TelemetryEnvironment } from './index.js'
+
 export interface AnalyticsIdentity {
   distinct_id: string | null
 }
@@ -59,6 +61,25 @@ export function analyticsIdentityForSurfaceFromEnvironment(
   subject: string,
   environment: NodeJS.ProcessEnv = process.env,
 ): AnalyticsIdentity {
-  if (environment[CLIENT_GATE[surface]] !== 'true') return { distinct_id: null }
+  if (
+    telemetryEnvironmentFromRuntime(environment) !== 'production' ||
+    environment[CLIENT_GATE[surface]] !== 'true'
+  ) {
+    return { distinct_id: null }
+  }
   return analyticsIdentityFromEnvironment(issuer, subject, environment)
+}
+
+export function telemetryEnvironmentFromRuntime(
+  environment: NodeJS.ProcessEnv = process.env,
+): TelemetryEnvironment {
+  const vercelEnvironment = environment.VERCEL_ENV
+  if (
+    vercelEnvironment === 'production' ||
+    vercelEnvironment === 'preview' ||
+    vercelEnvironment === 'development'
+  ) {
+    return vercelEnvironment
+  }
+  return environment.NODE_ENV === 'production' ? 'production' : 'development'
 }

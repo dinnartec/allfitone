@@ -1,4 +1,4 @@
-import { PostHog } from 'posthog-node'
+import { PostHog, type PostHogOptions } from 'posthog-node'
 
 import {
   sanitizeTelemetryEvent,
@@ -14,6 +14,7 @@ export interface ServerTelemetryAdapter {
 
 export interface ServerTelemetryOptions {
   apiKey?: string
+  fetch?: PostHogOptions['fetch']
   host?: string
   schedule?: (work: Promise<unknown>) => void
   immediate?: boolean
@@ -38,6 +39,7 @@ export function createPostHogServerTelemetry(
       disableGeoip: true,
       flushAt: options.immediate ? 1 : 20,
       flushInterval: options.immediate ? 0 : 10_000,
+      ...(options.fetch ? { fetch: options.fetch } : {}),
       before_send: (message) => {
         const sanitized = sanitizeTelemetryProviderEvent({
           event: message?.event,

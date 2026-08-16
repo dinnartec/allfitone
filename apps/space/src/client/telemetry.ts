@@ -1,5 +1,6 @@
 import {
   TELEMETRY_NOTICE_VERSION,
+  createClientTelemetryRuntime,
   type AnalyticsConsentRecord,
   type TelemetryEnvironment,
   type TelemetryEvent,
@@ -25,10 +26,13 @@ export interface SpaceTelemetryState {
 let state: SpaceTelemetryState = { active: false, decision: 'undecided' }
 let initialized = false
 let distinctId: string | null = null
-let startInFlight: Promise<void> | undefined
-let gateCache: { enabled: boolean; expiresAt: number } | undefined
 const listeners = new Set<() => void>()
-const pendingEvents: TelemetryEvent[] = []
+const runtime = createClientTelemetryRuntime({
+  adapter: client,
+  gateUrl: `${resolveBaseUrl()}/space/v1/telemetry-config`,
+  noticeVersion: TELEMETRY_NOTICE_VERSION,
+})
+runtime.subscribe(syncRuntimeState)
 
 export async function initializeSpaceTelemetry(): Promise<void> {
   if (initialized) return
@@ -45,7 +49,7 @@ export async function initializeSpaceTelemetry(): Promise<void> {
     distinctId = null
   }
   emit()
-  await maybeStart()
+  reconcileRuntime()
 }
 
 export async function setSpaceAnalyticsConsent(decision: 'denied' | 'granted'): Promise<void> {
@@ -61,38 +65,17 @@ export async function setSpaceAnalyticsConsent(decision: 'denied' | 'granted'): 
     return
   }
   state = { ...state, active: false, decision }
-  if (decision === 'denied') {
-    pendingEvents.length = 0
-    client.resetIdentity()
-  }
   emit()
-  await maybeStart()
+  reconcileRuntime()
 }
 
-export async function setSpaceTelemetryIdentity(value: string | null): Promise<void> {
+export function setSpaceTelemetryIdentity(value: string | null): void {
   distinctId = validDistinctId(value) ? value : null
-  try {
-    if (distinctId) await SecureStore.setItemAsync(ANALYTICS_IDENTITY_KEY, distinctId)
-    else await SecureStore.deleteItemAsync(ANALYTICS_IDENTITY_KEY)
-  } catch {
-    distinctId = null
-  }
-  if (!distinctId) {
-    client.resetIdentity()
-    state = { ...state, active: false }
-    emit()
-    return
-  }
-  client.identify(distinctId)
-  await maybeStart()
+  reconcileRuntime()
 }
 
 export function captureSpaceTelemetry(event: TelemetryEvent): void {
-  if (state.active) {
-    client.capture(event)
-    return
-  }
-  if (state.decision === 'granted' && pendingEvents.length < 20) pendingEvents.push(event)
+  runtime.capture(event)
 }
 
 export function spaceTelemetryCommon() {
@@ -156,35 +139,15 @@ export function spaceTelemetrySnapshot(): SpaceTelemetryState {
   return state
 }
 
-async function maybeStart(): Promise<void> {
-  if (state.decision !== 'granted' || !distinctId || startInFlight) return
-  const currentId = distinctId
-  startInFlight = (async () => {
-    if (!(await telemetryGate()) || state.decision !== 'granted' || distinctId !== currentId) return
-    const active = await client.start(currentId)
-    if (!active || state.decision !== 'granted' || distinctId !== currentId) return
-    state = { ...state, active: true }
-    emit()
-    for (const event of pendingEvents.splice(0)) client.capture(event)
-  })().finally(() => {
-    startInFlight = undefined
-  })
-  await startInFlight
+function reconcileRuntime(): void {
+  runtime.reconcile({ allowed: state.decision === 'granted', distinctId })
 }
 
-async function telemetryGate(): Promise<boolean> {
-  if (gateCache && gateCache.expiresAt > Date.now()) return gateCache.enabled
-  try {
-    const response = await fetch(`${resolveBaseUrl()}/space/v1/telemetry-config`)
-    const value: unknown = response.ok ? await response.json() : null
-    const enabled =
-      isRecord(value) && value.enabled === true && value.notice_version === TELEMETRY_NOTICE_VERSION
-    gateCache = { enabled, expiresAt: Date.now() + 5 * 60_000 }
-    return enabled
-  } catch {
-    gateCache = { enabled: false, expiresAt: Date.now() + 5 * 60_000 }
-    return false
-  }
+function syncRuntimeState(): void {
+  const { active } = runtime.snapshot()
+  if (state.active === active) return
+  state = { ...state, active }
+  emit()
 }
 
 function resolveBaseUrl(): string {

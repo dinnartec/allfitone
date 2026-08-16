@@ -7,6 +7,16 @@
  */
 
 export const TELEMETRY_NOTICE_VERSION = 'analytics-v1' as const
+export const ANALYTICS_PRIVACY_NOTICE_URL = 'https://www.allfit.one/privacy/analytics' as const
+
+export {
+  createClientTelemetryRuntime,
+  type ClientTelemetryAdapter,
+  type ClientTelemetryRuntime,
+  type ClientTelemetryRuntimeOptions,
+  type ClientTelemetryRuntimeScheduler,
+  type ClientTelemetryRuntimeState,
+} from './client-runtime.js'
 
 export type TelemetryEnvironment = 'development' | 'preview' | 'production'
 export type TelemetrySurface = 'backoffice' | 'space' | 'studio' | 'system'

@@ -1,10 +1,10 @@
 import { Button } from '@allfitone/react-native/button'
 import { Text } from '@allfitone/react-native/text'
 import { useTheme } from '@allfitone/react-native/theme'
-import type { TelemetryScreen } from '@allfitone/telemetry'
+import { ANALYTICS_PRIVACY_NOTICE_URL, type TelemetryScreen } from '@allfitone/telemetry'
 import { usePathname } from 'expo-router'
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
-import { StyleSheet, View } from 'react-native'
+import { Linking, StyleSheet, View } from 'react-native'
 
 import {
   captureSpaceTelemetry,
@@ -76,6 +76,13 @@ export function AnalyticsControls() {
             Mide rendimiento y uso con un seudónimo. Nunca capturamos contenido, nombres, correos ni
             datos de salud.
           </Text>
+          <Button
+            label="Leer el aviso completo"
+            variant="secondary"
+            onPress={() => {
+              void Linking.openURL(ANALYTICS_PRIVACY_NOTICE_URL)
+            }}
+          />
           <View style={styles.actions}>
             <Button
               label="Permitir analítica"

@@ -32,12 +32,7 @@ import Constants from 'expo-constants'
 
 import type { AllfitV1Schemas } from '@allfitone/contracts'
 
-import {
-  captureSpaceApiRequest,
-  captureSpaceTelemetry,
-  setSpaceTelemetryIdentity,
-  spaceTelemetryCommon,
-} from './telemetry'
+import { captureSpaceApiRequest, captureSpaceTelemetry, spaceTelemetryCommon } from './telemetry'
 
 export type RegistrationAccepted = AllfitV1Schemas['SpaceRegistrationAccepted']
 export type SessionTokens = AllfitV1Schemas['SpaceSessionTokens']
@@ -160,7 +155,6 @@ export async function verifyRegistration(
     { email, password, code },
     'space.auth.registration_verification',
   )
-  await setSpaceTelemetryIdentity(result.analytics.distinct_id)
   captureSpaceTelemetry({
     event: 'product.flow_step.completed.v1',
     properties: {

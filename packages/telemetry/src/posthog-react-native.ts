@@ -10,6 +10,7 @@ import { postHogUsHost } from './posthog-host.js'
 
 export interface ReactNativeTelemetry extends TelemetryPort {
   start(distinctId: string): Promise<boolean>
+  stop(): Promise<void>
 }
 
 export function createPostHogReactNativeTelemetry(options: {
@@ -20,20 +21,35 @@ export function createPostHogReactNativeTelemetry(options: {
   let starting: Promise<boolean> | undefined
   let pendingDistinctId: string | undefined
   let activeDistinctId: string | undefined
+  let generation = 0
 
   const start = (distinctId: string): Promise<boolean> => {
-    pendingDistinctId = distinctId
     if (!validDistinctId(distinctId)) return Promise.resolve(false)
-    if (client && activeDistinctId === distinctId) return Promise.resolve(true)
-    if (starting) return starting.then(() => start(distinctId))
+    pendingDistinctId = distinctId
+    if (client && activeDistinctId === distinctId) {
+      return client
+        .optIn()
+        .then(() => true)
+        .catch(() => false)
+    }
+    const requestedGeneration = generation
+    if (starting) {
+      return starting.then(() =>
+        generation === requestedGeneration && pendingDistinctId === distinctId
+          ? start(distinctId)
+          : false,
+      )
+    }
 
     const host = postHogUsHost(options.host)
     if (!options.apiKey || !host) return Promise.resolve(false)
+    const startGeneration = generation
     const previousClient = client
     client = undefined
     activeDistinctId = undefined
     starting = (async () => {
       await previousClient?._shutdown(1_000).catch(() => undefined)
+      if (generation !== startGeneration || pendingDistinctId !== distinctId) return false
       const { PostHog: PostHogClient } = await import('posthog-react-native')
       const identity = pendingDistinctId
       if (!identity || !validDistinctId(identity)) return false
@@ -79,7 +95,8 @@ export function createPostHogReactNativeTelemetry(options: {
         instance.ready().then(() => true),
         new Promise<false>((resolve) => setTimeout(() => resolve(false), 5_000)),
       ])
-      if (!ready || pendingDistinctId !== identity) {
+      if (!ready || generation !== startGeneration || pendingDistinctId !== identity) {
+        await instance.optOut().catch(() => undefined)
         await instance._shutdown(1_000).catch(() => undefined)
         return false
       }
@@ -114,17 +131,28 @@ export function createPostHogReactNativeTelemetry(options: {
       if (client && activeDistinctId !== distinctId) void start(distinctId)
     },
     resetIdentity() {
-      pendingDistinctId = undefined
-      activeDistinctId = undefined
-      try {
-        client?.reset()
-      } catch {
-        // Mobile telemetry never changes product behavior.
-      }
+      void stop()
     },
+    stop,
   }
 
   return adapter
+
+  async function stop(): Promise<void> {
+    generation += 1
+    pendingDistinctId = undefined
+    activeDistinctId = undefined
+    const currentClient = client
+    client = undefined
+    if (!currentClient) return
+    await currentClient.optOut().catch(() => undefined)
+    try {
+      currentClient.reset()
+    } catch {
+      // Mobile telemetry never changes product behavior.
+    }
+    await currentClient._shutdown(1_000).catch(() => undefined)
+  }
 }
 
 function validDistinctId(value: string): boolean {
