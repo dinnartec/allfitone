@@ -2,6 +2,24 @@
 
 import { Alert, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
 import { Button } from '@allfitone/react/components/button'
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@allfitone/react/components/empty'
+import {
+  SetupPanel,
+  SetupPanelActions,
+  SetupPanelContent,
+  SetupPanelDescription,
+  SetupPanelEyebrow,
+  SetupPanelIntro,
+  SetupPanelNote,
+  SetupPanelTitle,
+} from '@allfitone/react/components/setup-shell'
+import { FoundationIcon } from '@allfitone/react/icons'
 import { useState } from 'react'
 
 import { StudioFrame } from './studio-frame'
@@ -31,29 +49,35 @@ export function InvitationWaiting({ onCheck }: { onCheck: () => Promise<void> })
 
   return (
     <StudioFrame step="space" showLogout={false}>
-      <article data-studio-panel="waiting">
-        <div data-studio-panel-intro>
-          <p data-studio-eyebrow>Esperando una invitación</p>
-          <h1>Tu espacio puede llegar después.</h1>
-          <p>
+      <SetupPanel>
+        <SetupPanelIntro>
+          <SetupPanelEyebrow>Esperando una invitación</SetupPanelEyebrow>
+          <SetupPanelTitle>Tu espacio puede llegar después.</SetupPanelTitle>
+          <SetupPanelDescription>
             No crearemos una organización ni una membresía mientras esperas. Cuando un equipo te
             incorpore, Studio te llevará a ese espacio.
-          </p>
-          <div data-studio-signal-note>
-            <span aria-hidden="true">↻</span>
+          </SetupPanelDescription>
+          <SetupPanelNote>
+            <FoundationIcon name="activity" decorative />
             <p>
               Las membresías se consultan de nuevo solo cuando tú lo pides o cuando vuelves a
               entrar.
             </p>
-          </div>
-        </div>
+          </SetupPanelNote>
+        </SetupPanelIntro>
 
-        <div data-invitation-waiting>
-          <div data-invitation-status role="status">
-            <span>Estado actual</span>
-            <strong>Sin membresías activas</strong>
-            <p>Puedes cerrar esta sesión con tranquilidad y volver desde el enlace de acceso.</p>
-          </div>
+        <SetupPanelContent data-invitation-waiting>
+          <Empty role="status">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <FoundationIcon name="organization" decorative />
+              </EmptyMedia>
+              <EmptyTitle>Sin membresías activas</EmptyTitle>
+              <EmptyDescription>
+                Puedes cerrar esta sesión con tranquilidad y volver desde el enlace de acceso.
+              </EmptyDescription>
+            </EmptyHeader>
+          </Empty>
 
           {error ? (
             <Alert variant="warning" live="polite">
@@ -62,14 +86,14 @@ export function InvitationWaiting({ onCheck }: { onCheck: () => Promise<void> })
             </Alert>
           ) : null}
 
-          <div data-invitation-actions>
+          <SetupPanelActions>
             <Button size="lg" onClick={() => void checkAgain()} disabled={checking}>
               {checking ? 'Comprobando…' : 'Comprobar de nuevo'}
             </Button>
             <LogoutForm size="lg" variant="outline" disabled={checking} />
-          </div>
-        </div>
-      </article>
+          </SetupPanelActions>
+        </SetupPanelContent>
+      </SetupPanel>
     </StudioFrame>
   )
 }

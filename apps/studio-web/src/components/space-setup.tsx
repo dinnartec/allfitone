@@ -3,14 +3,32 @@
 import { Alert, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
 import { Button } from '@allfitone/react/components/button'
 import {
+  ChoiceCard,
+  ChoiceCardAction,
+  ChoiceCardDescription,
+  ChoiceCardEyebrow,
+  ChoiceCardTitle,
+} from '@allfitone/react/components/choice-card'
+import {
   Field,
   FieldDescription,
   FieldError,
   FieldGroup,
   FieldLabel,
+  FieldLegend,
+  FieldSet,
 } from '@allfitone/react/components/field'
 import { Input } from '@allfitone/react/components/input'
 import { RadioGroup, RadioGroupItem } from '@allfitone/react/components/radio-group'
+import {
+  SetupPanel,
+  SetupPanelActions,
+  SetupPanelContent,
+  SetupPanelDescription,
+  SetupPanelEyebrow,
+  SetupPanelIntro,
+  SetupPanelTitle,
+} from '@allfitone/react/components/setup-shell'
 import {
   Select,
   SelectContent,
@@ -60,35 +78,41 @@ export function SpaceSetup({
           onSessionExpired={onSessionExpired}
         />
       ) : (
-        <article data-studio-panel="choice">
-          <div data-studio-panel-intro>
-            <p data-studio-eyebrow>Elige cómo empezar</p>
-            <h1>¿Cómo trabajas hoy?</h1>
-            <p>Elige la estructura que mejor representa tu trabajo. Podrás ampliarla después.</p>
-          </div>
-          <div data-studio-choice-grid>
-            <button type="button" data-studio-choice onClick={() => setMode('individual')}>
-              <span data-choice-kicker>Para mí</span>
-              <strong>Trabajo por mi cuenta</strong>
-              <span>Crea tu espacio profesional. Tú quedarás como responsable y propietario.</span>
-              <span data-choice-action>Crear mi espacio →</span>
-            </button>
-            <button type="button" data-studio-choice onClick={() => setMode('team')}>
-              <span data-choice-kicker>Para un equipo</span>
-              <strong>Tengo un equipo o centro</strong>
-              <span>Configura un gimnasio, estudio u otro espacio para tu equipo.</span>
-              <span data-choice-action>Crear un espacio de equipo →</span>
-            </button>
-            <button type="button" data-studio-choice="waiting" onClick={onWait}>
-              <span data-choice-kicker>Más adelante</span>
-              <strong>Esperar una invitación</strong>
-              <span>
+        <SetupPanel>
+          <SetupPanelIntro>
+            <SetupPanelEyebrow>Elige cómo empezar</SetupPanelEyebrow>
+            <SetupPanelTitle>¿Cómo trabajas hoy?</SetupPanelTitle>
+            <SetupPanelDescription>
+              Elige la estructura que mejor representa tu trabajo. Podrás ampliarla después.
+            </SetupPanelDescription>
+          </SetupPanelIntro>
+          <SetupPanelContent data-studio-choice-grid>
+            <ChoiceCard onClick={() => setMode('individual')}>
+              <ChoiceCardEyebrow>Para mí</ChoiceCardEyebrow>
+              <ChoiceCardTitle>Trabajo por mi cuenta</ChoiceCardTitle>
+              <ChoiceCardDescription>
+                Crea tu espacio profesional. Tú quedarás como responsable y propietario.
+              </ChoiceCardDescription>
+              <ChoiceCardAction>Crear mi espacio</ChoiceCardAction>
+            </ChoiceCard>
+            <ChoiceCard onClick={() => setMode('team')}>
+              <ChoiceCardEyebrow>Para un equipo</ChoiceCardEyebrow>
+              <ChoiceCardTitle>Tengo un equipo o centro</ChoiceCardTitle>
+              <ChoiceCardDescription>
+                Configura un gimnasio, estudio u otro espacio para tu equipo.
+              </ChoiceCardDescription>
+              <ChoiceCardAction>Crear un espacio de equipo</ChoiceCardAction>
+            </ChoiceCard>
+            <ChoiceCard variant="muted" onClick={onWait}>
+              <ChoiceCardEyebrow>Más adelante</ChoiceCardEyebrow>
+              <ChoiceCardTitle>Esperar una invitación</ChoiceCardTitle>
+              <ChoiceCardDescription>
                 No tienes que crear un espacio ahora. Vuelve cuando un equipo te haya invitado.
-              </span>
-              <span data-choice-action>Esperar una invitación →</span>
-            </button>
-          </div>
-        </article>
+              </ChoiceCardDescription>
+              <ChoiceCardAction>Esperar una invitación</ChoiceCardAction>
+            </ChoiceCard>
+          </SetupPanelContent>
+        </SetupPanel>
       )}
     </StudioFrame>
   )
@@ -166,124 +190,128 @@ function SpaceForm({
   }
 
   return (
-    <article data-studio-panel="space-form">
-      <div data-studio-panel-intro>
-        <p data-studio-eyebrow>
+    <SetupPanel>
+      <SetupPanelIntro>
+        <SetupPanelEyebrow>
           {mode === 'individual' ? 'Profesional independiente' : 'Equipo o centro'}
-        </p>
-        <h1>
+        </SetupPanelEyebrow>
+        <SetupPanelTitle>
           {mode === 'individual' ? 'Dale nombre a tu espacio.' : 'Dale identidad a tu espacio.'}
-        </h1>
-        <p>Al crearlo, quedará activo y tú serás su propietario.</p>
-      </div>
+        </SetupPanelTitle>
+        <SetupPanelDescription>
+          Al crearlo, quedará activo y tú serás su propietario.
+        </SetupPanelDescription>
+      </SetupPanelIntro>
 
-      <form data-studio-form onSubmit={submit}>
-        <FieldGroup>
-          <Field>
-            <FieldLabel htmlFor="organization-name">Nombre visible</FieldLabel>
-            <Input
-              id="organization-name"
-              name="organizationName"
-              maxLength={120}
-              value={displayName}
-              onChange={(event) => setDisplayName(event.target.value)}
-              required
-            />
-            <FieldDescription>Así reconocerás el espacio dentro de Studio.</FieldDescription>
-          </Field>
+      <SetupPanelContent>
+        <form data-studio-form onSubmit={submit}>
+          <FieldGroup>
+            <Field>
+              <FieldLabel htmlFor="organization-name">Nombre visible</FieldLabel>
+              <Input
+                id="organization-name"
+                name="organizationName"
+                maxLength={120}
+                value={displayName}
+                onChange={(event) => setDisplayName(event.target.value)}
+                required
+              />
+              <FieldDescription>Así reconocerás el espacio dentro de Studio.</FieldDescription>
+            </Field>
 
-          {mode === 'team' ? (
-            <>
-              <Field>
-                <FieldLabel htmlFor="organization-type">Tipo de organización</FieldLabel>
-                <Select
-                  value={typeCode}
-                  onValueChange={(value) => {
-                    if (value !== null) setTypeCode(value)
-                  }}
-                  items={organizationTypes.map((type) => ({
-                    label: type.name,
-                    value: type.code,
-                  }))}
-                >
-                  <SelectTrigger id="organization-type" data-studio-select-trigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent align="start">
-                    {organizationTypes.map((type) => (
-                      <SelectItem key={type.code} value={type.code}>
-                        {type.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Field>
-
-              <fieldset data-studio-responsible-group>
-                <legend>Parte responsable</legend>
-                <RadioGroup
-                  value={responsibleKind}
-                  onValueChange={(value) => {
-                    if (value === 'natural_person' || value === 'legal_entity') {
-                      setResponsibleKind(value)
-                    }
-                  }}
-                  aria-label="Parte responsable"
-                  data-studio-responsible-options
-                >
-                  <label data-studio-responsible-option>
-                    <RadioGroupItem value="natural_person" />
-                    <span>Persona natural</span>
-                  </label>
-                  <label data-studio-responsible-option>
-                    <RadioGroupItem value="legal_entity" />
-                    <span>Entidad</span>
-                  </label>
-                </RadioGroup>
-                <FieldDescription>
-                  Si eliges persona natural, tú quedarás como responsable.
-                </FieldDescription>
-              </fieldset>
-
-              {responsibleKind === 'legal_entity' ? (
+            {mode === 'team' ? (
+              <>
                 <Field>
-                  <FieldLabel htmlFor="responsible-name">Nombre legal de la entidad</FieldLabel>
-                  <Input
-                    id="responsible-name"
-                    name="responsibleName"
-                    maxLength={160}
-                    value={responsibleName}
-                    onChange={(event) => setResponsibleName(event.target.value)}
-                    required
-                  />
+                  <FieldLabel htmlFor="organization-type">Tipo de organización</FieldLabel>
+                  <Select
+                    value={typeCode}
+                    onValueChange={(value) => {
+                      if (value !== null) setTypeCode(value)
+                    }}
+                    items={organizationTypes.map((type) => ({
+                      label: type.name,
+                      value: type.code,
+                    }))}
+                  >
+                    <SelectTrigger id="organization-type" data-studio-select-trigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent align="start">
+                      {organizationTypes.map((type) => (
+                        <SelectItem key={type.code} value={type.code}>
+                          {type.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </Field>
-              ) : null}
-            </>
-          ) : (
-            <Alert variant="info">
-              <AlertTitle>Responsable natural</AlertTitle>
-              <AlertDescription>
-                Tu nombre quedará registrado como responsable de este espacio.
-              </AlertDescription>
-            </Alert>
-          )}
-        </FieldGroup>
 
-        {error ? <FieldError>{error}</FieldError> : null}
+                <FieldSet>
+                  <FieldLegend>Parte responsable</FieldLegend>
+                  <RadioGroup
+                    value={responsibleKind}
+                    onValueChange={(value) => {
+                      if (value === 'natural_person' || value === 'legal_entity') {
+                        setResponsibleKind(value)
+                      }
+                    }}
+                    aria-label="Parte responsable"
+                    data-studio-responsible-options
+                  >
+                    <Field orientation="horizontal">
+                      <RadioGroupItem id="responsible-natural-person" value="natural_person" />
+                      <FieldLabel htmlFor="responsible-natural-person">Persona natural</FieldLabel>
+                    </Field>
+                    <Field orientation="horizontal">
+                      <RadioGroupItem id="responsible-legal-entity" value="legal_entity" />
+                      <FieldLabel htmlFor="responsible-legal-entity">Entidad</FieldLabel>
+                    </Field>
+                  </RadioGroup>
+                  <FieldDescription>
+                    Si eliges persona natural, tú quedarás como responsable.
+                  </FieldDescription>
+                </FieldSet>
 
-        <div data-studio-form-actions>
-          <Button type="submit" size="lg" disabled={!valid || submitting}>
-            {submitting
-              ? 'Creando…'
-              : mode === 'individual'
-                ? 'Crear mi espacio'
-                : 'Crear el espacio'}
-          </Button>
-          <Button type="button" variant="ghost" onClick={onBack} disabled={submitting}>
-            Volver
-          </Button>
-        </div>
-      </form>
-    </article>
+                {responsibleKind === 'legal_entity' ? (
+                  <Field>
+                    <FieldLabel htmlFor="responsible-name">Nombre legal de la entidad</FieldLabel>
+                    <Input
+                      id="responsible-name"
+                      name="responsibleName"
+                      maxLength={160}
+                      value={responsibleName}
+                      onChange={(event) => setResponsibleName(event.target.value)}
+                      required
+                    />
+                  </Field>
+                ) : null}
+              </>
+            ) : (
+              <Alert variant="info">
+                <AlertTitle>Responsable natural</AlertTitle>
+                <AlertDescription>
+                  Tu nombre quedará registrado como responsable de este espacio.
+                </AlertDescription>
+              </Alert>
+            )}
+          </FieldGroup>
+
+          {error ? <FieldError>{error}</FieldError> : null}
+
+          <SetupPanelActions>
+            <Button type="submit" size="lg" disabled={!valid || submitting}>
+              {submitting
+                ? 'Creando…'
+                : mode === 'individual'
+                  ? 'Crear mi espacio'
+                  : 'Crear el espacio'}
+            </Button>
+            <Button type="button" variant="ghost" onClick={onBack} disabled={submitting}>
+              Volver
+            </Button>
+          </SetupPanelActions>
+        </form>
+      </SetupPanelContent>
+    </SetupPanel>
   )
 }

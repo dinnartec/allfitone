@@ -4,13 +4,31 @@ import { Alert, AlertDescription, AlertTitle } from '@allfitone/react/components
 import { Button } from '@allfitone/react/components/button'
 import { Checkbox } from '@allfitone/react/components/checkbox'
 import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@allfitone/react/components/card'
+import {
   Field,
-  FieldDescription,
   FieldError,
   FieldGroup,
   FieldLabel,
+  FieldLegend,
+  FieldSet,
 } from '@allfitone/react/components/field'
 import { Input } from '@allfitone/react/components/input'
+import {
+  SetupPanel,
+  SetupPanelActions,
+  SetupPanelContent,
+  SetupPanelDescription,
+  SetupPanelEyebrow,
+  SetupPanelIntro,
+  SetupPanelNote,
+  SetupPanelTitle,
+} from '@allfitone/react/components/setup-shell'
 import { useState, type FormEvent } from 'react'
 
 import { StudioFrame } from './studio-frame'
@@ -127,110 +145,124 @@ export function ActivationForm({
 
   return (
     <StudioFrame step="identity">
-      <article data-studio-panel="activation">
-        <div data-studio-panel-intro>
-          <p data-studio-eyebrow>Activación personal</p>
-          <h1>Confirma y deja tu identidad lista.</h1>
-          <p>
+      <SetupPanel>
+        <SetupPanelIntro>
+          <SetupPanelEyebrow>Activación personal</SetupPanelEyebrow>
+          <SetupPanelTitle>Confirma y deja tu identidad lista.</SetupPanelTitle>
+          <SetupPanelDescription>
             Tu nombre ya viene de tu cuenta. Solo tú puedes confirmar tu mayoría de edad y las
             aceptaciones.
-          </p>
-          <div data-studio-signal-note>
+          </SetupPanelDescription>
+          <SetupPanelNote>
             <span aria-hidden="true">18+</span>
             <p>Declaras ser mayor de edad. No pedimos ni guardamos tu fecha de nacimiento.</p>
-          </div>
-        </div>
+          </SetupPanelNote>
+        </SetupPanelIntro>
 
-        <form data-studio-form onSubmit={submit} noValidate>
-          <FieldGroup>
-            {identity.name ? (
-              <div data-studio-identity-summary>
-                <span>Nombre de tu cuenta</span>
-                <strong>{identity.name}</strong>
-                <p>Usaremos este nombre para crear tu identidad personal en Allfit One.</p>
-              </div>
-            ) : (
-              <div data-studio-field-grid>
-                <Field>
-                  <FieldLabel htmlFor="given-name">Nombres</FieldLabel>
-                  <Input
-                    id="given-name"
-                    name="givenName"
-                    autoComplete="given-name"
-                    maxLength={100}
-                    value={givenName}
-                    onChange={(event) => setGivenName(event.target.value)}
-                    required
+        <SetupPanelContent>
+          <form data-studio-form onSubmit={submit} noValidate>
+            <FieldGroup>
+              {identity.name ? (
+                <Card data-studio-identity-summary>
+                  <CardHeader>
+                    <CardTitle>Nombre de tu cuenta</CardTitle>
+                    <CardDescription>
+                      Usaremos este nombre para crear tu identidad personal en Allfit One.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <strong>{identity.name}</strong>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div data-studio-field-grid>
+                  <Field>
+                    <FieldLabel htmlFor="given-name">Nombres</FieldLabel>
+                    <Input
+                      id="given-name"
+                      name="givenName"
+                      autoComplete="given-name"
+                      maxLength={100}
+                      value={givenName}
+                      onChange={(event) => setGivenName(event.target.value)}
+                      required
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="family-name">Apellidos</FieldLabel>
+                    <Input
+                      id="family-name"
+                      name="familyName"
+                      autoComplete="family-name"
+                      maxLength={100}
+                      value={familyName}
+                      onChange={(event) => setFamilyName(event.target.value)}
+                      required
+                    />
+                  </Field>
+                </div>
+              )}
+
+              <FieldSet>
+                <FieldLegend>Confirmaciones obligatorias</FieldLegend>
+                <Field orientation="horizontal">
+                  <Checkbox
+                    id="adult-confirmation"
+                    checked={adult}
+                    onCheckedChange={(checked) => setAdult(checked === true)}
                   />
+                  <FieldLabel htmlFor="adult-confirmation">
+                    Declaro que tengo al menos 18 años y estoy en Colombia.
+                  </FieldLabel>
                 </Field>
-                <Field>
-                  <FieldLabel htmlFor="family-name">Apellidos</FieldLabel>
-                  <Input
-                    id="family-name"
-                    name="familyName"
-                    autoComplete="family-name"
-                    maxLength={100}
-                    value={familyName}
-                    onChange={(event) => setFamilyName(event.target.value)}
-                    required
+                <Field orientation="horizontal">
+                  <Checkbox
+                    id="terms-confirmation"
+                    checked={terms}
+                    onCheckedChange={(checked) => setTerms(checked === true)}
                   />
+                  <FieldLabel htmlFor="terms-confirmation">
+                    Acepto los Términos de la plataforma.
+                  </FieldLabel>
                 </Field>
-              </div>
-            )}
+                <Field orientation="horizontal">
+                  <Checkbox
+                    id="privacy-confirmation"
+                    checked={privacy}
+                    onCheckedChange={(checked) => setPrivacy(checked === true)}
+                  />
+                  <FieldLabel htmlFor="privacy-confirmation">
+                    Acepto el Aviso de privacidad.
+                  </FieldLabel>
+                </Field>
+              </FieldSet>
+            </FieldGroup>
 
-            <fieldset data-studio-check-group>
-              <legend>Confirmaciones obligatorias</legend>
-              <label data-studio-check>
-                <Checkbox
-                  checked={adult}
-                  onCheckedChange={(checked) => setAdult(checked === true)}
-                />
-                <span>Declaro que tengo al menos 18 años y estoy en Colombia.</span>
-              </label>
-              <label data-studio-check>
-                <Checkbox
-                  checked={terms}
-                  onCheckedChange={(checked) => setTerms(checked === true)}
-                />
-                <span>Acepto los Términos de la plataforma, versión 1.</span>
-              </label>
-              <label data-studio-check>
-                <Checkbox
-                  checked={privacy}
-                  onCheckedChange={(checked) => setPrivacy(checked === true)}
-                />
-                <span>Acepto el Aviso de privacidad, versión 1.</span>
-              </label>
-              <FieldDescription>
-                Registraremos ambas aceptaciones junto con su versión.
-              </FieldDescription>
-            </fieldset>
-          </FieldGroup>
+            {expired ? (
+              <Alert variant="warning" live="polite">
+                <AlertTitle>La activación venció</AlertTitle>
+                <AlertDescription>
+                  Abre un nuevo intento para continuar sin volver a iniciar sesión.
+                </AlertDescription>
+                <Button type="button" variant="outline" onClick={retryAttempt} disabled={retrying}>
+                  {retrying ? 'Abriendo…' : 'Reintentar activación'}
+                </Button>
+              </Alert>
+            ) : null}
 
-          {expired ? (
-            <Alert variant="warning" live="polite">
-              <AlertTitle>La activación venció</AlertTitle>
-              <AlertDescription>
-                Abre un nuevo intento para continuar sin volver a iniciar sesión.
-              </AlertDescription>
-              <Button type="button" variant="outline" onClick={retryAttempt} disabled={retrying}>
-                {retrying ? 'Abriendo…' : 'Reintentar activación'}
+            {error ? <FieldError>{error}</FieldError> : null}
+
+            <SetupPanelActions>
+              <Button type="submit" size="lg" disabled={!valid || submitting || expired}>
+                {submitting ? 'Confirmando…' : 'Confirmar mi identidad'}
               </Button>
-            </Alert>
-          ) : null}
-
-          {error ? <FieldError>{error}</FieldError> : null}
-
-          <div data-studio-form-actions>
-            <Button type="submit" size="lg" disabled={!valid || submitting || expired}>
-              {submitting ? 'Confirmando…' : 'Confirmar mi identidad'}
-            </Button>
-            <p aria-live="polite">
-              {submitting ? 'Guardando la declaración y las aceptaciones…' : 'Paso 1 de 3'}
-            </p>
-          </div>
-        </form>
-      </article>
+              <p aria-live="polite">
+                {submitting ? 'Guardando la declaración y las aceptaciones…' : 'Paso 1 de 3'}
+              </p>
+            </SetupPanelActions>
+          </form>
+        </SetupPanelContent>
+      </SetupPanel>
     </StudioFrame>
   )
 }

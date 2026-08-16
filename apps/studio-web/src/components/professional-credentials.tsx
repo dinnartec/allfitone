@@ -703,7 +703,7 @@ function normalizedCredential(value: ProfessionalCredentialWrite): ProfessionalC
 function credentialValidity(credential: ProfessionalCredential): string {
   if (!credential.issued_on && !credential.expires_on) return 'Sin fechas declaradas'
   if (credential.issued_on && credential.expires_on) {
-    return `${credential.issued_on} → ${credential.expires_on}`
+    return `${credential.issued_on} – ${credential.expires_on}`
   }
   if (credential.issued_on) return `Emitida el ${credential.issued_on}`
   return `Vigente hasta ${credential.expires_on}`
@@ -716,7 +716,7 @@ function verificationValidity(credential: ProfessionalCredential): string {
   const to = credential.verification.valid_to
     ? formatDateTime(credential.verification.valid_to)
     : 'Sin vencimiento'
-  return `${from} → ${to}`
+  return `${from} – ${to}`
 }
 
 function formatDateTime(value: string): string {

@@ -4,6 +4,14 @@ import { Alert, AlertDescription, AlertTitle } from '@allfitone/react/components
 import { Badge } from '@allfitone/react/components/badge'
 import { Button } from '@allfitone/react/components/button'
 import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@allfitone/react/components/card'
+import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
@@ -70,19 +78,18 @@ export function OrganizationRoleCatalog() {
         description={`Consulta para qué sirve cada rol antes de decidir cómo debe participar una persona en ${current.display_name}.`}
       />
 
-      <div data-role-catalog-summary>
-        <div>
-          <Badge variant="code">4 roles fijos</Badge>
-          <Badge variant="outline">Solo consulta</Badge>
-        </div>
-        <p>Desde esta pantalla no se cambian roles.</p>
-      </div>
+      <Alert variant="info">
+        <AlertTitle>Cuatro roles fijos, solo consulta</AlertTitle>
+        <AlertDescription>Desde esta pantalla no se cambian roles.</AlertDescription>
+      </Alert>
 
       {state.kind === 'loading' ? (
-        <div data-role-catalog-state role="status" aria-live="polite">
-          <Spinner label="Cargando roles y permisos" />
-          <p>Cargando roles y permisos…</p>
-        </div>
+        <Card>
+          <CardContent data-role-catalog-state>
+            <Spinner label="Cargando roles y permisos" />
+            <p>Cargando roles y permisos…</p>
+          </CardContent>
+        </Card>
       ) : null}
 
       {state.kind === 'forbidden' ? (
@@ -123,42 +130,45 @@ function RoleRegisterItem({ role }: { role: OrganizationRole }) {
   const policy = fitnessPolicy(role)
   return (
     <Collapsible open={open} onOpenChange={setOpen} data-role-card={role.code}>
-      <article data-role-register-item>
-        <header>
-          <div data-role-register-title>
-            <span data-role-code>{role.code}</span>
-            <div>
-              <h2>{role.name}</h2>
-              <p>{rolePurpose(role.code)}</p>
-            </div>
+      <Card data-role-register-item>
+        <CardHeader>
+          <CardTitle role="heading" aria-level={2}>
+            {role.name}
+          </CardTitle>
+          <CardDescription>{rolePurpose(role.code)}</CardDescription>
+          <CardAction>
+            <Badge variant="code">{role.code}</Badge>
+          </CardAction>
+        </CardHeader>
+
+        <CardContent data-role-card-body>
+          <Alert
+            variant={role.fitness_data_access_policy === 'not_granted_by_role' ? 'success' : 'info'}
+          >
+            <AlertTitle>{policy.summary}</AlertTitle>
+            <AlertDescription>{policy.detail}</AlertDescription>
+          </Alert>
+
+          <div data-role-disclosure>
+            <CollapsibleTrigger render={<Button variant="outline" size="sm" />}>
+              {open ? 'Ocultar capacidades' : 'Ver capacidades'}
+              <FoundationIcon name={open ? 'collapse' : 'expand'} decorative />
+            </CollapsibleTrigger>
+            <Badge variant="outline">{role.capabilities.length} capacidades</Badge>
           </div>
-          <Badge variant="code">{role.capabilities.length} capacidades</Badge>
-        </header>
 
-        <div data-fitness-boundary={role.fitness_data_access_policy}>
-          <FoundationIcon name="permissions" decorative />
-          <div>
-            <strong>{policy.summary}</strong>
-            <p>{policy.detail}</p>
-          </div>
-        </div>
-
-        <CollapsibleTrigger render={<Button variant="ghost" size="sm" />}>
-          {open ? 'Ocultar capacidades' : 'Ver capacidades'}
-          <FoundationIcon name={open ? 'collapse' : 'expand'} decorative />
-        </CollapsibleTrigger>
-
-        <CollapsibleContent>
-          <ul data-role-capability-list>
-            {role.capabilities.map((capability) => (
-              <li key={capability.code}>
-                <FoundationIcon name="check" size="sm" decorative />
-                <span>{capability.name}</span>
-              </li>
-            ))}
-          </ul>
-        </CollapsibleContent>
-      </article>
+          <CollapsibleContent>
+            <ul data-role-capability-list>
+              {role.capabilities.map((capability) => (
+                <li key={capability.code}>
+                  <FoundationIcon name="check" size="sm" decorative />
+                  <span>{capability.name}</span>
+                </li>
+              ))}
+            </ul>
+          </CollapsibleContent>
+        </CardContent>
+      </Card>
     </Collapsible>
   )
 }

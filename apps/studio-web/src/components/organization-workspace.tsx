@@ -12,7 +12,13 @@ import {
   CardHeader,
   CardTitle,
 } from '@allfitone/react/components/card'
-import { Empty, EmptyDescription, EmptyMedia, EmptyTitle } from '@allfitone/react/components/empty'
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@allfitone/react/components/empty'
 import { Skeleton } from '@allfitone/react/components/skeleton'
 import { StatStrip, StatStripItem } from '@allfitone/react/components/stat-strip'
 import { FoundationIcon } from '@allfitone/react/icons'
@@ -162,8 +168,8 @@ export function OrganizationWorkspace() {
       {status === 'ready' && overview.invitations && overview.invitations.attention.length > 0 ? (
         <Card data-overview-attention>
           <CardHeader>
-            <CardTitle>
-              <h2>Requiere atención</h2>
+            <CardTitle role="heading" aria-level={2}>
+              Requiere atención
             </CardTitle>
             <CardDescription>
               {overview.invitations.attention.length === 1
@@ -197,8 +203,8 @@ export function OrganizationWorkspace() {
       {overview.members || status === 'loading' ? (
         <Card data-overview-team>
           <CardHeader>
-            <CardTitle>
-              <h2>Equipo reciente</h2>
+            <CardTitle role="heading" aria-level={2}>
+              Equipo reciente
             </CardTitle>
             <CardDescription>
               Las últimas personas que se sumaron a la organización.
@@ -239,13 +245,15 @@ export function OrganizationWorkspace() {
               </ul>
             ) : (
               <Empty>
-                <EmptyMedia variant="icon">
-                  <FoundationIcon name="people" decorative />
-                </EmptyMedia>
-                <EmptyTitle>Trabajas en solitario por ahora</EmptyTitle>
-                <EmptyDescription>
-                  Cuando alguien acepte una invitación aparecerá aquí.
-                </EmptyDescription>
+                <EmptyHeader>
+                  <EmptyMedia variant="icon">
+                    <FoundationIcon name="people" decorative />
+                  </EmptyMedia>
+                  <EmptyTitle>Trabajas en solitario por ahora</EmptyTitle>
+                  <EmptyDescription>
+                    Cuando alguien acepte una invitación aparecerá aquí.
+                  </EmptyDescription>
+                </EmptyHeader>
               </Empty>
             )}
           </CardContent>
@@ -262,8 +270,8 @@ function OrientationPanel({ roles, teamPath }: { roles: Membership['roles']; tea
     <div data-organization-overview>
       <Card data-overview-orientation>
         <CardHeader>
-          <CardTitle>
-            <h2>Tu participación en esta organización</h2>
+          <CardTitle role="heading" aria-level={2}>
+            Tu participación en esta organización
           </CardTitle>
           <CardDescription>
             Tu rol define qué puedes hacer aquí. El acceso a datos fitness siempre exige además
