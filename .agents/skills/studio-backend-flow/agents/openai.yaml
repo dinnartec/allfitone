@@ -1,0 +1,7 @@
+interface:
+  display_name: 'Studio Backend Flow'
+  short_description: 'Orchestrate verified Studio backend delivery'
+  default_prompt: 'Use $studio-backend-flow to implement an Allfit Studio backend package from Linear through independent review and verified handoff.'
+
+policy:
+  allow_implicit_invocation: true

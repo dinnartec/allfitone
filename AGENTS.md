@@ -605,6 +605,35 @@ chronological across topics.
 
 ---
 
+## 17. Multi-agent delivery workflow
+
+The primary agent is the sole orchestrator and integration owner. For Allfit
+Studio backend delivery, use the repository skill `studio-backend-flow` and the
+project-scoped agents under `.codex/agents/`.
+
+- Run `studio_analyst` before implementing a bounded Studio backend domain
+  package.
+- Run `studio_implementer` only after the primary agent accepts the analyst's
+  bounded implementation brief.
+- Use only one workspace-writing subagent at a time in a worktree.
+- Read-only exploration, test inspection and review may run concurrently.
+- Never allow parallel writes to OpenAPI, migrations, RLS, generated types or the
+  same domain module.
+- Run `studio_reviewer` after implementation and before declaring a package
+  reviewable.
+- Run `studio_corrector` only for verified findings. After two correction/review
+  cycles, escalate unresolved findings instead of looping.
+- Only the primary agent may mutate Linear, and only when the user authorizes
+  external writes.
+- A BACK issue reaches `Done` only after its code is merged into `main`, required
+  checks are green and its contract is consumable by frontend.
+- Return a frontend handoff with endpoints, generated types, error states,
+  preconditions and newly unblocked FRONT issues.
+- Use separate Codex worktree chats for independent write streams; keep one
+  writer per worktree and reconcile shared contracts serially.
+
+---
+
 ## Open items
 
 Track these; they are known gaps, not oversights:
