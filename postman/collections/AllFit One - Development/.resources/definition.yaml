@@ -1,0 +1,11 @@
+$kind: collection
+id: 371c52ec-0811-47c2-9702-7e8e9b21a775
+name: "AllFit One — Development"
+description: |-
+  Colección de desarrollo para explorar y probar la API que está implementada actualmente.
+
+  Selecciona el entorno Local Development. Los IDs capturados se guardan como valores locales del entorno para poder enviar requests individualmente.
+
+  La especificación OpenAPI del workspace contiene también contratos futuros; esta colección incluye únicamente rutas montadas por la aplicación, más GET /health.
+
+  No compartas credenciales, cookies, códigos, tokens ni respuestas con datos reales.

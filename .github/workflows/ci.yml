@@ -159,21 +159,13 @@ jobs:
       - name: Install
         run: bun install --frozen-lockfile
 
-      - name: Validate Native Git artifacts and sensitive-data policy
+      - name: Validate the development collection
         run: bun run check:postman
 
-      - name: Lint Local Journeys
+      - name: Lint Development
         uses: postmanlabs/postman-cli-action@v1
         with:
-          command: 'collection lint "postman/collections/AllFit One - Local Journeys" --fail-severity warning'
-
-      - name: Lint Production Smoke
-        uses: postmanlabs/postman-cli-action@v1
-        with:
-          command: 'collection lint "postman/collections/AllFit One - Production Smoke" --fail-severity warning'
-
-      - name: Run smoke collection against the local fixture
-        run: bun run test:postman:smoke
+          command: 'collection lint "postman/collections/AllFit One - Development" --fail-severity warning'
 
   postman-publish:
     name: Publish Postman Cloud View
@@ -192,15 +184,8 @@ jobs:
       - name: Install
         run: bun install --frozen-lockfile
 
-      - name: Publish local resources without deleting cloud-only resources
+      - name: Publish the development workspace
         uses: postmanlabs/postman-cli-action@v1
         with:
           command: 'workspace push --yes'
           api-key: ${{ secrets.POSTMAN_API_KEY }}
-
-      - name: Sync the canonical spec to the contract collection
-        env:
-          POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
-          POSTMAN_CONTRACT_COLLECTION_UID: ${{ vars.POSTMAN_CONTRACT_COLLECTION_UID }}
-          POSTMAN_SPEC_ID: ${{ vars.POSTMAN_SPEC_ID }}
-        run: bun run sync:postman:contract

@@ -1,0 +1,43 @@
+$kind: http-request
+id: ba7cfc50-66a4-4302-9a56-58af2788f1c3
+description: |-
+  **GET /backoffice/v1/auth/attempt**
+
+  Contrato: Recover the non-terminal TOTP attempt from its HttpOnly cookie.
+
+  Usa únicamente datos sintéticos en el entorno local.
+url: "{{baseUrl}}/backoffice/v1/auth/attempt"
+method: GET
+headers:
+  "Origin": "{{backofficeOrigin}}"
+  "Accept": "application/json, application/problem+json"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status esperado: 200", () => pm.response.to.have.status(200));
+      const contentType = (pm.response.headers.get('Content-Type') || '').toLowerCase();
+      if (pm.response.code >= 400) {
+        pm.test('Los errores usan Problem Details', () => {
+          pm.expect(contentType).to.include('application/problem+json');
+          const problem = pm.response.json();
+          pm.expect(problem).to.have.property('type');
+          pm.expect(problem).to.have.property('title');
+          pm.expect(problem).to.have.property('status', pm.response.code);
+        });
+      }
+      const responseEtag = pm.response.headers.get('ETag');
+      if (responseEtag && pm.environment) pm.environment.set('etag', responseEtag);
+      if (contentType.includes('json') && pm.response.text()) {
+        const payload = pm.response.json();
+        const captures = { attempt_id: 'attemptId', attemptId: 'attemptId', credential_id: 'credentialId', credentialId: 'credentialId', organization_id: 'organizationId', organizationId: 'organizationId', invitation_id: 'invitationId', invitationId: 'invitationId', access_token: 'spaceAccessToken', accessToken: 'spaceAccessToken' };
+        const visit = (value) => {
+          if (!value || typeof value !== 'object') return;
+          for (const [key, child] of Object.entries(value)) {
+            if (captures[key] && typeof child === 'string' && pm.environment) pm.environment.set(captures[key], child);
+            visit(child);
+          }
+        };
+        visit(payload);
+      }
+    language: text/javascript
+order: 2000

@@ -1,0 +1,5 @@
+$kind: collection
+id: 77162dee-fee6-4f41-8f7b-2bf5372053d3
+description: |-
+  API de Studio. Los endpoints protegidos usan la cookie allfit_studio_session del cookie jar de Postman.
+order: 2000

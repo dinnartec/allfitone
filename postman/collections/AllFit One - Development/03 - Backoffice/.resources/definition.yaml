@@ -1,0 +1,5 @@
+$kind: collection
+id: c03f920b-3605-4b9b-b390-636aea3028cb
+description: |-
+  Autenticación AAL2 de Backoffice. Postman conserva las cookies temporales y de sesión en su cookie jar.
+order: 4000

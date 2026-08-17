@@ -1,0 +1,5 @@
+$kind: collection
+id: c835c7e4-5d8f-4efb-b08f-d35cb1a47c3c
+description: |-
+  Checks rápidos y endpoints públicos disponibles sin autenticación.
+order: 1000

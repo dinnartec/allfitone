@@ -1,0 +1,5 @@
+$kind: collection
+id: 28f274b3-3fae-4827-8fd1-752eb3957f71
+description: |-
+  Registro de Space. Usa valores locales del entorno; las credenciales no deben compartirse.
+order: 3000

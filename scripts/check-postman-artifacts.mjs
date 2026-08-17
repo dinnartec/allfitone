@@ -1,65 +1,50 @@
-import { readFile, readdir, stat } from 'node:fs/promises'
-import { resolve, relative } from 'node:path'
+import { readFile, readdir } from 'node:fs/promises'
+import { relative, resolve } from 'node:path'
 
 import { parse } from 'yaml'
 
 const ROOT = resolve(import.meta.dirname, '..')
 const POSTMAN_ROOT = resolve(ROOT, 'postman')
-const NATIVE_GIT_RESOURCES = resolve(ROOT, '.postman/resources.yaml')
+const COLLECTIONS_ROOT = resolve(POSTMAN_ROOT, 'collections')
+const COLLECTION_ROOT = resolve(COLLECTIONS_ROOT, 'AllFit One - Development')
+const ENVIRONMENTS_ROOT = resolve(POSTMAN_ROOT, 'environments')
+const ENVIRONMENT_PATH = resolve(ENVIRONMENTS_ROOT, 'Local Development.postman_environment.json')
+const RESOURCES_PATH = resolve(ROOT, '.postman/resources.yaml')
 const OPENAPI_PATH = resolve(ROOT, 'packages/contracts/openapi/allfit-v1.openapi.yaml')
-const JOURNEYS_ROOT = resolve(POSTMAN_ROOT, 'collections/AllFit One - Local Journeys')
-const SMOKE_ROOT = resolve(POSTMAN_ROOT, 'collections/AllFit One - Production Smoke')
-const METHODS = new Set(['delete', 'get', 'head', 'options', 'patch', 'post', 'put', 'trace'])
+const HTTP_METHODS = new Set(['delete', 'get', 'head', 'options', 'patch', 'post', 'put'])
 
-const EXPECTED_ENVIRONMENTS = {
-  Local: {
-    backofficeOrigin: 'http://localhost:3001',
-    baseUrl: 'http://localhost:8080',
-    studioOrigin: 'http://localhost:3000',
-  },
-  Production: {
-    backofficeOrigin: 'https://backoffice.allfit.one',
-    baseUrl: 'https://api.allfit.one',
-    studioOrigin: 'https://studio.allfit.one',
-  },
+const WORKSPACE_ID = '0ea60379-cfe3-4d6b-8b48-0be8b689fb56'
+const COLLECTION_UID = '57465418-371c52ec-0811-47c2-9702-7e8e9b21a775'
+const COLLECTION_ID = '371c52ec-0811-47c2-9702-7e8e9b21a775'
+const ENVIRONMENT_UID = '57465418-b38e0f0a-f5b0-4e10-91e0-cf995038ad9e'
+const ENVIRONMENT_ID = 'b38e0f0a-f5b0-4e10-91e0-cf995038ad9e'
+const SPEC_UID = '34e1f771-367d-40b9-8911-10e1e3b084b0'
+
+const EXPECTED_SHARED_VALUES = {
+  baseUrl: 'http://localhost:8081',
+  studioOrigin: 'http://localhost:3000',
+  backofficeOrigin: 'http://localhost:3001',
+  attemptId: '',
+  credentialId: '',
+  organizationId: '',
+  invitationId: '',
+  etag: '',
+  spaceEmail: 'postman.space@example.invalid',
+  backofficeEmail: '',
+  specialtyCode: '',
+  credentialTypeCode: '',
+  intentId: '',
 }
 
-const EXPECTED_SMOKE = new Map([
-  ['/health', 'GET'],
-  ['/backoffice/v1/telemetry-config', 'GET'],
-  ['/space/v1/telemetry-config', 'GET'],
-  ['/studio/v1/telemetry-config', 'GET'],
-])
-
-const EXPECTED_CLOUD_RESOURCES = {
-  collections: new Set([
-    '../postman/collections/AllFit One - Local Journeys',
-    '../postman/collections/AllFit One - Production Smoke',
-  ]),
-  environments: new Set([
-    '../postman/environments/Local.postman_environment.json',
-    '../postman/environments/Production.postman_environment.json',
-  ]),
-  specs: new Set(['../packages/contracts/openapi/allfit-v1.openapi.yaml']),
-}
-
-const REQUIRED_JOURNEY_OPERATIONS = new Set([
-  'startStudioAuthentication',
-  'startStudioOnboardingAttempt',
-  'createStudioOrganization',
-  'createStudioTeamInvitation',
-  'publishProgramVersion',
-  'assignProgramVersion',
-  'listMyAgenda',
-  'startPlannedSessionAttempt',
-  'replaceExecutionResults',
-  'finalizeExecution',
-  'getAuthorizedClientExecution',
-  'createNutritionMeal',
-  'revokeConsentGrant',
-  'startBackofficePasswordAuthentication',
-  'verifyBackofficeTotp',
-  'getBackofficeSession',
+const EXPECTED_SECRET_KEYS = new Set([
+  'spacePassword',
+  'spaceVerificationCode',
+  'spaceAccessToken',
+  'backofficePassword',
+  'backofficeTotp',
+  'invitationToken',
+  'studioAuthCode',
+  'studioAuthState',
 ])
 
 function invariant(condition, message) {
@@ -76,246 +61,206 @@ async function filesRecursively(directory) {
   return files
 }
 
-async function yamlFiles(directory, suffix) {
-  const files = await filesRecursively(directory)
-  return files.filter((file) => file.endsWith(suffix))
+function canonicalPath(path) {
+  return path.replace(/:([A-Za-z0-9_]+)/g, '{$1}').replace(/\{\{([A-Za-z0-9_]+)\}\}/g, '{$1}')
+}
+
+function requestRoute(request) {
+  const path = request.url.replace(/^\{\{baseUrl\}\}/, '').split('?')[0]
+  return request.method.toUpperCase() + ' ' + canonicalPath(path)
 }
 
 function scriptsFromRequest(request) {
   return (request.scripts ?? []).map((script) => script.code ?? '')
 }
 
-function requestPath(url) {
-  const withoutBase = url.replace(/^\{\{baseUrl\}\}/, '')
-  return withoutBase.split('?')[0].replaceAll(/\{\{[^}]+\}\}/g, '{id}')
-}
+async function validateResourceMap() {
+  const resources = parse(await readFile(RESOURCES_PATH, 'utf8'))
+  invariant(resources.workspace?.id === WORKSPACE_ID, 'Postman workspace ID is incorrect')
 
-async function validateEnvironments() {
-  const directory = resolve(POSTMAN_ROOT, 'environments')
-  const files = (await readdir(directory)).filter((name) => name.endsWith('.json'))
-  invariant(files.length === 2, 'Exactly Local and Production environments are allowed')
-
-  const seen = new Set()
-  for (const file of files) {
-    const environment = JSON.parse(await readFile(resolve(directory, file), 'utf8'))
-    const expected = EXPECTED_ENVIRONMENTS[environment.name]
-    invariant(expected, `Unexpected Postman environment: ${environment.name}`)
-    invariant(!seen.has(environment.name), `Duplicate environment: ${environment.name}`)
-    seen.add(environment.name)
-    const values = Object.fromEntries(
-      environment.values.map(({ enabled, key, type, value }) => {
-        invariant(enabled === true, `${environment.name}.${key} must be enabled`)
-        invariant(type === 'default', `${environment.name}.${key} must be a shared URL`)
-        return [key, value]
-      }),
-    )
-    invariant(
-      Object.keys(values).length === Object.keys(expected).length &&
-        Object.entries(expected).every(([key, value]) => values[key] === value),
-      `${environment.name} contains unexpected keys or values`,
-    )
+  const expected = {
+    collections: {
+      '../postman/collections/AllFit One - Development': COLLECTION_UID,
+    },
+    environments: {
+      '../postman/environments/Local Development.postman_environment.json': ENVIRONMENT_UID,
+    },
+    specs: {
+      '../packages/contracts/openapi/allfit-v1.openapi.yaml': SPEC_UID,
+    },
   }
+
+  invariant(
+    JSON.stringify(resources.cloudResources) === JSON.stringify(expected),
+    'Native Git resource mappings do not match the development workspace',
+  )
 }
 
-async function validateNativeGit() {
-  const resources = parse(await readFile(NATIVE_GIT_RESOURCES, 'utf8'))
-  invariant(
-    /^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(resources.workspace?.id ?? ''),
-    'Native Git workspace ID is missing or invalid',
-  )
-  invariant(
-    resources.workspace.id === '0ea60379-cfe3-4d6b-8b48-0be8b689fb56',
-    'Native Git must target the AllFit One workspace',
-  )
-
-  const cloudResources = resources.cloudResources ?? {}
-  invariant(
-    Object.keys(cloudResources).length === Object.keys(EXPECTED_CLOUD_RESOURCES).length,
-    'Native Git contains an unexpected resource category',
-  )
-  for (const [category, expectedPaths] of Object.entries(EXPECTED_CLOUD_RESOURCES)) {
-    const mappings = cloudResources[category] ?? {}
-    invariant(
-      Object.keys(mappings).length === expectedPaths.size &&
-        Object.keys(mappings).every((path) => expectedPaths.has(path)),
-      `Native Git ${category} mappings changed unexpectedly`,
-    )
-    for (const [path, id] of Object.entries(mappings)) {
-      invariant(
-        /^[0-9]+-[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(id) || /^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(id),
-        `Native Git mapping has an invalid ID: ${path}`,
-      )
+async function validateTopology() {
+  const collectionDirectories = []
+  for (const entry of await readdir(COLLECTIONS_ROOT, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue
+    const definition = resolve(COLLECTIONS_ROOT, entry.name, '.resources/definition.yaml')
+    if (await readFile(definition, 'utf8').catch(() => undefined)) {
+      collectionDirectories.push(entry.name)
     }
   }
-}
+  invariant(
+    JSON.stringify(collectionDirectories) === JSON.stringify(['AllFit One - Development']),
+    'Exactly one Postman development collection is allowed',
+  )
 
-async function validateSmoke() {
+  const folders = (await readdir(COLLECTION_ROOT, { withFileTypes: true }))
+    .filter((entry) => entry.isDirectory() && entry.name !== '.resources')
+    .map((entry) => entry.name)
+    .sort()
+  invariant(
+    JSON.stringify(folders) ===
+      JSON.stringify(['00 - Platform', '01 - Studio', '02 - Space', '03 - Backoffice']),
+    'The development collection has an unexpected top-level folder',
+  )
+
   const definition = parse(
-    await readFile(resolve(SMOKE_ROOT, '.resources/definition.yaml'), 'utf8'),
+    await readFile(resolve(COLLECTION_ROOT, '.resources/definition.yaml'), 'utf8'),
+  )
+  invariant(definition.id === COLLECTION_ID, 'Development collection ID is incorrect')
+  invariant(
+    definition.name === 'AllFit One — Development',
+    'Development collection name is incorrect',
+  )
+
+  const environmentFiles = (await readdir(ENVIRONMENTS_ROOT)).filter((name) =>
+    name.endsWith('.json'),
   )
   invariant(
-    definition.name === 'AllFit One — Production Smoke',
-    'Production smoke collection name changed',
+    JSON.stringify(environmentFiles) ===
+      JSON.stringify(['Local Development.postman_environment.json']),
+    'Exactly one local development environment is allowed',
   )
-  invariant(definition.auth?.[0]?.type === 'noauth', 'Production smoke must use no auth')
+}
 
-  const requestFiles = await yamlFiles(SMOKE_ROOT, '.request.yaml')
-  invariant(requestFiles.length === 4, 'Production smoke must contain exactly four requests')
-  const actual = new Map()
+async function validateEnvironment() {
+  const environment = JSON.parse(await readFile(ENVIRONMENT_PATH, 'utf8'))
+  invariant(environment.id === ENVIRONMENT_ID, 'Local Development environment ID is incorrect')
+  invariant(environment.name === 'Local Development', 'Environment name is incorrect')
+
+  const variables = new Map(environment.values.map((variable) => [variable.key, variable]))
+  const expectedKeys = new Set([...Object.keys(EXPECTED_SHARED_VALUES), ...EXPECTED_SECRET_KEYS])
+  invariant(variables.size === expectedKeys.size, 'Environment has unexpected variables')
+
+  for (const [key, value] of Object.entries(EXPECTED_SHARED_VALUES)) {
+    const variable = variables.get(key)
+    invariant(variable, 'Missing environment variable: ' + key)
+    invariant(variable.enabled === true, key + ' must be enabled')
+    invariant(variable.type === 'default', key + ' must use the default type')
+    invariant(variable.value === value, key + ' has an unsafe shared value')
+  }
+
+  for (const key of EXPECTED_SECRET_KEYS) {
+    const variable = variables.get(key)
+    invariant(variable, 'Missing secret environment variable: ' + key)
+    invariant(variable.enabled === true, key + ' must be enabled')
+    invariant(variable.type === 'secret', key + ' must use the secret type')
+    invariant(variable.value === '', key + ' must not have a shared value')
+  }
+
+  return expectedKeys
+}
+
+async function implementedContractRoutes(openapiRoutes) {
+  process.env.API_PUBLIC_URL ??= 'https://api.example.test'
+  process.env.STUDIO_WEB_URL ??= 'https://studio.example.test'
+  process.env.BACKOFFICE_WEB_URL ??= 'https://backoffice.example.test'
+
+  const { createApp } = await import('../apps/api/src/application.ts')
+  const implemented = new Set(['GET /health'])
+  for (const route of createApp().routes) {
+    const key = route.method.toUpperCase() + ' ' + canonicalPath(route.path)
+    if (openapiRoutes.has(key)) implemented.add(key)
+  }
+  return implemented
+}
+
+async function validateRequests(environmentKeys) {
+  const openapi = parse(await readFile(OPENAPI_PATH, 'utf8'))
+  const openapiRoutes = new Set()
+  for (const [path, pathItem] of Object.entries(openapi.paths ?? {})) {
+    for (const [method] of Object.entries(pathItem)) {
+      if (HTTP_METHODS.has(method)) openapiRoutes.add(method.toUpperCase() + ' ' + path)
+    }
+  }
+
+  const expectedRoutes = await implementedContractRoutes(openapiRoutes)
+  invariant(expectedRoutes.size === 37, 'Expected 36 mounted contract routes plus GET /health')
+
+  const requestFiles = (await filesRecursively(COLLECTION_ROOT)).filter((file) =>
+    file.endsWith('.request.yaml'),
+  )
+  invariant(requestFiles.length === 37, 'Development collection must contain 37 requests')
+
+  const actualRoutes = new Map()
+  const referencedVariables = new Set()
   for (const file of requestFiles) {
     const request = parse(await readFile(file, 'utf8'))
-    const path = requestPath(request.url)
-    actual.set(path, request.method)
-    invariant(request.method === 'GET', `Production smoke mutation detected in ${path}`)
-    invariant(!request.body, `Production smoke body detected in ${path}`)
-    invariant(!request.auth, `Production smoke request auth detected in ${path}`)
+    const route = requestRoute(request)
+    invariant(!actualRoutes.has(route), 'Duplicate Postman request: ' + route)
+    actualRoutes.set(route, file)
+
+    invariant(request.description?.includes(route), route + ' must describe its method and path')
+    const scripts = scriptsFromRequest(request)
+    invariant(scripts.length > 0, route + ' must have an after-response script')
+    const joinedScripts = scripts.join('\n')
     invariant(
-      !Object.keys(request.headers ?? {}).some((key) =>
-        ['authorization', 'cookie'].includes(key.toLowerCase()),
-      ),
-      `Production smoke credential header detected in ${path}`,
+      joinedScripts.includes('Status esperado') ||
+        joinedScripts.includes('flujo de autenticación respondió'),
+      route + ' must assert its expected response',
     )
-    const scripts = scriptsFromRequest(request).join('\n')
-    invariant(scripts.includes('Status is 200'), `${path} has no status assertion`)
-    invariant(scripts.includes('never sets cookies'), `${path} has no cookie assertion`)
-    if (path.includes('telemetry-config')) {
-      invariant(scripts.includes('public for five minutes'), `${path} has no cache assertion`)
-      invariant(scripts.includes('response shape is closed'), `${path} has no shape assertion`)
+    invariant(joinedScripts.includes('Problem Details'), route + ' must validate governed errors')
+    for (const script of scripts) new Function(script)
+
+    const serialized = JSON.stringify(request)
+    for (const match of serialized.matchAll(/\{\{([^}]+)\}\}/g)) {
+      if (!match[1].startsWith('$')) referencedVariables.add(match[1])
     }
+
+    const headers = Object.keys(request.headers ?? {}).map((key) => key.toLowerCase())
+    invariant(!headers.includes('authorization'), route + ' must not commit an auth header')
+    invariant(!headers.includes('cookie'), route + ' must not commit a cookie header')
   }
-  invariant(actual.size === EXPECTED_SMOKE.size, 'Production smoke paths are not unique')
-  for (const [path, method] of EXPECTED_SMOKE) {
-    invariant(actual.get(path) === method, `Missing production smoke request ${method} ${path}`)
-  }
+
+  const missing = [...expectedRoutes].filter((route) => !actualRoutes.has(route))
+  const extra = [...actualRoutes.keys()].filter((route) => !expectedRoutes.has(route))
+  invariant(missing.length === 0, 'Missing implemented requests: ' + missing.join(', '))
+  invariant(extra.length === 0, 'Collection contains non-runnable requests: ' + extra.join(', '))
+
+  const unresolved = [...referencedVariables].filter((key) => !environmentKeys.has(key))
+  invariant(unresolved.length === 0, 'Undefined Postman variables: ' + unresolved.join(', '))
 }
 
-async function validateJourneys(openapiOperationIds) {
-  const definition = parse(
-    await readFile(resolve(JOURNEYS_ROOT, '.resources/definition.yaml'), 'utf8'),
-  )
-  invariant(
-    definition.name === 'AllFit One — Local Journeys',
-    'Local journeys collection name changed',
-  )
-  invariant(definition.auth?.[0]?.type === 'noauth', 'Local journeys must default to no auth')
-
-  const requestFiles = await yamlFiles(JOURNEYS_ROOT, '.request.yaml')
-  invariant(requestFiles.length > 0, 'Local journeys collection is empty')
-  const represented = new Set()
-  let replayCount = 0
-  let staleEtagCount = 0
-  for (const file of requestFiles) {
-    const request = parse(await readFile(file, 'utf8'))
-    const description = request.description ?? ''
-    const operationId = description.match(/OpenAPI operation: ([A-Za-z0-9_]+)\./)?.[1]
-    invariant(operationId, `Missing operationId metadata in ${relative(ROOT, file)}`)
-    invariant(openapiOperationIds.has(operationId), `Unknown operationId ${operationId}`)
-    represented.add(operationId)
-    const scripts = scriptsFromRequest(request).join('\n')
-    invariant(scripts.includes('Problem Details'), `${operationId} has no governed error test`)
-    for (const code of scriptsFromRequest(request)) {
-      // Syntax-only validation. Postman globals are intentionally not executed here.
-      new Function(code)
-    }
-    if (scripts.includes('Replay returned the same governed success status')) replayCount += 1
-    if (scripts.includes('A stale ETag is rejected')) staleEtagCount += 1
-    const authorization = Object.entries(request.headers ?? {}).find(
-      ([key]) => key.toLowerCase() === 'authorization',
-    )?.[1]
-    if (authorization) {
-      invariant(
-        /^Bearer \{\{\$vault:(space|studio)AccessToken\}\}$/.test(authorization),
-        `${operationId} bearer auth must reference Local Vault`,
-      )
-    }
-  }
-  for (const operationId of REQUIRED_JOURNEY_OPERATIONS) {
-    invariant(
-      represented.has(operationId),
-      `Required local journey operation missing: ${operationId}`,
-    )
-  }
-  invariant(replayCount >= 5, 'Local journeys need explicit idempotency replay coverage')
-  invariant(staleEtagCount === 1, 'Local journeys need one stale ETag rejection check')
-}
-
-async function validateNoSensitiveMaterial() {
-  invariant(
-    !(await stat(resolve(POSTMAN_ROOT, 'specs')).catch(() => undefined)),
-    'Do not copy the canonical OpenAPI into postman/specs',
-  )
-  const files = await filesRecursively(POSTMAN_ROOT)
+async function validateSensitiveMaterial() {
   const findings = []
+  const files = await filesRecursively(POSTMAN_ROOT)
   const patterns = [
     ['Postman API key', /\bPMAK-[A-Za-z0-9_-]{10,}\b/g],
     ['JWT', /\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g],
     ['private key', /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/g],
     ['real email', /\b[A-Z0-9._%+-]+@(?!example\.invalid\b)[A-Z0-9.-]+\.[A-Z]{2,}\b/gi],
   ]
+
   for (const file of files) {
     const content = await readFile(file, 'utf8')
     for (const [label, pattern] of patterns) {
       pattern.lastIndex = 0
-      if (pattern.test(content)) findings.push(`${label}: ${relative(ROOT, file)}`)
-    }
-    if (file.endsWith('.request.yaml')) {
-      const request = parse(content)
-      const cookieHeader = Object.keys(request.headers ?? {}).find(
-        (key) => key.toLowerCase() === 'cookie',
-      )
-      if (cookieHeader) findings.push(`cookie header: ${relative(ROOT, file)}`)
+      if (pattern.test(content)) findings.push(label + ': ' + relative(ROOT, file))
     }
   }
-  invariant(!findings.length, `Sensitive material detected:\n${findings.join('\n')}`)
+  invariant(findings.length === 0, 'Sensitive material detected:\n' + findings.join('\n'))
 }
 
-const openapi = parse(await readFile(OPENAPI_PATH, 'utf8'))
-const operations = []
-for (const [path, pathItem] of Object.entries(openapi.paths ?? {})) {
-  for (const [method, operation] of Object.entries(pathItem)) {
-    if (METHODS.has(method) && operation?.operationId) {
-      operations.push({ method: method.toUpperCase(), operationId: operation.operationId, path })
-    }
-  }
-}
-const tags = new Set(
-  operations.flatMap(({ operationId }) => {
-    for (const pathItem of Object.values(openapi.paths ?? {})) {
-      for (const [method, operation] of Object.entries(pathItem)) {
-        if (METHODS.has(method) && operation?.operationId === operationId)
-          return operation.tags ?? []
-      }
-    }
-    return []
-  }),
-)
-const operationIds = new Set(operations.map(({ operationId }) => operationId))
-for (const telemetryOperation of [
-  'getBackofficeTelemetryConfig',
-  'getSpaceTelemetryConfig',
-  'getStudioTelemetryConfig',
-]) {
-  invariant(
-    operationIds.has(telemetryOperation),
-    `Missing Platform Telemetry operation ${telemetryOperation}`,
-  )
-}
-const generatedTypes = await readFile(
-  resolve(ROOT, 'packages/contracts/generated/allfit-v1.ts'),
-  'utf8',
-)
-invariant(generatedTypes.includes('TelemetryClientConfig'), 'Generated telemetry types are stale')
-invariant(
-  generatedTypes.includes('AnalyticsIdentity'),
-  'Generated analytics identity types are stale',
-)
+await validateResourceMap()
+await validateTopology()
+const environmentKeys = await validateEnvironment()
+await validateRequests(environmentKeys)
+await validateSensitiveMaterial()
 
-await validateEnvironments()
-await validateNativeGit()
-await validateSmoke()
-await validateJourneys(operationIds)
-await validateNoSensitiveMaterial()
-
-console.log(
-  `Postman artifacts valid: ${Object.keys(openapi.paths ?? {}).length} paths, ${operations.length} operations, ${tags.size} tags, 2 environments.`,
-)
+console.log('Postman artifacts valid: 37 runnable requests, 1 local environment, 0 secrets.')

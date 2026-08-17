@@ -1,0 +1,52 @@
+$kind: http-request
+id: 36150998-7200-4816-96ff-9eb7e2d5644f
+description: |-
+  **POST /space/v1/auth/registrations**
+
+  Contrato: Create an account and send an email verification code.
+
+  Completa spaceEmail y spacePassword como valores locales del entorno.
+
+  Usa únicamente datos sintéticos en el entorno local.
+url: "{{baseUrl}}/space/v1/auth/registrations"
+method: POST
+headers:
+  "Accept": "application/json, application/problem+json"
+  "Content-Type": "application/json"
+body:
+  type: json
+  content: |-
+    {
+      "email": "{{spaceEmail}}",
+      "password": "{{spacePassword}}"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status esperado: 202", () => pm.response.to.have.status(202));
+      const contentType = (pm.response.headers.get('Content-Type') || '').toLowerCase();
+      if (pm.response.code >= 400) {
+        pm.test('Los errores usan Problem Details', () => {
+          pm.expect(contentType).to.include('application/problem+json');
+          const problem = pm.response.json();
+          pm.expect(problem).to.have.property('type');
+          pm.expect(problem).to.have.property('title');
+          pm.expect(problem).to.have.property('status', pm.response.code);
+        });
+      }
+      const responseEtag = pm.response.headers.get('ETag');
+      if (responseEtag && pm.environment) pm.environment.set('etag', responseEtag);
+      if (contentType.includes('json') && pm.response.text()) {
+        const payload = pm.response.json();
+        const captures = { attempt_id: 'attemptId', attemptId: 'attemptId', credential_id: 'credentialId', credentialId: 'credentialId', organization_id: 'organizationId', organizationId: 'organizationId', invitation_id: 'invitationId', invitationId: 'invitationId', access_token: 'spaceAccessToken', accessToken: 'spaceAccessToken' };
+        const visit = (value) => {
+          if (!value || typeof value !== 'object') return;
+          for (const [key, child] of Object.entries(value)) {
+            if (captures[key] && typeof child === 'string' && pm.environment) pm.environment.set(captures[key], child);
+            visit(child);
+          }
+        };
+        visit(payload);
+      }
+    language: text/javascript
+order: 1000

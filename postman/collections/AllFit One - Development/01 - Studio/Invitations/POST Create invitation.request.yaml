@@ -1,0 +1,66 @@
+$kind: http-request
+id: 80b28204-8942-4de5-acfe-59f0368367fe
+description: |-
+  **POST /studio/v1/organizations/{organizationId}/invitations**
+
+  Contrato: Invite someone to join an organization team.
+
+  Usa únicamente datos sintéticos en el entorno local.
+url: "{{baseUrl}}/studio/v1/organizations/{{organizationId}}/invitations"
+method: POST
+headers:
+  "Idempotency-Key": "{{$guid}}"
+  "Command-Id": "{{$guid}}"
+  "Origin": "{{studioOrigin}}"
+  "Accept": "application/json, application/problem+json"
+  "Content-Type": "application/json"
+body:
+  type: json
+  content: |-
+    {
+      "channel": "email",
+      "contact": "postman.allfitone@example.invalid",
+      "intents": [
+        {
+          "kind": "membership",
+          "proposed_role_code": "admin"
+        }
+      ]
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status esperado: 200", () => pm.response.to.have.status(200));
+      const contentType = (pm.response.headers.get('Content-Type') || '').toLowerCase();
+      if (pm.response.code >= 400) {
+        pm.test('Los errores usan Problem Details', () => {
+          pm.expect(contentType).to.include('application/problem+json');
+          const problem = pm.response.json();
+          pm.expect(problem).to.have.property('type');
+          pm.expect(problem).to.have.property('title');
+          pm.expect(problem).to.have.property('status', pm.response.code);
+        });
+      }
+      const responseEtag = pm.response.headers.get('ETag');
+      if (responseEtag && pm.environment) pm.environment.set('etag', responseEtag);
+      if (contentType.includes('json') && pm.response.text()) {
+        const payload = pm.response.json();
+        const captures = { attempt_id: 'attemptId', attemptId: 'attemptId', credential_id: 'credentialId', credentialId: 'credentialId', organization_id: 'organizationId', organizationId: 'organizationId', invitation_id: 'invitationId', invitationId: 'invitationId', access_token: 'spaceAccessToken', accessToken: 'spaceAccessToken' };
+        const visit = (value) => {
+          if (!value || typeof value !== 'object') return;
+          for (const [key, child] of Object.entries(value)) {
+            if (captures[key] && typeof child === 'string' && pm.environment) pm.environment.set(captures[key], child);
+            visit(child);
+          }
+        };
+        visit(payload);
+        const directValue = payload.invitation_id || payload.invitationId || payload.id;
+        if (directValue && pm.environment) pm.environment.set('invitationId', directValue);
+      }
+      if (contentType.includes('json') && pm.response.code < 400) {
+        const invitationPayload = pm.response.json();
+        const firstIntent = invitationPayload.intents?.[0] || invitationPayload.invitation?.intents?.[0];
+        if (firstIntent?.id && pm.environment) pm.environment.set('intentId', firstIntent.id);
+      }
+    language: text/javascript
+order: 2000

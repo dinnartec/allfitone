@@ -87,25 +87,22 @@ Studio runs at `http://localhost:3000` and Backoffice at
 Run from the repository root. Turbo runs each task across the workspaces and
 caches results, so repeat runs are near-instant.
 
-| Command                      | What it does                                          |
-| ---------------------------- | ----------------------------------------------------- |
-| `bun run dev`                | Starts every app in watch mode                        |
-| `bun run test`               | Runs tests (`bun test`)                               |
-| `bun run lint`               | ESLint, including the boundary rules                  |
-| `bun run typecheck`          | `tsc --noEmit` across workspaces                      |
-| `bun run build`              | Builds every deployable                               |
-| `bun run format`             | Prettier over the repository                          |
-| `bun run check:openapi`      | Validates the canonical OpenAPI with Redocly          |
-| `bun run check:postman`      | Validates Native Git artifacts and privacy rules      |
-| `bun run test:postman:smoke` | Runs the safe smoke against a local fixture           |
-| `bun run check:db-policy`    | Validates migration history, names, seeds and secrets |
-| `bun run db:reset`           | Rebuilds the local database from migrations           |
-| `bun run db:test`            | Runs the database pgTAP suite                         |
-| `bun run check:db-types`     | Verifies generated database types                     |
+| Command                   | What it does                                          |
+| ------------------------- | ----------------------------------------------------- |
+| `bun run dev`             | Starts every app in watch mode                        |
+| `bun run test`            | Runs tests (`bun test`)                               |
+| `bun run lint`            | ESLint, including the boundary rules                  |
+| `bun run typecheck`       | `tsc --noEmit` across workspaces                      |
+| `bun run build`           | Builds every deployable                               |
+| `bun run format`          | Prettier over the repository                          |
+| `bun run check:openapi`   | Validates the canonical OpenAPI with Redocly          |
+| `bun run check:postman`   | Validates the runnable Postman development collection |
+| `bun run check:db-policy` | Validates migration history, names, seeds and secrets |
+| `bun run db:reset`        | Rebuilds the local database from migrations           |
+| `bun run db:test`         | Runs the database pgTAP suite                         |
+| `bun run check:db-types`  | Verifies generated database types                     |
 
-Postman resources and concise local guidance live in [`postman/`](./postman/README.md).
-The canonical operating procedure is in
-[`allfitone-docs/platform/api/POSTMAN_RUNBOOK.md`](https://github.com/dinnartec/allfitone-docs/blob/main/platform/api/POSTMAN_RUNBOOK.md).
+Postman resources and local setup guidance live in [`postman/`](./postman/README.md).
 
 For a single workspace, use a filter:
 

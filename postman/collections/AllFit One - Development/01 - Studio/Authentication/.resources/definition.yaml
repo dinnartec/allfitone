@@ -1,0 +1,5 @@
+$kind: collection
+id: d482d1ad-d1f5-4883-85f2-a6b646ec2496
+description: |-
+  El inicio de sesión de Studio es un flujo de navegador. Los demás requests protegidos usan la cookie local del cookie jar.
+order: 1000
