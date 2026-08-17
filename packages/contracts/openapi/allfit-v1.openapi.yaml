@@ -1747,6 +1747,461 @@ paths:
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
 
+  /studio/v1/organizations/{organizationId}/session-templates:
+    get:
+      tags: [Studio Planning]
+      operationId: listOrganizationSessionTemplates
+      x-allfit-operation: OP-PLN-019
+      x-allfit-cache: private-revalidate
+      summary: List the organization's template drafts and immutable versions
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Templates ordered by most recent change and stable identifier
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/PrivateRevalidate'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionTemplatePage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+    post:
+      tags: [Studio Planning]
+      operationId: createOrganizationSessionTemplate
+      x-allfit-operation: OP-PLN-001
+      x-allfit-cache: no-store
+      summary: Create an organization-owned session template and its first draft
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SessionTemplateCreate'
+      responses:
+        '201':
+          description: Stable template identity and editable draft
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Location:
+              $ref: '#/components/headers/Location'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionTemplate'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /studio/v1/organizations/{organizationId}/session-templates/{templateId}/draft:
+    put:
+      tags: [Studio Planning]
+      operationId: replaceOrganizationSessionTemplateDraft
+      x-allfit-operation: OP-PLN-002
+      x-allfit-cache: no-store
+      summary: Replace the editable content of a session-template draft
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/TemplateId'
+        - $ref: '#/components/parameters/PlanningDraftIfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SessionTemplateDraftContent'
+      responses:
+        '200':
+          description: Current draft; unchanged replacements preserve its ETag
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionTemplateDraft'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /studio/v1/organizations/{organizationId}/session-templates/{templateId}/versions:
+    post:
+      tags: [Studio Planning]
+      operationId: publishOrganizationSessionTemplateVersion
+      x-allfit-operation: OP-PLN-003
+      x-allfit-cache: no-store
+      summary: Publish the current complete draft as an immutable template version
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/TemplateId'
+        - $ref: '#/components/parameters/PlanningDraftIfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      responses:
+        '201':
+          description: Immutable published template version
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Location:
+              $ref: '#/components/headers/Location'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionTemplateVersion'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /studio/v1/organizations/{organizationId}/session-templates/{templateId}/versions/{versionNumber}:
+    get:
+      tags: [Studio Planning]
+      operationId: getOrganizationSessionTemplateVersion
+      x-allfit-operation: OP-PLN-021
+      x-allfit-cache: private-immutable
+      summary: Read one complete immutable published template version
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/TemplateId'
+        - $ref: '#/components/parameters/VersionNumber'
+      responses:
+        '200':
+          description: Complete immutable template version
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                const: private, max-age=31536000, immutable
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionTemplateVersion'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /studio/v1/organizations/{organizationId}/session-templates/{templateId}/versions/{versionNumber}/derivation:
+    post:
+      tags: [Studio Planning]
+      operationId: deriveOrganizationSessionTemplateVersion
+      x-allfit-operation: OP-PLN-004
+      x-allfit-cache: no-store
+      summary: Replace the template draft from one accessible published version
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/TemplateId'
+        - $ref: '#/components/parameters/VersionNumber'
+        - $ref: '#/components/parameters/PlanningDraftIfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      responses:
+        '200':
+          description: Draft copied from the selected immutable version
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionTemplateDraft'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /studio/v1/organizations/{organizationId}/session-templates/{templateId}/versions/{versionNumber}/deprecation:
+    post:
+      tags: [Studio Planning]
+      operationId: deprecateOrganizationSessionTemplateVersion
+      x-allfit-operation: OP-PLN-005
+      x-allfit-cache: no-store
+      summary: Prevent a published template version from entering new content
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/TemplateId'
+        - $ref: '#/components/parameters/VersionNumber'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      responses:
+        '200':
+          description: Deprecated version, including convergent repeated commands
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionTemplateVersion'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /studio/v1/organizations/{organizationId}/programs:
+    get:
+      tags: [Studio Planning]
+      operationId: listOrganizationPrograms
+      x-allfit-operation: OP-PLN-020
+      x-allfit-cache: private-revalidate
+      summary: List the organization's program drafts and immutable versions
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Programs ordered by most recent change and stable identifier
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/PrivateRevalidate'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProgramPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+    post:
+      tags: [Studio Planning]
+      operationId: createOrganizationProgram
+      x-allfit-operation: OP-PLN-006
+      x-allfit-cache: no-store
+      summary: Create an organization-owned program and its first draft
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProgramCreate'
+      responses:
+        '201':
+          description: Stable program identity and editable draft
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Location:
+              $ref: '#/components/headers/Location'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Program'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /studio/v1/organizations/{organizationId}/programs/{programId}/draft:
+    put:
+      tags: [Studio Planning]
+      operationId: replaceOrganizationProgramDraft
+      x-allfit-operation: OP-PLN-007
+      x-allfit-cache: no-store
+      summary: Replace a program draft with exact published template-version references
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/ProgramId'
+        - $ref: '#/components/parameters/PlanningDraftIfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProgramDraftContent'
+      responses:
+        '200':
+          description: Current program draft
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProgramDraft'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
   /studio/v1/organizations/{organizationId}/programs/{programId}/versions:
     post:
       tags: [Studio Planning]
@@ -1755,18 +2210,13 @@ paths:
       x-allfit-cache: no-store
       summary: Publish an immutable program version
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - $ref: '#/components/parameters/OrganizationId'
         - $ref: '#/components/parameters/ProgramId'
+        - $ref: '#/components/parameters/PlanningDraftIfMatch'
         - $ref: '#/components/parameters/IdempotencyKey'
         - $ref: '#/components/parameters/CommandId'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ProgramVersionCreate'
       responses:
         '201':
           description: Published version
@@ -1791,8 +2241,56 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '422':
           $ref: '#/components/responses/ValidationFailed'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /studio/v1/organizations/{organizationId}/programs/{programId}/versions/{versionNumber}/deprecation:
+    post:
+      tags: [Studio Planning]
+      operationId: deprecateOrganizationProgramVersion
+      x-allfit-operation: OP-PLN-009
+      x-allfit-cache: no-store
+      summary: Prevent a published program version from receiving new assignments
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/ProgramId'
+        - $ref: '#/components/parameters/VersionNumber'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      responses:
+        '200':
+          description: Deprecated version, including convergent repeated commands
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProgramVersion'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
 
   /studio/v1/organizations/{organizationId}/relationships/{relationshipId}/assignments:
     post:
@@ -2621,6 +3119,20 @@ components:
       required: true
       schema:
         $ref: '#/components/schemas/Uuid'
+    TemplateId:
+      name: templateId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Uuid'
+    VersionNumber:
+      name: versionNumber
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 2147483647
     RelationshipId:
       name: relationshipId
       in: path
@@ -2685,6 +3197,14 @@ components:
       schema:
         type: string
         pattern: '^"execution:[0-9a-f-]{36}:r[0-9]+"$'
+    PlanningDraftIfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: Strong content ETag returned with the current editable draft.
+      schema:
+        type: string
+        pattern: '^"sha256:[A-Za-z0-9_-]{43}"$'
     OrganizationIfMatch:
       name: If-Match
       in: header
@@ -2816,6 +3336,20 @@ components:
             type: https://errors.allfit.invalid/idempotency-key-required
             title: Idempotency-Key is required
             status: 400
+            request_id: 01JEXAMPLE0000000000000000
+    UnsupportedMediaType:
+      description: A command representation other than application/json was supplied
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: https://errors.allfit.invalid/unsupported-media-type
+            title: Content-Type must be application/json
+            status: 415
             request_id: 01JEXAMPLE0000000000000000
     Unauthenticated:
       description: Missing, invalid or expired token
@@ -4233,38 +4767,314 @@ components:
       type: string
       enum: [read, contribute]
 
-    ProgramVersionCreate:
+    SessionTemplateCreate:
       type: object
       additionalProperties: false
-      required: [sessions]
-      example:
-        notes: Bloque de fuerza de ocho semanas
-        sessions:
-          - position: 1
-            week: 1
-            day: 1
-            session_template_version_id: 018f6f8d-2b00-7a00-8000-000000000101
-            template_version_number: 1
-          - position: 2
-            week: 1
-            day: 3
-            session_template_version_id: 018f6f8d-2b00-7a00-8000-000000000102
-            template_version_number: 2
+      required: [discipline_code, title]
       properties:
+        discipline_code:
+          type: string
+          pattern: '^[a-z][a-z0-9_]{1,63}$'
+        title:
+          type: string
+          minLength: 1
+          maxLength: 160
+          pattern: '.*\S.*'
+
+    SessionTemplateDraftContent:
+      type: object
+      additionalProperties: false
+      required: [title, activity_type_id, steps]
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 160
+          pattern: '.*\S.*'
+        activity_type_id:
+          type: [string, 'null']
+          format: uuid
+          description: Null is allowed only while the draft is incomplete.
+        steps:
+          type: array
+          maxItems: 200
+          items:
+            $ref: '#/components/schemas/PlannedStepContent'
+
+    PlannedStepContent:
+      type: object
+      additionalProperties: false
+      required: [position, target]
+      properties:
+        position:
+          type: integer
+          minimum: 1
+          maximum: 200
+        movement_id:
+          type: [string, 'null']
+          format: uuid
+        activity_type_id:
+          type: [string, 'null']
+          format: uuid
+          description: Optional per-step override for hybrid templates.
         notes:
           type: [string, 'null']
           maxLength: 2000
-        sessions:
-          type: array
-          minItems: 1
-          maxItems: 730
-          items:
-            $ref: '#/components/schemas/ProgramVersionSessionCreate'
-    ProgramVersionSessionCreate:
+        target:
+          oneOf:
+            - $ref: '#/components/schemas/StrengthTarget'
+            - $ref: '#/components/schemas/EnduranceTarget'
+            - $ref: '#/components/schemas/IntervalTarget'
+            - $ref: '#/components/schemas/MobilityTarget'
+
+    StrengthTarget:
+      type: object
+      additionalProperties: false
+      required: [family, target_sets]
+      properties:
+        family:
+          type: string
+          const: strength
+        target_sets:
+          type: integer
+          minimum: 1
+          maximum: 2147483647
+        target_reps:
+          type: [integer, 'null']
+          minimum: 1
+          maximum: 2147483647
+        target_load_value:
+          type: [number, 'null']
+          minimum: 0
+        target_load_unit_code:
+          type: [string, 'null']
+        target_rpe:
+          type: [number, 'null']
+          minimum: 0
+          maximum: 10
+
+    EnduranceTarget:
+      type: object
+      additionalProperties: false
+      required: [family]
+      allOf:
+        - anyOf:
+            - required: [target_distance_value, target_distance_unit_code]
+              properties:
+                target_distance_value:
+                  type: number
+                  exclusiveMinimum: 0
+                target_distance_unit_code:
+                  type: string
+            - required: [target_duration_seconds]
+              properties:
+                target_duration_seconds:
+                  type: number
+                  exclusiveMinimum: 0
+      properties:
+        family:
+          type: string
+          const: endurance
+        target_distance_value:
+          type: [number, 'null']
+          exclusiveMinimum: 0
+        target_distance_unit_code:
+          type: [string, 'null']
+        target_duration_seconds:
+          type: [number, 'null']
+          exclusiveMinimum: 0
+        target_pace_seconds_per_unit:
+          type: [number, 'null']
+          exclusiveMinimum: 0
+        target_pace_unit_code:
+          type: [string, 'null']
+
+    IntervalTarget:
+      type: object
+      additionalProperties: false
+      required: [family, rounds, work_duration_seconds]
+      properties:
+        family:
+          type: string
+          const: interval
+        rounds:
+          type: integer
+          minimum: 1
+          maximum: 2147483647
+        work_duration_seconds:
+          type: number
+          exclusiveMinimum: 0
+        rest_duration_seconds:
+          type: [number, 'null']
+          minimum: 0
+        target_rpe:
+          type: [number, 'null']
+          minimum: 0
+          maximum: 10
+
+    MobilityTarget:
+      type: object
+      additionalProperties: false
+      required: [family, sequence_position, side]
+      allOf:
+        - anyOf:
+            - required: [hold_duration_seconds]
+              properties:
+                hold_duration_seconds:
+                  type: number
+                  exclusiveMinimum: 0
+            - required: [target_repetitions]
+              properties:
+                target_repetitions:
+                  type: integer
+                  minimum: 1
+                  maximum: 2147483647
+      properties:
+        family:
+          type: string
+          const: mobility
+        sequence_position:
+          type: integer
+          minimum: 1
+          maximum: 2147483647
+        hold_duration_seconds:
+          type: [number, 'null']
+          exclusiveMinimum: 0
+        target_repetitions:
+          type: [integer, 'null']
+          minimum: 1
+          maximum: 2147483647
+        side:
+          type: string
+          enum: [left, right, bilateral, not_applicable]
+
+    SessionTemplateDraft:
+      type: object
+      additionalProperties: false
+      required: [id, template_id, content_schema_version, content, etag, updated_at]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        template_id:
+          $ref: '#/components/schemas/Uuid'
+        content_schema_version:
+          type: integer
+          const: 1
+        content:
+          $ref: '#/components/schemas/SessionTemplateDraftContent'
+        derived_from_version_id:
+          type: [string, 'null']
+          format: uuid
+        etag:
+          type: string
+          pattern: '^"sha256:[A-Za-z0-9_-]{43}"$'
+        updated_at:
+          type: string
+          format: date-time
+
+    SessionTemplateVersionSummary:
+      type: object
+      additionalProperties: false
+      required: [id, template_id, version_number, status, published_at]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        template_id:
+          $ref: '#/components/schemas/Uuid'
+        version_number:
+          type: integer
+          minimum: 1
+        status:
+          type: string
+          enum: [published, deprecated]
+        published_at:
+          type: string
+          format: date-time
+
+    SessionTemplateVersion:
       type: object
       additionalProperties: false
       required:
-        [position, week, day, session_template_version_id, template_version_number]
+        [id, template_id, version_number, discipline_code, activity_type_id, title, status,
+         published_at, steps]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        template_id:
+          $ref: '#/components/schemas/Uuid'
+        version_number:
+          type: integer
+          minimum: 1
+        discipline_code:
+          type: string
+        activity_type_id:
+          $ref: '#/components/schemas/Uuid'
+        derived_from_version_id:
+          type: [string, 'null']
+          format: uuid
+        title:
+          type: string
+        status:
+          type: string
+          enum: [published, deprecated]
+        published_at:
+          type: string
+          format: date-time
+        steps:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/PlannedStepContent'
+
+    SessionTemplate:
+      type: object
+      additionalProperties: false
+      required: [id, organization_id, discipline_code, status, author_person_id, draft, versions]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        organization_id:
+          $ref: '#/components/schemas/Uuid'
+        discipline_code:
+          type: string
+        status:
+          $ref: '#/components/schemas/PublicationStatus'
+        author_person_id:
+          $ref: '#/components/schemas/Uuid'
+        draft:
+          $ref: '#/components/schemas/SessionTemplateDraft'
+        versions:
+          type: array
+          items:
+            $ref: '#/components/schemas/SessionTemplateVersionSummary'
+
+    SessionTemplatePage:
+      type: object
+      additionalProperties: false
+      required: [data, page]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/SessionTemplate'
+        page:
+          $ref: '#/components/schemas/Page'
+
+    ProgramCreate:
+      type: object
+      additionalProperties: false
+      required: [title]
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 160
+          pattern: '.*\S.*'
+
+    ProgramVersionSessionCreate:
+      type: object
+      additionalProperties: false
+      required: [position, week, day, template_version_id]
       properties:
         position:
           type: integer
@@ -4278,35 +5088,147 @@ components:
           type: integer
           minimum: 1
           maximum: 7
-        session_template_version_id:
+        template_version_id:
           $ref: '#/components/schemas/Uuid'
-        template_version_number:
+
+    ProgramDraftContent:
+      type: object
+      additionalProperties: false
+      required: [title, sessions]
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 160
+          pattern: '.*\S.*'
+        notes:
+          type: [string, 'null']
+          maxLength: 2000
+        sessions:
+          type: array
+          maxItems: 730
+          items:
+            $ref: '#/components/schemas/ProgramVersionSessionCreate'
+
+    ProgramDraft:
+      type: object
+      additionalProperties: false
+      required: [id, program_id, content_schema_version, content, etag, updated_at]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        program_id:
+          $ref: '#/components/schemas/Uuid'
+        content_schema_version:
           type: integer
-          minimum: 1
+          const: 1
+        content:
+          $ref: '#/components/schemas/ProgramDraftContent'
+        etag:
+          type: string
+          pattern: '^"sha256:[A-Za-z0-9_-]{43}"$'
+        updated_at:
+          type: string
+          format: date-time
+        deprecated_template_version_ids:
+          type: array
+          items:
+            $ref: '#/components/schemas/Uuid'
+
+    Program:
+      type: object
+      additionalProperties: false
+      required: [id, organization_id, status, author_person_id, draft, versions]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        organization_id:
+          $ref: '#/components/schemas/Uuid'
+        status:
+          $ref: '#/components/schemas/PublicationStatus'
+        author_person_id:
+          $ref: '#/components/schemas/Uuid'
+        draft:
+          $ref: '#/components/schemas/ProgramDraft'
+        versions:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProgramVersion'
+
+    ProgramPage:
+      type: object
+      additionalProperties: false
+      required: [data, page]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Program'
+        page:
+          $ref: '#/components/schemas/Page'
+
     ProgramVersion:
       type: object
       additionalProperties: false
-      required: [id, version_number, status, published_at, session_count]
+      required:
+        [
+          id,
+          program_id,
+          version_number,
+          status,
+          title,
+          sessions,
+          published_at,
+          session_count,
+          deprecated_template_version_ids,
+        ]
       example:
         id: 018f6f8d-2b00-7a00-8000-000000000201
+        program_id: 018f6f8d-2b00-7a00-8000-000000000200
         version_number: 1
         status: published
+        title: Bloque de fuerza
+        sessions:
+          - position: 1
+            week: 1
+            day: 1
+            template_version_id: 018f6f8d-2b00-7a00-8000-000000000101
         published_at: '2026-07-27T09:12:00-05:00'
-        session_count: 24
+        session_count: 1
+        deprecated_template_version_ids: []
       properties:
         id:
+          $ref: '#/components/schemas/Uuid'
+        program_id:
           $ref: '#/components/schemas/Uuid'
         version_number:
           type: integer
           minimum: 1
         status:
-          $ref: '#/components/schemas/PublicationStatus'
+          type: string
+          enum: [published, deprecated]
+        title:
+          type: string
+        notes:
+          type: [string, 'null']
+          maxLength: 2000
+        sessions:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/ProgramVersionSessionCreate'
         published_at:
           type: string
           format: date-time
         session_count:
           type: integer
           minimum: 1
+        deprecated_template_version_ids:
+          description: Published template versions retained in this composition but already deprecated.
+          type: array
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/Uuid'
 
     ProgramAssignmentCreate:
       type: object
@@ -5546,6 +6468,11 @@ components:
           maxItems: 100
           items:
             $ref: '#/components/schemas/ValidationIssue'
+        current_state:
+          description: Current server draft returned only for stale-draft conflicts.
+          oneOf:
+            - $ref: '#/components/schemas/SessionTemplateDraft'
+            - $ref: '#/components/schemas/ProgramDraft'
     RequiredScope:
       type: object
       additionalProperties: false

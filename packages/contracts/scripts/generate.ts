@@ -13,6 +13,7 @@ type ContractOperation = {
   path: string
   operationId: string
   allfitOperation: string
+  responses: string[]
 }
 
 type ContractExclusion = {
@@ -61,11 +62,13 @@ function operationsFrom(document: Record<string, unknown>): ContractOperation[] 
       }
 
       const context = `${method.toUpperCase()} ${path}`
+      const responses = recordProperty(operationValue, 'responses', context)
       operations.push({
         method: method.toUpperCase(),
         path,
         operationId: stringProperty(operationValue, 'operationId', context),
         allfitOperation: stringProperty(operationValue, 'x-allfit-operation', context),
+        responses: Object.keys(responses).sort(),
       })
     }
   }

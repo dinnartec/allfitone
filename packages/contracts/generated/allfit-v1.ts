@@ -718,6 +718,144 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/studio/v1/organizations/{organizationId}/session-templates': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** List the organization's template drafts and immutable versions */
+    get: operations['listOrganizationSessionTemplates']
+    put?: never
+    /** Create an organization-owned session template and its first draft */
+    post: operations['createOrganizationSessionTemplate']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/studio/v1/organizations/{organizationId}/session-templates/{templateId}/draft': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    /** Replace the editable content of a session-template draft */
+    put: operations['replaceOrganizationSessionTemplateDraft']
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/studio/v1/organizations/{organizationId}/session-templates/{templateId}/versions': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /** Publish the current complete draft as an immutable template version */
+    post: operations['publishOrganizationSessionTemplateVersion']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/studio/v1/organizations/{organizationId}/session-templates/{templateId}/versions/{versionNumber}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** Read one complete immutable published template version */
+    get: operations['getOrganizationSessionTemplateVersion']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/studio/v1/organizations/{organizationId}/session-templates/{templateId}/versions/{versionNumber}/derivation': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /** Replace the template draft from one accessible published version */
+    post: operations['deriveOrganizationSessionTemplateVersion']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/studio/v1/organizations/{organizationId}/session-templates/{templateId}/versions/{versionNumber}/deprecation': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /** Prevent a published template version from entering new content */
+    post: operations['deprecateOrganizationSessionTemplateVersion']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/studio/v1/organizations/{organizationId}/programs': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** List the organization's program drafts and immutable versions */
+    get: operations['listOrganizationPrograms']
+    put?: never
+    /** Create an organization-owned program and its first draft */
+    post: operations['createOrganizationProgram']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/studio/v1/organizations/{organizationId}/programs/{programId}/draft': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    /** Replace a program draft with exact published template-version references */
+    put: operations['replaceOrganizationProgramDraft']
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/studio/v1/organizations/{organizationId}/programs/{programId}/versions': {
     parameters: {
       query?: never
@@ -729,6 +867,23 @@ export interface paths {
     put?: never
     /** Publish an immutable program version */
     post: operations['publishProgramVersion']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/studio/v1/organizations/{organizationId}/programs/{programId}/versions/{versionNumber}/deprecation': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /** Prevent a published program version from receiving new assignments */
+    post: operations['deprecateOrganizationProgramVersion']
     delete?: never
     options?: never
     head?: never
@@ -1550,54 +1705,205 @@ export interface components {
       | 'nutrition_media'
     /** @enum {string} */
     AccessLevel: 'read' | 'contribute'
-    /**
-     * @example {
-     *       "notes": "Bloque de fuerza de ocho semanas",
-     *       "sessions": [
-     *         {
-     *           "position": 1,
-     *           "week": 1,
-     *           "day": 1,
-     *           "session_template_version_id": "018f6f8d-2b00-7a00-8000-000000000101",
-     *           "template_version_number": 1
-     *         },
-     *         {
-     *           "position": 2,
-     *           "week": 1,
-     *           "day": 3,
-     *           "session_template_version_id": "018f6f8d-2b00-7a00-8000-000000000102",
-     *           "template_version_number": 2
-     *         }
-     *       ]
-     *     }
-     */
-    ProgramVersionCreate: {
+    SessionTemplateCreate: {
+      discipline_code: string
+      title: string
+    }
+    SessionTemplateDraftContent: {
+      title: string
+      /**
+       * Format: uuid
+       * @description Null is allowed only while the draft is incomplete.
+       */
+      activity_type_id: string | null
+      steps: components['schemas']['PlannedStepContent'][]
+    }
+    PlannedStepContent: {
+      position: number
+      /** Format: uuid */
+      movement_id?: string | null
+      /**
+       * Format: uuid
+       * @description Optional per-step override for hybrid templates.
+       */
+      activity_type_id?: string | null
       notes?: string | null
-      sessions: components['schemas']['ProgramVersionSessionCreate'][]
+      target:
+        | components['schemas']['StrengthTarget']
+        | components['schemas']['EnduranceTarget']
+        | components['schemas']['IntervalTarget']
+        | components['schemas']['MobilityTarget']
+    }
+    StrengthTarget: {
+      /** @constant */
+      family: 'strength'
+      target_sets: number
+      target_reps?: number | null
+      target_load_value?: number | null
+      target_load_unit_code?: string | null
+      target_rpe?: number | null
+    }
+    EnduranceTarget: {
+      /** @constant */
+      family: 'endurance'
+      target_distance_value?: number | null
+      target_distance_unit_code?: string | null
+      target_duration_seconds?: number | null
+      target_pace_seconds_per_unit?: number | null
+      target_pace_unit_code?: string | null
+    } & (
+      | {
+          target_distance_value: number
+          target_distance_unit_code: string
+        }
+      | {
+          target_duration_seconds: number
+        }
+    )
+    IntervalTarget: {
+      /** @constant */
+      family: 'interval'
+      rounds: number
+      work_duration_seconds: number
+      rest_duration_seconds?: number | null
+      target_rpe?: number | null
+    }
+    MobilityTarget: {
+      /** @constant */
+      family: 'mobility'
+      sequence_position: number
+      hold_duration_seconds?: number | null
+      target_repetitions?: number | null
+      /** @enum {string} */
+      side: 'left' | 'right' | 'bilateral' | 'not_applicable'
+    } & (
+      | {
+          hold_duration_seconds: number
+        }
+      | {
+          target_repetitions: number
+        }
+    )
+    SessionTemplateDraft: {
+      id: components['schemas']['Uuid']
+      template_id: components['schemas']['Uuid']
+      /** @constant */
+      content_schema_version: 1
+      content: components['schemas']['SessionTemplateDraftContent']
+      /** Format: uuid */
+      derived_from_version_id?: string | null
+      etag: string
+      /** Format: date-time */
+      updated_at: string
+    }
+    SessionTemplateVersionSummary: {
+      id: components['schemas']['Uuid']
+      template_id: components['schemas']['Uuid']
+      version_number: number
+      /** @enum {string} */
+      status: 'published' | 'deprecated'
+      /** Format: date-time */
+      published_at: string
+    }
+    SessionTemplateVersion: {
+      id: components['schemas']['Uuid']
+      template_id: components['schemas']['Uuid']
+      version_number: number
+      discipline_code: string
+      activity_type_id: components['schemas']['Uuid']
+      /** Format: uuid */
+      derived_from_version_id?: string | null
+      title: string
+      /** @enum {string} */
+      status: 'published' | 'deprecated'
+      /** Format: date-time */
+      published_at: string
+      steps: components['schemas']['PlannedStepContent'][]
+    }
+    SessionTemplate: {
+      id: components['schemas']['Uuid']
+      organization_id: components['schemas']['Uuid']
+      discipline_code: string
+      status: components['schemas']['PublicationStatus']
+      author_person_id: components['schemas']['Uuid']
+      draft: components['schemas']['SessionTemplateDraft']
+      versions: components['schemas']['SessionTemplateVersionSummary'][]
+    }
+    SessionTemplatePage: {
+      data: components['schemas']['SessionTemplate'][]
+      page: components['schemas']['Page']
+    }
+    ProgramCreate: {
+      title: string
     }
     ProgramVersionSessionCreate: {
       position: number
       week: number
       day: number
-      session_template_version_id: components['schemas']['Uuid']
-      template_version_number: number
+      template_version_id: components['schemas']['Uuid']
+    }
+    ProgramDraftContent: {
+      title: string
+      notes?: string | null
+      sessions: components['schemas']['ProgramVersionSessionCreate'][]
+    }
+    ProgramDraft: {
+      id: components['schemas']['Uuid']
+      program_id: components['schemas']['Uuid']
+      /** @constant */
+      content_schema_version: 1
+      content: components['schemas']['ProgramDraftContent']
+      etag: string
+      /** Format: date-time */
+      updated_at: string
+      deprecated_template_version_ids?: components['schemas']['Uuid'][]
+    }
+    Program: {
+      id: components['schemas']['Uuid']
+      organization_id: components['schemas']['Uuid']
+      status: components['schemas']['PublicationStatus']
+      author_person_id: components['schemas']['Uuid']
+      draft: components['schemas']['ProgramDraft']
+      versions: components['schemas']['ProgramVersion'][]
+    }
+    ProgramPage: {
+      data: components['schemas']['Program'][]
+      page: components['schemas']['Page']
     }
     /**
      * @example {
      *       "id": "018f6f8d-2b00-7a00-8000-000000000201",
+     *       "program_id": "018f6f8d-2b00-7a00-8000-000000000200",
      *       "version_number": 1,
      *       "status": "published",
+     *       "title": "Bloque de fuerza",
+     *       "sessions": [
+     *         {
+     *           "position": 1,
+     *           "week": 1,
+     *           "day": 1,
+     *           "template_version_id": "018f6f8d-2b00-7a00-8000-000000000101"
+     *         }
+     *       ],
      *       "published_at": "2026-07-27T09:12:00-05:00",
-     *       "session_count": 24
+     *       "session_count": 1,
+     *       "deprecated_template_version_ids": []
      *     }
      */
     ProgramVersion: {
       id: components['schemas']['Uuid']
+      program_id: components['schemas']['Uuid']
       version_number: number
-      status: components['schemas']['PublicationStatus']
+      /** @enum {string} */
+      status: 'published' | 'deprecated'
+      title: string
+      notes?: string | null
+      sessions: components['schemas']['ProgramVersionSessionCreate'][]
       /** Format: date-time */
       published_at: string
       session_count: number
+      /** @description Published template versions retained in this composition but already deprecated. */
+      deprecated_template_version_ids: components['schemas']['Uuid'][]
     }
     /**
      * @example {
@@ -2431,6 +2737,9 @@ export interface components {
       request_id: string
       required_scope?: components['schemas']['RequiredScope'] | null
       errors?: components['schemas']['ValidationIssue'][]
+      /** @description Current server draft returned only for stale-draft conflicts. */
+      current_state?:
+        components['schemas']['SessionTemplateDraft'] | components['schemas']['ProgramDraft']
     }
     RequiredScope: {
       code: components['schemas']['ScopeCode']
@@ -2455,6 +2764,24 @@ export interface components {
          *       "type": "https://errors.allfit.invalid/idempotency-key-required",
          *       "title": "Idempotency-Key is required",
          *       "status": 400,
+         *       "request_id": "01JEXAMPLE0000000000000000"
+         *     }
+         */
+        'application/problem+json': components['schemas']['Problem']
+      }
+    }
+    /** @description A command representation other than application/json was supplied */
+    UnsupportedMediaType: {
+      headers: {
+        'Cache-Control': components['headers']['NoStore']
+        [name: string]: unknown
+      }
+      content: {
+        /**
+         * @example {
+         *       "type": "https://errors.allfit.invalid/unsupported-media-type",
+         *       "title": "Content-Type must be application/json",
+         *       "status": 415,
          *       "request_id": "01JEXAMPLE0000000000000000"
          *     }
          */
@@ -2764,6 +3091,8 @@ export interface components {
     SiteId: components['schemas']['Uuid']
     MembershipId: components['schemas']['Uuid']
     ProgramId: components['schemas']['Uuid']
+    TemplateId: components['schemas']['Uuid']
+    VersionNumber: number
     RelationshipId: components['schemas']['Uuid']
     PlannedSessionId: components['schemas']['Uuid']
     ExecutionId: components['schemas']['Uuid']
@@ -2777,6 +3106,8 @@ export interface components {
     CommandId: components['schemas']['UuidV7']
     /** @description Strong ETag for the execution revision used as the command base. */
     IfMatch: string
+    /** @description Strong content ETag returned with the current editable draft. */
+    PlanningDraftIfMatch: string
     /** @description Strong ETag for the organization revision used as the command base. */
     OrganizationIfMatch: string
     /** @description Strong ETag for the organization site revision used as the command base. */
@@ -4210,10 +4541,361 @@ export interface operations {
       503: components['responses']['UpstreamUnavailable']
     }
   }
-  publishProgramVersion: {
+  listOrganizationSessionTemplates: {
+    parameters: {
+      query?: {
+        limit?: components['parameters']['Limit']
+        cursor?: components['parameters']['Cursor']
+      }
+      header?: never
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Templates ordered by most recent change and stable identifier */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['PrivateRevalidate']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SessionTemplatePage']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  createOrganizationSessionTemplate: {
     parameters: {
       query?: never
       header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SessionTemplateCreate']
+      }
+    }
+    responses: {
+      /** @description Stable template identity and editable draft */
+      201: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          ETag: components['headers']['ETag']
+          Location: components['headers']['Location']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SessionTemplate']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  replaceOrganizationSessionTemplateDraft: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description Strong content ETag returned with the current editable draft. */
+        'If-Match': components['parameters']['PlanningDraftIfMatch']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+        templateId: components['parameters']['TemplateId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SessionTemplateDraftContent']
+      }
+    }
+    responses: {
+      /** @description Current draft; unchanged replacements preserve its ETag */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          ETag: components['headers']['ETag']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SessionTemplateDraft']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
+      428: components['responses']['PreconditionRequired']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  publishOrganizationSessionTemplateVersion: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description Strong content ETag returned with the current editable draft. */
+        'If-Match': components['parameters']['PlanningDraftIfMatch']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+        templateId: components['parameters']['TemplateId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Immutable published template version */
+      201: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          Location: components['headers']['Location']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SessionTemplateVersion']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
+      428: components['responses']['PreconditionRequired']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  getOrganizationSessionTemplateVersion: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+        templateId: components['parameters']['TemplateId']
+        versionNumber: components['parameters']['VersionNumber']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Complete immutable template version */
+      200: {
+        headers: {
+          'Cache-Control'?: 'private, max-age=31536000, immutable'
+          ETag: components['headers']['ETag']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SessionTemplateVersion']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  deriveOrganizationSessionTemplateVersion: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description Strong content ETag returned with the current editable draft. */
+        'If-Match': components['parameters']['PlanningDraftIfMatch']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+        templateId: components['parameters']['TemplateId']
+        versionNumber: components['parameters']['VersionNumber']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Draft copied from the selected immutable version */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          ETag: components['headers']['ETag']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SessionTemplateDraft']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      428: components['responses']['PreconditionRequired']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  deprecateOrganizationSessionTemplateVersion: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+        templateId: components['parameters']['TemplateId']
+        versionNumber: components['parameters']['VersionNumber']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Deprecated version, including convergent repeated commands */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SessionTemplateVersion']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listOrganizationPrograms: {
+    parameters: {
+      query?: {
+        limit?: components['parameters']['Limit']
+        cursor?: components['parameters']['Cursor']
+      }
+      header?: never
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Programs ordered by most recent change and stable identifier */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['PrivateRevalidate']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ProgramPage']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  createOrganizationProgram: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ProgramCreate']
+      }
+    }
+    responses: {
+      /** @description Stable program identity and editable draft */
+      201: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          ETag: components['headers']['ETag']
+          Location: components['headers']['Location']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Program']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  replaceOrganizationProgramDraft: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description Strong content ETag returned with the current editable draft. */
+        'If-Match': components['parameters']['PlanningDraftIfMatch']
         /** @description UUIDv4 reused only for HTTP retries of this operation. */
         'Idempotency-Key': components['parameters']['IdempotencyKey']
         /** @description UUIDv7 durable identity generated when the user intention is created. */
@@ -4227,9 +4909,51 @@ export interface operations {
     }
     requestBody: {
       content: {
-        'application/json': components['schemas']['ProgramVersionCreate']
+        'application/json': components['schemas']['ProgramDraftContent']
       }
     }
+    responses: {
+      /** @description Current program draft */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          ETag: components['headers']['ETag']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ProgramDraft']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
+      428: components['responses']['PreconditionRequired']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  publishProgramVersion: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description Strong content ETag returned with the current editable draft. */
+        'If-Match': components['parameters']['PlanningDraftIfMatch']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+        programId: components['parameters']['ProgramId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
     responses: {
       /** @description Published version */
       201: {
@@ -4248,7 +4972,48 @@ export interface operations {
       403: components['responses']['Forbidden']
       404: components['responses']['NotFound']
       409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
       422: components['responses']['ValidationFailed']
+      428: components['responses']['PreconditionRequired']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  deprecateOrganizationProgramVersion: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+        programId: components['parameters']['ProgramId']
+        versionNumber: components['parameters']['VersionNumber']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Deprecated version, including convergent repeated commands */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ProgramVersion']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      503: components['responses']['UpstreamUnavailable']
     }
   }
   assignProgramVersion: {

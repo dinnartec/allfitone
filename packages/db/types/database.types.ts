@@ -28,11 +28,330 @@ export type Database = {
         Returns: boolean
       }
       is_self: { Args: { target_person_id: string }; Returns: boolean }
+      org: { Args: never; Returns: string }
       owns_membership: { Args: { p_membership_id: string }; Returns: boolean }
       person: { Args: never; Returns: string }
     }
     Enums: {
       [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
+  catalog: {
+    Tables: {
+      activity_type_result_contracts: {
+        Row: {
+          activity_type_id: string
+          id: string
+          is_default: boolean
+          result_contract_id: string
+          valid_from: string
+          valid_to: string | null
+        }
+        Insert: {
+          activity_type_id: string
+          id?: string
+          is_default?: boolean
+          result_contract_id: string
+          valid_from: string
+          valid_to?: string | null
+        }
+        Update: {
+          activity_type_id?: string
+          id?: string
+          is_default?: boolean
+          result_contract_id?: string
+          valid_from?: string
+          valid_to?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_activity_type_result_contracts_activity_type'
+            columns: ['activity_type_id']
+            isOneToOne: false
+            referencedRelation: 'activity_types'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'fk_activity_type_result_contracts_result_contract'
+            columns: ['result_contract_id']
+            isOneToOne: false
+            referencedRelation: 'result_contracts'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      activity_types: {
+        Row: {
+          code: string
+          content_scope: Database['catalog']['Enums']['content_scope']
+          created_at: string
+          discipline_code: string
+          id: string
+          name: string
+          owner_organization_id: string | null
+          status: Database['catalog']['Enums']['publication_status']
+        }
+        Insert: {
+          code: string
+          content_scope?: Database['catalog']['Enums']['content_scope']
+          created_at?: string
+          discipline_code: string
+          id?: string
+          name: string
+          owner_organization_id?: string | null
+          status?: Database['catalog']['Enums']['publication_status']
+        }
+        Update: {
+          code?: string
+          content_scope?: Database['catalog']['Enums']['content_scope']
+          created_at?: string
+          discipline_code?: string
+          id?: string
+          name?: string
+          owner_organization_id?: string | null
+          status?: Database['catalog']['Enums']['publication_status']
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_activity_types_discipline'
+            columns: ['discipline_code']
+            isOneToOne: false
+            referencedRelation: 'disciplines'
+            referencedColumns: ['code']
+          },
+        ]
+      }
+      disciplines: {
+        Row: {
+          code: string
+          created_at: string
+          id: string
+          name: string
+          status: Database['catalog']['Enums']['publication_status']
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          id?: string
+          name: string
+          status?: Database['catalog']['Enums']['publication_status']
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          id?: string
+          name?: string
+          status?: Database['catalog']['Enums']['publication_status']
+        }
+        Relationships: []
+      }
+      movements: {
+        Row: {
+          content_scope: Database['catalog']['Enums']['content_scope']
+          created_at: string
+          discipline_code: string
+          id: string
+          name: string
+          normalized_name: string
+          owner_organization_id: string | null
+          owner_person_id: string | null
+          status: Database['catalog']['Enums']['publication_status']
+          successor_movement_id: string | null
+        }
+        Insert: {
+          content_scope: Database['catalog']['Enums']['content_scope']
+          created_at?: string
+          discipline_code: string
+          id?: string
+          name: string
+          normalized_name: string
+          owner_organization_id?: string | null
+          owner_person_id?: string | null
+          status?: Database['catalog']['Enums']['publication_status']
+          successor_movement_id?: string | null
+        }
+        Update: {
+          content_scope?: Database['catalog']['Enums']['content_scope']
+          created_at?: string
+          discipline_code?: string
+          id?: string
+          name?: string
+          normalized_name?: string
+          owner_organization_id?: string | null
+          owner_person_id?: string | null
+          status?: Database['catalog']['Enums']['publication_status']
+          successor_movement_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_movements_discipline'
+            columns: ['discipline_code']
+            isOneToOne: false
+            referencedRelation: 'disciplines'
+            referencedColumns: ['code']
+          },
+          {
+            foreignKeyName: 'fk_movements_successor'
+            columns: ['successor_movement_id']
+            isOneToOne: false
+            referencedRelation: 'movements'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      professional_credential_types: {
+        Row: {
+          code: string
+          created_at: string
+          description: string | null
+          display_order: number
+          name: string
+          status: Database['catalog']['Enums']['publication_status']
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          description?: string | null
+          display_order: number
+          name: string
+          status?: Database['catalog']['Enums']['publication_status']
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          description?: string | null
+          display_order?: number
+          name?: string
+          status?: Database['catalog']['Enums']['publication_status']
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      professional_specialties: {
+        Row: {
+          code: string
+          created_at: string
+          description: string | null
+          display_order: number
+          name: string
+          status: Database['catalog']['Enums']['publication_status']
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          description?: string | null
+          display_order: number
+          name: string
+          status?: Database['catalog']['Enums']['publication_status']
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          description?: string | null
+          display_order?: number
+          name?: string
+          status?: Database['catalog']['Enums']['publication_status']
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      result_contracts: {
+        Row: {
+          activity_family: Database['catalog']['Enums']['activity_family']
+          contract_code: string
+          contract_schema_version: number
+          envelope: Json
+          id: string
+          minimums: Json
+          published_at: string | null
+          status: Database['catalog']['Enums']['publication_status']
+          version_number: number
+        }
+        Insert: {
+          activity_family: Database['catalog']['Enums']['activity_family']
+          contract_code: string
+          contract_schema_version?: number
+          envelope: Json
+          id?: string
+          minimums: Json
+          published_at?: string | null
+          status?: Database['catalog']['Enums']['publication_status']
+          version_number: number
+        }
+        Update: {
+          activity_family?: Database['catalog']['Enums']['activity_family']
+          contract_code?: string
+          contract_schema_version?: number
+          envelope?: Json
+          id?: string
+          minimums?: Json
+          published_at?: string | null
+          status?: Database['catalog']['Enums']['publication_status']
+          version_number?: number
+        }
+        Relationships: []
+      }
+      units: {
+        Row: {
+          code: string
+          dimension: string
+          id: string
+          is_canonical: boolean
+          to_canonical_factor: number
+        }
+        Insert: {
+          code: string
+          dimension: string
+          id?: string
+          is_canonical?: boolean
+          to_canonical_factor: number
+        }
+        Update: {
+          code?: string
+          dimension?: string
+          id?: string
+          is_canonical?: boolean
+          to_canonical_factor?: number
+        }
+        Relationships: []
+      }
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      activity_type_target_family: {
+        Args: { p_activity_type_id: string }
+        Returns: Database['catalog']['Enums']['activity_family']
+      }
+      list_professional_credential_types: {
+        Args: never
+        Returns: {
+          code: string
+          description: string
+          name: string
+        }[]
+      }
+      list_professional_specialties: {
+        Args: never
+        Returns: {
+          code: string
+          description: string
+          name: string
+        }[]
+      }
+    }
+    Enums: {
+      activity_family: 'strength' | 'endurance' | 'interval' | 'mobility'
+      content_scope: 'global' | 'organization' | 'person'
+      publication_status: 'draft' | 'published' | 'deprecated' | 'archived'
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1894,6 +2213,703 @@ export type Database = {
       [_ in never]: never
     }
   }
+  planning: {
+    Tables: {
+      endurance_targets: {
+        Row: {
+          id: string
+          planned_step_id: string
+          target_distance_unit_code: string | null
+          target_distance_value: number | null
+          target_duration_seconds: number | null
+          target_pace_seconds_per_unit: number | null
+          target_pace_unit_code: string | null
+        }
+        Insert: {
+          id?: string
+          planned_step_id: string
+          target_distance_unit_code?: string | null
+          target_distance_value?: number | null
+          target_duration_seconds?: number | null
+          target_pace_seconds_per_unit?: number | null
+          target_pace_unit_code?: string | null
+        }
+        Update: {
+          id?: string
+          planned_step_id?: string
+          target_distance_unit_code?: string | null
+          target_distance_value?: number | null
+          target_duration_seconds?: number | null
+          target_pace_seconds_per_unit?: number | null
+          target_pace_unit_code?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_endurance_targets_step'
+            columns: ['planned_step_id']
+            isOneToOne: true
+            referencedRelation: 'planned_steps'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      interval_targets: {
+        Row: {
+          id: string
+          planned_step_id: string
+          rest_duration_seconds: number | null
+          rounds: number
+          target_rpe: number | null
+          work_duration_seconds: number
+        }
+        Insert: {
+          id?: string
+          planned_step_id: string
+          rest_duration_seconds?: number | null
+          rounds: number
+          target_rpe?: number | null
+          work_duration_seconds: number
+        }
+        Update: {
+          id?: string
+          planned_step_id?: string
+          rest_duration_seconds?: number | null
+          rounds?: number
+          target_rpe?: number | null
+          work_duration_seconds?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_interval_targets_step'
+            columns: ['planned_step_id']
+            isOneToOne: true
+            referencedRelation: 'planned_steps'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      mobility_targets: {
+        Row: {
+          hold_duration_seconds: number | null
+          id: string
+          planned_step_id: string
+          sequence_position: number
+          side: string
+          target_repetitions: number | null
+        }
+        Insert: {
+          hold_duration_seconds?: number | null
+          id?: string
+          planned_step_id: string
+          sequence_position: number
+          side: string
+          target_repetitions?: number | null
+        }
+        Update: {
+          hold_duration_seconds?: number | null
+          id?: string
+          planned_step_id?: string
+          sequence_position?: number
+          side?: string
+          target_repetitions?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_mobility_targets_step'
+            columns: ['planned_step_id']
+            isOneToOne: true
+            referencedRelation: 'planned_steps'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      planned_steps: {
+        Row: {
+          activity_type_id: string | null
+          id: string
+          movement_id: string | null
+          notes: string | null
+          position: number
+          template_version_id: string
+        }
+        Insert: {
+          activity_type_id?: string | null
+          id?: string
+          movement_id?: string | null
+          notes?: string | null
+          position: number
+          template_version_id: string
+        }
+        Update: {
+          activity_type_id?: string | null
+          id?: string
+          movement_id?: string | null
+          notes?: string | null
+          position?: number
+          template_version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_planned_steps_template_version'
+            columns: ['template_version_id']
+            isOneToOne: false
+            referencedRelation: 'session_template_versions'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      program_drafts: {
+        Row: {
+          content: Json
+          content_schema_version: number
+          id: string
+          program_id: string
+          updated_at: string
+        }
+        Insert: {
+          content: Json
+          content_schema_version?: number
+          id?: string
+          program_id: string
+          updated_at?: string
+        }
+        Update: {
+          content?: Json
+          content_schema_version?: number
+          id?: string
+          program_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_program_drafts_program'
+            columns: ['program_id']
+            isOneToOne: true
+            referencedRelation: 'programs'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      program_version_sessions: {
+        Row: {
+          day: number
+          id: string
+          position: number
+          program_version_id: string
+          template_version_id: string
+          week: number
+        }
+        Insert: {
+          day: number
+          id?: string
+          position: number
+          program_version_id: string
+          template_version_id: string
+          week: number
+        }
+        Update: {
+          day?: number
+          id?: string
+          position?: number
+          program_version_id?: string
+          template_version_id?: string
+          week?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_program_version_sessions_program_version'
+            columns: ['program_version_id']
+            isOneToOne: false
+            referencedRelation: 'program_versions'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'fk_program_version_sessions_template_version'
+            columns: ['template_version_id']
+            isOneToOne: false
+            referencedRelation: 'session_template_versions'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      program_versions: {
+        Row: {
+          content_hash: string
+          id: string
+          notes: string | null
+          program_id: string
+          published_at: string
+          status: Database['catalog']['Enums']['publication_status']
+          title: string
+          version_number: number
+        }
+        Insert: {
+          content_hash: string
+          id?: string
+          notes?: string | null
+          program_id: string
+          published_at?: string
+          status?: Database['catalog']['Enums']['publication_status']
+          title: string
+          version_number: number
+        }
+        Update: {
+          content_hash?: string
+          id?: string
+          notes?: string | null
+          program_id?: string
+          published_at?: string
+          status?: Database['catalog']['Enums']['publication_status']
+          title?: string
+          version_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_program_versions_program'
+            columns: ['program_id']
+            isOneToOne: false
+            referencedRelation: 'programs'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      programs: {
+        Row: {
+          author_person_id: string
+          created_at: string
+          id: string
+          owner_organization_id: string | null
+          owner_person_id: string | null
+          status: Database['catalog']['Enums']['publication_status']
+          updated_at: string
+        }
+        Insert: {
+          author_person_id: string
+          created_at?: string
+          id?: string
+          owner_organization_id?: string | null
+          owner_person_id?: string | null
+          status?: Database['catalog']['Enums']['publication_status']
+          updated_at?: string
+        }
+        Update: {
+          author_person_id?: string
+          created_at?: string
+          id?: string
+          owner_organization_id?: string | null
+          owner_person_id?: string | null
+          status?: Database['catalog']['Enums']['publication_status']
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      session_template_drafts: {
+        Row: {
+          content: Json
+          content_schema_version: number
+          derived_from_version_id: string | null
+          id: string
+          template_id: string
+          updated_at: string
+        }
+        Insert: {
+          content: Json
+          content_schema_version?: number
+          derived_from_version_id?: string | null
+          id?: string
+          template_id: string
+          updated_at?: string
+        }
+        Update: {
+          content?: Json
+          content_schema_version?: number
+          derived_from_version_id?: string | null
+          id?: string
+          template_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_session_template_drafts_derivation'
+            columns: ['derived_from_version_id']
+            isOneToOne: false
+            referencedRelation: 'session_template_versions'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'fk_session_template_drafts_template'
+            columns: ['template_id']
+            isOneToOne: true
+            referencedRelation: 'session_templates'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      session_template_versions: {
+        Row: {
+          activity_type_id: string
+          content_hash: string
+          derived_from_version_id: string | null
+          discipline_code: string
+          id: string
+          published_at: string
+          status: Database['catalog']['Enums']['publication_status']
+          template_id: string
+          title: string
+          version_number: number
+        }
+        Insert: {
+          activity_type_id: string
+          content_hash: string
+          derived_from_version_id?: string | null
+          discipline_code: string
+          id?: string
+          published_at?: string
+          status?: Database['catalog']['Enums']['publication_status']
+          template_id: string
+          title: string
+          version_number: number
+        }
+        Update: {
+          activity_type_id?: string
+          content_hash?: string
+          derived_from_version_id?: string | null
+          discipline_code?: string
+          id?: string
+          published_at?: string
+          status?: Database['catalog']['Enums']['publication_status']
+          template_id?: string
+          title?: string
+          version_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_session_template_versions_derivation'
+            columns: ['derived_from_version_id']
+            isOneToOne: false
+            referencedRelation: 'session_template_versions'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'fk_session_template_versions_template'
+            columns: ['template_id']
+            isOneToOne: false
+            referencedRelation: 'session_templates'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      session_templates: {
+        Row: {
+          author_person_id: string
+          created_at: string
+          discipline_code: string
+          id: string
+          owner_organization_id: string | null
+          owner_person_id: string | null
+          status: Database['catalog']['Enums']['publication_status']
+          updated_at: string
+        }
+        Insert: {
+          author_person_id: string
+          created_at?: string
+          discipline_code: string
+          id?: string
+          owner_organization_id?: string | null
+          owner_person_id?: string | null
+          status?: Database['catalog']['Enums']['publication_status']
+          updated_at?: string
+        }
+        Update: {
+          author_person_id?: string
+          created_at?: string
+          discipline_code?: string
+          id?: string
+          owner_organization_id?: string | null
+          owner_person_id?: string | null
+          status?: Database['catalog']['Enums']['publication_status']
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      strength_targets: {
+        Row: {
+          id: string
+          planned_step_id: string
+          target_load_unit_code: string | null
+          target_load_value: number | null
+          target_reps: number | null
+          target_rpe: number | null
+          target_sets: number
+        }
+        Insert: {
+          id?: string
+          planned_step_id: string
+          target_load_unit_code?: string | null
+          target_load_value?: number | null
+          target_reps?: number | null
+          target_rpe?: number | null
+          target_sets: number
+        }
+        Update: {
+          id?: string
+          planned_step_id?: string
+          target_load_unit_code?: string | null
+          target_load_value?: number | null
+          target_reps?: number | null
+          target_rpe?: number | null
+          target_sets?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_strength_targets_step'
+            columns: ['planned_step_id']
+            isOneToOne: true
+            referencedRelation: 'planned_steps'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      assert_deprecate_content: {
+        Args: { p_organization_id: string; p_person_id: string }
+        Returns: string
+      }
+      assert_manage_content: {
+        Args: { p_organization_id: string; p_person_id: string }
+        Returns: string
+      }
+      audit_organization_read: {
+        Args: { p_organization_id: string; p_person_id: string }
+        Returns: undefined
+      }
+      content_etag: { Args: { p_content: Json }; Returns: string }
+      create_program: {
+        Args: {
+          p_command_id: string
+          p_idempotency_key: string
+          p_organization_id: string
+          p_person_id: string
+          p_request_hash: string
+          p_title: string
+        }
+        Returns: {
+          replayed: boolean
+          result: Json
+        }[]
+      }
+      create_session_template: {
+        Args: {
+          p_command_id: string
+          p_discipline_code: string
+          p_idempotency_key: string
+          p_organization_id: string
+          p_person_id: string
+          p_request_hash: string
+          p_title: string
+        }
+        Returns: {
+          replayed: boolean
+          result: Json
+        }[]
+      }
+      deprecate_program_version: {
+        Args: {
+          p_command_id: string
+          p_idempotency_key: string
+          p_organization_id: string
+          p_person_id: string
+          p_program_id: string
+          p_request_hash: string
+          p_version_number: number
+        }
+        Returns: {
+          replayed: boolean
+          result: Json
+        }[]
+      }
+      deprecate_session_template_version: {
+        Args: {
+          p_command_id: string
+          p_idempotency_key: string
+          p_organization_id: string
+          p_person_id: string
+          p_request_hash: string
+          p_template_id: string
+          p_version_number: number
+        }
+        Returns: {
+          replayed: boolean
+          result: Json
+        }[]
+      }
+      derive_session_template_version: {
+        Args: {
+          p_command_id: string
+          p_expected_etag: string
+          p_idempotency_key: string
+          p_organization_id: string
+          p_person_id: string
+          p_request_hash: string
+          p_template_id: string
+          p_version_number: number
+        }
+        Returns: {
+          replayed: boolean
+          result: Json
+        }[]
+      }
+      list_programs: {
+        Args: {
+          p_cursor_id: string
+          p_cursor_updated_at: string
+          p_limit: number
+          p_organization_id: string
+          p_person_id: string
+        }
+        Returns: {
+          program_id: string
+          result: Json
+          updated_at: string
+        }[]
+      }
+      list_session_templates: {
+        Args: {
+          p_cursor_id: string
+          p_cursor_updated_at: string
+          p_limit: number
+          p_organization_id: string
+          p_person_id: string
+        }
+        Returns: {
+          result: Json
+          template_id: string
+          updated_at: string
+        }[]
+      }
+      lock_program_template_versions: {
+        Args: { p_content: Json; p_organization_id: string }
+        Returns: undefined
+      }
+      materialize_target: {
+        Args: { p_step_id: string; p_target: Json }
+        Returns: undefined
+      }
+      program_content_errors: {
+        Args: {
+          p_content: Json
+          p_organization_id: string
+          p_require_publishable: boolean
+        }
+        Returns: string[]
+      }
+      program_draft_projection: { Args: { p_draft_id: string }; Returns: Json }
+      program_projection: { Args: { p_program_id: string }; Returns: Json }
+      program_version_projection: {
+        Args: { p_version_id: string }
+        Returns: Json
+      }
+      publish_program_version: {
+        Args: {
+          p_command_id: string
+          p_expected_etag: string
+          p_idempotency_key: string
+          p_organization_id: string
+          p_person_id: string
+          p_program_id: string
+          p_request_hash: string
+        }
+        Returns: {
+          replayed: boolean
+          result: Json
+        }[]
+      }
+      publish_session_template_version: {
+        Args: {
+          p_command_id: string
+          p_expected_etag: string
+          p_idempotency_key: string
+          p_organization_id: string
+          p_person_id: string
+          p_request_hash: string
+          p_template_id: string
+        }
+        Returns: {
+          replayed: boolean
+          result: Json
+        }[]
+      }
+      read_session_template_version: {
+        Args: {
+          p_organization_id: string
+          p_person_id: string
+          p_template_id: string
+          p_version_number: number
+        }
+        Returns: Json
+      }
+      replace_program_draft: {
+        Args: {
+          p_command_id: string
+          p_content: Json
+          p_expected_etag: string
+          p_idempotency_key: string
+          p_organization_id: string
+          p_person_id: string
+          p_program_id: string
+          p_request_hash: string
+        }
+        Returns: {
+          replayed: boolean
+          result: Json
+        }[]
+      }
+      replace_session_template_draft: {
+        Args: {
+          p_command_id: string
+          p_content: Json
+          p_expected_etag: string
+          p_idempotency_key: string
+          p_organization_id: string
+          p_person_id: string
+          p_request_hash: string
+          p_template_id: string
+        }
+        Returns: {
+          replayed: boolean
+          result: Json
+        }[]
+      }
+      session_content_errors: {
+        Args: {
+          p_content: Json
+          p_discipline_code: string
+          p_organization_id: string
+          p_require_complete: boolean
+        }
+        Returns: string[]
+      }
+      session_draft_projection: { Args: { p_draft_id: string }; Returns: Json }
+      session_template_projection: {
+        Args: { p_template_id: string }
+        Returns: Json
+      }
+      session_version_projection: {
+        Args: { p_version_id: string }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
 }
 
 type DatabaseWithoutInternals = Omit<Database, '__InternalSupabase'>
@@ -2011,6 +3027,13 @@ export const Constants = {
   access_control: {
     Enums: {},
   },
+  catalog: {
+    Enums: {
+      activity_family: ['strength', 'endurance', 'interval', 'mobility'],
+      content_scope: ['global', 'organization', 'person'],
+      publication_status: ['draft', 'published', 'deprecated', 'archived'],
+    },
+  },
   identity: {
     Enums: {
       access_session_surface: ['studio', 'backoffice'],
@@ -2037,5 +3060,8 @@ export const Constants = {
       membership_status: ['active', 'terminated'],
       organization_status: ['active', 'closed'],
     },
+  },
+  planning: {
+    Enums: {},
   },
 } as const
