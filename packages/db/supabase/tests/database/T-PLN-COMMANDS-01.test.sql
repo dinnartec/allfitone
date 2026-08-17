@@ -1,6 +1,6 @@
 begin;
 
-select plan(62);
+select plan(71);
 
 insert into identity.people (id, given_name, family_name)
 values
@@ -297,8 +297,33 @@ select throws_ok(
   '42501', null, 'T-PLN-RLS-07 coach cannot deprecate content'
 );
 select set_config('app.actor_person_id', '019d0000-0000-7000-8000-000000000001', true);
+-- The watermark is read through the list contract itself: it is the ordering and
+-- pagination key the caller sees, not an incidental column.
+select set_config('app.request_id', '11111111-1111-4111-8111-111111111140', true);
+create temporary table template_watermark_before_retirement as
+select updated_at from planning.list_session_templates(
+  '019d0000-0000-7000-8000-000000000001', '019d0000-0000-7000-8000-000000000101', 25, null, null
+) where template_id = (select (result->>'id')::uuid from created_template);
 select is((select result->>'status' from planning.deprecate_session_template_version('019d0000-0000-7000-8000-000000000001', '019d0000-0000-7000-8000-000000000101', (select (result->>'id')::uuid from created_template), 1, '11111111-1111-4111-8111-111111111114', '019d0000-0000-7000-8000-000000000314', decode(repeat('14', 32), 'hex'))), 'deprecated', 'T-PLN-IDEM-12 owner deprecates a template version');
+select set_config('app.request_id', '11111111-1111-4111-8111-111111111141', true);
+create temporary table template_watermark_after_retirement as
+select updated_at from planning.list_session_templates(
+  '019d0000-0000-7000-8000-000000000001', '019d0000-0000-7000-8000-000000000101', 25, null, null
+) where template_id = (select (result->>'id')::uuid from created_template);
+select ok(
+  (select updated_at from template_watermark_after_retirement)
+    > (select updated_at from template_watermark_before_retirement),
+  'T-PLN-INT-14 template retirement moves the watermark that orders the list'
+);
 select is((select replayed from planning.deprecate_session_template_version('019d0000-0000-7000-8000-000000000001', '019d0000-0000-7000-8000-000000000101', (select (result->>'id')::uuid from created_template), 1, '11111111-1111-4111-8111-111111111114', '019d0000-0000-7000-8000-000000000314', decode(repeat('14', 32), 'hex'))), true, 'T-PLN-IDEM-12A template deprecation replays');
+select set_config('app.request_id', '11111111-1111-4111-8111-111111111142', true);
+select is(
+  (select updated_at from planning.list_session_templates(
+    '019d0000-0000-7000-8000-000000000001', '019d0000-0000-7000-8000-000000000101', 25, null, null
+  ) where template_id = (select (result->>'id')::uuid from created_template)),
+  (select updated_at from template_watermark_after_retirement),
+  'T-PLN-INT-15 a replayed retirement leaves the watermark untouched'
+);
 create temporary table new_program_after_deprecation as
 select * from planning.create_program(
   '019d0000-0000-7000-8000-000000000001', '019d0000-0000-7000-8000-000000000101',
@@ -354,8 +379,31 @@ select * from planning.publish_program_version(
   '11111111-1111-4111-8111-111111111118', '019d0000-0000-7000-8000-000000000318', decode(repeat('18', 32), 'hex')
 );
 select is((select jsonb_array_length(result->'deprecated_template_version_ids') from republished_deprecated_program), 1, 'T-PLN-IDEM-13C publication succeeds and warns about deprecated template versions');
+select set_config('app.request_id', '11111111-1111-4111-8111-111111111143', true);
+create temporary table program_watermark_before_retirement as
+select updated_at from planning.list_programs(
+  '019d0000-0000-7000-8000-000000000001', '019d0000-0000-7000-8000-000000000101', 25, null, null
+) where program_id = (select (result->>'id')::uuid from created_program);
 select is((select result->>'status' from planning.deprecate_program_version('019d0000-0000-7000-8000-000000000001', '019d0000-0000-7000-8000-000000000101', (select (result->>'id')::uuid from created_program), 1, '11111111-1111-4111-8111-111111111115', '019d0000-0000-7000-8000-000000000315', decode(repeat('15', 32), 'hex'))), 'deprecated', 'T-PLN-IDEM-13 owner deprecates a program version');
+select set_config('app.request_id', '11111111-1111-4111-8111-111111111144', true);
+create temporary table program_watermark_after_retirement as
+select updated_at from planning.list_programs(
+  '019d0000-0000-7000-8000-000000000001', '019d0000-0000-7000-8000-000000000101', 25, null, null
+) where program_id = (select (result->>'id')::uuid from created_program);
+select ok(
+  (select updated_at from program_watermark_after_retirement)
+    > (select updated_at from program_watermark_before_retirement),
+  'T-PLN-INT-16 program retirement moves the watermark that orders the list'
+);
 select is((select replayed from planning.deprecate_program_version('019d0000-0000-7000-8000-000000000001', '019d0000-0000-7000-8000-000000000101', (select (result->>'id')::uuid from created_program), 1, '11111111-1111-4111-8111-111111111115', '019d0000-0000-7000-8000-000000000315', decode(repeat('15', 32), 'hex'))), true, 'T-PLN-IDEM-13A program deprecation replays');
+select set_config('app.request_id', '11111111-1111-4111-8111-111111111145', true);
+select is(
+  (select updated_at from planning.list_programs(
+    '019d0000-0000-7000-8000-000000000001', '019d0000-0000-7000-8000-000000000101', 25, null, null
+  ) where program_id = (select (result->>'id')::uuid from created_program)),
+  (select updated_at from program_watermark_after_retirement),
+  'T-PLN-INT-17 a replayed program retirement leaves the watermark untouched'
+);
 
 select set_config('app.actor_person_id', '019d0000-0000-7000-8000-000000000002', true);
 select is((select replayed from planning.derive_session_template_version(
@@ -371,6 +419,109 @@ select is((select result->>'status' from planning.deprecate_session_template_ver
   '11111111-1111-4111-8111-111111111114', '019d0000-0000-7000-8000-000000000314',
   decode(repeat('14', 32), 'hex'))), 'deprecated',
   'T-PLN-IDEM-16 deprecation remains idempotent after derivation is blocked');
+
+-- Publication converges on the materialized content. Two drafts that differ only
+-- in what materialization discards must not fork the immutable version history.
+create temporary table convergence_template as
+select * from planning.create_session_template(
+  '019d0000-0000-7000-8000-000000000001', '019d0000-0000-7000-8000-000000000101',
+  'test_strength', 'Convergencia', '11111111-1111-4111-8111-111111111123',
+  '019d0000-0000-7000-8000-000000000323', decode(repeat('23', 32), 'hex')
+);
+create temporary table convergence_draft as
+select * from planning.replace_session_template_draft(
+  '019d0000-0000-7000-8000-000000000001', '019d0000-0000-7000-8000-000000000101',
+  (select (result->>'id')::uuid from convergence_template),
+  (select result->'draft'->>'etag' from convergence_template),
+  '{"title":"Convergencia","activity_type_id":"019c0000-0000-7000-8000-000000000011","steps":[{"position":1,"movement_id":null,"activity_type_id":null,"notes":null,"target":{"family":"strength","target_sets":3,"target_reps":8,"target_load_value":null,"target_load_unit_code":null,"target_rpe":7}}]}',
+  '11111111-1111-4111-8111-111111111124', '019d0000-0000-7000-8000-000000000324', decode(repeat('24', 32), 'hex')
+);
+create temporary table convergence_version as
+select * from planning.publish_session_template_version(
+  '019d0000-0000-7000-8000-000000000001', '019d0000-0000-7000-8000-000000000101',
+  (select (result->>'id')::uuid from convergence_template),
+  (select result->>'etag' from convergence_draft),
+  '11111111-1111-4111-8111-111111111125', '019d0000-0000-7000-8000-000000000325', decode(repeat('25', 32), 'hex')
+);
+create temporary table convergence_normalized_draft as
+select * from planning.replace_session_template_draft(
+  '019d0000-0000-7000-8000-000000000001', '019d0000-0000-7000-8000-000000000101',
+  (select (result->>'id')::uuid from convergence_template),
+  (select result->>'etag' from convergence_draft),
+  '{"title":"  Convergencia  ","activity_type_id":"019c0000-0000-7000-8000-000000000011","steps":[{"position":1,"target":{"family":"strength","target_sets":3,"target_reps":8,"target_rpe":7}}]}',
+  '11111111-1111-4111-8111-111111111126', '019d0000-0000-7000-8000-000000000326', decode(repeat('26', 32), 'hex')
+);
+select isnt(
+  (select result->>'etag' from convergence_normalized_draft),
+  (select result->>'etag' from convergence_draft),
+  'T-PLN-IDEM-17 a padded, sparsely written draft is a distinct draft revision'
+);
+select is(
+  (select result->>'id' from planning.publish_session_template_version(
+    '019d0000-0000-7000-8000-000000000001', '019d0000-0000-7000-8000-000000000101',
+    (select (result->>'id')::uuid from convergence_template),
+    (select result->>'etag' from convergence_normalized_draft),
+    '11111111-1111-4111-8111-111111111127', '019d0000-0000-7000-8000-000000000327', decode(repeat('27', 32), 'hex'))),
+  (select result->>'id' from convergence_version),
+  'T-PLN-IDEM-18 template publication converges on materialized content, not the raw draft'
+);
+select set_config('app.request_id', '11111111-1111-4111-8111-111111111146', true);
+select is(
+  (select jsonb_array_length(result->'versions') from planning.list_session_templates(
+    '019d0000-0000-7000-8000-000000000001', '019d0000-0000-7000-8000-000000000101', 25, null, null
+  ) where template_id = (select (result->>'id')::uuid from convergence_template)),
+  1, 'T-PLN-INT-18 convergent template publication does not fork the version history'
+);
+
+create temporary table convergence_program as
+select * from planning.create_program(
+  '019d0000-0000-7000-8000-000000000001', '019d0000-0000-7000-8000-000000000101',
+  'Programa C', '11111111-1111-4111-8111-111111111128',
+  '019d0000-0000-7000-8000-000000000328', decode(repeat('28', 32), 'hex')
+);
+create temporary table convergence_program_draft as
+select * from planning.replace_program_draft(
+  '019d0000-0000-7000-8000-000000000001', '019d0000-0000-7000-8000-000000000101',
+  (select (result->>'id')::uuid from convergence_program),
+  (select result->'draft'->>'etag' from convergence_program),
+  jsonb_build_object('title', 'Programa C', 'notes', null, 'sessions', jsonb_build_array(
+    jsonb_build_object('position', 1, 'week', 1, 'day', 1,
+      'template_version_id', (select result->>'id' from convergence_version)))),
+  '11111111-1111-4111-8111-111111111129', '019d0000-0000-7000-8000-000000000329', decode(repeat('29', 32), 'hex')
+);
+create temporary table convergence_program_version as
+select * from planning.publish_program_version(
+  '019d0000-0000-7000-8000-000000000001', '019d0000-0000-7000-8000-000000000101',
+  (select (result->>'id')::uuid from convergence_program),
+  (select result->>'etag' from convergence_program_draft),
+  '11111111-1111-4111-8111-111111111130', '019d0000-0000-7000-8000-000000000330', decode(repeat('30', 32), 'hex')
+);
+create temporary table convergence_program_normalized_draft as
+select * from planning.replace_program_draft(
+  '019d0000-0000-7000-8000-000000000001', '019d0000-0000-7000-8000-000000000101',
+  (select (result->>'id')::uuid from convergence_program),
+  (select result->>'etag' from convergence_program_draft),
+  jsonb_build_object('title', '  Programa C  ', 'sessions', jsonb_build_array(
+    jsonb_build_object('position', 1, 'week', 1, 'day', 1,
+      'template_version_id', (select result->>'id' from convergence_version)))),
+  '11111111-1111-4111-8111-111111111131', '019d0000-0000-7000-8000-000000000331', decode(repeat('31', 32), 'hex')
+);
+select is(
+  (select result->>'id' from planning.publish_program_version(
+    '019d0000-0000-7000-8000-000000000001', '019d0000-0000-7000-8000-000000000101',
+    (select (result->>'id')::uuid from convergence_program),
+    (select result->>'etag' from convergence_program_normalized_draft),
+    '11111111-1111-4111-8111-111111111132', '019d0000-0000-7000-8000-000000000332', decode(repeat('32', 32), 'hex'))),
+  (select result->>'id' from convergence_program_version),
+  'T-PLN-IDEM-19 program publication converges on materialized content, not the raw draft'
+);
+select set_config('app.request_id', '11111111-1111-4111-8111-111111111147', true);
+select is(
+  (select jsonb_array_length(result->'versions') from planning.list_programs(
+    '019d0000-0000-7000-8000-000000000001', '019d0000-0000-7000-8000-000000000101', 25, null, null
+  ) where program_id = (select (result->>'id')::uuid from convergence_program)),
+  1, 'T-PLN-INT-19 convergent program publication does not fork the version history'
+);
 
 reset role;
 select throws_ok(format($sql$ update planning.session_template_versions set title = 'Mutated' where id = %L $sql$, (select result->>'id' from published_template)), '55000', null, 'T-PLN-INT-05 published template content is immutable');

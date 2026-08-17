@@ -1373,6 +1373,99 @@ exception when others then
 end
 $function$;
 
+-- Publication convergence and materialization must read one normalized value.
+-- Hashing the raw draft forks versions over whitespace, absent optional keys and
+-- identifier casing that materialization discards, so the canonical form is the
+-- single input to both the content hash and the immutable child rows.
+create or replace function planning.canonical_target(p_target jsonb)
+returns jsonb
+language sql
+immutable
+strict
+security invoker
+set search_path = pg_catalog
+as $function$
+  select case p_target->>'family'
+    when 'strength' then jsonb_strip_nulls(jsonb_build_object(
+      'family', 'strength',
+      'target_sets', (p_target->>'target_sets')::integer,
+      'target_reps', nullif(p_target->>'target_reps', '')::integer,
+      'target_load_value', nullif(p_target->>'target_load_value', '')::numeric,
+      'target_load_unit_code', nullif(p_target->>'target_load_unit_code', ''),
+      'target_rpe', nullif(p_target->>'target_rpe', '')::numeric
+    ))
+    when 'endurance' then jsonb_strip_nulls(jsonb_build_object(
+      'family', 'endurance',
+      'target_distance_value', nullif(p_target->>'target_distance_value', '')::numeric,
+      'target_distance_unit_code', nullif(p_target->>'target_distance_unit_code', ''),
+      'target_duration_seconds', nullif(p_target->>'target_duration_seconds', '')::numeric,
+      'target_pace_seconds_per_unit', nullif(p_target->>'target_pace_seconds_per_unit', '')::numeric,
+      'target_pace_unit_code', nullif(p_target->>'target_pace_unit_code', '')
+    ))
+    when 'interval' then jsonb_strip_nulls(jsonb_build_object(
+      'family', 'interval',
+      'rounds', (p_target->>'rounds')::integer,
+      'work_duration_seconds', (p_target->>'work_duration_seconds')::numeric,
+      'rest_duration_seconds', nullif(p_target->>'rest_duration_seconds', '')::numeric,
+      'target_rpe', nullif(p_target->>'target_rpe', '')::numeric
+    ))
+    when 'mobility' then jsonb_strip_nulls(jsonb_build_object(
+      'family', 'mobility',
+      'sequence_position', (p_target->>'sequence_position')::integer,
+      'hold_duration_seconds', nullif(p_target->>'hold_duration_seconds', '')::numeric,
+      'target_repetitions', nullif(p_target->>'target_repetitions', '')::integer,
+      'side', p_target->>'side'
+    ))
+  end
+$function$;
+
+create or replace function planning.canonical_session_content(p_content jsonb)
+returns jsonb
+language sql
+immutable
+strict
+security invoker
+set search_path = pg_catalog
+as $function$
+  select jsonb_build_object(
+    'title', btrim(p_content->>'title'),
+    'activity_type_id', (p_content->>'activity_type_id')::uuid,
+    'steps', coalesce((
+      select jsonb_agg(jsonb_strip_nulls(jsonb_build_object(
+        'position', (step.value->>'position')::integer,
+        'movement_id', nullif(step.value->>'movement_id', '')::uuid,
+        'activity_type_id', nullif(step.value->>'activity_type_id', '')::uuid,
+        'notes', nullif(step.value->>'notes', ''),
+        'target', planning.canonical_target(step.value->'target')
+      )) order by (step.value->>'position')::integer)
+      from jsonb_array_elements(p_content->'steps') as step(value)
+    ), '[]'::jsonb)
+  )
+$function$;
+
+create or replace function planning.canonical_program_content(p_content jsonb)
+returns jsonb
+language sql
+immutable
+strict
+security invoker
+set search_path = pg_catalog
+as $function$
+  select jsonb_build_object(
+    'title', btrim(p_content->>'title'),
+    'notes', nullif(p_content->>'notes', ''),
+    'sessions', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'position', (session.value->>'position')::integer,
+        'week', (session.value->>'week')::integer,
+        'day', (session.value->>'day')::integer,
+        'template_version_id', (session.value->>'template_version_id')::uuid
+      ) order by (session.value->>'position')::integer)
+      from jsonb_array_elements(p_content->'sessions') as session(value)
+    ), '[]'::jsonb)
+  )
+$function$;
+
 create or replace function planning.materialize_target(p_step_id uuid, p_target jsonb)
 returns void
 language plpgsql
@@ -1462,10 +1555,16 @@ $function$;
 
 alter function planning.session_content_errors(jsonb, uuid, text, boolean) owner to allfit_owner;
 alter function planning.program_content_errors(jsonb, uuid, boolean) owner to allfit_owner;
+alter function planning.canonical_target(jsonb) owner to allfit_owner;
+alter function planning.canonical_session_content(jsonb) owner to allfit_owner;
+alter function planning.canonical_program_content(jsonb) owner to allfit_owner;
 alter function planning.materialize_target(uuid, jsonb) owner to allfit_owner;
 alter function planning.lock_program_template_versions(jsonb, uuid) owner to allfit_owner;
 revoke all on function planning.session_content_errors(jsonb, uuid, text, boolean) from public, allfit_api;
 revoke all on function planning.program_content_errors(jsonb, uuid, boolean) from public, allfit_api;
+revoke all on function planning.canonical_target(jsonb) from public, allfit_api;
+revoke all on function planning.canonical_session_content(jsonb) from public, allfit_api;
+revoke all on function planning.canonical_program_content(jsonb) from public, allfit_api;
 revoke all on function planning.materialize_target(uuid, jsonb) from public, allfit_api;
 revoke all on function planning.lock_program_template_versions(jsonb, uuid) from public, allfit_api;
 
@@ -1600,6 +1699,7 @@ declare
   draft planning.session_template_drafts%rowtype;
   template planning.session_templates%rowtype;
   errors text[];
+  canonical_content jsonb;
   version_content_hash bytea;
   version_id uuid;
   next_version integer;
@@ -1632,7 +1732,8 @@ begin
     raise exception 'incomplete session template draft' using errcode = '22023', detail = to_json(errors)::text;
   end if;
 
-  version_content_hash := extensions.digest(convert_to(draft.content::text, 'UTF8'), 'sha256');
+  canonical_content := planning.canonical_session_content(draft.content);
+  version_content_hash := extensions.digest(convert_to(canonical_content::text, 'UTF8'), 'sha256');
   select version.id into version_id from planning.session_template_versions as version
   where version.template_id = p_template_id and version.content_hash = version_content_hash;
   if version_id is null then
@@ -1643,12 +1744,12 @@ begin
       derived_from_version_id, title, content_hash
     ) values (
       p_template_id, next_version, template.discipline_code,
-      (draft.content->>'activity_type_id')::uuid, draft.derived_from_version_id,
-      btrim(draft.content->>'title'), version_content_hash
+      (canonical_content->>'activity_type_id')::uuid, draft.derived_from_version_id,
+      canonical_content->>'title', version_content_hash
     ) returning id into version_id;
 
     perform set_config('app.planning_publication', 'true', true);
-    for step in select value from jsonb_array_elements(draft.content->'steps') order by (value->>'position')::integer loop
+    for step in select value from jsonb_array_elements(canonical_content->'steps') order by (value->>'position')::integer loop
       insert into planning.planned_steps (
         template_version_id, position, movement_id, activity_type_id, notes
       ) values (
@@ -1769,6 +1870,9 @@ begin
   update planning.session_template_versions set status = 'deprecated'
   where id = version_id and status = 'published';
   if found then
+    -- Retirement changes the aggregate projection, so it must move the watermark
+    -- that orders and paginates the list; a repeated command leaves it untouched.
+    update planning.session_templates set updated_at = clock_timestamp() where id = p_template_id;
     perform system.enqueue_outbox_event(
       'session_template_version', version_id, 'planning.session_template_version_deprecated.v1',
       jsonb_build_object('template_id', p_template_id, 'version_id', version_id)
@@ -1914,6 +2018,7 @@ declare
   receipt record;
   draft planning.program_drafts%rowtype;
   errors text[];
+  canonical_content jsonb;
   version_content_hash bytea;
   version_id uuid;
   next_version integer;
@@ -1941,7 +2046,8 @@ begin
   if cardinality(errors) > 0 then
     raise exception 'incomplete program draft' using errcode = '22023', detail = to_json(errors)::text;
   end if;
-  version_content_hash := extensions.digest(convert_to(draft.content::text, 'UTF8'), 'sha256');
+  canonical_content := planning.canonical_program_content(draft.content);
+  version_content_hash := extensions.digest(convert_to(canonical_content::text, 'UTF8'), 'sha256');
   select version.id into version_id from planning.program_versions as version
   where version.program_id = p_program_id and version.content_hash = version_content_hash;
   if version_id is null then
@@ -1950,11 +2056,11 @@ begin
     insert into planning.program_versions (
       program_id, version_number, title, notes, content_hash
     ) values (
-      p_program_id, next_version, btrim(draft.content->>'title'),
-      nullif(draft.content->>'notes', ''), version_content_hash
+      p_program_id, next_version, canonical_content->>'title',
+      canonical_content->>'notes', version_content_hash
     ) returning id into version_id;
     perform set_config('app.planning_publication', 'true', true);
-    for session in select value from jsonb_array_elements(draft.content->'sessions') order by (value->>'position')::integer loop
+    for session in select value from jsonb_array_elements(canonical_content->'sessions') order by (value->>'position')::integer loop
       insert into planning.program_version_sessions (
         program_version_id, template_version_id, position, week, day
       ) values (
@@ -2010,6 +2116,9 @@ begin
   update planning.program_versions set status = 'deprecated'
   where id = version_id and status = 'published';
   if found then
+    -- Retirement changes the aggregate projection, so it must move the watermark
+    -- that orders and paginates the list; a repeated command leaves it untouched.
+    update planning.programs set updated_at = clock_timestamp() where id = p_program_id;
     perform system.enqueue_outbox_event(
       'program_version', version_id, 'planning.program_version_deprecated.v1',
       jsonb_build_object('program_id', p_program_id, 'version_id', version_id)

@@ -2687,6 +2687,9 @@ export type Database = {
         Args: { p_organization_id: string; p_person_id: string }
         Returns: undefined
       }
+      canonical_program_content: { Args: { p_content: Json }; Returns: Json }
+      canonical_session_content: { Args: { p_content: Json }; Returns: Json }
+      canonical_target: { Args: { p_target: Json }; Returns: Json }
       content_etag: { Args: { p_content: Json }; Returns: string }
       create_program: {
         Args: {
