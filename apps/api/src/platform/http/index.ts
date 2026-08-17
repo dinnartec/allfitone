@@ -6,6 +6,7 @@
  * be named here rather than invented at a call site.
  */
 
+import { randomUUID } from 'node:crypto'
 import type { Context } from 'hono'
 import type { ContentfulStatusCode } from 'hono/utils/http-status'
 
@@ -30,6 +31,12 @@ export type ApiErrorCode =
   | 'weak-password'
   /** The command conflicts with durable state or a prior idempotent request. */
   | 'conflict'
+  /** The write base revision is no longer current. */
+  | 'stale-draft'
+  /** A concurrency-controlled write omitted If-Match. */
+  | 'precondition-required'
+  /** Another transaction still owns the command or aggregate lock. */
+  | 'idempotency-in-progress'
   /** A visible resource does not exist. */
   | 'not-found'
   /** A well-formed request violates a closed business schema. */
@@ -48,9 +55,31 @@ const STATUS: Record<ApiErrorCode, ContentfulStatusCode> = {
   forbidden: 403,
   'weak-password': 422,
   conflict: 409,
+  'stale-draft': 409,
+  'precondition-required': 428,
+  'idempotency-in-progress': 409,
   'not-found': 404,
   'validation-failed': 422,
   'rate-limited': 429,
+}
+
+const TITLE: Record<ApiErrorCode, string> = {
+  unauthenticated: 'Authentication is required',
+  'wrong-surface': 'This credential cannot access this surface',
+  'invalid-request': 'The request is invalid',
+  'upstream-unavailable': 'A required dependency is temporarily unavailable',
+  'service-degraded': 'The service is temporarily degraded',
+  'registration-incomplete': 'Registration must be completed first',
+  'account-closed': 'The account is closed',
+  forbidden: 'The actor cannot execute this operation',
+  'weak-password': 'The password does not satisfy the security policy',
+  conflict: 'The request conflicts with current state',
+  'stale-draft': 'The local draft is stale',
+  'precondition-required': 'If-Match is required',
+  'idempotency-in-progress': 'The command is still processing',
+  'not-found': 'Resource not found',
+  'validation-failed': 'The request does not satisfy the contract',
+  'rate-limited': 'Too many requests',
 }
 
 /**
@@ -59,4 +88,19 @@ const STATUS: Record<ApiErrorCode, ContentfulStatusCode> = {
  */
 export function fail(c: Context, code: ApiErrorCode, detail?: string) {
   return c.json({ error: { code, ...(detail ? { detail } : {}) } }, STATUS[code])
+}
+
+/** RFC 9457 response for contract-first endpoints migrating off the legacy envelope. */
+export function problem(c: Context, code: ApiErrorCode, detail?: string) {
+  return c.json(
+    {
+      type: `https://errors.allfit.invalid/${code}`,
+      title: TITLE[code],
+      status: STATUS[code],
+      ...(detail ? { detail } : {}),
+      request_id: randomUUID(),
+    },
+    STATUS[code],
+    { 'Content-Type': 'application/problem+json' },
+  )
 }

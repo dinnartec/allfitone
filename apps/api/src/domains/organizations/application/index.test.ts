@@ -27,6 +27,30 @@ describe('Studio organization registration boundary', () => {
         databaseCalls += 1
         throw new Error('must not be reached')
       },
+      get: async () => {
+        databaseCalls += 1
+        throw new Error('must not be reached')
+      },
+      update: async () => {
+        databaseCalls += 1
+        throw new Error('must not be reached')
+      },
+      createSite: async () => {
+        databaseCalls += 1
+        throw new Error('must not be reached')
+      },
+      updateSite: async () => {
+        databaseCalls += 1
+        throw new Error('must not be reached')
+      },
+      transferOwnership: async () => {
+        databaseCalls += 1
+        throw new Error('must not be reached')
+      },
+      grantMembershipRole: async () => {
+        databaseCalls += 1
+        throw new Error('must not be reached')
+      },
     }
     const service = createStudioOrganizationService(database)
     const accountOnlyActor = { accountId: 'account-without-person' }
@@ -57,6 +81,48 @@ describe('Studio organization registration boundary', () => {
     expect(() => service.create(accountOnlyActor, command)).toThrow(
       new StudioOrganizationError('registration-incomplete'),
     )
+    expect(() => service.get(accountOnlyActor, 'organization-id', 'request-id')).toThrow(
+      new StudioOrganizationError('registration-incomplete'),
+    )
+    expect(() =>
+      service.update(accountOnlyActor, {
+        organizationId: 'organization-id',
+        expectedRevision: 0,
+        patch: { displayName: 'Updated' },
+        ...command,
+      }),
+    ).toThrow(new StudioOrganizationError('registration-incomplete'))
+    expect(() =>
+      service.createSite(accountOnlyActor, {
+        organizationId: 'organization-id',
+        site: { name: 'Main' },
+        ...command,
+      }),
+    ).toThrow(new StudioOrganizationError('registration-incomplete'))
+    expect(() =>
+      service.updateSite(accountOnlyActor, {
+        organizationId: 'organization-id',
+        siteId: 'site-id',
+        expectedRevision: 0,
+        patch: { status: 'inactive' },
+        ...command,
+      }),
+    ).toThrow(new StudioOrganizationError('registration-incomplete'))
+    expect(() =>
+      service.transferOwnership(accountOnlyActor, {
+        organizationId: 'organization-id',
+        targetMembershipId: 'membership-id',
+        ...command,
+      }),
+    ).toThrow(new StudioOrganizationError('registration-incomplete'))
+    expect(() =>
+      service.grantMembershipRole(accountOnlyActor, {
+        organizationId: 'organization-id',
+        membershipId: 'membership-id',
+        roleCode: 'coach',
+        ...command,
+      }),
+    ).toThrow(new StudioOrganizationError('registration-incomplete'))
     expect(databaseCalls).toBe(0)
   })
 })

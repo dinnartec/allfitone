@@ -1538,6 +1538,83 @@ export type Database = {
         }
         Relationships: []
       }
+      organization_sites: {
+        Row: {
+          address: string | null
+          created_at: string
+          id: string
+          name: string
+          organization_id: string
+          revision_number: number
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          organization_id: string
+          revision_number?: number
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          organization_id?: string
+          revision_number?: number
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_organization_sites_organization'
+            columns: ['organization_id']
+            isOneToOne: false
+            referencedRelation: 'organizations'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      organization_type_transitions: {
+        Row: {
+          created_at: string
+          from_type_code: string
+          status: string
+          to_type_code: string
+        }
+        Insert: {
+          created_at?: string
+          from_type_code: string
+          status?: string
+          to_type_code: string
+        }
+        Update: {
+          created_at?: string
+          from_type_code?: string
+          status?: string
+          to_type_code?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_organization_type_transitions_from_type'
+            columns: ['from_type_code']
+            isOneToOne: false
+            referencedRelation: 'organization_types'
+            referencedColumns: ['code']
+          },
+          {
+            foreignKeyName: 'fk_organization_type_transitions_to_type'
+            columns: ['to_type_code']
+            isOneToOne: false
+            referencedRelation: 'organization_types'
+            referencedColumns: ['code']
+          },
+        ]
+      }
       organization_types: {
         Row: {
           active: boolean
@@ -1570,6 +1647,7 @@ export type Database = {
           legal_name: string | null
           responsible_party: Json
           responsible_party_schema_version: number
+          revision_number: number
           status: Database['organizations']['Enums']['organization_status']
           type_code: string
           updated_at: string
@@ -1581,6 +1659,7 @@ export type Database = {
           legal_name?: string | null
           responsible_party: Json
           responsible_party_schema_version?: number
+          revision_number?: number
           status?: Database['organizations']['Enums']['organization_status']
           type_code: string
           updated_at?: string
@@ -1592,6 +1671,7 @@ export type Database = {
           legal_name?: string | null
           responsible_party?: Json
           responsible_party_schema_version?: number
+          revision_number?: number
           status?: Database['organizations']['Enums']['organization_status']
           type_code?: string
           updated_at?: string
@@ -1660,6 +1740,29 @@ export type Database = {
           type_code: string
         }[]
       }
+      create_site: {
+        Args: {
+          p_command_id: string
+          p_idempotency_key: string
+          p_organization_id: string
+          p_person_id: string
+          p_request_hash: string
+          p_site: Json
+        }
+        Returns: Json
+      }
+      grant_membership_role: {
+        Args: {
+          p_command_id: string
+          p_idempotency_key: string
+          p_membership_id: string
+          p_organization_id: string
+          p_person_id: string
+          p_request_hash: string
+          p_role_code: string
+        }
+        Returns: Json
+      }
       list_my_memberships: {
         Args: { p_person_id: string }
         Returns: {
@@ -1708,6 +1811,48 @@ export type Database = {
           code: string
           name: string
         }[]
+      }
+      organization_projection: {
+        Args: { p_organization_id: string }
+        Returns: Json
+      }
+      read_organization: { Args: { p_organization_id: string }; Returns: Json }
+      site_projection: { Args: { p_site_id: string }; Returns: Json }
+      transfer_ownership: {
+        Args: {
+          p_command_id: string
+          p_idempotency_key: string
+          p_organization_id: string
+          p_person_id: string
+          p_request_hash: string
+          p_target_membership_id: string
+        }
+        Returns: Json
+      }
+      update_organization: {
+        Args: {
+          p_command_id: string
+          p_expected_revision: number
+          p_idempotency_key: string
+          p_organization_id: string
+          p_patch: Json
+          p_person_id: string
+          p_request_hash: string
+        }
+        Returns: Json
+      }
+      update_site: {
+        Args: {
+          p_command_id: string
+          p_expected_revision: number
+          p_idempotency_key: string
+          p_organization_id: string
+          p_patch: Json
+          p_person_id: string
+          p_request_hash: string
+          p_site_id: string
+        }
+        Returns: Json
       }
     }
     Enums: {

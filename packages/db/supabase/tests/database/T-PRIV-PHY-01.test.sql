@@ -110,11 +110,12 @@ values ('01991600-0000-7000-8000-000000000091', 'Audit', 'Partition');
 
 insert into privacy.access_events (
   actor_person_id,
-  target_person_id,
-  resource_type,
+  subject_person_id,
+  resource,
   purpose,
-  decision,
+  result,
   request_id,
+  access_mode,
   occurred_at
 ) values (
   '01991600-0000-7000-8000-000000000091',
@@ -123,6 +124,7 @@ insert into privacy.access_events (
   'profile_management',
   'allowed',
   '39999999-9999-4999-8999-999999999991',
+  'live',
   '2026-12-15T12:00:00Z'
 );
 
@@ -138,11 +140,12 @@ select is(
 
 insert into privacy.access_events (
   actor_person_id,
-  target_person_id,
-  resource_type,
+  subject_person_id,
+  resource,
   purpose,
-  decision,
+  result,
   request_id,
+  access_mode,
   occurred_at
 ) values (
   '01991600-0000-7000-8000-000000000091',
@@ -151,6 +154,7 @@ insert into privacy.access_events (
   'profile_management',
   'allowed',
   '39999999-9999-4999-8999-999999999992',
+  'live',
   '2035-06-15T12:00:00Z'
 );
 

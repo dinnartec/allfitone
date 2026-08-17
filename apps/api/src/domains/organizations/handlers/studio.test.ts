@@ -14,6 +14,15 @@ const HEADERS = {
 }
 
 const ORGANIZATION_ID = '0198d000-0000-7000-8000-000000000021'
+const SITE_ID = '0198d000-0000-7000-8000-000000000041'
+const TARGET_MEMBERSHIP_ID = '0198d000-0000-7000-8000-000000000032'
+
+interface ProblemResponse {
+  type: string
+  title: string
+  status: number
+  request_id: string
+}
 
 function sessions(overrides: Partial<StudioSessionService> = {}): StudioSessionService {
   return {
@@ -56,6 +65,49 @@ function organizations(
       displayName: 'Ada Entrena',
       typeCode: 'professional_practice',
       roles: ['owner'],
+    }),
+    get: async () => ({
+      id: ORGANIZATION_ID,
+      displayName: 'Ada Entrena',
+      legalName: 'Ada Entrena SAS',
+      typeCode: 'studio',
+      status: 'active',
+      revisionNumber: 2,
+      sites: [],
+    }),
+    update: async () => ({
+      id: ORGANIZATION_ID,
+      displayName: 'Ada Entrena Actualizada',
+      legalName: 'Ada Entrena SAS',
+      typeCode: 'studio',
+      status: 'active',
+      revisionNumber: 3,
+      sites: [],
+    }),
+    createSite: async () => ({
+      id: '0198d000-0000-7000-8000-000000000041',
+      name: 'Sede Centro',
+      address: 'Carrera 7',
+      status: 'active',
+      revisionNumber: 0,
+    }),
+    updateSite: async () => ({
+      id: '0198d000-0000-7000-8000-000000000041',
+      name: 'Sede Centro',
+      address: 'Carrera 7',
+      status: 'inactive',
+      revisionNumber: 1,
+    }),
+    transferOwnership: async () => ({
+      organizationId: ORGANIZATION_ID,
+      ownerMembershipId: '0198d000-0000-7000-8000-000000000032',
+      previousOwnerMembershipId: '0198d000-0000-7000-8000-000000000022',
+      transferredAt: '2026-08-17T15:30:00.000Z',
+    }),
+    grantMembershipRole: async () => ({
+      membershipId: '0198d000-0000-7000-8000-000000000032',
+      roleCode: 'coach',
+      validFrom: '2026-08-17T15:35:00.000Z',
     }),
     ...overrides,
   }
@@ -506,5 +558,317 @@ describe('Studio organization routes', () => {
       body: '{}',
     })
     expect(response.status).toBe(403)
+  })
+
+  test('reads the closed audited organization projection with a strong ETag', async () => {
+    const response = await app().request(`/studio/v1/organizations/${ORGANIZATION_ID}`, {
+      headers: HEADERS,
+    })
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('cache-control')).toBe('private, no-store')
+    expect(response.headers.get('etag')).toBe(`"organization:${ORGANIZATION_ID}:r2"`)
+    const body = await response.json()
+    expect(body).toEqual({
+      id: ORGANIZATION_ID,
+      display_name: 'Ada Entrena',
+      legal_name: 'Ada Entrena SAS',
+      type_code: 'studio',
+      status: 'active',
+      revision_number: 2,
+      sites: [],
+    })
+    expect(JSON.stringify(body)).not.toContain('responsible_party')
+  })
+
+  test('updates only the closed organization fields and returns the next ETag', async () => {
+    let received: unknown
+    const response = await app(
+      organizations({
+        update: async (_actor, input) => {
+          received = input
+          return {
+            id: ORGANIZATION_ID,
+            displayName: 'Ada Entrena Actualizada',
+            legalName: null,
+            typeCode: 'studio',
+            status: 'active',
+            revisionNumber: 3,
+            sites: [],
+          }
+        },
+      }),
+    ).request(`/studio/v1/organizations/${ORGANIZATION_ID}`, {
+      method: 'PATCH',
+      headers: { ...HEADERS, 'if-match': `"organization:${ORGANIZATION_ID}:r2"` },
+      body: JSON.stringify({ display_name: ' Ada Entrena Actualizada ', legal_name: null }),
+    })
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('etag')).toBe(`"organization:${ORGANIZATION_ID}:r3"`)
+    expect(received).toMatchObject({
+      organizationId: ORGANIZATION_ID,
+      expectedRevision: 2,
+      patch: { displayName: 'Ada Entrena Actualizada', legalName: null },
+    })
+  })
+
+  test('enforces organization If-Match and maps stale revisions without widening the patch', async () => {
+    const missing = await app().request(`/studio/v1/organizations/${ORGANIZATION_ID}`, {
+      method: 'PATCH',
+      headers: HEADERS,
+      body: JSON.stringify({ display_name: 'Updated' }),
+    })
+    const malformed = await app().request(`/studio/v1/organizations/${ORGANIZATION_ID}`, {
+      method: 'PATCH',
+      headers: { ...HEADERS, 'if-match': `W/"organization:${ORGANIZATION_ID}:r2"` },
+      body: JSON.stringify({ display_name: 'Updated' }),
+    })
+    const immutable = await app().request(`/studio/v1/organizations/${ORGANIZATION_ID}`, {
+      method: 'PATCH',
+      headers: { ...HEADERS, 'if-match': `"organization:${ORGANIZATION_ID}:r2"` },
+      body: JSON.stringify({ status: 'closed' }),
+    })
+    const stale = await app(
+      organizations({
+        update: async () => {
+          throw Object.assign(new Error('stale-draft'), { code: '40001' })
+        },
+      }),
+    ).request(`/studio/v1/organizations/${ORGANIZATION_ID}`, {
+      method: 'PATCH',
+      headers: { ...HEADERS, 'if-match': `"organization:${ORGANIZATION_ID}:r2"` },
+      body: JSON.stringify({ display_name: 'Updated' }),
+    })
+
+    expect([missing.status, malformed.status, immutable.status, stale.status]).toEqual([
+      428, 400, 400, 409,
+    ])
+    expect(stale.headers.get('content-type')).toContain('application/problem+json')
+    await expect(stale.json()).resolves.toMatchObject({
+      type: 'https://errors.allfit.invalid/stale-draft',
+      title: 'The local draft is stale',
+      status: 409,
+      request_id: expect.any(String),
+    })
+  })
+
+  test('returns contract Problem responses for all new route and session failures', async () => {
+    const instance = app()
+    const attackerHeaders = { ...HEADERS, origin: 'https://attacker.test' }
+    const forbiddenOrigins = await Promise.all([
+      instance.request(`/studio/v1/organizations/${ORGANIZATION_ID}`, {
+        headers: attackerHeaders,
+      }),
+      instance.request(`/studio/v1/organizations/${ORGANIZATION_ID}`, {
+        method: 'PATCH',
+        headers: attackerHeaders,
+      }),
+      instance.request(`/studio/v1/organizations/${ORGANIZATION_ID}/sites`, {
+        method: 'POST',
+        headers: attackerHeaders,
+      }),
+      instance.request(`/studio/v1/organizations/${ORGANIZATION_ID}/sites/${SITE_ID}`, {
+        method: 'PATCH',
+        headers: attackerHeaders,
+      }),
+      instance.request(`/studio/v1/organizations/${ORGANIZATION_ID}/ownership-transfers`, {
+        method: 'POST',
+        headers: attackerHeaders,
+      }),
+      instance.request(
+        `/studio/v1/organizations/${ORGANIZATION_ID}/memberships/${TARGET_MEMBERSHIP_ID}/roles`,
+        { method: 'POST', headers: attackerHeaders },
+      ),
+    ])
+    const closedSession = await app(
+      organizations(),
+      sessions({
+        resolveActor: async () => {
+          throw new StudioSessionError('account-closed')
+        },
+      }),
+    ).request(`/studio/v1/organizations/${ORGANIZATION_ID}`, { headers: HEADERS })
+
+    for (const response of [...forbiddenOrigins, closedSession]) {
+      expect(response.status).toBe(403)
+      expect(response.headers.get('content-type')).toContain('application/problem+json')
+      const problem = (await response.json()) as ProblemResponse
+      expect(problem).toMatchObject({
+        status: 403,
+        request_id: expect.any(String),
+      })
+      expect(problem.type).toMatch(/^https:\/\/errors\.allfit\.invalid\/[a-z][a-z0-9-]+$/)
+      expect(problem.title).toEqual(expect.any(String))
+      expect(Object.keys(problem).sort()).toEqual(['request_id', 'status', 'title', 'type'])
+    }
+  })
+
+  test('creates and deactivates informational sites with independent revisions', async () => {
+    const created = await app().request(`/studio/v1/organizations/${ORGANIZATION_ID}/sites`, {
+      method: 'POST',
+      headers: HEADERS,
+      body: JSON.stringify({ name: 'Sede Centro', address: 'Carrera 7' }),
+    })
+    const updated = await app().request(
+      `/studio/v1/organizations/${ORGANIZATION_ID}/sites/${SITE_ID}`,
+      {
+        method: 'PATCH',
+        headers: { ...HEADERS, 'if-match': `"organization-site:${SITE_ID}:r0"` },
+        body: JSON.stringify({ status: 'inactive' }),
+      },
+    )
+    const missingPrecondition = await app().request(
+      `/studio/v1/organizations/${ORGANIZATION_ID}/sites/${SITE_ID}`,
+      {
+        method: 'PATCH',
+        headers: HEADERS,
+        body: JSON.stringify({ status: 'inactive' }),
+      },
+    )
+
+    expect(created.status).toBe(201)
+    expect(created.headers.get('etag')).toBe(`"organization-site:${SITE_ID}:r0"`)
+    expect(updated.status).toBe(200)
+    expect(updated.headers.get('etag')).toBe(`"organization-site:${SITE_ID}:r1"`)
+    expect(missingPrecondition.status).toBe(428)
+    await expect(updated.json()).resolves.toMatchObject({ status: 'inactive', revision_number: 1 })
+  })
+
+  test('transfers ownership and grants only non-owner roles', async () => {
+    const transfer = await app().request(
+      `/studio/v1/organizations/${ORGANIZATION_ID}/ownership-transfers`,
+      {
+        method: 'POST',
+        headers: HEADERS,
+        body: JSON.stringify({ target_membership_id: TARGET_MEMBERSHIP_ID }),
+      },
+    )
+    const grant = await app().request(
+      `/studio/v1/organizations/${ORGANIZATION_ID}/memberships/${TARGET_MEMBERSHIP_ID}/roles`,
+      {
+        method: 'POST',
+        headers: HEADERS,
+        body: JSON.stringify({ role_code: 'coach' }),
+      },
+    )
+    const ownerGrant = await app().request(
+      `/studio/v1/organizations/${ORGANIZATION_ID}/memberships/${TARGET_MEMBERSHIP_ID}/roles`,
+      {
+        method: 'POST',
+        headers: HEADERS,
+        body: JSON.stringify({ role_code: 'owner' }),
+      },
+    )
+
+    expect(transfer.status).toBe(200)
+    await expect(transfer.json()).resolves.toMatchObject({
+      organization_id: ORGANIZATION_ID,
+      owner_membership_id: TARGET_MEMBERSHIP_ID,
+    })
+    expect(grant.status).toBe(200)
+    await expect(grant.json()).resolves.toMatchObject({
+      membership_id: TARGET_MEMBERSHIP_ID,
+      role_code: 'coach',
+    })
+    expect(ownerGrant.status).toBe(400)
+  })
+
+  test('binds command hashes to organization and membership path identities', async () => {
+    const hashes: string[] = []
+    const service = organizations({
+      grantMembershipRole: async (_actor, input) => {
+        hashes.push(Buffer.from(input.requestHash).toString('hex'))
+        return {
+          membershipId: input.membershipId,
+          roleCode: input.roleCode,
+          validFrom: '2026-08-17T15:35:00.000Z',
+        }
+      },
+    })
+    const otherOrganizationId = '0198d000-0000-7000-8000-000000000022'
+
+    const first = await app(service).request(
+      `/studio/v1/organizations/${ORGANIZATION_ID}/memberships/${TARGET_MEMBERSHIP_ID}/roles`,
+      {
+        method: 'POST',
+        headers: HEADERS,
+        body: JSON.stringify({ role_code: 'coach' }),
+      },
+    )
+    const second = await app(service).request(
+      `/studio/v1/organizations/${otherOrganizationId}/memberships/${TARGET_MEMBERSHIP_ID}/roles`,
+      {
+        method: 'POST',
+        headers: HEADERS,
+        body: JSON.stringify({ role_code: 'coach' }),
+      },
+    )
+
+    expect(first.status).toBe(200)
+    expect(second.status).toBe(200)
+    expect(hashes).toHaveLength(2)
+    expect(hashes[0]).not.toBe(hashes[1])
+  })
+
+  test('hides inaccessible organization resources behind not-found', async () => {
+    const hidden = organizations({
+      get: async () => {
+        throw Object.assign(new Error('organization not found'), { code: 'P0002' })
+      },
+      updateSite: async () => {
+        throw Object.assign(new Error('organization site not found'), { code: 'P0002' })
+      },
+    })
+    const organization = await app(hidden).request(`/studio/v1/organizations/${ORGANIZATION_ID}`, {
+      headers: HEADERS,
+    })
+    const site = await app(hidden).request(
+      `/studio/v1/organizations/${ORGANIZATION_ID}/sites/${SITE_ID}`,
+      {
+        method: 'PATCH',
+        headers: { ...HEADERS, 'if-match': `"organization-site:${SITE_ID}:r0"` },
+        body: JSON.stringify({ status: 'inactive' }),
+      },
+    )
+
+    expect(organization.status).toBe(404)
+    expect(site.status).toBe(404)
+    const organizationProblem = (await organization.json()) as ProblemResponse
+    const siteProblem = (await site.json()) as ProblemResponse
+    expect({
+      type: organizationProblem.type,
+      title: organizationProblem.title,
+      status: organizationProblem.status,
+    }).toEqual({
+      type: siteProblem.type,
+      title: siteProblem.title,
+      status: siteProblem.status,
+    })
+    expect(organizationProblem.request_id).toEqual(expect.any(String))
+    expect(siteProblem.request_id).toEqual(expect.any(String))
+  })
+
+  test('returns a bounded retryable conflict when a command lock times out', async () => {
+    const locked = organizations({
+      createSite: async () => {
+        throw Object.assign(new Error('canceling statement due to lock timeout'), { code: '55P03' })
+      },
+    })
+    const response = await app(locked).request(
+      `/studio/v1/organizations/${ORGANIZATION_ID}/sites`,
+      {
+        method: 'POST',
+        headers: HEADERS,
+        body: JSON.stringify({ name: 'Locked site' }),
+      },
+    )
+
+    expect(response.status).toBe(409)
+    expect(response.headers.get('retry-after')).toBe('1')
+    await expect(response.json()).resolves.toMatchObject({
+      type: 'https://errors.allfit.invalid/idempotency-in-progress',
+      status: 409,
+    })
   })
 })

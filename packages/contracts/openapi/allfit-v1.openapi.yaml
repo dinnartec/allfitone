@@ -1137,6 +1137,231 @@ paths:
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
 
+  /studio/v1/organizations/{organizationId}:
+    get:
+      tags: [Studio Organizations]
+      operationId: getStudioOrganization
+      x-allfit-operation: OP-ORG-013
+      x-allfit-cache: private-no-store
+      summary: Read the closed organization and site projection
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+      responses:
+        '200':
+          description: Authorized organization projection, audited before delivery
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/PrivateNoStore'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+    patch:
+      tags: [Studio Organizations]
+      operationId: updateStudioOrganization
+      x-allfit-operation: OP-ORG-002
+      x-allfit-cache: no-store
+      summary: Update the closed self-service organization fields
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/OrganizationIfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrganizationUpdate'
+      responses:
+        '200':
+          description: Updated organization projection, or the unchanged projection for a no-op
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/OrganizationCommandConflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /studio/v1/organizations/{organizationId}/sites:
+    post:
+      tags: [Studio Organizations]
+      operationId: createStudioOrganizationSite
+      x-allfit-operation: OP-ORG-003
+      x-allfit-cache: no-store
+      summary: Create an informational organization site
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrganizationSiteCreate'
+      responses:
+        '201':
+          description: Informational site created
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationSite'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /studio/v1/organizations/{organizationId}/sites/{siteId}:
+    patch:
+      tags: [Studio Organizations]
+      operationId: updateStudioOrganizationSite
+      x-allfit-operation: OP-ORG-004
+      x-allfit-cache: no-store
+      summary: Update or deactivate an informational organization site
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/SiteId'
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/OrganizationSiteIfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrganizationSiteUpdate'
+      responses:
+        '200':
+          description: Updated site, or the unchanged site for a no-op
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationSite'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/OrganizationCommandConflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /studio/v1/organizations/{organizationId}/ownership-transfers:
+    post:
+      tags: [Studio Organizations]
+      operationId: transferStudioOrganizationOwnership
+      x-allfit-operation: OP-ORG-011
+      x-allfit-cache: no-store
+      summary: Transfer the unique owner role to another active membership
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrganizationOwnershipTransferCreate'
+      responses:
+        '200':
+          description: Ownership transferred atomically
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationOwnershipTransfer'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
   /studio/v1/organizations/{organizationId}/memberships:
     get:
       tags: [Studio Organizations]
@@ -1182,6 +1407,52 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /studio/v1/organizations/{organizationId}/memberships/{membershipId}/roles:
+    post:
+      tags: [Studio Organizations]
+      operationId: grantStudioOrganizationMembershipRole
+      x-allfit-operation: OP-ORG-007
+      x-allfit-cache: no-store
+      summary: Grant a non-owner role to an active organization membership
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/MembershipId'
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrganizationRoleGrantCreate'
+      responses:
+        '200':
+          description: Durable role-grant receipt, including convergent duplicate commands
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationRoleGrant'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/ValidationFailed'
         '503':
@@ -2322,6 +2593,18 @@ components:
       required: true
       schema:
         $ref: '#/components/schemas/Uuid'
+    SiteId:
+      name: siteId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Uuid'
+    MembershipId:
+      name: membershipId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Uuid'
     ProgramId:
       name: programId
       in: path
@@ -2392,6 +2675,22 @@ components:
       schema:
         type: string
         pattern: '^"execution:[0-9a-f-]{36}:r[0-9]+"$'
+    OrganizationIfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: Strong ETag for the organization revision used as the command base.
+      schema:
+        type: string
+        pattern: '^"organization:[0-9a-f-]{36}:r[0-9]+"$'
+    OrganizationSiteIfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: Strong ETag for the organization site revision used as the command base.
+      schema:
+        type: string
+        pattern: '^"organization-site:[0-9a-f-]{36}:r[0-9]+"$'
     NutritionMealIfMatch:
       name: If-Match
       in: header
@@ -2655,6 +2954,17 @@ components:
             title: The command is still in progress
             status: 409
             request_id: 01JEXAMPLE0000000000000000
+    OrganizationCommandConflict:
+      description: Stale revision, idempotency conflict, or a bounded command lock timeout
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+        Retry-After:
+          $ref: '#/components/headers/RetryAfter'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
     StaleDraft:
       description: If-Match refers to a stale execution revision
       headers:
@@ -3145,6 +3455,136 @@ components:
           items:
             type: string
             enum: [owner, admin, coach, staff]
+    OrganizationUpdate:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        legal_name:
+          type: [string, 'null']
+          minLength: 1
+        type_code:
+          $ref: '#/components/schemas/OrganizationTypeCode'
+    OrganizationSiteStatus:
+      type: string
+      enum: [active, inactive]
+    OrganizationSite:
+      type: object
+      additionalProperties: false
+      required: [id, name, address, status, revision_number]
+      properties:
+        id:
+          $ref: '#/components/schemas/UuidV7'
+        name:
+          type: string
+          minLength: 1
+        address:
+          type: [string, 'null']
+          minLength: 1
+        status:
+          $ref: '#/components/schemas/OrganizationSiteStatus'
+        revision_number:
+          type: integer
+          format: int64
+          minimum: 0
+    OrganizationSiteCreate:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        address:
+          type: [string, 'null']
+          minLength: 1
+    OrganizationSiteUpdate:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          minLength: 1
+        address:
+          type: [string, 'null']
+          minLength: 1
+        status:
+          $ref: '#/components/schemas/OrganizationSiteStatus'
+    Organization:
+      type: object
+      additionalProperties: false
+      required: [id, display_name, legal_name, type_code, status, revision_number, sites]
+      properties:
+        id:
+          $ref: '#/components/schemas/UuidV7'
+        display_name:
+          type: string
+          minLength: 1
+        legal_name:
+          type: [string, 'null']
+          minLength: 1
+        type_code:
+          $ref: '#/components/schemas/OrganizationTypeCode'
+        status:
+          type: string
+          enum: [active, closed]
+        revision_number:
+          type: integer
+          format: int64
+          minimum: 0
+        sites:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrganizationSite'
+    OrganizationOwnershipTransferCreate:
+      type: object
+      additionalProperties: false
+      required: [target_membership_id]
+      properties:
+        target_membership_id:
+          $ref: '#/components/schemas/Uuid'
+    OrganizationOwnershipTransfer:
+      type: object
+      additionalProperties: false
+      required:
+        [organization_id, owner_membership_id, previous_owner_membership_id, transferred_at]
+      properties:
+        organization_id:
+          $ref: '#/components/schemas/Uuid'
+        owner_membership_id:
+          $ref: '#/components/schemas/Uuid'
+        previous_owner_membership_id:
+          $ref: '#/components/schemas/Uuid'
+        transferred_at:
+          type: string
+          format: date-time
+    AssignableOrganizationRoleCode:
+      type: string
+      enum: [admin, coach, staff]
+    OrganizationRoleGrantCreate:
+      type: object
+      additionalProperties: false
+      required: [role_code]
+      properties:
+        role_code:
+          $ref: '#/components/schemas/AssignableOrganizationRoleCode'
+    OrganizationRoleGrant:
+      type: object
+      additionalProperties: false
+      required: [membership_id, role_code, valid_from]
+      properties:
+        membership_id:
+          $ref: '#/components/schemas/Uuid'
+        role_code:
+          $ref: '#/components/schemas/AssignableOrganizationRoleCode'
+        valid_from:
+          type: string
+          format: date-time
     TeamInvitationToken:
       type: object
       additionalProperties: false

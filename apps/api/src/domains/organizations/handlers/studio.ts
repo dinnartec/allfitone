@@ -1,6 +1,6 @@
 /** Organization onboarding routes for Studio. */
 
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import type { AllfitV1Schemas } from '@allfitone/contracts'
 import { Hono, type Context } from 'hono'
 import { getCookie } from 'hono/cookie'
@@ -13,22 +13,38 @@ import {
   studioSessionService,
   trustedStudioWebUrl,
 } from '../../identity/index.js'
-import { fail } from '../../../platform/http/index.js'
+import { fail, problem, type ApiErrorCode } from '../../../platform/http/index.js'
 import {
   recordStudioMembershipDestination,
   recordStudioOrganizationQuery,
 } from '../../../platform/observability/index.js'
 import { StudioOrganizationError, type StudioOrganizationService } from '../application/index.js'
 import { studioOrganizationService } from '../dependencies.js'
-import type { OrganizationMembershipStatus, OrganizationTypeCode } from '../domain/index.js'
+import type {
+  OrganizationMembershipStatus,
+  OrganizationRoleCode,
+  OrganizationSiteStatus,
+  OrganizationTypeCode,
+} from '../domain/index.js'
 
 type OrganizationCreate = AllfitV1Schemas['OrganizationCreate']
+type OrganizationUpdate = AllfitV1Schemas['OrganizationUpdate']
+type OrganizationSiteCreate = AllfitV1Schemas['OrganizationSiteCreate']
+type OrganizationSiteUpdate = AllfitV1Schemas['OrganizationSiteUpdate']
+type OrganizationOwnershipTransferCreate = AllfitV1Schemas['OrganizationOwnershipTransferCreate']
+type OrganizationRoleGrantCreate = AllfitV1Schemas['OrganizationRoleGrantCreate']
 
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const UUID_V7 = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const ORGANIZATION_TYPES = new Set<OrganizationTypeCode>(['professional_practice', 'gym', 'studio'])
 const MEMBERSHIP_STATUSES = new Set<OrganizationMembershipStatus>(['active', 'terminated'])
+const SITE_STATUSES = new Set<OrganizationSiteStatus>(['active', 'inactive'])
+const ASSIGNABLE_ROLES = new Set<Exclude<OrganizationRoleCode, 'owner'>>([
+  'admin',
+  'coach',
+  'staff',
+])
 const ROLE_CATALOG_CACHE_CONTROL = 'private, max-age=0, must-revalidate'
 
 export function studioOrganizationRoutes(
@@ -45,8 +61,8 @@ export function studioOrganizationRoutes(
     cors({
       origin: studioOrigin,
       credentials: true,
-      allowMethods: ['GET', 'POST', 'PUT', 'OPTIONS'],
-      allowHeaders: ['Content-Type', 'Idempotency-Key', 'Command-Id', 'If-None-Match'],
+      allowMethods: ['GET', 'POST', 'PATCH', 'PUT', 'OPTIONS'],
+      allowHeaders: ['Content-Type', 'Idempotency-Key', 'Command-Id', 'If-Match', 'If-None-Match'],
       exposeHeaders: ['ETag', 'Server-Timing'],
       maxAge: 600,
     }),
@@ -235,6 +251,207 @@ export function studioOrganizationRoutes(
     }
   })
 
+  routes.get('/organizations/:organizationId', async (c) => {
+    c.header('Cache-Control', 'private, no-store')
+    if (c.req.header('origin') !== studioOrigin) {
+      return problem(c, 'forbidden')
+    }
+    const organizationId = c.req.param('organizationId')
+    if (!UUID.test(organizationId)) return problem(c, 'invalid-request')
+
+    try {
+      const actor = await studioActor(c, sessions(), problem)
+      if (actor instanceof Response) return actor
+      const organization = await organizations().get(actor, organizationId, randomUUID())
+      c.header('ETag', organizationEtag(organization.id, organization.revisionNumber))
+      return c.json(organizationPresentation(organization))
+    } catch (error) {
+      return operationFailure(c, error, problem)
+    }
+  })
+
+  routes.patch('/organizations/:organizationId', async (c) => {
+    c.header('Cache-Control', 'no-store')
+    if (c.req.header('origin') !== studioOrigin) {
+      return problem(c, 'forbidden')
+    }
+    const organizationId = c.req.param('organizationId')
+    if (!UUID.test(organizationId)) return problem(c, 'invalid-request')
+    const revision = expectedRevision(c.req.header('if-match'), 'organization', organizationId)
+    if (revision === undefined) return problem(c, 'precondition-required')
+    if (revision === null) return problem(c, 'invalid-request')
+    const body = await readJson(c)
+    if (!isOrganizationUpdate(body)) return problem(c, 'invalid-request')
+    const command = commandContext(c, { organization_id: organizationId, body, revision })
+    if (!command) return problem(c, 'invalid-request')
+
+    try {
+      const actor = await studioActor(c, sessions(), problem)
+      if (actor instanceof Response) return actor
+      const organization = await organizations().update(actor, {
+        organizationId,
+        expectedRevision: revision,
+        patch: {
+          ...(body.display_name !== undefined ? { displayName: body.display_name.trim() } : {}),
+          ...(body.legal_name !== undefined
+            ? { legalName: body.legal_name === null ? null : body.legal_name.trim() }
+            : {}),
+          ...(body.type_code !== undefined ? { typeCode: body.type_code } : {}),
+        },
+        ...command,
+      })
+      c.header('ETag', organizationEtag(organization.id, organization.revisionNumber))
+      return c.json(organizationPresentation(organization))
+    } catch (error) {
+      return operationFailure(c, error, problem)
+    }
+  })
+
+  routes.post('/organizations/:organizationId/sites', async (c) => {
+    c.header('Cache-Control', 'no-store')
+    if (c.req.header('origin') !== studioOrigin) {
+      return problem(c, 'forbidden')
+    }
+    const organizationId = c.req.param('organizationId')
+    if (!UUID.test(organizationId)) return problem(c, 'invalid-request')
+    const body = await readJson(c)
+    if (!isOrganizationSiteCreate(body)) return problem(c, 'invalid-request')
+    const command = commandContext(c, { organization_id: organizationId, body })
+    if (!command) return problem(c, 'invalid-request')
+
+    try {
+      const actor = await studioActor(c, sessions(), problem)
+      if (actor instanceof Response) return actor
+      const site = await organizations().createSite(actor, {
+        organizationId,
+        site: {
+          name: body.name.trim(),
+          ...(body.address !== undefined
+            ? { address: body.address === null ? null : body.address.trim() }
+            : {}),
+        },
+        ...command,
+      })
+      c.header('ETag', organizationSiteEtag(site.id, site.revisionNumber))
+      return c.json(sitePresentation(site), 201)
+    } catch (error) {
+      return operationFailure(c, error, problem)
+    }
+  })
+
+  routes.patch('/organizations/:organizationId/sites/:siteId', async (c) => {
+    c.header('Cache-Control', 'no-store')
+    if (c.req.header('origin') !== studioOrigin) {
+      return problem(c, 'forbidden')
+    }
+    const organizationId = c.req.param('organizationId')
+    const siteId = c.req.param('siteId')
+    if (!UUID.test(organizationId) || !UUID.test(siteId)) return problem(c, 'invalid-request')
+    const revision = expectedRevision(c.req.header('if-match'), 'organization-site', siteId)
+    if (revision === undefined) return problem(c, 'precondition-required')
+    if (revision === null) return problem(c, 'invalid-request')
+    const body = await readJson(c)
+    if (!isOrganizationSiteUpdate(body)) return problem(c, 'invalid-request')
+    const command = commandContext(c, {
+      organization_id: organizationId,
+      site_id: siteId,
+      body,
+      revision,
+    })
+    if (!command) return problem(c, 'invalid-request')
+
+    try {
+      const actor = await studioActor(c, sessions(), problem)
+      if (actor instanceof Response) return actor
+      const site = await organizations().updateSite(actor, {
+        organizationId,
+        siteId,
+        expectedRevision: revision,
+        patch: {
+          ...(body.name !== undefined ? { name: body.name.trim() } : {}),
+          ...(body.address !== undefined
+            ? { address: body.address === null ? null : body.address.trim() }
+            : {}),
+          ...(body.status !== undefined ? { status: body.status } : {}),
+        },
+        ...command,
+      })
+      c.header('ETag', organizationSiteEtag(site.id, site.revisionNumber))
+      return c.json(sitePresentation(site))
+    } catch (error) {
+      return operationFailure(c, error, problem)
+    }
+  })
+
+  routes.post('/organizations/:organizationId/ownership-transfers', async (c) => {
+    c.header('Cache-Control', 'no-store')
+    if (c.req.header('origin') !== studioOrigin) {
+      return problem(c, 'forbidden')
+    }
+    const organizationId = c.req.param('organizationId')
+    if (!UUID.test(organizationId)) return problem(c, 'invalid-request')
+    const body = await readJson(c)
+    if (!isOwnershipTransferCreate(body)) return problem(c, 'invalid-request')
+    const command = commandContext(c, { organization_id: organizationId, body })
+    if (!command) return problem(c, 'invalid-request')
+
+    try {
+      const actor = await studioActor(c, sessions(), problem)
+      if (actor instanceof Response) return actor
+      const transfer = await organizations().transferOwnership(actor, {
+        organizationId,
+        targetMembershipId: body.target_membership_id,
+        ...command,
+      })
+      return c.json({
+        organization_id: transfer.organizationId,
+        owner_membership_id: transfer.ownerMembershipId,
+        previous_owner_membership_id: transfer.previousOwnerMembershipId,
+        transferred_at: transfer.transferredAt,
+      })
+    } catch (error) {
+      return operationFailure(c, error, problem)
+    }
+  })
+
+  routes.post('/organizations/:organizationId/memberships/:membershipId/roles', async (c) => {
+    c.header('Cache-Control', 'no-store')
+    if (c.req.header('origin') !== studioOrigin) {
+      return problem(c, 'forbidden')
+    }
+    const organizationId = c.req.param('organizationId')
+    const membershipId = c.req.param('membershipId')
+    if (!UUID.test(organizationId) || !UUID.test(membershipId)) {
+      return problem(c, 'invalid-request')
+    }
+    const body = await readJson(c)
+    if (!isRoleGrantCreate(body)) return problem(c, 'invalid-request')
+    const command = commandContext(c, {
+      organization_id: organizationId,
+      membership_id: membershipId,
+      body,
+    })
+    if (!command) return problem(c, 'invalid-request')
+
+    try {
+      const actor = await studioActor(c, sessions(), problem)
+      if (actor instanceof Response) return actor
+      const grant = await organizations().grantMembershipRole(actor, {
+        organizationId,
+        membershipId,
+        roleCode: body.role_code,
+        ...command,
+      })
+      return c.json({
+        membership_id: grant.membershipId,
+        role_code: grant.roleCode,
+        valid_from: grant.validFrom,
+      })
+    } catch (error) {
+      return operationFailure(c, error, problem)
+    }
+  })
+
   return routes
 }
 
@@ -260,13 +477,81 @@ function membershipPresentation(membership: {
   }
 }
 
-async function studioActor(c: Context, sessions: StudioSessionService) {
+function organizationPresentation(organization: {
+  id: string
+  displayName: string
+  legalName: string | null
+  typeCode: OrganizationTypeCode
+  status: 'active' | 'closed'
+  revisionNumber: number
+  sites: Array<{
+    id: string
+    name: string
+    address: string | null
+    status: OrganizationSiteStatus
+    revisionNumber: number
+  }>
+}) {
+  return {
+    id: organization.id,
+    display_name: organization.displayName,
+    legal_name: organization.legalName,
+    type_code: organization.typeCode,
+    status: organization.status,
+    revision_number: organization.revisionNumber,
+    sites: organization.sites.map(sitePresentation),
+  }
+}
+
+function sitePresentation(site: {
+  id: string
+  name: string
+  address: string | null
+  status: OrganizationSiteStatus
+  revisionNumber: number
+}) {
+  return {
+    id: site.id,
+    name: site.name,
+    address: site.address,
+    status: site.status,
+    revision_number: site.revisionNumber,
+  }
+}
+
+function organizationEtag(organizationId: string, revision: number): string {
+  return `"organization:${organizationId}:r${revision}"`
+}
+
+function organizationSiteEtag(siteId: string, revision: number): string {
+  return `"organization-site:${siteId}:r${revision}"`
+}
+
+function expectedRevision(
+  value: string | undefined,
+  resource: 'organization' | 'organization-site',
+  id: string,
+): number | undefined | null {
+  if (value === undefined) return undefined
+  const match = new RegExp(`^"${resource}:${id}:r(0|[1-9][0-9]*)"$`, 'i').exec(value)
+  if (!match) return null
+  const revision = Number(match[1])
+  return Number.isSafeInteger(revision) ? revision : null
+}
+
+type FailureResponder = (c: Context, code: ApiErrorCode, detail?: string) => Response
+
+async function studioActor(
+  c: Context,
+  sessions: StudioSessionService,
+  respond: FailureResponder = fail,
+) {
   const token = getCookie(c, STUDIO_SESSION_COOKIE)
-  if (!token) return fail(c, 'unauthenticated', 'missing session cookie')
+  if (!token) return respond(c, 'unauthenticated')
   try {
     return await sessions.resolveActor(token)
   } catch (error) {
-    if (error instanceof StudioSessionError) return fail(c, error.code)
+    if (error instanceof StudioSessionError) return respond(c, error.code)
     throw error
   }
 }
@@ -384,20 +669,100 @@ function isOrganizationCreate(value: unknown): value is OrganizationCreate {
   )
 }
 
+function isOrganizationUpdate(value: unknown): value is OrganizationUpdate {
+  if (!isObject(value)) return false
+  const keys = Object.keys(value)
+  if (
+    keys.length === 0 ||
+    keys.some((key) => !['display_name', 'legal_name', 'type_code'].includes(key))
+  ) {
+    return false
+  }
+  return (
+    (value.display_name === undefined ||
+      (typeof value.display_name === 'string' &&
+        value.display_name.trim().length > 0 &&
+        value.display_name.length <= 120)) &&
+    (value.legal_name === undefined ||
+      value.legal_name === null ||
+      (typeof value.legal_name === 'string' && value.legal_name.trim().length > 0)) &&
+    (value.type_code === undefined ||
+      (typeof value.type_code === 'string' &&
+        ORGANIZATION_TYPES.has(value.type_code as OrganizationTypeCode)))
+  )
+}
+
+function isOrganizationSiteCreate(value: unknown): value is OrganizationSiteCreate {
+  if (!isObject(value) || Object.keys(value).some((key) => !['name', 'address'].includes(key))) {
+    return false
+  }
+  return (
+    typeof value.name === 'string' &&
+    value.name.trim().length > 0 &&
+    (value.address === undefined ||
+      value.address === null ||
+      (typeof value.address === 'string' && value.address.trim().length > 0))
+  )
+}
+
+function isOrganizationSiteUpdate(value: unknown): value is OrganizationSiteUpdate {
+  if (!isObject(value)) return false
+  const keys = Object.keys(value)
+  if (keys.length === 0 || keys.some((key) => !['name', 'address', 'status'].includes(key))) {
+    return false
+  }
+  return (
+    (value.name === undefined ||
+      (typeof value.name === 'string' && value.name.trim().length > 0)) &&
+    (value.address === undefined ||
+      value.address === null ||
+      (typeof value.address === 'string' && value.address.trim().length > 0)) &&
+    (value.status === undefined ||
+      (typeof value.status === 'string' &&
+        SITE_STATUSES.has(value.status as OrganizationSiteStatus)))
+  )
+}
+
+function isOwnershipTransferCreate(value: unknown): value is OrganizationOwnershipTransferCreate {
+  return (
+    isObject(value) &&
+    Object.keys(value).join(',') === 'target_membership_id' &&
+    typeof value.target_membership_id === 'string' &&
+    UUID.test(value.target_membership_id)
+  )
+}
+
+function isRoleGrantCreate(value: unknown): value is OrganizationRoleGrantCreate {
+  return (
+    isObject(value) &&
+    Object.keys(value).join(',') === 'role_code' &&
+    typeof value.role_code === 'string' &&
+    ASSIGNABLE_ROLES.has(value.role_code as Exclude<OrganizationRoleCode, 'owner'>)
+  )
+}
+
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-function operationFailure(c: Context, error: unknown) {
+function operationFailure(c: Context, error: unknown, respond: FailureResponder = fail) {
   if (error instanceof StudioSessionError || error instanceof StudioOrganizationError) {
-    return fail(c, error.code)
+    return respond(c, error.code)
   }
   const sqlState = isObject(error) && typeof error.code === 'string' ? error.code : undefined
-  if (sqlState === '42501') return fail(c, 'forbidden')
-  if (sqlState === '23505' || sqlState === '40001') return fail(c, 'conflict')
-  if (sqlState === '22023' || sqlState === '23514' || sqlState === '22P02') {
-    return fail(c, 'invalid-request')
+  const message = isObject(error) && typeof error.message === 'string' ? error.message : undefined
+  if (sqlState === '42501') return respond(c, 'forbidden')
+  if (sqlState === 'P0002') return respond(c, 'not-found')
+  if (sqlState === '40001' && message?.includes('stale-draft')) return respond(c, 'stale-draft')
+  if (sqlState === '55P03') {
+    c.header('Retry-After', '1')
+    return respond(c, 'idempotency-in-progress')
   }
+  if (sqlState === '23505' || sqlState === '40001') return respond(c, 'conflict')
+  if (sqlState === '22023' || sqlState === '23514') {
+    return respond(c, 'validation-failed')
+  }
+  if (sqlState === '22P02') return respond(c, 'invalid-request')
   console.error('[studio-organizations] operation failed')
-  return fail(c, 'upstream-unavailable')
+  return respond(c, 'upstream-unavailable')
 }

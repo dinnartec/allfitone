@@ -25,6 +25,8 @@ from organizations.create_organization(
   decode(repeat('41', 32), 'hex')
 );
 
+reset role;
+
 select is(
   (
     select count(*)
@@ -47,6 +49,9 @@ select is(
   'membership-created event carries the active membership snapshot'
 );
 
+set local role allfit_api;
+select set_config('app.actor_kind', 'person', true);
+select set_config('app.actor_person_id', '0198e100-0000-7000-8000-000000000001', true);
 select organizations.create_organization(
   '0198e100-0000-7000-8000-000000000001',
   'Invariant Lab',
@@ -57,6 +62,8 @@ select organizations.create_organization(
   '42222222-2222-4222-8222-222222222222',
   decode(repeat('41', 32), 'hex')
 );
+
+reset role;
 
 select is(
   (
@@ -69,6 +76,7 @@ select is(
   'T-ORG-IDEM-02 an idempotent replay does not duplicate membership events'
 );
 
+set local role allfit_api;
 select throws_ok(
   $$
     update organizations.membership_events
@@ -132,9 +140,11 @@ set local role allfit_api;
 select set_config('app.actor_kind', 'person', true);
 select set_config('app.actor_person_id', '0198e100-0000-7000-8000-000000000003', true);
 
-select is_empty(
+select throws_ok(
   $$ select id from organizations.membership_events $$,
-  'T-EVENT-RLS-01 a person without membership cannot read membership events'
+  '42501',
+  null,
+  'T-EVENT-RLS-01 runtime cannot read membership events directly'
 );
 
 reset role;
