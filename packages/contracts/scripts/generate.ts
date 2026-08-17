@@ -112,6 +112,21 @@ function exclusionsFrom(document: Record<string, unknown>): ContractExclusion[] 
     )
 }
 
+/**
+ * The bundled component schemas, emitted verbatim so a runtime validator can
+ * check a real response against the same document the DTOs are generated from.
+ * Internal $ref values stay as written, so consumers must register the object
+ * under the `#/components/schemas/...` pointer space.
+ */
+function schemasFrom(document: Record<string, unknown>): Record<string, unknown> {
+  const components = recordProperty(document, 'components', 'OpenAPI document')
+  const schemas = recordProperty(components, 'schemas', 'OpenAPI document.components')
+
+  return Object.fromEntries(
+    Object.entries(schemas).sort(([left], [right]) => left.localeCompare(right)),
+  )
+}
+
 function assertDistinctRoutes(
   operations: readonly ContractOperation[],
   exclusions: readonly ContractExclusion[],
@@ -192,6 +207,7 @@ async function generate() {
   const generatedDirectory = join(packageRoot, 'generated')
   const typesPath = join(generatedDirectory, 'allfit-v1.ts')
   const manifestPath = join(generatedDirectory, 'allfit-v1-manifest.ts')
+  const schemasPath = join(generatedDirectory, 'allfit-v1-schemas.ts')
 
   const [ast, bundledDocument] = await Promise.all([
     openapiTS(pathToFileURL(specificationPath)),
@@ -201,6 +217,7 @@ async function generate() {
   const exclusions = exclusionsFrom(bundledDocument)
   assertDistinctRoutes(operations, exclusions)
   const manifest = { operations, exclusions }
+  const schemas = schemasFrom(bundledDocument)
 
   await mkdir(generatedDirectory, { recursive: true })
   await Promise.all([
@@ -208,6 +225,10 @@ async function generate() {
     writeFormatted(
       manifestPath,
       `${COMMENT_HEADER}export const allfitV1ContractManifest = ${JSON.stringify(manifest, null, 2)} as const\n`,
+    ),
+    writeFormatted(
+      schemasPath,
+      `${COMMENT_HEADER}export const allfitV1ContractSchemas: Record<string, unknown> = ${JSON.stringify(schemas, null, 2)}\n`,
     ),
   ])
 }

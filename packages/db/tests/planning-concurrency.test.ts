@@ -30,8 +30,17 @@ let programEtag = ''
 let derivationEtag = ''
 
 async function cleanup(): Promise<void> {
+  // Published Planning rows are protected by immutability triggers, so only that
+  // step runs as `replica`; foreign-key cascades stay live for everything else,
+  // which is what removes the membership event rows and keeps this re-runnable.
   await admin.begin(async (transaction) => {
     await transaction`set local session_replication_role = replica`
+    await transaction`
+      delete from planning.session_template_versions
+      where id in (${COMPOSITION_VERSION_ID}::uuid, ${DERIVATION_VERSION_ID}::uuid)
+    `
+  })
+  await admin.begin(async (transaction) => {
     await transaction`
       delete from system.outbox_events
       where aggregate_id in (
@@ -50,10 +59,6 @@ async function cleanup(): Promise<void> {
     `
     await transaction`
       delete from planning.programs where id = ${PROGRAM_ID}::uuid
-    `
-    await transaction`
-      delete from planning.session_template_versions
-      where id in (${COMPOSITION_VERSION_ID}::uuid, ${DERIVATION_VERSION_ID}::uuid)
     `
     await transaction`
       delete from planning.session_template_drafts
