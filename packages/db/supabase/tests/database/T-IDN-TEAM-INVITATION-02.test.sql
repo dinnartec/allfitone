@@ -1,6 +1,6 @@
 begin;
 
-select plan(28);
+select plan(29);
 
 insert into identity.people (id, given_name, family_name)
 values
@@ -74,6 +74,13 @@ select is(
      and role_code = 'staff' and valid_to is null),
   1::bigint,
   'acceptance assigns the proposed role once'
+);
+select is(
+  (select count(*) from organizations.membership_events
+   where membership_id = (select membership_id from accepted_decision)
+     and event_type = 'organization.role_granted.v1'),
+  1::bigint,
+  'new invitation acceptances emit the canonical role-granted event'
 );
 select is(
   (select materialized_membership_id from identity.invitation_intents

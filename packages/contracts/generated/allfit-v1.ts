@@ -517,6 +517,75 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/studio/v1/organizations/{organizationId}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** Read the closed organization and site projection */
+    get: operations['getStudioOrganization']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    /** Update the closed self-service organization fields */
+    patch: operations['updateStudioOrganization']
+    trace?: never
+  }
+  '/studio/v1/organizations/{organizationId}/sites': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /** Create an informational organization site */
+    post: operations['createStudioOrganizationSite']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/studio/v1/organizations/{organizationId}/sites/{siteId}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    /** Update or deactivate an informational organization site */
+    patch: operations['updateStudioOrganizationSite']
+    trace?: never
+  }
+  '/studio/v1/organizations/{organizationId}/ownership-transfers': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /** Transfer the unique owner role to another active membership */
+    post: operations['transferStudioOrganizationOwnership']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/studio/v1/organizations/{organizationId}/memberships': {
     parameters: {
       query?: never
@@ -531,6 +600,23 @@ export interface paths {
     get: operations['listStudioOrganizationMemberships']
     put?: never
     post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/studio/v1/organizations/{organizationId}/memberships/{membershipId}/roles': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /** Grant a non-owner role to an active organization membership */
+    post: operations['grantStudioOrganizationMembershipRole']
     delete?: never
     options?: never
     head?: never
@@ -1132,6 +1218,62 @@ export interface components {
       type_code: components['schemas']['OrganizationTypeCode']
       membership_id: components['schemas']['UuidV7']
       roles: ('owner' | 'admin' | 'coach' | 'staff')[]
+    }
+    OrganizationUpdate: {
+      display_name?: string
+      legal_name?: string | null
+      type_code?: components['schemas']['OrganizationTypeCode']
+    }
+    /** @enum {string} */
+    OrganizationSiteStatus: 'active' | 'inactive'
+    OrganizationSite: {
+      id: components['schemas']['UuidV7']
+      name: string
+      address: string | null
+      status: components['schemas']['OrganizationSiteStatus']
+      /** Format: int64 */
+      revision_number: number
+    }
+    OrganizationSiteCreate: {
+      name: string
+      address?: string | null
+    }
+    OrganizationSiteUpdate: {
+      name?: string
+      address?: string | null
+      status?: components['schemas']['OrganizationSiteStatus']
+    }
+    Organization: {
+      id: components['schemas']['UuidV7']
+      display_name: string
+      legal_name: string | null
+      type_code: components['schemas']['OrganizationTypeCode']
+      /** @enum {string} */
+      status: 'active' | 'closed'
+      /** Format: int64 */
+      revision_number: number
+      sites: components['schemas']['OrganizationSite'][]
+    }
+    OrganizationOwnershipTransferCreate: {
+      target_membership_id: components['schemas']['Uuid']
+    }
+    OrganizationOwnershipTransfer: {
+      organization_id: components['schemas']['Uuid']
+      owner_membership_id: components['schemas']['Uuid']
+      previous_owner_membership_id: components['schemas']['Uuid']
+      /** Format: date-time */
+      transferred_at: string
+    }
+    /** @enum {string} */
+    AssignableOrganizationRoleCode: 'admin' | 'coach' | 'staff'
+    OrganizationRoleGrantCreate: {
+      role_code: components['schemas']['AssignableOrganizationRoleCode']
+    }
+    OrganizationRoleGrant: {
+      membership_id: components['schemas']['Uuid']
+      role_code: components['schemas']['AssignableOrganizationRoleCode']
+      /** Format: date-time */
+      valid_from: string
     }
     TeamInvitationToken: {
       /** @description Opaque token transported in JSON after being removed from the URL fragment. */
@@ -2498,6 +2640,17 @@ export interface components {
         'application/problem+json': components['schemas']['Problem']
       }
     }
+    /** @description Stale revision, idempotency conflict, or a bounded command lock timeout */
+    OrganizationCommandConflict: {
+      headers: {
+        'Cache-Control': components['headers']['NoStore']
+        'Retry-After': components['headers']['RetryAfter']
+        [name: string]: unknown
+      }
+      content: {
+        'application/problem+json': components['schemas']['Problem']
+      }
+    }
     /** @description If-Match refers to a stale execution revision */
     StaleDraft: {
       headers: {
@@ -2608,6 +2761,8 @@ export interface components {
     CredentialId: components['schemas']['UuidV7']
     Origin: string
     OrganizationId: components['schemas']['Uuid']
+    SiteId: components['schemas']['Uuid']
+    MembershipId: components['schemas']['Uuid']
     ProgramId: components['schemas']['Uuid']
     RelationshipId: components['schemas']['Uuid']
     PlannedSessionId: components['schemas']['Uuid']
@@ -2622,6 +2777,10 @@ export interface components {
     CommandId: components['schemas']['UuidV7']
     /** @description Strong ETag for the execution revision used as the command base. */
     IfMatch: string
+    /** @description Strong ETag for the organization revision used as the command base. */
+    OrganizationIfMatch: string
+    /** @description Strong ETag for the organization site revision used as the command base. */
+    OrganizationSiteIfMatch: string
     /** @description Strong ETag for the nutrition meal revision used as the command base. */
     NutritionMealIfMatch: string
     /** @description Opaque case UUID. When present the endpoint uses only the frozen guidance projection. */
@@ -3545,6 +3704,209 @@ export interface operations {
       503: components['responses']['UpstreamUnavailable']
     }
   }
+  getStudioOrganization: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Authorized organization projection, audited before delivery */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['PrivateNoStore']
+          ETag: components['headers']['ETag']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Organization']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  updateStudioOrganization: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description Strong ETag for the organization revision used as the command base. */
+        'If-Match': components['parameters']['OrganizationIfMatch']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['OrganizationUpdate']
+      }
+    }
+    responses: {
+      /** @description Updated organization projection, or the unchanged projection for a no-op */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          ETag: components['headers']['ETag']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Organization']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['OrganizationCommandConflict']
+      422: components['responses']['ValidationFailed']
+      428: components['responses']['PreconditionRequired']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  createStudioOrganizationSite: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['OrganizationSiteCreate']
+      }
+    }
+    responses: {
+      /** @description Informational site created */
+      201: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          ETag: components['headers']['ETag']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['OrganizationSite']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  updateStudioOrganizationSite: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description Strong ETag for the organization site revision used as the command base. */
+        'If-Match': components['parameters']['OrganizationSiteIfMatch']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+        siteId: components['parameters']['SiteId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['OrganizationSiteUpdate']
+      }
+    }
+    responses: {
+      /** @description Updated site, or the unchanged site for a no-op */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          ETag: components['headers']['ETag']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['OrganizationSite']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['OrganizationCommandConflict']
+      422: components['responses']['ValidationFailed']
+      428: components['responses']['PreconditionRequired']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  transferStudioOrganizationOwnership: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['OrganizationOwnershipTransferCreate']
+      }
+    }
+    responses: {
+      /** @description Ownership transferred atomically */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['OrganizationOwnershipTransfer']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
   listStudioOrganizationMemberships: {
     parameters: {
       query?: {
@@ -3573,6 +3935,48 @@ export interface operations {
       400: components['responses']['BadRequest']
       401: components['responses']['Unauthenticated']
       403: components['responses']['Forbidden']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  grantStudioOrganizationMembershipRole: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+        membershipId: components['parameters']['MembershipId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['OrganizationRoleGrantCreate']
+      }
+    }
+    responses: {
+      /** @description Durable role-grant receipt, including convergent duplicate commands */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['OrganizationRoleGrant']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
       422: components['responses']['ValidationFailed']
       503: components['responses']['UpstreamUnavailable']
     }

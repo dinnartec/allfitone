@@ -247,6 +247,18 @@ export const allfitV1ContractManifest = {
     },
     {
       method: 'GET',
+      path: '/studio/v1/organizations/{organizationId}',
+      operationId: 'getStudioOrganization',
+      allfitOperation: 'OP-ORG-013',
+    },
+    {
+      method: 'PATCH',
+      path: '/studio/v1/organizations/{organizationId}',
+      operationId: 'updateStudioOrganization',
+      allfitOperation: 'OP-ORG-002',
+    },
+    {
+      method: 'GET',
       path: '/studio/v1/organizations/{organizationId}/clients/{personId}/executions/{executionId}',
       operationId: 'getAuthorizedClientExecution',
       allfitOperation: 'OP-EXE-018',
@@ -307,6 +319,18 @@ export const allfitV1ContractManifest = {
     },
     {
       method: 'POST',
+      path: '/studio/v1/organizations/{organizationId}/memberships/{membershipId}/roles',
+      operationId: 'grantStudioOrganizationMembershipRole',
+      allfitOperation: 'OP-ORG-007',
+    },
+    {
+      method: 'POST',
+      path: '/studio/v1/organizations/{organizationId}/ownership-transfers',
+      operationId: 'transferStudioOrganizationOwnership',
+      allfitOperation: 'OP-ORG-011',
+    },
+    {
+      method: 'POST',
       path: '/studio/v1/organizations/{organizationId}/programs/{programId}/versions',
       operationId: 'publishProgramVersion',
       allfitOperation: 'OP-PLN-008',
@@ -322,6 +346,18 @@ export const allfitV1ContractManifest = {
       path: '/studio/v1/organizations/{organizationId}/roles',
       operationId: 'listStudioOrganizationRoles',
       allfitOperation: 'OP-ORG-017',
+    },
+    {
+      method: 'POST',
+      path: '/studio/v1/organizations/{organizationId}/sites',
+      operationId: 'createStudioOrganizationSite',
+      allfitOperation: 'OP-ORG-003',
+    },
+    {
+      method: 'PATCH',
+      path: '/studio/v1/organizations/{organizationId}/sites/{siteId}',
+      operationId: 'updateStudioOrganizationSite',
+      allfitOperation: 'OP-ORG-004',
     },
     {
       method: 'GET',

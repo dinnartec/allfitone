@@ -52,6 +52,8 @@ from organizations.create_organization(
 );
 
 select is((select role_code from test_organization), 'owner', 'T-ORG-INT-01 creates the owner role');
+
+reset role;
 select is(
   (select responsible_party ->> 'party_name' from organizations.organizations where id = (select organization_id from test_organization)),
   'Ada Owner',
@@ -67,6 +69,10 @@ select is(
   1::bigint,
   'organization creation leaves exactly one active owner'
 );
+
+set local role allfit_api;
+select set_config('app.actor_kind', 'person', true);
+select set_config('app.actor_person_id', '0198e000-0000-7000-8000-000000000001', true);
 select is(
   (select organization_id from organizations.create_organization(
     '0198e000-0000-7000-8000-000000000001',
@@ -112,9 +118,11 @@ select throws_ok(
 );
 
 select set_config('app.actor_person_id', '0198e000-0000-7000-8000-000000000002', true);
-select is_empty(
+select throws_ok(
   $$ select id from organizations.organizations $$,
-  'T-ORG-RLS-01 another person cannot read the organization'
+  '42501',
+  null,
+  'T-ORG-RLS-01 runtime cannot read the organization base table directly'
 );
 select is_empty(
   $$ select * from organizations.list_my_memberships('0198e000-0000-7000-8000-000000000002') $$,
