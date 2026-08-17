@@ -1749,7 +1749,10 @@ export type Database = {
           p_request_hash: string
           p_site: Json
         }
-        Returns: Json
+        Returns: {
+          replayed: boolean
+          result: Json
+        }[]
       }
       grant_membership_role: {
         Args: {
@@ -1761,7 +1764,10 @@ export type Database = {
           p_request_hash: string
           p_role_code: string
         }
-        Returns: Json
+        Returns: {
+          replayed: boolean
+          result: Json
+        }[]
       }
       list_my_memberships: {
         Args: { p_person_id: string }
@@ -1827,7 +1833,10 @@ export type Database = {
           p_request_hash: string
           p_target_membership_id: string
         }
-        Returns: Json
+        Returns: {
+          replayed: boolean
+          result: Json
+        }[]
       }
       update_organization: {
         Args: {
@@ -1839,7 +1848,10 @@ export type Database = {
           p_person_id: string
           p_request_hash: string
         }
-        Returns: Json
+        Returns: {
+          replayed: boolean
+          result: Json
+        }[]
       }
       update_site: {
         Args: {
@@ -1852,7 +1864,26 @@ export type Database = {
           p_request_hash: string
           p_site_id: string
         }
-        Returns: Json
+        Returns: {
+          replayed: boolean
+          result: Json
+        }[]
+      }
+      validate_membership_event_snapshot: {
+        Args: {
+          p_event_type: string
+          p_payload: Json
+          p_schema_version: number
+        }
+        Returns: boolean
+      }
+      validate_organization_event_snapshot: {
+        Args: {
+          p_event_type: string
+          p_payload: Json
+          p_schema_version: number
+        }
+        Returns: boolean
       }
     }
     Enums: {

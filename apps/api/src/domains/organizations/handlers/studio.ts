@@ -63,7 +63,7 @@ export function studioOrganizationRoutes(
       credentials: true,
       allowMethods: ['GET', 'POST', 'PATCH', 'PUT', 'OPTIONS'],
       allowHeaders: ['Content-Type', 'Idempotency-Key', 'Command-Id', 'If-Match', 'If-None-Match'],
-      exposeHeaders: ['ETag', 'Server-Timing'],
+      exposeHeaders: ['ETag', 'Server-Timing', 'Retry-After', 'Idempotent-Replay'],
       maxAge: 600,
     }),
   )
@@ -288,7 +288,7 @@ export function studioOrganizationRoutes(
     try {
       const actor = await studioActor(c, sessions(), problem)
       if (actor instanceof Response) return actor
-      const organization = await organizations().update(actor, {
+      const result = await organizations().update(actor, {
         organizationId,
         expectedRevision: revision,
         patch: {
@@ -300,6 +300,8 @@ export function studioOrganizationRoutes(
         },
         ...command,
       })
+      const organization = result.resource
+      replayHeader(c, result.replayed)
       c.header('ETag', organizationEtag(organization.id, organization.revisionNumber))
       return c.json(organizationPresentation(organization))
     } catch (error) {
@@ -322,7 +324,7 @@ export function studioOrganizationRoutes(
     try {
       const actor = await studioActor(c, sessions(), problem)
       if (actor instanceof Response) return actor
-      const site = await organizations().createSite(actor, {
+      const result = await organizations().createSite(actor, {
         organizationId,
         site: {
           name: body.name.trim(),
@@ -332,6 +334,8 @@ export function studioOrganizationRoutes(
         },
         ...command,
       })
+      const site = result.resource
+      replayHeader(c, result.replayed)
       c.header('ETag', organizationSiteEtag(site.id, site.revisionNumber))
       return c.json(sitePresentation(site), 201)
     } catch (error) {
@@ -363,7 +367,7 @@ export function studioOrganizationRoutes(
     try {
       const actor = await studioActor(c, sessions(), problem)
       if (actor instanceof Response) return actor
-      const site = await organizations().updateSite(actor, {
+      const result = await organizations().updateSite(actor, {
         organizationId,
         siteId,
         expectedRevision: revision,
@@ -376,6 +380,8 @@ export function studioOrganizationRoutes(
         },
         ...command,
       })
+      const site = result.resource
+      replayHeader(c, result.replayed)
       c.header('ETag', organizationSiteEtag(site.id, site.revisionNumber))
       return c.json(sitePresentation(site))
     } catch (error) {
@@ -398,11 +404,13 @@ export function studioOrganizationRoutes(
     try {
       const actor = await studioActor(c, sessions(), problem)
       if (actor instanceof Response) return actor
-      const transfer = await organizations().transferOwnership(actor, {
+      const result = await organizations().transferOwnership(actor, {
         organizationId,
         targetMembershipId: body.target_membership_id,
         ...command,
       })
+      const transfer = result.resource
+      replayHeader(c, result.replayed)
       return c.json({
         organization_id: transfer.organizationId,
         owner_membership_id: transfer.ownerMembershipId,
@@ -436,12 +444,14 @@ export function studioOrganizationRoutes(
     try {
       const actor = await studioActor(c, sessions(), problem)
       if (actor instanceof Response) return actor
-      const grant = await organizations().grantMembershipRole(actor, {
+      const result = await organizations().grantMembershipRole(actor, {
         organizationId,
         membershipId,
         roleCode: body.role_code,
         ...command,
       })
+      const grant = result.resource
+      replayHeader(c, result.replayed)
       return c.json({
         membership_id: grant.membershipId,
         role_code: grant.roleCode,
@@ -743,6 +753,10 @@ function isRoleGrantCreate(value: unknown): value is OrganizationRoleGrantCreate
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function replayHeader(c: Context, replayed: boolean): void {
+  if (replayed) c.header('Idempotent-Replay', 'true')
 }
 
 function operationFailure(c: Context, error: unknown, respond: FailureResponder = fail) {

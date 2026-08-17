@@ -76,38 +76,53 @@ function organizations(
       sites: [],
     }),
     update: async () => ({
-      id: ORGANIZATION_ID,
-      displayName: 'Ada Entrena Actualizada',
-      legalName: 'Ada Entrena SAS',
-      typeCode: 'studio',
-      status: 'active',
-      revisionNumber: 3,
-      sites: [],
+      resource: {
+        id: ORGANIZATION_ID,
+        displayName: 'Ada Entrena Actualizada',
+        legalName: 'Ada Entrena SAS',
+        typeCode: 'studio',
+        status: 'active',
+        revisionNumber: 3,
+        sites: [],
+      },
+      replayed: false,
     }),
     createSite: async () => ({
-      id: '0198d000-0000-7000-8000-000000000041',
-      name: 'Sede Centro',
-      address: 'Carrera 7',
-      status: 'active',
-      revisionNumber: 0,
+      resource: {
+        id: '0198d000-0000-7000-8000-000000000041',
+        name: 'Sede Centro',
+        address: 'Carrera 7',
+        status: 'active',
+        revisionNumber: 0,
+      },
+      replayed: false,
     }),
     updateSite: async () => ({
-      id: '0198d000-0000-7000-8000-000000000041',
-      name: 'Sede Centro',
-      address: 'Carrera 7',
-      status: 'inactive',
-      revisionNumber: 1,
+      resource: {
+        id: '0198d000-0000-7000-8000-000000000041',
+        name: 'Sede Centro',
+        address: 'Carrera 7',
+        status: 'inactive',
+        revisionNumber: 1,
+      },
+      replayed: false,
     }),
     transferOwnership: async () => ({
-      organizationId: ORGANIZATION_ID,
-      ownerMembershipId: '0198d000-0000-7000-8000-000000000032',
-      previousOwnerMembershipId: '0198d000-0000-7000-8000-000000000022',
-      transferredAt: '2026-08-17T15:30:00.000Z',
+      resource: {
+        organizationId: ORGANIZATION_ID,
+        ownerMembershipId: '0198d000-0000-7000-8000-000000000032',
+        previousOwnerMembershipId: '0198d000-0000-7000-8000-000000000022',
+        transferredAt: '2026-08-17T15:30:00.000Z',
+      },
+      replayed: false,
     }),
     grantMembershipRole: async () => ({
-      membershipId: '0198d000-0000-7000-8000-000000000032',
-      roleCode: 'coach',
-      validFrom: '2026-08-17T15:35:00.000Z',
+      resource: {
+        membershipId: '0198d000-0000-7000-8000-000000000032',
+        roleCode: 'coach',
+        validFrom: '2026-08-17T15:35:00.000Z',
+      },
+      replayed: false,
     }),
     ...overrides,
   }
@@ -588,13 +603,16 @@ describe('Studio organization routes', () => {
         update: async (_actor, input) => {
           received = input
           return {
-            id: ORGANIZATION_ID,
-            displayName: 'Ada Entrena Actualizada',
-            legalName: null,
-            typeCode: 'studio',
-            status: 'active',
-            revisionNumber: 3,
-            sites: [],
+            resource: {
+              id: ORGANIZATION_ID,
+              displayName: 'Ada Entrena Actualizada',
+              legalName: null,
+              typeCode: 'studio',
+              status: 'active',
+              revisionNumber: 3,
+              sites: [],
+            },
+            replayed: false,
           }
         },
       }),
@@ -774,15 +792,97 @@ describe('Studio organization routes', () => {
     expect(ownerGrant.status).toBe(400)
   })
 
+  test('signals idempotent replays for every command without changing successful responses', async () => {
+    const freshService = organizations()
+    const replayService = organizations({
+      update: async (actor, input) => ({
+        ...(await freshService.update(actor, input)),
+        replayed: true,
+      }),
+      createSite: async (actor, input) => ({
+        ...(await freshService.createSite(actor, input)),
+        replayed: true,
+      }),
+      updateSite: async (actor, input) => ({
+        ...(await freshService.updateSite(actor, input)),
+        replayed: true,
+      }),
+      transferOwnership: async (actor, input) => ({
+        ...(await freshService.transferOwnership(actor, input)),
+        replayed: true,
+      }),
+      grantMembershipRole: async (actor, input) => ({
+        ...(await freshService.grantMembershipRole(actor, input)),
+        replayed: true,
+      }),
+    })
+    const requestCommands = async (service: StudioOrganizationService) => {
+      const instance = app(service)
+      return Promise.all([
+        instance.request(`/studio/v1/organizations/${ORGANIZATION_ID}`, {
+          method: 'PATCH',
+          headers: { ...HEADERS, 'if-match': `"organization:${ORGANIZATION_ID}:r2"` },
+          body: JSON.stringify({ display_name: 'Ada Entrena Actualizada' }),
+        }),
+        instance.request(`/studio/v1/organizations/${ORGANIZATION_ID}/sites`, {
+          method: 'POST',
+          headers: HEADERS,
+          body: JSON.stringify({ name: 'Sede Centro', address: 'Carrera 7' }),
+        }),
+        instance.request(`/studio/v1/organizations/${ORGANIZATION_ID}/sites/${SITE_ID}`, {
+          method: 'PATCH',
+          headers: { ...HEADERS, 'if-match': `"organization-site:${SITE_ID}:r0"` },
+          body: JSON.stringify({ status: 'inactive' }),
+        }),
+        instance.request(`/studio/v1/organizations/${ORGANIZATION_ID}/ownership-transfers`, {
+          method: 'POST',
+          headers: HEADERS,
+          body: JSON.stringify({ target_membership_id: TARGET_MEMBERSHIP_ID }),
+        }),
+        instance.request(
+          `/studio/v1/organizations/${ORGANIZATION_ID}/memberships/${TARGET_MEMBERSHIP_ID}/roles`,
+          {
+            method: 'POST',
+            headers: HEADERS,
+            body: JSON.stringify({ role_code: 'coach' }),
+          },
+        ),
+      ])
+    }
+
+    const freshResponses = await requestCommands(freshService)
+    const replayResponses = await requestCommands(replayService)
+
+    expect(freshResponses.map((response) => response.status)).toEqual([200, 201, 200, 200, 200])
+    expect(replayResponses.map((response) => response.status)).toEqual([200, 201, 200, 200, 200])
+    for (const response of freshResponses) {
+      expect(response.headers.get('idempotent-replay')).toBeNull()
+    }
+    for (const response of replayResponses) {
+      expect(response.headers.get('idempotent-replay')).toBe('true')
+      expect(response.headers.get('access-control-expose-headers')).toContain('Retry-After')
+      expect(response.headers.get('access-control-expose-headers')).toContain('Idempotent-Replay')
+    }
+    expect(await Promise.all(freshResponses.map((response) => response.json()))).toEqual(
+      await Promise.all(replayResponses.map((response) => response.json())),
+    )
+    expect(freshResponses.map((response) => response.headers.get('etag'))).toEqual(
+      replayResponses.map((response) => response.headers.get('etag')),
+    )
+  })
+
   test('binds command hashes to organization and membership path identities', async () => {
     const hashes: string[] = []
     const service = organizations({
       grantMembershipRole: async (_actor, input) => {
         hashes.push(Buffer.from(input.requestHash).toString('hex'))
         return {
-          membershipId: input.membershipId,
-          roleCode: input.roleCode,
-          validFrom: '2026-08-17T15:35:00.000Z',
+          resource: {
+            membershipId: input.membershipId,
+            roleCode: input.roleCode,
+            validFrom: '2026-08-17T15:35:00.000Z',
+          },
+          replayed: false,
         }
       },
     })
@@ -866,6 +966,8 @@ describe('Studio organization routes', () => {
 
     expect(response.status).toBe(409)
     expect(response.headers.get('retry-after')).toBe('1')
+    expect(response.headers.get('access-control-expose-headers')).toContain('Retry-After')
+    expect(response.headers.get('access-control-expose-headers')).toContain('Idempotent-Replay')
     await expect(response.json()).resolves.toMatchObject({
       type: 'https://errors.allfit.invalid/idempotency-in-progress',
       status: 409,

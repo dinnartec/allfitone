@@ -94,6 +94,11 @@ export interface OrganizationCommand {
   requestHash: Uint8Array
 }
 
+export interface OrganizationCommandResult<T> {
+  resource: T
+  replayed: boolean
+}
+
 export interface OrganizationDatabase {
   listTypes(personId: string): Promise<OrganizationType[]>
   listMemberships(personId: string): Promise<StudioMembership[]>
@@ -127,14 +132,14 @@ export interface OrganizationDatabase {
         typeCode?: OrganizationTypeCode
       }
     },
-  ): Promise<Organization>
+  ): Promise<OrganizationCommandResult<Organization>>
   createSite(
     input: OrganizationCommand & {
       personId: string
       organizationId: string
       site: { name: string; address?: string | null }
     },
-  ): Promise<OrganizationSite>
+  ): Promise<OrganizationCommandResult<OrganizationSite>>
   updateSite(
     input: OrganizationCommand & {
       personId: string
@@ -143,14 +148,14 @@ export interface OrganizationDatabase {
       expectedRevision: number
       patch: { name?: string; address?: string | null; status?: OrganizationSiteStatus }
     },
-  ): Promise<OrganizationSite>
+  ): Promise<OrganizationCommandResult<OrganizationSite>>
   transferOwnership(
     input: OrganizationCommand & {
       personId: string
       organizationId: string
       targetMembershipId: string
     },
-  ): Promise<OwnershipTransfer>
+  ): Promise<OrganizationCommandResult<OwnershipTransfer>>
   grantMembershipRole(
     input: OrganizationCommand & {
       personId: string
@@ -158,5 +163,5 @@ export interface OrganizationDatabase {
       membershipId: string
       roleCode: Exclude<OrganizationRoleCode, 'owner'>
     },
-  ): Promise<MembershipRoleGrant>
+  ): Promise<OrganizationCommandResult<MembershipRoleGrant>>
 }

@@ -1,6 +1,6 @@
 begin;
 
-select plan(83);
+select plan(110);
 
 select has_table('organizations', 'organization_sites', 'T-ORG-PHY-01 sites are governed');
 select has_table('organizations', 'organization_type_transitions', 'T-ORG-INT-45 type transitions are governed');
@@ -135,7 +135,7 @@ select set_config('app.actor_kind', 'person', true);
 select set_config('app.actor_person_id', '019a1000-0000-7000-8000-000000000104', true);
 select set_config('app.actor_membership_id', '019a1000-0000-7000-8000-000000000304', true);
 select set_config('app.request_id', '61111111-1111-4111-8111-111111111191', true);
-select set_config('app.access_purpose', 'studio_organization_context', true);
+select set_config('app.purpose', 'studio_organization_context', true);
 select throws_ok(
   $$ select privacy.log_access_event(null, null, null, null, null, null, null, 'organization_operational', 'organizations.organization_context', 'allowed') $$,
   '22023', null, 'T-ACCESS-9 rejects an audit event with zero subjects'
@@ -179,21 +179,24 @@ select throws_ok($$ select organizations.read_organization('019a1000-0000-7000-8
 select throws_ok($$ select id from organizations.organizations $$, '42501', null, 'T-ORG-RLS-06 runtime cannot bypass closed read');
 
 select set_config('app.actor_person_id', '019a1000-0000-7000-8000-000000000102', true);
-select is((organizations.update_organization('019a1000-0000-7000-8000-000000000102', '019a1000-0000-7000-8000-000000000201', 0, '{"display_name":"Core Practice Updated","legal_name":"Core Practice SAS"}', '71111111-1111-4111-8111-111111111111', '019a1000-0000-7000-8000-000000000401', decode(repeat('71', 32), 'hex'))->>'revision_number')::bigint, 1::bigint, 'T-ORG-IDEM-02 admin update increments revision');
+create temporary table updated_organization as select * from organizations.update_organization('019a1000-0000-7000-8000-000000000102', '019a1000-0000-7000-8000-000000000201', 0, '{"display_name":"Core Practice Updated","legal_name":"Core Practice SAS"}', '71111111-1111-4111-8111-111111111111', '019a1000-0000-7000-8000-000000000401', decode(repeat('71', 32), 'hex'));
+select is(((select result from updated_organization)->>'revision_number')::bigint, 1::bigint, 'T-ORG-IDEM-02 admin update increments revision');
+select is((select replayed from updated_organization), false, 'T-ORG-IDEM-02A first organization update is not a replay');
 reset role;
 select is((select count(*) from organizations.organization_events where organization_id = '019a1000-0000-7000-8000-000000000201' and event_type = 'organization.updated.v1'), 1::bigint, 'T-ORG-INT-46 update emits one event');
 
 set local role allfit_api;
 select set_config('app.actor_kind', 'person', true);
 select set_config('app.actor_person_id', '019a1000-0000-7000-8000-000000000102', true);
-select is((organizations.update_organization('019a1000-0000-7000-8000-000000000102', '019a1000-0000-7000-8000-000000000201', 0, '{"display_name":"Core Practice Updated","legal_name":"Core Practice SAS"}', '71111111-1111-4111-8111-111111111111', '019a1000-0000-7000-8000-000000000401', decode(repeat('71', 32), 'hex'))->>'revision_number')::bigint, 1::bigint, 'T-ORG-IDEM-03 replay returns original receipt');
+select is(((select result from organizations.update_organization('019a1000-0000-7000-8000-000000000102', '019a1000-0000-7000-8000-000000000201', 0, '{"display_name":"Core Practice Updated","legal_name":"Core Practice SAS"}', '71111111-1111-4111-8111-111111111111', '019a1000-0000-7000-8000-000000000401', decode(repeat('71', 32), 'hex')))->>'revision_number')::bigint, 1::bigint, 'T-ORG-IDEM-03 replay returns original receipt');
+select is((select replayed from organizations.update_organization('019a1000-0000-7000-8000-000000000102', '019a1000-0000-7000-8000-000000000201', 0, '{"display_name":"Core Practice Updated","legal_name":"Core Practice SAS"}', '71111111-1111-4111-8111-111111111111', '019a1000-0000-7000-8000-000000000401', decode(repeat('71', 32), 'hex'))), true, 'T-ORG-IDEM-03A organization update reports replay');
 reset role;
 select is((select count(*) from organizations.organization_events where organization_id = '019a1000-0000-7000-8000-000000000201' and event_type = 'organization.updated.v1'), 1::bigint, 'T-ORG-IDEM-04 replay emits no event');
 
 set local role allfit_api;
 select set_config('app.actor_kind', 'person', true);
 select set_config('app.actor_person_id', '019a1000-0000-7000-8000-000000000102', true);
-select is((organizations.update_organization('019a1000-0000-7000-8000-000000000102', '019a1000-0000-7000-8000-000000000201', 1, '{"display_name":"Core Practice Updated"}', '71111111-1111-4111-8111-111111111112', '019a1000-0000-7000-8000-000000000402', decode(repeat('72', 32), 'hex'))->>'revision_number')::bigint, 1::bigint, 'T-ORG-IDEM-05 no-op preserves revision');
+select is(((select result from organizations.update_organization('019a1000-0000-7000-8000-000000000102', '019a1000-0000-7000-8000-000000000201', 1, '{"display_name":"Core Practice Updated"}', '71111111-1111-4111-8111-111111111112', '019a1000-0000-7000-8000-000000000402', decode(repeat('72', 32), 'hex')))->>'revision_number')::bigint, 1::bigint, 'T-ORG-IDEM-05 no-op preserves revision');
 reset role;
 select is((select count(*) from organizations.organization_events where organization_id = '019a1000-0000-7000-8000-000000000201' and event_type = 'organization.updated.v1'), 1::bigint, 'T-ORG-IDEM-06 no-op emits no event');
 
@@ -204,21 +207,26 @@ select throws_ok($$ select organizations.update_organization('019a1000-0000-7000
 select set_config('app.actor_person_id', '019a1000-0000-7000-8000-000000000104', true);
 select throws_ok($$ select organizations.update_organization('019a1000-0000-7000-8000-000000000104', '019a1000-0000-7000-8000-000000000201', 1, '{"display_name":"Forbidden"}', '71111111-1111-4111-8111-111111111114', '019a1000-0000-7000-8000-000000000404', decode(repeat('74', 32), 'hex')) $$, '42501', null, 'T-ORG-RLS-07 member cannot update');
 select set_config('app.actor_person_id', '019a1000-0000-7000-8000-000000000102', true);
-select is(organizations.update_organization('019a1000-0000-7000-8000-000000000102', '019a1000-0000-7000-8000-000000000201', 1, '{"type_code":"studio"}', '71111111-1111-4111-8111-111111111115', '019a1000-0000-7000-8000-000000000405', decode(repeat('75', 32), 'hex'))->>'type_code', 'studio', 'T-ORG-INT-48 approved transition succeeds');
+select is((select result from organizations.update_organization('019a1000-0000-7000-8000-000000000102', '019a1000-0000-7000-8000-000000000201', 1, '{"type_code":"studio"}', '71111111-1111-4111-8111-111111111115', '019a1000-0000-7000-8000-000000000405', decode(repeat('75', 32), 'hex')))->>'type_code', 'studio', 'T-ORG-INT-48 approved transition succeeds');
 select set_config('app.actor_person_id', '019a1000-0000-7000-8000-000000000105', true);
 select throws_ok($$ select organizations.update_organization('019a1000-0000-7000-8000-000000000105', '019a1000-0000-7000-8000-000000000202', 0, '{"type_code":"studio"}', '71111111-1111-4111-8111-111111111116', '019a1000-0000-7000-8000-000000000406', decode(repeat('76', 32), 'hex')) $$, '23514', 'IX-45 organization type transition is not active', 'T-ORG-INT-49 unpublished transition fails IX-45');
 
 select set_config('app.actor_person_id', '019a1000-0000-7000-8000-000000000102', true);
-create temporary table created_site as select organizations.create_site('019a1000-0000-7000-8000-000000000102', '019a1000-0000-7000-8000-000000000201', '{"name":"Sede Centro","address":"Carrera 7"}', '81111111-1111-4111-8111-111111111111', '019a1000-0000-7000-8000-000000000501', decode(repeat('81', 32), 'hex')) as result;
+create temporary table created_site as select * from organizations.create_site('019a1000-0000-7000-8000-000000000102', '019a1000-0000-7000-8000-000000000201', '{"name":"Sede Centro","address":"Carrera 7"}', '81111111-1111-4111-8111-111111111111', '019a1000-0000-7000-8000-000000000501', decode(repeat('81', 32), 'hex'));
 select is(((select result from created_site)->>'revision_number')::bigint, 0::bigint, 'T-ORG-IDEM-07 site starts at revision zero');
-select is(organizations.create_site('019a1000-0000-7000-8000-000000000102', '019a1000-0000-7000-8000-000000000201', '{"name":"Sede Centro","address":"Carrera 7"}', '81111111-1111-4111-8111-111111111111', '019a1000-0000-7000-8000-000000000501', decode(repeat('81', 32), 'hex'))->>'id', (select result->>'id' from created_site), 'T-ORG-IDEM-08 site replay returns original');
+select is((select replayed from created_site), false, 'T-ORG-IDEM-07A first site creation is not a replay');
+select is((select result from organizations.create_site('019a1000-0000-7000-8000-000000000102', '019a1000-0000-7000-8000-000000000201', '{"name":"Sede Centro","address":"Carrera 7"}', '81111111-1111-4111-8111-111111111111', '019a1000-0000-7000-8000-000000000501', decode(repeat('81', 32), 'hex')))->>'id', (select result->>'id' from created_site), 'T-ORG-IDEM-08 site replay returns original');
+select is((select replayed from organizations.create_site('019a1000-0000-7000-8000-000000000102', '019a1000-0000-7000-8000-000000000201', '{"name":"Sede Centro","address":"Carrera 7"}', '81111111-1111-4111-8111-111111111111', '019a1000-0000-7000-8000-000000000501', decode(repeat('81', 32), 'hex'))), true, 'T-ORG-IDEM-08A site creation reports replay');
 reset role;
 select is((select count(*) from organizations.organization_sites where organization_id = '019a1000-0000-7000-8000-000000000201'), 1::bigint, 'T-ORG-IDEM-09 no duplicate site');
 
 set local role allfit_api;
 select set_config('app.actor_kind', 'person', true);
 select set_config('app.actor_person_id', '019a1000-0000-7000-8000-000000000102', true);
-select is((organizations.update_site('019a1000-0000-7000-8000-000000000102', '019a1000-0000-7000-8000-000000000201', (select (result->>'id')::uuid from created_site), 0, '{"status":"inactive"}', '81111111-1111-4111-8111-111111111112', '019a1000-0000-7000-8000-000000000502', decode(repeat('82', 32), 'hex'))->>'revision_number')::bigint, 1::bigint, 'T-ORG-IDEM-10 site update increments revision');
+create temporary table updated_site as select * from organizations.update_site('019a1000-0000-7000-8000-000000000102', '019a1000-0000-7000-8000-000000000201', (select (result->>'id')::uuid from created_site), 0, '{"status":"inactive"}', '81111111-1111-4111-8111-111111111112', '019a1000-0000-7000-8000-000000000502', decode(repeat('82', 32), 'hex'));
+select is(((select result from updated_site)->>'revision_number')::bigint, 1::bigint, 'T-ORG-IDEM-10 site update increments revision');
+select is((select replayed from updated_site), false, 'T-ORG-IDEM-10A first site update is not a replay');
+select is((select replayed from organizations.update_site('019a1000-0000-7000-8000-000000000102', '019a1000-0000-7000-8000-000000000201', (select (result->>'id')::uuid from created_site), 0, '{"status":"inactive"}', '81111111-1111-4111-8111-111111111112', '019a1000-0000-7000-8000-000000000502', decode(repeat('82', 32), 'hex'))), true, 'T-ORG-IDEM-10B site update reports replay');
 reset role;
 select is((select count(*) from organizations.organization_events where organization_id = '019a1000-0000-7000-8000-000000000201' and event_type = 'organization.site_updated.v1'), 1::bigint, 'T-ORG-INT-50 site update emits event');
 
@@ -230,9 +238,11 @@ select set_config('app.request_id', '61111111-1111-4111-8111-111111111113', true
 select is(jsonb_array_length(organizations.read_organization('019a1000-0000-7000-8000-000000000201')->'sites'), 1, 'T-ORG-RLS-09 projection includes minimal site context');
 
 select set_config('app.actor_person_id', '019a1000-0000-7000-8000-000000000102', true);
-create temporary table granted_role as select organizations.grant_membership_role('019a1000-0000-7000-8000-000000000102', '019a1000-0000-7000-8000-000000000201', '019a1000-0000-7000-8000-000000000303', 'coach', '91111111-1111-4111-8111-111111111111', '019a1000-0000-7000-8000-000000000601', decode(repeat('91', 32), 'hex')) as result;
+create temporary table granted_role as select * from organizations.grant_membership_role('019a1000-0000-7000-8000-000000000102', '019a1000-0000-7000-8000-000000000201', '019a1000-0000-7000-8000-000000000303', 'coach', '91111111-1111-4111-8111-111111111111', '019a1000-0000-7000-8000-000000000601', decode(repeat('91', 32), 'hex'));
 select is((select result->>'role_code' from granted_role), 'coach', 'T-ORG-IDEM-11 admin grants role');
-select is(organizations.grant_membership_role('019a1000-0000-7000-8000-000000000102', '019a1000-0000-7000-8000-000000000201', '019a1000-0000-7000-8000-000000000303', 'coach', '91111111-1111-4111-8111-111111111112', '019a1000-0000-7000-8000-000000000602', decode(repeat('92', 32), 'hex'))->>'valid_from', (select result->>'valid_from' from granted_role), 'T-ORG-IDEM-12 duplicate command converges');
+select is((select replayed from granted_role), false, 'T-ORG-IDEM-11A first role grant is not a replay');
+select is((select replayed from organizations.grant_membership_role('019a1000-0000-7000-8000-000000000102', '019a1000-0000-7000-8000-000000000201', '019a1000-0000-7000-8000-000000000303', 'coach', '91111111-1111-4111-8111-111111111111', '019a1000-0000-7000-8000-000000000601', decode(repeat('91', 32), 'hex'))), true, 'T-ORG-IDEM-11B role grant reports replay');
+select is((select result from organizations.grant_membership_role('019a1000-0000-7000-8000-000000000102', '019a1000-0000-7000-8000-000000000201', '019a1000-0000-7000-8000-000000000303', 'coach', '91111111-1111-4111-8111-111111111112', '019a1000-0000-7000-8000-000000000602', decode(repeat('92', 32), 'hex')))->>'valid_from', (select result->>'valid_from' from granted_role), 'T-ORG-IDEM-12 duplicate command converges');
 reset role;
 select is((select count(*) from organizations.membership_roles where membership_id = '019a1000-0000-7000-8000-000000000303' and role_code = 'coach' and valid_to is null), 1::bigint, 'T-ORG-INT-51 no duplicate role vigency');
 
@@ -293,7 +303,7 @@ select ok(
 set local role allfit_api;
 select set_config('app.actor_kind', 'person', true);
 select set_config('app.actor_person_id', '019a1000-0000-7000-8000-000000000102', true);
-select is(organizations.grant_membership_role('019a1000-0000-7000-8000-000000000102', '019a1000-0000-7000-8000-000000000201', '019a1000-0000-7000-8000-000000000303', 'coach', '91111111-1111-4111-8111-111111111111', '019a1000-0000-7000-8000-000000000601', decode(repeat('91', 32), 'hex'))->>'valid_from', (select result->>'valid_from' from granted_role), 'T-ORG-IDEM-13 replay survives later revocation');
+select is((select result from organizations.grant_membership_role('019a1000-0000-7000-8000-000000000102', '019a1000-0000-7000-8000-000000000201', '019a1000-0000-7000-8000-000000000303', 'coach', '91111111-1111-4111-8111-111111111111', '019a1000-0000-7000-8000-000000000601', decode(repeat('91', 32), 'hex')))->>'valid_from', (select result->>'valid_from' from granted_role), 'T-ORG-IDEM-13 replay survives later revocation');
 reset role;
 select is((select count(*) from organizations.membership_roles where membership_id = '019a1000-0000-7000-8000-000000000303' and role_code = 'coach' and valid_to is null), 0::bigint, 'T-ORG-IDEM-14 replay does not reopen role');
 
@@ -302,7 +312,9 @@ select set_config('app.actor_kind', 'person', true);
 select set_config('app.actor_person_id', '019a1000-0000-7000-8000-000000000102', true);
 select throws_ok($$ select organizations.transfer_ownership('019a1000-0000-7000-8000-000000000102', '019a1000-0000-7000-8000-000000000201', '019a1000-0000-7000-8000-000000000303', 'a1111111-1111-4111-8111-111111111111', '019a1000-0000-7000-8000-000000000701', decode(repeat('a1', 32), 'hex')) $$, '42501', null, 'T-ORG-RLS-12 admin cannot transfer ownership');
 select set_config('app.actor_person_id', '019a1000-0000-7000-8000-000000000101', true);
-select is(organizations.transfer_ownership('019a1000-0000-7000-8000-000000000101', '019a1000-0000-7000-8000-000000000201', '019a1000-0000-7000-8000-000000000303', 'a1111111-1111-4111-8111-111111111112', '019a1000-0000-7000-8000-000000000702', decode(repeat('a2', 32), 'hex'))->>'owner_membership_id', '019a1000-0000-7000-8000-000000000303', 'T-ORG-IDEM-15 owner transfers atomically');
+create temporary table first_transfer as select * from organizations.transfer_ownership('019a1000-0000-7000-8000-000000000101', '019a1000-0000-7000-8000-000000000201', '019a1000-0000-7000-8000-000000000303', 'a1111111-1111-4111-8111-111111111112', '019a1000-0000-7000-8000-000000000702', decode(repeat('a2', 32), 'hex'));
+select is((select result->>'owner_membership_id' from first_transfer), '019a1000-0000-7000-8000-000000000303', 'T-ORG-IDEM-15 owner transfers atomically');
+select is((select replayed from first_transfer), false, 'T-ORG-IDEM-15A first ownership transfer is not a replay');
 
 reset role;
 set constraints all immediate;
@@ -333,21 +345,22 @@ set local role allfit_api;
 select set_config('app.actor_kind', 'person', true);
 select set_config('app.actor_person_id', '019a1000-0000-7000-8000-000000000103', true);
 select is(
-  organizations.transfer_ownership(
+  (select result from organizations.transfer_ownership(
     '019a1000-0000-7000-8000-000000000103',
     '019a1000-0000-7000-8000-000000000201',
     '019a1000-0000-7000-8000-000000000304',
     'a1111111-1111-4111-8111-111111111113',
     '019a1000-0000-7000-8000-000000000703',
     decode(repeat('a3', 32), 'hex')
-  )->>'owner_membership_id',
+  ))->>'owner_membership_id',
   '019a1000-0000-7000-8000-000000000304',
   'T-ORG-IDEM-26 a later command may move ownership forward'
 );
 
 select set_config('app.actor_kind', 'person', true);
 select set_config('app.actor_person_id', '019a1000-0000-7000-8000-000000000101', true);
-select is(organizations.transfer_ownership('019a1000-0000-7000-8000-000000000101', '019a1000-0000-7000-8000-000000000201', '019a1000-0000-7000-8000-000000000303', 'a1111111-1111-4111-8111-111111111112', '019a1000-0000-7000-8000-000000000702', decode(repeat('a2', 32), 'hex'))->>'owner_membership_id', '019a1000-0000-7000-8000-000000000303', 'T-ORG-IDEM-16 former owner replays durable transfer');
+select is((select result from organizations.transfer_ownership('019a1000-0000-7000-8000-000000000101', '019a1000-0000-7000-8000-000000000201', '019a1000-0000-7000-8000-000000000303', 'a1111111-1111-4111-8111-111111111112', '019a1000-0000-7000-8000-000000000702', decode(repeat('a2', 32), 'hex')))->>'owner_membership_id', '019a1000-0000-7000-8000-000000000303', 'T-ORG-IDEM-16 former owner replays durable transfer');
+select is((select replayed from organizations.transfer_ownership('019a1000-0000-7000-8000-000000000101', '019a1000-0000-7000-8000-000000000201', '019a1000-0000-7000-8000-000000000303', 'a1111111-1111-4111-8111-111111111112', '019a1000-0000-7000-8000-000000000702', decode(repeat('a2', 32), 'hex'))), true, 'T-ORG-IDEM-16A ownership transfer reports replay');
 
 reset role;
 select is((select count(*) from organizations.organization_events where organization_id = '019a1000-0000-7000-8000-000000000201' and event_type = 'organization.ownership_transferred.v1'), 2::bigint, 'T-ORG-IDEM-17 replay emits no duplicate transfer event');
@@ -401,17 +414,17 @@ set local role allfit_api;
 select set_config('app.actor_kind', 'person', true);
 select set_config('app.actor_person_id', '019a1000-0000-7000-8000-000000000102', true);
 select is(
-  organizations.update_organization('019a1000-0000-7000-8000-000000000102', '019a1000-0000-7000-8000-000000000201', 0, '{"display_name":"Core Practice Updated","legal_name":"Core Practice SAS"}', '71111111-1111-4111-8111-111111111111', '019a1000-0000-7000-8000-000000000401', decode(repeat('71', 32), 'hex'))->>'id',
+  (select result from organizations.update_organization('019a1000-0000-7000-8000-000000000102', '019a1000-0000-7000-8000-000000000201', 0, '{"display_name":"Core Practice Updated","legal_name":"Core Practice SAS"}', '71111111-1111-4111-8111-111111111111', '019a1000-0000-7000-8000-000000000401', decode(repeat('71', 32), 'hex')))->>'id',
   '019a1000-0000-7000-8000-000000000201',
   'T-ORG-IDEM-30 expired organization replay reconstructs the governed aggregate'
 );
 select is(
-  organizations.create_site('019a1000-0000-7000-8000-000000000102', '019a1000-0000-7000-8000-000000000201', '{"name":"Sede Centro","address":"Carrera 7"}', '81111111-1111-4111-8111-111111111111', '019a1000-0000-7000-8000-000000000501', decode(repeat('81', 32), 'hex'))->>'id',
+  (select result from organizations.create_site('019a1000-0000-7000-8000-000000000102', '019a1000-0000-7000-8000-000000000201', '{"name":"Sede Centro","address":"Carrera 7"}', '81111111-1111-4111-8111-111111111111', '019a1000-0000-7000-8000-000000000501', decode(repeat('81', 32), 'hex')))->>'id',
   (select result->>'id' from created_site),
   'T-ORG-IDEM-31 expired site creation replay reconstructs the same site'
 );
 select is(
-  (organizations.update_site('019a1000-0000-7000-8000-000000000102', '019a1000-0000-7000-8000-000000000201', (select (result->>'id')::uuid from created_site), 0, '{"status":"inactive"}', '81111111-1111-4111-8111-111111111112', '019a1000-0000-7000-8000-000000000502', decode(repeat('82', 32), 'hex'))->>'revision_number')::bigint,
+  ((select result from organizations.update_site('019a1000-0000-7000-8000-000000000102', '019a1000-0000-7000-8000-000000000201', (select (result->>'id')::uuid from created_site), 0, '{"status":"inactive"}', '81111111-1111-4111-8111-111111111112', '019a1000-0000-7000-8000-000000000502', decode(repeat('82', 32), 'hex')))->>'revision_number')::bigint,
   1::bigint,
   'T-ORG-IDEM-32 expired site update replay reconstructs the governed site'
 );
@@ -460,6 +473,169 @@ select ok(
   'T-ORG-PHY-04 public cannot execute commands'
 );
 select is((select type_code from organizations.organizations where id = '019a1000-0000-7000-8000-000000000201'), 'studio', 'T-ORG-INT-56 team roles never change organization type');
+
+select ok(
+  not exists (
+    select 1
+    from pg_catalog.pg_proc as routine
+    where routine.prosrc like '%app.access_purpose%'
+  ),
+  'T-ACCESS-11 no routine references the noncanonical access purpose GUC'
+);
+select set_config('app.actor_kind', 'person', true);
+select set_config('app.actor_person_id', '019a1000-0000-7000-8000-000000000105', true);
+select set_config('app.actor_membership_id', '019a1000-0000-7000-8000-000000000305', true);
+select set_config('app.request_id', '61111111-1111-4111-8111-111111111197', true);
+select set_config('app.purpose', 'studio_organization_context', true);
+select lives_ok(
+  $$ select privacy.log_access_event(null, '019a1000-0000-7000-8000-000000000202', null, null, null, null, null, 'organization_operational', 'organizations.organization_context', 'allowed') $$,
+  'T-ACCESS-12 the canonical app.purpose GUC records organization access'
+);
+
+select ok(
+  (
+    select bool_and(
+      (before_snapshot is null or organizations.validate_organization_event_snapshot(event_type, snapshot_schema_version, before_snapshot))
+      and (after_snapshot is null or organizations.validate_organization_event_snapshot(event_type, snapshot_schema_version, after_snapshot))
+    )
+    from organizations.organization_events
+    where organization_id = '019a1000-0000-7000-8000-000000000201'
+  ),
+  'T-ORG-AUDIT-01 organization command snapshots satisfy the closed validator'
+);
+select ok(
+  not exists (
+    select 1
+    from organizations.organization_events
+    where event_type in ('organization.site_created.v1', 'organization.site_updated.v1')
+      and ((before_snapshot ? 'id') or (after_snapshot ? 'id'))
+  ),
+  'T-ORG-AUDIT-02 site snapshots expose site_id and never projection id'
+);
+select ok(
+  not exists (
+    select 1
+    from organizations.organization_events
+    where event_type = 'organization.ownership_transferred.v1'
+      and (
+        before_snapshot is not null
+        or after_snapshot ? 'transferred_at'
+        or not system.jsonb_has_exact_keys(after_snapshot, array['previous_owner_membership_id', 'owner_membership_id'])
+      )
+  ),
+  'T-ORG-AUDIT-03 transfer snapshots contain only both owner membership IDs'
+);
+select ok(
+  (
+    select bool_and(
+      (before is null or organizations.validate_membership_event_snapshot(event_type, snapshot_schema_version, before))
+      and (after is null or organizations.validate_membership_event_snapshot(event_type, snapshot_schema_version, after))
+    )
+    from organizations.membership_events
+  ),
+  'T-ORG-AUDIT-04 membership snapshots contain canonical context and role vigency'
+);
+
+select throws_ok(
+  $$ insert into organizations.organization_events (organization_id, event_type, before_snapshot, after_snapshot) values (
+    '019a1000-0000-7000-8000-000000000201',
+    'organization.updated.v1',
+    '{"type_code":"studio","legal_name":"Core Practice SAS","display_name":"Core Practice Updated","status":"active","revision_number":2}',
+    '{"type_code":"studio","legal_name":"Core Practice SAS","display_name":"Core Practice Updated","status":"active","revision_number":2,"unexpected":true}'
+  ) $$,
+  '23514', null,
+  'T-ORG-AUDIT-05 organization snapshots reject additional keys'
+);
+select throws_ok(
+  $$ insert into organizations.organization_events (organization_id, event_type, before_snapshot, after_snapshot) values (
+    '019a1000-0000-7000-8000-000000000201',
+    'organization.updated.v1',
+    '{"type_code":"studio","legal_name":"Core Practice SAS","display_name":"Core Practice Updated","status":"active","revision_number":2}',
+    '{"type_code":"studio","legal_name":"Core Practice SAS","display_name":"Core Practice Updated","status":"active"}'
+  ) $$,
+  '23514', null,
+  'T-ORG-AUDIT-06 organization snapshots reject missing keys'
+);
+select throws_ok(
+  $$ insert into organizations.membership_events (membership_id, event_type, "after") values (
+    '019a1000-0000-7000-8000-000000000304',
+    'organization.role_granted.v1',
+    '{"organization_id":"019a1000-0000-7000-8000-000000000201","person_id":"019a1000-0000-7000-8000-000000000104","status":"terminated","role_code":"staff","valid_from":"2026-08-17T15:35:00+00:00","valid_to":null,"unexpected":true}'
+  ) $$,
+  '23514', null,
+  'T-ORG-AUDIT-07 membership snapshots reject additional keys'
+);
+select throws_ok(
+  $$ insert into organizations.organization_events (organization_id, event_type, snapshot_schema_version, after_snapshot) values (
+    '019a1000-0000-7000-8000-000000000201',
+    'organization.site_created.v1',
+    2,
+    '{"site_id":"019a1000-0000-7000-8000-000000000999","name":"Invalid version","address":null,"status":"active","revision_number":0}'
+  ) $$,
+  '23514', null,
+  'T-ORG-AUDIT-08 snapshots reject unknown schema versions'
+);
+select throws_ok(
+  $$ insert into organizations.organization_events (organization_id, event_type, after_snapshot) values (
+    '019a1000-0000-7000-8000-000000000201',
+    'organization.site_created.v1',
+    '{"site_id":"not-a-uuid","name":"Invalid UUID","address":null,"status":"active","revision_number":0}'
+  ) $$,
+  '23514', null,
+  'T-ORG-AUDIT-09 snapshots reject invalid UUID formats'
+);
+select throws_ok(
+  $$ insert into organizations.membership_events (membership_id, event_type, "after") values (
+    '019a1000-0000-7000-8000-000000000304',
+    'organization.role_granted.v1',
+    '{"organization_id":"019a1000-0000-7000-8000-000000000201","person_id":"019a1000-0000-7000-8000-000000000104","status":"terminated","role_code":"staff","valid_from":"not-a-timestamp","valid_to":null}'
+  ) $$,
+  '23514', null,
+  'T-ORG-AUDIT-10 snapshots reject invalid timestamp formats'
+);
+select throws_ok(
+  $$ insert into organizations.organization_events (organization_id, event_type, before_snapshot, after_snapshot) values (
+    '019a1000-0000-7000-8000-000000000201',
+    'organization.updated.v1',
+    '{"type_code":"studio","legal_name":"Core Practice SAS","display_name":"Core Practice Updated","status":"active","revision_number":2}',
+    '{"type_code":"studio","legal_name":"Core Practice SAS","display_name":"Core Practice Updated","status":"active","revision_number":"2"}'
+  ) $$,
+  '23514', null,
+  'T-ORG-AUDIT-11 snapshots reject incorrect value types'
+);
+select throws_ok(
+  $$ insert into organizations.organization_events (organization_id, event_type, after_snapshot) values (
+    '019a1000-0000-7000-8000-000000000201',
+    'organization.created.v1',
+    '{"type_code":"studio","display_name":"Legacy-shaped","status":"active","unexpected":true}'
+  ) $$,
+  '23514', null,
+  'T-ORG-AUDIT-12 legacy organization producers do not mask additional keys'
+);
+select throws_ok(
+  $$ insert into organizations.membership_events (membership_id, event_type, "after") values (
+    '019a1000-0000-7000-8000-000000000304',
+    'organization.role_assigned.v1',
+    '{"role_code":"staff","valid_from":"2026-08-17T15:35:00+00:00","unexpected":true}'
+  ) $$,
+  '23514', null,
+  'T-ORG-AUDIT-13 legacy membership producers do not mask additional keys'
+);
+select throws_ok(
+  $$ insert into organizations.organizations (id, type_code, display_name, responsible_party) values (
+    '019a1000-0000-7000-8000-000000000299',
+    'studio',
+    repeat('x', 121),
+    '{"party_kind":"legal_entity","party_name":"Too Long SAS","purpose":"studio_operations"}'
+  ) $$,
+  '23514', null,
+  'T-ORG-INT-58 organization creation rejects display names over 120 characters'
+);
+select throws_ok(
+  $$ update organizations.organizations set display_name = repeat('x', 121) where id = '019a1000-0000-7000-8000-000000000202' $$,
+  '23514', null,
+  'T-ORG-INT-59 organization update rejects display names over 120 characters'
+);
 
 select * from finish();
 rollback;

@@ -6,7 +6,10 @@ set statement_timeout = '60s';
 
 alter table organizations.organizations
   add column revision_number bigint not null default 0,
-  add constraint ck_organizations_revision_number check (revision_number >= 0);
+  add constraint ck_organizations_revision_number check (revision_number >= 0),
+  add constraint ck_organizations_display_name_length check (
+    char_length(display_name) between 1 and 120
+  );
 
 create table organizations.organization_type_transitions (
   from_type_code text not null,
@@ -260,7 +263,7 @@ declare
 begin
   actor_membership_id := nullif(current_setting('app.actor_membership_id', true), '')::uuid;
   request_id := nullif(current_setting('app.request_id', true), '')::uuid;
-  purpose := nullif(current_setting('app.access_purpose', true), '');
+  purpose := nullif(current_setting('app.purpose', true), '');
 
   if access_control.actor_kind() <> 'person'
      or actor_person_id is null
@@ -336,6 +339,394 @@ revoke select on
   organizations.organization_capabilities,
   organizations.role_capabilities
 from allfit_api;
+
+create or replace function system.jsonb_has_exact_keys(p_payload jsonb, p_keys text[])
+returns boolean
+language sql
+immutable
+strict
+security invoker
+set search_path = pg_catalog
+as $function$
+  select jsonb_typeof(p_payload) = 'object'
+    and p_payload ?& p_keys
+    and p_payload - p_keys = '{}'::jsonb
+$function$;
+
+create or replace function system.validate_json_contract(
+  p_contract_code text,
+  p_schema_version smallint,
+  p_payload jsonb
+)
+returns boolean
+language plpgsql
+immutable
+strict
+security invoker
+set search_path = pg_catalog
+as $function$
+declare
+  uuid_pattern constant text := '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$';
+  timestamp_pattern constant text := '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$';
+begin
+  if p_schema_version <> 1 or jsonb_typeof(p_payload) <> 'object' then
+    return false;
+  end if;
+
+  if p_contract_code = 'audit.organization_event_snapshot' then
+    if system.jsonb_has_exact_keys(
+      p_payload,
+      array['type_code', 'legal_name', 'display_name', 'status', 'revision_number']
+    ) then
+      return jsonb_typeof(p_payload->'type_code') = 'string'
+        and p_payload->>'type_code' in ('professional_practice', 'gym', 'studio')
+        and jsonb_typeof(p_payload->'legal_name') in ('string', 'null')
+        and (jsonb_typeof(p_payload->'legal_name') = 'null'
+          or btrim(p_payload->>'legal_name') <> '')
+        and jsonb_typeof(p_payload->'display_name') = 'string'
+        and char_length(btrim(p_payload->>'display_name')) between 1 and 120
+        and jsonb_typeof(p_payload->'status') = 'string'
+        and p_payload->>'status' in ('active', 'closed')
+        and jsonb_typeof(p_payload->'revision_number') = 'number'
+        and p_payload->>'revision_number' ~ '^(0|[1-9][0-9]*)$';
+    end if;
+
+    if system.jsonb_has_exact_keys(
+      p_payload,
+      array['site_id', 'name', 'address', 'status', 'revision_number']
+    ) then
+      return jsonb_typeof(p_payload->'site_id') = 'string'
+        and p_payload->>'site_id' ~ uuid_pattern
+        and jsonb_typeof(p_payload->'name') = 'string'
+        and btrim(p_payload->>'name') <> ''
+        and jsonb_typeof(p_payload->'address') in ('string', 'null')
+        and (jsonb_typeof(p_payload->'address') = 'null'
+          or btrim(p_payload->>'address') <> '')
+        and jsonb_typeof(p_payload->'status') = 'string'
+        and p_payload->>'status' in ('active', 'inactive')
+        and jsonb_typeof(p_payload->'revision_number') = 'number'
+        and p_payload->>'revision_number' ~ '^(0|[1-9][0-9]*)$';
+    end if;
+
+    if system.jsonb_has_exact_keys(
+      p_payload,
+      array['previous_owner_membership_id', 'owner_membership_id']
+    ) then
+      return jsonb_typeof(p_payload->'previous_owner_membership_id') = 'string'
+        and p_payload->>'previous_owner_membership_id' ~ uuid_pattern
+        and jsonb_typeof(p_payload->'owner_membership_id') = 'string'
+        and p_payload->>'owner_membership_id' ~ uuid_pattern;
+    end if;
+
+    return false;
+  end if;
+
+  if p_contract_code = 'audit.membership_event_snapshot' then
+    if system.jsonb_has_exact_keys(
+      p_payload,
+      array['organization_id', 'person_id', 'status']
+    ) then
+      return jsonb_typeof(p_payload->'organization_id') = 'string'
+        and p_payload->>'organization_id' ~ uuid_pattern
+        and jsonb_typeof(p_payload->'person_id') = 'string'
+        and p_payload->>'person_id' ~ uuid_pattern
+        and jsonb_typeof(p_payload->'status') = 'string'
+        and p_payload->>'status' in ('active', 'terminated');
+    end if;
+
+    if system.jsonb_has_exact_keys(
+      p_payload,
+      array[
+        'organization_id', 'person_id', 'status',
+        'role_code', 'valid_from', 'valid_to'
+      ]
+    ) then
+      return jsonb_typeof(p_payload->'organization_id') = 'string'
+        and p_payload->>'organization_id' ~ uuid_pattern
+        and jsonb_typeof(p_payload->'person_id') = 'string'
+        and p_payload->>'person_id' ~ uuid_pattern
+        and jsonb_typeof(p_payload->'status') = 'string'
+        and p_payload->>'status' in ('active', 'terminated')
+        and jsonb_typeof(p_payload->'role_code') = 'string'
+        and p_payload->>'role_code' in ('owner', 'admin', 'coach', 'staff')
+        and jsonb_typeof(p_payload->'valid_from') = 'string'
+        and p_payload->>'valid_from' ~ timestamp_pattern
+        and jsonb_typeof(p_payload->'valid_to') in ('string', 'null')
+        and (jsonb_typeof(p_payload->'valid_to') = 'null'
+          or p_payload->>'valid_to' ~ timestamp_pattern);
+    end if;
+
+    return false;
+  end if;
+
+  return false;
+end
+$function$;
+
+create or replace function organizations.validate_organization_event_snapshot(
+  p_event_type text,
+  p_schema_version smallint,
+  p_payload jsonb
+)
+returns boolean
+language sql
+immutable
+strict
+security invoker
+set search_path = pg_catalog
+as $function$
+  select system.validate_json_contract(
+    'audit.organization_event_snapshot',
+    p_schema_version,
+    p_payload
+  ) and case
+    when p_event_type in ('organization.created.v1', 'organization.updated.v1') then
+      system.jsonb_has_exact_keys(
+        p_payload,
+        array['type_code', 'legal_name', 'display_name', 'status', 'revision_number']
+      )
+    when p_event_type in ('organization.site_created.v1', 'organization.site_updated.v1') then
+      system.jsonb_has_exact_keys(
+        p_payload,
+        array['site_id', 'name', 'address', 'status', 'revision_number']
+      )
+    when p_event_type = 'organization.ownership_transferred.v1' then
+      system.jsonb_has_exact_keys(
+        p_payload,
+        array['previous_owner_membership_id', 'owner_membership_id']
+      )
+    else false
+  end
+$function$;
+
+create or replace function organizations.validate_membership_event_snapshot(
+  p_event_type text,
+  p_schema_version smallint,
+  p_payload jsonb
+)
+returns boolean
+language sql
+immutable
+strict
+security invoker
+set search_path = pg_catalog
+as $function$
+  select system.validate_json_contract(
+    'audit.membership_event_snapshot',
+    p_schema_version,
+    p_payload
+  ) and case
+    when p_event_type = 'organization.membership_created.v1' then
+      system.jsonb_has_exact_keys(
+        p_payload,
+        array['organization_id', 'person_id', 'status']
+      )
+    when p_event_type in (
+      'organization.role_assigned.v1',
+      'organization.role_granted.v1',
+      'organization.role_revoked.v1'
+    ) then
+      system.jsonb_has_exact_keys(
+        p_payload,
+        array[
+          'organization_id', 'person_id', 'status',
+          'role_code', 'valid_from', 'valid_to'
+        ]
+      )
+    else false
+  end
+$function$;
+
+alter function system.jsonb_has_exact_keys(jsonb, text[]) owner to allfit_owner;
+alter function system.validate_json_contract(text, smallint, jsonb) owner to allfit_owner;
+alter function organizations.validate_organization_event_snapshot(text, smallint, jsonb)
+  owner to allfit_owner;
+alter function organizations.validate_membership_event_snapshot(text, smallint, jsonb)
+  owner to allfit_owner;
+revoke all on function system.jsonb_has_exact_keys(jsonb, text[]) from public, allfit_api;
+revoke all on function system.validate_json_contract(text, smallint, jsonb) from public, allfit_api;
+revoke all on function organizations.validate_organization_event_snapshot(text, smallint, jsonb)
+  from public, allfit_api;
+revoke all on function organizations.validate_membership_event_snapshot(text, smallint, jsonb)
+  from public, allfit_api;
+
+-- Normalize the only pre-BETA shapes produced before the closed contracts existed.
+update organizations.organization_events as event
+set before_snapshot = null,
+    after_snapshot = jsonb_build_object(
+      'type_code', organization.type_code,
+      'legal_name', organization.legal_name,
+      'display_name', organization.display_name,
+      'status', organization.status,
+      'revision_number', organization.revision_number
+    )
+from organizations.organizations as organization
+where event.organization_id = organization.id
+  and event.event_type = 'organization.created.v1';
+
+update organizations.membership_events as event
+set before = null,
+    after = jsonb_build_object(
+      'organization_id', membership.organization_id,
+      'person_id', membership.person_id,
+      'status', membership.status
+    )
+from organizations.organization_memberships as membership
+where event.membership_id = membership.id
+  and event.event_type = 'organization.membership_created.v1';
+
+update organizations.membership_events as event
+set before = null,
+    after = jsonb_build_object(
+      'organization_id', membership.organization_id,
+      'person_id', membership.person_id,
+      'status', membership.status,
+      'role_code', event.after->>'role_code',
+      'valid_from', event.after->>'valid_from',
+      'valid_to', null
+    )
+from organizations.organization_memberships as membership
+where event.membership_id = membership.id
+  and event.event_type = 'organization.role_assigned.v1';
+
+create or replace function organizations.canonicalize_legacy_organization_event_tg()
+returns trigger
+language plpgsql
+security definer
+set search_path = pg_catalog
+as $function$
+begin
+  if new.event_type = 'organization.created.v1'
+    and new.before_snapshot is null
+    and system.jsonb_has_exact_keys(
+      new.after_snapshot,
+      array['type_code', 'display_name', 'status']
+    )
+  then
+    new.before_snapshot := null;
+    select jsonb_build_object(
+      'type_code', organization.type_code,
+      'legal_name', organization.legal_name,
+      'display_name', organization.display_name,
+      'status', organization.status,
+      'revision_number', organization.revision_number
+    )
+    into new.after_snapshot
+    from organizations.organizations as organization
+    where organization.id = new.organization_id;
+  end if;
+  return new;
+end
+$function$;
+
+create or replace function organizations.canonicalize_legacy_membership_event_tg()
+returns trigger
+language plpgsql
+security definer
+set search_path = pg_catalog
+as $function$
+declare
+  membership organizations.organization_memberships%rowtype;
+begin
+  if not (
+    (new.event_type = 'organization.membership_created.v1'
+      and new.before is null
+      and system.jsonb_has_exact_keys(
+        new.after,
+        array['organization_id', 'person_id', 'status', 'joined_at']
+      ))
+    or (new.event_type = 'organization.role_assigned.v1'
+      and new.before is null
+      and system.jsonb_has_exact_keys(new.after, array['role_code', 'valid_from']))
+  ) then
+    return new;
+  end if;
+
+  select target.* into membership
+  from organizations.organization_memberships as target
+  where target.id = new.membership_id;
+
+  if new.event_type = 'organization.membership_created.v1' then
+    new.before := null;
+    new.after := jsonb_build_object(
+      'organization_id', membership.organization_id,
+      'person_id', membership.person_id,
+      'status', membership.status
+    );
+  else
+    new.event_type := 'organization.role_granted.v1';
+    new.before := null;
+    new.after := jsonb_build_object(
+      'organization_id', membership.organization_id,
+      'person_id', membership.person_id,
+      'status', membership.status,
+      'role_code', new.after->>'role_code',
+      'valid_from', new.after->>'valid_from',
+      'valid_to', null
+    );
+  end if;
+
+  return new;
+end
+$function$;
+
+alter function organizations.canonicalize_legacy_organization_event_tg() owner to allfit_owner;
+alter function organizations.canonicalize_legacy_membership_event_tg() owner to allfit_owner;
+revoke all on function organizations.canonicalize_legacy_organization_event_tg()
+  from public, allfit_api;
+revoke all on function organizations.canonicalize_legacy_membership_event_tg()
+  from public, allfit_api;
+
+create trigger trg_organization_events_before_insert_canonicalize_legacy
+before insert on organizations.organization_events
+for each row execute function organizations.canonicalize_legacy_organization_event_tg();
+
+create trigger trg_membership_events_before_insert_canonicalize_legacy
+before insert on organizations.membership_events
+for each row execute function organizations.canonicalize_legacy_membership_event_tg();
+
+alter table organizations.organization_events
+  add constraint ck_organization_events_before_snapshot_contract check (
+    before_snapshot is null
+    or organizations.validate_organization_event_snapshot(
+      event_type, snapshot_schema_version, before_snapshot
+    )
+  ),
+  add constraint ck_organization_events_after_snapshot_contract check (
+    after_snapshot is null
+    or organizations.validate_organization_event_snapshot(
+      event_type, snapshot_schema_version, after_snapshot
+    )
+  ),
+  add constraint ck_organization_events_snapshot_pair check (
+    (event_type in ('organization.created.v1', 'organization.site_created.v1', 'organization.ownership_transferred.v1')
+      and before_snapshot is null and after_snapshot is not null)
+    or (event_type in ('organization.updated.v1', 'organization.site_updated.v1')
+      and before_snapshot is not null and after_snapshot is not null)
+  );
+
+alter table organizations.membership_events
+  add constraint ck_membership_events_before_contract check (
+    before is null
+    or organizations.validate_membership_event_snapshot(
+      event_type, snapshot_schema_version, before
+    )
+  ),
+  add constraint ck_membership_events_after_contract check (
+    after is null
+    or organizations.validate_membership_event_snapshot(
+      event_type, snapshot_schema_version, after
+    )
+  ),
+  add constraint ck_membership_events_snapshot_pair check (
+    (event_type in (
+      'organization.membership_created.v1',
+      'organization.role_assigned.v1',
+      'organization.role_granted.v1'
+    ) and before is null and after is not null)
+    or (event_type = 'organization.role_revoked.v1'
+      and before is not null and after is not null)
+  );
 
 alter table system.idempotency_keys
   add column updated_at timestamptz not null default clock_timestamp();
@@ -486,7 +877,7 @@ begin
   end if;
 
   perform set_config('app.actor_membership_id', actor_membership_id::text, true);
-  perform set_config('app.access_purpose', 'studio_organization_context', true);
+  perform set_config('app.purpose', 'studio_organization_context', true);
   perform privacy.log_access_event(
     null,
     p_organization_id,
@@ -517,7 +908,7 @@ create or replace function organizations.update_organization(
   p_command_id uuid,
   p_request_hash bytea
 )
-returns jsonb
+returns table (result jsonb, replayed boolean)
 language plpgsql
 security definer
 set search_path = pg_catalog
@@ -542,6 +933,7 @@ begin
      or p_patch = '{}'::jsonb
      or p_patch - array['display_name', 'legal_name', 'type_code'] <> '{}'::jsonb
      or (p_patch ? 'display_name' and (jsonb_typeof(p_patch->'display_name') <> 'string' or btrim(p_patch->>'display_name') = ''))
+     or (p_patch ? 'display_name' and char_length(p_patch->>'display_name') > 120)
      or (p_patch ? 'legal_name' and jsonb_typeof(p_patch->'legal_name') not in ('string', 'null'))
      or (p_patch ? 'legal_name' and jsonb_typeof(p_patch->'legal_name') = 'string' and btrim(p_patch->>'legal_name') = '')
      or (p_patch ? 'type_code' and (jsonb_typeof(p_patch->'type_code') <> 'string' or btrim(p_patch->>'type_code') = '')) then
@@ -580,7 +972,8 @@ begin
     if response is null then
       raise exception 'idempotent organization update not found' using errcode = '40001';
     end if;
-    return response;
+    return query select response, true;
+    return;
   end if;
 
   if not access_control.has_capability(p_organization_id, 'manage_organization') then
@@ -644,7 +1037,8 @@ begin
     receipt.receipt_id, 200::smallint, 'organization-updated',
     'organization', p_organization_id
   );
-  return response;
+  return query select response, false;
+  return;
 end
 $function$;
 
@@ -656,7 +1050,7 @@ create or replace function organizations.create_site(
   p_command_id uuid,
   p_request_hash bytea
 )
-returns jsonb
+returns table (result jsonb, replayed boolean)
 language plpgsql
 security definer
 set search_path = pg_catalog
@@ -711,7 +1105,8 @@ begin
     if response is null then
       raise exception 'idempotent site creation not found' using errcode = '40001';
     end if;
-    return response;
+    return query select response, true;
+    return;
   end if;
 
   if not access_control.has_capability(p_organization_id, 'manage_sites') then
@@ -733,7 +1128,7 @@ begin
   ) values (
     p_organization_id,
     'organization.site_created.v1',
-    response || jsonb_build_object('site_id', site_id),
+    (response - 'id') || jsonb_build_object('site_id', site_id),
     actor_membership_id
   );
 
@@ -741,7 +1136,8 @@ begin
     receipt.receipt_id, 201::smallint, 'organization-site-created',
     'organization_site', site_id
   );
-  return response;
+  return query select response, false;
+  return;
 end
 $function$;
 
@@ -755,7 +1151,7 @@ create or replace function organizations.update_site(
   p_command_id uuid,
   p_request_hash bytea
 )
-returns jsonb
+returns table (result jsonb, replayed boolean)
 language plpgsql
 security definer
 set search_path = pg_catalog
@@ -825,7 +1221,8 @@ begin
     if response is null then
       raise exception 'idempotent site update not found' using errcode = '40001';
     end if;
-    return response;
+    return query select response, true;
+    return;
   end if;
 
   if not access_control.has_capability(p_organization_id, 'manage_sites') then
@@ -846,7 +1243,8 @@ begin
   if next_name is distinct from target.name
      or next_address is distinct from target.address
      or next_status is distinct from target.status then
-    previous_snapshot := organizations.site_projection(p_site_id) || jsonb_build_object('site_id', p_site_id);
+    previous_snapshot := (organizations.site_projection(p_site_id) - 'id')
+      || jsonb_build_object('site_id', p_site_id);
     update organizations.organization_sites
     set name = next_name,
         address = next_address,
@@ -860,7 +1258,8 @@ begin
       p_organization_id,
       'organization.site_updated.v1',
       previous_snapshot,
-      organizations.site_projection(p_site_id) || jsonb_build_object('site_id', p_site_id),
+      (organizations.site_projection(p_site_id) - 'id')
+        || jsonb_build_object('site_id', p_site_id),
       actor_membership_id
     );
   end if;
@@ -870,7 +1269,8 @@ begin
     receipt.receipt_id, 200::smallint, 'organization-site-updated',
     'organization_site', p_site_id
   );
-  return response;
+  return query select response, false;
+  return;
 end
 $function$;
 
@@ -882,7 +1282,7 @@ create or replace function organizations.transfer_ownership(
   p_command_id uuid,
   p_request_hash bytea
 )
-returns jsonb
+returns table (result jsonb, replayed boolean)
 language plpgsql
 security definer
 set search_path = pg_catalog
@@ -891,6 +1291,7 @@ declare
   receipt record;
   actor_membership_id uuid;
   target_membership organizations.organization_memberships%rowtype;
+  previous_owner_valid_from timestamptz;
   transferred_at timestamptz := statement_timestamp();
   transfer_event_id uuid;
   response jsonb;
@@ -929,7 +1330,7 @@ begin
       'organization_id', event.organization_id,
       'owner_membership_id', event.after_snapshot->>'owner_membership_id',
       'previous_owner_membership_id', event.after_snapshot->>'previous_owner_membership_id',
-      'transferred_at', event.after_snapshot->>'transferred_at'
+      'transferred_at', event.occurred_at
     ) into response
     from system.idempotency_keys as idempotency
     join organizations.organization_events as event
@@ -941,16 +1342,18 @@ begin
     if response is null then
       raise exception 'idempotent ownership transfer not found' using errcode = '40001';
     end if;
-    return response;
+    return query select response, true;
+    return;
   end if;
 
-  if not exists (
-    select 1
+  select role.valid_from
+  into previous_owner_valid_from
     from organizations.membership_roles as role
     where role.membership_id = actor_membership_id
       and role.role_code = 'owner'
       and role.valid_to is null
-  ) then
+    for update;
+  if previous_owner_valid_from is null then
     raise exception 'active owner role required' using errcode = '42501';
   end if;
 
@@ -1001,17 +1404,18 @@ begin
   values (p_target_membership_id, 'owner', transferred_at);
 
   insert into organizations.organization_events (
-    organization_id, event_type, before_snapshot, after_snapshot, actor_membership_id
+    organization_id, event_type, before_snapshot, after_snapshot,
+    actor_membership_id, occurred_at
   ) values (
     p_organization_id,
     'organization.ownership_transferred.v1',
-    jsonb_build_object('owner_membership_id', actor_membership_id),
+    null,
     jsonb_build_object(
       'previous_owner_membership_id', actor_membership_id,
-      'owner_membership_id', p_target_membership_id,
-      'transferred_at', transferred_at
+      'owner_membership_id', p_target_membership_id
     ),
-    actor_membership_id
+    actor_membership_id,
+    transferred_at
   )
   returning id into transfer_event_id;
 
@@ -1020,14 +1424,35 @@ begin
     (
       actor_membership_id,
       'organization.role_revoked.v1',
-      jsonb_build_object('role_code', 'owner', 'valid_to', null),
-      jsonb_build_object('role_code', 'owner', 'valid_to', transferred_at)
+      jsonb_build_object(
+        'organization_id', p_organization_id,
+        'person_id', p_person_id,
+        'status', 'active',
+        'role_code', 'owner',
+        'valid_from', previous_owner_valid_from,
+        'valid_to', null
+      ),
+      jsonb_build_object(
+        'organization_id', p_organization_id,
+        'person_id', p_person_id,
+        'status', 'active',
+        'role_code', 'owner',
+        'valid_from', previous_owner_valid_from,
+        'valid_to', transferred_at
+      )
     ),
     (
       p_target_membership_id,
       'organization.role_granted.v1',
       null,
-      jsonb_build_object('role_code', 'owner', 'valid_from', transferred_at)
+      jsonb_build_object(
+        'organization_id', p_organization_id,
+        'person_id', target_membership.person_id,
+        'status', target_membership.status,
+        'role_code', 'owner',
+        'valid_from', transferred_at,
+        'valid_to', null
+      )
     );
 
   response := jsonb_build_object(
@@ -1040,7 +1465,8 @@ begin
     receipt.receipt_id, 200::smallint, 'organization-ownership-transferred',
     'organization_ownership_transfer', transfer_event_id
   );
-  return response;
+  return query select response, false;
+  return;
 end
 $function$;
 
@@ -1053,7 +1479,7 @@ create or replace function organizations.grant_membership_role(
   p_command_id uuid,
   p_request_hash bytea
 )
-returns jsonb
+returns table (result jsonb, replayed boolean)
 language plpgsql
 security definer
 set search_path = pg_catalog
@@ -1061,6 +1487,7 @@ as $function$
 declare
   receipt record;
   actor_membership_id uuid;
+  target_membership organizations.organization_memberships%rowtype;
   membership_role_id uuid;
   role_valid_from timestamptz;
   response jsonb;
@@ -1109,20 +1536,22 @@ begin
     if response is null then
       raise exception 'idempotent role grant not found' using errcode = '40001';
     end if;
-    return response;
+    return query select response, true;
+    return;
   end if;
 
   if not access_control.has_capability(p_organization_id, 'manage_roles') then
     raise exception 'role management capability required' using errcode = '42501';
   end if;
 
-  perform 1
+  select membership.*
+  into target_membership
   from organizations.organization_memberships as membership
   where membership.id = p_membership_id
     and membership.organization_id = p_organization_id
     and membership.status = 'active'
   for update;
-  if not found then
+  if target_membership.id is null then
     if exists (
       select 1
       from organizations.organization_memberships as membership
@@ -1151,7 +1580,14 @@ begin
     values (
       p_membership_id,
       'organization.role_granted.v1',
-      jsonb_build_object('role_code', p_role_code, 'valid_from', role_valid_from)
+      jsonb_build_object(
+        'organization_id', target_membership.organization_id,
+        'person_id', target_membership.person_id,
+        'status', target_membership.status,
+        'role_code', p_role_code,
+        'valid_from', role_valid_from,
+        'valid_to', null
+      )
     );
   end if;
 
@@ -1164,7 +1600,8 @@ begin
     receipt.receipt_id, 200::smallint, 'organization-role-granted',
     'membership_role', membership_role_id
   );
-  return response;
+  return query select response, false;
+  return;
 end
 $function$;
 

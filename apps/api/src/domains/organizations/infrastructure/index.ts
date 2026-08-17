@@ -238,8 +238,8 @@ export function createOrganizationDatabase(): OrganizationDatabase {
             ...(input.patch.legalName !== undefined ? { legal_name: input.patch.legalName } : {}),
             ...(input.patch.typeCode !== undefined ? { type_code: input.patch.typeCode } : {}),
           }
-          const [row] = await transaction<{ result: OrganizationJson }[]>`
-            select organizations.update_organization(
+          const [row] = await transaction<{ result: OrganizationJson; replayed: boolean }[]>`
+            select * from organizations.update_organization(
               ${input.personId}::uuid,
               ${input.organizationId}::uuid,
               ${input.expectedRevision}::bigint,
@@ -247,10 +247,10 @@ export function createOrganizationDatabase(): OrganizationDatabase {
               ${input.idempotencyKey}::uuid,
               ${input.commandId}::uuid,
               ${input.requestHash}
-            ) as result
+            )
           `
           if (!row) throw new Error('PostgreSQL did not update the organization')
-          return organizationFromJson(row.result)
+          return { resource: organizationFromJson(row.result), replayed: row.replayed }
         }),
       )
     },
@@ -259,18 +259,18 @@ export function createOrganizationDatabase(): OrganizationDatabase {
       return measureStudioRequestPhase('business-db', () =>
         sql.begin(async (transaction) => {
           await setPersonActor(transaction, input.personId)
-          const [row] = await transaction<{ result: OrganizationSiteJson }[]>`
-            select organizations.create_site(
+          const [row] = await transaction<{ result: OrganizationSiteJson; replayed: boolean }[]>`
+            select * from organizations.create_site(
               ${input.personId}::uuid,
               ${input.organizationId}::uuid,
               ${JSON.stringify(input.site)}::jsonb,
               ${input.idempotencyKey}::uuid,
               ${input.commandId}::uuid,
               ${input.requestHash}
-            ) as result
+            )
           `
           if (!row) throw new Error('PostgreSQL did not create the organization site')
-          return siteFromJson(row.result)
+          return { resource: siteFromJson(row.result), replayed: row.replayed }
         }),
       )
     },
@@ -279,8 +279,8 @@ export function createOrganizationDatabase(): OrganizationDatabase {
       return measureStudioRequestPhase('business-db', () =>
         sql.begin(async (transaction) => {
           await setPersonActor(transaction, input.personId)
-          const [row] = await transaction<{ result: OrganizationSiteJson }[]>`
-            select organizations.update_site(
+          const [row] = await transaction<{ result: OrganizationSiteJson; replayed: boolean }[]>`
+            select * from organizations.update_site(
               ${input.personId}::uuid,
               ${input.organizationId}::uuid,
               ${input.siteId}::uuid,
@@ -289,10 +289,10 @@ export function createOrganizationDatabase(): OrganizationDatabase {
               ${input.idempotencyKey}::uuid,
               ${input.commandId}::uuid,
               ${input.requestHash}
-            ) as result
+            )
           `
           if (!row) throw new Error('PostgreSQL did not update the organization site')
-          return siteFromJson(row.result)
+          return { resource: siteFromJson(row.result), replayed: row.replayed }
         }),
       )
     },
@@ -301,18 +301,18 @@ export function createOrganizationDatabase(): OrganizationDatabase {
       return measureStudioRequestPhase('business-db', () =>
         sql.begin(async (transaction) => {
           await setPersonActor(transaction, input.personId)
-          const [row] = await transaction<{ result: OwnershipTransferJson }[]>`
-            select organizations.transfer_ownership(
+          const [row] = await transaction<{ result: OwnershipTransferJson; replayed: boolean }[]>`
+            select * from organizations.transfer_ownership(
               ${input.personId}::uuid,
               ${input.organizationId}::uuid,
               ${input.targetMembershipId}::uuid,
               ${input.idempotencyKey}::uuid,
               ${input.commandId}::uuid,
               ${input.requestHash}
-            ) as result
+            )
           `
           if (!row) throw new Error('PostgreSQL did not transfer organization ownership')
-          return ownershipTransferFromJson(row.result)
+          return { resource: ownershipTransferFromJson(row.result), replayed: row.replayed }
         }),
       )
     },
@@ -321,8 +321,8 @@ export function createOrganizationDatabase(): OrganizationDatabase {
       return measureStudioRequestPhase('business-db', () =>
         sql.begin(async (transaction) => {
           await setPersonActor(transaction, input.personId)
-          const [row] = await transaction<{ result: MembershipRoleGrantJson }[]>`
-            select organizations.grant_membership_role(
+          const [row] = await transaction<{ result: MembershipRoleGrantJson; replayed: boolean }[]>`
+            select * from organizations.grant_membership_role(
               ${input.personId}::uuid,
               ${input.organizationId}::uuid,
               ${input.membershipId}::uuid,
@@ -330,10 +330,10 @@ export function createOrganizationDatabase(): OrganizationDatabase {
               ${input.idempotencyKey}::uuid,
               ${input.commandId}::uuid,
               ${input.requestHash}
-            ) as result
+            )
           `
           if (!row) throw new Error('PostgreSQL did not grant the membership role')
-          return membershipRoleGrantFromJson(row.result)
+          return { resource: membershipRoleGrantFromJson(row.result), replayed: row.replayed }
         }),
       )
     },

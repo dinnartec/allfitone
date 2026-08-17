@@ -3761,6 +3761,7 @@ export interface operations {
         headers: {
           'Cache-Control': components['headers']['NoStore']
           ETag: components['headers']['ETag']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
           [name: string]: unknown
         }
         content: {
@@ -3803,6 +3804,7 @@ export interface operations {
         headers: {
           'Cache-Control': components['headers']['NoStore']
           ETag: components['headers']['ETag']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
           [name: string]: unknown
         }
         content: {
@@ -3846,6 +3848,7 @@ export interface operations {
       200: {
         headers: {
           'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
           ETag: components['headers']['ETag']
           [name: string]: unknown
         }
@@ -3888,6 +3891,7 @@ export interface operations {
       200: {
         headers: {
           'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
           [name: string]: unknown
         }
         content: {
@@ -3961,6 +3965,7 @@ export interface operations {
       200: {
         headers: {
           'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
           [name: string]: unknown
         }
         content: {

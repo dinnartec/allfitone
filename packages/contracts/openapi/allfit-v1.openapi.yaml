@@ -1198,6 +1198,8 @@ paths:
               $ref: '#/components/headers/NoStore'
             ETag:
               $ref: '#/components/headers/ETag'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
           content:
             application/json:
               schema:
@@ -1247,6 +1249,8 @@ paths:
               $ref: '#/components/headers/NoStore'
             ETag:
               $ref: '#/components/headers/ETag'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
           content:
             application/json:
               schema:
@@ -1294,6 +1298,8 @@ paths:
           headers:
             Cache-Control:
               $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
             ETag:
               $ref: '#/components/headers/ETag'
           content:
@@ -1343,6 +1349,8 @@ paths:
           headers:
             Cache-Control:
               $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
           content:
             application/json:
               schema:
@@ -1439,6 +1447,8 @@ paths:
           headers:
             Cache-Control:
               $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
           content:
             application/json:
               schema:
