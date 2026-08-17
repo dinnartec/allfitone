@@ -165,7 +165,8 @@ jobs:
       - name: Lint Development
         uses: postmanlabs/postman-cli-action@v1
         with:
-          command: 'collection lint "postman/collections/AllFit One - Development" --fail-severity warning'
+          working-directory: 'postman/collections/AllFit One - Development'
+          command: 'collection lint . --fail-severity warning'
 
   postman-publish:
     name: Publish Postman Cloud View
