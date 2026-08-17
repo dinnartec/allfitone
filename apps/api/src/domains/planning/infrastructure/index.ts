@@ -13,6 +13,8 @@ import type {
   SessionTemplateVersion,
 } from '../domain/index.js'
 
+// Draft content travels through `transaction.json`: a pre-stringified value binds
+// as a JSON string, and the content functions reject it as an invalid shape.
 type CommandRow<T> = { result: T; replayed: boolean }
 type PageRow<T> = { result: T; updated_at: Date; resource_id: string }
 
@@ -36,7 +38,7 @@ export function createPlanningDatabase(): PlanningDatabase {
           select * from planning.replace_session_template_draft(
             ${input.personId}::uuid, ${input.organizationId}::uuid,
             ${input.templateId}::uuid, ${input.expectedEtag},
-            ${JSON.stringify(input.content)}::jsonb, ${input.idempotencyKey}::uuid,
+            ${transaction.json(input.content)}::jsonb, ${input.idempotencyKey}::uuid,
             ${input.commandId}::uuid, ${input.requestHash}
           )
         `
@@ -92,7 +94,7 @@ export function createPlanningDatabase(): PlanningDatabase {
           select * from planning.replace_program_draft(
             ${input.personId}::uuid, ${input.organizationId}::uuid,
             ${input.programId}::uuid, ${input.expectedEtag},
-            ${JSON.stringify(input.content)}::jsonb, ${input.idempotencyKey}::uuid,
+            ${transaction.json(input.content)}::jsonb, ${input.idempotencyKey}::uuid,
             ${input.commandId}::uuid, ${input.requestHash}
           )
         `
