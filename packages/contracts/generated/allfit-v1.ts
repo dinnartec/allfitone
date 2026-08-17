@@ -762,7 +762,10 @@ export interface paths {
     }
     get?: never
     put?: never
-    /** Publish the current complete draft as an immutable template version */
+    /**
+     * Publish the current complete draft as an immutable template version
+     * @description This command carries no request body. Supplying a payload is rejected with 415; the media type header itself is neither required nor used.
+     */
     post: operations['publishOrganizationSessionTemplateVersion']
     delete?: never
     options?: never
@@ -777,7 +780,10 @@ export interface paths {
       path?: never
       cookie?: never
     }
-    /** Read one complete immutable published template version */
+    /**
+     * Read one complete published template version
+     * @description The published content of a version is immutable, but deprecation changes the status carried by this projection, so the response is revalidated against its ETag rather than cached as immutable.
+     */
     get: operations['getOrganizationSessionTemplateVersion']
     put?: never
     post?: never
@@ -796,7 +802,10 @@ export interface paths {
     }
     get?: never
     put?: never
-    /** Replace the template draft from one accessible published version */
+    /**
+     * Replace the template draft from one accessible published version
+     * @description This command carries no request body. Supplying a payload is rejected with 415; the media type header itself is neither required nor used.
+     */
     post: operations['deriveOrganizationSessionTemplateVersion']
     delete?: never
     options?: never
@@ -813,7 +822,10 @@ export interface paths {
     }
     get?: never
     put?: never
-    /** Prevent a published template version from entering new content */
+    /**
+     * Prevent a published template version from entering new content
+     * @description This command carries no request body. Supplying a payload is rejected with 415; the media type header itself is neither required nor used.
+     */
     post: operations['deprecateOrganizationSessionTemplateVersion']
     delete?: never
     options?: never
@@ -865,7 +877,10 @@ export interface paths {
     }
     get?: never
     put?: never
-    /** Publish an immutable program version */
+    /**
+     * Publish an immutable program version
+     * @description This command carries no request body. Supplying a payload is rejected with 415; the media type header itself is neither required nor used.
+     */
     post: operations['publishProgramVersion']
     delete?: never
     options?: never
@@ -882,7 +897,10 @@ export interface paths {
     }
     get?: never
     put?: never
-    /** Prevent a published program version from receiving new assignments */
+    /**
+     * Prevent a published program version from receiving new assignments
+     * @description This command carries no request body. Supplying a payload is rejected with 415; the media type header itself is neither required nor used.
+     */
     post: operations['deprecateOrganizationProgramVersion']
     delete?: never
     options?: never
@@ -2770,7 +2788,7 @@ export interface components {
         'application/problem+json': components['schemas']['Problem']
       }
     }
-    /** @description A command representation other than application/json was supplied */
+    /** @description A command that declares a request body received a representation other than application/json, or a command that declares none received a payload */
     UnsupportedMediaType: {
       headers: {
         'Cache-Control': components['headers']['NoStore']
@@ -4717,10 +4735,10 @@ export interface operations {
     }
     requestBody?: never
     responses: {
-      /** @description Complete immutable template version */
+      /** @description Complete template version with its current status */
       200: {
         headers: {
-          'Cache-Control'?: 'private, max-age=31536000, immutable'
+          'Cache-Control': components['headers']['PrivateRevalidate']
           ETag: components['headers']['ETag']
           [name: string]: unknown
         }

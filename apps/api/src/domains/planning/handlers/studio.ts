@@ -50,13 +50,6 @@ export function studioPlanningRoutes(
     c.header('Vary', 'Origin')
     if (c.res.status >= 400) c.header('Cache-Control', 'no-store')
   })
-  routes.use('*', async (c, next) => {
-    if (c.req.method !== 'GET' && c.req.method !== 'OPTIONS' && !canonicalContentType(c)) {
-      return problem(c, 'unsupported-media-type')
-    }
-    await next()
-  })
-
   routes.get('/organizations/:organizationId/session-templates', async (c) => {
     const organizationId = organization(c, studioOrigin)
     if (organizationId instanceof Response) return organizationId
@@ -83,7 +76,9 @@ export function studioPlanningRoutes(
   routes.post('/organizations/:organizationId/session-templates', async (c) => {
     const organizationId = organization(c, studioOrigin)
     if (organizationId instanceof Response) return organizationId
-    const body = await readJson(c)
+    const payload = await jsonPayload(c)
+    if (payload instanceof Response) return payload
+    const body = payload.value
     if (!isCreateBody(body, 'discipline_code')) return problem(c, 'validation-failed')
     const command = commandContext(c, { organizationId, body })
     if (!command) return problem(c, 'invalid-request')
@@ -114,7 +109,9 @@ export function studioPlanningRoutes(
     if (ids instanceof Response) return ids
     const etag = draftEtag(c)
     if (etag instanceof Response) return etag
-    const body = await readJson(c)
+    const payload = await jsonPayload(c)
+    if (payload instanceof Response) return payload
+    const body = payload.value
     if (!isObject(body)) return problem(c, 'invalid-request')
     const command = commandContext(c, { ...ids, body, etag })
     if (!command) return problem(c, 'invalid-request')
@@ -143,6 +140,8 @@ export function studioPlanningRoutes(
       if (ids instanceof Response) return ids
       const etag = draftEtag(c)
       if (etag instanceof Response) return etag
+      const payload = await rejectPayload(c)
+      if (payload) return payload
       const command = commandContext(c, { ...ids, etag })
       if (!command) return problem(c, 'invalid-request')
       try {
@@ -175,9 +174,10 @@ export function studioPlanningRoutes(
           ...version,
           requestId: randomUUID(),
         })
-        const etag = immutableEtag(resource)
-        c.header('Cache-Control', 'private, max-age=31536000, immutable')
-        c.header('ETag', etag)
+        // The published content is immutable, but deprecation still moves the
+        // status this projection carries, so the response must be revalidated.
+        c.header('Cache-Control', 'private, max-age=0, must-revalidate')
+        c.header('ETag', projectionEtag(resource))
         return c.json(resource)
       } catch (error) {
         return operationFailure(c, error)
@@ -192,6 +192,8 @@ export function studioPlanningRoutes(
       if (version instanceof Response) return version
       const etag = draftEtag(c)
       if (etag instanceof Response) return etag
+      const payload = await rejectPayload(c)
+      if (payload) return payload
       const command = commandContext(c, { ...version, etag })
       if (!command) return problem(c, 'invalid-request')
       try {
@@ -217,6 +219,8 @@ export function studioPlanningRoutes(
     async (c) => {
       const version = templateVersionPath(c, studioOrigin)
       if (version instanceof Response) return version
+      const payload = await rejectPayload(c)
+      if (payload) return payload
       const command = commandContext(c, version)
       if (!command) return problem(c, 'invalid-request')
       try {
@@ -261,7 +265,9 @@ export function studioPlanningRoutes(
   routes.post('/organizations/:organizationId/programs', async (c) => {
     const organizationId = organization(c, studioOrigin)
     if (organizationId instanceof Response) return organizationId
-    const body = await readJson(c)
+    const payload = await jsonPayload(c)
+    if (payload instanceof Response) return payload
+    const body = payload.value
     if (!isCreateBody(body)) return problem(c, 'validation-failed')
     const command = commandContext(c, { organizationId, body })
     if (!command) return problem(c, 'invalid-request')
@@ -291,7 +297,9 @@ export function studioPlanningRoutes(
     if (ids instanceof Response) return ids
     const etag = draftEtag(c)
     if (etag instanceof Response) return etag
-    const body = await readJson(c)
+    const payload = await jsonPayload(c)
+    if (payload instanceof Response) return payload
+    const body = payload.value
     if (!isObject(body)) return problem(c, 'invalid-request')
     const command = commandContext(c, { ...ids, body, etag })
     if (!command) return problem(c, 'invalid-request')
@@ -318,6 +326,8 @@ export function studioPlanningRoutes(
     if (ids instanceof Response) return ids
     const etag = draftEtag(c)
     if (etag instanceof Response) return etag
+    const payload = await rejectPayload(c)
+    if (payload) return payload
     const command = commandContext(c, { ...ids, etag })
     if (!command) return problem(c, 'invalid-request')
     try {
@@ -342,6 +352,8 @@ export function studioPlanningRoutes(
     async (c) => {
       const version = programVersionPath(c, studioOrigin)
       if (version instanceof Response) return version
+      const payload = await rejectPayload(c)
+      if (payload) return payload
       const command = commandContext(c, version)
       if (!command) return problem(c, 'invalid-request')
       try {
@@ -414,15 +426,14 @@ function commandContext(c: Context, request: unknown) {
   return {
     idempotencyKey,
     commandId,
+    // Only the inputs the command actually consumes feed the hash. Folding in
+    // headers a route ignores would fork one logical command across receipts.
     requestHash: createHash('sha256')
       .update(
         JSON.stringify(
           canonicalJson({
             method: c.req.method.toUpperCase(),
             path: c.req.path,
-            content_type: canonicalContentType(c),
-            body: isObject(request) && 'body' in request ? request.body : null,
-            if_match: c.req.header('if-match') ?? null,
             resource: request,
           }),
         ),
@@ -510,12 +521,23 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-async function readJson(c: Context): Promise<unknown> {
+/** Commands that declare a request body: the canonical media type is mandatory. */
+async function jsonPayload(c: Context): Promise<{ value: unknown } | Response> {
+  if (!canonicalContentType(c)) return problem(c, 'unsupported-media-type')
   try {
-    return await c.req.json<unknown>()
+    return { value: await c.req.json<unknown>() }
   } catch {
-    return undefined
+    return { value: undefined }
   }
+}
+
+/**
+ * Commands that declare no request body. The contract accepts none, so a media
+ * type must not be required — only an actual payload is refused.
+ */
+async function rejectPayload(c: Context): Promise<Response | undefined> {
+  const raw = await c.req.text()
+  return raw.trim() ? problem(c, 'unsupported-media-type') : undefined
 }
 
 function replay(c: Context, replayed: boolean): void {
@@ -527,7 +549,7 @@ function canonicalContentType(c: Context): 'application/json' | undefined {
   return value?.trim().toLowerCase() === 'application/json' ? 'application/json' : undefined
 }
 
-function immutableEtag(value: unknown): string {
+function projectionEtag(value: unknown): string {
   return `"sha256:${createHash('sha256').update(JSON.stringify(value)).digest('base64url')}"`
 }
 

@@ -1894,6 +1894,9 @@ paths:
       x-allfit-operation: OP-PLN-003
       x-allfit-cache: no-store
       summary: Publish the current complete draft as an immutable template version
+      description: >-
+        This command carries no request body. Supplying a payload is rejected
+        with 415; the media type header itself is neither required nor used.
       security:
         - cookieAuth: []
       parameters:
@@ -1940,8 +1943,12 @@ paths:
       tags: [Studio Planning]
       operationId: getOrganizationSessionTemplateVersion
       x-allfit-operation: OP-PLN-021
-      x-allfit-cache: private-immutable
-      summary: Read one complete immutable published template version
+      x-allfit-cache: private-revalidate
+      summary: Read one complete published template version
+      description: >-
+        The published content of a version is immutable, but deprecation changes
+        the status carried by this projection, so the response is revalidated
+        against its ETag rather than cached as immutable.
       security:
         - cookieAuth: []
       parameters:
@@ -1950,12 +1957,10 @@ paths:
         - $ref: '#/components/parameters/VersionNumber'
       responses:
         '200':
-          description: Complete immutable template version
+          description: Complete template version with its current status
           headers:
             Cache-Control:
-              schema:
-                type: string
-                const: private, max-age=31536000, immutable
+              $ref: '#/components/headers/PrivateRevalidate'
             ETag:
               $ref: '#/components/headers/ETag'
           content:
@@ -1980,6 +1985,9 @@ paths:
       x-allfit-operation: OP-PLN-004
       x-allfit-cache: no-store
       summary: Replace the template draft from one accessible published version
+      description: >-
+        This command carries no request body. Supplying a payload is rejected
+        with 415; the media type header itself is neither required nor used.
       security:
         - cookieAuth: []
       parameters:
@@ -2027,6 +2035,9 @@ paths:
       x-allfit-operation: OP-PLN-005
       x-allfit-cache: no-store
       summary: Prevent a published template version from entering new content
+      description: >-
+        This command carries no request body. Supplying a payload is rejected
+        with 415; the media type header itself is neither required nor used.
       security:
         - cookieAuth: []
       parameters:
@@ -2209,6 +2220,9 @@ paths:
       x-allfit-operation: OP-PLN-008
       x-allfit-cache: no-store
       summary: Publish an immutable program version
+      description: >-
+        This command carries no request body. Supplying a payload is rejected
+        with 415; the media type header itself is neither required nor used.
       security:
         - cookieAuth: []
       parameters:
@@ -2257,6 +2271,9 @@ paths:
       x-allfit-operation: OP-PLN-009
       x-allfit-cache: no-store
       summary: Prevent a published program version from receiving new assignments
+      description: >-
+        This command carries no request body. Supplying a payload is rejected
+        with 415; the media type header itself is neither required nor used.
       security:
         - cookieAuth: []
       parameters:
@@ -3338,7 +3355,9 @@ components:
             status: 400
             request_id: 01JEXAMPLE0000000000000000
     UnsupportedMediaType:
-      description: A command representation other than application/json was supplied
+      description: >-
+        A command that declares a request body received a representation other
+        than application/json, or a command that declares none received a payload
       headers:
         Cache-Control:
           $ref: '#/components/headers/NoStore'

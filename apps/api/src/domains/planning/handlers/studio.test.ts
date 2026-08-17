@@ -249,7 +249,7 @@ describe('Studio planning API contract', () => {
       path: `/organizations/${ORGANIZATION_ID}/session-templates/${TEMPLATE_ID}/versions/1`,
       expectedId: TEMPLATE_VERSION_ID,
       expectedInput: { organizationId: ORGANIZATION_ID, templateId: TEMPLATE_ID, versionNumber: 1 },
-      expectedHeaders: { 'cache-control': 'private, max-age=31536000, immutable' },
+      expectedHeaders: { 'cache-control': 'private, max-age=0, must-revalidate' },
     },
     {
       operation: 'OP-PLN-004',
@@ -551,20 +551,55 @@ describe('Studio planning API contract', () => {
     expect(replay.headers.get('idempotent-replay')).toBe('true')
   })
 
-  test('T-PLN-API-038 requires the canonical JSON representation on every command', async () => {
+  test('T-PLN-API-038 requires the canonical JSON representation on a command that carries a body', async () => {
     const response = await studioPlanningRoutes(planningService([]), sessionService()).request(
-      `/organizations/${ORGANIZATION_ID}/programs/${PROGRAM_ID}/versions/1/deprecation`,
+      `/organizations/${ORGANIZATION_ID}/programs`,
       {
         method: 'POST',
-        headers: {
-          origin: 'https://studio.example.test',
-          cookie: `${STUDIO_SESSION_COOKIE}=opaque-session`,
-          'idempotency-key': IDEMPOTENCY_KEY,
-          'command-id': COMMAND_ID,
-        },
+        headers: { ...commandHeaders(), 'content-type': 'text/plain' },
+        body: JSON.stringify({ title: 'Program A' }),
       },
     )
     expect(response.status).toBe(415)
+    expect(response.headers.get('cache-control')).toBe('no-store')
+  })
+
+  test('T-PLN-API-041 accepts a bodyless command without a media type and refuses a payload', async () => {
+    const calls: CapturedCall[] = []
+    const path = `/organizations/${ORGANIZATION_ID}/programs/${PROGRAM_ID}/versions/1/deprecation`
+    const app = studioPlanningRoutes(planningService(calls), sessionService())
+    const bodyless = await app.request(path, { method: 'POST', headers: commandHeaders() })
+    expect(bodyless.status).toBe(200)
+    const declared = await app.request(path, {
+      method: 'POST',
+      headers: { ...commandHeaders(), 'content-type': 'application/json' },
+    })
+    expect(declared.status).toBe(200)
+    // The contract declares no body here, so the media type is not part of the
+    // command and must not split one logical command across two receipts.
+    expect(calls[0]?.input.requestHash).toEqual(calls[1]?.input.requestHash)
+    const withPayload = await studioPlanningRoutes(planningService([]), sessionService()).request(
+      path,
+      {
+        method: 'POST',
+        headers: { ...commandHeaders(), 'content-type': 'application/json' },
+        body: JSON.stringify({ unexpected: true }),
+      },
+    )
+    expect(withPayload.status).toBe(415)
+    expect(withPayload.headers.get('cache-control')).toBe('no-store')
+  })
+
+  test('T-PLN-API-042 ignores a precondition header the bodyless command does not declare', async () => {
+    const calls: CapturedCall[] = []
+    const path = `/organizations/${ORGANIZATION_ID}/session-templates/${TEMPLATE_ID}/versions/1/deprecation`
+    const app = studioPlanningRoutes(planningService(calls), sessionService())
+    await app.request(path, { method: 'POST', headers: commandHeaders() })
+    await app.request(path, {
+      method: 'POST',
+      headers: { ...commandHeaders(), 'if-match': ETAG },
+    })
+    expect(calls[0]?.input.requestHash).toEqual(calls[1]?.input.requestHash)
   })
 
   test('T-PLN-API-039 exposes Retry-After for an in-progress idempotent command', async () => {
@@ -588,6 +623,15 @@ describe('Studio planning API contract', () => {
   })
 })
 
+function commandHeaders(): Record<string, string> {
+  return {
+    origin: 'https://studio.example.test',
+    cookie: `${STUDIO_SESSION_COOKIE}=opaque-session`,
+    'idempotency-key': IDEMPOTENCY_KEY,
+    'command-id': COMMAND_ID,
+  }
+}
+
 function requestInit(input: {
   method: string
   body?: unknown
@@ -600,7 +644,7 @@ function requestInit(input: {
   if (input.method !== 'GET') {
     headers['idempotency-key'] = IDEMPOTENCY_KEY
     headers['command-id'] = COMMAND_ID
-    headers['content-type'] = 'application/json'
+    if (input.body !== undefined) headers['content-type'] = 'application/json'
   }
   if (input.ifMatch) headers['if-match'] = typeof input.ifMatch === 'string' ? input.ifMatch : ETAG
   return {
