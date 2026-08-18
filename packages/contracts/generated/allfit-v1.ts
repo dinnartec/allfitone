@@ -194,6 +194,120 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/space/v1/auth/sessions': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Sign in with email and password
+     * @description Headless sign-in: the app owns its screens and never calls the identity provider. It posts the credentials here and the API makes the provider call with the server API key.
+     *
+     *     **A failed attempt never says which half was wrong.** A wrong password, an address with no account and an address that was never verified all answer `401` with the same body. That is HU-SP-002 criterion 2, and it is what stops this endpoint from being used to discover who is registered.
+     *
+     *     Rate limiting is mandatory here for the same reason it is on verification.
+     */
+    post: operations['signInToSpace']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/auth/sessions/refresh': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Exchange a refresh token for a new session
+     * @description What makes the session survive closing the app, which is HU-SP-002 criterion 4. The refresh token rotates on use, so replaying an old one fails — that failure is how a stolen token surfaces.
+     *
+     *     A rejection means signing in again. There is no degraded session.
+     */
+    post: operations['refreshSpaceSession']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/auth/password-resets': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Ask for a password reset link
+     * @description **Answers `202` always** — whether the address has an account, has none, or the provider is unreachable. HU-SP-004 criterion 2 requires the same message either way, and telling an outage apart from an unknown address would give away the same fact by another route.
+     *
+     *     The provider issues the token and sends the mail; its secret URL never reaches us. Sessions on other devices are closed when the password actually changes, which arrives later as a provider webhook — not here.
+     *
+     *     Rate limiting is mandatory: unthrottled, this endpoint sends mail to any address it is given.
+     */
+    post: operations['requestSpacePasswordReset']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/onboarding-attempts': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Start or resume the authenticated account's onboarding attempt
+     * @description The same operation Studio calls, on the surface the person came through. `OP-IDN-003` is the only path that creates a person and a Fitness ID is one per person, so both surfaces share it rather than each growing their own way to create an identity.
+     *
+     *     Space presents a bearer token, so the access account is derived here from the verified `sub` and the environment's issuer. An account with an open, unexpired attempt receives that attempt instead of a second one.
+     */
+    post: operations['startSpaceOnboardingAttempt']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/onboarding-attempts/{attemptId}/eligibility-evidence': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Record the account holder's adult self-declaration
+     * @description HU-SP-007. A declaration, never a date of birth: criterion 4 says a declaration resolves the control, and collecting a precise date we do not need would be worse privacy for the same outcome.
+     *
+     *     The evidence freezes the policy version it was judged against, which is criterion 5. A refusal is recorded as evidence too, and it does not make the attempt eligible — `fail` is not eligibility, and neither is absence.
+     */
+    post: operations['recordSpaceAdultEligibilityEvidence']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/studio/v1/telemetry-config': {
     parameters: {
       query?: never
@@ -1105,6 +1219,32 @@ export interface components {
       expiresIn: number
       analytics: components['schemas']['AnalyticsIdentity']
     }
+    SpaceSignInCreate: {
+      /**
+       * Format: email
+       * @description The address the account was created with.
+       */
+      email: string
+      /** @description Composition is not re-checked here. The credential already exists, and rejecting it would lock out an account created under an earlier policy. */
+      password: string
+    }
+    SpacePasswordResetCreate: {
+      /**
+       * Format: email
+       * @description Shape only. Whether it has an account is precisely what the response must not reveal.
+       */
+      email: string
+    }
+    SpaceSessionRefreshCreate: {
+      refreshToken: string
+    }
+    /** @description Carries no analytics identity, unlike a fresh sign-in: refreshing returns tokens without a subject, and the app already holds the identity it was given when the session began. */
+    SpaceSessionRefreshed: {
+      accessToken: string
+      /** @description Rotates on use — the previous value stops working. */
+      refreshToken: string
+      expiresIn: number
+    }
     /** @enum {string} */
     StudioRegistrationStatus: 'complete' | 'registration_incomplete'
     StudioSession: {
@@ -1158,6 +1298,14 @@ export interface components {
       terms_version: 'platform_terms_v1'
       /** @constant */
       privacy_notice_version: 'privacy_notice_v1'
+    }
+    /** @description The same attempt Studio reads, without the legal versions. Space asks for those acceptances on a later screen and there are no consultable texts to name yet, so quoting a version here would assert something the product cannot honour. */
+    SpaceOnboardingAttempt: {
+      id: components['schemas']['UuidV7']
+      status: components['schemas']['StudioOnboardingStatus']
+      eligibility_status: components['schemas']['StudioEligibilityStatus']
+      /** Format: date-time */
+      expires_at: string
     }
     AdultEligibilityEvidenceCreate: {
       declared_adult: boolean
@@ -3109,6 +3257,174 @@ export interface operations {
         }
       }
       429: components['responses']['TooManyRequests']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  signInToSpace: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SpaceSignInCreate']
+      }
+    }
+    responses: {
+      /** @description Session issued */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SpaceSessionTokens']
+        }
+      }
+      400: components['responses']['BadRequest']
+      /** @description The credentials were refused. Deliberately identical whether the password was wrong, the address unknown, or the address unverified. */
+      401: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['Problem']
+        }
+      }
+      429: components['responses']['TooManyRequests']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  refreshSpaceSession: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SpaceSessionRefreshCreate']
+      }
+    }
+    responses: {
+      /** @description A new token pair */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SpaceSessionRefreshed']
+        }
+      }
+      400: components['responses']['BadRequest']
+      /** @description The refresh token is expired, already used, or for another surface. */
+      401: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['Problem']
+        }
+      }
+      429: components['responses']['TooManyRequests']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  requestSpacePasswordReset: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SpacePasswordResetCreate']
+      }
+    }
+    responses: {
+      /** @description Accepted. Deliberately carries no body: anything describing what happened would distinguish the cases this operation exists to hide. */
+      202: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      400: components['responses']['BadRequest']
+      429: components['responses']['TooManyRequests']
+    }
+  }
+  startSpaceOnboardingAttempt: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Open onboarding attempt, newly created or resumed */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SpaceOnboardingAttempt']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      409: components['responses']['Conflict']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  recordSpaceAdultEligibilityEvidence: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        attemptId: components['parameters']['OnboardingAttemptId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AdultEligibilityEvidenceCreate']
+      }
+    }
+    responses: {
+      /** @description Versioned adult eligibility evaluation */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['AdultEligibilityEvidence']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      409: components['responses']['Conflict']
       503: components['responses']['UpstreamUnavailable']
     }
   }

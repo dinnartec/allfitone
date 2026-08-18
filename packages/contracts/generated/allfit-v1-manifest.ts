@@ -55,6 +55,12 @@ export const allfitV1ContractManifest = {
     },
     {
       method: 'POST',
+      path: '/space/v1/auth/password-resets',
+      operationId: 'requestSpacePasswordReset',
+      allfitOperation: 'OP-IDN-033',
+    },
+    {
+      method: 'POST',
       path: '/space/v1/auth/registrations',
       operationId: 'startSpaceRegistration',
       allfitOperation: 'OP-IDN-029',
@@ -64,6 +70,18 @@ export const allfitV1ContractManifest = {
       path: '/space/v1/auth/registrations/verification',
       operationId: 'verifySpaceRegistration',
       allfitOperation: 'OP-IDN-030',
+    },
+    {
+      method: 'POST',
+      path: '/space/v1/auth/sessions',
+      operationId: 'signInToSpace',
+      allfitOperation: 'OP-IDN-031',
+    },
+    {
+      method: 'POST',
+      path: '/space/v1/auth/sessions/refresh',
+      operationId: 'refreshSpaceSession',
+      allfitOperation: 'OP-IDN-032',
     },
     {
       method: 'POST',
@@ -130,6 +148,18 @@ export const allfitV1ContractManifest = {
       path: '/space/v1/nutrition/meals/{mealId}',
       operationId: 'updateNutritionMeal',
       allfitOperation: 'OP-NUT-003',
+    },
+    {
+      method: 'POST',
+      path: '/space/v1/onboarding-attempts',
+      operationId: 'startSpaceOnboardingAttempt',
+      allfitOperation: 'OP-IDN-001',
+    },
+    {
+      method: 'POST',
+      path: '/space/v1/onboarding-attempts/{attemptId}/eligibility-evidence',
+      operationId: 'recordSpaceAdultEligibilityEvidence',
+      allfitOperation: 'OP-IDN-002',
     },
     {
       method: 'POST',

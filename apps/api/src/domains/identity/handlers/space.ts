@@ -5,10 +5,14 @@
  * the provider. It sends credentials here and the API makes the call with the API
  * key, which exists only on the server.
  *
- * Both routes are unauthenticated by definition — they exist to obtain a
+ * All four routes are unauthenticated by definition — they exist to obtain a
  * credential — which makes them the most exposed surface in the API. Two
  * consequences run through the code below: nothing in a response may vary with
  * whether an account exists, and every answer is `no-store`.
+ *
+ * Signing in re-checks the password's length but not its composition. The
+ * credential already exists, and applying today's policy to an account created
+ * under an earlier one would lock the person out of their own data.
  */
 
 import { Hono } from 'hono'
@@ -30,6 +34,7 @@ const MAX_PASSWORD_LENGTH = 256
 const PASSWORD_COMPOSITION = /^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])/
 /** RFC 5321 caps the whole address here. */
 const MAX_EMAIL_LENGTH = 254
+const MAX_REFRESH_TOKEN_LENGTH = 4096
 const VERIFICATION_CODE = /^[0-9]{6}$/
 
 export function spaceIdentityRoutes(injectedService?: SpaceRegistrationService): Hono {
@@ -68,6 +73,64 @@ export function spaceIdentityRoutes(injectedService?: SpaceRegistrationService):
     try {
       const session = await registrations().verify(email, password, code)
       return c.json({ ...session, analytics: session.analytics ?? { distinct_id: null } }, 200)
+    } catch (cause) {
+      return failRegistration(c, cause)
+    }
+  })
+
+  routes.post('/auth/sessions', async (c) => {
+    c.header('Cache-Control', 'no-store')
+
+    const body = await readJson(c.req.raw)
+    const email = readEmail(body)
+    const password = readPassword(body)
+    // Composition is not re-checked, unlike registration: the credential already
+    // exists and an older policy must not lock anyone out.
+    if (!email || !password) return fail(c, 'invalid-request')
+
+    try {
+      const session = await registrations().signIn(email, password)
+      return c.json({ ...session, analytics: session.analytics ?? { distinct_id: null } }, 200)
+    } catch (cause) {
+      return failRegistration(c, cause)
+    }
+  })
+
+  routes.post('/auth/password-resets', async (c) => {
+    c.header('Cache-Control', 'no-store')
+
+    const email = readEmail(await readJson(c.req.raw))
+    if (!email) return fail(c, 'invalid-request')
+
+    try {
+      await registrations().requestPasswordReset(email)
+    } catch {
+      // Swallowed on purpose. An outage that answered differently from an
+      // unknown address would reveal which addresses exist, which is the whole
+      // point of HU-SP-004 criterion 2. The failure is still logged upstream.
+    }
+    return c.body(null, 202)
+  })
+
+  routes.post('/auth/sessions/refresh', async (c) => {
+    c.header('Cache-Control', 'no-store')
+
+    const body = await readJson(c.req.raw)
+    const refreshToken = readRefreshToken(body)
+    if (!refreshToken) return fail(c, 'invalid-request')
+
+    try {
+      const session = await registrations().refresh(refreshToken)
+      // Deliberately not spread: refreshing carries no analytics identity, and
+      // passing one through would attribute events to a subject we do not have.
+      return c.json(
+        {
+          accessToken: session.accessToken,
+          refreshToken: session.refreshToken,
+          expiresIn: session.expiresIn,
+        },
+        200,
+      )
     } catch (cause) {
       return failRegistration(c, cause)
     }
@@ -123,5 +186,13 @@ function readPassword(body: Record<string, unknown>): string | undefined {
 function readCode(body: Record<string, unknown>): string | undefined {
   const value = body.code
   if (typeof value !== 'string' || !VERIFICATION_CODE.test(value)) return undefined
+  return value
+}
+
+/** Opaque to us: only its presence and a sane length are ours to check. */
+function readRefreshToken(body: Record<string, unknown>): string | undefined {
+  const value = body.refreshToken
+  if (typeof value !== 'string') return undefined
+  if (value.length === 0 || value.length > MAX_REFRESH_TOKEN_LENGTH) return undefined
   return value
 }
