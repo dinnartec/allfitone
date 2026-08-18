@@ -557,6 +557,34 @@ describe('error translation', () => {
     expect(a.message).toBe(b.message)
   })
 
+  test('an unverified address is not distinguishable from an unknown one', async () => {
+    // Observed live: a 403 whose code contains "email" was read as a malformed
+    // address, so this answered 400 while an unknown address answered 401.
+    const unverified = Object.assign(
+      new Error('Email ownership must be verified before authentication.'),
+      { status: 403, code: 'email_verification_required' },
+    )
+    const unknown = Object.assign(new Error("Invalid credentials for 'a@b.com'."), { status: 400 })
+
+    const forUnverified = await rejection(
+      providerWith({
+        authenticateWithPassword: async () => {
+          throw unverified
+        },
+      }).provider.authenticateWithPassword({ email: 'a@b.com', password: 'x' }, 'space'),
+    )
+    const forUnknown = await rejection(
+      providerWith({
+        authenticateWithPassword: async () => {
+          throw unknown
+        },
+      }).provider.authenticateWithPassword({ email: 'a@b.com', password: 'x' }, 'space'),
+    )
+
+    expect(forUnverified.code).toBe('invalid_credentials')
+    expect(forUnverified.code).toBe(forUnknown.code)
+  })
+
   test('wrong credentials are not retryable', async () => {
     const unauthorized = Object.assign(new Error('Unauthorized'), { status: 401 })
 
