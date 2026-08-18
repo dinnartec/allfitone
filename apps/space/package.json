@@ -8,9 +8,9 @@
     "ios": "expo run:ios --device",
     "android": "expo run:android --device",
     "build": "expo export --platform all --output-dir dist",
-    "test": "bun test src/client/session-operations.test.ts",
+    "test": "bun test src",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json"
   },
   "dependencies": {
     "@allfitone/contracts": "workspace:*",
@@ -19,6 +19,7 @@
     "expo": "57.0.11",
     "expo-blur": "57.0.2",
     "expo-constants": "57.0.9",
+    "expo-crypto": "^57.0.1",
     "expo-dev-client": "~57.0.10",
     "expo-font": "57.0.1",
     "expo-linear-gradient": "57.0.1",

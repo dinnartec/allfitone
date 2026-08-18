@@ -89,7 +89,12 @@ export function spaceTelemetryCommon() {
 }
 
 export function captureSpaceApiRequest(input: {
-  operation: 'space.auth.registration' | 'space.auth.registration_verification'
+  operation:
+    | 'space.auth.registration'
+    | 'space.auth.registration_verification'
+    | 'space.auth.session'
+    | 'space.auth.session_refresh'
+    | 'space.auth.password_reset'
   durationMs: number
   response?: Response
 }): void {

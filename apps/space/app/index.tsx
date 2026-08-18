@@ -9,6 +9,12 @@
  * Timings are deliberate: the fill lands at 1.5s and the sequence ends at 2.8s.
  * An earlier pass ran six hundred milliseconds slower and felt like waiting.
  * Anything longer is charming once and irritating from the second launch.
+ *
+ * Where it goes next is not this screen's decision. An earlier version always
+ * replaced with the welcome screen, which asked somebody who had just signed in
+ * to create an account again — HU-SP-002 criterion 4. Reading the stored session
+ * happens here; choosing the destination lives in `session-gate`, where it can be
+ * tested without launching the app.
  */
 
 import { BrandEntrance } from '@allfitone/react-native/brand-entrance'
@@ -17,6 +23,9 @@ import { useTheme } from '@allfitone/react-native/theme'
 import { useRouter } from 'expo-router'
 import { useEffect, useRef, useState } from 'react'
 import { AccessibilityInfo, Animated, Easing, StyleSheet, View } from 'react-native'
+
+import { resolveEntryRoute } from '../src/client/session-gate'
+import { readSession } from '../src/client/session'
 
 const FILL_MS = 1500
 const POWERED_DELAY_MS = 2050
@@ -27,6 +36,23 @@ export default function Opening() {
   const theme = useTheme()
   const router = useRouter()
   const [reduceMotion, setReduceMotion] = useState<boolean | null>(null)
+  const [route, setRoute] = useState<string | null>(null)
+
+  useEffect(() => {
+    let active = true
+    readSession()
+      .then((session) => {
+        if (active) setRoute(resolveEntryRoute({ session }))
+      })
+      .catch(() => {
+        // Unreadable storage is not a signed-in state, and it must not hang the
+        // opening on a screen with no way forward.
+        if (active) setRoute(resolveEntryRoute({ session: null }))
+      })
+    return () => {
+      active = false
+    }
+  }, [])
 
   const name = useRef(new Animated.Value(0)).current
   const powered = useRef(new Animated.Value(0)).current
@@ -42,7 +68,7 @@ export default function Opening() {
   }, [])
 
   useEffect(() => {
-    if (reduceMotion === null) return
+    if (reduceMotion === null || route === null) return
 
     if (reduceMotion) {
       name.setValue(1)
@@ -67,11 +93,11 @@ export default function Opening() {
     }
 
     const timer = setTimeout(
-      () => router.replace('/welcome'),
+      () => router.replace(route as '/welcome'),
       reduceMotion ? REDUCED_EXIT_MS : EXIT_MS,
     )
     return () => clearTimeout(timer)
-  }, [reduceMotion, name, powered, router])
+  }, [reduceMotion, route, name, powered, router])
 
   return (
     <View style={[styles.root, { backgroundColor: theme.color.background.canvas }]}>
