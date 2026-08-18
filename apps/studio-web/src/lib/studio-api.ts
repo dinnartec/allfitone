@@ -1,4 +1,5 @@
 import type { AllfitV1Schemas } from '@allfitone/contracts'
+import { newCommand as createCommand, type CommandHeaders } from '@allfitone/contracts/commands'
 import type { ClientOperation } from '@allfitone/telemetry'
 
 import { notifyStudioAuthenticated, notifyStudioUnauthenticated } from './session-activity'
@@ -267,26 +268,18 @@ export const studioApi = {
     ),
 }
 
-export interface CommandHeaders {
-  idempotencyKey: string
-  commandId: string
-}
+export type { CommandHeaders }
 
+/**
+ * The formats live in the contract package because Space needs them too, and an
+ * app may never import another app. Only the web sources of randomness and time
+ * stay here.
+ */
 export function newCommand(): CommandHeaders {
-  return { idempotencyKey: crypto.randomUUID(), commandId: uuidV7() }
-}
-
-function uuidV7(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(16))
-  let timestamp = Date.now()
-  for (let index = 5; index >= 0; index -= 1) {
-    bytes[index] = timestamp & 0xff
-    timestamp = Math.floor(timestamp / 256)
-  }
-  bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x70
-  bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80
-  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
+  return createCommand(
+    { randomBytes: (length) => crypto.getRandomValues(new Uint8Array(length)) },
+    Date.now(),
+  )
 }
 
 interface RequestTelemetryContext {
