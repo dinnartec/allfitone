@@ -1,4 +1,4 @@
-import type { StudioActor } from '../../identity/index.js'
+import type { AccountActor } from '../../identity/index.js'
 import type { ProfessionalCatalogDatabase } from '../domain/index.js'
 
 export class StudioCatalogError extends Error {
@@ -9,16 +9,16 @@ export class StudioCatalogError extends Error {
 }
 
 export interface StudioCatalogService {
-  listSpecialties(actor: StudioActor): ReturnType<ProfessionalCatalogDatabase['listSpecialties']>
+  listSpecialties(actor: AccountActor): ReturnType<ProfessionalCatalogDatabase['listSpecialties']>
   listCredentialTypes(
-    actor: StudioActor,
+    actor: AccountActor,
   ): ReturnType<ProfessionalCatalogDatabase['listCredentialTypes']>
 }
 
 export function createStudioCatalogService(
   database: ProfessionalCatalogDatabase,
 ): StudioCatalogService {
-  const personId = (actor: StudioActor) => {
+  const personId = (actor: AccountActor) => {
     if (!actor.personId) throw new StudioCatalogError('registration-incomplete')
     return actor.personId
   }

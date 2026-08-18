@@ -9,7 +9,7 @@ import type {
   CommandContext,
   IdentityInvitationDatabase,
   StudioAccountIdentity,
-  StudioActor,
+  AccountActor,
   TeamInvitationStatus,
   TeamInvitationRole,
   TeamInvitationPresentation,
@@ -26,7 +26,7 @@ export class StudioInvitationError extends Error {
 
 export interface StudioInvitationService {
   issue(
-    actor: StudioActor,
+    actor: AccountActor,
     input: CommandContext & {
       organizationId: string
       channel: 'email'
@@ -44,7 +44,7 @@ export interface StudioInvitationService {
     },
   ): ReturnType<IdentityInvitationDatabase['decide']>
   list(
-    actor: StudioActor,
+    actor: AccountActor,
     input: {
       organizationId: string
       status?: TeamInvitationStatus
@@ -55,7 +55,7 @@ export interface StudioInvitationService {
     },
   ): ReturnType<IdentityInvitationDatabase['list']>
   revoke(
-    actor: StudioActor,
+    actor: AccountActor,
     input: CommandContext & { organizationId: string; invitationId: string },
   ): ReturnType<IdentityInvitationDatabase['revoke']>
 }
