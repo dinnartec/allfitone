@@ -1,7 +1,6 @@
 /** Studio session use cases. No HTTP and no direct SQL. */
 
 import { AuthError, type AuthProvider, type SessionTokens } from '@allfitone/auth-provider'
-import { hashInvitationToken } from '@allfitone/notifications'
 import {
   analyticsIdentityForSurfaceFromEnvironment,
   type AnalyticsIdentity,
@@ -10,7 +9,6 @@ import { measureStudioRequestPhase } from '../../../platform/observability/index
 
 import type {
   IdentitySessionDatabase,
-  IdentityOnboardingDatabase,
   IdentityProfessionalDatabase,
   CommandContext,
   ProfessionalCredentialInput,
@@ -21,10 +19,17 @@ import type {
   StoredSessionSecret,
   StoredAccessSession,
   StudioAccountIdentity,
-  StudioActor,
+  AccountActor,
 } from '../domain/index.js'
 
 const REFRESH_WINDOW_MS = 30_000
+
+export {
+  createOnboardingService,
+  createSpaceOnboardingService,
+  type OnboardingService,
+  type SpaceOnboardingService,
+} from './onboarding.js'
 
 export type StudioSessionErrorCode = 'unauthenticated' | 'account-closed' | 'upstream-unavailable'
 
@@ -43,7 +48,7 @@ export interface StudioSessionService {
     identity: { given_name: string | null; family_name: string | null }
     analytics?: AnalyticsIdentity
   }>
-  resolveActor(opaqueToken: string): Promise<StudioActor>
+  resolveActor(opaqueToken: string): Promise<AccountActor>
   resolveAccountIdentity(opaqueToken: string): Promise<StudioAccountIdentity>
   logout(opaqueToken: string | undefined): Promise<StudioLogoutResult>
 }
@@ -55,21 +60,6 @@ export interface StudioLogoutResult {
   outcome: StudioLogoutOutcome
 }
 
-export interface StudioOnboardingService {
-  startAttempt(
-    actor: StudioActor,
-    input: CommandContext & { invitationToken?: string },
-  ): ReturnType<IdentityOnboardingDatabase['startAttempt']>
-  recordAdultEligibility(
-    actor: StudioActor,
-    input: Omit<Parameters<IdentityOnboardingDatabase['recordAdultEligibility']>[0], 'accountId'>,
-  ): ReturnType<IdentityOnboardingDatabase['recordAdultEligibility']>
-  complete(
-    actor: StudioActor,
-    input: Omit<Parameters<IdentityOnboardingDatabase['activatePerson']>[0], 'accountId'>,
-  ): ReturnType<IdentityOnboardingDatabase['activatePerson']>
-}
-
 export class StudioProfessionalError extends Error {
   constructor(readonly code: 'registration-incomplete') {
     super(code)
@@ -78,22 +68,22 @@ export class StudioProfessionalError extends Error {
 }
 
 export interface StudioProfessionalService {
-  getMe(actor: StudioActor, requestId: string): ReturnType<IdentityProfessionalDatabase['getMe']>
+  getMe(actor: AccountActor, requestId: string): ReturnType<IdentityProfessionalDatabase['getMe']>
   putProfile(
-    actor: StudioActor,
+    actor: AccountActor,
     input: CommandContext & ProfessionalProfileInput,
   ): ReturnType<IdentityProfessionalDatabase['putProfile']>
   declareCredential(
-    actor: StudioActor,
+    actor: AccountActor,
     input: CommandContext & ProfessionalCredentialInput,
   ): ReturnType<IdentityProfessionalDatabase['declareCredential']>
   reviseCredential(
-    actor: StudioActor,
+    actor: AccountActor,
     credentialId: string,
     input: CommandContext & ProfessionalCredentialInput,
   ): ReturnType<IdentityProfessionalDatabase['reviseCredential']>
   retireCredential(
-    actor: StudioActor,
+    actor: AccountActor,
     credentialId: string,
     command: CommandContext,
   ): ReturnType<IdentityProfessionalDatabase['retireCredential']>
@@ -322,28 +312,10 @@ function partialLogoutReturnTo(studioWebUrl: string): string {
   return returnTo.toString()
 }
 
-export function createStudioOnboardingService(
-  database: IdentityOnboardingDatabase,
-): StudioOnboardingService {
-  return {
-    startAttempt: (actor, input) => {
-      const { invitationToken, ...command } = input
-      return database.startAttempt({
-        accountId: actor.accountId,
-        ...command,
-        ...(invitationToken ? { invitationTokenHash: hashInvitationToken(invitationToken) } : {}),
-      })
-    },
-    recordAdultEligibility: (actor, input) =>
-      database.recordAdultEligibility({ accountId: actor.accountId, ...input }),
-    complete: (actor, input) => database.activatePerson({ accountId: actor.accountId, ...input }),
-  }
-}
-
 export function createStudioProfessionalService(
   professionalDatabase: IdentityProfessionalDatabase,
 ): StudioProfessionalService {
-  const personId = (actor: StudioActor) => {
+  const personId = (actor: AccountActor) => {
     if (!actor.personId) throw new StudioProfessionalError('registration-incomplete')
     return actor.personId
   }
