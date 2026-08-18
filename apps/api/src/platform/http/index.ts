@@ -17,6 +17,8 @@ export type ApiErrorCode =
   | 'wrong-surface'
   /** Malformed request: missing parameter, bad shape. */
   | 'invalid-request'
+  /** A JSON command used a representation other than application/json. */
+  | 'unsupported-media-type'
   /** A dependency we do not control did not answer. Retryable. */
   | 'upstream-unavailable'
   /** A locally controlled feature or delivery path is intentionally unavailable. */
@@ -48,6 +50,7 @@ const STATUS: Record<ApiErrorCode, ContentfulStatusCode> = {
   unauthenticated: 401,
   'wrong-surface': 403,
   'invalid-request': 400,
+  'unsupported-media-type': 415,
   'upstream-unavailable': 503,
   'service-degraded': 503,
   'registration-incomplete': 403,
@@ -67,6 +70,7 @@ const TITLE: Record<ApiErrorCode, string> = {
   unauthenticated: 'Authentication is required',
   'wrong-surface': 'This credential cannot access this surface',
   'invalid-request': 'The request is invalid',
+  'unsupported-media-type': 'Content-Type must be application/json',
   'upstream-unavailable': 'A required dependency is temporarily unavailable',
   'service-degraded': 'The service is temporarily degraded',
   'registration-incomplete': 'Registration must be completed first',

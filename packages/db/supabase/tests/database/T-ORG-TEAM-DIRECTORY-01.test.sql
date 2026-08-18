@@ -92,7 +92,7 @@ select is(
 
 select is(
   (select count(*) from organizations.role_capabilities),
-  39::bigint,
+  41::bigint,
   'the governed V1 role mapping is fully materialized'
 );
 
