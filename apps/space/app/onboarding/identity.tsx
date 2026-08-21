@@ -89,9 +89,13 @@ export default function OnboardingIdentity() {
           setUsername(current.identity.username)
         }
       })
-      .catch(() => {
-        // An outage must not empty a form the person can still fill in.
-        if (active) setFailure(UNREACHABLE)
+      .catch((cause: unknown) => {
+        // An outage must not empty a form the person can still fill in, and a
+        // dead session must not read as one: the answers differ.
+        if (!active) return
+        setFailure(
+          cause instanceof ApiError && cause.failure === 'unauthenticated' ? EXPIRED : UNREACHABLE,
+        )
       })
 
     return () => {
@@ -174,7 +178,7 @@ export default function OnboardingIdentity() {
             <Text role="body" size="md" style={styles.email}>
               {email ?? '—'}
             </Text>
-            <Text role="label" size="xs" color="muted" style={styles.hint}>
+            <Text role="body" size="sm" color="muted" style={styles.hint}>
               No se puede cambiar aquí.
             </Text>
           </View>
@@ -192,7 +196,7 @@ export default function OnboardingIdentity() {
               editable={!submitting}
               {...(usernameError ? { error: usernameError } : {})}
             />
-            <Text role="label" size="xs" color="muted" style={styles.hint}>
+            <Text role="body" size="sm" color="muted" style={styles.hint}>
               {USERNAME.test(username)
                 ? `Así te verán: @${username}`
                 : '3 a 30 caracteres. Empieza por letra; después letras, números y _'}
