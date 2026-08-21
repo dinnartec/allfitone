@@ -43,15 +43,18 @@ import { useEffect, useMemo, useState } from 'react'
 import { ScrollView, StyleSheet, View } from 'react-native'
 
 import { ApiError } from '../../src/client'
+import { canSubmitIdentity, isUsernameWellFormed } from '../../src/client/identity-form'
 import { createSpaceOnboardingFlow } from '../../src/client/onboarding-transport'
 import { readSession } from '../../src/client/session'
 import { resolveOnboardingRoute } from '../../src/client/session-gate'
 
-const USERNAME = /^[a-z][a-z0-9_]{2,29}$/
 const NAME_MAX_LENGTH = 120
+const USERNAME_MAX_LENGTH = 30
 
+const USERNAME_RULE =
+  'De 3 a 30 caracteres, empezando con una letra. Solo letras, números y guion bajo.'
 const TAKEN = 'Ese usuario ya está en uso. Prueba con otro.'
-const EXPIRED = 'Tu sesión venció. Inicia sesión otra vez.'
+const EXPIRED = 'Tu sesión venció. Vuelve a entrar para guardar tus datos.'
 const UNREACHABLE = 'No pudimos guardar tus datos. Inténtalo otra vez.'
 
 export default function OnboardingIdentity() {
@@ -64,6 +67,7 @@ export default function OnboardingIdentity() {
   const [username, setUsername] = useState('')
   const [takenUsername, setTakenUsername] = useState<string | undefined>(undefined)
   const [submitting, setSubmitting] = useState(false)
+  const [sessionExpired, setSessionExpired] = useState(false)
   const [failure, setFailure] = useState<string | undefined>(undefined)
 
   useEffect(() => {
@@ -93,9 +97,12 @@ export default function OnboardingIdentity() {
         // An outage must not empty a form the person can still fill in, and a
         // dead session must not read as one: the answers differ.
         if (!active) return
-        setFailure(
-          cause instanceof ApiError && cause.failure === 'unauthenticated' ? EXPIRED : UNREACHABLE,
-        )
+        if (cause instanceof ApiError && cause.failure === 'unauthenticated') {
+          setSessionExpired(true)
+          setFailure(EXPIRED)
+          return
+        }
+        setFailure(UNREACHABLE)
       })
 
     return () => {
@@ -104,8 +111,14 @@ export default function OnboardingIdentity() {
   }, [flow, router])
 
   const usernameError = username && username === takenUsername ? TAKEN : undefined
-  const complete =
-    givenName.trim().length > 0 && familyName.trim().length > 0 && USERNAME.test(username)
+  const editable = !submitting && !sessionExpired
+  const complete = canSubmitIdentity({
+    givenName,
+    familyName,
+    username,
+    submitting,
+    sessionExpired,
+  })
 
   const submit = async () => {
     setSubmitting(true)
@@ -123,9 +136,12 @@ export default function OnboardingIdentity() {
         setTakenUsername(username)
         return
       }
-      setFailure(
-        cause instanceof ApiError && cause.failure === 'unauthenticated' ? EXPIRED : UNREACHABLE,
-      )
+      if (cause instanceof ApiError && cause.failure === 'unauthenticated') {
+        setSessionExpired(true)
+        setFailure(EXPIRED)
+        return
+      }
+      setFailure(UNREACHABLE)
     } finally {
       setSubmitting(false)
     }
@@ -156,7 +172,7 @@ export default function OnboardingIdentity() {
               maxLength={NAME_MAX_LENGTH}
               autoCapitalize="words"
               autoComplete="given-name"
-              editable={!submitting}
+              editable={editable}
               style={styles.half}
             />
             <TextField
@@ -166,7 +182,7 @@ export default function OnboardingIdentity() {
               maxLength={NAME_MAX_LENGTH}
               autoCapitalize="words"
               autoComplete="family-name"
-              editable={!submitting}
+              editable={editable}
               style={styles.half}
             />
           </View>
@@ -190,16 +206,14 @@ export default function OnboardingIdentity() {
               // Lowercased as typed: two handles differing only in case are the
               // same handle, so showing otherwise would promise a choice.
               onChangeText={(value) => setUsername(value.toLowerCase())}
-              maxLength={30}
+              maxLength={USERNAME_MAX_LENGTH}
               autoCapitalize="none"
               autoCorrect={false}
-              editable={!submitting}
+              editable={editable}
               {...(usernameError ? { error: usernameError } : {})}
             />
             <Text role="body" size="sm" color="muted" style={styles.hint}>
-              {USERNAME.test(username)
-                ? `Así te verán: @${username}`
-                : '3 a 30 caracteres. Empieza por letra; después letras, números y _'}
+              {isUsernameWellFormed(username) ? `Así te verán: @${username}` : USERNAME_RULE}
             </Text>
           </View>
 
@@ -207,13 +221,22 @@ export default function OnboardingIdentity() {
 
           <Button
             label="Continuar"
-            disabled={!complete || submitting}
+            disabled={!complete}
             loading={submitting}
             onPress={() => {
               void submit()
             }}
             style={styles.submit}
           />
+
+          {/* Without this the screen says "sign in again" and offers no way to. */}
+          {sessionExpired ? (
+            <Button
+              label="Iniciar sesión"
+              variant="secondary"
+              onPress={() => router.replace('/sign-in')}
+            />
+          ) : null}
         </View>
       </ScrollView>
     </Screen>
