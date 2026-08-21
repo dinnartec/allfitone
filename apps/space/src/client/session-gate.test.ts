@@ -26,6 +26,37 @@ describe('resolveEntryRoute', () => {
     )
   })
 
+  test('resumes at the step the person had reached instead of the first one', () => {
+    expect(
+      resolveEntryRoute({
+        session: { accessToken: 'at_1', refreshToken: 'rt_1' },
+        onboarding: { attempt: { eligibility_status: 'pass' } },
+      }),
+    ).toBe('/onboarding/identity')
+  })
+
+  test('a refusal outranks the progress that came with it', () => {
+    // The declaration passed, but the credential is gone: there is nothing to
+    // resume with, and landing on a step would repeat the dead end.
+    expect(
+      resolveEntryRoute({
+        session: { accessToken: 'at_1', refreshToken: 'rt_1' },
+        rejected: true,
+        onboarding: { attempt: { eligibility_status: 'pass' } },
+      }),
+    ).toBe('/welcome')
+  })
+
+  test('an outage lands on the first step rather than assuming progress', () => {
+    expect(
+      resolveEntryRoute({
+        session: { accessToken: 'at_1', refreshToken: 'rt_1' },
+        unreachable: true,
+        onboarding: { attempt: { eligibility_status: 'pass' } },
+      }),
+    ).toBe('/onboarding/age')
+  })
+
   test('treats a session the API refused as no session at all', () => {
     expect(
       resolveEntryRoute({ session: { accessToken: 'at_1', refreshToken: 'rt_1' }, rejected: true }),
