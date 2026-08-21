@@ -10,10 +10,10 @@ import {
   type StudioInvitationService,
 } from './application/invitations.js'
 import {
-  createStudioOnboardingService,
+  createOnboardingService,
   createStudioProfessionalService,
   createStudioSessionService,
-  type StudioOnboardingService,
+  type OnboardingService,
   type StudioProfessionalService,
   type StudioSessionService,
 } from './application/index.js'
@@ -21,6 +21,10 @@ import {
   createIdentityWebhookService,
   type IdentityWebhookService,
 } from './application/webhooks.js'
+import {
+  createSpaceOnboardingService,
+  type SpaceOnboardingService,
+} from './application/onboarding.js'
 import {
   createSpaceRegistrationService,
   type SpaceRegistrationService,
@@ -36,9 +40,10 @@ import {
 } from './infrastructure/index.js'
 
 let cached: StudioSessionService | undefined
-let cachedOnboarding: StudioOnboardingService | undefined
+let cachedOnboarding: OnboardingService | undefined
 let cachedProfessional: StudioProfessionalService | undefined
 let cachedRegistrations: SpaceRegistrationService | undefined
+let cachedSpaceOnboarding: SpaceOnboardingService | undefined
 let cachedWebhooks: IdentityWebhookService | undefined
 let cachedInvitations: StudioInvitationService | undefined
 let cachedBackoffice: BackofficeAuthenticationService | undefined
@@ -59,8 +64,8 @@ export function studioSessionService(): StudioSessionService {
   return cached
 }
 
-export function studioOnboardingService(): StudioOnboardingService {
-  cachedOnboarding ??= createStudioOnboardingService(createIdentityOnboardingDatabase())
+export function studioOnboardingService(): OnboardingService {
+  cachedOnboarding ??= createOnboardingService(createIdentityOnboardingDatabase())
   return cachedOnboarding
 }
 
@@ -88,6 +93,23 @@ export function spaceRegistrationService(): SpaceRegistrationService {
 /** Test seam. Undefined restores environment-backed construction. */
 export function setSpaceRegistrationService(service: SpaceRegistrationService | undefined): void {
   cachedRegistrations = service
+}
+
+export function spaceOnboardingService(): SpaceOnboardingService {
+  if (cachedSpaceOnboarding) return cachedSpaceOnboarding
+  const issuer = process.env.WORKOS_ISSUER
+  if (!issuer) throw new Error('WORKOS_ISSUER is not set')
+  cachedSpaceOnboarding = createSpaceOnboardingService({
+    accounts: createIdentitySessionDatabase(),
+    onboarding: studioOnboardingService(),
+    issuer,
+  })
+  return cachedSpaceOnboarding
+}
+
+/** Test seam. Undefined restores environment-backed construction. */
+export function setSpaceOnboardingService(service: SpaceOnboardingService | undefined): void {
+  cachedSpaceOnboarding = service
 }
 
 export function identityWebhookService(): IdentityWebhookService {

@@ -358,7 +358,7 @@ paths:
     post:
       tags: [Space Identity]
       operationId: startSpaceRegistration
-      x-allfit-operation: OP-IDN-029
+      x-allfit-operation: OP-IDN-038
       x-allfit-cache: no-store
       summary: Create an account and send an email verification code
       description: >-
@@ -419,7 +419,7 @@ paths:
     post:
       tags: [Space Identity]
       operationId: verifySpaceRegistration
-      x-allfit-operation: OP-IDN-030
+      x-allfit-operation: OP-IDN-039
       x-allfit-cache: no-store
       summary: Verify the email code and issue the first session
       description: >-
@@ -478,6 +478,239 @@ paths:
                 $ref: '#/components/schemas/Problem'
         '429':
           $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /space/v1/auth/sessions:
+    post:
+      tags: [Space Identity]
+      operationId: signInToSpace
+      x-allfit-operation: OP-IDN-040
+      x-allfit-cache: no-store
+      summary: Sign in with email and password
+      description: >-
+        Headless sign-in: the app owns its screens and never calls the identity
+        provider. It posts the credentials here and the API makes the provider
+        call with the server API key.
+
+
+        **A failed attempt never says which half was wrong.** A wrong password, an
+        address with no account and an address that was never verified all answer
+        `401` with the same body. That is HU-SP-002 criterion 2, and it is what
+        stops this endpoint from being used to discover who is registered.
+
+
+        Rate limiting is mandatory here for the same reason it is on verification.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SpaceSignInCreate'
+      responses:
+        '200':
+          description: Session issued
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpaceSessionTokens'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          description: >-
+            The credentials were refused. Deliberately identical whether the
+            password was wrong, the address unknown, or the address unverified.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /space/v1/auth/sessions/refresh:
+    post:
+      tags: [Space Identity]
+      operationId: refreshSpaceSession
+      x-allfit-operation: OP-IDN-041
+      x-allfit-cache: no-store
+      summary: Exchange a refresh token for a new session
+      description: >-
+        What makes the session survive closing the app, which is HU-SP-002
+        criterion 4. The refresh token rotates on use, so replaying an old one
+        fails — that failure is how a stolen token surfaces.
+
+
+        A rejection means signing in again. There is no degraded session.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SpaceSessionRefreshCreate'
+      responses:
+        '200':
+          description: A new token pair
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpaceSessionRefreshed'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          description: The refresh token is expired, already used, or for another surface.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /space/v1/auth/password-resets:
+    post:
+      tags: [Space Identity]
+      operationId: requestSpacePasswordReset
+      x-allfit-operation: OP-IDN-042
+      x-allfit-cache: no-store
+      summary: Ask for a password reset link
+      description: >-
+        **Answers `202` always** — whether the address has an account, has none,
+        or the provider is unreachable. HU-SP-004 criterion 2 requires the same
+        message either way, and telling an outage apart from an unknown address
+        would give away the same fact by another route.
+
+
+        The provider issues the token and sends the mail; its secret URL never
+        reaches us. Sessions on other devices are closed when the password
+        actually changes, which arrives later as a provider webhook — not here.
+
+
+        Rate limiting is mandatory: unthrottled, this endpoint sends mail to any
+        address it is given.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SpacePasswordResetCreate'
+      responses:
+        '202':
+          description: >-
+            Accepted. Deliberately carries no body: anything describing what
+            happened would distinguish the cases this operation exists to hide.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+
+  /space/v1/onboarding-attempts:
+    post:
+      tags: [Space Identity]
+      operationId: startSpaceOnboardingAttempt
+      x-allfit-operation: OP-IDN-001
+      x-allfit-cache: no-store
+      summary: Start or resume the authenticated account's onboarding attempt
+      description: >-
+        The same operation Studio calls, on the surface the person came through.
+        `OP-IDN-003` is the only path that creates a person and a Fitness ID is
+        one per person, so both surfaces share it rather than each growing their
+        own way to create an identity.
+
+
+        Space presents a bearer token, so the access account is derived here from
+        the verified `sub` and the environment's issuer. An account with an open,
+        unexpired attempt receives that attempt instead of a second one.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      responses:
+        '200':
+          description: Open onboarding attempt, newly created or resumed
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpaceOnboardingAttempt'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /space/v1/onboarding-attempts/{attemptId}/eligibility-evidence:
+    post:
+      tags: [Space Identity]
+      operationId: recordSpaceAdultEligibilityEvidence
+      x-allfit-operation: OP-IDN-002
+      x-allfit-cache: no-store
+      summary: Record the account holder's adult self-declaration
+      description: >-
+        HU-SP-007. A declaration, never a date of birth: criterion 4 says a
+        declaration resolves the control, and collecting a precise date we do not
+        need would be worse privacy for the same outcome.
+
+
+        The evidence freezes the policy version it was judged against, which is
+        criterion 5. A refusal is recorded as evidence too, and it does not make
+        the attempt eligible — `fail` is not eligibility, and neither is absence.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OnboardingAttemptId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdultEligibilityEvidenceCreate'
+      responses:
+        '200':
+          description: Versioned adult eligibility evaluation
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdultEligibilityEvidence'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
 
@@ -3764,6 +3997,62 @@ components:
           description: Seconds until the access token expires.
         analytics:
           $ref: '#/components/schemas/AnalyticsIdentity'
+    SpaceSignInCreate:
+      type: object
+      additionalProperties: false
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+          description: The address the account was created with.
+        password:
+          type: string
+          minLength: 8
+          maxLength: 256
+          description: >-
+            Composition is not re-checked here. The credential already exists,
+            and rejecting it would lock out an account created under an earlier
+            policy.
+    SpacePasswordResetCreate:
+      type: object
+      additionalProperties: false
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+          description: >-
+            Shape only. Whether it has an account is precisely what the response
+            must not reveal.
+    SpaceSessionRefreshCreate:
+      type: object
+      additionalProperties: false
+      required: [refreshToken]
+      properties:
+        refreshToken:
+          type: string
+          minLength: 1
+          maxLength: 4096
+    SpaceSessionRefreshed:
+      type: object
+      additionalProperties: false
+      required: [accessToken, refreshToken, expiresIn]
+      properties:
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+          description: Rotates on use — the previous value stops working.
+        expiresIn:
+          type: integer
+          minimum: 1
+      description: >-
+        Carries no analytics identity, unlike a fresh sign-in: refreshing returns
+        tokens without a subject, and the app already holds the identity it was
+        given when the session began.
     StudioRegistrationStatus:
       type: string
       enum: [complete, registration_incomplete]
@@ -3882,6 +4171,25 @@ components:
         privacy_notice_version:
           type: string
           const: privacy_notice_v1
+    SpaceOnboardingAttempt:
+      type: object
+      additionalProperties: false
+      required: [id, status, eligibility_status, expires_at]
+      properties:
+        id:
+          $ref: '#/components/schemas/UuidV7'
+        status:
+          $ref: '#/components/schemas/StudioOnboardingStatus'
+        eligibility_status:
+          $ref: '#/components/schemas/StudioEligibilityStatus'
+        expires_at:
+          type: string
+          format: date-time
+      description: >-
+        The same attempt Studio reads, without the legal versions. Space asks for
+        those acceptances on a later screen and there are no consultable texts to
+        name yet, so quoting a version here would assert something the product
+        cannot honour.
     AdultEligibilityEvidenceCreate:
       type: object
       additionalProperties: false

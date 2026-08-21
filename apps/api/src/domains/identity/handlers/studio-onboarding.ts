@@ -9,7 +9,7 @@ import { cors } from 'hono/cors'
 import { fail } from '../../../platform/http/index.js'
 import {
   StudioSessionError,
-  type StudioOnboardingService,
+  type OnboardingService,
   type StudioSessionService,
 } from '../application/index.js'
 import {
@@ -27,7 +27,7 @@ const UUID_V7 = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f
 
 export function studioOnboardingRoutes(
   injectedSessions?: StudioSessionService,
-  injectedOnboarding?: StudioOnboardingService,
+  injectedOnboarding?: OnboardingService,
 ): Hono {
   const studioOrigin = new URL(trustedStudioWebUrl()).origin
   const sessions = () => injectedSessions ?? studioSessionService()

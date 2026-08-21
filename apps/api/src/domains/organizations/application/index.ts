@@ -1,4 +1,4 @@
-import type { StudioActor } from '../../identity/index.js'
+import type { AccountActor } from '../../identity/index.js'
 import type {
   OrganizationCommand,
   OrganizationDatabase,
@@ -16,10 +16,10 @@ export class StudioOrganizationError extends Error {
 }
 
 export interface StudioOrganizationService {
-  listTypes(actor: StudioActor): ReturnType<OrganizationDatabase['listTypes']>
-  listMemberships(actor: StudioActor): ReturnType<OrganizationDatabase['listMemberships']>
+  listTypes(actor: AccountActor): ReturnType<OrganizationDatabase['listTypes']>
+  listMemberships(actor: AccountActor): ReturnType<OrganizationDatabase['listMemberships']>
   listOrganizationMemberships(
-    actor: StudioActor,
+    actor: AccountActor,
     input: {
       organizationId: string
       status?: OrganizationMembershipStatus
@@ -30,11 +30,11 @@ export interface StudioOrganizationService {
     },
   ): ReturnType<OrganizationDatabase['listOrganizationMemberships']>
   listRoleCatalog(
-    actor: StudioActor,
+    actor: AccountActor,
     organizationId: string,
   ): ReturnType<OrganizationDatabase['listRoleCatalog']>
   create(
-    actor: StudioActor,
+    actor: AccountActor,
     input: OrganizationCommand & {
       displayName: string
       typeCode: OrganizationTypeCode
@@ -42,12 +42,12 @@ export interface StudioOrganizationService {
     },
   ): ReturnType<OrganizationDatabase['create']>
   get(
-    actor: StudioActor,
+    actor: AccountActor,
     organizationId: string,
     requestId: string,
   ): ReturnType<OrganizationDatabase['get']>
   update(
-    actor: StudioActor,
+    actor: AccountActor,
     input: OrganizationCommand & {
       organizationId: string
       expectedRevision: number
@@ -59,14 +59,14 @@ export interface StudioOrganizationService {
     },
   ): ReturnType<OrganizationDatabase['update']>
   createSite(
-    actor: StudioActor,
+    actor: AccountActor,
     input: OrganizationCommand & {
       organizationId: string
       site: { name: string; address?: string | null }
     },
   ): ReturnType<OrganizationDatabase['createSite']>
   updateSite(
-    actor: StudioActor,
+    actor: AccountActor,
     input: OrganizationCommand & {
       organizationId: string
       siteId: string
@@ -75,11 +75,11 @@ export interface StudioOrganizationService {
     },
   ): ReturnType<OrganizationDatabase['updateSite']>
   transferOwnership(
-    actor: StudioActor,
+    actor: AccountActor,
     input: OrganizationCommand & { organizationId: string; targetMembershipId: string },
   ): ReturnType<OrganizationDatabase['transferOwnership']>
   grantMembershipRole(
-    actor: StudioActor,
+    actor: AccountActor,
     input: OrganizationCommand & {
       organizationId: string
       membershipId: string
@@ -91,7 +91,7 @@ export interface StudioOrganizationService {
 export function createStudioOrganizationService(
   database: OrganizationDatabase,
 ): StudioOrganizationService {
-  const personId = (actor: StudioActor) => {
+  const personId = (actor: AccountActor) => {
     if (!actor.personId) throw new StudioOrganizationError('registration-incomplete')
     return actor.personId
   }

@@ -15,11 +15,10 @@
  * the jump. Android needs `softwareKeyboardLayoutMode: "pan"` for the same
  * reason: the default resizes the window.
  *
- * Nothing authenticates. `/space/v1/auth/*` does not exist in the OpenAPI
- * contract — it is one of the repository's open items. Submitting therefore
- * shows the failure state so the compliant message can be reviewed on device;
- * it is a review stub, not a sign-in attempt, and it goes the moment the
- * endpoint exists.
+ * Only two outcomes are distinguished, and deliberately so. A refused credential
+ * and an unknown address both arrive as `unauthenticated`, because the API
+ * answers them identically; the one case worth separating is an unreachable API,
+ * where telling somebody their password is wrong would be a lie.
  */
 
 import { AmbientBackdrop } from '@allfitone/react-native/backdrop'
@@ -34,7 +33,12 @@ import { useRouter } from 'expo-router'
 import { useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
 
+import { ApiError, signIn } from '../src/client'
+import { storeSession } from '../src/client/session'
+import { PasswordResetSheet } from '../src/components/password-reset-sheet'
+
 const FAILURE = 'Correo o contraseña incorrectos'
+const UNREACHABLE = 'No pudimos conectar. Revisa tu conexión e inténtalo otra vez.'
 
 export default function SignIn() {
   const theme = useTheme()
@@ -42,9 +46,28 @@ export default function SignIn() {
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [failed, setFailed] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [failure, setFailure] = useState<string | undefined>(undefined)
+  const [resetting, setResetting] = useState(false)
 
-  const canSubmit = email.length > 0 && password.length > 0
+  const failed = failure === FAILURE
+  const canSubmit = email.length > 0 && password.length > 0 && !submitting
+
+  const submit = async () => {
+    setSubmitting(true)
+    setFailure(undefined)
+    try {
+      const session = await signIn(email.trim(), password)
+      await storeSession(session)
+      router.replace('/onboarding/age')
+    } catch (cause) {
+      setFailure(
+        cause instanceof ApiError && cause.failure === 'unavailable' ? UNREACHABLE : FAILURE,
+      )
+    } finally {
+      setSubmitting(false)
+    }
+  }
 
   return (
     <Screen edges={['top', 'bottom']}>
@@ -106,16 +129,23 @@ export default function SignIn() {
             {...(failed ? { error: '' } : {})}
           />
 
-          {failed ? <InlineAlert message={FAILURE} /> : null}
+          {failure ? <InlineAlert message={failure} /> : null}
 
           <Button
             label="Entrar"
             disabled={!canSubmit}
-            onPress={() => setFailed(true)}
+            loading={submitting}
+            onPress={() => {
+              void submit()
+            }}
             style={styles.submit}
           />
 
-          <Pressable accessibilityRole="link" style={styles.link}>
+          <Pressable
+            accessibilityRole="link"
+            onPress={() => setResetting(true)}
+            style={styles.link}
+          >
             <Text role="body" size="sm" color="secondary" align="center">
               ¿Olvidaste tu contraseña?{' '}
               <Text role="control" size="sm" color="accent">
@@ -141,6 +171,7 @@ export default function SignIn() {
           </Text>
         </Text>
       </Pressable>
+      <PasswordResetSheet visible={resetting} onDismiss={() => setResetting(false)} email={email} />
     </Screen>
   )
 }

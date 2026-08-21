@@ -1,7 +1,7 @@
 import { describe, expect, test, beforeEach } from 'bun:test'
 import { Hono } from 'hono'
 
-import type { StudioOnboardingService, StudioSessionService } from '../application/index.js'
+import type { OnboardingService, StudioSessionService } from '../application/index.js'
 import { studioOnboardingRoutes } from './studio-onboarding.js'
 
 const COMMAND_HEADERS = {
@@ -33,7 +33,7 @@ function sessions(overrides: Partial<StudioSessionService> = {}): StudioSessionS
   }
 }
 
-function onboarding(overrides: Partial<StudioOnboardingService> = {}): StudioOnboardingService {
+function onboarding(overrides: Partial<OnboardingService> = {}): OnboardingService {
   return {
     startAttempt: async () => ({
       id: '0198d000-0000-7000-8000-000000000021',
@@ -52,7 +52,7 @@ function onboarding(overrides: Partial<StudioOnboardingService> = {}): StudioOnb
 
 function app(
   sessionService: StudioSessionService = sessions(),
-  onboardingService: StudioOnboardingService = onboarding(),
+  onboardingService: OnboardingService = onboarding(),
 ) {
   const instance = new Hono()
   instance.route('/studio/v1', studioOnboardingRoutes(sessionService, onboardingService))

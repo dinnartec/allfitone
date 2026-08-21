@@ -32,10 +32,12 @@ import Constants from 'expo-constants'
 
 import type { AllfitV1Schemas } from '@allfitone/contracts'
 
+import { readJsonBody } from './response'
 import { captureSpaceApiRequest, captureSpaceTelemetry, spaceTelemetryCommon } from './telemetry'
 
 export type RegistrationAccepted = AllfitV1Schemas['SpaceRegistrationAccepted']
 export type SessionTokens = AllfitV1Schemas['SpaceSessionTokens']
+export type SessionRefreshed = AllfitV1Schemas['SpaceSessionRefreshed']
 
 export type ApiFailure =
   /** The request was malformed. Only reachable if client validation drifts. */
@@ -86,7 +88,12 @@ function timeoutSignal(ms: number): { signal: AbortSignal; done: () => void } {
 async function post<T>(
   path: string,
   body: unknown,
-  operation: 'space.auth.registration' | 'space.auth.registration_verification',
+  operation:
+    | 'space.auth.registration'
+    | 'space.auth.registration_verification'
+    | 'space.auth.session'
+    | 'space.auth.session_refresh'
+    | 'space.auth.password_reset',
 ): Promise<T> {
   const { signal, done } = timeoutSignal(TIMEOUT_MS)
   const startedAt = Date.now()
@@ -113,7 +120,7 @@ async function post<T>(
 
   if (!response.ok) throw new ApiError(failureFor(response.status))
 
-  return (await response.json()) as T
+  return (await readJsonBody<T>(response)) as T
 }
 
 function failureFor(status: number): ApiFailure {
@@ -166,4 +173,84 @@ export async function verifyRegistration(
     },
   })
   return result
+}
+
+export async function signIn(email: string, password: string): Promise<SessionTokens> {
+  const startedAt = Date.now()
+  const result = await post<SessionTokens>(
+    '/space/v1/auth/sessions',
+    { email, password },
+    'space.auth.session',
+  )
+  captureSpaceTelemetry({
+    event: 'product.flow_step.completed.v1',
+    properties: {
+      ...spaceTelemetryCommon(),
+      flow: 'space.sign_in',
+      step: 'session_issued',
+      outcome: 'success',
+      duration_ms: Date.now() - startedAt,
+    },
+  })
+  return result
+}
+
+/** Rotates the pair. A 401 here means the session is gone, not that it degraded. */
+export function refreshSession(refreshToken: string): Promise<SessionRefreshed> {
+  return post<SessionRefreshed>(
+    '/space/v1/auth/sessions/refresh',
+    { refreshToken },
+    'space.auth.session_refresh',
+  )
+}
+
+/**
+ * Authenticated POST. Command headers travel here because every authenticated
+ * command in this contract carries them.
+ */
+export async function authorizedPost<T>(
+  path: string,
+  command: { idempotencyKey: string; commandId: string },
+  body: unknown,
+  token?: string,
+): Promise<T> {
+  const { signal, done } = timeoutSignal(TIMEOUT_MS)
+  let response: Response | undefined
+  try {
+    response = await fetch(`${BASE_URL}${path}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Idempotency-Key': command.idempotencyKey,
+        'Command-Id': command.commandId,
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      signal,
+    })
+  } catch {
+    throw new ApiError('unavailable')
+  } finally {
+    done()
+  }
+
+  if (!response.ok) throw new ApiError(failureFor(response.status))
+
+  return (await readJsonBody<T>(response)) as T
+}
+
+/** Resolves for an unknown address too: the API answers 202 either way. */
+export async function requestPasswordReset(email: string): Promise<void> {
+  const startedAt = Date.now()
+  await post<null>('/space/v1/auth/password-resets', { email }, 'space.auth.password_reset')
+  captureSpaceTelemetry({
+    event: 'product.flow_step.completed.v1',
+    properties: {
+      ...spaceTelemetryCommon(),
+      flow: 'space.password_reset',
+      step: 'password_reset_requested',
+      outcome: 'success',
+      duration_ms: Date.now() - startedAt,
+    },
+  })
 }

@@ -1,6 +1,5 @@
 {
   "lockfileVersion": 1,
-  "configVersion": 0,
   "workspaces": {
     "": {
       "name": "allfitone",
@@ -65,11 +64,12 @@
       "version": "0.0.0",
       "dependencies": {
         "@allfitone/contracts": "workspace:*",
-        "@allfitone/react-native": "0.5.1",
+        "@allfitone/react-native": "0.6.0",
         "@allfitone/telemetry": "workspace:*",
         "expo": "57.0.11",
         "expo-blur": "57.0.2",
         "expo-constants": "57.0.9",
+        "expo-crypto": "^57.0.1",
         "expo-dev-client": "~57.0.10",
         "expo-font": "57.0.1",
         "expo-linear-gradient": "57.0.1",
@@ -189,7 +189,7 @@
 
     "@allfitone/react": ["@allfitone/react@0.10.0", "", { "dependencies": { "@allfitone/brand": "^0.3.0", "@allfitone/icons": "^0.2.0", "@allfitone/tokens": "^0.2.0", "@base-ui/react": "^1.6.0", "@tanstack/react-table": "^8.21.3", "class-variance-authority": "^0.7.1", "clsx": "^2.1.1", "cmdk": "^1.1.1", "date-fns": "^4.4.0", "motion": "^12.42.2", "react-day-picker": "^9.14.0", "sonner": "^2.0.7", "tailwind-merge": "^3.4.0" }, "peerDependencies": { "react": ">=19", "react-dom": ">=19" } }, "sha512-GWn70XYwQlYYFPAsNSjvLTTDAKi418cC1Hi84KEc+/RWMce4fD8eUyALhW3mrM4bFYB0c32sFHDQOPOAgOgtPg=="],
 
-    "@allfitone/react-native": ["@allfitone/react-native@0.5.1", "", { "dependencies": { "@allfitone/brand": "^0.3.0", "@allfitone/icons": "^0.2.0", "@allfitone/tokens": "^0.2.0", "@expo-google-fonts/barlow-condensed": "^0.4.0", "@expo-google-fonts/manrope": "^0.4.0", "lucide-react-native": "^1.25.0" }, "peerDependencies": { "expo-blur": ">=57", "expo-font": ">=57", "expo-linear-gradient": ">=57", "react": ">=19", "react-native": ">=0.86", "react-native-safe-area-context": ">=5", "react-native-svg": ">=15.15.5" } }, "sha512-WiXwOisDaEo+1eJz3FNu1Wyb/uSmYvP2U/tbzzM7QH0VKBLkC73Wy+OingOFhhnnaXMoyBWjGb0wxF+n8EW1gQ=="],
+    "@allfitone/react-native": ["@allfitone/react-native@0.6.0", "", { "dependencies": { "@allfitone/brand": "^0.3.0", "@allfitone/icons": "^0.2.0", "@allfitone/tokens": "^0.2.0", "@expo-google-fonts/barlow-condensed": "^0.4.0", "@expo-google-fonts/manrope": "^0.4.0", "lucide-react-native": "^1.25.0" }, "peerDependencies": { "expo-blur": ">=57", "expo-font": ">=57", "expo-linear-gradient": ">=57", "react": ">=19", "react-native": ">=0.86", "react-native-safe-area-context": ">=5", "react-native-svg": ">=15.15.5" } }, "sha512-PcGNV18C+JM/mlnWpfOZ4DRPTRdKUFCcVOsnnHGfMbgkvsjH1ONXqdjCrvQKiITDEFvjb5du4vWgzumekWEs3w=="],
 
     "@allfitone/space": ["@allfitone/space@workspace:apps/space"],
 
@@ -1082,6 +1082,8 @@
     "expo-blur": ["expo-blur@57.0.2", "", { "peerDependencies": { "expo": "*", "react": "*", "react-native": "*" } }, "sha512-Aoud8H8lmlNkbRufyvRLefmGFELdBf1n5Te/Xm+Zx8ORINH+aXL+gKb5mbftFSha860+I7pMArz77TBYz8HDVg=="],
 
     "expo-constants": ["expo-constants@57.0.9", "", { "dependencies": { "@expo/env": "~2.4.2" }, "peerDependencies": { "expo": "*", "react-native": "*" } }, "sha512-Y47sGiF+U8fwicUSPdJPjB27PuU+FgLK4Mpai0ksZF5hv8jNN3HBqKuDNxsiu70uHBKf80TaR4gwMPh0pmETiQ=="],
+
+    "expo-crypto": ["expo-crypto@57.0.1", "", { "peerDependencies": { "expo": "*" } }, "sha512-xwegXQw3ATgeL1ZuqbSNrGzOeG+zNeh6Z6DSJk825Qpa3TEQQ1kG3ioE1p3g/SNF373BAVz2iBKUTSytlIbBRA=="],
 
     "expo-dev-client": ["expo-dev-client@57.0.10", "", { "dependencies": { "expo-dev-launcher": "~57.0.10", "expo-dev-menu": "~57.0.10", "expo-dev-menu-interface": "~57.0.0", "expo-manifests": "~57.0.1", "expo-updates-interface": "~57.0.1" }, "peerDependencies": { "expo": "*" } }, "sha512-aY6PVbD1R+XwIcrOucRnB/yJfB6qVHIHqgRV6F8LwOzo7DwZaa/ixs+O2itHH7BNbUiwkS8tFjtbzJ4vDx/ulw=="],
 

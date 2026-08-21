@@ -60,6 +60,21 @@ export interface SpaceRegistrationService {
    */
   register(email: string, password: string): Promise<RegistrationAccepted>
   verify(email: string, password: string, code: string): Promise<SessionIssued>
+  /**
+   * One answer for a wrong password, an unknown address and an unverified one.
+   * HU-SP-002 criterion 2; the distinction stays inside the adapter.
+   */
+  signIn(email: string, password: string): Promise<SessionIssued>
+  /**
+   * Carries HU-SP-002 criterion 4. A rejection means signing in again, never a
+   * degraded session.
+   */
+  refresh(refreshToken: string): Promise<SessionIssued>
+  /**
+   * Resolves for an unknown address too — the adapter swallows that difference,
+   * because revealing it is what HU-SP-004 criterion 2 forbids.
+   */
+  requestPasswordReset(email: string): Promise<void>
 }
 
 export interface SpaceRegistrationDependencies {
@@ -104,6 +119,55 @@ export function createSpaceRegistrationService(
             dependencies.issuer,
             result.subject,
           ),
+        }
+      } catch (cause) {
+        throw toRegistrationError(cause)
+      }
+    },
+
+    async signIn(email, password) {
+      try {
+        const result = await measureRequestPhase('workos-refresh', () =>
+          dependencies.authProvider.authenticateWithPassword({ email, password }, 'space'),
+        )
+        return {
+          accessToken: result.tokens.accessToken,
+          refreshToken: result.tokens.refreshToken,
+          expiresIn: result.tokens.expiresIn,
+          analytics: analyticsIdentityForSurfaceFromEnvironment(
+            'space',
+            dependencies.issuer,
+            result.subject,
+          ),
+        }
+      } catch (cause) {
+        throw toRegistrationError(cause)
+      }
+    },
+
+    async requestPasswordReset(email) {
+      try {
+        // Lower-cased for the provider, which treats addresses as case-sensitive
+        // on lookup even though mail servers do not.
+        await measureRequestPhase('workos-refresh', () =>
+          dependencies.authProvider.requestPasswordReset(email.trim().toLowerCase(), 'space'),
+        )
+      } catch (cause) {
+        throw toRegistrationError(cause)
+      }
+    },
+
+    async refresh(refreshToken) {
+      try {
+        const tokens = await measureRequestPhase('workos-refresh', () =>
+          dependencies.authProvider.refresh(refreshToken, 'space'),
+        )
+        // No analytics identity here: refreshing returns tokens without a
+        // subject, and inventing one would attribute events to the wrong person.
+        return {
+          accessToken: tokens.accessToken,
+          refreshToken: tokens.refreshToken,
+          expiresIn: tokens.expiresIn,
         }
       } catch (cause) {
         throw toRegistrationError(cause)

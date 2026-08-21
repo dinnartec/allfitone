@@ -12,6 +12,9 @@ import type { components, operations, paths } from '../generated/allfit-v1.js'
 export { allfitV1ContractManifest } from '../generated/allfit-v1-manifest.js'
 export { allfitV1ContractSchemas } from '../generated/allfit-v1-schemas.js'
 
+export { newCommand, uuidV4, uuidV7 } from './commands.js'
+export type { CommandHeaders, CommandRandomness } from './commands.js'
+
 export type AllfitV1Paths = paths
 export type AllfitV1Operations = operations
 export type AllfitV1Schemas = components['schemas']

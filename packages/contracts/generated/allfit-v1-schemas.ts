@@ -3324,6 +3324,42 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  SpaceOnboardingAttempt: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['id', 'status', 'eligibility_status', 'expires_at'],
+    properties: {
+      id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      status: {
+        $ref: '#/components/schemas/StudioOnboardingStatus',
+      },
+      eligibility_status: {
+        $ref: '#/components/schemas/StudioEligibilityStatus',
+      },
+      expires_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+    },
+    description:
+      'The same attempt Studio reads, without the legal versions. Space asks for those acceptances on a later screen and there are no consultable texts to name yet, so quoting a version here would assert something the product cannot honour.',
+  },
+  SpacePasswordResetCreate: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['email'],
+    properties: {
+      email: {
+        type: 'string',
+        format: 'email',
+        maxLength: 254,
+        description:
+          'Shape only. Whether it has an account is precisely what the response must not reveal.',
+      },
+    },
+  },
   SpaceRegistrationAccepted: {
     type: 'object',
     additionalProperties: false,
@@ -3383,6 +3419,38 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  SpaceSessionRefreshCreate: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['refreshToken'],
+    properties: {
+      refreshToken: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 4096,
+      },
+    },
+  },
+  SpaceSessionRefreshed: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['accessToken', 'refreshToken', 'expiresIn'],
+    properties: {
+      accessToken: {
+        type: 'string',
+      },
+      refreshToken: {
+        type: 'string',
+        description: 'Rotates on use — the previous value stops working.',
+      },
+      expiresIn: {
+        type: 'integer',
+        minimum: 1,
+      },
+    },
+    description:
+      'Carries no analytics identity, unlike a fresh sign-in: refreshing returns tokens without a subject, and the app already holds the identity it was given when the session began.',
+  },
   SpaceSessionTokens: {
     type: 'object',
     additionalProperties: false,
@@ -3404,6 +3472,26 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
       analytics: {
         $ref: '#/components/schemas/AnalyticsIdentity',
+      },
+    },
+  },
+  SpaceSignInCreate: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['email', 'password'],
+    properties: {
+      email: {
+        type: 'string',
+        format: 'email',
+        maxLength: 254,
+        description: 'The address the account was created with.',
+      },
+      password: {
+        type: 'string',
+        minLength: 8,
+        maxLength: 256,
+        description:
+          'Composition is not re-checked here. The credential already exists, and rejecting it would lock out an account created under an earlier policy.',
       },
     },
   },

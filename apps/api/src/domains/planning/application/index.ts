@@ -1,4 +1,4 @@
-import type { StudioActor } from '../../identity/index.js'
+import type { AccountActor } from '../../identity/index.js'
 import type { PlanningDatabase } from '../domain/index.js'
 
 export class StudioPlanningError extends Error {
@@ -12,59 +12,59 @@ export interface StudioPlanningService {
   createSessionTemplate: PlanningDatabase['createSessionTemplate'] extends (
     input: infer I,
   ) => infer R
-    ? (actor: StudioActor, input: Omit<I, 'personId'>) => R
+    ? (actor: AccountActor, input: Omit<I, 'personId'>) => R
     : never
   replaceSessionTemplateDraft: PlanningDatabase['replaceSessionTemplateDraft'] extends (
     input: infer I,
   ) => infer R
-    ? (actor: StudioActor, input: Omit<I, 'personId'>) => R
+    ? (actor: AccountActor, input: Omit<I, 'personId'>) => R
     : never
   publishSessionTemplateVersion: PlanningDatabase['publishSessionTemplateVersion'] extends (
     input: infer I,
   ) => infer R
-    ? (actor: StudioActor, input: Omit<I, 'personId'>) => R
+    ? (actor: AccountActor, input: Omit<I, 'personId'>) => R
     : never
   deriveSessionTemplateVersion: PlanningDatabase['deriveSessionTemplateVersion'] extends (
     input: infer I,
   ) => infer R
-    ? (actor: StudioActor, input: Omit<I, 'personId'>) => R
+    ? (actor: AccountActor, input: Omit<I, 'personId'>) => R
     : never
   deprecateSessionTemplateVersion: PlanningDatabase['deprecateSessionTemplateVersion'] extends (
     input: infer I,
   ) => infer R
-    ? (actor: StudioActor, input: Omit<I, 'personId'>) => R
+    ? (actor: AccountActor, input: Omit<I, 'personId'>) => R
     : never
   createProgram: PlanningDatabase['createProgram'] extends (input: infer I) => infer R
-    ? (actor: StudioActor, input: Omit<I, 'personId'>) => R
+    ? (actor: AccountActor, input: Omit<I, 'personId'>) => R
     : never
   replaceProgramDraft: PlanningDatabase['replaceProgramDraft'] extends (input: infer I) => infer R
-    ? (actor: StudioActor, input: Omit<I, 'personId'>) => R
+    ? (actor: AccountActor, input: Omit<I, 'personId'>) => R
     : never
   publishProgramVersion: PlanningDatabase['publishProgramVersion'] extends (
     input: infer I,
   ) => infer R
-    ? (actor: StudioActor, input: Omit<I, 'personId'>) => R
+    ? (actor: AccountActor, input: Omit<I, 'personId'>) => R
     : never
   deprecateProgramVersion: PlanningDatabase['deprecateProgramVersion'] extends (
     input: infer I,
   ) => infer R
-    ? (actor: StudioActor, input: Omit<I, 'personId'>) => R
+    ? (actor: AccountActor, input: Omit<I, 'personId'>) => R
     : never
   listSessionTemplates: PlanningDatabase['listSessionTemplates'] extends (input: infer I) => infer R
-    ? (actor: StudioActor, input: Omit<I, 'personId'>) => R
+    ? (actor: AccountActor, input: Omit<I, 'personId'>) => R
     : never
   listPrograms: PlanningDatabase['listPrograms'] extends (input: infer I) => infer R
-    ? (actor: StudioActor, input: Omit<I, 'personId'>) => R
+    ? (actor: AccountActor, input: Omit<I, 'personId'>) => R
     : never
   readSessionTemplateVersion: PlanningDatabase['readSessionTemplateVersion'] extends (
     input: infer I,
   ) => infer R
-    ? (actor: StudioActor, input: Omit<I, 'personId'>) => R
+    ? (actor: AccountActor, input: Omit<I, 'personId'>) => R
     : never
 }
 
 export function createStudioPlanningService(database: PlanningDatabase): StudioPlanningService {
-  const personId = (actor: StudioActor): string => {
+  const personId = (actor: AccountActor): string => {
     if (!actor.personId) throw new StudioPlanningError('registration-incomplete')
     return actor.personId
   }

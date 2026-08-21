@@ -26,6 +26,9 @@ function appWith(overrides: Partial<SpaceRegistrationService> = {}): Hono {
   const service: SpaceRegistrationService = {
     register: async () => ({ expiresAt: EXPIRES_AT }),
     verify: async () => ({ accessToken: 'at_1', refreshToken: 'rt_1', expiresIn: 300 }),
+    signIn: async () => ({ accessToken: 'at_1', refreshToken: 'rt_1', expiresIn: 300 }),
+    refresh: async () => ({ accessToken: 'at_2', refreshToken: 'rt_2', expiresIn: 300 }),
+    requestPasswordReset: async () => undefined,
     ...overrides,
   }
   const app = new Hono()
@@ -249,5 +252,184 @@ describe('POST /space/v1/auth/registrations/verification', () => {
   test('is never cached', async () => {
     const response = await post(appWith(), path, { email: EMAIL, password: PASSWORD, code: CODE })
     expect(response.headers.get('Cache-Control')).toBe('no-store')
+  })
+})
+
+describe('POST /space/v1/auth/sessions', () => {
+  const path = '/space/v1/auth/sessions'
+
+  test('issues a session for valid credentials', async () => {
+    const response = await post(appWith(), path, { email: EMAIL, password: PASSWORD })
+
+    expect(response.status).toBe(200)
+    // `analytics` is required by the contract, so the handler fills it in when
+    // the service has no subject to derive one from.
+    expect(await response.json()).toEqual({
+      accessToken: 'at_1',
+      refreshToken: 'rt_1',
+      expiresIn: 300,
+      analytics: { distinct_id: null },
+    })
+  })
+
+  test('answers a wrong password and an unknown address identically', async () => {
+    // HU-SP-002 criterion 2. Compared whole, because a difference that does not
+    // show in the status can still show in the body or a header.
+    const app = appWith({
+      signIn: async () => {
+        throw new RegistrationError('unauthenticated')
+      },
+    })
+
+    const wrongPassword = await fingerprint(
+      await post(app, path, { email: EMAIL, password: PASSWORD }),
+    )
+    const unknownAddress = await fingerprint(
+      await post(app, path, { email: 'nadie@dinnartec.co', password: PASSWORD }),
+    )
+
+    expect(wrongPassword.status).toBe(401)
+    expect(unknownAddress).toEqual(wrongPassword)
+  })
+
+  test('carries no detail explaining why it failed', async () => {
+    const app = appWith({
+      signIn: async () => {
+        throw new RegistrationError('unauthenticated')
+      },
+    })
+
+    const body = await (await post(app, path, { email: EMAIL, password: PASSWORD })).text()
+
+    for (const leak of ['password', 'email', 'contraseña', 'correo', 'verified']) {
+      expect(body.toLowerCase()).not.toContain(leak)
+    }
+  })
+
+  test('rejects a malformed body before reaching the provider', async () => {
+    let called = false
+    const app = appWith({
+      signIn: async () => {
+        called = true
+        return { accessToken: 'at_1', refreshToken: 'rt_1', expiresIn: 300 }
+      },
+    })
+
+    for (const body of [
+      {},
+      { email: EMAIL },
+      { password: PASSWORD },
+      { email: 'sin-arroba', password: PASSWORD },
+    ]) {
+      expect((await post(app, path, body)).status).toBe(400)
+    }
+    expect(called).toBe(false)
+  })
+
+  test('is never cached', async () => {
+    const response = await post(appWith(), path, { email: EMAIL, password: PASSWORD })
+    expect(response.headers.get('Cache-Control')).toBe('no-store')
+  })
+})
+
+describe('POST /space/v1/auth/sessions/refresh', () => {
+  const path = '/space/v1/auth/sessions/refresh'
+
+  test('returns a rotated pair without an analytics identity', async () => {
+    const response = await post(appWith(), path, { refreshToken: 'rt_1' })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({
+      accessToken: 'at_2',
+      refreshToken: 'rt_2',
+      expiresIn: 300,
+    })
+  })
+
+  test('a rejected token is 401, so the app signs in again instead of degrading', async () => {
+    const app = appWith({
+      refresh: async () => {
+        throw new RegistrationError('unauthenticated')
+      },
+    })
+
+    expect((await post(app, path, { refreshToken: 'rt_stale' })).status).toBe(401)
+  })
+
+  test('an outage is 503, which must not clear the stored session', async () => {
+    const app = appWith({
+      refresh: async () => {
+        throw new RegistrationError('upstream-unavailable')
+      },
+    })
+
+    expect((await post(app, path, { refreshToken: 'rt_1' })).status).toBe(503)
+  })
+
+  test('rejects an empty or missing token before reaching the provider', async () => {
+    let called = false
+    const app = appWith({
+      refresh: async () => {
+        called = true
+        return { accessToken: 'at_2', refreshToken: 'rt_2', expiresIn: 300 }
+      },
+    })
+
+    for (const body of [{}, { refreshToken: '' }, { refreshToken: 42 }]) {
+      expect((await post(app, path, body)).status).toBe(400)
+    }
+    expect(called).toBe(false)
+  })
+})
+
+describe('POST /space/v1/auth/password-resets', () => {
+  const path = '/space/v1/auth/password-resets'
+
+  test('accepts the request with 202 and an empty body', async () => {
+    const response = await post(appWith(), path, { email: EMAIL })
+
+    expect(response.status).toBe(202)
+    expect(await response.text()).toBe('')
+  })
+
+  test('answers a known address, an unknown one and an outage identically', async () => {
+    // HU-SP-004 criterion 2, and the reason the handler swallows the failure:
+    // an outage that answered differently would leak the same fact.
+    const working = appWith()
+    const failing = appWith({
+      requestPasswordReset: async () => {
+        throw new RegistrationError('upstream-unavailable')
+      },
+    })
+
+    const known = await fingerprint(await post(working, path, { email: EMAIL }))
+    const unknown = await fingerprint(await post(working, path, { email: 'nadie@dinnartec.co' }))
+    const down = await fingerprint(await post(failing, path, { email: EMAIL }))
+
+    expect(known.status).toBe(202)
+    expect(unknown).toEqual(known)
+    expect(down).toEqual(known)
+  })
+
+  test('rejects a malformed address before reaching the provider', async () => {
+    let called = false
+    const app = appWith({
+      requestPasswordReset: async () => {
+        called = true
+      },
+    })
+
+    for (const body of [{}, { email: '' }, { email: 'sin-arroba' }, { email: 42 }]) {
+      expect((await post(app, path, body)).status).toBe(400)
+    }
+    expect(called).toBe(false)
+  })
+
+  test('is never cached, on either path', async () => {
+    const accepted = await post(appWith(), path, { email: EMAIL })
+    const rejected = await post(appWith(), path, { email: 'nope' })
+
+    expect(accepted.headers.get('Cache-Control')).toBe('no-store')
+    expect(rejected.headers.get('Cache-Control')).toBe('no-store')
   })
 })

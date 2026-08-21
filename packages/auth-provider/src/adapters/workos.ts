@@ -17,6 +17,22 @@
  * which is consistent with everything else here: the provider states a fact, and
  * PostgreSQL owns it. Backoffice authority checks then read our record inside
  * the transaction, not a claim.
+ *
+ * ON TRANSLATING ERRORS
+ * The provider's structured error code is the signal; its prose is not. That
+ * lesson cost four separate bugs, all the same shape: something whose message or
+ * code contained the word "email" was treated as a statement about the address.
+ * A duplicate registration, a mistyped verification code, a throttled attempt and
+ * an unverified account each landed in the address branch, and each answered a
+ * status that told a caller something the design goes to lengths to hide.
+ *
+ * Hence the order in `translate`. Verification codes are checked first, then any
+ * outright refusal — 401 or 403 — and only after those does a code mentioning
+ * "email" mean the address itself. The last of those bugs was found against the
+ * live API: an unverified account is refused with 403 and a code containing
+ * "email", so it answered 400 while an unknown address answered 401, which let a
+ * caller tell registered addresses apart. HU-SP-002 criterion 2 forbids exactly
+ * that.
  */
 
 import {
@@ -533,6 +549,11 @@ function translate(cause: unknown): AuthError {
   // mistyped code came back as a malformed email and answered 400 instead of
   // 401 — telling the person to fix an address that was never wrong.
   if (codes.some((code) => code.includes('verification_code'))) {
+    return new AuthError('invalid_credentials', trace)
+  }
+  // A refusal is never a statement about the shape of the address. See the
+  // header note on translating errors.
+  if (status === 401 || status === 403) {
     return new AuthError('invalid_credentials', trace)
   }
   if (codes.some((code) => code.includes('email'))) {

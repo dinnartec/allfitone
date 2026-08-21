@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "./tsconfig.json",
+  // Tests are excluded from the app config on purpose: `bun` globals do not
+  // exist on Hermes, and offering them app-wide would let `Bun.file()` typecheck
+  // in a screen and crash on device. They still have to be typechecked, so they
+  // get their own project where those globals are real.
+  "compilerOptions": {
+    "types": ["bun", "expo/types"]
+  },
+  "include": ["src/**/*.test.ts", "src/**/*.test.tsx"],
+  "exclude": ["node_modules"]
+}

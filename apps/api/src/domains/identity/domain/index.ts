@@ -34,13 +34,14 @@ export interface ActorRegistration {
   personStatus?: 'active' | 'closed'
 }
 
-export interface StudioActor {
+/** The access account, and the person behind it once activated. Every surface. */
+export interface AccountActor {
   accountId: string
   personId?: string
 }
 
 export interface StudioAccountIdentity {
-  actor: StudioActor
+  actor: AccountActor
   identity: AuthenticatedIdentity
   /** Optional only for injected test seams; production session resolution always sets it. */
   analytics?: AnalyticsIdentity
