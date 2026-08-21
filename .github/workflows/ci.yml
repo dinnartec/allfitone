@@ -9,10 +9,15 @@
 
 name: CI
 
+# Pull requests only. GitHub checks the merge preview, so a run on main after
+# the merge validates a tree that was already green, and nothing here depends on
+# a CI result for a main commit — `Deploy database` is dispatched by hand.
+#
+# The trade-off is real: two pull requests that pass alone can break together.
+# Requiring branches to be up to date before merging closes that, and costs
+# nothing. Restore `push: branches: [main]` if this ever bites.
 on:
   pull_request:
-  push:
-    branches: [main]
 
 # A superseded run tells you nothing. Cancel it and save the minutes.
 concurrency:
@@ -20,6 +25,50 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Decides which of the heavy jobs this change actually needs. Roughly twenty
+  # seconds of Linux that can save fifteen minutes of Supabase and Playwright.
+  scope:
+    name: Scope
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      database: ${{ steps.changed.outputs.database }}
+      studio: ${{ steps.changed.outputs.studio }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: changed
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          # A push whose before-sha is unknown — a new branch, or a force push —
+          # cannot be diffed, so everything runs rather than silently skipping.
+          if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ] \
+             || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            echo "database=true" >> "$GITHUB_OUTPUT"
+            echo "studio=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          FILES=$(git diff --name-only "$BASE" "${{ github.sha }}")
+          echo "$FILES"
+
+          database=false
+          studio=false
+
+          # The workflow itself counts: a change to these rules has to prove it.
+          if echo "$FILES" | grep -qE '^(packages/db/|packages/contracts/|\.github/workflows/|package\.json|bun\.lock|turbo\.json)'; then
+            database=true
+          fi
+          if echo "$FILES" | grep -qE '^(apps/studio-web/|packages/telemetry/|packages/contracts/|\.github/workflows/|package\.json|bun\.lock)'; then
+            studio=true
+          fi
+
+          echo "database=$database" >> "$GITHUB_OUTPUT"
+          echo "studio=$studio" >> "$GITHUB_OUTPUT"
+
   verify:
     name: Verify
     runs-on: ubuntu-latest
@@ -78,6 +127,8 @@ jobs:
 
   database:
     name: Database
+    needs: scope
+    if: needs.scope.outputs.database == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -122,6 +173,8 @@ jobs:
 
   studio-e2e:
     name: Studio E2E
+    needs: scope
+    if: needs.scope.outputs.studio == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -137,6 +190,14 @@ jobs:
 
       - name: Build Studio workspace dependencies
         run: bun run --cwd packages/telemetry build
+
+      # Downloading the browser on every run costs more than storing it.
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('bun.lock') }}
 
       - name: Install Chromium
         run: bunx playwright install --with-deps chromium
