@@ -13,7 +13,7 @@
 
 import { describe, expect, test } from 'bun:test'
 
-import { resolveEntryRoute } from './session-gate'
+import { resolveEntryRoute, resolveOnboardingRoute } from './session-gate'
 
 describe('resolveEntryRoute', () => {
   test('sends somebody with no session to the welcome screen', () => {
@@ -41,5 +41,33 @@ describe('resolveEntryRoute', () => {
         unreachable: true,
       }),
     ).toBe('/onboarding/age')
+  })
+})
+
+describe('resolveOnboardingRoute', () => {
+  test('sends a session with no attempt to the first step', () => {
+    expect(resolveOnboardingRoute({ attempt: null })).toBe('/onboarding/age')
+  })
+
+  test('keeps a pending declaration on the first step', () => {
+    expect(resolveOnboardingRoute({ attempt: { eligibility_status: 'pending' } })).toBe(
+      '/onboarding/age',
+    )
+  })
+
+  test('never walks past a refusal, because a fail is not eligibility', () => {
+    expect(resolveOnboardingRoute({ attempt: { eligibility_status: 'fail' } })).toBe(
+      '/onboarding/age',
+    )
+  })
+
+  test('moves on once the declaration passed', () => {
+    expect(resolveOnboardingRoute({ attempt: { eligibility_status: 'pass' } })).toBe(
+      '/onboarding/identity',
+    )
+  })
+
+  test('treats an unreadable answer as the first step rather than guessing forward', () => {
+    expect(resolveOnboardingRoute(null)).toBe('/onboarding/age')
   })
 })

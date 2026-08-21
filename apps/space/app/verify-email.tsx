@@ -77,11 +77,8 @@ export default function VerifyEmail() {
     setFailure(undefined)
     try {
       const session = await verifyRegistration(email, password, code)
-      await storeSession(session)
-      // Onboarding has no screen yet. Landing on the welcome screen with a
-      // session is wrong, but inventing a destination would be worse — the next
-      // slice replaces this line.
-      router.replace('/welcome')
+      await storeSession({ ...session, email })
+      router.replace('/onboarding/age')
     } catch (cause) {
       setFailure(
         cause instanceof ApiError && cause.failure === 'unavailable'
