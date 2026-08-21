@@ -14,6 +14,7 @@ import type {
   IdentityInvitationDatabase,
   BackofficeAuthenticationDatabase,
   BackofficeAttemptSecret,
+  OnboardingAttempt,
   ProfessionalCredential,
   ProfessionalProfile,
   StudioProfessionalContext,
@@ -238,6 +239,85 @@ export function createIdentityOnboardingDatabase(): IdentityOnboardingDatabase {
         `
         if (!row) throw new Error('PostgreSQL did not record eligibility evidence')
         return { result: row.result, evaluatedAt: new Date(row.evaluated_at) }
+      })
+    },
+
+    async recordOnboardingIdentity(input) {
+      return sql.begin(async (transaction) => {
+        await setAccountActor(transaction, input.accountId)
+        // A taken handle surfaces as SQLSTATE 23505 and the handler maps it to
+        // conflict, the same way its siblings do. Nothing is translated here.
+        const [row] = await transaction<
+          { given_name: string; family_name: string; username: string }[]
+        >`
+          select * from identity.record_onboarding_identity(
+            ${input.accountId}::uuid,
+            ${input.attemptId}::uuid,
+            ${input.givenName},
+            ${input.familyName},
+            ${input.username},
+            ${input.idempotencyKey}::uuid,
+            ${input.commandId}::uuid,
+            ${input.requestHash}
+          )
+        `
+        if (!row) throw new Error('PostgreSQL did not record the onboarding identity')
+        return { givenName: row.given_name, familyName: row.family_name, username: row.username }
+      })
+    },
+
+    async readCurrentAttempt(accountId) {
+      return sql.begin(async (transaction) => {
+        await setAccountActor(transaction, accountId)
+        const [row] = await transaction<
+          {
+            id: string
+            status: OnboardingAttempt['status']
+            eligibility_status: OnboardingAttempt['eligibilityStatus']
+            expires_at: Date
+            given_name: string | null
+            family_name: string | null
+            username: string | null
+          }[]
+        >`
+          select attempt.id,
+                 attempt.status::text as status,
+                 coalesce(evidence.result::text, 'pending') as eligibility_status,
+                 attempt.expires_at,
+                 attempt.given_name,
+                 attempt.family_name,
+                 attempt.username::text as username
+          from identity.onboarding_attempts as attempt
+          left join lateral (
+            select evidence.result
+            from identity.eligibility_evidence as evidence
+            where evidence.onboarding_attempt_id = attempt.id
+            order by evidence.evaluated_at desc, evidence.id desc
+            limit 1
+          ) as evidence on true
+          where attempt.account_id = ${accountId}::uuid
+            and attempt.status = 'open'
+            and attempt.expires_at > clock_timestamp()
+        `
+        // No open attempt is an answer, not a failure: it is also what an
+        // already activated person sees.
+        if (!row) return { attempt: null, identity: null }
+        return {
+          attempt: {
+            id: row.id,
+            status: row.status,
+            eligibilityStatus: row.eligibility_status,
+            expiresAt: new Date(row.expires_at),
+          },
+          identity:
+            row.given_name && row.family_name && row.username
+              ? {
+                  givenName: row.given_name,
+                  familyName: row.family_name,
+                  username: row.username,
+                }
+              : null,
+        }
       })
     },
 

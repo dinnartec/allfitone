@@ -59,6 +59,21 @@ export interface AdultEligibilityEvidence {
   evaluatedAt: Date
 }
 
+/**
+ * Declared during the onboarding and held on the attempt until activation reads
+ * it. There is no person to hang it on yet.
+ */
+export interface OnboardingIdentity {
+  givenName: string
+  familyName: string
+  username: string
+}
+
+export interface CurrentOnboardingAttempt {
+  attempt: OnboardingAttempt | null
+  identity: OnboardingIdentity | null
+}
+
 export interface IdentityOnboardingDatabase {
   startAttempt(
     input: CommandContext & { accountId: string; invitationTokenHash?: Uint8Array },
@@ -66,6 +81,10 @@ export interface IdentityOnboardingDatabase {
   recordAdultEligibility(
     input: CommandContext & { accountId: string; attemptId: string; declaredAdult: boolean },
   ): Promise<AdultEligibilityEvidence>
+  recordOnboardingIdentity(
+    input: CommandContext & { accountId: string; attemptId: string } & OnboardingIdentity,
+  ): Promise<OnboardingIdentity>
+  readCurrentAttempt(accountId: string): Promise<CurrentOnboardingAttempt>
   activatePerson(
     input: CommandContext & {
       accountId: string

@@ -40,6 +40,12 @@ function appWith(overrides: Partial<SpaceOnboardingService> = {}): Hono {
   const service: SpaceOnboardingService = {
     startAttempt: async () => ATTEMPT,
     recordAdultEligibility: async () => EVIDENCE,
+    recordIdentity: async (_token, input) => ({
+      givenName: input.givenName,
+      familyName: input.familyName,
+      username: input.username,
+    }),
+    readCurrentAttempt: async () => ({ attempt: ATTEMPT, identity: null }),
     ...overrides,
   }
   const app = new Hono()
@@ -86,7 +92,16 @@ describe('POST /space/v1/onboarding-attempts', () => {
     app.route(
       '/space/v1',
       spaceOnboardingRoutes(
-        { startAttempt: async () => ATTEMPT, recordAdultEligibility: async () => EVIDENCE },
+        {
+          startAttempt: async () => ATTEMPT,
+          recordAdultEligibility: async () => EVIDENCE,
+          recordIdentity: async (_token, input) => ({
+            givenName: input.givenName,
+            familyName: input.familyName,
+            username: input.username,
+          }),
+          readCurrentAttempt: async () => ({ attempt: ATTEMPT, identity: null }),
+        },
         async () => {
           throw new Error('token rejected')
         },
@@ -179,5 +194,196 @@ describe('POST /space/v1/onboarding-attempts/{id}/eligibility-evidence', () => {
     )
 
     expect(response.status).toBe(400)
+  })
+})
+
+describe('POST /space/v1/onboarding-attempts/{id}/identity', () => {
+  const path = `/space/v1/onboarding-attempts/${ATTEMPT_ID}/identity`
+  const IDENTITY = { given_name: 'Ada', family_name: 'Lovelace', username: 'ada_lovelace' }
+
+  test('records the declared identity and returns what is now staged', async () => {
+    const response = await post(appWith(), path, { body: IDENTITY })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual(IDENTITY)
+  })
+
+  test('trims the name, so a stray space is not part of it', async () => {
+    const seen: string[] = []
+    const app = appWith({
+      recordIdentity: async (_token, input) => {
+        seen.push(input.givenName, input.familyName)
+        return {
+          givenName: input.givenName,
+          familyName: input.familyName,
+          username: input.username,
+        }
+      },
+    })
+
+    await post(app, path, { body: { ...IDENTITY, given_name: '  Ada  ' } })
+
+    expect(seen).toEqual(['Ada', 'Lovelace'])
+  })
+
+  test('refuses a body that is not exactly the three declared fields', async () => {
+    let called = false
+    const app = appWith({
+      recordIdentity: async () => {
+        called = true
+        return { givenName: 'Ada', familyName: 'Lovelace', username: 'ada_lovelace' }
+      },
+    })
+
+    const bodies = [
+      {},
+      { given_name: 'Ada', family_name: 'Lovelace' },
+      { ...IDENTITY, email: 'ada@example.test' },
+      { ...IDENTITY, given_name: '' },
+      { ...IDENTITY, given_name: '   ' },
+      { ...IDENTITY, family_name: 42 },
+      { ...IDENTITY, given_name: 'A'.repeat(121) },
+    ]
+    for (const body of bodies) {
+      expect((await post(app, path, { body })).status).toBe(400)
+    }
+    expect(called).toBe(false)
+  })
+
+  test('refuses a malformed username before it can burn an idempotency key', async () => {
+    let called = false
+    const app = appWith({
+      recordIdentity: async () => {
+        called = true
+        return { givenName: 'Ada', familyName: 'Lovelace', username: 'ada_lovelace' }
+      },
+    })
+
+    const usernames = ['Ada', 'ad', '1ada', 'ada lovelace', 'ada-lovelace', 'a'.repeat(31), '']
+    for (const username of usernames) {
+      expect((await post(app, path, { body: { ...IDENTITY, username } })).status).toBe(400)
+    }
+    expect(called).toBe(false)
+  })
+
+  test('answers conflict when the handle is already reserved', async () => {
+    const app = appWith({
+      recordIdentity: async () => {
+        // What PostgreSQL raises on the primary key of identity.usernames.
+        throw Object.assign(new Error('duplicate key'), { code: '23505' })
+      },
+    })
+
+    expect((await post(app, path, { body: IDENTITY })).status).toBe(409)
+  })
+
+  test('refuses a request with no bearer token', async () => {
+    const app = new Hono()
+    app.route(
+      '/space/v1',
+      spaceOnboardingRoutes(undefined, async () => {
+        throw new Error('token rejected')
+      }),
+    )
+
+    expect((await post(app, path, { body: IDENTITY })).status).toBe(401)
+  })
+
+  test('refuses malformed command headers before touching the service', async () => {
+    let called = false
+    const app = appWith({
+      recordIdentity: async () => {
+        called = true
+        return { givenName: 'Ada', familyName: 'Lovelace', username: 'ada_lovelace' }
+      },
+    })
+
+    const response = await post(app, path, {
+      headers: { 'idempotency-key': COMMAND_ID },
+      body: IDENTITY,
+    })
+
+    expect(response.status).toBe(400)
+    expect(called).toBe(false)
+  })
+
+  test('rejects an attempt id that is not a UUIDv7', async () => {
+    const response = await post(appWith(), '/space/v1/onboarding-attempts/nope/identity', {
+      body: IDENTITY,
+    })
+
+    expect(response.status).toBe(400)
+  })
+
+  test('is never cached', async () => {
+    const response = await post(appWith(), path, { body: IDENTITY })
+
+    expect(response.headers.get('Cache-Control')).toBe('no-store')
+  })
+})
+
+describe('GET /space/v1/onboarding-attempts/current', () => {
+  const path = '/space/v1/onboarding-attempts/current'
+
+  function get(app: Hono, headers: Record<string, string> = {}) {
+    return app.request(path, {
+      method: 'GET',
+      headers: { authorization: 'Bearer token_1', ...headers },
+    })
+  }
+
+  test('returns the open attempt and whatever identity was already declared', async () => {
+    const app = appWith({
+      readCurrentAttempt: async () => ({
+        attempt: ATTEMPT,
+        identity: { givenName: 'Ada', familyName: 'Lovelace', username: 'ada_lovelace' },
+      }),
+    })
+
+    const response = await get(app)
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({
+      attempt: {
+        id: ATTEMPT_ID,
+        status: 'open',
+        eligibility_status: 'pending',
+        expires_at: EXPIRES_AT.toISOString(),
+      },
+      identity: { given_name: 'Ada', family_name: 'Lovelace', username: 'ada_lovelace' },
+    })
+  })
+
+  test('answers nulls rather than an error when nothing was started', async () => {
+    const app = appWith({
+      readCurrentAttempt: async () => ({ attempt: null, identity: null }),
+    })
+
+    const response = await get(app)
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ attempt: null, identity: null })
+  })
+
+  test('reports a declared attempt with no name yet as identity null', async () => {
+    const response = await get(appWith())
+
+    expect(await response.json()).toMatchObject({ identity: null })
+  })
+
+  test('refuses a request with no bearer token', async () => {
+    const app = new Hono()
+    app.route(
+      '/space/v1',
+      spaceOnboardingRoutes(undefined, async () => {
+        throw new Error('token rejected')
+      }),
+    )
+
+    expect((await get(app)).status).toBe(401)
+  })
+
+  test('is never cached', async () => {
+    expect((await get(appWith())).headers.get('Cache-Control')).toBe('no-store')
   })
 })

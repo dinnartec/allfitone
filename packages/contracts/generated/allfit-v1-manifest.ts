@@ -189,6 +189,20 @@ export const allfitV1ContractManifest = {
     },
     {
       method: 'POST',
+      path: '/space/v1/onboarding-attempts/{attemptId}/identity',
+      operationId: 'recordSpaceOnboardingIdentity',
+      allfitOperation: 'OP-IDN-043',
+      responses: ['200', '400', '401', '403', '409', '503'],
+    },
+    {
+      method: 'GET',
+      path: '/space/v1/onboarding-attempts/current',
+      operationId: 'getSpaceCurrentOnboardingAttempt',
+      allfitOperation: 'OP-IDN-044',
+      responses: ['200', '401', '503'],
+    },
+    {
+      method: 'POST',
       path: '/space/v1/planned-sessions/{plannedSessionId}/attempts',
       operationId: 'startPlannedSessionAttempt',
       allfitOperation: 'OP-EXE-001',

@@ -45,6 +45,12 @@ function onboarding(overrides: Partial<OnboardingService> = {}): OnboardingServi
       result: 'pass',
       evaluatedAt: new Date('2026-08-09T12:00:00.000Z'),
     }),
+    recordIdentity: async (_actor, input) => ({
+      givenName: input.givenName,
+      familyName: input.familyName,
+      username: input.username,
+    }),
+    readCurrentAttempt: async () => ({ attempt: null, identity: null }),
     complete: async () => '0198d000-0000-7000-8000-000000000031',
     ...overrides,
   }

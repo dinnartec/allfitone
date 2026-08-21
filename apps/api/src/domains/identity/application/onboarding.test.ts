@@ -50,6 +50,14 @@ function serviceWith(overrides: Partial<OnboardingService> = {}) {
       actors.push(actor.accountId)
       return EVIDENCE
     },
+    recordIdentity: async (actor, input) => {
+      actors.push(actor.accountId)
+      return { givenName: input.givenName, familyName: input.familyName, username: input.username }
+    },
+    readCurrentAttempt: async (actor) => {
+      actors.push(actor.accountId)
+      return { attempt: ATTEMPT, identity: null }
+    },
     complete: async () => 'person_01',
     ...overrides,
   }
