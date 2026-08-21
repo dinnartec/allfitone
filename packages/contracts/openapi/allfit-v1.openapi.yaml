@@ -358,7 +358,7 @@ paths:
     post:
       tags: [Space Identity]
       operationId: startSpaceRegistration
-      x-allfit-operation: OP-IDN-029
+      x-allfit-operation: OP-IDN-038
       x-allfit-cache: no-store
       summary: Create an account and send an email verification code
       description: >-
@@ -419,7 +419,7 @@ paths:
     post:
       tags: [Space Identity]
       operationId: verifySpaceRegistration
-      x-allfit-operation: OP-IDN-030
+      x-allfit-operation: OP-IDN-039
       x-allfit-cache: no-store
       summary: Verify the email code and issue the first session
       description: >-
@@ -485,7 +485,7 @@ paths:
     post:
       tags: [Space Identity]
       operationId: signInToSpace
-      x-allfit-operation: OP-IDN-031
+      x-allfit-operation: OP-IDN-040
       x-allfit-cache: no-store
       summary: Sign in with email and password
       description: >-
@@ -540,7 +540,7 @@ paths:
     post:
       tags: [Space Identity]
       operationId: refreshSpaceSession
-      x-allfit-operation: OP-IDN-032
+      x-allfit-operation: OP-IDN-041
       x-allfit-cache: no-store
       summary: Exchange a refresh token for a new session
       description: >-
@@ -587,7 +587,7 @@ paths:
     post:
       tags: [Space Identity]
       operationId: requestSpacePasswordReset
-      x-allfit-operation: OP-IDN-033
+      x-allfit-operation: OP-IDN-042
       x-allfit-cache: no-store
       summary: Ask for a password reset link
       description: >-
