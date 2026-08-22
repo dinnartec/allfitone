@@ -797,8 +797,6 @@ export type Database = {
           account_id: string
           created_at: string
           expires_at: string
-          family_name: string | null
-          given_name: string | null
           id: string
           invitation_token_hash: string | null
           person_id: string | null
@@ -808,14 +806,11 @@ export type Database = {
           terms_accepted_at: string | null
           terms_version: string | null
           updated_at: string
-          username: string | null
         }
         Insert: {
           account_id: string
           created_at?: string
           expires_at: string
-          family_name?: string | null
-          given_name?: string | null
           id?: string
           invitation_token_hash?: string | null
           person_id?: string | null
@@ -825,14 +820,11 @@ export type Database = {
           terms_accepted_at?: string | null
           terms_version?: string | null
           updated_at?: string
-          username?: string | null
         }
         Update: {
           account_id?: string
           created_at?: string
           expires_at?: string
-          family_name?: string | null
-          given_name?: string | null
           id?: string
           invitation_token_hash?: string | null
           person_id?: string | null
@@ -842,7 +834,6 @@ export type Database = {
           terms_accepted_at?: string | null
           terms_version?: string | null
           updated_at?: string
-          username?: string | null
         }
         Relationships: [
           {
@@ -910,7 +901,7 @@ export type Database = {
       }
       people: {
         Row: {
-          activated_at: string
+          activated_at: string | null
           contact_email: string | null
           contact_email_verified_at: string | null
           contact_phone: string | null
@@ -922,9 +913,10 @@ export type Database = {
           id: string
           status: Database['identity']['Enums']['person_status']
           updated_at: string
+          username: string | null
         }
         Insert: {
-          activated_at?: string
+          activated_at?: string | null
           contact_email?: string | null
           contact_email_verified_at?: string | null
           contact_phone?: string | null
@@ -936,9 +928,10 @@ export type Database = {
           id?: string
           status?: Database['identity']['Enums']['person_status']
           updated_at?: string
+          username?: string | null
         }
         Update: {
-          activated_at?: string
+          activated_at?: string | null
           contact_email?: string | null
           contact_email_verified_at?: string | null
           contact_phone?: string | null
@@ -950,6 +943,7 @@ export type Database = {
           id?: string
           status?: Database['identity']['Enums']['person_status']
           updated_at?: string
+          username?: string | null
         }
         Relationships: []
       }
@@ -1165,42 +1159,6 @@ export type Database = {
           },
         ]
       }
-      usernames: {
-        Row: {
-          onboarding_attempt_id: string | null
-          person_id: string | null
-          reserved_at: string
-          username: string
-        }
-        Insert: {
-          onboarding_attempt_id?: string | null
-          person_id?: string | null
-          reserved_at?: string
-          username: string
-        }
-        Update: {
-          onboarding_attempt_id?: string | null
-          person_id?: string | null
-          reserved_at?: string
-          username?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: 'fk_usernames_onboarding_attempt'
-            columns: ['onboarding_attempt_id']
-            isOneToOne: false
-            referencedRelation: 'onboarding_attempts'
-            referencedColumns: ['id']
-          },
-          {
-            foreignKeyName: 'fk_usernames_person'
-            columns: ['person_id']
-            isOneToOne: false
-            referencedRelation: 'people'
-            referencedColumns: ['id']
-          },
-        ]
-      }
     }
     Views: {
       [_ in never]: never
@@ -1268,6 +1226,24 @@ export type Database = {
           p_token_hash: string
         }
         Returns: string
+      }
+      create_pending_person: {
+        Args: {
+          p_account_id: string
+          p_attempt_id: string
+          p_command_id: string
+          p_family_name: string
+          p_given_name: string
+          p_idempotency_key: string
+          p_request_hash: string
+          p_username: string
+        }
+        Returns: {
+          family_name: string
+          given_name: string
+          person_id: string
+          username: string
+        }[]
       }
       decide_staff_invitation: {
         Args: {
@@ -1491,6 +1467,18 @@ export type Database = {
           replayed: boolean
         }[]
       }
+      read_current_onboarding: {
+        Args: { p_account_id: string }
+        Returns: {
+          attempt_id: string
+          eligibility_status: string
+          expires_at: string
+          family_name: string
+          given_name: string
+          status: string
+          username: string
+        }[]
+      }
       record_adult_eligibility: {
         Args: {
           p_account_id: string
@@ -1510,23 +1498,6 @@ export type Database = {
         Returns: {
           remaining_attempts: number
           terminal: boolean
-        }[]
-      }
-      record_onboarding_identity: {
-        Args: {
-          p_account_id: string
-          p_attempt_id: string
-          p_command_id: string
-          p_family_name: string
-          p_given_name: string
-          p_idempotency_key: string
-          p_request_hash: string
-          p_username: string
-        }
-        Returns: {
-          family_name: string
-          given_name: string
-          username: string
         }[]
       }
       recover_backoffice_totp_factor: {
@@ -1712,7 +1683,7 @@ export type Database = {
       mfa_factor_status: 'pending' | 'active' | 'revoked' | 'superseded'
       onboarding_status: 'open' | 'activated' | 'ineligible' | 'expired'
       password_reset_receipt_result: 'processed' | 'account_absent'
-      person_status: 'active' | 'closed'
+      person_status: 'pending_activation' | 'active' | 'closed'
     }
     CompositeTypes: {
       [_ in never]: never
@@ -3117,7 +3088,7 @@ export const Constants = {
       mfa_factor_status: ['pending', 'active', 'revoked', 'superseded'],
       onboarding_status: ['open', 'activated', 'ineligible', 'expired'],
       password_reset_receipt_result: ['processed', 'account_absent'],
-      person_status: ['active', 'closed'],
+      person_status: ['pending_activation', 'active', 'closed'],
     },
   },
   organizations: {
