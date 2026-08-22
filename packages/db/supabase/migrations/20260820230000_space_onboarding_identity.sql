@@ -25,16 +25,17 @@
 -- is still only ever learned by attempting a write, under an authenticated
 -- command, and the rate limit that this endpoint needs does not exist yet.
 
+set lock_timeout = '5s';
+set statement_timeout = '60s';
+
 alter table identity.onboarding_attempts
   add column given_name text,
   add column family_name text,
   add column username extensions.citext;
 
 alter table identity.onboarding_attempts
-  add constraint ck_onboarding_attempts_given_name
-    check (given_name is null or btrim(given_name) <> ''),
-  add constraint ck_onboarding_attempts_family_name
-    check (family_name is null or btrim(family_name) <> '');
+  add constraint ck_onboarding_attempts_given_name check (given_name is null or btrim(given_name) <> ''),
+  add constraint ck_onboarding_attempts_family_name check (family_name is null or btrim(family_name) <> '');
 
 create table identity.usernames (
   username extensions.citext not null,
@@ -42,11 +43,9 @@ create table identity.usernames (
   onboarding_attempt_id uuid,
   reserved_at timestamptz not null default clock_timestamp(),
   constraint pk_usernames primary key (username),
-  constraint fk_usernames_person foreign key (person_id)
-    references identity.people(id) on delete restrict,
+  constraint fk_usernames_person foreign key (person_id) references identity.people(id) on delete restrict,
   -- Cascade on purpose: purging an abandoned attempt frees its handle.
-  constraint fk_usernames_onboarding_attempt foreign key (onboarding_attempt_id)
-    references identity.onboarding_attempts(id) on delete cascade,
+  constraint fk_usernames_onboarding_attempt foreign key (onboarding_attempt_id) references identity.onboarding_attempts(id) on delete cascade,
   -- A handle belongs to a person or to an attempt, never to both and never to
   -- neither: activation moves ownership, it does not add a second owner.
   constraint ck_usernames_owner check (num_nonnulls(person_id, onboarding_attempt_id) = 1),
