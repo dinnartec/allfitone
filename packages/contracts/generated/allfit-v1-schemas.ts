@@ -3324,6 +3324,38 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  SpaceCurrentOnboardingAttempt: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['attempt', 'identity'],
+    properties: {
+      attempt: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/SpaceOnboardingAttempt',
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description:
+          'Null when the account has no open attempt, which is also what an already activated person sees.',
+      },
+      identity: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/SpaceOnboardingIdentity',
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description: 'Null until the name has been declared.',
+      },
+    },
+    description:
+      'Enough to resume the onboarding and nothing more. Absent answers are null rather than omitted, so the app never has to guess whether a step was skipped or the field simply did not travel.',
+  },
   SpaceOnboardingAttempt: {
     type: 'object',
     additionalProperties: false,
@@ -3345,6 +3377,46 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
     },
     description:
       'The same attempt Studio reads, without the legal versions. Space asks for those acceptances on a later screen and there are no consultable texts to name yet, so quoting a version here would assert something the product cannot honour.',
+  },
+  SpaceOnboardingIdentity: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['given_name', 'family_name', 'username'],
+    properties: {
+      given_name: {
+        type: 'string',
+      },
+      family_name: {
+        type: 'string',
+      },
+      username: {
+        $ref: '#/components/schemas/Username',
+      },
+    },
+    description:
+      'What is now staged on the attempt. `OP-IDN-003` reads it at activation; the person does not exist yet, so there is nowhere else for it to live.',
+  },
+  SpaceOnboardingIdentityCreate: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['given_name', 'family_name', 'username'],
+    properties: {
+      given_name: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 120,
+      },
+      family_name: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 120,
+      },
+      username: {
+        $ref: '#/components/schemas/Username',
+      },
+    },
+    description:
+      "The email is absent on purpose. It is the credential's address, it already travels with the session, and changing it is another operation with its own verification.",
   },
   SpacePasswordResetCreate: {
     type: 'object',
@@ -3449,7 +3521,7 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
     description:
-      'Carries no analytics identity, unlike a fresh sign-in: refreshing returns tokens without a subject, and the app already holds the identity it was given when the session began.',
+      'Carries no analytics identity, unlike a fresh sign-in, and carries no contact either: the verified address is server-only and never travels in a token response. The onboarding shows it from what the app stored when the person signed in, and reads everything else back from the attempt.',
   },
   SpaceSessionTokens: {
     type: 'object',
@@ -4187,6 +4259,14 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         const: 'analytics-v1',
       },
     },
+  },
+  Username: {
+    type: 'string',
+    minLength: 3,
+    maxLength: 30,
+    pattern: '^[a-z][a-z0-9_]{2,29}$',
+    description:
+      'Lowercase, starts with a letter, then letters, digits or underscore. Stored lowercased, and compared case-insensitively, so two handles that differ only in case are the same handle.',
   },
   Uuid: {
     type: 'string',

@@ -29,8 +29,10 @@ import type {
   AccountActor,
   AdultEligibilityEvidence,
   CommandContext,
+  CurrentOnboardingAttempt,
   IdentityOnboardingDatabase,
   OnboardingAttempt,
+  OnboardingIdentity,
 } from '../domain/index.js'
 
 export interface OnboardingService {
@@ -42,6 +44,11 @@ export interface OnboardingService {
     actor: AccountActor,
     input: CommandContext & { attemptId: string; declaredAdult: boolean },
   ): Promise<AdultEligibilityEvidence>
+  recordIdentity(
+    actor: AccountActor,
+    input: CommandContext & { attemptId: string } & OnboardingIdentity,
+  ): Promise<OnboardingIdentity>
+  readCurrentAttempt(actor: AccountActor): Promise<CurrentOnboardingAttempt>
   complete(
     actor: AccountActor,
     input: Omit<Parameters<IdentityOnboardingDatabase['activatePerson']>[0], 'accountId'>,
@@ -60,6 +67,9 @@ export function createOnboardingService(database: IdentityOnboardingDatabase): O
     },
     recordAdultEligibility: (actor, input) =>
       database.recordAdultEligibility({ accountId: actor.accountId, ...input }),
+    recordIdentity: (actor, input) =>
+      database.recordOnboardingIdentity({ accountId: actor.accountId, ...input }),
+    readCurrentAttempt: (actor) => database.readCurrentAttempt(actor.accountId),
     complete: (actor, input) => database.activatePerson({ accountId: actor.accountId, ...input }),
   }
 }
@@ -75,6 +85,11 @@ export interface SpaceOnboardingService {
     token: VerifiedToken,
     input: CommandContext & { attemptId: string; declaredAdult: boolean },
   ): Promise<AdultEligibilityEvidence>
+  recordIdentity(
+    token: VerifiedToken,
+    input: CommandContext & { attemptId: string } & OnboardingIdentity,
+  ): Promise<OnboardingIdentity>
+  readCurrentAttempt(token: VerifiedToken): Promise<CurrentOnboardingAttempt>
 }
 
 export interface SpaceOnboardingDependencies {
@@ -103,6 +118,12 @@ export function createSpaceOnboardingService(
     },
     async recordAdultEligibility(token, input) {
       return dependencies.onboarding.recordAdultEligibility(await actorFor(token), input)
+    },
+    async recordIdentity(token, input) {
+      return dependencies.onboarding.recordIdentity(await actorFor(token), input)
+    },
+    async readCurrentAttempt(token) {
+      return dependencies.onboarding.readCurrentAttempt(await actorFor(token))
     },
   }
 }

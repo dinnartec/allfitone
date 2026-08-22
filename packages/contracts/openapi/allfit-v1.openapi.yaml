@@ -714,6 +714,97 @@ paths:
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
 
+  /space/v1/onboarding-attempts/current:
+    get:
+      tags: [Space Identity]
+      operationId: getSpaceCurrentOnboardingAttempt
+      x-allfit-operation: OP-IDN-044
+      x-allfit-cache: no-store
+      summary: Read the authenticated account's open onboarding attempt
+      description: >-
+        What HU-SP-015 criterion 3 and HU-SP-098 criterion 5 need: coming back
+        resumes where the person left off instead of starting over. Space makes
+        activation the last step, so every answer given before it rests on the
+        attempt, and this is how the app reads them back.
+
+
+        No contact travels here. The verified address is server-only, and the app
+        already holds the one the person signed in with.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: The open attempt, or none
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpaceCurrentOnboardingAttempt'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /space/v1/onboarding-attempts/{attemptId}/identity:
+    post:
+      tags: [Space Identity]
+      operationId: recordSpaceOnboardingIdentity
+      x-allfit-operation: OP-IDN-043
+      x-allfit-cache: no-store
+      summary: Declare the account holder's name and reserve their username
+      description: >-
+        HU-SP-098. Activating a Fitness ID requires a given name and a family
+        name, and in Space the login is headless, so the identity provider only
+        ever knew an email and a password. They are declared here and rest on the
+        attempt, because activation is the last step and no person exists yet.
+
+
+        There is deliberately no way to ask whether a username is free. A
+        collision comes back as `409` from this command and nothing else: an
+        availability query would reveal that somebody exists, which is the
+        guarantee the whole registration flow is built on. What makes the
+        collision itself tolerable is that a handle, unlike an email address, is
+        not an identifier that exists outside the platform.
+
+
+        The email is not accepted as input. It belongs to the credential, it is
+        returned with the session, and changing it is `OP-IDN-021` with its own
+        verification.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OnboardingAttemptId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SpaceOnboardingIdentityCreate'
+      responses:
+        '200':
+          description: The identity now staged on the attempt
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpaceOnboardingIdentity'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
   /studio/v1/telemetry-config:
     get:
       tags: [Platform Telemetry]
@@ -4050,9 +4141,10 @@ components:
           type: integer
           minimum: 1
       description: >-
-        Carries no analytics identity, unlike a fresh sign-in: refreshing returns
-        tokens without a subject, and the app already holds the identity it was
-        given when the session began.
+        Carries no analytics identity, unlike a fresh sign-in, and carries no
+        contact either: the verified address is server-only and never travels in
+        a token response. The onboarding shows it from what the app stored when
+        the person signed in, and reads everything else back from the attempt.
     StudioRegistrationStatus:
       type: string
       enum: [complete, registration_incomplete]
@@ -4197,6 +4289,69 @@ components:
       properties:
         declared_adult:
           type: boolean
+    SpaceOnboardingIdentityCreate:
+      type: object
+      additionalProperties: false
+      required: [given_name, family_name, username]
+      properties:
+        given_name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        family_name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        username:
+          $ref: '#/components/schemas/Username'
+      description: >-
+        The email is absent on purpose. It is the credential's address, it
+        already travels with the session, and changing it is another operation
+        with its own verification.
+    Username:
+      type: string
+      minLength: 3
+      maxLength: 30
+      pattern: '^[a-z][a-z0-9_]{2,29}$'
+      description: >-
+        Lowercase, starts with a letter, then letters, digits or underscore.
+        Stored lowercased, and compared case-insensitively, so two handles that
+        differ only in case are the same handle.
+    SpaceOnboardingIdentity:
+      type: object
+      additionalProperties: false
+      required: [given_name, family_name, username]
+      properties:
+        given_name:
+          type: string
+        family_name:
+          type: string
+        username:
+          $ref: '#/components/schemas/Username'
+      description: >-
+        What is now staged on the attempt. `OP-IDN-003` reads it at activation;
+        the person does not exist yet, so there is nowhere else for it to live.
+    SpaceCurrentOnboardingAttempt:
+      type: object
+      additionalProperties: false
+      required: [attempt, identity]
+      properties:
+        attempt:
+          oneOf:
+            - $ref: '#/components/schemas/SpaceOnboardingAttempt'
+            - type: 'null'
+          description: >-
+            Null when the account has no open attempt, which is also what an
+            already activated person sees.
+        identity:
+          oneOf:
+            - $ref: '#/components/schemas/SpaceOnboardingIdentity'
+            - type: 'null'
+          description: Null until the name has been declared.
+      description: >-
+        Enough to resume the onboarding and nothing more. Absent answers are
+        null rather than omitted, so the app never has to guess whether a step
+        was skipped or the field simply did not travel.
     AdultEligibilityPolicy:
       type: object
       additionalProperties: false

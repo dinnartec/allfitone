@@ -13,8 +13,14 @@
  * Where it goes next is not this screen's decision. An earlier version always
  * replaced with the welcome screen, which asked somebody who had just signed in
  * to create an account again — HU-SP-002 criterion 4. Reading the stored session
- * happens here; choosing the destination lives in `session-gate`, where it can be
- * tested without launching the app.
+ * and checking it happens here; choosing the destination lives in `session-gate`,
+ * where it can be tested without launching the app.
+ *
+ * The check is not optional. Deciding from storage alone landed a credential the
+ * provider had already refused on the onboarding, and the person only found out
+ * after filling a form and pressing a button that could never work. One
+ * authenticated read settles it, and it fits inside the animation rather than
+ * delaying it.
  */
 
 import { BrandEntrance } from '@allfitone/react-native/brand-entrance'
@@ -24,8 +30,10 @@ import { useRouter } from 'expo-router'
 import { useEffect, useRef, useState } from 'react'
 import { AccessibilityInfo, Animated, Easing, StyleSheet, View } from 'react-native'
 
+import { ApiError } from '../src/client'
+import { createSpaceOnboardingFlow } from '../src/client/onboarding-transport'
 import { resolveEntryRoute } from '../src/client/session-gate'
-import { readSession } from '../src/client/session'
+import { clearSession, readSession } from '../src/client/session'
 
 const FILL_MS = 1500
 const POWERED_DELAY_MS = 2050
@@ -40,15 +48,29 @@ export default function Opening() {
 
   useEffect(() => {
     let active = true
-    readSession()
-      .then((session) => {
-        if (active) setRoute(resolveEntryRoute({ session }))
-      })
-      .catch(() => {
-        // Unreadable storage is not a signed-in state, and it must not hang the
-        // opening on a screen with no way forward.
-        if (active) setRoute(resolveEntryRoute({ session: null }))
-      })
+
+    const decide = async () => {
+      const session = await readSession().catch(() => null)
+      if (!session) return resolveEntryRoute({ session: null })
+
+      // A stored token is not a session until the API accepts it. `resume` is
+      // the cheapest authenticated read, and it renews before giving up.
+      try {
+        const onboarding = await createSpaceOnboardingFlow().resume()
+        return resolveEntryRoute({ session, onboarding })
+      } catch (cause) {
+        const rejected = cause instanceof ApiError && cause.failure === 'unauthenticated'
+        // A refused credential is not a session. Keeping it would land the next
+        // launch on the same dead end.
+        if (rejected) await clearSession().catch(() => undefined)
+        return resolveEntryRoute({ session, rejected, unreachable: !rejected })
+      }
+    }
+
+    void decide().then((next) => {
+      if (active) setRoute(next)
+    })
+
     return () => {
       active = false
     }

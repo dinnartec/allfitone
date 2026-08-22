@@ -46,6 +46,8 @@ export type ApiFailure =
   | 'unauthenticated'
   /** Too short for the provider's floor, or known to be breached. */
   | 'weak-password'
+  /** Something else already holds what was asked for. Only a username, today. */
+  | 'conflict'
   /** The API or the provider did not answer. Retryable; nothing else is. */
   | 'unavailable'
 
@@ -126,6 +128,7 @@ async function post<T>(
 function failureFor(status: number): ApiFailure {
   if (status === 400) return 'invalid-request'
   if (status === 401) return 'unauthenticated'
+  if (status === 409) return 'conflict'
   if (status === 422) return 'weak-password'
   return 'unavailable'
 }
@@ -226,6 +229,30 @@ export async function authorizedPost<T>(
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      signal,
+    })
+  } catch {
+    throw new ApiError('unavailable')
+  } finally {
+    done()
+  }
+
+  if (!response.ok) throw new ApiError(failureFor(response.status))
+
+  return (await readJsonBody<T>(response)) as T
+}
+
+/**
+ * Authenticated GET. No command headers: a read is not a command, and sending
+ * them would claim an idempotency key for something that changes nothing.
+ */
+export async function authorizedGet<T>(path: string, token?: string): Promise<T> {
+  const { signal, done } = timeoutSignal(TIMEOUT_MS)
+  let response: Response | undefined
+  try {
+    response = await fetch(`${BASE_URL}${path}`, {
+      method: 'GET',
+      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       signal,
     })
   } catch {

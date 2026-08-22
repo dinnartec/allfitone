@@ -57,8 +57,9 @@ export default function SignIn() {
     setSubmitting(true)
     setFailure(undefined)
     try {
-      const session = await signIn(email.trim(), password)
-      await storeSession(session)
+      const trimmed = email.trim()
+      const session = await signIn(trimmed, password)
+      await storeSession({ ...session, email: trimmed })
       router.replace('/onboarding/age')
     } catch (cause) {
       setFailure(

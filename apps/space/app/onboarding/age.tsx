@@ -64,7 +64,7 @@ export default function AdultDeclaration() {
         setFailure('No podemos continuar sin la declaración de mayoría de edad.')
         return
       }
-      router.replace('/welcome')
+      router.replace('/onboarding/identity')
     } catch (cause) {
       setFailure(
         cause instanceof ApiError && cause.failure === 'unauthenticated'

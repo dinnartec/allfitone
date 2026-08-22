@@ -35,8 +35,15 @@ const EVIDENCE = {
   policy: POLICY,
 }
 
+const IDENTITY = {
+  given_name: 'Ada',
+  family_name: 'Lovelace',
+  username: 'ada_lovelace',
+}
+
 function flowWith(transport: Partial<OnboardingTransport> = {}) {
   const sent: Array<{ idempotencyKey: string; declaredAdult: boolean }> = []
+  const declared: Array<{ idempotencyKey: string; username: string }> = []
   let issued = 0
 
   const flow = createOnboardingFlow({
@@ -46,6 +53,11 @@ function flowWith(transport: Partial<OnboardingTransport> = {}) {
         sent.push({ idempotencyKey: command.idempotencyKey, declaredAdult })
         return EVIDENCE
       },
+      recordIdentity: async (command, _attemptId, identity) => {
+        declared.push({ idempotencyKey: command.idempotencyKey, username: identity.username })
+        return identity
+      },
+      readCurrent: async () => ({ attempt: ATTEMPT, identity: null }),
       ...transport,
     },
     newCommand: () => {
@@ -54,7 +66,7 @@ function flowWith(transport: Partial<OnboardingTransport> = {}) {
     },
   })
 
-  return { flow, sent }
+  return { flow, sent, declared }
 }
 
 describe('declareAdult', () => {
@@ -131,5 +143,115 @@ describe('declareAdult', () => {
       evaluated_at: EVIDENCE.evaluated_at,
       policy: POLICY,
     })
+  })
+})
+
+describe('declareIdentity', () => {
+  test('reuses the key when a failed submission is retried', async () => {
+    const keys: string[] = []
+    let firstCall = true
+    const { flow } = flowWith({
+      recordIdentity: async (command, _attemptId, identity) => {
+        keys.push(command.idempotencyKey)
+        if (firstCall) {
+          firstCall = false
+          throw new Error('network')
+        }
+        return identity
+      },
+    })
+
+    await expect(flow.declareIdentity(IDENTITY)).rejects.toThrow('network')
+    await flow.declareIdentity(IDENTITY)
+
+    expect(keys).toHaveLength(2)
+    expect(keys[1]).toBe(keys[0])
+  })
+
+  test('issues a fresh key when any part of the answer changes', async () => {
+    const { flow, declared } = flowWith()
+
+    await flow.declareIdentity(IDENTITY)
+    await flow.declareIdentity({ ...IDENTITY, username: 'ada_byron' })
+
+    expect(declared[1]?.idempotencyKey).not.toBe(declared[0]?.idempotencyKey)
+  })
+
+  test('discards the key once the identity lands, so a later one is its own', async () => {
+    const { flow, declared } = flowWith()
+
+    await flow.declareIdentity(IDENTITY)
+    await flow.declareIdentity(IDENTITY)
+
+    expect(declared[1]?.idempotencyKey).not.toBe(declared[0]?.idempotencyKey)
+  })
+
+  test('opens the attempt once and reuses it across steps', async () => {
+    let starts = 0
+    const { flow } = flowWith({
+      startAttempt: async () => {
+        starts += 1
+        return ATTEMPT
+      },
+    })
+
+    await flow.declareAdult(true)
+    await flow.declareIdentity(IDENTITY)
+
+    expect(starts).toBe(1)
+  })
+
+  test('surfaces a taken handle as itself, not as a failure to reach the API', async () => {
+    // Shaped like ApiError rather than imported: `./index` pulls React Native
+    // into the runner, and the flow only ever propagates what it is given.
+    const { flow } = flowWith({
+      recordIdentity: async () => {
+        throw Object.assign(new Error('conflict'), { failure: 'conflict' })
+      },
+    })
+
+    await expect(flow.declareIdentity(IDENTITY)).rejects.toMatchObject({ failure: 'conflict' })
+  })
+})
+
+describe('resume', () => {
+  test('returns what the server already holds', async () => {
+    const { flow } = flowWith({
+      readCurrent: async () => ({ attempt: ATTEMPT, identity: IDENTITY }),
+    })
+
+    expect(await flow.resume()).toEqual({ attempt: ATTEMPT, identity: IDENTITY })
+  })
+
+  test('adopts the open attempt instead of starting a second one', async () => {
+    let starts = 0
+    const { flow } = flowWith({
+      startAttempt: async () => {
+        starts += 1
+        return ATTEMPT
+      },
+      readCurrent: async () => ({ attempt: ATTEMPT, identity: null }),
+    })
+
+    await flow.resume()
+    await flow.declareIdentity(IDENTITY)
+
+    expect(starts).toBe(0)
+  })
+
+  test('leaves the flow able to start when nothing was open', async () => {
+    let starts = 0
+    const { flow } = flowWith({
+      startAttempt: async () => {
+        starts += 1
+        return ATTEMPT
+      },
+      readCurrent: async () => ({ attempt: null, identity: null }),
+    })
+
+    await flow.resume()
+    await flow.declareIdentity(IDENTITY)
+
+    expect(starts).toBe(1)
   })
 })

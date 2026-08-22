@@ -1,9 +1,16 @@
 export const ACCESS_TOKEN_KEY = 'allfit.accessToken'
 export const REFRESH_TOKEN_KEY = 'allfit.refreshToken'
+export const EMAIL_KEY = 'allfit.email'
 
 export interface StoredSession {
   accessToken: string
   refreshToken: string
+  /**
+   * The address the person signed in with. Kept here rather than fetched,
+   * because the verified one is server-only and never travels in a token
+   * response. Absent on a refresh, which must not erase it.
+   */
+  email?: string
   analytics: { distinct_id: string | null }
 }
 
@@ -25,20 +32,29 @@ export function createSessionOperations(options: SessionOperationsOptions) {
       await Promise.all([
         options.storage.setItemAsync(ACCESS_TOKEN_KEY, session.accessToken),
         options.storage.setItemAsync(REFRESH_TOKEN_KEY, session.refreshToken),
+        // Only written when supplied: a refresh rotates tokens and knows no
+        // address, and clearing it there would blank the field it feeds.
+        ...(session.email ? [options.storage.setItemAsync(EMAIL_KEY, session.email)] : []),
       ])
       notifyIdentity(options, session.analytics.distinct_id)
       void persistAnalyticsIdentity(options, session.analytics.distinct_id)
     },
 
     async readSession(): Promise<StoredSession | null> {
-      const [accessToken, refreshToken] = await Promise.all([
+      const [accessToken, refreshToken, email] = await Promise.all([
         options.storage.getItemAsync(ACCESS_TOKEN_KEY),
         options.storage.getItemAsync(REFRESH_TOKEN_KEY),
+        options.storage.getItemAsync(EMAIL_KEY),
       ])
       if (!accessToken || !refreshToken) return null
 
       void restoreAnalyticsIdentity(options)
-      return { accessToken, refreshToken, analytics: { distinct_id: null } }
+      return {
+        accessToken,
+        refreshToken,
+        ...(email ? { email } : {}),
+        analytics: { distinct_id: null },
+      }
     },
 
     async clearSession(): Promise<void> {
@@ -46,6 +62,7 @@ export function createSessionOperations(options: SessionOperationsOptions) {
       await Promise.all([
         options.storage.deleteItemAsync(ACCESS_TOKEN_KEY),
         options.storage.deleteItemAsync(REFRESH_TOKEN_KEY),
+        options.storage.deleteItemAsync(EMAIL_KEY),
       ])
       void options.storage.deleteItemAsync(options.analyticsIdentityKey).catch(() => undefined)
     },

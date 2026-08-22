@@ -308,6 +308,52 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/space/v1/onboarding-attempts/current': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Read the authenticated account's open onboarding attempt
+     * @description What HU-SP-015 criterion 3 and HU-SP-098 criterion 5 need: coming back resumes where the person left off instead of starting over. Space makes activation the last step, so every answer given before it rests on the attempt, and this is how the app reads them back.
+     *
+     *     No contact travels here. The verified address is server-only, and the app already holds the one the person signed in with.
+     */
+    get: operations['getSpaceCurrentOnboardingAttempt']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/onboarding-attempts/{attemptId}/identity': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Declare the account holder's name and reserve their username
+     * @description HU-SP-098. Activating a Fitness ID requires a given name and a family name, and in Space the login is headless, so the identity provider only ever knew an email and a password. They are declared here and rest on the attempt, because activation is the last step and no person exists yet.
+     *
+     *     There is deliberately no way to ask whether a username is free. A collision comes back as `409` from this command and nothing else: an availability query would reveal that somebody exists, which is the guarantee the whole registration flow is built on. What makes the collision itself tolerable is that a handle, unlike an email address, is not an identifier that exists outside the platform.
+     *
+     *     The email is not accepted as input. It belongs to the credential, it is returned with the session, and changing it is `OP-IDN-021` with its own verification.
+     */
+    post: operations['recordSpaceOnboardingIdentity']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/studio/v1/telemetry-config': {
     parameters: {
       query?: never
@@ -1411,7 +1457,7 @@ export interface components {
     SpaceSessionRefreshCreate: {
       refreshToken: string
     }
-    /** @description Carries no analytics identity, unlike a fresh sign-in: refreshing returns tokens without a subject, and the app already holds the identity it was given when the session began. */
+    /** @description Carries no analytics identity, unlike a fresh sign-in, and carries no contact either: the verified address is server-only and never travels in a token response. The onboarding shows it from what the app stored when the person signed in, and reads everything else back from the attempt. */
     SpaceSessionRefreshed: {
       accessToken: string
       /** @description Rotates on use — the previous value stops working. */
@@ -1482,6 +1528,27 @@ export interface components {
     }
     AdultEligibilityEvidenceCreate: {
       declared_adult: boolean
+    }
+    /** @description The email is absent on purpose. It is the credential's address, it already travels with the session, and changing it is another operation with its own verification. */
+    SpaceOnboardingIdentityCreate: {
+      given_name: string
+      family_name: string
+      username: components['schemas']['Username']
+    }
+    /** @description Lowercase, starts with a letter, then letters, digits or underscore. Stored lowercased, and compared case-insensitively, so two handles that differ only in case are the same handle. */
+    Username: string
+    /** @description What is now staged on the attempt. `OP-IDN-003` reads it at activation; the person does not exist yet, so there is nowhere else for it to live. */
+    SpaceOnboardingIdentity: {
+      given_name: string
+      family_name: string
+      username: components['schemas']['Username']
+    }
+    /** @description Enough to resume the onboarding and nothing more. Absent answers are null rather than omitted, so the app never has to guess whether a step was skipped or the field simply did not travel. */
+    SpaceCurrentOnboardingAttempt: {
+      /** @description Null when the account has no open attempt, which is also what an already activated person sees. */
+      attempt: components['schemas']['SpaceOnboardingAttempt'] | null
+      /** @description Null until the name has been declared. */
+      identity: components['schemas']['SpaceOnboardingIdentity'] | null
     }
     AdultEligibilityPolicy: {
       /** @constant */
@@ -3768,6 +3835,66 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['AdultEligibilityEvidence']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      409: components['responses']['Conflict']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  getSpaceCurrentOnboardingAttempt: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The open attempt, or none */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SpaceCurrentOnboardingAttempt']
+        }
+      }
+      401: components['responses']['Unauthenticated']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  recordSpaceOnboardingIdentity: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        attemptId: components['parameters']['OnboardingAttemptId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SpaceOnboardingIdentityCreate']
+      }
+    }
+    responses: {
+      /** @description The identity now staged on the attempt */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SpaceOnboardingIdentity']
         }
       }
       400: components['responses']['BadRequest']
