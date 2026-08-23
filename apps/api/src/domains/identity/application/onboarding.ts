@@ -32,7 +32,7 @@ import type {
   CurrentOnboardingAttempt,
   IdentityOnboardingDatabase,
   OnboardingAttempt,
-  OnboardingIdentity,
+  PendingFitnessId,
 } from '../domain/index.js'
 
 export interface OnboardingService {
@@ -44,10 +44,10 @@ export interface OnboardingService {
     actor: AccountActor,
     input: CommandContext & { attemptId: string; declaredAdult: boolean },
   ): Promise<AdultEligibilityEvidence>
-  recordIdentity(
+  createFitnessId(
     actor: AccountActor,
-    input: CommandContext & { attemptId: string } & OnboardingIdentity,
-  ): Promise<OnboardingIdentity>
+    input: CommandContext & { attemptId: string } & PendingFitnessId,
+  ): Promise<PendingFitnessId>
   readCurrentAttempt(actor: AccountActor): Promise<CurrentOnboardingAttempt>
   complete(
     actor: AccountActor,
@@ -67,8 +67,8 @@ export function createOnboardingService(database: IdentityOnboardingDatabase): O
     },
     recordAdultEligibility: (actor, input) =>
       database.recordAdultEligibility({ accountId: actor.accountId, ...input }),
-    recordIdentity: (actor, input) =>
-      database.recordOnboardingIdentity({ accountId: actor.accountId, ...input }),
+    createFitnessId: (actor, input) =>
+      database.createPendingPerson({ accountId: actor.accountId, ...input }),
     readCurrentAttempt: (actor) => database.readCurrentAttempt(actor.accountId),
     complete: (actor, input) => database.activatePerson({ accountId: actor.accountId, ...input }),
   }
@@ -85,10 +85,10 @@ export interface SpaceOnboardingService {
     token: VerifiedToken,
     input: CommandContext & { attemptId: string; declaredAdult: boolean },
   ): Promise<AdultEligibilityEvidence>
-  recordIdentity(
+  createFitnessId(
     token: VerifiedToken,
-    input: CommandContext & { attemptId: string } & OnboardingIdentity,
-  ): Promise<OnboardingIdentity>
+    input: CommandContext & { attemptId: string } & PendingFitnessId,
+  ): Promise<PendingFitnessId>
   readCurrentAttempt(token: VerifiedToken): Promise<CurrentOnboardingAttempt>
 }
 
@@ -119,8 +119,8 @@ export function createSpaceOnboardingService(
     async recordAdultEligibility(token, input) {
       return dependencies.onboarding.recordAdultEligibility(await actorFor(token), input)
     },
-    async recordIdentity(token, input) {
-      return dependencies.onboarding.recordIdentity(await actorFor(token), input)
+    async createFitnessId(token, input) {
+      return dependencies.onboarding.createFitnessId(await actorFor(token), input)
     },
     async readCurrentAttempt(token) {
       return dependencies.onboarding.readCurrentAttempt(await actorFor(token))

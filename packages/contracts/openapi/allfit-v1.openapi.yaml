@@ -747,18 +747,24 @@ paths:
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
 
-  /space/v1/onboarding-attempts/{attemptId}/identity:
+  /space/v1/onboarding-attempts/{attemptId}/fitness-id:
     post:
       tags: [Space Identity]
-      operationId: recordSpaceOnboardingIdentity
+      operationId: createSpacePendingFitnessId
       x-allfit-operation: OP-IDN-043
       x-allfit-cache: no-store
-      summary: Declare the account holder's name and reserve their username
+      summary: Create the account holder's Fitness ID, pending activation
       description: >-
-        HU-SP-098. Activating a Fitness ID requires a given name and a family
-        name, and in Space the login is headless, so the identity provider only
-        ever knew an email and a password. They are declared here and rest on the
-        attempt, because activation is the last step and no person exists yet.
+        HU-SP-098. The Fitness ID is created here, in `pending_activation`, as
+        soon as the name is known — not at the end of the onboarding. That is what
+        lets every answer given afterwards be written straight onto the person:
+        profile claims require a `person_id`, so with the person created last
+        there would be nowhere for them to go and every step would need a staging
+        table and a second write path.
+
+
+        Adult eligibility is still required first. Creating the row earlier does
+        not move any control earlier.
 
 
         There is deliberately no way to ask whether a username is free. A
@@ -769,9 +775,8 @@ paths:
         not an identifier that exists outside the platform.
 
 
-        The email is not accepted as input. It belongs to the credential, it is
-        returned with the session, and changing it is `OP-IDN-021` with its own
-        verification.
+        The email is not accepted as input. It belongs to the credential, and
+        changing it is `OP-IDN-021` with its own verification.
       security:
         - bearerAuth: []
       parameters:
@@ -783,17 +788,17 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/SpaceOnboardingIdentityCreate'
+              $ref: '#/components/schemas/SpacePendingFitnessIdCreate'
       responses:
         '200':
-          description: The identity now staged on the attempt
+          description: The Fitness ID, created and pending activation
           headers:
             Cache-Control:
               $ref: '#/components/headers/NoStore'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SpaceOnboardingIdentity'
+                $ref: '#/components/schemas/SpacePendingFitnessId'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -4289,7 +4294,7 @@ components:
       properties:
         declared_adult:
           type: boolean
-    SpaceOnboardingIdentityCreate:
+    SpacePendingFitnessIdCreate:
       type: object
       additionalProperties: false
       required: [given_name, family_name, username]
@@ -4317,7 +4322,7 @@ components:
         Lowercase, starts with a letter, then letters, digits or underscore.
         Stored lowercased, and compared case-insensitively, so two handles that
         differ only in case are the same handle.
-    SpaceOnboardingIdentity:
+    SpacePendingFitnessId:
       type: object
       additionalProperties: false
       required: [given_name, family_name, username]
@@ -4329,8 +4334,9 @@ components:
         username:
           $ref: '#/components/schemas/Username'
       description: >-
-        What is now staged on the attempt. `OP-IDN-003` reads it at activation;
-        the person does not exist yet, so there is nowhere else for it to live.
+        The Fitness ID as it now exists on the person, pending activation. No
+        person identifier travels here: the app never needs one, and the API
+        resolves it from the token on every call.
     SpaceCurrentOnboardingAttempt:
       type: object
       additionalProperties: false
@@ -4345,9 +4351,11 @@ components:
             already activated person sees.
         identity:
           oneOf:
-            - $ref: '#/components/schemas/SpaceOnboardingIdentity'
+            - $ref: '#/components/schemas/SpacePendingFitnessId'
             - type: 'null'
-          description: Null until the name has been declared.
+          description: >-
+            Null until the Fitness ID exists. Non-null is how the app knows that
+            step is behind it.
       description: >-
         Enough to resume the onboarding and nothing more. Absent answers are
         null rather than omitted, so the app never has to guess whether a step

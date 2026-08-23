@@ -189,8 +189,8 @@ export const allfitV1ContractManifest = {
     },
     {
       method: 'POST',
-      path: '/space/v1/onboarding-attempts/{attemptId}/identity',
-      operationId: 'recordSpaceOnboardingIdentity',
+      path: '/space/v1/onboarding-attempts/{attemptId}/fitness-id',
+      operationId: 'createSpacePendingFitnessId',
       allfitOperation: 'OP-IDN-043',
       responses: ['200', '400', '401', '403', '409', '503'],
     },

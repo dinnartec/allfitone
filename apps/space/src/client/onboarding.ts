@@ -27,7 +27,7 @@ import type { CommandHeaders } from '@allfitone/contracts/commands'
 
 export type OnboardingAttempt = AllfitV1Schemas['SpaceOnboardingAttempt']
 export type AdultEligibilityEvidence = AllfitV1Schemas['AdultEligibilityEvidence']
-export type OnboardingIdentity = AllfitV1Schemas['SpaceOnboardingIdentity']
+export type PendingFitnessId = AllfitV1Schemas['SpacePendingFitnessId']
 export type CurrentOnboardingAttempt = AllfitV1Schemas['SpaceCurrentOnboardingAttempt']
 
 export interface OnboardingTransport {
@@ -37,11 +37,11 @@ export interface OnboardingTransport {
     attemptId: string,
     declaredAdult: boolean,
   ): Promise<AdultEligibilityEvidence>
-  recordIdentity(
+  createFitnessId(
     command: CommandHeaders,
     attemptId: string,
-    identity: OnboardingIdentity,
-  ): Promise<OnboardingIdentity>
+    identity: PendingFitnessId,
+  ): Promise<PendingFitnessId>
   readCurrent(): Promise<CurrentOnboardingAttempt>
 }
 
@@ -56,7 +56,7 @@ export interface OnboardingFlowDependencies {
 
 export interface OnboardingFlow {
   declareAdult(declaredAdult: boolean): Promise<AdultEligibilityEvidence>
-  declareIdentity(identity: OnboardingIdentity): Promise<OnboardingIdentity>
+  createFitnessId(identity: PendingFitnessId): Promise<PendingFitnessId>
   /** What was already answered, so coming back does not start over. */
   resume(): Promise<CurrentOnboardingAttempt>
 }
@@ -89,7 +89,7 @@ export function createOnboardingFlow(dependencies: OnboardingFlowDependencies): 
       return evidence
     },
 
-    async declareIdentity(identity) {
+    async createFitnessId(identity) {
       const open = await openAttempt()
       const answer = `${identity.given_name}\u0000${identity.family_name}\u0000${identity.username}`
 
@@ -99,13 +99,13 @@ export function createOnboardingFlow(dependencies: OnboardingFlowDependencies): 
         pendingIdentity = { command: issue(), identity: answer }
       }
 
-      const stored = await dependencies.transport.recordIdentity(
+      const created = await dependencies.transport.createFitnessId(
         pendingIdentity.command,
         open.id,
         identity,
       )
       pendingIdentity = undefined
-      return stored
+      return created
     },
 
     async resume() {

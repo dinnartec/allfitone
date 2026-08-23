@@ -53,7 +53,7 @@ function flowWith(transport: Partial<OnboardingTransport> = {}) {
         sent.push({ idempotencyKey: command.idempotencyKey, declaredAdult })
         return EVIDENCE
       },
-      recordIdentity: async (command, _attemptId, identity) => {
+      createFitnessId: async (command, _attemptId, identity) => {
         declared.push({ idempotencyKey: command.idempotencyKey, username: identity.username })
         return identity
       },
@@ -146,12 +146,12 @@ describe('declareAdult', () => {
   })
 })
 
-describe('declareIdentity', () => {
+describe('createFitnessId', () => {
   test('reuses the key when a failed submission is retried', async () => {
     const keys: string[] = []
     let firstCall = true
     const { flow } = flowWith({
-      recordIdentity: async (command, _attemptId, identity) => {
+      createFitnessId: async (command, _attemptId, identity) => {
         keys.push(command.idempotencyKey)
         if (firstCall) {
           firstCall = false
@@ -161,8 +161,8 @@ describe('declareIdentity', () => {
       },
     })
 
-    await expect(flow.declareIdentity(IDENTITY)).rejects.toThrow('network')
-    await flow.declareIdentity(IDENTITY)
+    await expect(flow.createFitnessId(IDENTITY)).rejects.toThrow('network')
+    await flow.createFitnessId(IDENTITY)
 
     expect(keys).toHaveLength(2)
     expect(keys[1]).toBe(keys[0])
@@ -171,8 +171,8 @@ describe('declareIdentity', () => {
   test('issues a fresh key when any part of the answer changes', async () => {
     const { flow, declared } = flowWith()
 
-    await flow.declareIdentity(IDENTITY)
-    await flow.declareIdentity({ ...IDENTITY, username: 'ada_byron' })
+    await flow.createFitnessId(IDENTITY)
+    await flow.createFitnessId({ ...IDENTITY, username: 'ada_byron' })
 
     expect(declared[1]?.idempotencyKey).not.toBe(declared[0]?.idempotencyKey)
   })
@@ -180,8 +180,8 @@ describe('declareIdentity', () => {
   test('discards the key once the identity lands, so a later one is its own', async () => {
     const { flow, declared } = flowWith()
 
-    await flow.declareIdentity(IDENTITY)
-    await flow.declareIdentity(IDENTITY)
+    await flow.createFitnessId(IDENTITY)
+    await flow.createFitnessId(IDENTITY)
 
     expect(declared[1]?.idempotencyKey).not.toBe(declared[0]?.idempotencyKey)
   })
@@ -196,7 +196,7 @@ describe('declareIdentity', () => {
     })
 
     await flow.declareAdult(true)
-    await flow.declareIdentity(IDENTITY)
+    await flow.createFitnessId(IDENTITY)
 
     expect(starts).toBe(1)
   })
@@ -205,12 +205,12 @@ describe('declareIdentity', () => {
     // Shaped like ApiError rather than imported: `./index` pulls React Native
     // into the runner, and the flow only ever propagates what it is given.
     const { flow } = flowWith({
-      recordIdentity: async () => {
+      createFitnessId: async () => {
         throw Object.assign(new Error('conflict'), { failure: 'conflict' })
       },
     })
 
-    await expect(flow.declareIdentity(IDENTITY)).rejects.toMatchObject({ failure: 'conflict' })
+    await expect(flow.createFitnessId(IDENTITY)).rejects.toMatchObject({ failure: 'conflict' })
   })
 })
 
@@ -234,7 +234,7 @@ describe('resume', () => {
     })
 
     await flow.resume()
-    await flow.declareIdentity(IDENTITY)
+    await flow.createFitnessId(IDENTITY)
 
     expect(starts).toBe(0)
   })
@@ -250,7 +250,7 @@ describe('resume', () => {
     })
 
     await flow.resume()
-    await flow.declareIdentity(IDENTITY)
+    await flow.createFitnessId(IDENTITY)
 
     expect(starts).toBe(1)
   })

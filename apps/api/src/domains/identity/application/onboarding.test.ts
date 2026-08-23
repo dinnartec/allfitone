@@ -50,7 +50,7 @@ function serviceWith(overrides: Partial<OnboardingService> = {}) {
       actors.push(actor.accountId)
       return EVIDENCE
     },
-    recordIdentity: async (actor, input) => {
+    createFitnessId: async (actor, input) => {
       actors.push(actor.accountId)
       return { givenName: input.givenName, familyName: input.familyName, username: input.username }
     },
