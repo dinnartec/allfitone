@@ -137,3 +137,18 @@ export function guardStep(
   const stepIndex = ONBOARDING_STEPS.findIndex((candidate) => candidate.route === step)
   return owedIndex < stepIndex ? owed : null
 }
+
+/**
+ * The last step a person may go back and change.
+ *
+ * What the terminal screen points its arrow at. Derived rather than named, so it
+ * follows the declared order when steps are appended instead of pointing at
+ * whatever was last when it was written.
+ */
+export function lastRevisitableStep(): OnboardingStepRoute | null {
+  return (
+    ONBOARDING_STEPS.slice()
+      .reverse()
+      .find((step) => step.revisitable)?.route ?? null
+  )
+}

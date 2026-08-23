@@ -41,24 +41,34 @@ export interface OnboardingHeaderProps {
   readonly step: OnboardingStepRoute
 }
 
-export function OnboardingHeader({ step }: OnboardingHeaderProps) {
+/**
+ * The arrow on its own, for screens that are not steps and so carry no bar.
+ * Exported rather than copied: two arrows would drift in size and hit area.
+ */
+export function OnboardingBack({ to }: { readonly to: OnboardingStepRoute }) {
   const theme = useTheme()
   const router = useRouter()
+
+  return (
+    <Pressable
+      onPress={() => router.replace(to)}
+      accessibilityRole="button"
+      accessibilityLabel="Volver al paso anterior"
+      hitSlop={12}
+      style={styles.back}
+    >
+      <FoundationIcon name="back" size="lg" color={theme.color.icon.primary} decorative />
+    </Pressable>
+  )
+}
+
+export function OnboardingHeader({ step }: OnboardingHeaderProps) {
+  const theme = useTheme()
   const { total, completed, previous } = stepPosition(step)
 
   return (
     <View style={styles.row}>
-      {previous ? (
-        <Pressable
-          onPress={() => router.replace(previous)}
-          accessibilityRole="button"
-          accessibilityLabel="Volver al paso anterior"
-          hitSlop={12}
-          style={styles.back}
-        >
-          <FoundationIcon name="back" size="lg" color={theme.color.icon.primary} decorative />
-        </Pressable>
-      ) : null}
+      {previous ? <OnboardingBack to={previous} /> : null}
 
       <View
         style={styles.bar}

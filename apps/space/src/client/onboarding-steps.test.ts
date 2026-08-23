@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test'
 import {
   ELIGIBILITY_GATE_ROUTE,
   guardStep,
+  lastRevisitableStep,
   ONBOARDING_STEPS,
   resolveOnboardingRoute,
   stepPosition,
@@ -111,5 +112,20 @@ describe('guardStep', () => {
     // the subject of the answer and does not exist yet.
     expect(guardStep('/onboarding/sex', { attempt: PASSED })).toBe('/onboarding/identity')
     expect(guardStep('/onboarding/identity', { attempt: null })).toBe(ELIGIBILITY_GATE_ROUTE)
+  })
+})
+
+describe('lastRevisitableStep', () => {
+  test('is the last declared step a person may change', () => {
+    expect(lastRevisitableStep()).toBe('/onboarding/sex')
+  })
+
+  test('follows the declared order rather than a name written once', () => {
+    const revisitable = ONBOARDING_STEPS.filter((step) => step.revisitable).map(
+      (step) => step.route,
+    )
+
+    expect(revisitable).not.toHaveLength(0)
+    expect(lastRevisitableStep()).toBe(revisitable[revisitable.length - 1] ?? null)
   })
 })
