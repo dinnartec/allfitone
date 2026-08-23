@@ -16,6 +16,7 @@ import * as Crypto from 'expo-crypto'
 
 import { ApiError, authorizedGet, authorizedPost, refreshSession } from './index'
 import {
+  type BiologicalSex,
   createOnboardingFlow,
   type CurrentOnboardingAttempt,
   type OnboardingFlow,
@@ -53,6 +54,16 @@ export function createSpaceOnboardingFlow(): OnboardingFlow {
             token,
           ),
         ),
+      declareBiologicalSex: (command, attemptId, biologicalSex) =>
+        authenticated(async (token) => {
+          const declared = await authorizedPost<{ biological_sex: BiologicalSex | null }>(
+            `/space/v1/onboarding-attempts/${attemptId}/biological-sex`,
+            command,
+            { biological_sex: biologicalSex },
+            token,
+          )
+          return declared.biological_sex
+        }),
       readCurrent: () =>
         authenticated((token) =>
           authorizedGet<CurrentOnboardingAttempt>('/space/v1/onboarding-attempts/current', token),

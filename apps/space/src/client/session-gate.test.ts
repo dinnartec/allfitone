@@ -102,3 +102,41 @@ describe('resolveOnboardingRoute', () => {
     expect(resolveOnboardingRoute(null)).toBe('/onboarding/age')
   })
 })
+
+describe('resolveOnboardingRoute past the identity step', () => {
+  const PASSED = { eligibility_status: 'pass' as const }
+  const IDENTITY = { given_name: 'Ada', family_name: 'Lovelace', username: 'ada_lovelace' }
+
+  test('asks for the biological sex once the Fitness ID exists', () => {
+    expect(
+      resolveOnboardingRoute({
+        attempt: PASSED,
+        identity: IDENTITY,
+        biological_sex_answered: false,
+      }),
+    ).toBe('/onboarding/sex')
+  })
+
+  test('moves past it once the question was answered', () => {
+    expect(
+      resolveOnboardingRoute({
+        attempt: PASSED,
+        identity: IDENTITY,
+        biological_sex_answered: true,
+      }),
+    ).toBe('/welcome')
+  })
+
+  test('does not send a person who declined back to the same screen', () => {
+    // The refusal records no value, so a decision made from the value alone would
+    // ask again on every cold start and the onboarding could never advance.
+    expect(
+      resolveOnboardingRoute({
+        attempt: PASSED,
+        identity: IDENTITY,
+        biological_sex: null,
+        biological_sex_answered: true,
+      } as never),
+    ).toBe('/welcome')
+  })
+})

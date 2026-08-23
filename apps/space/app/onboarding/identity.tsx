@@ -16,6 +16,7 @@
  *
  * Which is also why the screen skips itself when the Fitness ID already exists —
  * there is nothing left to create, and re-asking would offer to create a second.
+ * Where it goes instead is `resolveOnboardingRoute`'s call, not this screen's.
  *
  * The email is shown and cannot be edited. It belongs to the credential, and
  * changing it is a different operation with its own verification. It is read from
@@ -46,11 +47,12 @@ import { useRouter } from 'expo-router'
 import { useEffect, useMemo, useState } from 'react'
 import { ScrollView, StyleSheet, View } from 'react-native'
 
+import { OnboardingHeader } from '../../src/components/onboarding-header'
 import { ApiError } from '../../src/client'
 import { canSubmitIdentity, isUsernameWellFormed } from '../../src/client/identity-form'
 import { createSpaceOnboardingFlow } from '../../src/client/onboarding-transport'
 import { readSession } from '../../src/client/session'
-import { resolveOnboardingRoute } from '../../src/client/session-gate'
+import { guardStep } from '../../src/client/onboarding-steps'
 
 const NAME_MAX_LENGTH = 120
 const USERNAME_MAX_LENGTH = 30
@@ -86,15 +88,17 @@ export default function OnboardingIdentity() {
       .resume()
       .then((current) => {
         if (!active) return
-        const step = resolveOnboardingRoute(current)
-        if (step !== '/onboarding/identity') {
-          router.replace(step)
+        // Only backwards. Being ahead of the first owed step is not a reason to
+        // move: a person who came back to change their name belongs here.
+        const owed = guardStep('/onboarding/identity', current)
+        if (owed) {
+          router.replace(owed)
           return
         }
-        // The Fitness ID exists, so this step is behind us. `/welcome` stands in
-        // until the next onboarding screen exists; it is not the destination.
         if (current.identity) {
-          router.replace('/welcome')
+          setGivenName(current.identity.given_name)
+          setFamilyName(current.identity.family_name)
+          setUsername(current.identity.username)
         }
       })
       .catch((cause: unknown) => {
@@ -133,7 +137,7 @@ export default function OnboardingIdentity() {
         family_name: familyName.trim(),
         username,
       })
-      router.replace('/welcome')
+      router.replace('/onboarding/sex')
     } catch (cause) {
       if (cause instanceof ApiError && cause.failure === 'conflict') {
         // Held against the value, so the message clears the moment it changes.
@@ -154,6 +158,8 @@ export default function OnboardingIdentity() {
   return (
     <Screen edges={['top', 'bottom']}>
       <AmbientBackdrop />
+
+      <OnboardingHeader step="/onboarding/identity" />
 
       <ScrollView
         style={styles.scroll}

@@ -48,7 +48,13 @@ function appWith(overrides: Partial<SpaceOnboardingService> = {}): Hono {
       familyName: input.familyName,
       username: input.username,
     }),
-    readCurrentAttempt: async () => ({ attempt: ATTEMPT, identity: null }),
+    declareBiologicalSex: async (_token, input) => input.biologicalSex,
+    readCurrentAttempt: async () => ({
+      attempt: ATTEMPT,
+      identity: null,
+      biologicalSex: null,
+      biologicalSexAnswered: false,
+    }),
     ...overrides,
   }
   const app = new Hono()
@@ -103,7 +109,13 @@ describe('POST /space/v1/onboarding-attempts', () => {
             familyName: input.familyName,
             username: input.username,
           }),
-          readCurrentAttempt: async () => ({ attempt: ATTEMPT, identity: null }),
+          declareBiologicalSex: async (_token, input) => input.biologicalSex,
+          readCurrentAttempt: async () => ({
+            attempt: ATTEMPT,
+            identity: null,
+            biologicalSex: null,
+            biologicalSexAnswered: false,
+          }),
         },
         async () => {
           throw new Error('token rejected')
@@ -335,6 +347,101 @@ describe('POST /space/v1/onboarding-attempts/{id}/fitness-id', () => {
   })
 })
 
+describe('POST /space/v1/onboarding-attempts/{id}/biological-sex', () => {
+  const path = `/space/v1/onboarding-attempts/${ATTEMPT_ID}/biological-sex`
+
+  test('records the declaration and returns what the person now has', async () => {
+    const response = await post(appWith(), path, { body: { biological_sex: 'female' } })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ biological_sex: 'female' })
+  })
+
+  test('refuses anything that is not exactly one of the two values', async () => {
+    let called = false
+    const app = appWith({
+      declareBiologicalSex: async () => {
+        called = true
+        return 'male'
+      },
+    })
+
+    // Null is absent from this list on purpose: it is the refusal and it is valid.
+    // 'unknown' is refused because a sentinel would have to be told apart from
+    // "never asked" by every later reader.
+    const bodies = [
+      {},
+      { biological_sex: 'other' },
+      { biological_sex: 'unknown' },
+      { biological_sex: 'Male' },
+      { biological_sex: '' },
+      { biological_sex: false },
+      { biological_sex: 'female', extra: true },
+    ]
+    for (const body of bodies) {
+      expect((await post(app, path, { body })).status).toBe(400)
+    }
+    expect(called).toBe(false)
+  })
+
+  test('accepts null as the refusal, which is what lets the flow advance', async () => {
+    const seen: Array<string | null> = []
+    const app = appWith({
+      declareBiologicalSex: async (_token, input) => {
+        seen.push(input.biologicalSex)
+        return input.biologicalSex
+      },
+    })
+
+    const response = await post(app, path, { body: { biological_sex: null } })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ biological_sex: null })
+    expect(seen).toEqual([null])
+  })
+
+  test('answers conflict when a different value was already declared', async () => {
+    const app = appWith({
+      declareBiologicalSex: async () => {
+        // What PostgreSQL raises rather than overwriting the first declaration.
+        throw Object.assign(new Error('already declared'), { code: '23505' })
+      },
+    })
+
+    expect((await post(app, path, { body: { biological_sex: 'male' } })).status).toBe(409)
+  })
+
+  test('answers forbidden when the account owns no person yet', async () => {
+    const app = appWith({
+      declareBiologicalSex: async () => {
+        throw Object.assign(new Error('no person'), { code: '42501' })
+      },
+    })
+
+    expect((await post(app, path, { body: { biological_sex: 'male' } })).status).toBe(403)
+  })
+
+  test('refuses a request with no bearer token', async () => {
+    const app = new Hono()
+    app.route(
+      '/space/v1',
+      spaceOnboardingRoutes(undefined, async () => {
+        throw new Error('token rejected')
+      }),
+    )
+
+    expect((await post(app, path, { body: { biological_sex: 'male' } })).status).toBe(401)
+  })
+
+  test('rejects an attempt id that is not a UUIDv7', async () => {
+    const response = await post(appWith(), '/space/v1/onboarding-attempts/nope/biological-sex', {
+      body: { biological_sex: 'male' },
+    })
+
+    expect(response.status).toBe(400)
+  })
+})
+
 describe('GET /space/v1/onboarding-attempts/current', () => {
   const path = '/space/v1/onboarding-attempts/current'
 
@@ -350,6 +457,8 @@ describe('GET /space/v1/onboarding-attempts/current', () => {
       readCurrentAttempt: async () => ({
         attempt: ATTEMPT,
         identity: { givenName: 'Ada', familyName: 'Lovelace', username: 'ada_lovelace' },
+        biologicalSex: 'female' as const,
+        biologicalSexAnswered: true,
       }),
     })
 
@@ -364,18 +473,30 @@ describe('GET /space/v1/onboarding-attempts/current', () => {
         expires_at: EXPIRES_AT.toISOString(),
       },
       identity: { given_name: 'Ada', family_name: 'Lovelace', username: 'ada_lovelace' },
+      biological_sex: 'female',
+      biological_sex_answered: true,
     })
   })
 
   test('answers nulls rather than an error when nothing was started', async () => {
     const app = appWith({
-      readCurrentAttempt: async () => ({ attempt: null, identity: null }),
+      readCurrentAttempt: async () => ({
+        attempt: null,
+        identity: null,
+        biologicalSex: null,
+        biologicalSexAnswered: false,
+      }),
     })
 
     const response = await get(app)
 
     expect(response.status).toBe(200)
-    expect(await response.json()).toEqual({ attempt: null, identity: null })
+    expect(await response.json()).toEqual({
+      attempt: null,
+      identity: null,
+      biological_sex: null,
+      biological_sex_answered: false,
+    })
   })
 
   test('reports a declared attempt with no name yet as identity null', async () => {

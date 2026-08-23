@@ -669,6 +669,12 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  BiologicalSex: {
+    type: 'string',
+    enum: ['male', 'female'],
+    description:
+      'Biological sex, used to calibrate energy expenditure estimates and reference ranges. Classified as training data. Absent means the person declined or has not been asked.',
+  },
   CompletenessLevel: {
     type: 'string',
     enum: ['partial', 'summary', 'detailed', 'sensor_enriched'],
@@ -3324,10 +3330,49 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  SpaceBiologicalSex: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['biological_sex'],
+    properties: {
+      biological_sex: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/BiologicalSex',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+    },
+    description:
+      'What the person now has recorded. No person identifier travels here: the API resolves it from the token on every call.',
+  },
+  SpaceBiologicalSexDeclaration: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['biological_sex'],
+    properties: {
+      biological_sex: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/BiologicalSex',
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description: 'Null is the refusal, and it is required rather than omitted.',
+      },
+    },
+    description:
+      'Null declines. It is a value the request must carry explicitly, not an omission, because the server records that the question was answered even when no sex was given — otherwise a screen that skips itself once answered would ask a decliner again on every cold start.',
+  },
   SpaceCurrentOnboardingAttempt: {
     type: 'object',
     additionalProperties: false,
-    required: ['attempt', 'identity'],
+    required: ['attempt', 'identity', 'biological_sex', 'biological_sex_answered'],
     properties: {
       attempt: {
         oneOf: [
@@ -3352,6 +3397,23 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         ],
         description:
           'Null until the Fitness ID exists. Non-null is how the app knows that step is behind it.',
+      },
+      biological_sex: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/BiologicalSex',
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description:
+          'Null while unanswered, and also when the person declined: declining is recorded as the absence of a value, so the two are deliberately indistinguishable here.',
+      },
+      biological_sex_answered: {
+        type: 'boolean',
+        description:
+          'Whether the question was already put and answered, refusal included. This is what tells the screen to skip itself; the value alone cannot, because declining leaves none.',
       },
     },
     description:

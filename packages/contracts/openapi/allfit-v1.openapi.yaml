@@ -767,6 +767,11 @@ paths:
         not move any control earlier.
 
 
+        Called again by an account that already has one, it **corrects** the name,
+        surname and handle on the same person rather than refusing. Adult eligibility
+        is still required: a correction does not get to skip a control.
+
+
         There is deliberately no way to ask whether a username is free. A
         collision comes back as `409` from this command and nothing else: an
         availability query would reveal that somebody exists, which is the
@@ -799,6 +804,64 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SpacePendingFitnessId'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /space/v1/onboarding-attempts/{attemptId}/biological-sex:
+    post:
+      tags: [Space Identity]
+      operationId: declareSpaceBiologicalSex
+      x-allfit-operation: OP-IDN-045
+      x-allfit-cache: no-store
+      summary: Declare the account holder's biological sex
+      description: >-
+        HU-SP-096. Written straight onto `identity.people`, not into the profile
+        claims catalogue. That catalogue exists for data that changes and that
+        several sources observe, each with its own provenance and validity window;
+        biological sex is a single stable fact with one possible source, so all of
+        that machinery would sit unused.
+
+
+        Declining is an answer, and the client does not call this operation for
+        it: it simply moves on. The absence of a value is what records the refusal,
+        because a sentinel such as `unknown` would force every later reader to tell
+        "declined" apart from "never asked", and nothing needs that distinction.
+
+
+        A second declaration with a different value **corrects** it. A person may go
+        back and change what they answered, and declining after having declared
+        clears the value. What does not move is the mark on the attempt: the question
+        was answered either way, and that is what stops the flow asking again.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OnboardingAttemptId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SpaceBiologicalSexDeclaration'
+      responses:
+        '200':
+          description: The declared value
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpaceBiologicalSex'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -4337,10 +4400,44 @@ components:
         The Fitness ID as it now exists on the person, pending activation. No
         person identifier travels here: the app never needs one, and the API
         resolves it from the token on every call.
+    SpaceBiologicalSexDeclaration:
+      type: object
+      additionalProperties: false
+      required: [biological_sex]
+      properties:
+        biological_sex:
+          oneOf:
+            - $ref: '#/components/schemas/BiologicalSex'
+            - type: 'null'
+          description: Null is the refusal, and it is required rather than omitted.
+      description: >-
+        Null declines. It is a value the request must carry explicitly, not an
+        omission, because the server records that the question was answered even
+        when no sex was given — otherwise a screen that skips itself once answered
+        would ask a decliner again on every cold start.
+    SpaceBiologicalSex:
+      type: object
+      additionalProperties: false
+      required: [biological_sex]
+      properties:
+        biological_sex:
+          oneOf:
+            - $ref: '#/components/schemas/BiologicalSex'
+            - type: 'null'
+      description: >-
+        What the person now has recorded. No person identifier travels here: the
+        API resolves it from the token on every call.
+    BiologicalSex:
+      type: string
+      enum: [male, female]
+      description: >-
+        Biological sex, used to calibrate energy expenditure estimates and
+        reference ranges. Classified as training data. Absent means the person
+        declined or has not been asked.
     SpaceCurrentOnboardingAttempt:
       type: object
       additionalProperties: false
-      required: [attempt, identity]
+      required: [attempt, identity, biological_sex, biological_sex_answered]
       properties:
         attempt:
           oneOf:
@@ -4356,6 +4453,20 @@ components:
           description: >-
             Null until the Fitness ID exists. Non-null is how the app knows that
             step is behind it.
+        biological_sex:
+          oneOf:
+            - $ref: '#/components/schemas/BiologicalSex'
+            - type: 'null'
+          description: >-
+            Null while unanswered, and also when the person declined: declining is
+            recorded as the absence of a value, so the two are deliberately
+            indistinguishable here.
+        biological_sex_answered:
+          type: boolean
+          description: >-
+            Whether the question was already put and answered, refusal included.
+            This is what tells the screen to skip itself; the value alone cannot,
+            because declining leaves none.
       description: >-
         Enough to resume the onboarding and nothing more. Absent answers are
         null rather than omitted, so the app never has to guess whether a step

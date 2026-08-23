@@ -29,6 +29,7 @@ export type OnboardingAttempt = AllfitV1Schemas['SpaceOnboardingAttempt']
 export type AdultEligibilityEvidence = AllfitV1Schemas['AdultEligibilityEvidence']
 export type PendingFitnessId = AllfitV1Schemas['SpacePendingFitnessId']
 export type CurrentOnboardingAttempt = AllfitV1Schemas['SpaceCurrentOnboardingAttempt']
+export type BiologicalSex = AllfitV1Schemas['BiologicalSex']
 
 export interface OnboardingTransport {
   startAttempt(command: CommandHeaders): Promise<OnboardingAttempt>
@@ -42,6 +43,11 @@ export interface OnboardingTransport {
     attemptId: string,
     identity: PendingFitnessId,
   ): Promise<PendingFitnessId>
+  declareBiologicalSex(
+    command: CommandHeaders,
+    attemptId: string,
+    biologicalSex: BiologicalSex | null,
+  ): Promise<BiologicalSex | null>
   readCurrent(): Promise<CurrentOnboardingAttempt>
 }
 
@@ -57,6 +63,11 @@ export interface OnboardingFlowDependencies {
 export interface OnboardingFlow {
   declareAdult(declaredAdult: boolean): Promise<AdultEligibilityEvidence>
   createFitnessId(identity: PendingFitnessId): Promise<PendingFitnessId>
+  /**
+   * Null declines. It still goes to the server, because the refusal has to be
+   * recorded on the attempt or the screen would ask again on every cold start.
+   */
+  declareBiologicalSex(biologicalSex: BiologicalSex | null): Promise<BiologicalSex | null>
   /** What was already answered, so coming back does not start over. */
   resume(): Promise<CurrentOnboardingAttempt>
 }
@@ -66,6 +77,7 @@ export function createOnboardingFlow(dependencies: OnboardingFlowDependencies): 
   let attempt: OnboardingAttempt | undefined
   let pendingAdult: { command: CommandHeaders; declaredAdult: boolean } | undefined
   let pendingIdentity: { command: CommandHeaders; identity: string } | undefined
+  let pendingSex: { command: CommandHeaders; value: BiologicalSex | null } | undefined
 
   const openAttempt = async (): Promise<OnboardingAttempt> => {
     attempt ??= await dependencies.transport.startAttempt(issue())
@@ -106,6 +118,24 @@ export function createOnboardingFlow(dependencies: OnboardingFlowDependencies): 
       )
       pendingIdentity = undefined
       return created
+    },
+
+    async declareBiologicalSex(biologicalSex) {
+      const open = await openAttempt()
+
+      // Same discipline as the other steps: the key belongs to the submission, so
+      // changing the answer starts a new one instead of reusing a burnt key.
+      if (!pendingSex || pendingSex.value !== biologicalSex) {
+        pendingSex = { command: issue(), value: biologicalSex }
+      }
+
+      const declared = await dependencies.transport.declareBiologicalSex(
+        pendingSex.command,
+        open.id,
+        biologicalSex,
+      )
+      pendingSex = undefined
+      return declared
     },
 
     async resume() {

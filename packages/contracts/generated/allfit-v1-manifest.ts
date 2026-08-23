@@ -182,6 +182,13 @@ export const allfitV1ContractManifest = {
     },
     {
       method: 'POST',
+      path: '/space/v1/onboarding-attempts/{attemptId}/biological-sex',
+      operationId: 'declareSpaceBiologicalSex',
+      allfitOperation: 'OP-IDN-045',
+      responses: ['200', '400', '401', '403', '409', '503'],
+    },
+    {
+      method: 'POST',
       path: '/space/v1/onboarding-attempts/{attemptId}/eligibility-evidence',
       operationId: 'recordSpaceAdultEligibilityEvidence',
       allfitOperation: 'OP-IDN-002',

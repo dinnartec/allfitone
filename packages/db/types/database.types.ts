@@ -795,6 +795,7 @@ export type Database = {
       onboarding_attempts: {
         Row: {
           account_id: string
+          biological_sex_answered_at: string | null
           created_at: string
           expires_at: string
           id: string
@@ -809,6 +810,7 @@ export type Database = {
         }
         Insert: {
           account_id: string
+          biological_sex_answered_at?: string | null
           created_at?: string
           expires_at: string
           id?: string
@@ -823,6 +825,7 @@ export type Database = {
         }
         Update: {
           account_id?: string
+          biological_sex_answered_at?: string | null
           created_at?: string
           expires_at?: string
           id?: string
@@ -902,6 +905,7 @@ export type Database = {
       people: {
         Row: {
           activated_at: string | null
+          biological_sex: Database['identity']['Enums']['biological_sex'] | null
           contact_email: string | null
           contact_email_verified_at: string | null
           contact_phone: string | null
@@ -917,6 +921,7 @@ export type Database = {
         }
         Insert: {
           activated_at?: string | null
+          biological_sex?: Database['identity']['Enums']['biological_sex'] | null
           contact_email?: string | null
           contact_email_verified_at?: string | null
           contact_phone?: string | null
@@ -932,6 +937,7 @@ export type Database = {
         }
         Update: {
           activated_at?: string | null
+          biological_sex?: Database['identity']['Enums']['biological_sex'] | null
           contact_email?: string | null
           contact_email_verified_at?: string | null
           contact_phone?: string | null
@@ -1227,28 +1233,6 @@ export type Database = {
         }
         Returns: string
       }
-      create_pending_person: {
-        Args: {
-          p_account_id: string
-          p_attempt_id: string
-          p_command_id: string
-          p_contact_email: string
-          p_contact_email_verified: boolean
-          p_family_name: string
-          p_given_name: string
-          p_idempotency_key: string
-          p_request_hash: string
-          p_username: string
-        }
-        Returns: {
-          contact_email: string
-          contact_email_verified: boolean
-          family_name: string
-          given_name: string
-          person_id: string
-          username: string
-        }[]
-      }
       decide_staff_invitation: {
         Args: {
           p_command_id: string
@@ -1268,6 +1252,42 @@ export type Database = {
           organization_id: string
           proposed_role_code: string
           replayed: boolean
+        }[]
+      }
+      declare_biological_sex: {
+        Args: {
+          p_account_id: string
+          p_attempt_id: string
+          p_command_id: string
+          p_idempotency_key: string
+          p_request_hash: string
+          p_value: string
+        }
+        Returns: {
+          biological_sex: string
+          replayed: boolean
+        }[]
+      }
+      declare_fitness_id: {
+        Args: {
+          p_account_id: string
+          p_attempt_id: string
+          p_command_id: string
+          p_contact_email: string
+          p_contact_email_verified: boolean
+          p_family_name: string
+          p_given_name: string
+          p_idempotency_key: string
+          p_request_hash: string
+          p_username: string
+        }
+        Returns: {
+          contact_email: string
+          contact_email_verified: boolean
+          family_name: string
+          given_name: string
+          person_id: string
+          username: string
         }[]
       }
       declare_professional_credential: {
@@ -1475,6 +1495,8 @@ export type Database = {
         Args: { p_account_id: string }
         Returns: {
           attempt_id: string
+          biological_sex: string
+          biological_sex_answered: boolean
           eligibility_status: string
           expires_at: string
           family_name: string
@@ -1680,6 +1702,7 @@ export type Database = {
       actor_kind: 'anonymous' | 'account' | 'person' | 'professional' | 'worker' | 'support'
       backoffice_authentication_attempt_status:
         'pending_enrollment' | 'pending_challenge' | 'completed' | 'failed' | 'expired'
+      biological_sex: 'male' | 'female'
       eligibility_result: 'pass' | 'fail' | 'review_required' | 'unknown'
       invitation_intent_kind: 'membership' | 'service_relationship' | 'program_assignment'
       invitation_intent_status: 'pending' | 'accepted' | 'rejected' | 'revoked' | 'expired'
@@ -3085,6 +3108,7 @@ export const Constants = {
         'failed',
         'expired',
       ],
+      biological_sex: ['male', 'female'],
       eligibility_result: ['pass', 'fail', 'review_required', 'unknown'],
       invitation_intent_kind: ['membership', 'service_relationship', 'program_assignment'],
       invitation_intent_status: ['pending', 'accepted', 'rejected', 'revoked', 'expired'],

@@ -50,7 +50,13 @@ function onboarding(overrides: Partial<OnboardingService> = {}): OnboardingServi
       familyName: input.familyName,
       username: input.username,
     }),
-    readCurrentAttempt: async () => ({ attempt: null, identity: null }),
+    declareBiologicalSex: async (_actor, input) => input.biologicalSex,
+    readCurrentAttempt: async () => ({
+      attempt: null,
+      identity: null,
+      biologicalSex: null,
+      biologicalSexAnswered: false,
+    }),
     complete: async () => '0198d000-0000-7000-8000-000000000031',
     ...overrides,
   }

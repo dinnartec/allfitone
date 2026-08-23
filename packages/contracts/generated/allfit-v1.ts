@@ -345,11 +345,37 @@ export interface paths {
      *
      *     Adult eligibility is still required first. Creating the row earlier does not move any control earlier.
      *
+     *     Called again by an account that already has one, it **corrects** the name, surname and handle on the same person rather than refusing. Adult eligibility is still required: a correction does not get to skip a control.
+     *
      *     There is deliberately no way to ask whether a username is free. A collision comes back as `409` from this command and nothing else: an availability query would reveal that somebody exists, which is the guarantee the whole registration flow is built on. What makes the collision itself tolerable is that a handle, unlike an email address, is not an identifier that exists outside the platform.
      *
      *     The email is not accepted as input. It belongs to the credential, and changing it is `OP-IDN-021` with its own verification.
      */
     post: operations['createSpacePendingFitnessId']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/onboarding-attempts/{attemptId}/biological-sex': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Declare the account holder's biological sex
+     * @description HU-SP-096. Written straight onto `identity.people`, not into the profile claims catalogue. That catalogue exists for data that changes and that several sources observe, each with its own provenance and validity window; biological sex is a single stable fact with one possible source, so all of that machinery would sit unused.
+     *
+     *     Declining is an answer, and the client does not call this operation for it: it simply moves on. The absence of a value is what records the refusal, because a sentinel such as `unknown` would force every later reader to tell "declined" apart from "never asked", and nothing needs that distinction.
+     *
+     *     A second declaration with a different value **corrects** it. A person may go back and change what they answered, and declining after having declared clears the value. What does not move is the mark on the attempt: the question was answered either way, and that is what stops the flow asking again.
+     */
+    post: operations['declareSpaceBiologicalSex']
     delete?: never
     options?: never
     head?: never
@@ -1545,12 +1571,30 @@ export interface components {
       family_name: string
       username: components['schemas']['Username']
     }
+    /** @description Null declines. It is a value the request must carry explicitly, not an omission, because the server records that the question was answered even when no sex was given — otherwise a screen that skips itself once answered would ask a decliner again on every cold start. */
+    SpaceBiologicalSexDeclaration: {
+      /** @description Null is the refusal, and it is required rather than omitted. */
+      biological_sex: components['schemas']['BiologicalSex'] | null
+    }
+    /** @description What the person now has recorded. No person identifier travels here: the API resolves it from the token on every call. */
+    SpaceBiologicalSex: {
+      biological_sex: components['schemas']['BiologicalSex'] | null
+    }
+    /**
+     * @description Biological sex, used to calibrate energy expenditure estimates and reference ranges. Classified as training data. Absent means the person declined or has not been asked.
+     * @enum {string}
+     */
+    BiologicalSex: 'male' | 'female'
     /** @description Enough to resume the onboarding and nothing more. Absent answers are null rather than omitted, so the app never has to guess whether a step was skipped or the field simply did not travel. */
     SpaceCurrentOnboardingAttempt: {
       /** @description Null when the account has no open attempt, which is also what an already activated person sees. */
       attempt: components['schemas']['SpaceOnboardingAttempt'] | null
       /** @description Null until the Fitness ID exists. Non-null is how the app knows that step is behind it. */
       identity: components['schemas']['SpacePendingFitnessId'] | null
+      /** @description Null while unanswered, and also when the person declined: declining is recorded as the absence of a value, so the two are deliberately indistinguishable here. */
+      biological_sex: components['schemas']['BiologicalSex'] | null
+      /** @description Whether the question was already put and answered, refusal included. This is what tells the screen to skip itself; the value alone cannot, because declining leaves none. */
+      biological_sex_answered: boolean
     }
     AdultEligibilityPolicy: {
       /** @constant */
@@ -3897,6 +3941,43 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['SpacePendingFitnessId']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      409: components['responses']['Conflict']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  declareSpaceBiologicalSex: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        attemptId: components['parameters']['OnboardingAttemptId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SpaceBiologicalSexDeclaration']
+      }
+    }
+    responses: {
+      /** @description The declared value */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SpaceBiologicalSex']
         }
       }
       400: components['responses']['BadRequest']

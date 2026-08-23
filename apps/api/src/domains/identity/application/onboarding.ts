@@ -28,6 +28,7 @@ import type {
   AccessAccount,
   AccountActor,
   AdultEligibilityEvidence,
+  BiologicalSex,
   CommandContext,
   CurrentOnboardingAttempt,
   IdentityOnboardingDatabase,
@@ -55,6 +56,10 @@ export interface OnboardingService {
       contactEmailVerified: boolean
     },
   ): Promise<PendingFitnessId>
+  declareBiologicalSex(
+    actor: AccountActor,
+    input: CommandContext & { attemptId: string; biologicalSex: BiologicalSex | null },
+  ): Promise<BiologicalSex | null>
   readCurrentAttempt(actor: AccountActor): Promise<CurrentOnboardingAttempt>
   complete(
     actor: AccountActor,
@@ -76,6 +81,8 @@ export function createOnboardingService(database: IdentityOnboardingDatabase): O
       database.recordAdultEligibility({ accountId: actor.accountId, ...input }),
     createFitnessId: (actor, input) =>
       database.createPendingPerson({ accountId: actor.accountId, ...input }),
+    declareBiologicalSex: (actor, input) =>
+      database.declareBiologicalSex({ accountId: actor.accountId, ...input }),
     readCurrentAttempt: (actor) => database.readCurrentAttempt(actor.accountId),
     complete: (actor, input) => database.activatePerson({ accountId: actor.accountId, ...input }),
   }
@@ -120,6 +127,10 @@ export interface SpaceOnboardingService {
       username: string
     },
   ): Promise<PendingFitnessId>
+  declareBiologicalSex(
+    token: VerifiedToken,
+    input: CommandContext & { attemptId: string; biologicalSex: BiologicalSex | null },
+  ): Promise<BiologicalSex | null>
   readCurrentAttempt(token: VerifiedToken): Promise<CurrentOnboardingAttempt>
 }
 
@@ -162,6 +173,9 @@ export function createSpaceOnboardingService(
         contactEmail: identity.verifiedEmail,
         contactEmailVerified: true,
       })
+    },
+    async declareBiologicalSex(token, input) {
+      return dependencies.onboarding.declareBiologicalSex(await actorFor(token), input)
     },
     async readCurrentAttempt(token) {
       return dependencies.onboarding.readCurrentAttempt(await actorFor(token))

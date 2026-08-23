@@ -7,6 +7,7 @@ import type postgres from 'postgres'
 import { database } from '../../../platform/db/index.js'
 import { measureStudioRequestPhase } from '../../../platform/observability/index.js'
 import type {
+  BiologicalSex,
   IdentitySessionDatabase,
   IdentityWebhookDatabase,
   IdentityOnboardingDatabase,
@@ -245,13 +246,14 @@ export function createIdentityOnboardingDatabase(): IdentityOnboardingDatabase {
     async createPendingPerson(input) {
       return sql.begin(async (transaction) => {
         await setAccountActor(transaction, input.accountId)
-        // A taken handle surfaces as SQLSTATE 23505 and the handler maps it to
+        // Creates the Fitness ID, or corrects it when the account already owns one.
+        // A handle somebody else holds surfaces as 23505 and the handler maps it to
         // conflict, the same way its siblings do. Nothing is translated here.
         const [row] = await transaction<
           { given_name: string; family_name: string; username: string }[]
         >`
           select given_name, family_name, username
-          from identity.create_pending_person(
+          from identity.declare_fitness_id(
             ${input.accountId}::uuid,
             ${input.attemptId}::uuid,
             ${input.givenName},
@@ -273,6 +275,27 @@ export function createIdentityOnboardingDatabase(): IdentityOnboardingDatabase {
       })
     },
 
+    async declareBiologicalSex(input) {
+      return sql.begin(async (transaction) => {
+        await setAccountActor(transaction, input.accountId)
+        // A second, different declaration raises 23505 and the handler maps it to
+        // conflict. Nothing is translated here.
+        const [row] = await transaction<{ biological_sex: BiologicalSex | null }[]>`
+          select biological_sex
+          from identity.declare_biological_sex(
+            ${input.accountId}::uuid,
+            ${input.attemptId}::uuid,
+            ${input.biologicalSex},
+            ${input.idempotencyKey}::uuid,
+            ${input.commandId}::uuid,
+            ${input.requestHash}
+          )
+        `
+        if (!row) throw new Error('PostgreSQL did not record the biological sex')
+        return row.biological_sex
+      })
+    },
+
     async readCurrentAttempt(accountId) {
       return sql.begin(async (transaction) => {
         await setAccountActor(transaction, accountId)
@@ -287,12 +310,20 @@ export function createIdentityOnboardingDatabase(): IdentityOnboardingDatabase {
             given_name: string | null
             family_name: string | null
             username: string | null
+            biological_sex: BiologicalSex | null
+            biological_sex_answered: boolean
           }[]
         >`select * from identity.read_current_onboarding(${accountId}::uuid)`
 
         // No open attempt is an answer, not a failure: it is also what an
         // already activated person sees.
-        if (!row) return { attempt: null, identity: null }
+        if (!row)
+          return {
+            attempt: null,
+            identity: null,
+            biologicalSex: null,
+            biologicalSexAnswered: false,
+          }
         return {
           attempt: {
             id: row.attempt_id,
@@ -308,6 +339,8 @@ export function createIdentityOnboardingDatabase(): IdentityOnboardingDatabase {
                   username: row.username,
                 }
               : null,
+          biologicalSex: row.biological_sex,
+          biologicalSexAnswered: row.biological_sex_answered,
         }
       })
     },

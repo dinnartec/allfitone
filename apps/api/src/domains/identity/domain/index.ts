@@ -26,12 +26,12 @@ export interface StoredAccessSession {
   tokenCiphertext: string
   accessTokenExpiresAt: Date
   tokenVersion: number
-  personStatus?: 'active' | 'closed'
+  personStatus?: 'pending_activation' | 'active' | 'closed'
 }
 
 export interface ActorRegistration {
   personId?: string
-  personStatus?: 'active' | 'closed'
+  personStatus?: 'pending_activation' | 'active' | 'closed'
 }
 
 /** The access account, and the person behind it once activated. Every surface. */
@@ -69,10 +69,17 @@ export interface PendingFitnessId {
   username: string
 }
 
+/** Only what the person can declare. Declining is the absence of a value. */
+export type BiologicalSex = 'male' | 'female'
+
 export interface CurrentOnboardingAttempt {
   attempt: OnboardingAttempt | null
   /** Non-null once the Fitness ID exists, which is how the app knows to move on. */
   identity: PendingFitnessId | null
+  /** Null while unanswered and also when declined: the two are the same absence. */
+  biologicalSex: BiologicalSex | null
+  /** Whether the question was put and answered, refusal included. */
+  biologicalSexAnswered: boolean
 }
 
 export interface IdentityOnboardingDatabase {
@@ -93,6 +100,14 @@ export interface IdentityOnboardingDatabase {
       contactEmailVerified: boolean
     },
   ): Promise<PendingFitnessId>
+  declareBiologicalSex(
+    input: CommandContext & {
+      accountId: string
+      attemptId: string
+      /** Null declines: no value is recorded, only that the question was answered. */
+      biologicalSex: BiologicalSex | null
+    },
+  ): Promise<BiologicalSex | null>
   readCurrentAttempt(accountId: string): Promise<CurrentOnboardingAttempt>
   activatePerson(
     input: CommandContext & {

@@ -20,6 +20,7 @@ import { createHash } from 'node:crypto'
 import type { VerifiedToken } from '@allfitone/auth-provider'
 import { Hono, type Context } from 'hono'
 
+import type { BiologicalSex } from '../domain/index.js'
 import { fail } from '../../../platform/http/index.js'
 import {
   OnboardingPreconditionError,
@@ -134,6 +135,8 @@ export function spaceOnboardingRoutes(
                 username: current.identity.username,
               }
             : null,
+          biological_sex: current.biologicalSex,
+          biological_sex_answered: current.biologicalSexAnswered,
         },
         200,
       )
@@ -170,6 +173,32 @@ export function spaceOnboardingRoutes(
         },
         200,
       )
+    } catch (error) {
+      return operationFailure(c, error)
+    }
+  })
+
+  routes.post('/onboarding-attempts/:attemptId/biological-sex', async (c) => {
+    c.header('Cache-Control', 'no-store')
+
+    const token = await verified(c, verify)
+    if (!token) return fail(c, 'unauthenticated')
+
+    const attemptId = c.req.param('attemptId')
+    if (!UUID_V7.test(attemptId)) return fail(c, 'invalid-request')
+
+    const body = await readJson(c)
+    const declaration = readBiologicalSex(body)
+    const command = commandContext(c, body)
+    if (!declaration || !command) return fail(c, 'invalid-request')
+
+    try {
+      const declared = await onboarding().declareBiologicalSex(token, {
+        ...command,
+        attemptId,
+        biologicalSex: declaration.biologicalSex,
+      })
+      return c.json({ biological_sex: declared }, 200)
     } catch (error) {
       return operationFailure(c, error)
     }
@@ -262,6 +291,20 @@ function readIdentity(
   if (typeof record.username !== 'string' || !USERNAME.test(record.username)) return undefined
 
   return { givenName, familyName, username: record.username }
+}
+
+/**
+ * Declining is not a value: the client that declines never sends this request.
+ * Accepting one would create a third state to tell apart from "never asked".
+ */
+function readBiologicalSex(body: unknown): { biologicalSex: BiologicalSex | null } | undefined {
+  if (typeof body !== 'object' || body === null) return undefined
+  const keys = Object.keys(body)
+  if (keys.length !== 1 || keys[0] !== 'biological_sex') return undefined
+
+  const value = (body as { biological_sex: unknown }).biological_sex
+  if (value === null) return { biologicalSex: null }
+  return value === 'male' || value === 'female' ? { biologicalSex: value } : undefined
 }
 
 function trimmedName(value: unknown): string | undefined {

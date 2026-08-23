@@ -44,6 +44,7 @@ const IDENTITY = {
 function flowWith(transport: Partial<OnboardingTransport> = {}) {
   const sent: Array<{ idempotencyKey: string; declaredAdult: boolean }> = []
   const declared: Array<{ idempotencyKey: string; username: string }> = []
+  const sexes: Array<{ idempotencyKey: string; value: string | null }> = []
   let issued = 0
 
   const flow = createOnboardingFlow({
@@ -57,7 +58,16 @@ function flowWith(transport: Partial<OnboardingTransport> = {}) {
         declared.push({ idempotencyKey: command.idempotencyKey, username: identity.username })
         return identity
       },
-      readCurrent: async () => ({ attempt: ATTEMPT, identity: null }),
+      declareBiologicalSex: async (command, _attemptId, biologicalSex) => {
+        sexes.push({ idempotencyKey: command.idempotencyKey, value: biologicalSex })
+        return biologicalSex
+      },
+      readCurrent: async () => ({
+        attempt: ATTEMPT,
+        identity: null,
+        biological_sex: null,
+        biological_sex_answered: false,
+      }),
       ...transport,
     },
     newCommand: () => {
@@ -66,7 +76,7 @@ function flowWith(transport: Partial<OnboardingTransport> = {}) {
     },
   })
 
-  return { flow, sent, declared }
+  return { flow, sent, declared, sexes }
 }
 
 describe('declareAdult', () => {
@@ -217,10 +227,20 @@ describe('createFitnessId', () => {
 describe('resume', () => {
   test('returns what the server already holds', async () => {
     const { flow } = flowWith({
-      readCurrent: async () => ({ attempt: ATTEMPT, identity: IDENTITY }),
+      readCurrent: async () => ({
+        attempt: ATTEMPT,
+        identity: IDENTITY,
+        biological_sex: null,
+        biological_sex_answered: false,
+      }),
     })
 
-    expect(await flow.resume()).toEqual({ attempt: ATTEMPT, identity: IDENTITY })
+    expect(await flow.resume()).toEqual({
+      attempt: ATTEMPT,
+      identity: IDENTITY,
+      biological_sex: null,
+      biological_sex_answered: false,
+    })
   })
 
   test('adopts the open attempt instead of starting a second one', async () => {
@@ -230,7 +250,12 @@ describe('resume', () => {
         starts += 1
         return ATTEMPT
       },
-      readCurrent: async () => ({ attempt: ATTEMPT, identity: null }),
+      readCurrent: async () => ({
+        attempt: ATTEMPT,
+        identity: null,
+        biological_sex: null,
+        biological_sex_answered: false,
+      }),
     })
 
     await flow.resume()
@@ -246,12 +271,77 @@ describe('resume', () => {
         starts += 1
         return ATTEMPT
       },
-      readCurrent: async () => ({ attempt: null, identity: null }),
+      readCurrent: async () => ({
+        attempt: null,
+        identity: null,
+        biological_sex: null,
+        biological_sex_answered: false,
+      }),
     })
 
     await flow.resume()
     await flow.createFitnessId(IDENTITY)
 
     expect(starts).toBe(1)
+  })
+})
+
+describe('declareBiologicalSex', () => {
+  test('sends the value the person chose', async () => {
+    const { flow, sexes } = flowWith()
+
+    await expect(flow.declareBiologicalSex('female')).resolves.toBe('female')
+    expect(sexes.map((entry) => entry.value)).toEqual(['female'])
+  })
+
+  test('reuses the key while the same answer keeps failing', async () => {
+    let attempts = 0
+    const keys: string[] = []
+    const { flow } = flowWith({
+      declareBiologicalSex: async (command, _attemptId, value) => {
+        keys.push(command.idempotencyKey)
+        attempts += 1
+        if (attempts === 1) throw new Error('network')
+        return value
+      },
+    })
+
+    await expect(flow.declareBiologicalSex('male')).rejects.toThrow('network')
+    await expect(flow.declareBiologicalSex('male')).resolves.toBe('male')
+
+    expect(keys).toHaveLength(2)
+    expect(keys[0]).toBe(keys[1])
+  })
+
+  test('starts a new submission when the answer changes', async () => {
+    const keys: string[] = []
+    const { flow } = flowWith({
+      declareBiologicalSex: async (command) => {
+        keys.push(command.idempotencyKey)
+        throw new Error('network')
+      },
+    })
+
+    await expect(flow.declareBiologicalSex('male')).rejects.toThrow('network')
+    await expect(flow.declareBiologicalSex('female')).rejects.toThrow('network')
+
+    // A corrected answer must not reuse a key the server already hashed against
+    // the previous body: that would come back as a conflict.
+    expect(keys[0]).not.toBe(keys[1])
+  })
+
+  test('discards the key once it lands, so a later change is a new command', async () => {
+    const keys: string[] = []
+    const { flow } = flowWith({
+      declareBiologicalSex: async (command, _attemptId, value) => {
+        keys.push(command.idempotencyKey)
+        return value
+      },
+    })
+
+    await flow.declareBiologicalSex('male')
+    await flow.declareBiologicalSex('male')
+
+    expect(keys[0]).not.toBe(keys[1])
   })
 })

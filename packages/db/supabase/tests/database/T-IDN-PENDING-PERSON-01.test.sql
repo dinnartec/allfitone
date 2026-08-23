@@ -1,8 +1,8 @@
 begin;
 
-select plan(30);
+select plan(33);
 
-select has_function('identity', 'create_pending_person',
+select has_function('identity', 'declare_fitness_id',
   'T-IDN-PHY-11 the pending Fitness ID is reachable only through a closed command');
 select has_column('identity', 'people', 'username',
   'T-IDN-PHY-12 the handle belongs to the person, not to a separate relation');
@@ -37,7 +37,7 @@ select attempt_id from identity.start_onboarding_attempt(
 
 -- Adulthood before the person exists: DT-012 is not relaxed by creating earlier.
 select throws_ok(
-  $$ select identity.create_pending_person(
+  $$ select identity.declare_fitness_id(
        '019f1000-0000-7000-8000-000000000011',
        (select attempt_id from attempt_one),
        'Ada', 'Lovelace', 'ada_lovelace', 'ada@example.test', true,
@@ -55,7 +55,7 @@ select identity.record_adult_eligibility(
   decode(repeat('33', 32), 'hex'));
 
 create temporary table pending_one as
-select * from identity.create_pending_person(
+select * from identity.declare_fitness_id(
   '019f1000-0000-7000-8000-000000000011',
   (select attempt_id from attempt_one),
   '  Ada  ', 'Lovelace', 'Ada_Lovelace', '  Ada@Example.TEST  ', true,
@@ -108,7 +108,7 @@ select is_empty(
   'and still cannot read the table directly: the function is the only way in');
 
 select is(
-  (select person_id from identity.create_pending_person(
+  (select person_id from identity.declare_fitness_id(
     '019f1000-0000-7000-8000-000000000011',
     (select attempt_id from attempt_one),
     'Ada', 'Lovelace', 'ada_lovelace', 'ada@example.test', true,
@@ -117,6 +117,34 @@ select is(
     decode(repeat('34', 32), 'hex'))),
   (select person_id from pending_one),
   'T-IDN-IDEM-11 replaying never creates a second Fitness ID');
+
+-- Corregir el nombre reutiliza la persona: una cuenta tiene exactamente una.
+select is(
+  (select given_name from identity.declare_fitness_id(
+    '019f1000-0000-7000-8000-000000000011',
+    (select attempt_id from attempt_one),
+    'Augusta', 'Byron', 'ada_lovelace', 'ada@example.test', true,
+    '31111111-1111-4111-8111-111111111151',
+    '31111111-1111-4111-8111-111111111152',
+    decode(repeat('3f', 32), 'hex'))),
+  'Augusta',
+  'T-IDN-INT-18 going back corrects the Fitness ID instead of being refused');
+
+reset role;
+-- Se afirma sobre el vínculo de esta cuenta, no sobre el conteo de la tabla: estas
+-- pruebas corren contra la base local compartida y cualquier fila ajena las rompería.
+select is(
+  (select person_id from identity.access_accounts where id = '019f1000-0000-7000-8000-000000000011'),
+  (select person_id from pending_one),
+  'and correcting reuses the same person: an account owns exactly one');
+select is(
+  (select username::text from identity.people where id = (select person_id from pending_one)),
+  'ada_lovelace',
+  'and the handle it kept is still taken, so the collision below is a real one');
+
+set local role allfit_api;
+select set_config('app.actor_kind', 'account', true);
+select set_config('app.actor_account_id', '019f1000-0000-7000-8000-000000000011', true);
 
 -- A second account cannot take the handle.
 select set_config('app.actor_account_id', '019f1000-0000-7000-8000-000000000012', true);
@@ -134,7 +162,7 @@ select identity.record_adult_eligibility(
   decode(repeat('36', 32), 'hex'));
 
 select throws_ok(
-  $$ select identity.create_pending_person(
+  $$ select identity.declare_fitness_id(
        '019f1000-0000-7000-8000-000000000012',
        (select attempt_id from attempt_two),
        'Grace', 'Hopper', 'ada_lovelace', 'grace@example.test', true,
@@ -145,7 +173,7 @@ select throws_ok(
   'T-IDN-INT-13 a handle another person holds cannot be taken');
 
 select throws_ok(
-  $$ select identity.create_pending_person(
+  $$ select identity.declare_fitness_id(
        '019f1000-0000-7000-8000-000000000012',
        (select attempt_id from attempt_two),
        'Grace', 'Hopper', 'Grace Hopper!', 'grace@example.test', true,
@@ -156,7 +184,7 @@ select throws_ok(
   'a malformed handle is refused by a constraint, not only by the application');
 
 select throws_ok(
-  $$ select identity.create_pending_person(
+  $$ select identity.declare_fitness_id(
        '019f1000-0000-7000-8000-000000000012',
        (select attempt_id from attempt_two),
        'Grace', 'Hopper', 'grace_hopper', '   ', true,
@@ -169,7 +197,7 @@ select throws_ok(
 -- Unverified stores the address and withholds the stamp. That is the whole point
 -- of keeping them separate: an unverified contact receives no notifications.
 create temporary table pending_two as
-select * from identity.create_pending_person(
+select * from identity.declare_fitness_id(
   '019f1000-0000-7000-8000-000000000012',
   (select attempt_id from attempt_two),
   'Grace', 'Hopper', 'grace_hopper', 'Grace@Example.test', false,

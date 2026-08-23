@@ -72,9 +72,13 @@ function serviceWith(
       })
       return { givenName: input.givenName, familyName: input.familyName, username: input.username }
     },
+    declareBiologicalSex: async (actor, input) => {
+      actors.push(actor.accountId)
+      return input.biologicalSex
+    },
     readCurrentAttempt: async (actor) => {
       actors.push(actor.accountId)
-      return { attempt: ATTEMPT, identity: null }
+      return { attempt: ATTEMPT, identity: null, biologicalSex: null, biologicalSexAnswered: false }
     },
     complete: async () => 'person_01',
     ...overrides,
