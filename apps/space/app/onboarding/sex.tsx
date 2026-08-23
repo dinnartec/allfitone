@@ -50,7 +50,7 @@ import malePortrait from '../../assets/images/sex-male.webp'
 import { OnboardingHeader } from '../../src/components/onboarding-header'
 import { ApiError } from '../../src/client'
 import { createSpaceOnboardingFlow } from '../../src/client/onboarding-transport'
-import { guardStep } from '../../src/client/onboarding-steps'
+import { guardStep, ONBOARDING_CONTINUES_ROUTE } from '../../src/client/onboarding-steps'
 import { canSubmitSex, cardGeometry, CARD_GAP, type SexAnswer } from '../../src/client/sex-form'
 
 const EXPIRED = 'Tu sesión venció. Vuelve a entrar para guardar tu respuesta.'
@@ -122,7 +122,7 @@ export default function OnboardingBiologicalSex() {
     setFailure(undefined)
     try {
       await flow.declareBiologicalSex(answer)
-      router.replace('/welcome')
+      router.replace(ONBOARDING_CONTINUES_ROUTE)
     } catch (cause) {
       if (cause instanceof ApiError && cause.failure === 'conflict') {
         setFailure(TAKEN_CONFLICT)

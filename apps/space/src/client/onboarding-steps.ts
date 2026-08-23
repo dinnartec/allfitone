@@ -14,13 +14,18 @@
  * attempt precisely because declining leaves no value.
  */
 
-const WELCOME_ROUTE = '/welcome'
+/**
+ * Where the onboarding stops today. **Not** `/welcome`: that is the "create an
+ * account" front door, and sending somebody who had answered everything there both
+ * looked like starting over and looped — signing in again resolved to it right back.
+ */
+const CONTINUES_ROUTE = '/onboarding/continues'
 const AGE_ROUTE = '/onboarding/age'
 const IDENTITY_ROUTE = '/onboarding/identity'
 const SEX_ROUTE = '/onboarding/sex'
 
 export type OnboardingStepRoute = typeof IDENTITY_ROUTE | typeof SEX_ROUTE
-export type OnboardingRoute = OnboardingStepRoute | typeof AGE_ROUTE | typeof WELCOME_ROUTE
+export type OnboardingRoute = OnboardingStepRoute | typeof AGE_ROUTE | typeof CONTINUES_ROUTE
 
 /** Only the shape the decisions read, so a test needs no generated DTO. */
 export interface OnboardingProgress {
@@ -56,6 +61,9 @@ interface OnboardingStep {
  */
 export const ELIGIBILITY_GATE_ROUTE = AGE_ROUTE
 
+/** Exported so the screens and the entry decision agree on the terminal. */
+export const ONBOARDING_CONTINUES_ROUTE = CONTINUES_ROUTE
+
 const eligible = (progress: OnboardingProgress) => progress.attempt?.eligibility_status === 'pass'
 
 export const ONBOARDING_STEPS: readonly OnboardingStep[] = [
@@ -74,9 +82,8 @@ export const ONBOARDING_STEPS: readonly OnboardingStep[] = [
 export function resolveOnboardingRoute(current: OnboardingProgress | null): OnboardingRoute {
   // A `fail` is not eligibility and must not be walked past either.
   if (!current || !eligible(current)) return ELIGIBILITY_GATE_ROUTE
-  // Everything declared so far is answered. The welcome screen stands in until
-  // the next onboarding step exists; it is not where the onboarding ends.
-  return ONBOARDING_STEPS.find((step) => !step.answered(current))?.route ?? WELCOME_ROUTE
+  // Everything declared so far is answered.
+  return ONBOARDING_STEPS.find((step) => !step.answered(current))?.route ?? CONTINUES_ROUTE
 }
 
 export interface StepPosition {
@@ -122,7 +129,7 @@ export function guardStep(
 ): OnboardingRoute | null {
   const owed = resolveOnboardingRoute(current)
   // Nothing owed at all: every step is open for editing.
-  if (owed === WELCOME_ROUTE) return null
+  if (owed === CONTINUES_ROUTE) return null
   // The gate is not a step, so no step is ever ahead of it.
   if (owed === ELIGIBILITY_GATE_ROUTE) return owed
 

@@ -33,8 +33,8 @@ import {
 export { resolveOnboardingRoute }
 export type { OnboardingProgress, OnboardingRoute }
 
-/** Same set as the onboarding routes: an entry can land on any of them. */
-export type EntryRoute = OnboardingRoute
+/** The onboarding routes plus the front door, where a session that is gone lands. */
+export type EntryRoute = OnboardingRoute | '/welcome'
 
 export interface EntryState {
   session: { accessToken: string; refreshToken: string } | null

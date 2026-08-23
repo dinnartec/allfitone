@@ -124,7 +124,7 @@ describe('resolveOnboardingRoute past the identity step', () => {
         identity: IDENTITY,
         biological_sex_answered: true,
       }),
-    ).toBe('/welcome')
+    ).toBe('/onboarding/continues')
   })
 
   test('does not send a person who declined back to the same screen', () => {
@@ -137,6 +137,6 @@ describe('resolveOnboardingRoute past the identity step', () => {
         biological_sex: null,
         biological_sex_answered: true,
       } as never),
-    ).toBe('/welcome')
+    ).toBe('/onboarding/continues')
   })
 })

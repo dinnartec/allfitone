@@ -35,6 +35,8 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
 
 import { ApiError, signIn } from '../src/client'
 import { storeSession } from '../src/client/session'
+import { createSpaceOnboardingFlow } from '../src/client/onboarding-transport'
+import { routeAfterAuthentication } from '../src/client/resume-route'
 import { PasswordResetSheet } from '../src/components/password-reset-sheet'
 
 const FAILURE = 'Correo o contraseña incorrectos'
@@ -60,7 +62,7 @@ export default function SignIn() {
       const trimmed = email.trim()
       const session = await signIn(trimmed, password)
       await storeSession({ ...session, email: trimmed })
-      router.replace('/onboarding/age')
+      router.replace(await routeAfterAuthentication(() => createSpaceOnboardingFlow().resume()))
     } catch (cause) {
       setFailure(
         cause instanceof ApiError && cause.failure === 'unavailable' ? UNREACHABLE : FAILURE,

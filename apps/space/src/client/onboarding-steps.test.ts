@@ -46,7 +46,7 @@ describe('resolveOnboardingRoute', () => {
       biological_sex_answered: true,
     }
 
-    expect(resolveOnboardingRoute(declined)).toBe('/welcome')
+    expect(resolveOnboardingRoute(declined)).toBe('/onboarding/continues')
   })
 })
 
