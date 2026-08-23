@@ -635,6 +635,73 @@ export type Database = {
           },
         ]
       }
+      fitness_profile_claims: {
+        Row: {
+          attribute_code: string
+          captured_by_assignment_id: string | null
+          captured_by_kind: Database['identity']['Enums']['actor_kind']
+          id: string
+          person_id: string
+          provenance: Database['identity']['Enums']['provenance']
+          superseded_by_id: string | null
+          unit_code: string | null
+          valid_from: string
+          valid_to: string | null
+          value_numeric: number | null
+          value_text: string | null
+        }
+        Insert: {
+          attribute_code: string
+          captured_by_assignment_id?: string | null
+          captured_by_kind: Database['identity']['Enums']['actor_kind']
+          id: string
+          person_id: string
+          provenance: Database['identity']['Enums']['provenance']
+          superseded_by_id?: string | null
+          unit_code?: string | null
+          valid_from?: string
+          valid_to?: string | null
+          value_numeric?: number | null
+          value_text?: string | null
+        }
+        Update: {
+          attribute_code?: string
+          captured_by_assignment_id?: string | null
+          captured_by_kind?: Database['identity']['Enums']['actor_kind']
+          id?: string
+          person_id?: string
+          provenance?: Database['identity']['Enums']['provenance']
+          superseded_by_id?: string | null
+          unit_code?: string | null
+          valid_from?: string
+          valid_to?: string | null
+          value_numeric?: number | null
+          value_text?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_fitness_profile_claims_attribute'
+            columns: ['attribute_code']
+            isOneToOne: false
+            referencedRelation: 'profile_attributes'
+            referencedColumns: ['code']
+          },
+          {
+            foreignKeyName: 'fk_fitness_profile_claims_person'
+            columns: ['person_id']
+            isOneToOne: false
+            referencedRelation: 'people'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'fk_fitness_profile_claims_superseded'
+            columns: ['superseded_by_id']
+            isOneToOne: false
+            referencedRelation: 'fitness_profile_claims'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       invitation_intents: {
         Row: {
           created_at: string
@@ -1165,6 +1232,39 @@ export type Database = {
           },
         ]
       }
+      profile_attributes: {
+        Row: {
+          allowed_values: string[] | null
+          code: string
+          created_at: string
+          data_classification_code: string
+          id: string
+          name: string
+          unit_dimension: string | null
+          value_kind: string
+        }
+        Insert: {
+          allowed_values?: string[] | null
+          code: string
+          created_at?: string
+          data_classification_code: string
+          id?: string
+          name: string
+          unit_dimension?: string | null
+          value_kind: string
+        }
+        Update: {
+          allowed_values?: string[] | null
+          code?: string
+          created_at?: string
+          data_classification_code?: string
+          id?: string
+          name?: string
+          unit_dimension?: string | null
+          value_kind?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -1307,6 +1407,26 @@ export type Database = {
         Returns: {
           credential: Json
           replayed: boolean
+        }[]
+      }
+      declare_profile_claim: {
+        Args: {
+          p_account_id: string
+          p_attribute_code: string
+          p_command_id: string
+          p_idempotency_key: string
+          p_request_hash: string
+          p_unit_code: string
+          p_value_numeric: number
+          p_value_text: string
+        }
+        Returns: {
+          attribute_code: string
+          claim_id: string
+          replayed: boolean
+          superseded_claim_id: string
+          value_numeric: number
+          value_text: string
         }[]
       }
       expire_backoffice_authentication_attempts: {
@@ -1711,6 +1831,12 @@ export type Database = {
       onboarding_status: 'open' | 'activated' | 'ineligible' | 'expired'
       password_reset_receipt_result: 'processed' | 'account_absent'
       person_status: 'pending_activation' | 'active' | 'closed'
+      provenance:
+        | 'person_declared'
+        | 'professional_observation'
+        | 'device_observed'
+        | 'system_inferred'
+        | 'authority_verified'
     }
     CompositeTypes: {
       [_ in never]: never
@@ -3117,6 +3243,13 @@ export const Constants = {
       onboarding_status: ['open', 'activated', 'ineligible', 'expired'],
       password_reset_receipt_result: ['processed', 'account_absent'],
       person_status: ['pending_activation', 'active', 'closed'],
+      provenance: [
+        'person_declared',
+        'professional_observation',
+        'device_observed',
+        'system_inferred',
+        'authority_verified',
+      ],
     },
   },
   organizations: {
