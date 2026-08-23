@@ -21,7 +21,10 @@ import type { VerifiedToken } from '@allfitone/auth-provider'
 import { Hono, type Context } from 'hono'
 
 import { fail } from '../../../platform/http/index.js'
-import type { SpaceOnboardingService } from '../application/onboarding.js'
+import {
+  OnboardingPreconditionError,
+  type SpaceOnboardingService,
+} from '../application/onboarding.js'
 import { spaceOnboardingService } from '../dependencies.js'
 import { authProvider } from '../../../platform/auth/index.js'
 
@@ -274,6 +277,7 @@ function isObject(value: unknown): value is Record<string, unknown> {
 
 /** Same mapping the sibling handlers use: the SQLSTATE is the signal. */
 function operationFailure(c: Context, error: unknown) {
+  if (error instanceof OnboardingPreconditionError) return fail(c, error.code)
   const sqlState = isObject(error) && typeof error.code === 'string' ? error.code : undefined
   if (sqlState === '42501') return fail(c, 'forbidden')
   if (sqlState === '23505' || sqlState === '40001') return fail(c, 'conflict')

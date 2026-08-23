@@ -14,10 +14,14 @@
  */
 
 import { describe, expect, test } from 'bun:test'
-import type { VerifiedToken } from '@allfitone/auth-provider'
+import type { AuthenticatedIdentity, VerifiedToken } from '@allfitone/auth-provider'
 
 import type { AdultEligibilityEvidence, OnboardingAttempt } from '../domain/index.js'
-import { createSpaceOnboardingService, type OnboardingService } from './onboarding.js'
+import {
+  createSpaceOnboardingService,
+  OnboardingPreconditionError,
+  type OnboardingService,
+} from './onboarding.js'
 
 const ISSUER = 'https://api.workos.test/user_management/client_space'
 const TOKEN: VerifiedToken = { subject: 'user_01', sessionId: 'sid_01', surface: 'space' }
@@ -32,14 +36,24 @@ const ATTEMPT: OnboardingAttempt = {
   eligibilityStatus: 'pending',
   expiresAt: new Date('2026-08-18T00:00:00.000Z'),
 }
+const PROVIDER_IDENTITY: AuthenticatedIdentity = {
+  givenName: 'Ada',
+  familyName: 'Lovelace',
+  verifiedEmail: 'ada@example.test',
+}
 const EVIDENCE: AdultEligibilityEvidence = {
   result: 'pass',
   evaluatedAt: new Date('2026-08-17T00:00:00.000Z'),
 }
 
-function serviceWith(overrides: Partial<OnboardingService> = {}) {
+function serviceWith(
+  overrides: Partial<OnboardingService> = {},
+  providerIdentity: AuthenticatedIdentity = PROVIDER_IDENTITY,
+) {
   const resolved: Array<{ issuer: string; subject: string }> = []
   const actors: string[] = []
+  const contacts: Array<{ contactEmail: string; contactEmailVerified: boolean }> = []
+  const subjects: string[] = []
 
   const onboarding: OnboardingService = {
     startAttempt: async (actor) => {
@@ -52,6 +66,10 @@ function serviceWith(overrides: Partial<OnboardingService> = {}) {
     },
     createFitnessId: async (actor, input) => {
       actors.push(actor.accountId)
+      contacts.push({
+        contactEmail: input.contactEmail,
+        contactEmailVerified: input.contactEmailVerified,
+      })
       return { givenName: input.givenName, familyName: input.familyName, username: input.username }
     },
     readCurrentAttempt: async (actor) => {
@@ -70,10 +88,16 @@ function serviceWith(overrides: Partial<OnboardingService> = {}) {
       },
     },
     onboarding,
+    provider: {
+      identityFor: async (subject) => {
+        subjects.push(subject)
+        return providerIdentity
+      },
+    },
     issuer: ISSUER,
   })
 
-  return { service, resolved, actors }
+  return { service, resolved, actors, contacts, subjects }
 }
 
 describe('createSpaceOnboardingService', () => {
@@ -129,5 +153,44 @@ describe('createSpaceOnboardingService', () => {
     })
 
     expect(seen).toEqual([false])
+  })
+})
+
+describe('the contact email of a new Fitness ID', () => {
+  const INPUT = {
+    ...COMMAND,
+    attemptId: 'attempt_01',
+    givenName: 'Ada',
+    familyName: 'Lovelace',
+    username: 'ada_lovelace',
+  }
+
+  test('is the credential address the provider confirmed, looked up by subject', async () => {
+    const { service, contacts, subjects } = serviceWith()
+
+    await service.createFitnessId(TOKEN, INPUT)
+
+    expect(subjects).toEqual([TOKEN.subject])
+    expect(contacts).toEqual([{ contactEmail: 'ada@example.test', contactEmailVerified: true }])
+  })
+
+  test('is never taken from the caller, even when the caller sends one', async () => {
+    const { service, contacts } = serviceWith()
+
+    // The signature does not accept a contact; the cast is what a client
+    // sending extra JSON would look like once it reaches the use case.
+    const hostile = { ...INPUT, contactEmail: 'attacker@example.test' }
+    await service.createFitnessId(TOKEN, hostile as typeof INPUT)
+
+    expect(contacts[0]?.contactEmail).toBe('ada@example.test')
+  })
+
+  test('refuses the command when the provider reports the address unverified', async () => {
+    const { service, contacts } = serviceWith({}, { ...PROVIDER_IDENTITY, verifiedEmail: null })
+
+    await expect(service.createFitnessId(TOKEN, INPUT)).rejects.toBeInstanceOf(
+      OnboardingPreconditionError,
+    )
+    expect(contacts).toEqual([])
   })
 })

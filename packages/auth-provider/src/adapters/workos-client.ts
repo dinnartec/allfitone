@@ -35,6 +35,13 @@ export interface WorkOSUser {
   emailVerified: boolean
 }
 
+/** What `getUser` returns and `identityFor` reads. Verified against the SDK types. */
+export interface WorkOSUserProfile extends WorkOSUser {
+  email: string
+  firstName: string | null
+  lastName: string | null
+}
+
 export interface WorkOSSession {
   id: string
 }
@@ -92,6 +99,9 @@ export interface WorkOSUserManagement {
   createPasswordReset(options: { email: string }): Promise<unknown>
 
   createUser(options: { email: string; password: string }): Promise<{ id: string }>
+
+  /** Lookup by subject. The contact email is the provider's fact, never the client's. */
+  getUser(userId: string): Promise<WorkOSUserProfile>
 
   /**
    * Filtering by email is the only lookup the SDK offers — there is no

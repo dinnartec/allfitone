@@ -102,6 +102,7 @@ export function spaceOnboardingService(): SpaceOnboardingService {
   cachedSpaceOnboarding = createSpaceOnboardingService({
     accounts: createIdentitySessionDatabase(),
     onboarding: studioOnboardingService(),
+    provider: { identityFor: (subject) => authProvider().identityFor(subject) },
     issuer,
   })
   return cachedSpaceOnboarding

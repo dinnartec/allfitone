@@ -1232,6 +1232,8 @@ export type Database = {
           p_account_id: string
           p_attempt_id: string
           p_command_id: string
+          p_contact_email: string
+          p_contact_email_verified: boolean
           p_family_name: string
           p_given_name: string
           p_idempotency_key: string
@@ -1239,6 +1241,8 @@ export type Database = {
           p_username: string
         }
         Returns: {
+          contact_email: string
+          contact_email_verified: boolean
           family_name: string
           given_name: string
           person_id: string

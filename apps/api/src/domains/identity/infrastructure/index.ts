@@ -250,19 +250,26 @@ export function createIdentityOnboardingDatabase(): IdentityOnboardingDatabase {
         const [row] = await transaction<
           { given_name: string; family_name: string; username: string }[]
         >`
-          select given_name, family_name, username from identity.create_pending_person(
+          select given_name, family_name, username
+          from identity.create_pending_person(
             ${input.accountId}::uuid,
             ${input.attemptId}::uuid,
             ${input.givenName},
             ${input.familyName},
             ${input.username},
+            ${input.contactEmail},
+            ${input.contactEmailVerified},
             ${input.idempotencyKey}::uuid,
             ${input.commandId}::uuid,
             ${input.requestHash}
           )
         `
         if (!row) throw new Error('PostgreSQL did not create the pending Fitness ID')
-        return { givenName: row.given_name, familyName: row.family_name, username: row.username }
+        return {
+          givenName: row.given_name,
+          familyName: row.family_name,
+          username: row.username,
+        }
       })
     },
 

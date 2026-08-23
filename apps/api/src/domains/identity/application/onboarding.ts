@@ -21,7 +21,7 @@
  * belong here.
  */
 
-import type { VerifiedToken } from '@allfitone/auth-provider'
+import type { AuthenticatedIdentity, VerifiedToken } from '@allfitone/auth-provider'
 import { hashInvitationToken } from '@allfitone/notifications'
 
 import type {
@@ -46,7 +46,14 @@ export interface OnboardingService {
   ): Promise<AdultEligibilityEvidence>
   createFitnessId(
     actor: AccountActor,
-    input: CommandContext & { attemptId: string } & PendingFitnessId,
+    input: CommandContext & {
+      attemptId: string
+      givenName: string
+      familyName: string
+      username: string
+      contactEmail: string
+      contactEmailVerified: boolean
+    },
   ): Promise<PendingFitnessId>
   readCurrentAttempt(actor: AccountActor): Promise<CurrentOnboardingAttempt>
   complete(
@@ -74,6 +81,25 @@ export function createOnboardingService(database: IdentityOnboardingDatabase): O
   }
 }
 
+/**
+ * Refusing a Fitness ID because the credential's address is not verified.
+ *
+ * The contact email is the same datum as the sign-in email (DT-016), and a
+ * contact we cannot prove must never be recorded as verified — nothing would
+ * satisfy the "verified contact" filter every notification depends on.
+ */
+export class OnboardingPreconditionError extends Error {
+  constructor(readonly code: 'forbidden') {
+    super(code)
+    this.name = 'OnboardingPreconditionError'
+  }
+}
+
+/** Only what the Space path needs from the identity provider. */
+export interface ProviderIdentityReader {
+  identityFor(subject: string): Promise<AuthenticatedIdentity>
+}
+
 /** Only what the Space path needs from the session database. */
 export interface AccountResolver {
   resolveOrCreateAccount(issuer: string, subject: string): Promise<AccessAccount>
@@ -87,7 +113,12 @@ export interface SpaceOnboardingService {
   ): Promise<AdultEligibilityEvidence>
   createFitnessId(
     token: VerifiedToken,
-    input: CommandContext & { attemptId: string } & PendingFitnessId,
+    input: CommandContext & {
+      attemptId: string
+      givenName: string
+      familyName: string
+      username: string
+    },
   ): Promise<PendingFitnessId>
   readCurrentAttempt(token: VerifiedToken): Promise<CurrentOnboardingAttempt>
 }
@@ -95,6 +126,7 @@ export interface SpaceOnboardingService {
 export interface SpaceOnboardingDependencies {
   accounts: AccountResolver
   onboarding: OnboardingService
+  provider: ProviderIdentityReader
   issuer: string
 }
 
@@ -120,7 +152,16 @@ export function createSpaceOnboardingService(
       return dependencies.onboarding.recordAdultEligibility(await actorFor(token), input)
     },
     async createFitnessId(token, input) {
-      return dependencies.onboarding.createFitnessId(await actorFor(token), input)
+      // The address is the provider's fact, never the client's: a client-supplied
+      // one recorded as verified would be a contact nobody proved.
+      const identity = await dependencies.provider.identityFor(token.subject)
+      if (!identity.verifiedEmail) throw new OnboardingPreconditionError('forbidden')
+
+      return dependencies.onboarding.createFitnessId(await actorFor(token), {
+        ...input,
+        contactEmail: identity.verifiedEmail,
+        contactEmailVerified: true,
+      })
     },
     async readCurrentAttempt(token) {
       return dependencies.onboarding.readCurrentAttempt(await actorFor(token))

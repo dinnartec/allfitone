@@ -58,6 +58,7 @@ function provider(overrides: Partial<AuthProvider> = {}): AuthProvider {
     }),
     verifyWebhookEvent: async () => null,
     updateEmail: async () => undefined,
+    identityFor: async () => ({ givenName: null, familyName: null, verifiedEmail: null }),
     revokeSessions: async () => undefined,
     ...overrides,
   }

@@ -83,7 +83,15 @@ export interface IdentityOnboardingDatabase {
     input: CommandContext & { accountId: string; attemptId: string; declaredAdult: boolean },
   ): Promise<AdultEligibilityEvidence>
   createPendingPerson(
-    input: CommandContext & { accountId: string; attemptId: string } & PendingFitnessId,
+    input: CommandContext & {
+      accountId: string
+      attemptId: string
+      givenName: string
+      familyName: string
+      username: string
+      contactEmail: string
+      contactEmailVerified: boolean
+    },
   ): Promise<PendingFitnessId>
   readCurrentAttempt(accountId: string): Promise<CurrentOnboardingAttempt>
   activatePerson(

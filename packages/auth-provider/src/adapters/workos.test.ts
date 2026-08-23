@@ -303,6 +303,18 @@ function fakeClient(
         passwordResetUrl: 'https://example.test/must-not-escape',
       }),
     createUser: async (o) => record('createUser', o, { id: 'user_01NEW' }),
+    getUser: async (userId) =>
+      record(
+        'getUser',
+        { userId },
+        {
+          id: userId,
+          email: 'Ada@Example.test',
+          emailVerified: true,
+          firstName: 'Ada',
+          lastName: 'Lovelace',
+        },
+      ),
     listUsers: async (o) =>
       record('listUsers', o, { data: [{ id: 'user_01FAKE', emailVerified: false }] }),
     sendVerificationEmail: async (o) => record('sendVerificationEmail', o, {}),
@@ -941,5 +953,38 @@ describe('verifyEmail', () => {
     await provider.verifyEmail(CREDS, '481920', 'space')
 
     expect(calls.at(-1)?.args).toMatchObject({ clientId: CREDENTIALS.space.clientId })
+  })
+})
+
+describe('identityFor', () => {
+  test('returns the provider address lowercased, as the verified contact', async () => {
+    const { provider, calls } = providerWith()
+
+    await expect(provider.identityFor('user_01FAKE')).resolves.toEqual({
+      givenName: 'Ada',
+      familyName: 'Lovelace',
+      verifiedEmail: 'ada@example.test',
+    })
+    expect(calls.map((call) => call.method)).toContain('getUser')
+  })
+
+  test('refuses to call an unverified address verified', async () => {
+    // A contact we mark verified must have been proven, or notifications would
+    // go to an address nobody confirmed.
+    const { provider } = providerWith({
+      getUser: async (userId) => ({
+        id: userId,
+        email: 'grace@example.test',
+        emailVerified: false,
+        firstName: null,
+        lastName: null,
+      }),
+    })
+
+    await expect(provider.identityFor('user_01FAKE')).resolves.toEqual({
+      givenName: null,
+      familyName: null,
+      verifiedEmail: null,
+    })
   })
 })

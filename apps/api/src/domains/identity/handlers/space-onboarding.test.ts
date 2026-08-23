@@ -13,7 +13,10 @@
 import { describe, expect, test } from 'bun:test'
 import { Hono } from 'hono'
 
-import type { SpaceOnboardingService } from '../application/onboarding.js'
+import {
+  OnboardingPreconditionError,
+  type SpaceOnboardingService,
+} from '../application/onboarding.js'
 import { spaceOnboardingRoutes } from './space-onboarding.js'
 
 const IDEMPOTENCY_KEY = '52222222-2222-4222-8222-222222222221'
@@ -269,12 +272,22 @@ describe('POST /space/v1/onboarding-attempts/{id}/fitness-id', () => {
   test('answers conflict when the handle is already reserved', async () => {
     const app = appWith({
       createFitnessId: async () => {
-        // What PostgreSQL raises on the primary key of identity.usernames.
+        // What PostgreSQL raises on uidx_people_username.
         throw Object.assign(new Error('duplicate key'), { code: '23505' })
       },
     })
 
     expect((await post(app, path, { body: IDENTITY })).status).toBe(409)
+  })
+
+  test('answers forbidden when the credential address is not verified', async () => {
+    const app = appWith({
+      createFitnessId: async () => {
+        throw new OnboardingPreconditionError('forbidden')
+      },
+    })
+
+    expect((await post(app, path, { body: IDENTITY })).status).toBe(403)
   })
 
   test('refuses a request with no bearer token', async () => {

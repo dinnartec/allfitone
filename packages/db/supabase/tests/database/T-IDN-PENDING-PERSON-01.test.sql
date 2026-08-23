@@ -1,6 +1,6 @@
 begin;
 
-select plan(25);
+select plan(30);
 
 select has_function('identity', 'create_pending_person',
   'T-IDN-PHY-11 the pending Fitness ID is reachable only through a closed command');
@@ -40,7 +40,7 @@ select throws_ok(
   $$ select identity.create_pending_person(
        '019f1000-0000-7000-8000-000000000011',
        (select attempt_id from attempt_one),
-       'Ada', 'Lovelace', 'ada_lovelace',
+       'Ada', 'Lovelace', 'ada_lovelace', 'ada@example.test', true,
        '31111111-1111-4111-8111-111111111121',
        '31111111-1111-4111-8111-111111111122',
        decode(repeat('32', 32), 'hex')) $$,
@@ -58,7 +58,7 @@ create temporary table pending_one as
 select * from identity.create_pending_person(
   '019f1000-0000-7000-8000-000000000011',
   (select attempt_id from attempt_one),
-  '  Ada  ', 'Lovelace', 'Ada_Lovelace',
+  '  Ada  ', 'Lovelace', 'Ada_Lovelace', '  Ada@Example.TEST  ', true,
   '31111111-1111-4111-8111-111111111141',
   '31111111-1111-4111-8111-111111111142',
   decode(repeat('34', 32), 'hex'));
@@ -83,6 +83,14 @@ select is(
   (select status::text from identity.onboarding_attempts where id = (select attempt_id from attempt_one)),
   'open',
   'and the attempt stays open: existing is not being active');
+select is(
+  (select contact_email::text from identity.people where id = (select person_id from pending_one)),
+  'ada@example.test',
+  'the credential address is the contact, trimmed and lowercased: DT-016');
+select isnt(
+  (select contact_email_verified_at from identity.people where id = (select person_id from pending_one)),
+  null::timestamptz,
+  'and it is stamped verified, which OP-SYS-002 needs to notify at all');
 
 set local role allfit_api;
 select set_config('app.actor_kind', 'account', true);
@@ -103,7 +111,7 @@ select is(
   (select person_id from identity.create_pending_person(
     '019f1000-0000-7000-8000-000000000011',
     (select attempt_id from attempt_one),
-    'Ada', 'Lovelace', 'ada_lovelace',
+    'Ada', 'Lovelace', 'ada_lovelace', 'ada@example.test', true,
     '31111111-1111-4111-8111-111111111141',
     '31111111-1111-4111-8111-111111111142',
     decode(repeat('34', 32), 'hex'))),
@@ -129,7 +137,7 @@ select throws_ok(
   $$ select identity.create_pending_person(
        '019f1000-0000-7000-8000-000000000012',
        (select attempt_id from attempt_two),
-       'Grace', 'Hopper', 'ada_lovelace',
+       'Grace', 'Hopper', 'ada_lovelace', 'grace@example.test', true,
        '31111111-1111-4111-8111-111111111231',
        '31111111-1111-4111-8111-111111111232',
        decode(repeat('37', 32), 'hex')) $$,
@@ -140,12 +148,46 @@ select throws_ok(
   $$ select identity.create_pending_person(
        '019f1000-0000-7000-8000-000000000012',
        (select attempt_id from attempt_two),
-       'Grace', 'Hopper', 'Grace Hopper!',
+       'Grace', 'Hopper', 'Grace Hopper!', 'grace@example.test', true,
        '31111111-1111-4111-8111-111111111241',
        '31111111-1111-4111-8111-111111111242',
        decode(repeat('38', 32), 'hex')) $$,
   '23514', null,
   'a malformed handle is refused by a constraint, not only by the application');
+
+select throws_ok(
+  $$ select identity.create_pending_person(
+       '019f1000-0000-7000-8000-000000000012',
+       (select attempt_id from attempt_two),
+       'Grace', 'Hopper', 'grace_hopper', '   ', true,
+       '31111111-1111-4111-8111-111111111251',
+       '31111111-1111-4111-8111-111111111252',
+       decode(repeat('3d', 32), 'hex')) $$,
+  '22023', null,
+  'a Fitness ID with no contact is refused: nothing could ever reach that person');
+
+-- Unverified stores the address and withholds the stamp. That is the whole point
+-- of keeping them separate: an unverified contact receives no notifications.
+create temporary table pending_two as
+select * from identity.create_pending_person(
+  '019f1000-0000-7000-8000-000000000012',
+  (select attempt_id from attempt_two),
+  'Grace', 'Hopper', 'grace_hopper', 'Grace@Example.test', false,
+  '31111111-1111-4111-8111-111111111261',
+  '31111111-1111-4111-8111-111111111262',
+  decode(repeat('3e', 32), 'hex'));
+
+reset role;
+select is(
+  (select contact_email::text from identity.people where id = (select person_id from pending_two)),
+  'grace@example.test',
+  'an unverified contact is still recorded');
+select is(
+  (select contact_email_verified_at from identity.people where id = (select person_id from pending_two)),
+  null::timestamptz,
+  'and carries no verification stamp, so it receives nothing');
+
+set local role allfit_api;
 
 -- A pending person cannot do what needs an active Fitness ID.
 select set_config('app.actor_kind', 'person', true);
@@ -156,10 +198,14 @@ select throws_ok(
   null, null,
   'T-IDN-RLS-11 a pending Fitness ID cannot open a professional profile');
 
--- Activation is a transition, not a creation.
+-- Activation is a transition, not a creation. The snapshot is taken unfiltered:
+-- read as allfit_api it would count what the actor can see, not what exists.
+reset role;
+create temporary table people_before as select count(*) as total from identity.people;
+
+set local role allfit_api;
 select set_config('app.actor_kind', 'account', true);
 select set_config('app.actor_account_id', '019f1000-0000-7000-8000-000000000011', true);
-create temporary table people_before as select count(*) as total from identity.people;
 
 select is(
   identity.activate_person(
