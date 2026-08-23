@@ -139,7 +139,7 @@ export function spaceOnboardingRoutes(
     }
   })
 
-  routes.post('/onboarding-attempts/:attemptId/identity', async (c) => {
+  routes.post('/onboarding-attempts/:attemptId/fitness-id', async (c) => {
     c.header('Cache-Control', 'no-store')
 
     const token = await verified(c, verify)
@@ -154,16 +154,16 @@ export function spaceOnboardingRoutes(
     if (!identity || !command) return fail(c, 'invalid-request')
 
     try {
-      const stored = await onboarding().recordIdentity(token, {
+      const created = await onboarding().createFitnessId(token, {
         ...command,
         attemptId,
         ...identity,
       })
       return c.json(
         {
-          given_name: stored.givenName,
-          family_name: stored.familyName,
-          username: stored.username,
+          given_name: created.givenName,
+          family_name: created.familyName,
+          username: created.username,
         },
         200,
       )

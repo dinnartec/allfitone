@@ -8,10 +8,14 @@
  * Space signs in headless, so the provider only ever knew an email and a
  * password.
  *
- * Activation is the last step, so what is answered here rests on the onboarding
- * attempt and `OP-IDN-003` reads it back at the end. That is also why the screen
- * opens by asking what is already stored: HU-SP-098 criterion 5 promises that
- * closing the app and coming back resumes instead of starting over.
+ * Submitting creates the Fitness ID in `pending_activation`. That is the whole
+ * point of doing it here rather than at the end: profile claims require a
+ * `person_id`, so with the person created last every answer that follows would
+ * need a staging table and a second write path. From this screen onwards each
+ * answer is written where it belongs the first time.
+ *
+ * Which is also why the screen skips itself when the Fitness ID already exists —
+ * there is nothing left to create, and re-asking would offer to create a second.
  *
  * The email is shown and cannot be edited. It belongs to the credential, and
  * changing it is a different operation with its own verification. It is read from
@@ -87,10 +91,10 @@ export default function OnboardingIdentity() {
           router.replace(step)
           return
         }
+        // The Fitness ID exists, so this step is behind us. `/welcome` stands in
+        // until the next onboarding screen exists; it is not the destination.
         if (current.identity) {
-          setGivenName(current.identity.given_name)
-          setFamilyName(current.identity.family_name)
-          setUsername(current.identity.username)
+          router.replace('/welcome')
         }
       })
       .catch((cause: unknown) => {
@@ -124,7 +128,7 @@ export default function OnboardingIdentity() {
     setSubmitting(true)
     setFailure(undefined)
     try {
-      await flow.declareIdentity({
+      await flow.createFitnessId({
         given_name: givenName.trim(),
         family_name: familyName.trim(),
         username,

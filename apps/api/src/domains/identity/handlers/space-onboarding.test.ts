@@ -40,7 +40,7 @@ function appWith(overrides: Partial<SpaceOnboardingService> = {}): Hono {
   const service: SpaceOnboardingService = {
     startAttempt: async () => ATTEMPT,
     recordAdultEligibility: async () => EVIDENCE,
-    recordIdentity: async (_token, input) => ({
+    createFitnessId: async (_token, input) => ({
       givenName: input.givenName,
       familyName: input.familyName,
       username: input.username,
@@ -95,7 +95,7 @@ describe('POST /space/v1/onboarding-attempts', () => {
         {
           startAttempt: async () => ATTEMPT,
           recordAdultEligibility: async () => EVIDENCE,
-          recordIdentity: async (_token, input) => ({
+          createFitnessId: async (_token, input) => ({
             givenName: input.givenName,
             familyName: input.familyName,
             username: input.username,
@@ -197,11 +197,11 @@ describe('POST /space/v1/onboarding-attempts/{id}/eligibility-evidence', () => {
   })
 })
 
-describe('POST /space/v1/onboarding-attempts/{id}/identity', () => {
-  const path = `/space/v1/onboarding-attempts/${ATTEMPT_ID}/identity`
+describe('POST /space/v1/onboarding-attempts/{id}/fitness-id', () => {
+  const path = `/space/v1/onboarding-attempts/${ATTEMPT_ID}/fitness-id`
   const IDENTITY = { given_name: 'Ada', family_name: 'Lovelace', username: 'ada_lovelace' }
 
-  test('records the declared identity and returns what is now staged', async () => {
+  test('creates the Fitness ID and returns what now exists on the person', async () => {
     const response = await post(appWith(), path, { body: IDENTITY })
 
     expect(response.status).toBe(200)
@@ -211,7 +211,7 @@ describe('POST /space/v1/onboarding-attempts/{id}/identity', () => {
   test('trims the name, so a stray space is not part of it', async () => {
     const seen: string[] = []
     const app = appWith({
-      recordIdentity: async (_token, input) => {
+      createFitnessId: async (_token, input) => {
         seen.push(input.givenName, input.familyName)
         return {
           givenName: input.givenName,
@@ -229,7 +229,7 @@ describe('POST /space/v1/onboarding-attempts/{id}/identity', () => {
   test('refuses a body that is not exactly the three declared fields', async () => {
     let called = false
     const app = appWith({
-      recordIdentity: async () => {
+      createFitnessId: async () => {
         called = true
         return { givenName: 'Ada', familyName: 'Lovelace', username: 'ada_lovelace' }
       },
@@ -253,7 +253,7 @@ describe('POST /space/v1/onboarding-attempts/{id}/identity', () => {
   test('refuses a malformed username before it can burn an idempotency key', async () => {
     let called = false
     const app = appWith({
-      recordIdentity: async () => {
+      createFitnessId: async () => {
         called = true
         return { givenName: 'Ada', familyName: 'Lovelace', username: 'ada_lovelace' }
       },
@@ -268,7 +268,7 @@ describe('POST /space/v1/onboarding-attempts/{id}/identity', () => {
 
   test('answers conflict when the handle is already reserved', async () => {
     const app = appWith({
-      recordIdentity: async () => {
+      createFitnessId: async () => {
         // What PostgreSQL raises on the primary key of identity.usernames.
         throw Object.assign(new Error('duplicate key'), { code: '23505' })
       },
@@ -292,7 +292,7 @@ describe('POST /space/v1/onboarding-attempts/{id}/identity', () => {
   test('refuses malformed command headers before touching the service', async () => {
     let called = false
     const app = appWith({
-      recordIdentity: async () => {
+      createFitnessId: async () => {
         called = true
         return { givenName: 'Ada', familyName: 'Lovelace', username: 'ada_lovelace' }
       },
@@ -308,7 +308,7 @@ describe('POST /space/v1/onboarding-attempts/{id}/identity', () => {
   })
 
   test('rejects an attempt id that is not a UUIDv7', async () => {
-    const response = await post(appWith(), '/space/v1/onboarding-attempts/nope/identity', {
+    const response = await post(appWith(), '/space/v1/onboarding-attempts/nope/fitness-id', {
       body: IDENTITY,
     })
 

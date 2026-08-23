@@ -330,7 +330,7 @@ export interface paths {
     patch?: never
     trace?: never
   }
-  '/space/v1/onboarding-attempts/{attemptId}/identity': {
+  '/space/v1/onboarding-attempts/{attemptId}/fitness-id': {
     parameters: {
       query?: never
       header?: never
@@ -340,14 +340,16 @@ export interface paths {
     get?: never
     put?: never
     /**
-     * Declare the account holder's name and reserve their username
-     * @description HU-SP-098. Activating a Fitness ID requires a given name and a family name, and in Space the login is headless, so the identity provider only ever knew an email and a password. They are declared here and rest on the attempt, because activation is the last step and no person exists yet.
+     * Create the account holder's Fitness ID, pending activation
+     * @description HU-SP-098. The Fitness ID is created here, in `pending_activation`, as soon as the name is known — not at the end of the onboarding. That is what lets every answer given afterwards be written straight onto the person: profile claims require a `person_id`, so with the person created last there would be nowhere for them to go and every step would need a staging table and a second write path.
+     *
+     *     Adult eligibility is still required first. Creating the row earlier does not move any control earlier.
      *
      *     There is deliberately no way to ask whether a username is free. A collision comes back as `409` from this command and nothing else: an availability query would reveal that somebody exists, which is the guarantee the whole registration flow is built on. What makes the collision itself tolerable is that a handle, unlike an email address, is not an identifier that exists outside the platform.
      *
-     *     The email is not accepted as input. It belongs to the credential, it is returned with the session, and changing it is `OP-IDN-021` with its own verification.
+     *     The email is not accepted as input. It belongs to the credential, and changing it is `OP-IDN-021` with its own verification.
      */
-    post: operations['recordSpaceOnboardingIdentity']
+    post: operations['createSpacePendingFitnessId']
     delete?: never
     options?: never
     head?: never
@@ -1530,15 +1532,15 @@ export interface components {
       declared_adult: boolean
     }
     /** @description The email is absent on purpose. It is the credential's address, it already travels with the session, and changing it is another operation with its own verification. */
-    SpaceOnboardingIdentityCreate: {
+    SpacePendingFitnessIdCreate: {
       given_name: string
       family_name: string
       username: components['schemas']['Username']
     }
     /** @description Lowercase, starts with a letter, then letters, digits or underscore. Stored lowercased, and compared case-insensitively, so two handles that differ only in case are the same handle. */
     Username: string
-    /** @description What is now staged on the attempt. `OP-IDN-003` reads it at activation; the person does not exist yet, so there is nowhere else for it to live. */
-    SpaceOnboardingIdentity: {
+    /** @description The Fitness ID as it now exists on the person, pending activation. No person identifier travels here: the app never needs one, and the API resolves it from the token on every call. */
+    SpacePendingFitnessId: {
       given_name: string
       family_name: string
       username: components['schemas']['Username']
@@ -1547,8 +1549,8 @@ export interface components {
     SpaceCurrentOnboardingAttempt: {
       /** @description Null when the account has no open attempt, which is also what an already activated person sees. */
       attempt: components['schemas']['SpaceOnboardingAttempt'] | null
-      /** @description Null until the name has been declared. */
-      identity: components['schemas']['SpaceOnboardingIdentity'] | null
+      /** @description Null until the Fitness ID exists. Non-null is how the app knows that step is behind it. */
+      identity: components['schemas']['SpacePendingFitnessId'] | null
     }
     AdultEligibilityPolicy: {
       /** @constant */
@@ -3867,7 +3869,7 @@ export interface operations {
       503: components['responses']['UpstreamUnavailable']
     }
   }
-  recordSpaceOnboardingIdentity: {
+  createSpacePendingFitnessId: {
     parameters: {
       query?: never
       header: {
@@ -3883,18 +3885,18 @@ export interface operations {
     }
     requestBody: {
       content: {
-        'application/json': components['schemas']['SpaceOnboardingIdentityCreate']
+        'application/json': components['schemas']['SpacePendingFitnessIdCreate']
       }
     }
     responses: {
-      /** @description The identity now staged on the attempt */
+      /** @description The Fitness ID, created and pending activation */
       200: {
         headers: {
           'Cache-Control': components['headers']['NoStore']
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['SpaceOnboardingIdentity']
+          'application/json': components['schemas']['SpacePendingFitnessId']
         }
       }
       400: components['responses']['BadRequest']

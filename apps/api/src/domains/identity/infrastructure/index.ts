@@ -242,7 +242,7 @@ export function createIdentityOnboardingDatabase(): IdentityOnboardingDatabase {
       })
     },
 
-    async recordOnboardingIdentity(input) {
+    async createPendingPerson(input) {
       return sql.begin(async (transaction) => {
         await setAccountActor(transaction, input.accountId)
         // A taken handle surfaces as SQLSTATE 23505 and the handler maps it to
@@ -250,7 +250,7 @@ export function createIdentityOnboardingDatabase(): IdentityOnboardingDatabase {
         const [row] = await transaction<
           { given_name: string; family_name: string; username: string }[]
         >`
-          select * from identity.record_onboarding_identity(
+          select given_name, family_name, username from identity.create_pending_person(
             ${input.accountId}::uuid,
             ${input.attemptId}::uuid,
             ${input.givenName},
@@ -261,7 +261,7 @@ export function createIdentityOnboardingDatabase(): IdentityOnboardingDatabase {
             ${input.requestHash}
           )
         `
-        if (!row) throw new Error('PostgreSQL did not record the onboarding identity')
+        if (!row) throw new Error('PostgreSQL did not create the pending Fitness ID')
         return { givenName: row.given_name, familyName: row.family_name, username: row.username }
       })
     },
@@ -269,9 +269,11 @@ export function createIdentityOnboardingDatabase(): IdentityOnboardingDatabase {
     async readCurrentAttempt(accountId) {
       return sql.begin(async (transaction) => {
         await setAccountActor(transaction, accountId)
+        // A governed read, not a join: during the onboarding the actor is an
+        // account, and `people` is only visible to a person actor.
         const [row] = await transaction<
           {
-            id: string
+            attempt_id: string
             status: OnboardingAttempt['status']
             eligibility_status: OnboardingAttempt['eligibilityStatus']
             expires_at: Date
@@ -279,32 +281,14 @@ export function createIdentityOnboardingDatabase(): IdentityOnboardingDatabase {
             family_name: string | null
             username: string | null
           }[]
-        >`
-          select attempt.id,
-                 attempt.status::text as status,
-                 coalesce(evidence.result::text, 'pending') as eligibility_status,
-                 attempt.expires_at,
-                 attempt.given_name,
-                 attempt.family_name,
-                 attempt.username::text as username
-          from identity.onboarding_attempts as attempt
-          left join lateral (
-            select evidence.result
-            from identity.eligibility_evidence as evidence
-            where evidence.onboarding_attempt_id = attempt.id
-            order by evidence.evaluated_at desc, evidence.id desc
-            limit 1
-          ) as evidence on true
-          where attempt.account_id = ${accountId}::uuid
-            and attempt.status = 'open'
-            and attempt.expires_at > clock_timestamp()
-        `
+        >`select * from identity.read_current_onboarding(${accountId}::uuid)`
+
         // No open attempt is an answer, not a failure: it is also what an
         // already activated person sees.
         if (!row) return { attempt: null, identity: null }
         return {
           attempt: {
-            id: row.id,
+            id: row.attempt_id,
             status: row.status,
             eligibilityStatus: row.eligibility_status,
             expiresAt: new Date(row.expires_at),

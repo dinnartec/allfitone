@@ -44,10 +44,10 @@ export function createSpaceOnboardingFlow(): OnboardingFlow {
             token,
           ),
         ),
-      recordIdentity: (command, attemptId, identity) =>
+      createFitnessId: (command, attemptId, identity) =>
         authenticated((token) =>
           authorizedPost(
-            `/space/v1/onboarding-attempts/${attemptId}/identity`,
+            `/space/v1/onboarding-attempts/${attemptId}/fitness-id`,
             command,
             identity,
             token,

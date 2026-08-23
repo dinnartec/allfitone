@@ -3344,13 +3344,14 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       identity: {
         oneOf: [
           {
-            $ref: '#/components/schemas/SpaceOnboardingIdentity',
+            $ref: '#/components/schemas/SpacePendingFitnessId',
           },
           {
             type: 'null',
           },
         ],
-        description: 'Null until the name has been declared.',
+        description:
+          'Null until the Fitness ID exists. Non-null is how the app knows that step is behind it.',
       },
     },
     description:
@@ -3378,7 +3379,21 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
     description:
       'The same attempt Studio reads, without the legal versions. Space asks for those acceptances on a later screen and there are no consultable texts to name yet, so quoting a version here would assert something the product cannot honour.',
   },
-  SpaceOnboardingIdentity: {
+  SpacePasswordResetCreate: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['email'],
+    properties: {
+      email: {
+        type: 'string',
+        format: 'email',
+        maxLength: 254,
+        description:
+          'Shape only. Whether it has an account is precisely what the response must not reveal.',
+      },
+    },
+  },
+  SpacePendingFitnessId: {
     type: 'object',
     additionalProperties: false,
     required: ['given_name', 'family_name', 'username'],
@@ -3394,9 +3409,9 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
     description:
-      'What is now staged on the attempt. `OP-IDN-003` reads it at activation; the person does not exist yet, so there is nowhere else for it to live.',
+      'The Fitness ID as it now exists on the person, pending activation. No person identifier travels here: the app never needs one, and the API resolves it from the token on every call.',
   },
-  SpaceOnboardingIdentityCreate: {
+  SpacePendingFitnessIdCreate: {
     type: 'object',
     additionalProperties: false,
     required: ['given_name', 'family_name', 'username'],
@@ -3417,20 +3432,6 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
     },
     description:
       "The email is absent on purpose. It is the credential's address, it already travels with the session, and changing it is another operation with its own verification.",
-  },
-  SpacePasswordResetCreate: {
-    type: 'object',
-    additionalProperties: false,
-    required: ['email'],
-    properties: {
-      email: {
-        type: 'string',
-        format: 'email',
-        maxLength: 254,
-        description:
-          'Shape only. Whether it has an account is precisely what the response must not reveal.',
-      },
-    },
   },
   SpaceRegistrationAccepted: {
     type: 'object',
