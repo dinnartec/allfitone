@@ -19,6 +19,7 @@ import {
   type BiologicalSex,
   createOnboardingFlow,
   type CurrentOnboardingAttempt,
+  type FocusArea,
   type OnboardingFlow,
   type ProfileClaim,
 } from './onboarding'
@@ -74,6 +75,16 @@ export function createSpaceOnboardingFlow(): OnboardingFlow {
             token,
           ),
         ),
+      declareFocusAreas: (command, areas) =>
+        authenticated(async (token) => {
+          const declared = await authorizedPost<{ areas: FocusArea[] }>(
+            '/space/v1/profile/focus-areas',
+            command,
+            { areas },
+            token,
+          )
+          return declared.areas
+        }),
       readCurrent: () =>
         authenticated((token) =>
           authorizedGet<CurrentOnboardingAttempt>('/space/v1/onboarding-attempts/current', token),

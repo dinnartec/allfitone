@@ -46,6 +46,7 @@ function flowWith(transport: Partial<OnboardingTransport> = {}) {
   const declared: Array<{ idempotencyKey: string; username: string }> = []
   const sexes: Array<{ idempotencyKey: string; value: string | null }> = []
   const goals: Array<{ idempotencyKey: string; value: string }> = []
+  const focuses: Array<{ idempotencyKey: string; value: string[] }> = []
   let issued = 0
 
   const flow = createOnboardingFlow({
@@ -71,12 +72,17 @@ function flowWith(transport: Partial<OnboardingTransport> = {}) {
           superseded_claim_id: null,
         }
       },
+      declareFocusAreas: async (command, areas) => {
+        focuses.push({ idempotencyKey: command.idempotencyKey, value: [...areas] })
+        return areas
+      },
       readCurrent: async () => ({
         attempt: ATTEMPT,
         answers: {
           identity: { answered: false, value: null },
           biological_sex: { answered: false, value: null },
           primary_training_goal: { answered: false, value: null },
+          focus_areas: { answered: false, value: [] },
         },
       }),
       ...transport,
@@ -87,7 +93,7 @@ function flowWith(transport: Partial<OnboardingTransport> = {}) {
     },
   })
 
-  return { flow, sent, declared, sexes, goals }
+  return { flow, sent, declared, sexes, goals, focuses }
 }
 
 describe('declareAdult', () => {
@@ -244,6 +250,7 @@ describe('resume', () => {
           identity: { answered: true, value: IDENTITY },
           biological_sex: { answered: false, value: null },
           primary_training_goal: { answered: false, value: null },
+          focus_areas: { answered: false, value: [] },
         },
       }),
     })
@@ -254,6 +261,7 @@ describe('resume', () => {
         identity: { answered: true, value: IDENTITY },
         biological_sex: { answered: false, value: null },
         primary_training_goal: { answered: false, value: null },
+        focus_areas: { answered: false, value: [] },
       },
     })
   })
@@ -271,6 +279,7 @@ describe('resume', () => {
           identity: { answered: false, value: null },
           biological_sex: { answered: false, value: null },
           primary_training_goal: { answered: false, value: null },
+          focus_areas: { answered: false, value: [] },
         },
       }),
     })
@@ -294,6 +303,7 @@ describe('resume', () => {
           identity: { answered: false, value: null },
           biological_sex: { answered: false, value: null },
           primary_training_goal: { answered: false, value: null },
+          focus_areas: { answered: false, value: [] },
         },
       }),
     })
@@ -437,6 +447,93 @@ describe('declareTrainingGoal', () => {
 
     await flow.declareTrainingGoal('run_a_race')
     await flow.declareTrainingGoal('run_a_race')
+
+    expect(keys[0]).not.toBe(keys[1])
+  })
+})
+
+describe('declareFocusAreas', () => {
+  test('sends the whole set, and needs no attempt for it', async () => {
+    const { flow, focuses } = flowWith({
+      startAttempt: async () => {
+        throw new Error('the emphasis must not need an attempt')
+      },
+    })
+
+    const declared = await flow.declareFocusAreas(['chest', 'arms'])
+
+    expect(declared).toEqual(['chest', 'arms'])
+    expect(focuses.map((entry) => entry.value)).toEqual([['chest', 'arms']])
+  })
+
+  test('reuses the key while the same emphasis keeps failing', async () => {
+    let attempts = 0
+    const keys: string[] = []
+    const { flow } = flowWith({
+      declareFocusAreas: async (command, areas) => {
+        keys.push(command.idempotencyKey)
+        attempts += 1
+        if (attempts === 1) throw new Error('network')
+        return areas
+      },
+    })
+
+    await expect(flow.declareFocusAreas(['legs'])).rejects.toThrow('network')
+    await expect(flow.declareFocusAreas(['legs'])).resolves.toEqual(['legs'])
+
+    // One lost response must replay rather than declare the emphasis twice.
+    expect(keys).toHaveLength(2)
+    expect(keys[0]).toBe(keys[1])
+  })
+
+  test('treats the same set in another order as the same submission', async () => {
+    let attempts = 0
+    const keys: string[] = []
+    const { flow } = flowWith({
+      declareFocusAreas: async (command, areas) => {
+        keys.push(command.idempotencyKey)
+        attempts += 1
+        if (attempts === 1) throw new Error('network')
+        return areas
+      },
+    })
+
+    await expect(flow.declareFocusAreas(['chest', 'legs'])).rejects.toThrow('network')
+    await expect(flow.declareFocusAreas(['legs', 'chest'])).resolves.toBeDefined()
+
+    // Tapping the same two zones in the other order is not a different answer, and
+    // a new key would turn a retry into a second command.
+    expect(keys[0]).toBe(keys[1])
+  })
+
+  test('starts a new submission when a zone changes', async () => {
+    const keys: string[] = []
+    const { flow } = flowWith({
+      declareFocusAreas: async (command) => {
+        keys.push(command.idempotencyKey)
+        throw new Error('network')
+      },
+    })
+
+    await expect(flow.declareFocusAreas(['chest'])).rejects.toThrow('network')
+    await expect(flow.declareFocusAreas(['chest', 'abs'])).rejects.toThrow('network')
+
+    // The server hashes the body against the key, so the same key with another set
+    // comes back as a conflict rather than as a correction.
+    expect(keys[0]).not.toBe(keys[1])
+  })
+
+  test('discards the key once it lands, so editing later is its own command', async () => {
+    const keys: string[] = []
+    const { flow } = flowWith({
+      declareFocusAreas: async (command, areas) => {
+        keys.push(command.idempotencyKey)
+        return areas
+      },
+    })
+
+    await flow.declareFocusAreas(['whole_body'])
+    await flow.declareFocusAreas(['whole_body'])
 
     expect(keys[0]).not.toBe(keys[1])
   })

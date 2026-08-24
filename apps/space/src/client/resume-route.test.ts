@@ -4,10 +4,13 @@ import { routeAfterAuthentication } from './resume-route'
 
 const PASSED = { eligibility_status: 'pass' as const }
 
-const answers = (...steps: Array<'identity' | 'biological_sex' | 'primary_training_goal'>) => ({
+const answers = (
+  ...steps: Array<'identity' | 'biological_sex' | 'primary_training_goal' | 'focus_areas'>
+) => ({
   identity: { answered: steps.includes('identity') },
   biological_sex: { answered: steps.includes('biological_sex') },
   primary_training_goal: { answered: steps.includes('primary_training_goal') },
+  focus_areas: { answered: steps.includes('focus_areas') },
 })
 
 describe('routeAfterAuthentication', () => {
@@ -29,7 +32,7 @@ describe('routeAfterAuthentication', () => {
     await expect(
       routeAfterAuthentication(async () => ({
         attempt: PASSED,
-        answers: answers('identity', 'biological_sex', 'primary_training_goal'),
+        answers: answers('identity', 'biological_sex', 'primary_training_goal', 'focus_areas'),
       })),
     ).resolves.toBe('/onboarding/continues')
   })

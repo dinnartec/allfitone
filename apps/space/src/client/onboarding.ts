@@ -32,6 +32,7 @@ export type CurrentOnboardingAttempt = AllfitV1Schemas['SpaceCurrentOnboardingAt
 export type BiologicalSex = AllfitV1Schemas['BiologicalSex']
 export type PrimaryTrainingGoal = AllfitV1Schemas['PrimaryTrainingGoal']
 export type ProfileClaim = AllfitV1Schemas['SpaceProfileClaim']
+export type FocusArea = AllfitV1Schemas['FocusArea']
 
 export interface OnboardingTransport {
   startAttempt(command: CommandHeaders): Promise<OnboardingAttempt>
@@ -51,6 +52,10 @@ export interface OnboardingTransport {
     biologicalSex: BiologicalSex | null,
   ): Promise<BiologicalSex | null>
   declareTrainingGoal(command: CommandHeaders, goal: PrimaryTrainingGoal): Promise<ProfileClaim>
+  declareFocusAreas(
+    command: CommandHeaders,
+    areas: readonly FocusArea[],
+  ): Promise<readonly FocusArea[]>
   readCurrent(): Promise<CurrentOnboardingAttempt>
 }
 
@@ -76,6 +81,11 @@ export interface OnboardingFlow {
    * keeps editing it from their profile once the onboarding is closed.
    */
   declareTrainingGoal(goal: PrimaryTrainingGoal): Promise<ProfileClaim>
+  /**
+   * The whole emphasis, not one zone. Declaring replaces the set, so what the
+   * person deselected is withdrawn by being absent rather than by a second call.
+   */
+  declareFocusAreas(areas: readonly FocusArea[]): Promise<readonly FocusArea[]>
   /** What was already answered, so coming back does not start over. */
   resume(): Promise<CurrentOnboardingAttempt>
 }
@@ -87,6 +97,7 @@ export function createOnboardingFlow(dependencies: OnboardingFlowDependencies): 
   let pendingIdentity: { command: CommandHeaders; identity: string } | undefined
   let pendingSex: { command: CommandHeaders; value: BiologicalSex | null } | undefined
   let pendingGoal: { command: CommandHeaders; value: PrimaryTrainingGoal } | undefined
+  let pendingFocus: { command: CommandHeaders; value: string } | undefined
 
   const openAttempt = async (): Promise<OnboardingAttempt> => {
     attempt ??= await dependencies.transport.startAttempt(issue())
@@ -159,6 +170,20 @@ export function createOnboardingFlow(dependencies: OnboardingFlowDependencies): 
       return claim
     },
 
+    async declareFocusAreas(areas) {
+      // The key follows the set, not the call: a retry of the same emphasis
+      // replays, and changing a zone is a different command rather than a replay
+      // of the old one under a key the server already answered.
+      const identity = setIdentity(areas)
+      if (!pendingFocus || pendingFocus.value !== identity) {
+        pendingFocus = { command: issue(), value: identity }
+      }
+
+      const declared = await dependencies.transport.declareFocusAreas(pendingFocus.command, areas)
+      pendingFocus = undefined
+      return declared
+    },
+
     async resume() {
       const current = await dependencies.transport.readCurrent()
       // Reuse what the server already has rather than opening a second attempt.
@@ -166,4 +191,9 @@ export function createOnboardingFlow(dependencies: OnboardingFlowDependencies): 
       return current
     },
   }
+}
+
+/** Order must not make two identical emphases look like different commands. */
+function setIdentity(areas: readonly FocusArea[]): string {
+  return [...areas].sort().join(',')
 }

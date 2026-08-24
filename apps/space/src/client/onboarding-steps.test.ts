@@ -92,6 +92,10 @@ describe('stepPosition', () => {
       resolveOnboardingRoute({ attempt: PASSED }),
       resolveOnboardingRoute({ attempt: PASSED, answers: answers('identity') }),
       resolveOnboardingRoute({ attempt: PASSED, answers: answers('identity', 'biological_sex') }),
+      resolveOnboardingRoute({
+        attempt: PASSED,
+        answers: answers('identity', 'biological_sex', 'primary_training_goal'),
+      }),
     ]
 
     expect(walked).toEqual(ONBOARDING_STEPS.map((step) => step.route))
@@ -127,7 +131,7 @@ describe('guardStep', () => {
 
 describe('lastRevisitableStep', () => {
   test('is the last declared step a person may change', () => {
-    expect(lastRevisitableStep()).toBe('/onboarding/goal')
+    expect(lastRevisitableStep()).toBe('/onboarding/focus')
   })
 
   test('follows the declared order rather than a name written once', () => {
@@ -163,5 +167,28 @@ describe('nextRouteAfter', () => {
     }
 
     expect(walked).toEqual(ONBOARDING_STEPS.map((step) => step.route))
+  })
+})
+
+describe('the focus step', () => {
+  test('comes after the goal, which is what HU-SP-097 depends on', () => {
+    expect(nextRouteAfter('/onboarding/goal')).toBe('/onboarding/focus')
+  })
+
+  test('is the last step, so it hands over to the terminal', () => {
+    expect(nextRouteAfter('/onboarding/focus')).toBe('/onboarding/continues')
+  })
+
+  test('reads answered rather than a value, because whole body leaves none', () => {
+    const passed = { eligibility_status: 'pass' as const }
+    const upTo = answers('identity', 'biological_sex', 'primary_training_goal')
+
+    expect(resolveOnboardingRoute({ attempt: passed, answers: upTo })).toBe('/onboarding/focus')
+    expect(
+      resolveOnboardingRoute({
+        attempt: passed,
+        answers: { ...upTo, focus_areas: { answered: true } },
+      }),
+    ).toBe('/onboarding/continues')
   })
 })

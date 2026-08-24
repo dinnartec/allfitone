@@ -24,8 +24,10 @@ const AGE_ROUTE = '/onboarding/age'
 const IDENTITY_ROUTE = '/onboarding/identity'
 const SEX_ROUTE = '/onboarding/sex'
 const GOAL_ROUTE = '/onboarding/goal'
+const FOCUS_ROUTE = '/onboarding/focus'
 
-export type OnboardingStepRoute = typeof IDENTITY_ROUTE | typeof SEX_ROUTE | typeof GOAL_ROUTE
+export type OnboardingStepRoute =
+  typeof IDENTITY_ROUTE | typeof SEX_ROUTE | typeof GOAL_ROUTE | typeof FOCUS_ROUTE
 export type OnboardingRoute = OnboardingStepRoute | typeof AGE_ROUTE | typeof CONTINUES_ROUTE
 
 /** Only the shape the decisions read, so a test needs no generated DTO. */
@@ -41,6 +43,7 @@ export interface OnboardingProgress {
     identity?: { answered?: boolean }
     biological_sex?: { answered?: boolean }
     primary_training_goal?: { answered?: boolean }
+    focus_areas?: { answered?: boolean }
   }
 }
 
@@ -90,6 +93,11 @@ export const ONBOARDING_STEPS: readonly OnboardingStep[] = [
   {
     route: GOAL_ROUTE,
     answered: (progress) => answered(progress, 'primary_training_goal'),
+    revisitable: true,
+  },
+  {
+    route: FOCUS_ROUTE,
+    answered: (progress) => answered(progress, 'focus_areas'),
     revisitable: true,
   },
 ]
