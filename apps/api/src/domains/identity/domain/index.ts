@@ -80,6 +80,16 @@ export type PrimaryTrainingGoal =
   'lose_weight' | 'build_muscle' | 'get_fit' | 'run_a_race' | 'maintain'
 
 /**
+ * The three simple terms of HU-SP-012 criterion 2, least to most.
+ *
+ * Not `beginner`, `intermediate`, `advanced`. The story asks for simple terms and
+ * the reason is behavioural: "advanced" makes people underrate themselves and pick
+ * below their real level, and then the plan bores them. Rank is drawn by the screen,
+ * not carried by the words.
+ */
+export type TrainingExperience = 'starting' | 'some_practice' | 'experienced'
+
+/**
  * The seven zones of HU-SP-097, plus `whole_body`, which is a member and not an
  * empty set: it says "no emphasis, my goal decides". Without it that answer and
  * never having answered would both be zero members.
@@ -102,6 +112,7 @@ export interface OnboardingAnswers {
   identity: OnboardingAnswer<PendingFitnessId>
   biologicalSex: OnboardingAnswer<BiologicalSex>
   primaryTrainingGoal: OnboardingAnswer<PrimaryTrainingGoal>
+  trainingExperience: OnboardingAnswer<TrainingExperience>
   /**
    * The one answer that is a set. Its value is never null — an unanswered step is
    * no members — so it does not use `OnboardingAnswer`, whose nullable value would
@@ -115,10 +126,17 @@ export interface CurrentOnboardingAttempt {
   answers: OnboardingAnswers
 }
 
+/**
+ * Which attribute is being declared, and with what. A union rather than two loose
+ * strings so a goal code cannot be paired with an experience value: the database
+ * would refuse it, and refusing it here means the mistake cannot be written at all.
+ */
+export type ProfileClaimDeclaration =
+  | { attributeCode: 'primary_training_goal'; valueText: PrimaryTrainingGoal }
+  | { attributeCode: 'training_experience'; valueText: TrainingExperience }
+
 /** What the database records for a claim, including what it displaced. */
-export interface ProfileClaim {
-  attributeCode: 'primary_training_goal'
-  valueText: PrimaryTrainingGoal
+export type ProfileClaim = ProfileClaimDeclaration & {
   /** The claim this one replaced, or null on a first declaration. */
   supersededClaimId: string | null
 }
@@ -150,11 +168,7 @@ export interface IdentityOnboardingDatabase {
     },
   ): Promise<BiologicalSex | null>
   declareProfileClaim(
-    input: CommandContext & {
-      accountId: string
-      attributeCode: 'primary_training_goal'
-      valueText: PrimaryTrainingGoal
-    },
+    input: CommandContext & { accountId: string } & ProfileClaimDeclaration,
   ): Promise<ProfileClaim>
   declareFocusAreas(
     input: CommandContext & { accountId: string; areas: readonly FocusArea[] },

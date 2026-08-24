@@ -19,6 +19,7 @@ import type {
   OnboardingAnswers,
   OnboardingAttempt,
   PrimaryTrainingGoal,
+  TrainingExperience,
   ProfessionalCredential,
   ProfessionalProfile,
   StudioProfessionalContext,
@@ -42,6 +43,7 @@ type RawOnboardingAnswers = {
   }
   biological_sex: { answered: boolean; value: BiologicalSex | null }
   primary_training_goal: { answered: boolean; value: PrimaryTrainingGoal | null }
+  training_experience: { answered: boolean; value: TrainingExperience | null }
   focus_areas: { answered: boolean; value: FocusArea[] }
 }
 
@@ -51,6 +53,7 @@ function emptyAnswers(): OnboardingAnswers {
     identity: { answered: false, value: null },
     biologicalSex: { answered: false, value: null },
     primaryTrainingGoal: { answered: false, value: null },
+    trainingExperience: { answered: false, value: null },
     focusAreas: { answered: false, value: [] },
   }
 }
@@ -330,11 +333,7 @@ export function createIdentityOnboardingDatabase(): IdentityOnboardingDatabase {
         // An unknown attribute or a value outside the catalogue raises 23514 and
         // the handler maps it to invalid-request. Nothing is validated twice here.
         const [row] = await transaction<
-          {
-            attribute_code: 'primary_training_goal'
-            value_text: PrimaryTrainingGoal
-            superseded_claim_id: string | null
-          }[]
+          { attribute_code: string; value_text: string; superseded_claim_id: string | null }[]
         >`
           select attribute_code, value_text, superseded_claim_id
           from identity.declare_profile_claim(
@@ -349,11 +348,20 @@ export function createIdentityOnboardingDatabase(): IdentityOnboardingDatabase {
           )
         `
         if (!row) throw new Error('PostgreSQL did not record the profile claim')
-        return {
-          attributeCode: row.attribute_code,
-          valueText: row.value_text,
-          supersededClaimId: row.superseded_claim_id,
+        // The function echoes what it stored, and the catalogue is what validated the
+        // pairing, so the narrowed input is what types the answer. Asserting the echo
+        // rather than casting means a divergence surfaces instead of being asserted away.
+        if (row.attribute_code !== input.attributeCode || row.value_text !== input.valueText) {
+          throw new Error('PostgreSQL recorded a different claim than the one declared')
         }
+        const supersededClaimId = row.superseded_claim_id
+        return input.attributeCode === 'training_experience'
+          ? { attributeCode: 'training_experience', valueText: input.valueText, supersededClaimId }
+          : {
+              attributeCode: 'primary_training_goal',
+              valueText: input.valueText,
+              supersededClaimId,
+            }
       })
     },
 
@@ -416,6 +424,7 @@ export function createIdentityOnboardingDatabase(): IdentityOnboardingDatabase {
             },
             biologicalSex: row.answers.biological_sex,
             primaryTrainingGoal: row.answers.primary_training_goal,
+            trainingExperience: row.answers.training_experience,
             focusAreas: row.answers.focus_areas,
           },
         }

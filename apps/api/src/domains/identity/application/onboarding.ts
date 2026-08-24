@@ -35,8 +35,8 @@ import type {
   IdentityOnboardingDatabase,
   OnboardingAttempt,
   PendingFitnessId,
-  PrimaryTrainingGoal,
   ProfileClaim,
+  ProfileClaimDeclaration,
 } from '../domain/index.js'
 
 export interface OnboardingService {
@@ -65,10 +65,7 @@ export interface OnboardingService {
   ): Promise<BiologicalSex | null>
   declareProfileClaim(
     actor: AccountActor,
-    input: CommandContext & {
-      attributeCode: 'primary_training_goal'
-      valueText: PrimaryTrainingGoal
-    },
+    input: CommandContext & ProfileClaimDeclaration,
   ): Promise<ProfileClaim>
   declareFocusAreas(
     actor: AccountActor,
@@ -151,10 +148,7 @@ export interface SpaceOnboardingService {
   ): Promise<BiologicalSex | null>
   declareProfileClaim(
     token: VerifiedToken,
-    input: CommandContext & {
-      attributeCode: 'primary_training_goal'
-      valueText: PrimaryTrainingGoal
-    },
+    input: CommandContext & ProfileClaimDeclaration,
   ): Promise<ProfileClaim>
   declareFocusAreas(
     token: VerifiedToken,

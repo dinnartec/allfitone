@@ -22,6 +22,21 @@ import {
   OnboardingPreconditionError,
   type OnboardingService,
 } from './onboarding.js'
+import type { ProfileClaim, ProfileClaimDeclaration } from '../domain/index.js'
+
+/**
+ * Echoes a declaration back as the claim it would become, keeping the attribute
+ * paired with its value. Spreading the two fields loses that pairing: destructuring
+ * a discriminated union drops the correlation between its members.
+ */
+function echoClaim(
+  input: ProfileClaimDeclaration,
+  supersededClaimId: string | null = null,
+): ProfileClaim {
+  return input.attributeCode === 'training_experience'
+    ? { attributeCode: 'training_experience', valueText: input.valueText, supersededClaimId }
+    : { attributeCode: 'primary_training_goal', valueText: input.valueText, supersededClaimId }
+}
 
 /** The empty shape, repeated in enough doubles to be worth naming once. */
 function emptyAnswers() {
@@ -29,6 +44,7 @@ function emptyAnswers() {
     identity: { answered: false as boolean, value: null },
     biologicalSex: { answered: false as boolean, value: null },
     primaryTrainingGoal: { answered: false as boolean, value: null },
+    trainingExperience: { answered: false as boolean, value: null },
     focusAreas: { answered: false as boolean, value: [] },
   }
 }
@@ -88,11 +104,7 @@ function serviceWith(
     },
     declareProfileClaim: async (actor, input) => {
       actors.push(actor.accountId)
-      return {
-        attributeCode: input.attributeCode,
-        valueText: input.valueText,
-        supersededClaimId: null,
-      }
+      return echoClaim(input)
     },
     declareFocusAreas: async (actor, input) => {
       actors.push(actor.accountId)

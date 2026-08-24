@@ -20,7 +20,13 @@ import { createHash } from 'node:crypto'
 import type { VerifiedToken } from '@allfitone/auth-provider'
 import { Hono, type Context } from 'hono'
 
-import type { BiologicalSex, FocusArea, PrimaryTrainingGoal } from '../domain/index.js'
+import type {
+  BiologicalSex,
+  FocusArea,
+  PrimaryTrainingGoal,
+  ProfileClaimDeclaration,
+  TrainingExperience,
+} from '../domain/index.js'
 import { fail } from '../../../platform/http/index.js'
 import {
   OnboardingPreconditionError,
@@ -141,6 +147,7 @@ export function spaceOnboardingRoutes(
             },
             biological_sex: current.answers.biologicalSex,
             primary_training_goal: current.answers.primaryTrainingGoal,
+            training_experience: current.answers.trainingExperience,
             focus_areas: current.answers.focusAreas,
           },
         },
@@ -224,11 +231,7 @@ export function spaceOnboardingRoutes(
     if (!declaration || !command) return fail(c, 'invalid-request')
 
     try {
-      const claim = await onboarding().declareProfileClaim(token, {
-        ...command,
-        attributeCode: declaration.attributeCode,
-        valueText: declaration.valueText,
-      })
+      const claim = await onboarding().declareProfileClaim(token, { ...command, ...declaration })
       return c.json(
         {
           attribute_code: claim.attributeCode,
@@ -379,9 +382,19 @@ const TRAINING_GOALS: readonly PrimaryTrainingGoal[] = [
   'maintain',
 ]
 
-function readProfileClaim(
-  body: unknown,
-): { attributeCode: 'primary_training_goal'; valueText: PrimaryTrainingGoal } | undefined {
+const TRAINING_EXPERIENCE: readonly TrainingExperience[] = [
+  'starting',
+  'some_practice',
+  'experienced',
+]
+
+/**
+ * One variant per member of the attribute catalogue, and the pairing is checked
+ * rather than assumed: a goal code carrying an experience value is refused here as
+ * well as by the database, which is what makes it a `400` instead of a constraint
+ * violation.
+ */
+function readProfileClaim(body: unknown): ProfileClaimDeclaration | undefined {
   if (typeof body !== 'object' || body === null) return undefined
   const keys = Object.keys(body).sort()
   if (keys.length !== 2 || keys[0] !== 'attribute_code' || keys[1] !== 'value_text')
@@ -391,11 +404,19 @@ function readProfileClaim(
     attribute_code: unknown
     value_text: unknown
   }
-  if (code !== 'primary_training_goal') return undefined
   if (typeof value !== 'string') return undefined
-  return TRAINING_GOALS.includes(value as PrimaryTrainingGoal)
-    ? { attributeCode: code, valueText: value as PrimaryTrainingGoal }
-    : undefined
+
+  if (code === 'primary_training_goal') {
+    return TRAINING_GOALS.includes(value as PrimaryTrainingGoal)
+      ? { attributeCode: code, valueText: value as PrimaryTrainingGoal }
+      : undefined
+  }
+  if (code === 'training_experience') {
+    return TRAINING_EXPERIENCE.includes(value as TrainingExperience)
+      ? { attributeCode: code, valueText: value as TrainingExperience }
+      : undefined
+  }
+  return undefined
 }
 
 const FOCUS_AREAS: readonly FocusArea[] = [

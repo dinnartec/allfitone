@@ -3,6 +3,21 @@ import { Hono } from 'hono'
 
 import type { OnboardingService, StudioSessionService } from '../application/index.js'
 import { studioOnboardingRoutes } from './studio-onboarding.js'
+import type { ProfileClaim, ProfileClaimDeclaration } from '../domain/index.js'
+
+/**
+ * Echoes a declaration back as the claim it would become, keeping the attribute
+ * paired with its value. Spreading the two fields loses that pairing: destructuring
+ * a discriminated union drops the correlation between its members.
+ */
+function echoClaim(
+  input: ProfileClaimDeclaration,
+  supersededClaimId: string | null = null,
+): ProfileClaim {
+  return input.attributeCode === 'training_experience'
+    ? { attributeCode: 'training_experience', valueText: input.valueText, supersededClaimId }
+    : { attributeCode: 'primary_training_goal', valueText: input.valueText, supersededClaimId }
+}
 
 const COMMAND_HEADERS = {
   origin: 'https://studio.example.test',
@@ -51,11 +66,7 @@ function onboarding(overrides: Partial<OnboardingService> = {}): OnboardingServi
       username: input.username,
     }),
     declareBiologicalSex: async (_actor, input) => input.biologicalSex,
-    declareProfileClaim: async (_actor, input) => ({
-      attributeCode: input.attributeCode,
-      valueText: input.valueText,
-      supersededClaimId: null,
-    }),
+    declareProfileClaim: async (_actor, input) => echoClaim(input),
     declareFocusAreas: async (_actor, input) => input.areas,
     readCurrentAttempt: async () => ({
       attempt: null,
@@ -63,6 +74,7 @@ function onboarding(overrides: Partial<OnboardingService> = {}): OnboardingServi
         identity: { answered: false, value: null },
         biologicalSex: { answered: false, value: null },
         primaryTrainingGoal: { answered: false, value: null },
+        trainingExperience: { answered: false, value: null },
         focusAreas: { answered: false, value: [] },
       },
     }),
