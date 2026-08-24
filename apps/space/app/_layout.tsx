@@ -22,6 +22,8 @@
 
 import { useAllfitFonts } from '@allfitone/react-native/fonts'
 import { ThemeProvider } from '@allfitone/react-native/theme'
+import { GestureHandlerRootView } from 'react-native-gesture-handler'
+import { StyleSheet } from 'react-native'
 import { Stack } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import { useColorScheme } from 'react-native'
@@ -39,21 +41,27 @@ export default function RootLayout() {
   const theme = scheme === 'light' ? 'light' : 'dark'
 
   return (
-    <SafeAreaProvider>
-      <ThemeProvider theme={theme}>
-        <StatusBar style={theme === 'light' ? 'dark' : 'light'} />
-        <Stack
-          screenOptions={{
-            headerShown: false,
-            animation: 'slide_from_right',
-            animationDuration: 220,
-          }}
-        >
-          <Stack.Screen name="welcome" options={{ animation: 'fade', animationDuration: 260 }} />
-        </Stack>
-        {/* Withheld until onboarding completes: asking on the welcome screen,
+    // Wraps the app once. Without it gestures do nothing and report no error,
+    // which is the failure that looks like a broken animation.
+    <GestureHandlerRootView style={styles.root}>
+      <SafeAreaProvider>
+        <ThemeProvider theme={theme}>
+          <StatusBar style={theme === 'light' ? 'dark' : 'light'} />
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              animation: 'slide_from_right',
+              animationDuration: 220,
+            }}
+          >
+            <Stack.Screen name="welcome" options={{ animation: 'fade', animationDuration: 260 }} />
+          </Stack>
+          {/* Withheld until onboarding completes: asking on the welcome screen,
             before the person knows what Allfit is, is not informed consent. */}
-      </ThemeProvider>
-    </SafeAreaProvider>
+        </ThemeProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   )
 }
+
+const styles = StyleSheet.create({ root: { flex: 1 } })
