@@ -44,6 +44,7 @@ import { useTheme } from '@allfitone/react-native/theme'
 import { useRouter } from 'expo-router'
 import { useEffect, useMemo, useState } from 'react'
 import { Image, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native'
+import Animated, { FadeInDown, FadeOut, useReducedMotion } from 'react-native-reanimated'
 
 import femalePortrait from '../../assets/images/sex-female.webp'
 import malePortrait from '../../assets/images/sex-male.webp'
@@ -51,7 +52,11 @@ import { OnboardingHeader } from '../../src/components/onboarding-header'
 import { ApiError } from '../../src/client'
 import { createSpaceOnboardingFlow } from '../../src/client/onboarding-transport'
 import { guardStep, nextRouteAfter } from '../../src/client/onboarding-steps'
+import { cssDuration } from '../../src/client/motion'
 import { canSubmitSex, cardGeometry, CARD_GAP, type SexAnswer } from '../../src/client/sex-form'
+
+/** Keeps the button off the very bottom edge, the same amount on every step. */
+const FOOTER_LIFT = 16
 
 const EXPIRED = 'Tu sesión venció. Vuelve a entrar para guardar tu respuesta.'
 const UNREACHABLE = 'No pudimos guardar tu respuesta. Inténtalo otra vez.'
@@ -64,11 +69,31 @@ const CHOICES: Array<{ value: Exclude<SexAnswer, null>; label: string; portrait:
 
 /** Widths of the three bars on the decline card, as the prototype drew them. */
 const STRATA = [13, 19, 16]
+const STRATUM_HEIGHT = 2
+const STRATA_GAP = 3
+/** Where the three settle when the answer is declined: level with each other. */
+const STRATA_ALIGNED = 22
+
+/**
+ * The bars are absolutely positioned inside a fixed box, which makes animating
+ * their width the sanctioned case — nothing else re-lays-out, and the rounded
+ * ends survive, where a scaleX would have smeared them into ovals.
+ */
+const STRATA_TRANSITION = {
+  transitionProperty: 'width',
+  transitionDuration: cssDuration('normal', false),
+  transitionTimingFunction: 'ease-out',
+} as const
+
+/** The consequence is an answer to what was just chosen, so it arrives with it. */
+const consequenceIn = FadeInDown.duration(160)
+const consequenceOut = FadeOut.duration(120)
 
 export default function OnboardingBiologicalSex() {
   const router = useRouter()
   const theme = useTheme()
   const { height } = useWindowDimensions()
+  const reduceMotion = useReducedMotion()
   const flow = useMemo(() => createSpaceOnboardingFlow(), [])
 
   const [rowWidth, setRowWidth] = useState(0)
@@ -243,16 +268,19 @@ export default function OnboardingBiologicalSex() {
         >
           <View style={styles.strata}>
             {STRATA.map((width, index) => (
-              <View
+              <Animated.View
                 key={index}
-                style={{
-                  width: declined ? 22 : width,
-                  height: 2,
-                  borderRadius: 2,
-                  backgroundColor: declined
-                    ? theme.color.border.accent
-                    : theme.color.border.default,
-                }}
+                style={[
+                  styles.stratum,
+                  STRATA_TRANSITION,
+                  {
+                    top: index * (STRATUM_HEIGHT + STRATA_GAP),
+                    width: declined ? STRATA_ALIGNED : width,
+                    backgroundColor: declined
+                      ? theme.color.border.accent
+                      : theme.color.border.default,
+                  },
+                ]}
               />
             ))}
           </View>
@@ -262,7 +290,10 @@ export default function OnboardingBiologicalSex() {
         </Pressable>
 
         {declined ? (
-          <View style={styles.consequence}>
+          <Animated.View
+            style={styles.consequence}
+            {...(reduceMotion ? {} : { entering: consequenceIn, exiting: consequenceOut })}
+          >
             <FoundationIcon
               name="info"
               size="sm"
@@ -273,9 +304,13 @@ export default function OnboardingBiologicalSex() {
             <Text role="body" size="sm" color="muted" style={styles.consequenceText}>
               Puedes añadirlo cuando quieras desde tu perfil. Nada más cambia.
             </Text>
-          </View>
+          </Animated.View>
         ) : null}
+      </ScrollView>
 
+      {/* Outside the scroll so the button sits in the same place on every step of
+          the onboarding, whatever the content above it does. */}
+      <View style={styles.footer}>
         {failure ? (
           <View style={styles.alert}>
             <InlineAlert message={failure} />
@@ -300,13 +335,14 @@ export default function OnboardingBiologicalSex() {
             onPress={() => router.replace('/sign-in')}
           />
         ) : null}
-      </ScrollView>
+      </View>
     </Screen>
   )
 }
 
 const styles = StyleSheet.create({
   scroll: { flex: 1 },
+  footer: { paddingTop: 4, paddingBottom: FOOTER_LIFT },
   content: { flexGrow: 1, paddingTop: 18, paddingBottom: 26 },
   lede: { marginTop: 11 },
   cards: { flexDirection: 'row', gap: CARD_GAP, marginTop: 20 },
@@ -339,7 +375,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 13,
   },
-  strata: { gap: 3 },
+  strata: {
+    width: STRATA_ALIGNED,
+    height: STRATUM_HEIGHT * 3 + STRATA_GAP * 2,
+  },
+  stratum: { position: 'absolute', left: 0, height: STRATUM_HEIGHT, borderRadius: 2 },
   consequence: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginTop: 11 },
   consequenceIcon: { marginTop: 2 },
   consequenceText: { flex: 1 },

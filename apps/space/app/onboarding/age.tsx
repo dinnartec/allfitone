@@ -46,6 +46,9 @@ import { FIRST_STEP_ROUTE } from '../../src/client/onboarding-steps'
 
 const DECLARATION = 'Declaro que tengo 18 años o más.'
 
+/** Keeps the button off the very bottom edge, the same amount on every step. */
+const FOOTER_LIFT = 16
+
 export default function AdultDeclaration() {
   const router = useRouter()
   const flow = useMemo(() => createSpaceOnboardingFlow(), [])
@@ -100,25 +103,30 @@ export default function AdultDeclaration() {
             onChange={setDeclared}
             disabled={submitting}
           />
-
-          {failure ? <InlineAlert message={failure} /> : null}
-
-          <Button
-            label="Continuar"
-            disabled={!declared || submitting}
-            loading={submitting}
-            onPress={() => {
-              void submit()
-            }}
-            style={styles.submit}
-          />
         </View>
       </ScrollView>
+
+      {/* Outside the scroll so the button sits in the same place on every step of
+          the onboarding, whatever the content above it does. */}
+      <View style={styles.footer}>
+        {failure ? <InlineAlert message={failure} /> : null}
+
+        <Button
+          label="Continuar"
+          disabled={!declared || submitting}
+          loading={submitting}
+          onPress={() => {
+            void submit()
+          }}
+          style={styles.submit}
+        />
+      </View>
     </Screen>
   )
 }
 
 const styles = StyleSheet.create({
+  footer: { paddingTop: 4, paddingBottom: FOOTER_LIFT },
   scroll: {
     flex: 1,
   },

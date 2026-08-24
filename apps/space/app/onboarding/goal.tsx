@@ -34,6 +34,12 @@ import { useTheme } from '@allfitone/react-native/theme'
 import { useRouter } from 'expo-router'
 import { useEffect, useMemo, useState } from 'react'
 import { Image, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native'
+import Animated, {
+  Easing,
+  FadeInDown,
+  LinearTransition,
+  useReducedMotion,
+} from 'react-native-reanimated'
 
 /**
  * A height with no width makes React Native fall back to the file's intrinsic
@@ -49,6 +55,16 @@ function figureAspect(source: number): number {
 }
 
 import { OnboardingHeader } from '../../src/components/onboarding-header'
+import {
+  cssDuration,
+  durationFor,
+  easingFor,
+  liftFor,
+  PRESS_DURATION,
+  PRESS_SCALE,
+  shouldPlayEntrance,
+  staggerDelays,
+} from '../../src/client/motion'
 import { ApiError } from '../../src/client'
 import { createSpaceOnboardingFlow } from '../../src/client/onboarding-transport'
 import { guardStep, nextRouteAfter } from '../../src/client/onboarding-steps'
@@ -59,6 +75,7 @@ import {
   goalSlots,
   heroGeometry,
   pairHeight,
+  TRAINING_GOALS,
   type TrainingGoal,
 } from '../../src/client/goal-form'
 
@@ -93,6 +110,33 @@ const OVERLAP = 0.55
  * and DT-009 reserves cyan for action and focus — it never decorates.
  */
 const HALO_SCALE = 1.25
+
+/**
+ * The reflow when a row becomes the card. Built at module scope: an inline
+ * builder is rebuilt on every render, and this one carries no per-item delay.
+ */
+const cardReflow = LinearTransition.duration(200)
+
+/**
+ * The press transition, passed in the style rather than through
+ * `StyleSheet.create`, which rejects these properties. 3 % and 120 ms is the
+ * ceiling for something touched as often as a row in this list.
+ *
+ * `ease-out` by name, not the parametrised curve: the style types accept only the
+ * predefined keywords, and the stronger bezier is reachable only through
+ * `css.create`, whose generic collides with this project's
+ * `exactOptionalPropertyTypes`. Over 120 ms and 3 % the difference between the
+ * two is not perceptible — where the curve does matter, the entrance below, it
+ * gets the strong one.
+ */
+const PRESS_TRANSITION = {
+  transitionProperty: 'transform',
+  transitionDuration: cssDuration(PRESS_DURATION, false),
+  transitionTimingFunction: 'ease-out',
+} as const
+
+/** Keeps the button off the very bottom edge, the same amount on every step. */
+const FOOTER_LIFT = 16
 
 const EXPIRED = 'Tu sesión venció. Vuelve a entrar para guardar tu respuesta.'
 const UNREACHABLE = 'No pudimos guardar tu respuesta. Inténtalo otra vez.'
@@ -160,6 +204,21 @@ export default function OnboardingTrainingGoal() {
   const [submitting, setSubmitting] = useState(false)
   const [sessionExpired, setSessionExpired] = useState(false)
   const [failure, setFailure] = useState<string | undefined>(undefined)
+  const reduceMotion = useReducedMotion()
+  const [pressing, setPressing] = useState<TrainingGoal | undefined>(undefined)
+  const [entering, setEntering] = useState(false)
+
+  // Built outside the JSX: an inline chain rebuilds the builder on every render,
+  // and a per-index delay cannot live at module scope.
+  const entrances = useMemo(() => {
+    const delays = staggerDelays(TRAINING_GOALS.length + 1, reduceMotion)
+    return delays.map((delay) =>
+      FadeInDown.duration(durationFor('fast', reduceMotion))
+        .delay(delay)
+        .easing(Easing.bezier(...easingFor('emphasized')).factory())
+        .withInitialValues({ transform: [{ translateY: liftFor(reduceMotion) }] }),
+    )
+  }, [reduceMotion])
 
   const { cardWidth, cardHeight } = heroGeometry(rowWidth, height)
 
@@ -180,6 +239,8 @@ export default function OnboardingTrainingGoal() {
         setDeclaredSex(current.answers.biological_sex.value ?? null)
         const declared = current.answers.primary_training_goal.value
         if (declared) setGoal(declared)
+
+        setEntering(shouldPlayEntrance(Boolean(declared)))
       })
       .catch((cause: unknown) => {
         if (!active) return
@@ -228,16 +289,49 @@ export default function OnboardingTrainingGoal() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <Text role="display" size="4xl" uppercase accessibilityRole="header">
-          ¿Qué quieres{'\n'}lograr?
-        </Text>
-        <Text role="body" size="md" color="secondary" style={styles.lede}>
-          Elige uno. Es la dirección que toma tu entrenamiento, y puedes cambiarlo cuando quieras.
-        </Text>
+        <Animated.View {...(entering && entrances[0] ? { entering: entrances[0] } : {})}>
+          <Text role="display" size="4xl" uppercase accessibilityRole="header">
+            ¿Qué quieres{'\n'}lograr?
+          </Text>
+          <Text role="body" size="md" color="secondary" style={styles.lede}>
+            Elige uno. Es la dirección que toma tu entrenamiento, y puedes cambiarlo cuando quieras.
+          </Text>
+        </Animated.View>
+
+        {/* Decoded on mount, not when a card opens. What made the photograph
+            arrive late was the first render of the asset, and neither prefetch nor
+            downloadAsync touches that — only having it already mounted does. Zero
+            height so it costs nothing in layout, and never read by a screen
+            reader. */}
+        <View
+          style={styles.preload}
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+        >
+          {TRAINING_GOALS.flatMap((option) => {
+            const art = GOALS[option][bodyVariant(declaredSex, option)]
+            return [art.before, art.after]
+              .filter(Boolean)
+              .map((source, index) => (
+                <Image
+                  key={`${option}-${index}`}
+                  source={source as number}
+                  style={{ height: cardHeight, width: undefined, aspectRatio: 1 }}
+                  accessible={false}
+                />
+              ))
+          })}
+        </View>
 
         <View onLayout={(event) => setRowWidth(event.nativeEvent.layout.width)}>
-          {goalSlots(goal).map((slot) => {
+          {goalSlots(goal).map((slot, index) => {
             const entry = GOALS[slot.goal]
+            // exactOptionalPropertyTypes rejects an explicit undefined, so the
+            // props are spread in only when there is something to spread.
+            const motionProps = {
+              ...(entering && entrances[index + 1] ? { entering: entrances[index + 1] } : {}),
+              ...(reduceMotion ? {} : { layout: cardReflow }),
+            }
             const bodies = entry[bodyVariant(declaredSex, slot.goal)]
 
             // The card opens where the row was, so nothing below it moves.
@@ -251,143 +345,154 @@ export default function OnboardingTrainingGoal() {
               const beforeWidth = figureHeight * beforeAspect
 
               return (
-                <View
-                  key={slot.goal}
-                  accessible
-                  accessibilityRole="radio"
-                  accessibilityState={{ selected: true }}
-                  accessibilityLabel={`${entry.name}. ${entry.why}`}
-                  style={[
-                    styles.hero,
-                    {
-                      width: cardWidth,
-                      height: cardHeight,
-                      borderColor: theme.color.border.accent,
-                      backgroundColor: theme.color.background.surfaceSubtle,
-                    },
-                  ]}
-                >
-                  {/* No radial gradient exists in React Native, so the glow is
-                      an asset tinted with the accent token — the cyan differs
-                      between themes and a baked one would be wrong on light. */}
-                  <Image
-                    source={halo}
+                <Animated.View key={slot.goal} {...motionProps} style={styles.slot}>
+                  <View
+                    accessible
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: true }}
+                    accessibilityLabel={`${entry.name}. ${entry.why}`}
                     style={[
-                      styles.halo,
+                      styles.hero,
                       {
-                        width: figureHeight * HALO_SCALE,
-                        height: figureHeight * HALO_SCALE,
-                        // Centred on the pair as a whole, by arithmetic: a
-                        // percentage offset with a translate centres nothing in
-                        // React Native, and centring it on the front figure alone
-                        // pushed the glow out to one side of the group.
-                        top: cardHeight - figureHeight / 2 - (figureHeight * HALO_SCALE) / 2,
-                        right:
-                          EDGE +
-                          (afterWidth * OVERLAP + beforeWidth) / 2 -
-                          (figureHeight * HALO_SCALE) / 2,
-                        tintColor: theme.color.border.accent,
+                        width: cardWidth,
+                        height: cardHeight,
+                        borderColor: theme.color.border.accent,
+                        backgroundColor: theme.color.background.surfaceSubtle,
                       },
                     ]}
-                    resizeMode="contain"
-                    accessible={false}
-                  />
+                  >
+                    {/* No radial gradient exists in React Native, so the glow is
+                      an asset tinted with the accent token — the cyan differs
+                      between themes and a baked one would be wrong on light. */}
+                    <Image
+                      source={halo}
+                      style={[
+                        styles.halo,
+                        {
+                          width: figureHeight * HALO_SCALE,
+                          height: figureHeight * HALO_SCALE,
+                          // Centred on the pair as a whole, by arithmetic: a
+                          // percentage offset with a translate centres nothing in
+                          // React Native, and centring it on the front figure alone
+                          // pushed the glow out to one side of the group.
+                          top: cardHeight - figureHeight / 2 - (figureHeight * HALO_SCALE) / 2,
+                          right:
+                            EDGE +
+                            (afterWidth * OVERLAP + beforeWidth) / 2 -
+                            (figureHeight * HALO_SCALE) / 2,
+                          tintColor: theme.color.border.accent,
+                        },
+                      ]}
+                      resizeMode="contain"
+                      accessible={false}
+                    />
 
-                  {bodies.after ? (
-                    <>
-                      {/* Already softened in the artwork: React Native has no
+                    {bodies.after ? (
+                      <>
+                        {/* Already softened in the artwork: React Native has no
                           blur filter, and opacity alone read as nothing. */}
+                        <Image
+                          source={bodies.before}
+                          style={[
+                            styles.figure,
+                            styles.behind,
+                            {
+                              height: figureHeight,
+                              width: beforeWidth,
+                              right: EDGE + afterWidth * OVERLAP,
+                            },
+                          ]}
+                          resizeMode="cover"
+                          accessible={false}
+                        />
+                        <Image
+                          source={bodies.after}
+                          style={[
+                            styles.figure,
+                            { height: figureHeight, width: afterWidth, right: EDGE },
+                          ]}
+                          resizeMode="cover"
+                          accessible={false}
+                        />
+                      </>
+                    ) : (
                       <Image
                         source={bodies.before}
                         style={[
                           styles.figure,
-                          styles.behind,
-                          {
-                            height: figureHeight,
-                            width: beforeWidth,
-                            right: EDGE + afterWidth * OVERLAP,
-                          },
+                          { height: figureHeight, width: beforeWidth, right: EDGE * 4 },
                         ]}
                         resizeMode="cover"
                         accessible={false}
                       />
-                      <Image
-                        source={bodies.after}
-                        style={[
-                          styles.figure,
-                          { height: figureHeight, width: afterWidth, right: EDGE },
-                        ]}
-                        resizeMode="cover"
-                        accessible={false}
+                    )}
+
+                    <View style={styles.copy}>
+                      <Text role="display" size="xl" uppercase>
+                        {entry.name}
+                      </Text>
+                      <Text role="body" size="xs" color="secondary" style={styles.why}>
+                        {entry.why}
+                      </Text>
+                    </View>
+
+                    <View style={[styles.check, { backgroundColor: theme.color.border.accent }]}>
+                      <FoundationIcon
+                        name="check"
+                        customSize={12}
+                        strokeScale="compact"
+                        color={theme.color.accent.onAccent}
+                        decorative
                       />
-                    </>
-                  ) : (
-                    <Image
-                      source={bodies.before}
-                      style={[
-                        styles.figure,
-                        { height: figureHeight, width: beforeWidth, right: EDGE * 4 },
-                      ]}
-                      resizeMode="cover"
-                      accessible={false}
-                    />
-                  )}
-
-                  <View style={styles.copy}>
-                    <Text role="display" size="xl" uppercase>
-                      {entry.name}
-                    </Text>
-                    <Text role="body" size="xs" color="secondary" style={styles.why}>
-                      {entry.why}
-                    </Text>
+                    </View>
                   </View>
-
-                  <View style={[styles.check, { backgroundColor: theme.color.border.accent }]}>
-                    <FoundationIcon
-                      name="check"
-                      customSize={12}
-                      strokeScale="compact"
-                      color={theme.color.accent.onAccent}
-                      decorative
-                    />
-                  </View>
-                </View>
+                </Animated.View>
               )
             }
 
             return (
-              <Pressable
-                key={slot.goal}
-                accessibilityRole="radio"
-                accessibilityState={{ selected: false, disabled: !pressable }}
-                accessibilityLabel={`${entry.name}. ${entry.why}`}
-                disabled={!pressable}
-                onPress={() => setGoal(slot.goal)}
-                style={[
-                  styles.row,
-                  {
-                    borderColor: theme.color.border.subtle,
-                    backgroundColor: theme.color.background.surfaceSubtle,
-                  },
-                ]}
-              >
-                <View style={[styles.icon, { backgroundColor: theme.color.accent.tonal }]}>
-                  <FoundationIcon
-                    name={entry.icon}
-                    size="sm"
-                    color={theme.color.border.accent}
-                    decorative
-                  />
-                </View>
-                <View style={styles.rowText}>
-                  <Text role="display" size="lg" uppercase>
-                    {entry.name}
-                  </Text>
-                  <Text role="body" size="xs" color="muted" style={styles.why}>
-                    {entry.why}
-                  </Text>
-                </View>
-              </Pressable>
+              <Animated.View key={slot.goal} {...motionProps} style={styles.slot}>
+                <Pressable
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: false, disabled: !pressable }}
+                  accessibilityLabel={`${entry.name}. ${entry.why}`}
+                  disabled={!pressable}
+                  onPress={() => setGoal(slot.goal)}
+                  onPressIn={() => setPressing(slot.goal)}
+                  onPressOut={() => setPressing(undefined)}
+                  hitSlop={8}
+                  pressRetentionOffset={16}
+                >
+                  <Animated.View
+                    style={[
+                      styles.row,
+                      PRESS_TRANSITION,
+                      { transform: [{ scale: pressing === slot.goal ? PRESS_SCALE : 1 }] },
+                      {
+                        borderColor: theme.color.border.subtle,
+                        backgroundColor: theme.color.background.surfaceSubtle,
+                      },
+                    ]}
+                  >
+                    <View style={[styles.icon, { backgroundColor: theme.color.accent.tonal }]}>
+                      <FoundationIcon
+                        name={entry.icon}
+                        size="sm"
+                        color={theme.color.border.accent}
+                        decorative
+                      />
+                    </View>
+                    <View style={styles.rowText}>
+                      <Text role="display" size="lg" uppercase>
+                        {entry.name}
+                      </Text>
+                      <Text role="body" size="xs" color="muted" style={styles.why}>
+                        {entry.why}
+                      </Text>
+                    </View>
+                  </Animated.View>
+                </Pressable>
+              </Animated.View>
             )
           })}
         </View>
@@ -422,9 +527,16 @@ export default function OnboardingTrainingGoal() {
 
 const styles = StyleSheet.create({
   lede: { marginTop: 9, marginBottom: 16 },
+  // Both branches hang off an identical container so the reflow is the same
+  // wherever the card opens. It clips, which is what makes the card reveal from
+  // its top edge instead of the middle.
+  slot: { overflow: 'hidden' },
+  // Off-screen rather than zero-sized: the decoded bitmap is cached per size, so
+  // mounting these at 2×2 would cache a 2×2 and decode again at the real size.
+  preload: { position: 'absolute', left: -10000, top: 0, opacity: 0 },
   scroll: { flex: 1 },
   scrollContent: { paddingBottom: 4 },
-  footer: { paddingTop: 4 },
+  footer: { paddingTop: 4, paddingBottom: FOOTER_LIFT },
   hero: {
     borderWidth: 2,
     borderRadius: 20,

@@ -30,8 +30,17 @@
 import { FoundationIcon } from '@allfitone/react-native/icons'
 import { useTheme } from '@allfitone/react-native/theme'
 import { useRouter } from 'expo-router'
+import { useEffect } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated'
 
+import { durationFor, easingFor } from '../client/motion'
 import { stepPosition, type OnboardingStepRoute } from '../client/onboarding-steps'
 
 const CURRENT_SEGMENT_OPACITY = 0.6
@@ -64,7 +73,26 @@ export function OnboardingBack({ to }: { readonly to: OnboardingStepRoute }) {
 
 export function OnboardingHeader({ step }: OnboardingHeaderProps) {
   const theme = useTheme()
+  const reduceMotion = useReducedMotion()
   const { total, completed, previous } = stepPosition(step)
+  const grown = useSharedValue(0)
+
+  // The step you are on fills in rather than appearing lit. Keyed to which segment
+  // that is, not to mount, so it fills again when the person moves.
+  useEffect(() => {
+    grown.set(0)
+    grown.set(
+      withTiming(1, {
+        duration: durationFor('normal', reduceMotion),
+        easing: Easing.bezier(...easingFor('emphasized')),
+      }),
+    )
+  }, [completed, grown, reduceMotion])
+
+  // The sanctioned width animation: the fill is absolutely positioned with no
+  // children, so nothing else re-lays-out, and its corner radius survives —
+  // scaleX would smear those rounded ends into ovals.
+  const fillStyle = useAnimatedStyle(() => ({ width: `${grown.get() * 100}%` }))
 
   return (
     <View style={styles.row}>
@@ -81,15 +109,21 @@ export function OnboardingHeader({ step }: OnboardingHeaderProps) {
           return (
             <View
               key={index}
-              style={[
-                styles.segment,
-                {
-                  backgroundColor:
-                    done || current ? theme.color.border.accent : theme.color.border.subtle,
-                  opacity: current && !done ? CURRENT_SEGMENT_OPACITY : 1,
-                },
-              ]}
-            />
+              style={[styles.segment, { backgroundColor: theme.color.border.subtle }]}
+            >
+              {done || current ? (
+                <Animated.View
+                  style={[
+                    styles.fill,
+                    {
+                      backgroundColor: theme.color.border.accent,
+                      opacity: current && !done ? CURRENT_SEGMENT_OPACITY : 1,
+                    },
+                    index === completed ? fillStyle : styles.filled,
+                  ]}
+                />
+              ) : null}
+            </View>
           )
         })}
       </View>
@@ -101,5 +135,7 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 14, minHeight: 44 },
   back: { width: 28, height: 44, alignItems: 'flex-start', justifyContent: 'center' },
   bar: { flex: 1, flexDirection: 'row', gap: 6 },
-  segment: { flex: 1, height: 3, borderRadius: 999 },
+  segment: { flex: 1, height: 3, borderRadius: 999, overflow: 'hidden' },
+  fill: { position: 'absolute', left: 0, top: 0, bottom: 0, borderRadius: 999 },
+  filled: { width: '100%' },
 })

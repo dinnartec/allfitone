@@ -60,6 +60,9 @@ const USERNAME_MAX_LENGTH = 30
 const USERNAME_RULE =
   'De 3 a 30 caracteres, empezando con una letra. Solo letras, números y guion bajo.'
 const TAKEN = 'Ese usuario ya está en uso. Prueba con otro.'
+/** Keeps the button off the very bottom edge, the same amount on every step. */
+const FOOTER_LIFT = 16
+
 const EXPIRED = 'Tu sesión venció. Vuelve a entrar para guardar tus datos.'
 const UNREACHABLE = 'No pudimos guardar tus datos. Inténtalo otra vez.'
 
@@ -227,34 +230,39 @@ export default function OnboardingIdentity() {
               {isUsernameWellFormed(username) ? `Así te verán: @${username}` : USERNAME_RULE}
             </Text>
           </View>
-
-          {failure ? <InlineAlert message={failure} /> : null}
-
-          <Button
-            label="Continuar"
-            disabled={!complete}
-            loading={submitting}
-            onPress={() => {
-              void submit()
-            }}
-            style={styles.submit}
-          />
-
-          {/* Without this the screen says "sign in again" and offers no way to. */}
-          {sessionExpired ? (
-            <Button
-              label="Iniciar sesión"
-              variant="secondary"
-              onPress={() => router.replace('/sign-in')}
-            />
-          ) : null}
         </View>
       </ScrollView>
+
+      {/* Outside the scroll so the button sits in the same place on every step of
+          the onboarding, whatever the content above it does. */}
+      <View style={styles.footer}>
+        {failure ? <InlineAlert message={failure} /> : null}
+
+        <Button
+          label="Continuar"
+          disabled={!complete}
+          loading={submitting}
+          onPress={() => {
+            void submit()
+          }}
+          style={styles.submit}
+        />
+
+        {/* Without this the screen says "sign in again" and offers no way to. */}
+        {sessionExpired ? (
+          <Button
+            label="Iniciar sesión"
+            variant="secondary"
+            onPress={() => router.replace('/sign-in')}
+          />
+        ) : null}
+      </View>
     </Screen>
   )
 }
 
 const styles = StyleSheet.create({
+  footer: { paddingTop: 4, paddingBottom: FOOTER_LIFT },
   scroll: {
     flex: 1,
   },
