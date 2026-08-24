@@ -1333,6 +1333,7 @@ export type Database = {
         }
         Returns: string
       }
+      current_focus_areas: { Args: { p_person_id: string }; Returns: string[] }
       decide_staff_invitation: {
         Args: {
           p_command_id: string
@@ -1388,6 +1389,19 @@ export type Database = {
           given_name: string
           person_id: string
           username: string
+        }[]
+      }
+      declare_focus_areas: {
+        Args: {
+          p_account_id: string
+          p_areas: string[]
+          p_command_id: string
+          p_idempotency_key: string
+          p_request_hash: string
+        }
+        Returns: {
+          areas: string[]
+          replayed: boolean
         }[]
       }
       declare_professional_credential: {
