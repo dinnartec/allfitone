@@ -47,6 +47,7 @@ function flowWith(transport: Partial<OnboardingTransport> = {}) {
   const sexes: Array<{ idempotencyKey: string; value: string | null }> = []
   const goals: Array<{ idempotencyKey: string; value: string }> = []
   const focuses: Array<{ idempotencyKey: string; value: string[] }> = []
+  const levels: Array<{ idempotencyKey: string; value: string }> = []
   let issued = 0
 
   const flow = createOnboardingFlow({
@@ -76,6 +77,14 @@ function flowWith(transport: Partial<OnboardingTransport> = {}) {
         focuses.push({ idempotencyKey: command.idempotencyKey, value: [...areas] })
         return areas
       },
+      declareTrainingExperience: async (command, level) => {
+        levels.push({ idempotencyKey: command.idempotencyKey, value: level })
+        return {
+          attribute_code: 'training_experience' as const,
+          value_text: level,
+          superseded_claim_id: null,
+        }
+      },
       readCurrent: async () => ({
         attempt: ATTEMPT,
         answers: {
@@ -83,6 +92,7 @@ function flowWith(transport: Partial<OnboardingTransport> = {}) {
           biological_sex: { answered: false, value: null },
           primary_training_goal: { answered: false, value: null },
           focus_areas: { answered: false, value: [] },
+          training_experience: { answered: false, value: null },
         },
       }),
       ...transport,
@@ -93,7 +103,7 @@ function flowWith(transport: Partial<OnboardingTransport> = {}) {
     },
   })
 
-  return { flow, sent, declared, sexes, goals, focuses }
+  return { flow, sent, declared, sexes, goals, focuses, levels }
 }
 
 describe('declareAdult', () => {
@@ -251,6 +261,7 @@ describe('resume', () => {
           biological_sex: { answered: false, value: null },
           primary_training_goal: { answered: false, value: null },
           focus_areas: { answered: false, value: [] },
+          training_experience: { answered: false, value: null },
         },
       }),
     })
@@ -262,6 +273,7 @@ describe('resume', () => {
         biological_sex: { answered: false, value: null },
         primary_training_goal: { answered: false, value: null },
         focus_areas: { answered: false, value: [] },
+        training_experience: { answered: false, value: null },
       },
     })
   })
@@ -280,6 +292,7 @@ describe('resume', () => {
           biological_sex: { answered: false, value: null },
           primary_training_goal: { answered: false, value: null },
           focus_areas: { answered: false, value: [] },
+          training_experience: { answered: false, value: null },
         },
       }),
     })
@@ -304,6 +317,7 @@ describe('resume', () => {
           biological_sex: { answered: false, value: null },
           primary_training_goal: { answered: false, value: null },
           focus_areas: { answered: false, value: [] },
+          training_experience: { answered: false, value: null },
         },
       }),
     })
@@ -534,6 +548,83 @@ describe('declareFocusAreas', () => {
 
     await flow.declareFocusAreas(['whole_body'])
     await flow.declareFocusAreas(['whole_body'])
+
+    expect(keys[0]).not.toBe(keys[1])
+  })
+})
+
+describe('declareTrainingExperience', () => {
+  test('sends the level chosen, without opening an attempt for it', async () => {
+    const { flow, levels } = flowWith({
+      startAttempt: async () => {
+        throw new Error('the level must not need an attempt')
+      },
+    })
+
+    const claim = await flow.declareTrainingExperience('some_practice')
+
+    expect(claim.value_text).toBe('some_practice')
+    expect(levels.map((entry) => entry.value)).toEqual(['some_practice'])
+  })
+
+  test('reuses the key while the same level keeps failing', async () => {
+    let attempts = 0
+    const keys: string[] = []
+    const { flow } = flowWith({
+      declareTrainingExperience: async (command, level) => {
+        keys.push(command.idempotencyKey)
+        attempts += 1
+        if (attempts === 1) throw new Error('network')
+        return {
+          attribute_code: 'training_experience' as const,
+          value_text: level,
+          superseded_claim_id: null,
+        }
+      },
+    })
+
+    await expect(flow.declareTrainingExperience('starting')).rejects.toThrow('network')
+    await expect(flow.declareTrainingExperience('starting')).resolves.toMatchObject({
+      value_text: 'starting',
+    })
+
+    // One lost response must replay, not record a second level.
+    expect(keys).toHaveLength(2)
+    expect(keys[0]).toBe(keys[1])
+  })
+
+  test('starts a new submission when the level changes', async () => {
+    const keys: string[] = []
+    const { flow } = flowWith({
+      declareTrainingExperience: async (command) => {
+        keys.push(command.idempotencyKey)
+        throw new Error('network')
+      },
+    })
+
+    await expect(flow.declareTrainingExperience('starting')).rejects.toThrow('network')
+    await expect(flow.declareTrainingExperience('experienced')).rejects.toThrow('network')
+
+    // The server hashes the body against the key, so reusing it with another level
+    // comes back as a conflict rather than as a requalification.
+    expect(keys[0]).not.toBe(keys[1])
+  })
+
+  test('discards the key once it lands, so requalifying later is its own command', async () => {
+    const keys: string[] = []
+    const { flow } = flowWith({
+      declareTrainingExperience: async (command, level) => {
+        keys.push(command.idempotencyKey)
+        return {
+          attribute_code: 'training_experience' as const,
+          value_text: level,
+          superseded_claim_id: null,
+        }
+      },
+    })
+
+    await flow.declareTrainingExperience('experienced')
+    await flow.declareTrainingExperience('experienced')
 
     expect(keys[0]).not.toBe(keys[1])
   })

@@ -33,6 +33,8 @@ export type BiologicalSex = AllfitV1Schemas['BiologicalSex']
 export type PrimaryTrainingGoal = AllfitV1Schemas['PrimaryTrainingGoal']
 export type ProfileClaim = AllfitV1Schemas['SpaceProfileClaim']
 export type FocusArea = AllfitV1Schemas['FocusArea']
+export type TrainingExperience = AllfitV1Schemas['TrainingExperience']
+export type TrainingExperienceClaim = AllfitV1Schemas['SpaceTrainingExperienceClaim']
 
 export interface OnboardingTransport {
   startAttempt(command: CommandHeaders): Promise<OnboardingAttempt>
@@ -56,6 +58,10 @@ export interface OnboardingTransport {
     command: CommandHeaders,
     areas: readonly FocusArea[],
   ): Promise<readonly FocusArea[]>
+  declareTrainingExperience(
+    command: CommandHeaders,
+    level: TrainingExperience,
+  ): Promise<TrainingExperienceClaim>
   readCurrent(): Promise<CurrentOnboardingAttempt>
 }
 
@@ -86,6 +92,11 @@ export interface OnboardingFlow {
    * person deselected is withdrawn by being absent rather than by a second call.
    */
   declareFocusAreas(areas: readonly FocusArea[]): Promise<readonly FocusArea[]>
+  /**
+   * One level, exclusive. Declaring again is a requalification rather than an edit:
+   * the previous claim is sealed, so the level someone signed up with stays readable.
+   */
+  declareTrainingExperience(level: TrainingExperience): Promise<TrainingExperienceClaim>
   /** What was already answered, so coming back does not start over. */
   resume(): Promise<CurrentOnboardingAttempt>
 }
@@ -98,6 +109,7 @@ export function createOnboardingFlow(dependencies: OnboardingFlowDependencies): 
   let pendingSex: { command: CommandHeaders; value: BiologicalSex | null } | undefined
   let pendingGoal: { command: CommandHeaders; value: PrimaryTrainingGoal } | undefined
   let pendingFocus: { command: CommandHeaders; value: string } | undefined
+  let pendingExperience: { command: CommandHeaders; value: TrainingExperience } | undefined
 
   const openAttempt = async (): Promise<OnboardingAttempt> => {
     attempt ??= await dependencies.transport.startAttempt(issue())
@@ -182,6 +194,21 @@ export function createOnboardingFlow(dependencies: OnboardingFlowDependencies): 
       const declared = await dependencies.transport.declareFocusAreas(pendingFocus.command, areas)
       pendingFocus = undefined
       return declared
+    },
+
+    async declareTrainingExperience(level) {
+      // The same discipline as every other step, and no attempt is opened for it:
+      // the claim stands on its own, so editing it later needs no attempt.
+      if (!pendingExperience || pendingExperience.value !== level) {
+        pendingExperience = { command: issue(), value: level }
+      }
+
+      const claim = await dependencies.transport.declareTrainingExperience(
+        pendingExperience.command,
+        level,
+      )
+      pendingExperience = undefined
+      return claim
     },
 
     async resume() {

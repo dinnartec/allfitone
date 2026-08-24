@@ -22,6 +22,7 @@ import {
   type FocusArea,
   type OnboardingFlow,
   type ProfileClaim,
+  type TrainingExperienceClaim,
 } from './onboarding'
 import { readSession, storeSession } from './session'
 import { withRefresh } from './with-refresh'
@@ -85,6 +86,15 @@ export function createSpaceOnboardingFlow(): OnboardingFlow {
           )
           return declared.areas
         }),
+      declareTrainingExperience: (command, level) =>
+        authenticated((token) =>
+          authorizedPost<TrainingExperienceClaim>(
+            '/space/v1/profile/claims',
+            command,
+            { attribute_code: 'training_experience', value_text: level },
+            token,
+          ),
+        ),
       readCurrent: () =>
         authenticated((token) =>
           authorizedGet<CurrentOnboardingAttempt>('/space/v1/onboarding-attempts/current', token),

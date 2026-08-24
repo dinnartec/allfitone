@@ -14,10 +14,17 @@ import {
 
 const PASSED = { eligibility_status: 'pass' as const }
 
-const answers = (...steps: Array<'identity' | 'biological_sex' | 'primary_training_goal'>) => ({
+/** Every step, so a test can say which ones are behind it. */
+const answers = (
+  ...steps: Array<
+    'identity' | 'biological_sex' | 'primary_training_goal' | 'focus_areas' | 'training_experience'
+  >
+) => ({
   identity: { answered: steps.includes('identity') },
   biological_sex: { answered: steps.includes('biological_sex') },
   primary_training_goal: { answered: steps.includes('primary_training_goal') },
+  focus_areas: { answered: steps.includes('focus_areas') },
+  training_experience: { answered: steps.includes('training_experience') },
 })
 
 describe('resolveOnboardingRoute', () => {
@@ -96,6 +103,10 @@ describe('stepPosition', () => {
         attempt: PASSED,
         answers: answers('identity', 'biological_sex', 'primary_training_goal'),
       }),
+      resolveOnboardingRoute({
+        attempt: PASSED,
+        answers: answers('identity', 'biological_sex', 'primary_training_goal', 'focus_areas'),
+      }),
     ]
 
     expect(walked).toEqual(ONBOARDING_STEPS.map((step) => step.route))
@@ -131,7 +142,7 @@ describe('guardStep', () => {
 
 describe('lastRevisitableStep', () => {
   test('is the last declared step a person may change', () => {
-    expect(lastRevisitableStep()).toBe('/onboarding/focus')
+    expect(lastRevisitableStep()).toBe('/onboarding/experience')
   })
 
   test('follows the declared order rather than a name written once', () => {
@@ -175,8 +186,8 @@ describe('the focus step', () => {
     expect(nextRouteAfter('/onboarding/goal')).toBe('/onboarding/focus')
   })
 
-  test('is the last step, so it hands over to the terminal', () => {
-    expect(nextRouteAfter('/onboarding/focus')).toBe('/onboarding/continues')
+  test('hands over to the experience, which was appended after it', () => {
+    expect(nextRouteAfter('/onboarding/focus')).toBe('/onboarding/experience')
   })
 
   test('reads answered rather than a value, because whole body leaves none', () => {
@@ -189,6 +200,42 @@ describe('the focus step', () => {
         attempt: passed,
         answers: { ...upTo, focus_areas: { answered: true } },
       }),
+    ).toBe('/onboarding/experience')
+  })
+})
+
+describe('the experience step', () => {
+  test('comes after the focus', () => {
+    expect(nextRouteAfter('/onboarding/focus')).toBe('/onboarding/experience')
+  })
+
+  test('is the last step, so it hands over to the terminal', () => {
+    expect(nextRouteAfter('/onboarding/experience')).toBe('/onboarding/continues')
+  })
+
+  test('is owed until it is answered', () => {
+    const passed = { eligibility_status: 'pass' as const }
+    const upTo = answers('identity', 'biological_sex', 'primary_training_goal', 'focus_areas')
+
+    expect(resolveOnboardingRoute({ attempt: passed, answers: upTo })).toBe(
+      '/onboarding/experience',
+    )
+    expect(
+      resolveOnboardingRoute({
+        attempt: passed,
+        answers: { ...upTo, training_experience: { answered: true } },
+      }),
     ).toBe('/onboarding/continues')
+  })
+
+  test('cannot be reached before the focus is answered', () => {
+    // Not because the level depends on the zones, but because no screen may let a
+    // prerequisite be skipped: that is what `guardStep` is for.
+    const passed = { eligibility_status: 'pass' as const }
+    const upTo = answers('identity', 'biological_sex', 'primary_training_goal')
+
+    expect(guardStep('/onboarding/experience', { attempt: passed, answers: upTo })).toBe(
+      '/onboarding/focus',
+    )
   })
 })

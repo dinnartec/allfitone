@@ -4,13 +4,17 @@ import { routeAfterAuthentication } from './resume-route'
 
 const PASSED = { eligibility_status: 'pass' as const }
 
+/** Every step, so a test can say which ones are behind it. */
 const answers = (
-  ...steps: Array<'identity' | 'biological_sex' | 'primary_training_goal' | 'focus_areas'>
+  ...steps: Array<
+    'identity' | 'biological_sex' | 'primary_training_goal' | 'focus_areas' | 'training_experience'
+  >
 ) => ({
   identity: { answered: steps.includes('identity') },
   biological_sex: { answered: steps.includes('biological_sex') },
   primary_training_goal: { answered: steps.includes('primary_training_goal') },
   focus_areas: { answered: steps.includes('focus_areas') },
+  training_experience: { answered: steps.includes('training_experience') },
 })
 
 describe('routeAfterAuthentication', () => {
@@ -32,7 +36,13 @@ describe('routeAfterAuthentication', () => {
     await expect(
       routeAfterAuthentication(async () => ({
         attempt: PASSED,
-        answers: answers('identity', 'biological_sex', 'primary_training_goal', 'focus_areas'),
+        answers: answers(
+          'identity',
+          'biological_sex',
+          'primary_training_goal',
+          'focus_areas',
+          'training_experience',
+        ),
       })),
     ).resolves.toBe('/onboarding/continues')
   })
