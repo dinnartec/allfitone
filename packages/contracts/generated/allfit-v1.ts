@@ -393,7 +393,7 @@ export interface paths {
     put?: never
     /**
      * Declare an attribute of the account holder's fitness profile
-     * @description HU-SP-010 for now, and the same operation will carry the attributes of HU-SP-011 through HU-SP-013 and HU-SP-021 as their screens get built. The route is not under the onboarding attempt on purpose: a profile claim outlives the attempt, and the person edits it from their profile long after onboarding closed.
+     * @description HU-SP-010 and the experience level of HU-SP-012 criterion 2, with the remaining attributes of HU-SP-013 and HU-SP-021 joining as their screens get built. The body is a discriminated union on `attribute_code`. The route is not under the onboarding attempt on purpose: a profile claim outlives the attempt, and the person edits it from their profile long after onboarding closed.
      *
      *     Declaring the same attribute again **corrects** it. Nothing is edited: the previous claim is sealed with its end of validity and the new one records who superseded it, so what someone signed up with stays readable forever. That is also why the claim carries the device's `Command-Id` as its own identity — the primary key itself refuses a second claim from the same command.
      *
@@ -1663,6 +1663,11 @@ export interface components {
         answered: boolean
         value: components['schemas']['FocusAreaSet']
       }
+      /** @description The level in force. A superseded level never appears here: requalifying writes another claim and this reads the current one. */
+      training_experience: {
+        answered: boolean
+        value: components['schemas']['TrainingExperience'] | null
+      }
     }
     /**
      * @description The five goals offered in the initial V1 launch. The attribute catalogue in the database also holds `improve_performance`, deferred rather than deleted, and this operation refuses it: it is the only one of the six whose progress does not show on the body, so the screen cannot show what it promises.
@@ -1687,22 +1692,61 @@ export interface components {
     SpaceFocusAreas: {
       areas: components['schemas']['FocusAreaSet']
     }
+    /**
+     * @description The three simple terms of HU-SP-012 criterion 2, least to most.
+     *
+     *     Deliberately not `beginner`, `intermediate`, `advanced`. The story asks for simple terms and the reason is behavioural rather than stylistic: "advanced" makes people underrate themselves and pick below their real level, and then the plan bores them. Rank is communicated by the screen, which draws one, two or three bars; the vocabulary carries none.
+     *
+     *     One global level, not one per discipline. Criterion 2 read "in each one" and was amended on 24 August 2026: the discipline catalogue is not readable by the runtime role and holds no production rows, so there is nothing to hang a per-discipline level on. Were that to change, a per-discipline level would be a new attribute — a member carrying its own value — not a widening of this one.
+     * @enum {string}
+     */
+    TrainingExperience: 'starting' | 'some_practice' | 'experienced'
+    /** @description One member of the attribute catalogue per variant. This was a single object while only the goal existed; the second member is what earns the union, and it is what keeps a goal code from being sent with an experience value. */
+    SpaceProfileClaimDeclaration:
+      | components['schemas']['SpaceTrainingGoalDeclaration']
+      | components['schemas']['SpaceTrainingExperienceDeclaration']
     /** @description Only one goal is principal, so declaring a second time replaces which one that is rather than adding to a set. */
-    SpaceProfileClaimDeclaration: {
+    SpaceTrainingGoalDeclaration: {
       /**
-       * @description The only member of the attribute catalogue declared so far. When a second one arrives this becomes a discriminated union; writing it as one today would be shape without a case.
-       * @constant
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
        */
       attribute_code: 'primary_training_goal'
       value_text: components['schemas']['PrimaryTrainingGoal']
     }
-    SpaceProfileClaim: {
-      /** @constant */
+    /** @description A single level, exclusive. Declaring again is a requalification: the previous claim is sealed rather than edited, so the level someone signed up with stays readable. */
+    SpaceTrainingExperienceDeclaration: {
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      attribute_code: 'training_experience'
+      value_text: components['schemas']['TrainingExperience']
+    }
+    /** @description The claim as recorded, in the variant matching what was declared. */
+    SpaceProfileClaim:
+      | components['schemas']['SpaceTrainingGoalClaim']
+      | components['schemas']['SpaceTrainingExperienceClaim']
+    SpaceTrainingGoalClaim: {
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
       attribute_code: 'primary_training_goal'
       value_text: components['schemas']['PrimaryTrainingGoal']
-      /** @description The claim this one replaced, or null on a first declaration. Returned because it is the app's proof that a correction was recorded as a correction and not as an edit. */
-      superseded_claim_id: components['schemas']['UuidV7'] | null
+      superseded_claim_id: components['schemas']['SupersededClaimId']
     }
+    SpaceTrainingExperienceClaim: {
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      attribute_code: 'training_experience'
+      value_text: components['schemas']['TrainingExperience']
+      superseded_claim_id: components['schemas']['SupersededClaimId']
+    }
+    /** @description The claim this one replaced, or null on a first declaration. Returned because it is the app's proof that a correction was recorded as a correction and not as an edit. */
+    SupersededClaimId: components['schemas']['UuidV7'] | null
     AdultEligibilityPolicy: {
       /** @constant */
       code: 'adult_eligibility'

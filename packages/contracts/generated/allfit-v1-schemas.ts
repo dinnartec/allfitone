@@ -3451,7 +3451,13 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
   SpaceOnboardingAnswers: {
     type: 'object',
     additionalProperties: false,
-    required: ['identity', 'biological_sex', 'primary_training_goal', 'focus_areas'],
+    required: [
+      'identity',
+      'biological_sex',
+      'primary_training_goal',
+      'focus_areas',
+      'training_experience',
+    ],
     properties: {
       identity: {
         type: 'object',
@@ -3534,6 +3540,28 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         description:
           'The set in force, and the one entry whose value is a set rather than a single value. `answered` is not redundant with emptiness for the app\'s purposes but it is derived from it: an unanswered step has no members, and saying "no emphasis" is answering with `whole_body`.',
       },
+      training_experience: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['answered', 'value'],
+        properties: {
+          answered: {
+            type: 'boolean',
+          },
+          value: {
+            oneOf: [
+              {
+                $ref: '#/components/schemas/TrainingExperience',
+              },
+              {
+                type: 'null',
+              },
+            ],
+          },
+        },
+        description:
+          'The level in force. A superseded level never appears here: requalifying writes another claim and this reads the current one.',
+      },
     },
     description:
       "One entry per step, all the same shape. This is what keeps a step from widening the reader's signature: a new step adds an entry here, and the database function that builds it changes its body rather than its return type. Every answer is derived on read from the data itself — the person's name, the mark on the attempt, the claim in force — because storing a progress pointer would be a second truth that drifts, and a pointer cannot survive people going back to correct what they already answered.",
@@ -3615,48 +3643,41 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       "The email is absent on purpose. It is the credential's address, it already travels with the session, and changing it is another operation with its own verification.",
   },
   SpaceProfileClaim: {
-    type: 'object',
-    additionalProperties: false,
-    required: ['attribute_code', 'value_text', 'superseded_claim_id'],
-    properties: {
-      attribute_code: {
-        type: 'string',
-        const: 'primary_training_goal',
+    oneOf: [
+      {
+        $ref: '#/components/schemas/SpaceTrainingGoalClaim',
       },
-      value_text: {
-        $ref: '#/components/schemas/PrimaryTrainingGoal',
+      {
+        $ref: '#/components/schemas/SpaceTrainingExperienceClaim',
       },
-      superseded_claim_id: {
-        oneOf: [
-          {
-            $ref: '#/components/schemas/UuidV7',
-          },
-          {
-            type: 'null',
-          },
-        ],
-        description:
-          "The claim this one replaced, or null on a first declaration. Returned because it is the app's proof that a correction was recorded as a correction and not as an edit.",
+    ],
+    discriminator: {
+      propertyName: 'attribute_code',
+      mapping: {
+        primary_training_goal: '#/components/schemas/SpaceTrainingGoalClaim',
+        training_experience: '#/components/schemas/SpaceTrainingExperienceClaim',
       },
     },
+    description: 'The claim as recorded, in the variant matching what was declared.',
   },
   SpaceProfileClaimDeclaration: {
-    type: 'object',
-    additionalProperties: false,
-    required: ['attribute_code', 'value_text'],
-    properties: {
-      attribute_code: {
-        type: 'string',
-        const: 'primary_training_goal',
-        description:
-          'The only member of the attribute catalogue declared so far. When a second one arrives this becomes a discriminated union; writing it as one today would be shape without a case.',
+    oneOf: [
+      {
+        $ref: '#/components/schemas/SpaceTrainingGoalDeclaration',
       },
-      value_text: {
-        $ref: '#/components/schemas/PrimaryTrainingGoal',
+      {
+        $ref: '#/components/schemas/SpaceTrainingExperienceDeclaration',
+      },
+    ],
+    discriminator: {
+      propertyName: 'attribute_code',
+      mapping: {
+        primary_training_goal: '#/components/schemas/SpaceTrainingGoalDeclaration',
+        training_experience: '#/components/schemas/SpaceTrainingExperienceDeclaration',
       },
     },
     description:
-      'Only one goal is principal, so declaring a second time replaces which one that is rather than adding to a set.',
+      'One member of the attribute catalogue per variant. This was a single object while only the goal existed; the second member is what earns the union, and it is what keeps a goal code from being sent with an experience value.',
   },
   SpaceRegistrationAccepted: {
     type: 'object',
@@ -3792,6 +3813,72 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
           'Composition is not re-checked here. The credential already exists, and rejecting it would lock out an account created under an earlier policy.',
       },
     },
+  },
+  SpaceTrainingExperienceClaim: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['attribute_code', 'value_text', 'superseded_claim_id'],
+    properties: {
+      attribute_code: {
+        type: 'string',
+        const: 'training_experience',
+      },
+      value_text: {
+        $ref: '#/components/schemas/TrainingExperience',
+      },
+      superseded_claim_id: {
+        $ref: '#/components/schemas/SupersededClaimId',
+      },
+    },
+  },
+  SpaceTrainingExperienceDeclaration: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['attribute_code', 'value_text'],
+    properties: {
+      attribute_code: {
+        type: 'string',
+        const: 'training_experience',
+      },
+      value_text: {
+        $ref: '#/components/schemas/TrainingExperience',
+      },
+    },
+    description:
+      'A single level, exclusive. Declaring again is a requalification: the previous claim is sealed rather than edited, so the level someone signed up with stays readable.',
+  },
+  SpaceTrainingGoalClaim: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['attribute_code', 'value_text', 'superseded_claim_id'],
+    properties: {
+      attribute_code: {
+        type: 'string',
+        const: 'primary_training_goal',
+      },
+      value_text: {
+        $ref: '#/components/schemas/PrimaryTrainingGoal',
+      },
+      superseded_claim_id: {
+        $ref: '#/components/schemas/SupersededClaimId',
+      },
+    },
+  },
+  SpaceTrainingGoalDeclaration: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['attribute_code', 'value_text'],
+    properties: {
+      attribute_code: {
+        type: 'string',
+        const: 'primary_training_goal',
+      },
+      value_text: {
+        $ref: '#/components/schemas/PrimaryTrainingGoal',
+      },
+    },
+    description:
+      'Only one goal is principal, so declaring a second time replaces which one that is rather than adding to a set.',
   },
   StrengthSet: {
     type: 'object',
@@ -4133,6 +4220,18 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         $ref: '#/components/schemas/AnalyticsIdentity',
       },
     },
+  },
+  SupersededClaimId: {
+    oneOf: [
+      {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      {
+        type: 'null',
+      },
+    ],
+    description:
+      "The claim this one replaced, or null on a first declaration. Returned because it is the app's proof that a correction was recorded as a correction and not as an edit.",
   },
   TeamInvitation: {
     type: 'object',
@@ -4485,6 +4584,12 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         const: 'analytics-v1',
       },
     },
+  },
+  TrainingExperience: {
+    type: 'string',
+    enum: ['starting', 'some_practice', 'experienced'],
+    description:
+      'The three simple terms of HU-SP-012 criterion 2, least to most.\n\nDeliberately not `beginner`, `intermediate`, `advanced`. The story asks for simple terms and the reason is behavioural rather than stylistic: "advanced" makes people underrate themselves and pick below their real level, and then the plan bores them. Rank is communicated by the screen, which draws one, two or three bars; the vocabulary carries none.\n\nOne global level, not one per discipline. Criterion 2 read "in each one" and was amended on 24 August 2026: the discipline catalogue is not readable by the runtime role and holds no production rows, so there is nothing to hang a per-discipline level on. Were that to change, a per-discipline level would be a new attribute — a member carrying its own value — not a widening of this one.',
   },
   Username: {
     type: 'string',
