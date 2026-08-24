@@ -16,7 +16,7 @@ select is(
 select is(
   (select cardinality(allowed_values) from identity.profile_attributes where code = 'primary_training_goal'),
   6,
-  'and carries the six values of HU-SP-010 criterion 1');
+  'and keeps six members while the API contract offers five: improve_performance is deferred, not deleted');
 
 insert into identity.access_accounts (id, provider, issuer, subject)
 values
