@@ -50,7 +50,7 @@ import malePortrait from '../../assets/images/sex-male.webp'
 import { OnboardingHeader } from '../../src/components/onboarding-header'
 import { ApiError } from '../../src/client'
 import { createSpaceOnboardingFlow } from '../../src/client/onboarding-transport'
-import { guardStep, ONBOARDING_CONTINUES_ROUTE } from '../../src/client/onboarding-steps'
+import { guardStep, nextRouteAfter } from '../../src/client/onboarding-steps'
 import { canSubmitSex, cardGeometry, CARD_GAP, type SexAnswer } from '../../src/client/sex-form'
 
 const EXPIRED = 'Tu sesión venció. Vuelve a entrar para guardar tu respuesta.'
@@ -96,7 +96,8 @@ export default function OnboardingBiologicalSex() {
         // Prefilled so going back shows what was answered rather than an empty
         // screen. Declining left no value, and that is a real state: answered with
         // nothing, which is exactly `null`.
-        if (current.biological_sex_answered) setAnswer(current.biological_sex ?? null)
+        const sex = current.answers.biological_sex
+        if (sex.answered) setAnswer(sex.value ?? null)
       })
       .catch((cause: unknown) => {
         if (!active) return
@@ -122,7 +123,7 @@ export default function OnboardingBiologicalSex() {
     setFailure(undefined)
     try {
       await flow.declareBiologicalSex(answer)
-      router.replace(ONBOARDING_CONTINUES_ROUTE)
+      router.replace(nextRouteAfter('/onboarding/sex'))
     } catch (cause) {
       if (cause instanceof ApiError && cause.failure === 'conflict') {
         setFailure(TAKEN_CONFLICT)

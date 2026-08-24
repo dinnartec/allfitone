@@ -20,6 +20,7 @@ import {
   createOnboardingFlow,
   type CurrentOnboardingAttempt,
   type OnboardingFlow,
+  type ProfileClaim,
 } from './onboarding'
 import { readSession, storeSession } from './session'
 import { withRefresh } from './with-refresh'
@@ -64,6 +65,15 @@ export function createSpaceOnboardingFlow(): OnboardingFlow {
           )
           return declared.biological_sex
         }),
+      declareTrainingGoal: (command, goal) =>
+        authenticated((token) =>
+          authorizedPost<ProfileClaim>(
+            '/space/v1/profile/claims',
+            command,
+            { attribute_code: 'primary_training_goal', value_text: goal },
+            token,
+          ),
+        ),
       readCurrent: () =>
         authenticated((token) =>
           authorizedGet<CurrentOnboardingAttempt>('/space/v1/onboarding-attempts/current', token),

@@ -30,6 +30,8 @@ export type AdultEligibilityEvidence = AllfitV1Schemas['AdultEligibilityEvidence
 export type PendingFitnessId = AllfitV1Schemas['SpacePendingFitnessId']
 export type CurrentOnboardingAttempt = AllfitV1Schemas['SpaceCurrentOnboardingAttempt']
 export type BiologicalSex = AllfitV1Schemas['BiologicalSex']
+export type PrimaryTrainingGoal = AllfitV1Schemas['PrimaryTrainingGoal']
+export type ProfileClaim = AllfitV1Schemas['SpaceProfileClaim']
 
 export interface OnboardingTransport {
   startAttempt(command: CommandHeaders): Promise<OnboardingAttempt>
@@ -48,6 +50,7 @@ export interface OnboardingTransport {
     attemptId: string,
     biologicalSex: BiologicalSex | null,
   ): Promise<BiologicalSex | null>
+  declareTrainingGoal(command: CommandHeaders, goal: PrimaryTrainingGoal): Promise<ProfileClaim>
   readCurrent(): Promise<CurrentOnboardingAttempt>
 }
 
@@ -68,6 +71,11 @@ export interface OnboardingFlow {
    * recorded on the attempt or the screen would ask again on every cold start.
    */
   declareBiologicalSex(biologicalSex: BiologicalSex | null): Promise<BiologicalSex | null>
+  /**
+   * No attempt id travels: the claim is not part of the attempt, and the person
+   * keeps editing it from their profile once the onboarding is closed.
+   */
+  declareTrainingGoal(goal: PrimaryTrainingGoal): Promise<ProfileClaim>
   /** What was already answered, so coming back does not start over. */
   resume(): Promise<CurrentOnboardingAttempt>
 }
@@ -78,6 +86,7 @@ export function createOnboardingFlow(dependencies: OnboardingFlowDependencies): 
   let pendingAdult: { command: CommandHeaders; declaredAdult: boolean } | undefined
   let pendingIdentity: { command: CommandHeaders; identity: string } | undefined
   let pendingSex: { command: CommandHeaders; value: BiologicalSex | null } | undefined
+  let pendingGoal: { command: CommandHeaders; value: PrimaryTrainingGoal } | undefined
 
   const openAttempt = async (): Promise<OnboardingAttempt> => {
     attempt ??= await dependencies.transport.startAttempt(issue())
@@ -136,6 +145,18 @@ export function createOnboardingFlow(dependencies: OnboardingFlowDependencies): 
       )
       pendingSex = undefined
       return declared
+    },
+
+    async declareTrainingGoal(goal) {
+      // Same discipline as the other steps, and no attempt is opened for it: the
+      // claim stands on its own, so a person editing it later needs no attempt.
+      if (!pendingGoal || pendingGoal.value !== goal) {
+        pendingGoal = { command: issue(), value: goal }
+      }
+
+      const claim = await dependencies.transport.declareTrainingGoal(pendingGoal.command, goal)
+      pendingGoal = undefined
+      return claim
     },
 
     async resume() {

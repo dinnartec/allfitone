@@ -23,21 +23,25 @@ const CONTINUES_ROUTE = '/onboarding/continues'
 const AGE_ROUTE = '/onboarding/age'
 const IDENTITY_ROUTE = '/onboarding/identity'
 const SEX_ROUTE = '/onboarding/sex'
+const GOAL_ROUTE = '/onboarding/goal'
 
-export type OnboardingStepRoute = typeof IDENTITY_ROUTE | typeof SEX_ROUTE
+export type OnboardingStepRoute = typeof IDENTITY_ROUTE | typeof SEX_ROUTE | typeof GOAL_ROUTE
 export type OnboardingRoute = OnboardingStepRoute | typeof AGE_ROUTE | typeof CONTINUES_ROUTE
 
 /** Only the shape the decisions read, so a test needs no generated DTO. */
 export interface OnboardingProgress {
   attempt: { eligibility_status: 'pending' | 'pass' | 'fail' } | null
-  /** Non-null once the Fitness ID exists. */
-  identity?: unknown
   /**
-   * Whether the biological sex question was put and answered. The value cannot
-   * carry this: declining records no value, so reading the value alone would send
-   * a decliner back to the same screen on every cold start.
+   * One entry per step, each carrying whether it was answered. `answered` is
+   * separate from the value on purpose: declining the sex records no value, so
+   * reading the value alone would send a decliner back to the same screen on
+   * every cold start.
    */
-  biological_sex_answered?: boolean
+  answers?: {
+    identity?: { answered?: boolean }
+    biological_sex?: { answered?: boolean }
+    primary_training_goal?: { answered?: boolean }
+  }
 }
 
 interface OnboardingStep {
@@ -64,16 +68,47 @@ export const ELIGIBILITY_GATE_ROUTE = AGE_ROUTE
 /** Exported so the screens and the entry decision agree on the terminal. */
 export const ONBOARDING_CONTINUES_ROUTE = CONTINUES_ROUTE
 
+/** One reader for every step, so adding a step stays a line of data. */
+const answered = (
+  progress: OnboardingProgress,
+  step: keyof NonNullable<OnboardingProgress['answers']>,
+): boolean => progress.answers?.[step]?.answered === true
+
 const eligible = (progress: OnboardingProgress) => progress.attempt?.eligibility_status === 'pass'
 
 export const ONBOARDING_STEPS: readonly OnboardingStep[] = [
-  { route: IDENTITY_ROUTE, answered: (progress) => Boolean(progress.identity), revisitable: true },
+  {
+    route: IDENTITY_ROUTE,
+    answered: (progress) => answered(progress, 'identity'),
+    revisitable: true,
+  },
   {
     route: SEX_ROUTE,
-    answered: (progress) => Boolean(progress.biological_sex_answered),
+    answered: (progress) => answered(progress, 'biological_sex'),
+    revisitable: true,
+  },
+  {
+    route: GOAL_ROUTE,
+    answered: (progress) => answered(progress, 'primary_training_goal'),
     revisitable: true,
   },
 ]
+
+/** The first step, which is where the eligibility gate hands over. */
+export const FIRST_STEP_ROUTE: OnboardingStepRoute = IDENTITY_ROUTE
+
+/**
+ * Where a step goes once it is answered. Derived from the declared order rather
+ * than written into each screen: the destination used to be hardcoded in three
+ * places, so adding a step meant remembering all three, and the one time it was
+ * forgotten the sex screen kept jumping straight to the terminal and skipped the
+ * goal entirely.
+ */
+export function nextRouteAfter(step: OnboardingStepRoute): OnboardingRoute {
+  const index = ONBOARDING_STEPS.findIndex((candidate) => candidate.route === step)
+  if (index < 0) return CONTINUES_ROUTE
+  return ONBOARDING_STEPS[index + 1]?.route ?? CONTINUES_ROUTE
+}
 
 /**
  * Where the onboarding resumes, given what the server already holds: the first

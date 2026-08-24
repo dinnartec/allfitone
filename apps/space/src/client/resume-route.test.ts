@@ -3,14 +3,19 @@ import { describe, expect, test } from 'bun:test'
 import { routeAfterAuthentication } from './resume-route'
 
 const PASSED = { eligibility_status: 'pass' as const }
-const IDENTITY = { given_name: 'Ada', family_name: 'Lovelace', username: 'ada_lovelace' }
+
+const answers = (...steps: Array<'identity' | 'biological_sex' | 'primary_training_goal'>) => ({
+  identity: { answered: steps.includes('identity') },
+  biological_sex: { answered: steps.includes('biological_sex') },
+  primary_training_goal: { answered: steps.includes('primary_training_goal') },
+})
 
 describe('routeAfterAuthentication', () => {
   test('resumes where the person left off instead of restarting', async () => {
     // The defect this replaces: signing in always went to the adult declaration,
     // which is also the one step that cannot be changed.
     await expect(
-      routeAfterAuthentication(async () => ({ attempt: PASSED, identity: IDENTITY })),
+      routeAfterAuthentication(async () => ({ attempt: PASSED, answers: answers('identity') })),
     ).resolves.toBe('/onboarding/sex')
   })
 
@@ -24,8 +29,7 @@ describe('routeAfterAuthentication', () => {
     await expect(
       routeAfterAuthentication(async () => ({
         attempt: PASSED,
-        identity: IDENTITY,
-        biological_sex_answered: true,
+        answers: answers('identity', 'biological_sex', 'primary_training_goal'),
       })),
     ).resolves.toBe('/onboarding/continues')
   })

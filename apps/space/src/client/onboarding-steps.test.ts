@@ -2,16 +2,23 @@ import { describe, expect, test } from 'bun:test'
 
 import {
   ELIGIBILITY_GATE_ROUTE,
+  FIRST_STEP_ROUTE,
+  ONBOARDING_STEPS,
   guardStep,
   lastRevisitableStep,
-  ONBOARDING_STEPS,
+  nextRouteAfter,
   resolveOnboardingRoute,
   stepPosition,
   type OnboardingProgress,
 } from './onboarding-steps'
 
 const PASSED = { eligibility_status: 'pass' as const }
-const IDENTITY = { given_name: 'Ada', family_name: 'Lovelace', username: 'ada_lovelace' }
+
+const answers = (...steps: Array<'identity' | 'biological_sex' | 'primary_training_goal'>) => ({
+  identity: { answered: steps.includes('identity') },
+  biological_sex: { answered: steps.includes('biological_sex') },
+  primary_training_goal: { answered: steps.includes('primary_training_goal') },
+})
 
 describe('resolveOnboardingRoute', () => {
   test('sends a session with nothing read to the first step', () => {
@@ -35,7 +42,9 @@ describe('resolveOnboardingRoute', () => {
   })
 
   test('asks for the biological sex once the Fitness ID exists', () => {
-    expect(resolveOnboardingRoute({ attempt: PASSED, identity: IDENTITY })).toBe('/onboarding/sex')
+    expect(resolveOnboardingRoute({ attempt: PASSED, answers: answers('identity') })).toBe(
+      '/onboarding/sex',
+    )
   })
 
   test('does not send a person who declined back to the same screen', () => {
@@ -43,11 +52,10 @@ describe('resolveOnboardingRoute', () => {
     // again on every cold start and the onboarding could never advance.
     const declined: OnboardingProgress = {
       attempt: PASSED,
-      identity: IDENTITY,
-      biological_sex_answered: true,
+      answers: answers('identity', 'biological_sex'),
     }
 
-    expect(resolveOnboardingRoute(declined)).toBe('/onboarding/continues')
+    expect(resolveOnboardingRoute(declined)).toBe('/onboarding/goal')
   })
 })
 
@@ -82,7 +90,8 @@ describe('stepPosition', () => {
     // decision hands out, or the bar and the navigation disagree.
     const walked = [
       resolveOnboardingRoute({ attempt: PASSED }),
-      resolveOnboardingRoute({ attempt: PASSED, identity: IDENTITY }),
+      resolveOnboardingRoute({ attempt: PASSED, answers: answers('identity') }),
+      resolveOnboardingRoute({ attempt: PASSED, answers: answers('identity', 'biological_sex') }),
     ]
 
     expect(walked).toEqual(ONBOARDING_STEPS.map((step) => step.route))
@@ -94,8 +103,7 @@ describe('stepPosition', () => {
 describe('guardStep', () => {
   const ANSWERED: OnboardingProgress = {
     attempt: PASSED,
-    identity: IDENTITY,
-    biological_sex_answered: true,
+    answers: answers('identity', 'biological_sex', 'primary_training_goal'),
   }
 
   test('lets a step already answered be opened, because that is editing', () => {
@@ -104,7 +112,9 @@ describe('guardStep', () => {
   })
 
   test('lets the current step through', () => {
-    expect(guardStep('/onboarding/sex', { attempt: PASSED, identity: IDENTITY })).toBeNull()
+    expect(
+      guardStep('/onboarding/sex', { attempt: PASSED, answers: answers('identity') }),
+    ).toBeNull()
   })
 
   test('refuses to let a missing prerequisite be skipped', () => {
@@ -117,7 +127,7 @@ describe('guardStep', () => {
 
 describe('lastRevisitableStep', () => {
   test('is the last declared step a person may change', () => {
-    expect(lastRevisitableStep()).toBe('/onboarding/sex')
+    expect(lastRevisitableStep()).toBe('/onboarding/goal')
   })
 
   test('follows the declared order rather than a name written once', () => {
@@ -127,5 +137,31 @@ describe('lastRevisitableStep', () => {
 
     expect(revisitable).not.toHaveLength(0)
     expect(lastRevisitableStep()).toBe(revisitable[revisitable.length - 1] ?? null)
+  })
+})
+
+describe('nextRouteAfter', () => {
+  test('hands each step to the next one in the declared order', () => {
+    expect(nextRouteAfter('/onboarding/identity')).toBe('/onboarding/sex')
+    expect(nextRouteAfter('/onboarding/sex')).toBe('/onboarding/goal')
+  })
+
+  test('sends the last step to the terminal, not to a step that does not exist', () => {
+    const last = ONBOARDING_STEPS.at(-1)
+    if (!last) throw new Error('the declared order cannot be empty')
+    expect(nextRouteAfter(last.route)).toBe('/onboarding/continues')
+  })
+
+  test('never skips a step, which is the defect it exists to prevent', () => {
+    // Walking forward from the first step must visit every declared route in
+    // order. A screen that hardcodes its destination cannot make this promise.
+    const walked: string[] = []
+    let route: string = FIRST_STEP_ROUTE
+    while (route !== '/onboarding/continues') {
+      walked.push(route)
+      route = nextRouteAfter(route as never)
+    }
+
+    expect(walked).toEqual(ONBOARDING_STEPS.map((step) => step.route))
   })
 })

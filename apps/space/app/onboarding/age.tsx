@@ -42,6 +42,7 @@ import { ScrollView, StyleSheet, View } from 'react-native'
 
 import { ApiError } from '../../src/client'
 import { createSpaceOnboardingFlow } from '../../src/client/onboarding-transport'
+import { FIRST_STEP_ROUTE } from '../../src/client/onboarding-steps'
 
 const DECLARATION = 'Declaro que tengo 18 años o más.'
 
@@ -64,7 +65,7 @@ export default function AdultDeclaration() {
         setFailure('No podemos continuar sin la declaración de mayoría de edad.')
         return
       }
-      router.replace('/onboarding/identity')
+      router.replace(FIRST_STEP_ROUTE)
     } catch (cause) {
       setFailure(
         cause instanceof ApiError && cause.failure === 'unauthenticated'

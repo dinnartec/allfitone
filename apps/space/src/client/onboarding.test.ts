@@ -45,6 +45,7 @@ function flowWith(transport: Partial<OnboardingTransport> = {}) {
   const sent: Array<{ idempotencyKey: string; declaredAdult: boolean }> = []
   const declared: Array<{ idempotencyKey: string; username: string }> = []
   const sexes: Array<{ idempotencyKey: string; value: string | null }> = []
+  const goals: Array<{ idempotencyKey: string; value: string }> = []
   let issued = 0
 
   const flow = createOnboardingFlow({
@@ -62,11 +63,21 @@ function flowWith(transport: Partial<OnboardingTransport> = {}) {
         sexes.push({ idempotencyKey: command.idempotencyKey, value: biologicalSex })
         return biologicalSex
       },
+      declareTrainingGoal: async (command, goal) => {
+        goals.push({ idempotencyKey: command.idempotencyKey, value: goal })
+        return {
+          attribute_code: 'primary_training_goal' as const,
+          value_text: goal,
+          superseded_claim_id: null,
+        }
+      },
       readCurrent: async () => ({
         attempt: ATTEMPT,
-        identity: null,
-        biological_sex: null,
-        biological_sex_answered: false,
+        answers: {
+          identity: { answered: false, value: null },
+          biological_sex: { answered: false, value: null },
+          primary_training_goal: { answered: false, value: null },
+        },
       }),
       ...transport,
     },
@@ -76,7 +87,7 @@ function flowWith(transport: Partial<OnboardingTransport> = {}) {
     },
   })
 
-  return { flow, sent, declared, sexes }
+  return { flow, sent, declared, sexes, goals }
 }
 
 describe('declareAdult', () => {
@@ -229,17 +240,21 @@ describe('resume', () => {
     const { flow } = flowWith({
       readCurrent: async () => ({
         attempt: ATTEMPT,
-        identity: IDENTITY,
-        biological_sex: null,
-        biological_sex_answered: false,
+        answers: {
+          identity: { answered: true, value: IDENTITY },
+          biological_sex: { answered: false, value: null },
+          primary_training_goal: { answered: false, value: null },
+        },
       }),
     })
 
     expect(await flow.resume()).toEqual({
       attempt: ATTEMPT,
-      identity: IDENTITY,
-      biological_sex: null,
-      biological_sex_answered: false,
+      answers: {
+        identity: { answered: true, value: IDENTITY },
+        biological_sex: { answered: false, value: null },
+        primary_training_goal: { answered: false, value: null },
+      },
     })
   })
 
@@ -252,9 +267,11 @@ describe('resume', () => {
       },
       readCurrent: async () => ({
         attempt: ATTEMPT,
-        identity: null,
-        biological_sex: null,
-        biological_sex_answered: false,
+        answers: {
+          identity: { answered: false, value: null },
+          biological_sex: { answered: false, value: null },
+          primary_training_goal: { answered: false, value: null },
+        },
       }),
     })
 
@@ -273,9 +290,11 @@ describe('resume', () => {
       },
       readCurrent: async () => ({
         attempt: null,
-        identity: null,
-        biological_sex: null,
-        biological_sex_answered: false,
+        answers: {
+          identity: { answered: false, value: null },
+          biological_sex: { answered: false, value: null },
+          primary_training_goal: { answered: false, value: null },
+        },
       }),
     })
 
@@ -341,6 +360,83 @@ describe('declareBiologicalSex', () => {
 
     await flow.declareBiologicalSex('male')
     await flow.declareBiologicalSex('male')
+
+    expect(keys[0]).not.toBe(keys[1])
+  })
+})
+
+describe('declareTrainingGoal', () => {
+  test('sends the goal the person chose, without opening an attempt for it', async () => {
+    const { flow, goals } = flowWith({
+      startAttempt: async () => {
+        throw new Error('the goal must not need an attempt')
+      },
+    })
+
+    const claim = await flow.declareTrainingGoal('build_muscle')
+
+    expect(claim.value_text).toBe('build_muscle')
+    expect(goals.map((entry) => entry.value)).toEqual(['build_muscle'])
+  })
+
+  test('reuses the key while the same answer keeps failing', async () => {
+    let attempts = 0
+    const keys: string[] = []
+    const { flow } = flowWith({
+      declareTrainingGoal: async (command, goal) => {
+        keys.push(command.idempotencyKey)
+        attempts += 1
+        if (attempts === 1) throw new Error('network')
+        return {
+          attribute_code: 'primary_training_goal' as const,
+          value_text: goal,
+          superseded_claim_id: null,
+        }
+      },
+    })
+
+    await expect(flow.declareTrainingGoal('get_fit')).rejects.toThrow('network')
+    await expect(flow.declareTrainingGoal('get_fit')).resolves.toMatchObject({
+      value_text: 'get_fit',
+    })
+
+    // One lost response must replay, not record a second goal.
+    expect(keys).toHaveLength(2)
+    expect(keys[0]).toBe(keys[1])
+  })
+
+  test('starts a new submission when the answer changes', async () => {
+    const keys: string[] = []
+    const { flow } = flowWith({
+      declareTrainingGoal: async (command) => {
+        keys.push(command.idempotencyKey)
+        throw new Error('network')
+      },
+    })
+
+    await expect(flow.declareTrainingGoal('lose_weight')).rejects.toThrow('network')
+    await expect(flow.declareTrainingGoal('maintain')).rejects.toThrow('network')
+
+    // The server hashes the body against the key, so reusing it with a different
+    // goal comes back as a conflict rather than a correction.
+    expect(keys[0]).not.toBe(keys[1])
+  })
+
+  test('discards the key once it lands, so a later correction is its own command', async () => {
+    const keys: string[] = []
+    const { flow } = flowWith({
+      declareTrainingGoal: async (command, goal) => {
+        keys.push(command.idempotencyKey)
+        return {
+          attribute_code: 'primary_training_goal' as const,
+          value_text: goal,
+          superseded_claim_id: null,
+        }
+      },
+    })
+
+    await flow.declareTrainingGoal('run_a_race')
+    await flow.declareTrainingGoal('run_a_race')
 
     expect(keys[0]).not.toBe(keys[1])
   })

@@ -52,7 +52,7 @@ import { ApiError } from '../../src/client'
 import { canSubmitIdentity, isUsernameWellFormed } from '../../src/client/identity-form'
 import { createSpaceOnboardingFlow } from '../../src/client/onboarding-transport'
 import { readSession } from '../../src/client/session'
-import { guardStep } from '../../src/client/onboarding-steps'
+import { guardStep, nextRouteAfter } from '../../src/client/onboarding-steps'
 
 const NAME_MAX_LENGTH = 120
 const USERNAME_MAX_LENGTH = 30
@@ -95,10 +95,11 @@ export default function OnboardingIdentity() {
           router.replace(owed)
           return
         }
-        if (current.identity) {
-          setGivenName(current.identity.given_name)
-          setFamilyName(current.identity.family_name)
-          setUsername(current.identity.username)
+        const declared = current.answers.identity.value
+        if (declared) {
+          setGivenName(declared.given_name)
+          setFamilyName(declared.family_name)
+          setUsername(declared.username)
         }
       })
       .catch((cause: unknown) => {
@@ -137,7 +138,7 @@ export default function OnboardingIdentity() {
         family_name: familyName.trim(),
         username,
       })
-      router.replace('/onboarding/sex')
+      router.replace(nextRouteAfter('/onboarding/identity'))
     } catch (cause) {
       if (cause instanceof ApiError && cause.failure === 'conflict') {
         // Held against the value, so the message clears the moment it changes.
