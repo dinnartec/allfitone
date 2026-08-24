@@ -406,6 +406,32 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/space/v1/profile/focus-areas': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Declare which body zones the account holder wants emphasised
+     * @description HU-SP-097. Separate from `OP-IDN-004` because the emphasis is the first profile attribute that holds **several values at once**, and that operation cannot write it: it seals the live claim of the same attribute before inserting, so three zones would leave one.
+     *
+     *     The body carries the **whole set**, not one member. Declaring seals the zones that left, inserts the ones that arrived, and leaves the ones that stayed untouched — a zone still chosen keeps the moment it was first chosen. A withdrawn zone is closed rather than deleted, and carries no superseding claim, because nothing replaced it.
+     *
+     *     `whole_body` is a member of the catalogue rather than an empty set: it is how someone says "no emphasis, let my goal decide". It is exclusive with every zone, and the empty array is refused — otherwise "I did not answer" and "I want no emphasis" would be the same request.
+     *
+     *     Unlike `OP-IDN-004`, the `Command-Id` is not the identity of a stored row, because one command writes several. Idempotency rests on the durable receipt, and a replay answers the set in force.
+     */
+    post: operations['declareSpaceFocusAreas']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/studio/v1/telemetry-config': {
     parameters: {
       query?: never
@@ -1632,12 +1658,35 @@ export interface components {
         answered: boolean
         value: components['schemas']['PrimaryTrainingGoal'] | null
       }
+      /** @description The set in force, and the one entry whose value is a set rather than a single value. `answered` is not redundant with emptiness for the app's purposes but it is derived from it: an unanswered step has no members, and saying "no emphasis" is answering with `whole_body`. */
+      focus_areas: {
+        answered: boolean
+        value: components['schemas']['FocusAreaSet']
+      }
     }
     /**
      * @description The five goals offered in the initial V1 launch. The attribute catalogue in the database also holds `improve_performance`, deferred rather than deleted, and this operation refuses it: it is the only one of the six whose progress does not show on the body, so the screen cannot show what it promises.
      * @enum {string}
      */
     PrimaryTrainingGoal: 'lose_weight' | 'build_muscle' | 'get_fit' | 'run_a_race' | 'maintain'
+    /**
+     * @description The seven zones of HU-SP-097 criterion 1, plus `whole_body`. A zone is a group of muscles rather than one, because the story asks about zones and because a person points at a region, not at a head of the triceps.
+     *
+     *     `whole_body` is a member and not the absence of an answer. It means "no emphasis, my main goal decides", and keeping it in the catalogue is what makes that distinguishable from never having answered.
+     * @enum {string}
+     */
+    FocusArea: 'chest' | 'back' | 'shoulders' | 'arms' | 'abs' | 'glutes' | 'legs' | 'whole_body'
+    /** @description Always ordered by code so two reads of the same emphasis compare equal without the client sorting first. */
+    FocusAreaSet: components['schemas']['FocusArea'][]
+    /** @description Declaring replaces the set. It is not additive, so the client sends what the person has selected rather than a difference. */
+    SpaceFocusAreasDeclaration: {
+      /** @description The whole set, not one member: what is absent here is withdrawn. At least one member, because the empty array would be indistinguishable from not having answered; `whole_body` is how to say "no emphasis", and it travels alone. */
+      areas: components['schemas']['FocusAreaSet'] & unknown
+    }
+    /** @description The emphasis in force after the command, which on a replay is simply the emphasis in force. */
+    SpaceFocusAreas: {
+      areas: components['schemas']['FocusAreaSet']
+    }
     /** @description Only one goal is principal, so declaring a second time replaces which one that is rather than adding to a set. */
     SpaceProfileClaimDeclaration: {
       /**
@@ -4071,6 +4120,41 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['SpaceProfileClaim']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      409: components['responses']['Conflict']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  declareSpaceFocusAreas: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SpaceFocusAreasDeclaration']
+      }
+    }
+    responses: {
+      /** @description The emphasis in force after the command */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SpaceFocusAreas']
         }
       }
       400: components['responses']['BadRequest']

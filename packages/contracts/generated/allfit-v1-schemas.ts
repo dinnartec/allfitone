@@ -927,6 +927,22 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       'A role never grants fitness data by itself. Coach still requires an active relationship, assignment, compatible grant, membership, role, and credentials.',
     enum: ['not_granted_by_role', 'requires_relationship_assignment_and_grant'],
   },
+  FocusArea: {
+    type: 'string',
+    enum: ['chest', 'back', 'shoulders', 'arms', 'abs', 'glutes', 'legs', 'whole_body'],
+    description:
+      'The seven zones of HU-SP-097 criterion 1, plus `whole_body`. A zone is a group of muscles rather than one, because the story asks about zones and because a person points at a region, not at a head of the triceps.\n\n`whole_body` is a member and not the absence of an answer. It means "no emphasis, my main goal decides", and keeping it in the catalogue is what makes that distinguishable from never having answered.',
+  },
+  FocusAreaSet: {
+    type: 'array',
+    uniqueItems: true,
+    maxItems: 8,
+    items: {
+      $ref: '#/components/schemas/FocusArea',
+    },
+    description:
+      'Always ordered by code so two reads of the same emphasis compare equal without the client sorting first.',
+  },
   FrozenContractRef: {
     type: 'object',
     additionalProperties: false,
@@ -3399,10 +3415,43 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
     description:
       'Enough to resume the onboarding and nothing more. Absent answers are null rather than omitted, so the app never has to guess whether a step was skipped or the field simply did not travel.',
   },
+  SpaceFocusAreas: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['areas'],
+    properties: {
+      areas: {
+        $ref: '#/components/schemas/FocusAreaSet',
+      },
+    },
+    description:
+      'The emphasis in force after the command, which on a replay is simply the emphasis in force.',
+  },
+  SpaceFocusAreasDeclaration: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['areas'],
+    properties: {
+      areas: {
+        allOf: [
+          {
+            $ref: '#/components/schemas/FocusAreaSet',
+          },
+          {
+            minItems: 1,
+          },
+        ],
+        description:
+          'The whole set, not one member: what is absent here is withdrawn. At least one member, because the empty array would be indistinguishable from not having answered; `whole_body` is how to say "no emphasis", and it travels alone.',
+      },
+    },
+    description:
+      'Declaring replaces the set. It is not additive, so the client sends what the person has selected rather than a difference.',
+  },
   SpaceOnboardingAnswers: {
     type: 'object',
     additionalProperties: false,
-    required: ['identity', 'biological_sex', 'primary_training_goal'],
+    required: ['identity', 'biological_sex', 'primary_training_goal', 'focus_areas'],
     properties: {
       identity: {
         type: 'object',
@@ -3469,6 +3518,21 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         },
         description:
           'The claim in force. A superseded claim never appears here: correcting the answer writes another one and this reads the current one.',
+      },
+      focus_areas: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['answered', 'value'],
+        properties: {
+          answered: {
+            type: 'boolean',
+          },
+          value: {
+            $ref: '#/components/schemas/FocusAreaSet',
+          },
+        },
+        description:
+          'The set in force, and the one entry whose value is a set rather than a single value. `answered` is not redundant with emptiness for the app\'s purposes but it is derived from it: an unanswered step has no members, and saying "no emphasis" is answering with `whole_body`.',
       },
     },
     description:

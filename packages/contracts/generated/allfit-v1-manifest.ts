@@ -223,6 +223,13 @@ export const allfitV1ContractManifest = {
       responses: ['200', '400', '401', '403', '409', '503'],
     },
     {
+      method: 'POST',
+      path: '/space/v1/profile/focus-areas',
+      operationId: 'declareSpaceFocusAreas',
+      allfitOperation: 'OP-IDN-046',
+      responses: ['200', '400', '401', '403', '409', '503'],
+    },
+    {
       method: 'GET',
       path: '/space/v1/telemetry-config',
       operationId: 'getSpaceTelemetryConfig',

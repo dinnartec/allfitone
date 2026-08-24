@@ -932,6 +932,68 @@ paths:
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
 
+  /space/v1/profile/focus-areas:
+    post:
+      tags: [Space Identity]
+      operationId: declareSpaceFocusAreas
+      x-allfit-operation: OP-IDN-046
+      x-allfit-cache: no-store
+      summary: Declare which body zones the account holder wants emphasised
+      description: >-
+        HU-SP-097. Separate from `OP-IDN-004` because the emphasis is the first
+        profile attribute that holds **several values at once**, and that operation
+        cannot write it: it seals the live claim of the same attribute before
+        inserting, so three zones would leave one.
+
+
+        The body carries the **whole set**, not one member. Declaring seals the
+        zones that left, inserts the ones that arrived, and leaves the ones that
+        stayed untouched — a zone still chosen keeps the moment it was first
+        chosen. A withdrawn zone is closed rather than deleted, and carries no
+        superseding claim, because nothing replaced it.
+
+
+        `whole_body` is a member of the catalogue rather than an empty set: it is
+        how someone says "no emphasis, let my goal decide". It is exclusive with
+        every zone, and the empty array is refused — otherwise "I did not answer"
+        and "I want no emphasis" would be the same request.
+
+
+        Unlike `OP-IDN-004`, the `Command-Id` is not the identity of a stored row,
+        because one command writes several. Idempotency rests on the durable
+        receipt, and a replay answers the set in force.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SpaceFocusAreasDeclaration'
+      responses:
+        '200':
+          description: The emphasis in force after the command
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpaceFocusAreas'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
   /studio/v1/telemetry-config:
     get:
       tags: [Platform Telemetry]
@@ -4514,7 +4576,7 @@ components:
     SpaceOnboardingAnswers:
       type: object
       additionalProperties: false
-      required: [identity, biological_sex, primary_training_goal]
+      required: [identity, biological_sex, primary_training_goal, focus_areas]
       properties:
         identity:
           type: object
@@ -4560,6 +4622,20 @@ components:
           description: >-
             The claim in force. A superseded claim never appears here: correcting
             the answer writes another one and this reads the current one.
+        focus_areas:
+          type: object
+          additionalProperties: false
+          required: [answered, value]
+          properties:
+            answered:
+              type: boolean
+            value:
+              $ref: '#/components/schemas/FocusAreaSet'
+          description: >-
+            The set in force, and the one entry whose value is a set rather than a
+            single value. `answered` is not redundant with emptiness for the app's
+            purposes but it is derived from it: an unanswered step has no members,
+            and saying "no emphasis" is answering with `whole_body`.
       description: >-
         One entry per step, all the same shape. This is what keeps a step from
         widening the reader's signature: a new step adds an entry here, and the
@@ -4577,6 +4653,54 @@ components:
         deleted, and this operation refuses it: it is the only one of the six whose
         progress does not show on the body, so the screen cannot show what it
         promises.
+    FocusArea:
+      type: string
+      enum: [chest, back, shoulders, arms, abs, glutes, legs, whole_body]
+      description: >-
+        The seven zones of HU-SP-097 criterion 1, plus `whole_body`. A zone is a
+        group of muscles rather than one, because the story asks about zones and
+        because a person points at a region, not at a head of the triceps.
+
+
+        `whole_body` is a member and not the absence of an answer. It means "no
+        emphasis, my main goal decides", and keeping it in the catalogue is what
+        makes that distinguishable from never having answered.
+    FocusAreaSet:
+      type: array
+      uniqueItems: true
+      maxItems: 8
+      items:
+        $ref: '#/components/schemas/FocusArea'
+      description: >-
+        Always ordered by code so two reads of the same emphasis compare equal
+        without the client sorting first.
+    SpaceFocusAreasDeclaration:
+      type: object
+      additionalProperties: false
+      required: [areas]
+      properties:
+        areas:
+          allOf:
+            - $ref: '#/components/schemas/FocusAreaSet'
+            - minItems: 1
+          description: >-
+            The whole set, not one member: what is absent here is withdrawn. At
+            least one member, because the empty array would be indistinguishable
+            from not having answered; `whole_body` is how to say "no emphasis", and
+            it travels alone.
+      description: >-
+        Declaring replaces the set. It is not additive, so the client sends what
+        the person has selected rather than a difference.
+    SpaceFocusAreas:
+      type: object
+      additionalProperties: false
+      required: [areas]
+      properties:
+        areas:
+          $ref: '#/components/schemas/FocusAreaSet'
+      description: >-
+        The emphasis in force after the command, which on a replay is simply the
+        emphasis in force.
     SpaceProfileClaimDeclaration:
       type: object
       additionalProperties: false
