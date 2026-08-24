@@ -100,7 +100,8 @@ select set_config('app.actor_account_id', '019f1000-0000-7000-8000-000000000011'
 -- governed function. A plain join returned null here and the API concluded the
 -- Fitness ID did not exist, which would have offered to create a second one.
 select is(
-  (select username from identity.read_current_onboarding('019f1000-0000-7000-8000-000000000011')),
+  (select answers -> 'identity' -> 'value' ->> 'username'
+     from identity.read_current_onboarding('019f1000-0000-7000-8000-000000000011')),
   'ada_lovelace',
   'T-IDN-RLS-12 an account reads the Fitness ID it owns, which no policy on people allows');
 select is_empty(

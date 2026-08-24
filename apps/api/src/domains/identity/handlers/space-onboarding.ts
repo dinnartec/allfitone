@@ -20,7 +20,7 @@ import { createHash } from 'node:crypto'
 import type { VerifiedToken } from '@allfitone/auth-provider'
 import { Hono, type Context } from 'hono'
 
-import type { BiologicalSex } from '../domain/index.js'
+import type { BiologicalSex, PrimaryTrainingGoal } from '../domain/index.js'
 import { fail } from '../../../platform/http/index.js'
 import {
   OnboardingPreconditionError,
@@ -128,15 +128,20 @@ export function spaceOnboardingRoutes(
                 expires_at: current.attempt.expiresAt.toISOString(),
               }
             : null,
-          identity: current.identity
-            ? {
-                given_name: current.identity.givenName,
-                family_name: current.identity.familyName,
-                username: current.identity.username,
-              }
-            : null,
-          biological_sex: current.biologicalSex,
-          biological_sex_answered: current.biologicalSexAnswered,
+          answers: {
+            identity: {
+              answered: current.answers.identity.answered,
+              value: current.answers.identity.value
+                ? {
+                    given_name: current.answers.identity.value.givenName,
+                    family_name: current.answers.identity.value.familyName,
+                    username: current.answers.identity.value.username,
+                  }
+                : null,
+            },
+            biological_sex: current.answers.biologicalSex,
+            primary_training_goal: current.answers.primaryTrainingGoal,
+          },
         },
         200,
       )
@@ -199,6 +204,38 @@ export function spaceOnboardingRoutes(
         biologicalSex: declaration.biologicalSex,
       })
       return c.json({ biological_sex: declared }, 200)
+    } catch (error) {
+      return operationFailure(c, error)
+    }
+  })
+
+  // Not under the attempt: a profile claim outlives the onboarding, and the person
+  // edits it from their profile long after the attempt closed.
+  routes.post('/profile/claims', async (c) => {
+    c.header('Cache-Control', 'no-store')
+
+    const token = await verified(c, verify)
+    if (!token) return fail(c, 'unauthenticated')
+
+    const body = await readJson(c)
+    const declaration = readProfileClaim(body)
+    const command = commandContext(c, body)
+    if (!declaration || !command) return fail(c, 'invalid-request')
+
+    try {
+      const claim = await onboarding().declareProfileClaim(token, {
+        ...command,
+        attributeCode: declaration.attributeCode,
+        valueText: declaration.valueText,
+      })
+      return c.json(
+        {
+          attribute_code: claim.attributeCode,
+          value_text: claim.valueText,
+          superseded_claim_id: claim.supersededClaimId,
+        },
+        200,
+      )
     } catch (error) {
       return operationFailure(c, error)
     }
@@ -305,6 +342,37 @@ function readBiologicalSex(body: unknown): { biologicalSex: BiologicalSex | null
   const value = (body as { biological_sex: unknown }).biological_sex
   if (value === null) return { biologicalSex: null }
   return value === 'male' || value === 'female' ? { biologicalSex: value } : undefined
+}
+
+/**
+ * `improve_performance` is in the database catalogue but deferred out of the
+ * initial V1 launch, so it is absent here and arrives as invalid-request.
+ */
+const TRAINING_GOALS: readonly PrimaryTrainingGoal[] = [
+  'lose_weight',
+  'build_muscle',
+  'get_fit',
+  'run_a_race',
+  'maintain',
+]
+
+function readProfileClaim(
+  body: unknown,
+): { attributeCode: 'primary_training_goal'; valueText: PrimaryTrainingGoal } | undefined {
+  if (typeof body !== 'object' || body === null) return undefined
+  const keys = Object.keys(body).sort()
+  if (keys.length !== 2 || keys[0] !== 'attribute_code' || keys[1] !== 'value_text')
+    return undefined
+
+  const { attribute_code: code, value_text: value } = body as {
+    attribute_code: unknown
+    value_text: unknown
+  }
+  if (code !== 'primary_training_goal') return undefined
+  if (typeof value !== 'string') return undefined
+  return TRAINING_GOALS.includes(value as PrimaryTrainingGoal)
+    ? { attributeCode: code, valueText: value as PrimaryTrainingGoal }
+    : undefined
 }
 
 function trimmedName(value: unknown): string | undefined {

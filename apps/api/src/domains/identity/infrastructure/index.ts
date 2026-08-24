@@ -15,7 +15,9 @@ import type {
   IdentityInvitationDatabase,
   BackofficeAuthenticationDatabase,
   BackofficeAttemptSecret,
+  OnboardingAnswers,
   OnboardingAttempt,
+  PrimaryTrainingGoal,
   ProfessionalCredential,
   ProfessionalProfile,
   StudioProfessionalContext,
@@ -26,6 +28,29 @@ import type {
   TeamInvitationIntentStatus,
   TeamInvitationStatus,
 } from '../domain/index.js'
+
+/**
+ * The `answers` object exactly as PostgreSQL builds it. Snake case because it is
+ * the wire shape, not the domain one, and only the identity entry needs mapping:
+ * the other two already match.
+ */
+type RawOnboardingAnswers = {
+  identity: {
+    answered: boolean
+    value: { given_name: string; family_name: string; username: string } | null
+  }
+  biological_sex: { answered: boolean; value: BiologicalSex | null }
+  primary_training_goal: { answered: boolean; value: PrimaryTrainingGoal | null }
+}
+
+/** No open attempt still answers the question: nothing has been answered. */
+function emptyAnswers(): OnboardingAnswers {
+  return {
+    identity: { answered: false, value: null },
+    biologicalSex: { answered: false, value: null },
+    primaryTrainingGoal: { answered: false, value: null },
+  }
+}
 
 type InvitationRow = {
   invitation_id: string
@@ -296,6 +321,39 @@ export function createIdentityOnboardingDatabase(): IdentityOnboardingDatabase {
       })
     },
 
+    async declareProfileClaim(input) {
+      return sql.begin(async (transaction) => {
+        await setAccountActor(transaction, input.accountId)
+        // An unknown attribute or a value outside the catalogue raises 23514 and
+        // the handler maps it to invalid-request. Nothing is validated twice here.
+        const [row] = await transaction<
+          {
+            attribute_code: 'primary_training_goal'
+            value_text: PrimaryTrainingGoal
+            superseded_claim_id: string | null
+          }[]
+        >`
+          select attribute_code, value_text, superseded_claim_id
+          from identity.declare_profile_claim(
+            ${input.accountId}::uuid,
+            ${input.attributeCode},
+            ${input.valueText},
+            null,
+            null,
+            ${input.idempotencyKey}::uuid,
+            ${input.commandId}::uuid,
+            ${input.requestHash}
+          )
+        `
+        if (!row) throw new Error('PostgreSQL did not record the profile claim')
+        return {
+          attributeCode: row.attribute_code,
+          valueText: row.value_text,
+          supersededClaimId: row.superseded_claim_id,
+        }
+      })
+    },
+
     async readCurrentAttempt(accountId) {
       return sql.begin(async (transaction) => {
         await setAccountActor(transaction, accountId)
@@ -307,23 +365,13 @@ export function createIdentityOnboardingDatabase(): IdentityOnboardingDatabase {
             status: OnboardingAttempt['status']
             eligibility_status: OnboardingAttempt['eligibilityStatus']
             expires_at: Date
-            given_name: string | null
-            family_name: string | null
-            username: string | null
-            biological_sex: BiologicalSex | null
-            biological_sex_answered: boolean
+            answers: RawOnboardingAnswers
           }[]
         >`select * from identity.read_current_onboarding(${accountId}::uuid)`
 
         // No open attempt is an answer, not a failure: it is also what an
         // already activated person sees.
-        if (!row)
-          return {
-            attempt: null,
-            identity: null,
-            biologicalSex: null,
-            biologicalSexAnswered: false,
-          }
+        if (!row) return { attempt: null, answers: emptyAnswers() }
         return {
           attempt: {
             id: row.attempt_id,
@@ -331,16 +379,20 @@ export function createIdentityOnboardingDatabase(): IdentityOnboardingDatabase {
             eligibilityStatus: row.eligibility_status,
             expiresAt: new Date(row.expires_at),
           },
-          identity:
-            row.given_name && row.family_name && row.username
-              ? {
-                  givenName: row.given_name,
-                  familyName: row.family_name,
-                  username: row.username,
-                }
-              : null,
-          biologicalSex: row.biological_sex,
-          biologicalSexAnswered: row.biological_sex_answered,
+          answers: {
+            identity: {
+              answered: row.answers.identity.answered,
+              value: row.answers.identity.value
+                ? {
+                    givenName: row.answers.identity.value.given_name,
+                    familyName: row.answers.identity.value.family_name,
+                    username: row.answers.identity.value.username,
+                  }
+                : null,
+            },
+            biologicalSex: row.answers.biological_sex,
+            primaryTrainingGoal: row.answers.primary_training_goal,
+          },
         }
       })
     },

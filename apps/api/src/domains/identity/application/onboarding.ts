@@ -34,6 +34,8 @@ import type {
   IdentityOnboardingDatabase,
   OnboardingAttempt,
   PendingFitnessId,
+  PrimaryTrainingGoal,
+  ProfileClaim,
 } from '../domain/index.js'
 
 export interface OnboardingService {
@@ -60,6 +62,13 @@ export interface OnboardingService {
     actor: AccountActor,
     input: CommandContext & { attemptId: string; biologicalSex: BiologicalSex | null },
   ): Promise<BiologicalSex | null>
+  declareProfileClaim(
+    actor: AccountActor,
+    input: CommandContext & {
+      attributeCode: 'primary_training_goal'
+      valueText: PrimaryTrainingGoal
+    },
+  ): Promise<ProfileClaim>
   readCurrentAttempt(actor: AccountActor): Promise<CurrentOnboardingAttempt>
   complete(
     actor: AccountActor,
@@ -83,6 +92,8 @@ export function createOnboardingService(database: IdentityOnboardingDatabase): O
       database.createPendingPerson({ accountId: actor.accountId, ...input }),
     declareBiologicalSex: (actor, input) =>
       database.declareBiologicalSex({ accountId: actor.accountId, ...input }),
+    declareProfileClaim: (actor, input) =>
+      database.declareProfileClaim({ accountId: actor.accountId, ...input }),
     readCurrentAttempt: (actor) => database.readCurrentAttempt(actor.accountId),
     complete: (actor, input) => database.activatePerson({ accountId: actor.accountId, ...input }),
   }
@@ -131,6 +142,13 @@ export interface SpaceOnboardingService {
     token: VerifiedToken,
     input: CommandContext & { attemptId: string; biologicalSex: BiologicalSex | null },
   ): Promise<BiologicalSex | null>
+  declareProfileClaim(
+    token: VerifiedToken,
+    input: CommandContext & {
+      attributeCode: 'primary_training_goal'
+      valueText: PrimaryTrainingGoal
+    },
+  ): Promise<ProfileClaim>
   readCurrentAttempt(token: VerifiedToken): Promise<CurrentOnboardingAttempt>
 }
 
@@ -174,6 +192,10 @@ export function createSpaceOnboardingService(
         contactEmailVerified: true,
       })
     },
+    async declareProfileClaim(token, input) {
+      return dependencies.onboarding.declareProfileClaim(await actorFor(token), input)
+    },
+
     async declareBiologicalSex(token, input) {
       return dependencies.onboarding.declareBiologicalSex(await actorFor(token), input)
     },

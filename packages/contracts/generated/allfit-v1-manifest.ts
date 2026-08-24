@@ -216,6 +216,13 @@ export const allfitV1ContractManifest = {
       responses: ['201', '400', '401', '403', '404', '409', '422'],
     },
     {
+      method: 'POST',
+      path: '/space/v1/profile/claims',
+      operationId: 'declareSpaceProfileClaim',
+      allfitOperation: 'OP-IDN-004',
+      responses: ['200', '400', '401', '403', '409', '503'],
+    },
+    {
       method: 'GET',
       path: '/space/v1/telemetry-config',
       operationId: 'getSpaceTelemetryConfig',

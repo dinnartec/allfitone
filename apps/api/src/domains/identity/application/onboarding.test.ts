@@ -23,6 +23,15 @@ import {
   type OnboardingService,
 } from './onboarding.js'
 
+/** The empty shape, repeated in enough doubles to be worth naming once. */
+function emptyAnswers() {
+  return {
+    identity: { answered: false as boolean, value: null },
+    biologicalSex: { answered: false as boolean, value: null },
+    primaryTrainingGoal: { answered: false as boolean, value: null },
+  }
+}
+
 const ISSUER = 'https://api.workos.test/user_management/client_space'
 const TOKEN: VerifiedToken = { subject: 'user_01', sessionId: 'sid_01', surface: 'space' }
 const COMMAND = {
@@ -76,9 +85,17 @@ function serviceWith(
       actors.push(actor.accountId)
       return input.biologicalSex
     },
+    declareProfileClaim: async (actor, input) => {
+      actors.push(actor.accountId)
+      return {
+        attributeCode: input.attributeCode,
+        valueText: input.valueText,
+        supersededClaimId: null,
+      }
+    },
     readCurrentAttempt: async (actor) => {
       actors.push(actor.accountId)
-      return { attempt: ATTEMPT, identity: null, biologicalSex: null, biologicalSexAnswered: false }
+      return { attempt: ATTEMPT, answers: emptyAnswers() }
     },
     complete: async () => 'person_01',
     ...overrides,

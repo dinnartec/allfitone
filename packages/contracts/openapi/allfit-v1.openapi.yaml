@@ -873,6 +873,65 @@ paths:
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
 
+  /space/v1/profile/claims:
+    post:
+      tags: [Space Identity]
+      operationId: declareSpaceProfileClaim
+      x-allfit-operation: OP-IDN-004
+      x-allfit-cache: no-store
+      summary: Declare an attribute of the account holder's fitness profile
+      description: >-
+        HU-SP-010 for now, and the same operation will carry the attributes of
+        HU-SP-011 through HU-SP-013 and HU-SP-021 as their screens get built. The
+        route is not under the onboarding attempt on purpose: a profile claim
+        outlives the attempt, and the person edits it from their profile long
+        after onboarding closed.
+
+
+        Declaring the same attribute again **corrects** it. Nothing is edited: the
+        previous claim is sealed with its end of validity and the new one records
+        who superseded it, so what someone signed up with stays readable forever.
+        That is also why the claim carries the device's `Command-Id` as its own
+        identity — the primary key itself refuses a second claim from the same
+        command.
+
+
+        `improve_performance` exists in the attribute catalogue but is **not
+        offered in the initial V1 launch**, so it is absent from the enum here and
+        the operation refuses it. Keeping the value in the catalogue is what lets
+        it arrive later without a migration.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SpaceProfileClaimDeclaration'
+      responses:
+        '200':
+          description: The claim as recorded
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpaceProfileClaim'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
   /studio/v1/telemetry-config:
     get:
       tags: [Platform Telemetry]
@@ -4437,7 +4496,7 @@ components:
     SpaceCurrentOnboardingAttempt:
       type: object
       additionalProperties: false
-      required: [attempt, identity, biological_sex, biological_sex_answered]
+      required: [attempt, answers]
       properties:
         attempt:
           oneOf:
@@ -4446,31 +4505,113 @@ components:
           description: >-
             Null when the account has no open attempt, which is also what an
             already activated person sees.
-        identity:
-          oneOf:
-            - $ref: '#/components/schemas/SpacePendingFitnessId'
-            - type: 'null'
-          description: >-
-            Null until the Fitness ID exists. Non-null is how the app knows that
-            step is behind it.
-        biological_sex:
-          oneOf:
-            - $ref: '#/components/schemas/BiologicalSex'
-            - type: 'null'
-          description: >-
-            Null while unanswered, and also when the person declined: declining is
-            recorded as the absence of a value, so the two are deliberately
-            indistinguishable here.
-        biological_sex_answered:
-          type: boolean
-          description: >-
-            Whether the question was already put and answered, refusal included.
-            This is what tells the screen to skip itself; the value alone cannot,
-            because declining leaves none.
+        answers:
+          $ref: '#/components/schemas/SpaceOnboardingAnswers'
       description: >-
         Enough to resume the onboarding and nothing more. Absent answers are
         null rather than omitted, so the app never has to guess whether a step
         was skipped or the field simply did not travel.
+    SpaceOnboardingAnswers:
+      type: object
+      additionalProperties: false
+      required: [identity, biological_sex, primary_training_goal]
+      properties:
+        identity:
+          type: object
+          additionalProperties: false
+          required: [answered, value]
+          properties:
+            answered:
+              type: boolean
+            value:
+              oneOf:
+                - $ref: '#/components/schemas/SpacePendingFitnessId'
+                - type: 'null'
+          description: >-
+            The Fitness ID. Here `answered` and a non-null value say the same
+            thing, and the shape stays uniform anyway so the app never special
+            cases a step.
+        biological_sex:
+          type: object
+          additionalProperties: false
+          required: [answered, value]
+          properties:
+            answered:
+              type: boolean
+            value:
+              oneOf:
+                - $ref: '#/components/schemas/BiologicalSex'
+                - type: 'null'
+          description: >-
+            `answered` is what tells the screen to skip itself; the value alone
+            cannot, because declining is recorded as the absence of a value and is
+            deliberately indistinguishable from never having been asked.
+        primary_training_goal:
+          type: object
+          additionalProperties: false
+          required: [answered, value]
+          properties:
+            answered:
+              type: boolean
+            value:
+              oneOf:
+                - $ref: '#/components/schemas/PrimaryTrainingGoal'
+                - type: 'null'
+          description: >-
+            The claim in force. A superseded claim never appears here: correcting
+            the answer writes another one and this reads the current one.
+      description: >-
+        One entry per step, all the same shape. This is what keeps a step from
+        widening the reader's signature: a new step adds an entry here, and the
+        database function that builds it changes its body rather than its return
+        type. Every answer is derived on read from the data itself — the person's
+        name, the mark on the attempt, the claim in force — because storing a
+        progress pointer would be a second truth that drifts, and a pointer cannot
+        survive people going back to correct what they already answered.
+    PrimaryTrainingGoal:
+      type: string
+      enum: [lose_weight, build_muscle, get_fit, run_a_race, maintain]
+      description: >-
+        The five goals offered in the initial V1 launch. The attribute catalogue in
+        the database also holds `improve_performance`, deferred rather than
+        deleted, and this operation refuses it: it is the only one of the six whose
+        progress does not show on the body, so the screen cannot show what it
+        promises.
+    SpaceProfileClaimDeclaration:
+      type: object
+      additionalProperties: false
+      required: [attribute_code, value_text]
+      properties:
+        attribute_code:
+          type: string
+          const: primary_training_goal
+          description: >-
+            The only member of the attribute catalogue declared so far. When a
+            second one arrives this becomes a discriminated union; writing it as one
+            today would be shape without a case.
+        value_text:
+          $ref: '#/components/schemas/PrimaryTrainingGoal'
+      description: >-
+        Only one goal is principal, so declaring a second time replaces which one
+        that is rather than adding to a set.
+    SpaceProfileClaim:
+      type: object
+      additionalProperties: false
+      required: [attribute_code, value_text, superseded_claim_id]
+      properties:
+        attribute_code:
+          type: string
+          const: primary_training_goal
+        value_text:
+          $ref: '#/components/schemas/PrimaryTrainingGoal'
+        superseded_claim_id:
+          oneOf:
+            - $ref: '#/components/schemas/UuidV7'
+            - type: 'null'
+          description: >-
+            The claim this one replaced, or null on a first declaration. Returned
+            because it is the app's proof that a correction was recorded as a
+            correction and not as an edit.
     AdultEligibilityPolicy:
       type: object
       additionalProperties: false

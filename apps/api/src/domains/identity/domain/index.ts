@@ -72,14 +72,41 @@ export interface PendingFitnessId {
 /** Only what the person can declare. Declining is the absence of a value. */
 export type BiologicalSex = 'male' | 'female'
 
+/**
+ * The five goals offered in the initial V1 launch. `improve_performance` stays in
+ * the database catalogue, deferred rather than deleted, and is refused here.
+ */
+export type PrimaryTrainingGoal =
+  'lose_weight' | 'build_muscle' | 'get_fit' | 'run_a_race' | 'maintain'
+
+/**
+ * One entry per onboarding step, every one the same shape. `answered` is separate
+ * from the value because a step can be answered without leaving one: declining the
+ * sex records the refusal as an absence, and a value alone could not tell that
+ * apart from never having been asked.
+ */
+export interface OnboardingAnswer<T> {
+  answered: boolean
+  value: T | null
+}
+
+export interface OnboardingAnswers {
+  identity: OnboardingAnswer<PendingFitnessId>
+  biologicalSex: OnboardingAnswer<BiologicalSex>
+  primaryTrainingGoal: OnboardingAnswer<PrimaryTrainingGoal>
+}
+
 export interface CurrentOnboardingAttempt {
   attempt: OnboardingAttempt | null
-  /** Non-null once the Fitness ID exists, which is how the app knows to move on. */
-  identity: PendingFitnessId | null
-  /** Null while unanswered and also when declined: the two are the same absence. */
-  biologicalSex: BiologicalSex | null
-  /** Whether the question was put and answered, refusal included. */
-  biologicalSexAnswered: boolean
+  answers: OnboardingAnswers
+}
+
+/** What the database records for a claim, including what it displaced. */
+export interface ProfileClaim {
+  attributeCode: 'primary_training_goal'
+  valueText: PrimaryTrainingGoal
+  /** The claim this one replaced, or null on a first declaration. */
+  supersededClaimId: string | null
 }
 
 export interface IdentityOnboardingDatabase {
@@ -108,6 +135,13 @@ export interface IdentityOnboardingDatabase {
       biologicalSex: BiologicalSex | null
     },
   ): Promise<BiologicalSex | null>
+  declareProfileClaim(
+    input: CommandContext & {
+      accountId: string
+      attributeCode: 'primary_training_goal'
+      valueText: PrimaryTrainingGoal
+    },
+  ): Promise<ProfileClaim>
   readCurrentAttempt(accountId: string): Promise<CurrentOnboardingAttempt>
   activatePerson(
     input: CommandContext & {

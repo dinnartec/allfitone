@@ -91,7 +91,8 @@ select is(
   'T-IDN-INT-16 going back changes the answer instead of being refused');
 
 select is(
-  (select biological_sex from identity.read_current_onboarding('019f2000-0000-7000-8000-000000000021')),
+  (select answers -> 'biological_sex' ->> 'value'
+     from identity.read_current_onboarding('019f2000-0000-7000-8000-000000000021')),
   'male',
   'T-IDN-RLS-15 the resume read carries the current value, which is what prefills the screen');
 
@@ -167,7 +168,8 @@ select is(
   null::text,
   'declining records no value');
 select is(
-  (select biological_sex_answered from identity.read_current_onboarding('019f2000-0000-7000-8000-000000000023')),
+  (select (answers -> 'biological_sex' ->> 'answered')::boolean
+     from identity.read_current_onboarding('019f2000-0000-7000-8000-000000000023')),
   true,
   'T-IDN-INT-17 but the attempt records that the question was answered, so the flow advances');
 

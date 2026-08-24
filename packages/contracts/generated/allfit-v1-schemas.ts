@@ -2342,6 +2342,12 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  PrimaryTrainingGoal: {
+    type: 'string',
+    enum: ['lose_weight', 'build_muscle', 'get_fit', 'run_a_race', 'maintain'],
+    description:
+      'The five goals offered in the initial V1 launch. The attribute catalogue in the database also holds `improve_performance`, deferred rather than deleted, and this operation refuses it: it is the only one of the six whose progress does not show on the body, so the screen cannot show what it promises.',
+  },
   Problem: {
     type: 'object',
     additionalProperties: false,
@@ -3372,7 +3378,7 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
   SpaceCurrentOnboardingAttempt: {
     type: 'object',
     additionalProperties: false,
-    required: ['attempt', 'identity', 'biological_sex', 'biological_sex_answered'],
+    required: ['attempt', 'answers'],
     properties: {
       attempt: {
         oneOf: [
@@ -3386,38 +3392,87 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         description:
           'Null when the account has no open attempt, which is also what an already activated person sees.',
       },
-      identity: {
-        oneOf: [
-          {
-            $ref: '#/components/schemas/SpacePendingFitnessId',
-          },
-          {
-            type: 'null',
-          },
-        ],
-        description:
-          'Null until the Fitness ID exists. Non-null is how the app knows that step is behind it.',
-      },
-      biological_sex: {
-        oneOf: [
-          {
-            $ref: '#/components/schemas/BiologicalSex',
-          },
-          {
-            type: 'null',
-          },
-        ],
-        description:
-          'Null while unanswered, and also when the person declined: declining is recorded as the absence of a value, so the two are deliberately indistinguishable here.',
-      },
-      biological_sex_answered: {
-        type: 'boolean',
-        description:
-          'Whether the question was already put and answered, refusal included. This is what tells the screen to skip itself; the value alone cannot, because declining leaves none.',
+      answers: {
+        $ref: '#/components/schemas/SpaceOnboardingAnswers',
       },
     },
     description:
       'Enough to resume the onboarding and nothing more. Absent answers are null rather than omitted, so the app never has to guess whether a step was skipped or the field simply did not travel.',
+  },
+  SpaceOnboardingAnswers: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['identity', 'biological_sex', 'primary_training_goal'],
+    properties: {
+      identity: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['answered', 'value'],
+        properties: {
+          answered: {
+            type: 'boolean',
+          },
+          value: {
+            oneOf: [
+              {
+                $ref: '#/components/schemas/SpacePendingFitnessId',
+              },
+              {
+                type: 'null',
+              },
+            ],
+          },
+        },
+        description:
+          'The Fitness ID. Here `answered` and a non-null value say the same thing, and the shape stays uniform anyway so the app never special cases a step.',
+      },
+      biological_sex: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['answered', 'value'],
+        properties: {
+          answered: {
+            type: 'boolean',
+          },
+          value: {
+            oneOf: [
+              {
+                $ref: '#/components/schemas/BiologicalSex',
+              },
+              {
+                type: 'null',
+              },
+            ],
+          },
+        },
+        description:
+          '`answered` is what tells the screen to skip itself; the value alone cannot, because declining is recorded as the absence of a value and is deliberately indistinguishable from never having been asked.',
+      },
+      primary_training_goal: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['answered', 'value'],
+        properties: {
+          answered: {
+            type: 'boolean',
+          },
+          value: {
+            oneOf: [
+              {
+                $ref: '#/components/schemas/PrimaryTrainingGoal',
+              },
+              {
+                type: 'null',
+              },
+            ],
+          },
+        },
+        description:
+          'The claim in force. A superseded claim never appears here: correcting the answer writes another one and this reads the current one.',
+      },
+    },
+    description:
+      "One entry per step, all the same shape. This is what keeps a step from widening the reader's signature: a new step adds an entry here, and the database function that builds it changes its body rather than its return type. Every answer is derived on read from the data itself — the person's name, the mark on the attempt, the claim in force — because storing a progress pointer would be a second truth that drifts, and a pointer cannot survive people going back to correct what they already answered.",
   },
   SpaceOnboardingAttempt: {
     type: 'object',
@@ -3494,6 +3549,50 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
     },
     description:
       "The email is absent on purpose. It is the credential's address, it already travels with the session, and changing it is another operation with its own verification.",
+  },
+  SpaceProfileClaim: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['attribute_code', 'value_text', 'superseded_claim_id'],
+    properties: {
+      attribute_code: {
+        type: 'string',
+        const: 'primary_training_goal',
+      },
+      value_text: {
+        $ref: '#/components/schemas/PrimaryTrainingGoal',
+      },
+      superseded_claim_id: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/UuidV7',
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description:
+          "The claim this one replaced, or null on a first declaration. Returned because it is the app's proof that a correction was recorded as a correction and not as an edit.",
+      },
+    },
+  },
+  SpaceProfileClaimDeclaration: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['attribute_code', 'value_text'],
+    properties: {
+      attribute_code: {
+        type: 'string',
+        const: 'primary_training_goal',
+        description:
+          'The only member of the attribute catalogue declared so far. When a second one arrives this becomes a discriminated union; writing it as one today would be shape without a case.',
+      },
+      value_text: {
+        $ref: '#/components/schemas/PrimaryTrainingGoal',
+      },
+    },
+    description:
+      'Only one goal is principal, so declaring a second time replaces which one that is rather than adding to a set.',
   },
   SpaceRegistrationAccepted: {
     type: 'object',

@@ -51,11 +51,18 @@ function onboarding(overrides: Partial<OnboardingService> = {}): OnboardingServi
       username: input.username,
     }),
     declareBiologicalSex: async (_actor, input) => input.biologicalSex,
+    declareProfileClaim: async (_actor, input) => ({
+      attributeCode: input.attributeCode,
+      valueText: input.valueText,
+      supersededClaimId: null,
+    }),
     readCurrentAttempt: async () => ({
       attempt: null,
-      identity: null,
-      biologicalSex: null,
-      biologicalSexAnswered: false,
+      answers: {
+        identity: { answered: false, value: null },
+        biologicalSex: { answered: false, value: null },
+        primaryTrainingGoal: { answered: false, value: null },
+      },
     }),
     complete: async () => '0198d000-0000-7000-8000-000000000031',
     ...overrides,

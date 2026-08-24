@@ -382,6 +382,30 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/space/v1/profile/claims': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Declare an attribute of the account holder's fitness profile
+     * @description HU-SP-010 for now, and the same operation will carry the attributes of HU-SP-011 through HU-SP-013 and HU-SP-021 as their screens get built. The route is not under the onboarding attempt on purpose: a profile claim outlives the attempt, and the person edits it from their profile long after onboarding closed.
+     *
+     *     Declaring the same attribute again **corrects** it. Nothing is edited: the previous claim is sealed with its end of validity and the new one records who superseded it, so what someone signed up with stays readable forever. That is also why the claim carries the device's `Command-Id` as its own identity — the primary key itself refuses a second claim from the same command.
+     *
+     *     `improve_performance` exists in the attribute catalogue but is **not offered in the initial V1 launch**, so it is absent from the enum here and the operation refuses it. Keeping the value in the catalogue is what lets it arrive later without a migration.
+     */
+    post: operations['declareSpaceProfileClaim']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/studio/v1/telemetry-config': {
     parameters: {
       query?: never
@@ -1589,12 +1613,46 @@ export interface components {
     SpaceCurrentOnboardingAttempt: {
       /** @description Null when the account has no open attempt, which is also what an already activated person sees. */
       attempt: components['schemas']['SpaceOnboardingAttempt'] | null
-      /** @description Null until the Fitness ID exists. Non-null is how the app knows that step is behind it. */
-      identity: components['schemas']['SpacePendingFitnessId'] | null
-      /** @description Null while unanswered, and also when the person declined: declining is recorded as the absence of a value, so the two are deliberately indistinguishable here. */
-      biological_sex: components['schemas']['BiologicalSex'] | null
-      /** @description Whether the question was already put and answered, refusal included. This is what tells the screen to skip itself; the value alone cannot, because declining leaves none. */
-      biological_sex_answered: boolean
+      answers: components['schemas']['SpaceOnboardingAnswers']
+    }
+    /** @description One entry per step, all the same shape. This is what keeps a step from widening the reader's signature: a new step adds an entry here, and the database function that builds it changes its body rather than its return type. Every answer is derived on read from the data itself — the person's name, the mark on the attempt, the claim in force — because storing a progress pointer would be a second truth that drifts, and a pointer cannot survive people going back to correct what they already answered. */
+    SpaceOnboardingAnswers: {
+      /** @description The Fitness ID. Here `answered` and a non-null value say the same thing, and the shape stays uniform anyway so the app never special cases a step. */
+      identity: {
+        answered: boolean
+        value: components['schemas']['SpacePendingFitnessId'] | null
+      }
+      /** @description `answered` is what tells the screen to skip itself; the value alone cannot, because declining is recorded as the absence of a value and is deliberately indistinguishable from never having been asked. */
+      biological_sex: {
+        answered: boolean
+        value: components['schemas']['BiologicalSex'] | null
+      }
+      /** @description The claim in force. A superseded claim never appears here: correcting the answer writes another one and this reads the current one. */
+      primary_training_goal: {
+        answered: boolean
+        value: components['schemas']['PrimaryTrainingGoal'] | null
+      }
+    }
+    /**
+     * @description The five goals offered in the initial V1 launch. The attribute catalogue in the database also holds `improve_performance`, deferred rather than deleted, and this operation refuses it: it is the only one of the six whose progress does not show on the body, so the screen cannot show what it promises.
+     * @enum {string}
+     */
+    PrimaryTrainingGoal: 'lose_weight' | 'build_muscle' | 'get_fit' | 'run_a_race' | 'maintain'
+    /** @description Only one goal is principal, so declaring a second time replaces which one that is rather than adding to a set. */
+    SpaceProfileClaimDeclaration: {
+      /**
+       * @description The only member of the attribute catalogue declared so far. When a second one arrives this becomes a discriminated union; writing it as one today would be shape without a case.
+       * @constant
+       */
+      attribute_code: 'primary_training_goal'
+      value_text: components['schemas']['PrimaryTrainingGoal']
+    }
+    SpaceProfileClaim: {
+      /** @constant */
+      attribute_code: 'primary_training_goal'
+      value_text: components['schemas']['PrimaryTrainingGoal']
+      /** @description The claim this one replaced, or null on a first declaration. Returned because it is the app's proof that a correction was recorded as a correction and not as an edit. */
+      superseded_claim_id: components['schemas']['UuidV7'] | null
     }
     AdultEligibilityPolicy: {
       /** @constant */
@@ -3978,6 +4036,41 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['SpaceBiologicalSex']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      409: components['responses']['Conflict']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  declareSpaceProfileClaim: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SpaceProfileClaimDeclaration']
+      }
+    }
+    responses: {
+      /** @description The claim as recorded */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SpaceProfileClaim']
         }
       }
       400: components['responses']['BadRequest']

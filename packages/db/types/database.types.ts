@@ -1614,15 +1614,11 @@ export type Database = {
       read_current_onboarding: {
         Args: { p_account_id: string }
         Returns: {
+          answers: Json
           attempt_id: string
-          biological_sex: string
-          biological_sex_answered: boolean
           eligibility_status: string
           expires_at: string
-          family_name: string
-          given_name: string
           status: string
-          username: string
         }[]
       }
       record_adult_eligibility: {
