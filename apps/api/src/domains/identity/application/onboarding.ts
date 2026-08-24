@@ -31,6 +31,7 @@ import type {
   BiologicalSex,
   CommandContext,
   CurrentOnboardingAttempt,
+  FocusArea,
   IdentityOnboardingDatabase,
   OnboardingAttempt,
   PendingFitnessId,
@@ -69,6 +70,10 @@ export interface OnboardingService {
       valueText: PrimaryTrainingGoal
     },
   ): Promise<ProfileClaim>
+  declareFocusAreas(
+    actor: AccountActor,
+    input: CommandContext & { areas: readonly FocusArea[] },
+  ): Promise<readonly FocusArea[]>
   readCurrentAttempt(actor: AccountActor): Promise<CurrentOnboardingAttempt>
   complete(
     actor: AccountActor,
@@ -94,6 +99,8 @@ export function createOnboardingService(database: IdentityOnboardingDatabase): O
       database.declareBiologicalSex({ accountId: actor.accountId, ...input }),
     declareProfileClaim: (actor, input) =>
       database.declareProfileClaim({ accountId: actor.accountId, ...input }),
+    declareFocusAreas: (actor, input) =>
+      database.declareFocusAreas({ accountId: actor.accountId, ...input }),
     readCurrentAttempt: (actor) => database.readCurrentAttempt(actor.accountId),
     complete: (actor, input) => database.activatePerson({ accountId: actor.accountId, ...input }),
   }
@@ -149,6 +156,10 @@ export interface SpaceOnboardingService {
       valueText: PrimaryTrainingGoal
     },
   ): Promise<ProfileClaim>
+  declareFocusAreas(
+    token: VerifiedToken,
+    input: CommandContext & { areas: readonly FocusArea[] },
+  ): Promise<readonly FocusArea[]>
   readCurrentAttempt(token: VerifiedToken): Promise<CurrentOnboardingAttempt>
 }
 
@@ -194,6 +205,10 @@ export function createSpaceOnboardingService(
     },
     async declareProfileClaim(token, input) {
       return dependencies.onboarding.declareProfileClaim(await actorFor(token), input)
+    },
+
+    async declareFocusAreas(token, input) {
+      return dependencies.onboarding.declareFocusAreas(await actorFor(token), input)
     },
 
     async declareBiologicalSex(token, input) {

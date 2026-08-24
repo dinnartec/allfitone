@@ -29,6 +29,7 @@ function emptyAnswers() {
     identity: { answered: false as boolean, value: null },
     biologicalSex: { answered: false as boolean, value: null },
     primaryTrainingGoal: { answered: false as boolean, value: null },
+    focusAreas: { answered: false as boolean, value: [] },
   }
 }
 
@@ -92,6 +93,10 @@ function serviceWith(
         valueText: input.valueText,
         supersededClaimId: null,
       }
+    },
+    declareFocusAreas: async (actor, input) => {
+      actors.push(actor.accountId)
+      return input.areas
     },
     readCurrentAttempt: async (actor) => {
       actors.push(actor.accountId)

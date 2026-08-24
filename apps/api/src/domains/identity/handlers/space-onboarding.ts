@@ -20,7 +20,7 @@ import { createHash } from 'node:crypto'
 import type { VerifiedToken } from '@allfitone/auth-provider'
 import { Hono, type Context } from 'hono'
 
-import type { BiologicalSex, PrimaryTrainingGoal } from '../domain/index.js'
+import type { BiologicalSex, FocusArea, PrimaryTrainingGoal } from '../domain/index.js'
 import { fail } from '../../../platform/http/index.js'
 import {
   OnboardingPreconditionError,
@@ -141,6 +141,7 @@ export function spaceOnboardingRoutes(
             },
             biological_sex: current.answers.biologicalSex,
             primary_training_goal: current.answers.primaryTrainingGoal,
+            focus_areas: current.answers.focusAreas,
           },
         },
         200,
@@ -236,6 +237,28 @@ export function spaceOnboardingRoutes(
         },
         200,
       )
+    } catch (error) {
+      return operationFailure(c, error)
+    }
+  })
+
+  // The emphasis needs its own route because it is a set: `OP-IDN-004` seals the
+  // live claim of the same attribute before inserting, so posting three zones
+  // there would have kept one and lost two in silence.
+  routes.post('/profile/focus-areas', async (c) => {
+    c.header('Cache-Control', 'no-store')
+
+    const token = await verified(c, verify)
+    if (!token) return fail(c, 'unauthenticated')
+
+    const body = await readJson(c)
+    const areas = readFocusAreas(body)
+    const command = commandContext(c, body)
+    if (!areas || !command) return fail(c, 'invalid-request')
+
+    try {
+      const declared = await onboarding().declareFocusAreas(token, { ...command, areas })
+      return c.json({ areas: declared }, 200)
     } catch (error) {
       return operationFailure(c, error)
     }
@@ -373,6 +396,43 @@ function readProfileClaim(
   return TRAINING_GOALS.includes(value as PrimaryTrainingGoal)
     ? { attributeCode: code, valueText: value as PrimaryTrainingGoal }
     : undefined
+}
+
+const FOCUS_AREAS: readonly FocusArea[] = [
+  'chest',
+  'back',
+  'shoulders',
+  'arms',
+  'abs',
+  'glutes',
+  'legs',
+  'whole_body',
+]
+
+/**
+ * The whole set, and every reason to refuse it. The empty array is refused because
+ * it would be indistinguishable from an unanswered step, and `whole_body` travels
+ * alone because it means "no emphasis" — a set that both says no emphasis and
+ * names a zone has no meaning to record.
+ *
+ * The database refuses all of this too. Checking here as well is not duplication
+ * for its own sake: it is what turns a constraint violation into `400`.
+ */
+function readFocusAreas(body: unknown): readonly FocusArea[] | undefined {
+  if (typeof body !== 'object' || body === null) return undefined
+  const keys = Object.keys(body).sort()
+  if (keys.length !== 1 || keys[0] !== 'areas') return undefined
+
+  const { areas } = body as { areas: unknown }
+  if (!Array.isArray(areas) || areas.length === 0 || areas.length > FOCUS_AREAS.length) {
+    return undefined
+  }
+  if (!areas.every((area): area is FocusArea => FOCUS_AREAS.includes(area as FocusArea))) {
+    return undefined
+  }
+  if (new Set(areas).size !== areas.length) return undefined
+  if (areas.includes('whole_body') && areas.length > 1) return undefined
+  return areas
 }
 
 function trimmedName(value: unknown): string | undefined {

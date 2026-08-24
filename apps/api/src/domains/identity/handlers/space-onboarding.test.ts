@@ -25,6 +25,7 @@ function emptyAnswers() {
     identity: { answered: false as boolean, value: null },
     biologicalSex: { answered: false as boolean, value: null },
     primaryTrainingGoal: { answered: false as boolean, value: null },
+    focusAreas: { answered: false as boolean, value: [] },
   }
 }
 
@@ -63,12 +64,14 @@ function appWith(overrides: Partial<SpaceOnboardingService> = {}): Hono {
       valueText: input.valueText,
       supersededClaimId: null,
     }),
+    declareFocusAreas: async (_token, input) => input.areas,
     readCurrentAttempt: async () => ({
       attempt: ATTEMPT,
       answers: {
         identity: { answered: false, value: null },
         biologicalSex: { answered: false, value: null },
         primaryTrainingGoal: { answered: false, value: null },
+        focusAreas: { answered: false, value: [] },
       },
     }),
     ...overrides,
@@ -131,6 +134,7 @@ describe('POST /space/v1/onboarding-attempts', () => {
             valueText: input.valueText,
             supersededClaimId: null,
           }),
+          declareFocusAreas: async (_token, input) => input.areas,
           readCurrentAttempt: async () => ({ attempt: ATTEMPT, answers: emptyAnswers() }),
         },
         async () => {
@@ -479,6 +483,7 @@ describe('GET /space/v1/onboarding-attempts/current', () => {
           },
           biologicalSex: { answered: true, value: 'female' as const },
           primaryTrainingGoal: { answered: true, value: 'build_muscle' as const },
+          focusAreas: { answered: true, value: ['chest', 'arms'] as const },
         },
       }),
     })
@@ -500,6 +505,7 @@ describe('GET /space/v1/onboarding-attempts/current', () => {
         },
         biological_sex: { answered: true, value: 'female' },
         primary_training_goal: { answered: true, value: 'build_muscle' },
+        focus_areas: { answered: true, value: ['chest', 'arms'] },
       },
     })
   })
@@ -518,6 +524,7 @@ describe('GET /space/v1/onboarding-attempts/current', () => {
         identity: { answered: false, value: null },
         biological_sex: { answered: false, value: null },
         primary_training_goal: { answered: false, value: null },
+        focus_areas: { answered: false, value: [] },
       },
     })
   })
@@ -691,6 +698,111 @@ describe('POST /space/v1/profile/claims', () => {
     const response = await post(appWith(), claims(), {
       body: { attribute_code: 'primary_training_goal', value_text: 'get_fit' },
     })
+
+    expect(response.headers.get('Cache-Control')).toBe('no-store')
+  })
+})
+
+describe('POST /space/v1/profile/focus-areas', () => {
+  const focus = () => '/space/v1/profile/focus-areas'
+
+  test('records the whole set and answers the emphasis in force', async () => {
+    const app = appWith({ declareFocusAreas: async (_token, input) => input.areas })
+
+    const response = await post(app, focus(), { body: { areas: ['chest', 'arms', 'abs'] } })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ areas: ['chest', 'arms', 'abs'] })
+  })
+
+  test('takes whole body on its own, which is how someone says no emphasis', async () => {
+    const app = appWith({ declareFocusAreas: async (_token, input) => input.areas })
+
+    const response = await post(app, focus(), { body: { areas: ['whole_body'] } })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ areas: ['whole_body'] })
+  })
+
+  test('refuses anything outside the shape, without reaching the service', async () => {
+    let called = false
+    const app = appWith({
+      declareFocusAreas: async (_token, input) => {
+        called = true
+        return input.areas
+      },
+    })
+
+    const bodies: unknown[] = [
+      {},
+      { areas: [] },
+      { areas: 'chest' },
+      { areas: ['chest', 'chest'] },
+      { areas: ['left_eyebrow'] },
+      { areas: ['Chest'] },
+      { areas: [null] },
+      // Whole body means no emphasis, so naming a zone alongside it records
+      // nothing coherent. The database refuses it too; refusing here is what
+      // makes it a 400 instead of a constraint violation.
+      { areas: ['whole_body', 'chest'] },
+      { areas: ['chest'], extra: 1 },
+    ]
+
+    for (const body of bodies) {
+      expect((await post(app, focus(), { body })).status).toBe(400)
+    }
+    expect(called).toBe(false)
+  })
+
+  test('refuses malformed command headers', async () => {
+    const app = appWith()
+    const body = { areas: ['legs'] }
+
+    const cases: Array<Record<string, string>> = [
+      { 'idempotency-key': 'not-a-uuid' },
+      { 'command-id': 'not-a-uuid' },
+      { 'idempotency-key': COMMAND_ID },
+    ]
+
+    for (const headers of cases) {
+      expect((await post(app, focus(), { headers, body })).status).toBe(400)
+    }
+  })
+
+  test('maps a forbidden actor to 403', async () => {
+    const app = appWith({
+      declareFocusAreas: async () => {
+        throw { code: '42501' }
+      },
+    })
+
+    expect((await post(app, focus(), { body: { areas: ['glutes'] } })).status).toBe(403)
+  })
+
+  test('maps a set the database rejects to 400', async () => {
+    const app = appWith({
+      declareFocusAreas: async () => {
+        throw { code: '23514' }
+      },
+    })
+
+    expect((await post(app, focus(), { body: { areas: ['back'] } })).status).toBe(400)
+  })
+
+  test('refuses without a valid token', async () => {
+    const app = new Hono()
+    app.route(
+      '/space/v1',
+      spaceOnboardingRoutes(undefined, async () => {
+        throw new Error('token rejected')
+      }),
+    )
+
+    expect((await post(app, focus(), { body: { areas: ['abs'] } })).status).toBe(401)
+  })
+
+  test('is never cached', async () => {
+    const response = await post(appWith(), focus(), { body: { areas: ['shoulders'] } })
 
     expect(response.headers.get('Cache-Control')).toBe('no-store')
   })

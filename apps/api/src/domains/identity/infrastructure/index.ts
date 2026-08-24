@@ -8,6 +8,7 @@ import { database } from '../../../platform/db/index.js'
 import { measureStudioRequestPhase } from '../../../platform/observability/index.js'
 import type {
   BiologicalSex,
+  FocusArea,
   IdentitySessionDatabase,
   IdentityWebhookDatabase,
   IdentityOnboardingDatabase,
@@ -41,6 +42,7 @@ type RawOnboardingAnswers = {
   }
   biological_sex: { answered: boolean; value: BiologicalSex | null }
   primary_training_goal: { answered: boolean; value: PrimaryTrainingGoal | null }
+  focus_areas: { answered: boolean; value: FocusArea[] }
 }
 
 /** No open attempt still answers the question: nothing has been answered. */
@@ -49,6 +51,7 @@ function emptyAnswers(): OnboardingAnswers {
     identity: { answered: false, value: null },
     biologicalSex: { answered: false, value: null },
     primaryTrainingGoal: { answered: false, value: null },
+    focusAreas: { answered: false, value: [] },
   }
 }
 
@@ -354,6 +357,27 @@ export function createIdentityOnboardingDatabase(): IdentityOnboardingDatabase {
       })
     },
 
+    async declareFocusAreas(input) {
+      return sql.begin(async (transaction) => {
+        await setAccountActor(transaction, input.accountId)
+        // The array is the shape of the command, not of the storage: one row per
+        // zone, so several stay in force at once. The function answers the set it
+        // left behind, which on a replay is simply the set in force.
+        const [row] = await transaction<{ areas: FocusArea[] }[]>`
+          select areas
+          from identity.declare_focus_areas(
+            ${input.accountId}::uuid,
+            ${input.areas as FocusArea[]}::text[],
+            ${input.idempotencyKey}::uuid,
+            ${input.commandId}::uuid,
+            ${input.requestHash}
+          )
+        `
+        if (!row) throw new Error('PostgreSQL did not record the focus areas')
+        return row.areas
+      })
+    },
+
     async readCurrentAttempt(accountId) {
       return sql.begin(async (transaction) => {
         await setAccountActor(transaction, accountId)
@@ -392,6 +416,7 @@ export function createIdentityOnboardingDatabase(): IdentityOnboardingDatabase {
             },
             biologicalSex: row.answers.biological_sex,
             primaryTrainingGoal: row.answers.primary_training_goal,
+            focusAreas: row.answers.focus_areas,
           },
         }
       })

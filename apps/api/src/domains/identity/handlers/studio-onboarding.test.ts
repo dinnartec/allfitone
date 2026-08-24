@@ -56,12 +56,14 @@ function onboarding(overrides: Partial<OnboardingService> = {}): OnboardingServi
       valueText: input.valueText,
       supersededClaimId: null,
     }),
+    declareFocusAreas: async (_actor, input) => input.areas,
     readCurrentAttempt: async () => ({
       attempt: null,
       answers: {
         identity: { answered: false, value: null },
         biologicalSex: { answered: false, value: null },
         primaryTrainingGoal: { answered: false, value: null },
+        focusAreas: { answered: false, value: [] },
       },
     }),
     complete: async () => '0198d000-0000-7000-8000-000000000031',

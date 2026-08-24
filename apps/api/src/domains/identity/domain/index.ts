@@ -80,6 +80,14 @@ export type PrimaryTrainingGoal =
   'lose_weight' | 'build_muscle' | 'get_fit' | 'run_a_race' | 'maintain'
 
 /**
+ * The seven zones of HU-SP-097, plus `whole_body`, which is a member and not an
+ * empty set: it says "no emphasis, my goal decides". Without it that answer and
+ * never having answered would both be zero members.
+ */
+export type FocusArea =
+  'chest' | 'back' | 'shoulders' | 'arms' | 'abs' | 'glutes' | 'legs' | 'whole_body'
+
+/**
  * One entry per onboarding step, every one the same shape. `answered` is separate
  * from the value because a step can be answered without leaving one: declining the
  * sex records the refusal as an absence, and a value alone could not tell that
@@ -94,6 +102,12 @@ export interface OnboardingAnswers {
   identity: OnboardingAnswer<PendingFitnessId>
   biologicalSex: OnboardingAnswer<BiologicalSex>
   primaryTrainingGoal: OnboardingAnswer<PrimaryTrainingGoal>
+  /**
+   * The one answer that is a set. Its value is never null — an unanswered step is
+   * no members — so it does not use `OnboardingAnswer`, whose nullable value would
+   * invent a third state this step does not have.
+   */
+  focusAreas: { answered: boolean; value: readonly FocusArea[] }
 }
 
 export interface CurrentOnboardingAttempt {
@@ -142,6 +156,9 @@ export interface IdentityOnboardingDatabase {
       valueText: PrimaryTrainingGoal
     },
   ): Promise<ProfileClaim>
+  declareFocusAreas(
+    input: CommandContext & { accountId: string; areas: readonly FocusArea[] },
+  ): Promise<readonly FocusArea[]>
   readCurrentAttempt(accountId: string): Promise<CurrentOnboardingAttempt>
   activatePerson(
     input: CommandContext & {
