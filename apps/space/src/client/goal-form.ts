@@ -61,9 +61,31 @@ export function heroGeometry(rowWidth: number, screenHeight: number): HeroGeomet
   return { cardWidth, cardHeight: Math.min(cardWidth / HERO_ASPECT, affordable) }
 }
 
-/** Which body to show, from what the person declared on the previous screen. */
-export function bodyVariant(biologicalSex: 'male' | 'female' | null): 'male' | 'female' {
-  return biologicalSex === 'female' ? 'female' : 'male'
+/**
+ * When the sex question is declined, the artwork is mixed rather than defaulting
+ * to one sex for everything. A screen where every goal shows a man would be a
+ * statement, and declining is precisely the answer that asks us not to make one.
+ * The split is decided per goal so the screen as a whole reads as neither.
+ */
+const DECLINED_VARIANT: Record<TrainingGoal, 'male' | 'female'> = {
+  lose_weight: 'female',
+  build_muscle: 'male',
+  get_fit: 'female',
+  run_a_race: 'male',
+  maintain: 'male',
+}
+
+/**
+ * Which body to show. Declared female brings the woman and declared male brings
+ * the man; declining brings the mix above.
+ */
+export function bodyVariant(
+  biologicalSex: 'male' | 'female' | null,
+  goal: TrainingGoal,
+): 'male' | 'female' {
+  if (biologicalSex === 'female') return 'female'
+  if (biologicalSex === 'male') return 'male'
+  return DECLINED_VARIANT[goal]
 }
 
 export interface GoalSubmission {

@@ -54,16 +54,34 @@ describe('heroGeometry', () => {
 })
 
 describe('bodyVariant', () => {
-  test('brings the woman when that is what was declared', () => {
-    expect(bodyVariant('female')).toBe('female')
+  test('brings the woman for every goal when that is what was declared', () => {
+    for (const goal of TRAINING_GOALS) {
+      expect(bodyVariant('female', goal)).toBe('female')
+    }
   })
 
-  test('brings the man for male', () => {
-    expect(bodyVariant('male')).toBe('male')
+  test('brings the man for every goal when that is what was declared', () => {
+    for (const goal of TRAINING_GOALS) {
+      expect(bodyVariant('male', goal)).toBe('male')
+    }
   })
 
-  test('brings the man when the question was declined, because there is no neutral body', () => {
-    expect(bodyVariant(null)).toBe('male')
+  test('mixes the artwork when the question was declined', () => {
+    // A screen where every goal showed one sex would be a statement, and
+    // declining is the answer that asks us not to make one.
+    const variants = TRAINING_GOALS.map((goal) => bodyVariant(null, goal))
+
+    expect(new Set(variants).size).toBe(2)
+  })
+
+  test('keeps the declined mix stable, so the screen does not shuffle between visits', () => {
+    expect(TRAINING_GOALS.map((goal) => bodyVariant(null, goal))).toEqual([
+      'female',
+      'male',
+      'female',
+      'male',
+      'male',
+    ])
   })
 })
 

@@ -156,7 +156,7 @@ export default function OnboardingTrainingGoal() {
 
   const [rowWidth, setRowWidth] = useState(0)
   const [goal, setGoal] = useState<TrainingGoal | undefined>(undefined)
-  const [variant, setVariant] = useState<'male' | 'female'>('male')
+  const [declaredSex, setDeclaredSex] = useState<'male' | 'female' | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [sessionExpired, setSessionExpired] = useState(false)
   const [failure, setFailure] = useState<string | undefined>(undefined)
@@ -177,7 +177,7 @@ export default function OnboardingTrainingGoal() {
           router.replace(owed)
           return
         }
-        setVariant(bodyVariant(current.answers.biological_sex.value ?? null))
+        setDeclaredSex(current.answers.biological_sex.value ?? null)
         const declared = current.answers.primary_training_goal.value
         if (declared) setGoal(declared)
       })
@@ -238,7 +238,7 @@ export default function OnboardingTrainingGoal() {
         <View onLayout={(event) => setRowWidth(event.nativeEvent.layout.width)}>
           {goalSlots(goal).map((slot) => {
             const entry = GOALS[slot.goal]
-            const bodies = entry[variant]
+            const bodies = entry[bodyVariant(declaredSex, slot.goal)]
 
             // The card opens where the row was, so nothing below it moves.
             if (slot.expanded && cardWidth > 0) {
