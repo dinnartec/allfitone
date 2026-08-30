@@ -28,11 +28,15 @@ select is((
 ), 18::bigint, 'T-PLN-RLS-09 every new relation enables and forces RLS');
 
 select is((
-  select count(*)
+  -- Cuenta relaciones con política de dueño, no políticas. Contando políticas, añadir
+  -- una segunda legítima a una de estas tablas rompía la prueba sin que nada se
+  -- hubiera degradado: el nombre decía una cosa y la consulta medía otra.
+  select count(distinct relation.relname)
   from pg_policy as policy
   join pg_class as relation on relation.oid = policy.polrelid
   join pg_namespace as namespace on namespace.oid = relation.relnamespace
   where namespace.nspname in ('catalog', 'planning')
+    and policy.polroles @> array[(select oid from pg_roles where rolname = 'allfit_owner')]
     and relation.relname in (
       'disciplines', 'activity_types', 'movements', 'units', 'result_contracts',
       'activity_type_result_contracts', 'session_templates', 'session_template_drafts',
