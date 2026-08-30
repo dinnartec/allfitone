@@ -90,6 +90,40 @@ export type PrimaryTrainingGoal =
 export type TrainingExperience = 'starting' | 'some_practice' | 'experienced'
 
 /**
+ * The two body metrics V1 records. The `body_` prefix is not decoration: `metric_code`
+ * also names execution results, where `weight` is the load on the bar.
+ */
+export type BodyMetric = 'body_weight' | 'body_height'
+export type MassUnit = 'kg' | 'lb'
+export type LengthUnit = 'cm' | 'in'
+
+/**
+ * One measurement, and the unit is tied to the metric so a weight cannot arrive in
+ * centimetres. The value is **what the person read**, not the canonical figure: the
+ * conversion happens in the database, where the factor lives.
+ */
+export type BodyProgressDeclaration =
+  | { metricCode: 'body_weight'; value: number; unit: MassUnit; measuredOn: string }
+  | { metricCode: 'body_height'; value: number; unit: LengthUnit; measuredOn: string }
+
+/** What the database recorded, in canonical units, plus what she actually read. */
+export interface BodyProgressRecord {
+  id: string
+  metricCode: BodyMetric
+  value: number
+  unit: string
+  /** Null when she was already using the canonical unit: nothing to preserve. */
+  originalValue: number | null
+  originalUnit: string | null
+}
+
+/** The latest of each metric. Either can be null on its own, mid-pair. */
+export interface BodyMeasures {
+  weight: { value: number; unit: string; originalUnit: string | null } | null
+  height: { value: number; unit: string; originalUnit: string | null } | null
+}
+
+/**
  * The seven zones of HU-SP-097, plus `whole_body`, which is a member and not an
  * empty set: it says "no emphasis, my goal decides". Without it that answer and
  * never having answered would both be zero members.
@@ -113,6 +147,12 @@ export interface OnboardingAnswers {
   biologicalSex: OnboardingAnswer<BiologicalSex>
   primaryTrainingGoal: OnboardingAnswer<PrimaryTrainingGoal>
   trainingExperience: OnboardingAnswer<TrainingExperience>
+  /**
+   * Answered when both were recorded **or** the step was skipped. A half-finished
+   * pair leaves the step owed and still returns what it has, so the ruler reopens
+   * where she left it — which is why this cannot be derived from presence alone.
+   */
+  bodyMeasures: { answered: boolean; value: BodyMeasures | null }
   /**
    * The one answer that is a set. Its value is never null — an unanswered step is
    * no members — so it does not use `OnboardingAnswer`, whose nullable value would
@@ -173,6 +213,15 @@ export interface IdentityOnboardingDatabase {
   declareFocusAreas(
     input: CommandContext & { accountId: string; areas: readonly FocusArea[] },
   ): Promise<readonly FocusArea[]>
+  recordBodyProgress(
+    input: CommandContext & { accountId: string } & BodyProgressDeclaration,
+  ): Promise<BodyProgressRecord>
+  /** No command context: the primary key of the skip is the whole idempotency. */
+  skipOnboardingStep(input: {
+    accountId: string
+    attemptId: string
+    stepCode: string
+  }): Promise<void>
   readCurrentAttempt(accountId: string): Promise<CurrentOnboardingAttempt>
   activatePerson(
     input: CommandContext & {

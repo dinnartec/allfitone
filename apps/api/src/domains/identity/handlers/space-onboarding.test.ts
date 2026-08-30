@@ -42,6 +42,7 @@ function emptyAnswers() {
     primaryTrainingGoal: { answered: false as boolean, value: null },
     trainingExperience: { answered: false as boolean, value: null },
     focusAreas: { answered: false as boolean, value: [] },
+    bodyMeasures: { answered: false, value: null },
   }
 }
 
@@ -77,6 +78,15 @@ function appWith(overrides: Partial<SpaceOnboardingService> = {}): Hono {
     declareBiologicalSex: async (_token, input) => input.biologicalSex,
     declareProfileClaim: async (_token, input) => echoClaim(input),
     declareFocusAreas: async (_token, input) => input.areas,
+    recordBodyProgress: async (_actor, input) => ({
+      id: '019fe000-0000-7000-8000-000000000001',
+      metricCode: input.metricCode,
+      value: input.value,
+      unit: input.unit,
+      originalValue: null,
+      originalUnit: null,
+    }),
+    skipStep: async () => undefined,
     readCurrentAttempt: async () => ({
       attempt: ATTEMPT,
       answers: {
@@ -85,6 +95,7 @@ function appWith(overrides: Partial<SpaceOnboardingService> = {}): Hono {
         primaryTrainingGoal: { answered: false, value: null },
         trainingExperience: { answered: false, value: null },
         focusAreas: { answered: false, value: [] },
+        bodyMeasures: { answered: false, value: null },
       },
     }),
     ...overrides,
@@ -144,6 +155,15 @@ describe('POST /space/v1/onboarding-attempts', () => {
           declareBiologicalSex: async (_token, input) => input.biologicalSex,
           declareProfileClaim: async (_token, input) => echoClaim(input),
           declareFocusAreas: async (_token, input) => input.areas,
+          recordBodyProgress: async (_actor, input) => ({
+            id: '019fe000-0000-7000-8000-000000000001',
+            metricCode: input.metricCode,
+            value: input.value,
+            unit: input.unit,
+            originalValue: null,
+            originalUnit: null,
+          }),
+          skipStep: async () => undefined,
           readCurrentAttempt: async () => ({ attempt: ATTEMPT, answers: emptyAnswers() }),
         },
         async () => {
@@ -483,6 +503,15 @@ describe('GET /space/v1/onboarding-attempts/current', () => {
 
   test('returns the open attempt and whatever identity was already declared', async () => {
     const app = appWith({
+      recordBodyProgress: async (_actor, input) => ({
+        id: '019fe000-0000-7000-8000-000000000001',
+        metricCode: input.metricCode,
+        value: input.value,
+        unit: input.unit,
+        originalValue: null,
+        originalUnit: null,
+      }),
+      skipStep: async () => undefined,
       readCurrentAttempt: async () => ({
         attempt: ATTEMPT,
         answers: {
@@ -494,6 +523,7 @@ describe('GET /space/v1/onboarding-attempts/current', () => {
           primaryTrainingGoal: { answered: true, value: 'build_muscle' as const },
           trainingExperience: { answered: true, value: 'experienced' as const },
           focusAreas: { answered: true, value: ['chest', 'arms'] as const },
+          bodyMeasures: { answered: false, value: null },
         },
       }),
     })
@@ -517,12 +547,22 @@ describe('GET /space/v1/onboarding-attempts/current', () => {
         primary_training_goal: { answered: true, value: 'build_muscle' },
         training_experience: { answered: true, value: 'experienced' },
         focus_areas: { answered: true, value: ['chest', 'arms'] },
+        body_measures: { answered: false, value: null },
       },
     })
   })
 
   test('answers nulls rather than an error when nothing was started', async () => {
     const app = appWith({
+      recordBodyProgress: async (_actor, input) => ({
+        id: '019fe000-0000-7000-8000-000000000001',
+        metricCode: input.metricCode,
+        value: input.value,
+        unit: input.unit,
+        originalValue: null,
+        originalUnit: null,
+      }),
+      skipStep: async () => undefined,
       readCurrentAttempt: async () => ({ attempt: null, answers: emptyAnswers() }),
     })
 
@@ -537,6 +577,7 @@ describe('GET /space/v1/onboarding-attempts/current', () => {
         primary_training_goal: { answered: false, value: null },
         training_experience: { answered: false, value: null },
         focus_areas: { answered: false, value: [] },
+        body_measures: { answered: false, value: null },
       },
     })
   })
@@ -792,6 +833,177 @@ describe('POST /space/v1/profile/claims — the training experience variant', ()
     })
 
     expect(response.status).toBe(400)
+  })
+})
+
+describe('POST /space/v1/body-progress', () => {
+  const route = () => '/space/v1/body-progress'
+  const measured = '2026-08-24'
+
+  test('records a weight and answers what the server computed', async () => {
+    const app = appWith({
+      recordBodyProgress: async (_token, input) => ({
+        id: '019fe000-0000-7000-8000-0000000000aa',
+        metricCode: input.metricCode,
+        value: 73.93555631,
+        unit: 'kg',
+        originalValue: input.value,
+        originalUnit: input.unit,
+      }),
+    })
+
+    const response = await post(app, route(), {
+      body: { metric_code: 'body_weight', value: 163, unit: 'lb', measured_on: measured },
+    })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({
+      id: '019fe000-0000-7000-8000-0000000000aa',
+      metric_code: 'body_weight',
+      value: 73.93555631,
+      unit: 'kg',
+      original_value: 163,
+      original_unit: 'lb',
+    })
+  })
+
+  test('takes both metrics in either of their units', async () => {
+    const app = appWith()
+    const bodies = [
+      { metric_code: 'body_weight', value: 74, unit: 'kg', measured_on: measured },
+      { metric_code: 'body_weight', value: 163, unit: 'lb', measured_on: measured },
+      { metric_code: 'body_height', value: 170, unit: 'cm', measured_on: measured },
+      { metric_code: 'body_height', value: 67, unit: 'in', measured_on: measured },
+    ]
+
+    for (const body of bodies) {
+      expect((await post(app, route(), { body })).status).toBe(200)
+    }
+  })
+
+  test('refuses a unit from the other dimension, without reaching the service', async () => {
+    let called = false
+    const app = appWith({
+      recordBodyProgress: async (_token, input) => {
+        called = true
+        return {
+          id: '019fe000-0000-7000-8000-0000000000ab',
+          metricCode: input.metricCode,
+          value: input.value,
+          unit: input.unit,
+          originalValue: null,
+          originalUnit: null,
+        }
+      },
+    })
+
+    const bodies: unknown[] = [
+      // A weight in centimetres is the mistake the union exists to stop.
+      { metric_code: 'body_weight', value: 170, unit: 'cm', measured_on: measured },
+      { metric_code: 'body_height', value: 74, unit: 'kg', measured_on: measured },
+      { metric_code: 'body_fat', value: 18, unit: 'kg', measured_on: measured },
+      { metric_code: 'body_weight', value: 0, unit: 'kg', measured_on: measured },
+      { metric_code: 'body_weight', value: -74, unit: 'kg', measured_on: measured },
+      { metric_code: 'body_weight', value: '74', unit: 'kg', measured_on: measured },
+      { metric_code: 'body_weight', value: 74, unit: 'kg', measured_on: '24-08-2026' },
+      { metric_code: 'body_weight', value: 74, unit: 'kg' },
+      { metric_code: 'body_weight', value: 74, unit: 'kg', measured_on: measured, extra: 1 },
+    ]
+
+    for (const body of bodies) {
+      expect((await post(app, route(), { body })).status).toBe(400)
+    }
+    expect(called).toBe(false)
+  })
+
+  test('maps a measurement the database rejects to 400, and a foreign actor to 403', async () => {
+    const refused = appWith({
+      recordBodyProgress: async () => {
+        throw { code: '23514' }
+      },
+    })
+    const forbidden = appWith({
+      recordBodyProgress: async () => {
+        throw { code: '42501' }
+      },
+    })
+    const body = { metric_code: 'body_weight', value: 74, unit: 'kg', measured_on: measured }
+
+    expect((await post(refused, route(), { body })).status).toBe(400)
+    expect((await post(forbidden, route(), { body })).status).toBe(403)
+  })
+
+  test('is never cached', async () => {
+    const response = await post(appWith(), route(), {
+      body: { metric_code: 'body_weight', value: 74, unit: 'kg', measured_on: measured },
+    })
+
+    expect(response.headers.get('Cache-Control')).toBe('no-store')
+  })
+})
+
+describe('POST /space/v1/onboarding-attempts/{id}/skips', () => {
+  const route = () => `/space/v1/onboarding-attempts/${ATTEMPT.id}/skips`
+
+  test('records the skip and answers no content', async () => {
+    let skipped: { attemptId: string; stepCode: string } | undefined
+    const app = appWith({
+      skipStep: async (_token, input) => {
+        skipped = input
+      },
+    })
+
+    const response = await post(app, route(), { body: { step_code: 'body_measures' } })
+
+    expect(response.status).toBe(204)
+    expect(skipped).toEqual({ attemptId: ATTEMPT.id, stepCode: 'body_measures' })
+  })
+
+  test('refuses a step that is not skippable, without reaching the service', async () => {
+    let called = false
+    const app = appWith({
+      skipStep: async () => {
+        called = true
+      },
+    })
+
+    const bodies: unknown[] = [
+      // The age, the name and the terms are the condition for a person to exist at
+      // all, so they can never join the skippable list.
+      { step_code: 'identity' },
+      { step_code: 'age' },
+      { step_code: 'invented' },
+      { step_code: 'body_measures', extra: 1 },
+      { step_code: null },
+      {},
+    ]
+
+    for (const body of bodies) {
+      expect((await post(app, route(), { body })).status).toBe(400)
+    }
+    expect(called).toBe(false)
+  })
+
+  test('refuses an attempt id that is not a v7 uuid', async () => {
+    const response = await post(appWith(), '/space/v1/onboarding-attempts/not-a-uuid/skips', {
+      body: { step_code: 'body_measures' },
+    })
+
+    expect(response.status).toBe(400)
+  })
+
+  test('refuses without a valid token', async () => {
+    const app = new Hono()
+    app.route(
+      '/space/v1',
+      spaceOnboardingRoutes(undefined, async () => {
+        throw new Error('token rejected')
+      }),
+    )
+
+    const response = await post(app, route(), { body: { step_code: 'body_measures' } })
+
+    expect(response.status).toBe(401)
   })
 })
 

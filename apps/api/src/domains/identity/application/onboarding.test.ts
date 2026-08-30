@@ -46,6 +46,7 @@ function emptyAnswers() {
     primaryTrainingGoal: { answered: false as boolean, value: null },
     trainingExperience: { answered: false as boolean, value: null },
     focusAreas: { answered: false as boolean, value: [] },
+    bodyMeasures: { answered: false, value: null },
   }
 }
 
@@ -110,6 +111,15 @@ function serviceWith(
       actors.push(actor.accountId)
       return input.areas
     },
+    recordBodyProgress: async (_actor, input) => ({
+      id: '019fe000-0000-7000-8000-000000000001',
+      metricCode: input.metricCode,
+      value: input.value,
+      unit: input.unit,
+      originalValue: null,
+      originalUnit: null,
+    }),
+    skipStep: async () => undefined,
     readCurrentAttempt: async (actor) => {
       actors.push(actor.accountId)
       return { attempt: ATTEMPT, answers: emptyAnswers() }

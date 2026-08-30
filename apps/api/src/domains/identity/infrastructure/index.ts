@@ -8,6 +8,8 @@ import { database } from '../../../platform/db/index.js'
 import { measureStudioRequestPhase } from '../../../platform/observability/index.js'
 import type {
   BiologicalSex,
+  BodyMeasures,
+  BodyProgressRecord,
   FocusArea,
   IdentitySessionDatabase,
   IdentityWebhookDatabase,
@@ -45,6 +47,21 @@ type RawOnboardingAnswers = {
   primary_training_goal: { answered: boolean; value: PrimaryTrainingGoal | null }
   training_experience: { answered: boolean; value: TrainingExperience | null }
   focus_areas: { answered: boolean; value: FocusArea[] }
+  body_measures: { answered: boolean; value: RawBodyMeasures | null }
+}
+
+/** Snake case because it is the wire shape the function builds, not the domain one. */
+type RawBodyMeasures = {
+  weight: { value: number; unit: string; original_unit: string | null } | null
+  height: { value: number; unit: string; original_unit: string | null } | null
+}
+
+/** The one answer whose value needs mapping, because its keys are snake case. */
+function toBodyMeasures(raw: RawBodyMeasures | null): BodyMeasures | null {
+  if (!raw) return null
+  const side = (m: RawBodyMeasures['weight']) =>
+    m ? { value: m.value, unit: m.unit, originalUnit: m.original_unit } : null
+  return { weight: side(raw.weight), height: side(raw.height) }
 }
 
 /** No open attempt still answers the question: nothing has been answered. */
@@ -55,6 +72,7 @@ function emptyAnswers(): OnboardingAnswers {
     primaryTrainingGoal: { answered: false, value: null },
     trainingExperience: { answered: false, value: null },
     focusAreas: { answered: false, value: [] },
+    bodyMeasures: { answered: false, value: null },
   }
 }
 
@@ -386,6 +404,60 @@ export function createIdentityOnboardingDatabase(): IdentityOnboardingDatabase {
       })
     },
 
+    async recordBodyProgress(input) {
+      return sql.begin(async (transaction) => {
+        await setAccountActor(transaction, input.accountId)
+        // What she read goes over the wire; the canonical figure comes back computed
+        // from the unit catalogue, which is the only place the factor lives.
+        const [row] = await transaction<
+          {
+            record_id: string
+            metric_code: BodyProgressRecord['metricCode']
+            value_numeric: string
+            unit_code: string
+            original_value: string | null
+            original_unit_code: string | null
+          }[]
+        >`
+          select record_id, metric_code, value_numeric, unit_code, original_value, original_unit_code
+          from identity.record_body_progress(
+            ${input.accountId}::uuid,
+            ${input.metricCode},
+            ${input.value}::numeric,
+            ${input.unit},
+            ${input.measuredOn}::date,
+            ${input.idempotencyKey}::uuid,
+            ${input.commandId}::uuid,
+            ${input.requestHash}
+          )
+        `
+        if (!row) throw new Error('PostgreSQL did not record the body measurement')
+        return {
+          id: row.record_id,
+          metricCode: row.metric_code,
+          // `numeric` arrives as a string so no precision is lost in transit; the
+          // contract carries a number, so the widening happens once, here.
+          value: Number(row.value_numeric),
+          unit: row.unit_code,
+          originalValue: row.original_value === null ? null : Number(row.original_value),
+          originalUnit: row.original_unit_code,
+        }
+      })
+    },
+
+    async skipOnboardingStep(input) {
+      await sql.begin(async (transaction) => {
+        await setAccountActor(transaction, input.accountId)
+        await transaction`
+          select identity.skip_onboarding_step(
+            ${input.accountId}::uuid,
+            ${input.attemptId}::uuid,
+            ${input.stepCode}
+          )
+        `
+      })
+    },
+
     async readCurrentAttempt(accountId) {
       return sql.begin(async (transaction) => {
         await setAccountActor(transaction, accountId)
@@ -426,6 +498,10 @@ export function createIdentityOnboardingDatabase(): IdentityOnboardingDatabase {
             primaryTrainingGoal: row.answers.primary_training_goal,
             trainingExperience: row.answers.training_experience,
             focusAreas: row.answers.focus_areas,
+            bodyMeasures: {
+              answered: row.answers.body_measures.answered,
+              value: toBodyMeasures(row.answers.body_measures.value),
+            },
           },
         }
       })

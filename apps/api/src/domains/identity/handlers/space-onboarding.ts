@@ -22,7 +22,10 @@ import { Hono, type Context } from 'hono'
 
 import type {
   BiologicalSex,
+  BodyProgressDeclaration,
   FocusArea,
+  LengthUnit,
+  MassUnit,
   PrimaryTrainingGoal,
   ProfileClaimDeclaration,
   TrainingExperience,
@@ -149,6 +152,15 @@ export function spaceOnboardingRoutes(
             primary_training_goal: current.answers.primaryTrainingGoal,
             training_experience: current.answers.trainingExperience,
             focus_areas: current.answers.focusAreas,
+            body_measures: {
+              answered: current.answers.bodyMeasures.answered,
+              value: current.answers.bodyMeasures.value
+                ? {
+                    weight: side(current.answers.bodyMeasures.value.weight),
+                    height: side(current.answers.bodyMeasures.value.height),
+                  }
+                : null,
+            },
           },
         },
         200,
@@ -267,7 +279,68 @@ export function spaceOnboardingRoutes(
     }
   })
 
+  // One measurement per call: OP-IDN-006 fixes the record's id as the Command-Id, so
+  // weight and height are two commands. They are independent measurements anyway.
+  routes.post('/body-progress', async (c) => {
+    c.header('Cache-Control', 'no-store')
+
+    const token = await verified(c, verify)
+    if (!token) return fail(c, 'unauthenticated')
+
+    const body = await readJson(c)
+    const declaration = readBodyProgress(body)
+    const command = commandContext(c, body)
+    if (!declaration || !command) return fail(c, 'invalid-request')
+
+    try {
+      const record = await onboarding().recordBodyProgress(token, { ...command, ...declaration })
+      return c.json(
+        {
+          id: record.id,
+          metric_code: record.metricCode,
+          value: record.value,
+          unit: record.unit,
+          original_value: record.originalValue,
+          original_unit: record.originalUnit,
+        },
+        200,
+      )
+    } catch (error) {
+      return operationFailure(c, error)
+    }
+  })
+
+  // Skipping carries no idempotency headers: the record's primary key is the whole
+  // guarantee, and there is no body a replay could contradict.
+  routes.post('/onboarding-attempts/:attemptId/skips', async (c) => {
+    c.header('Cache-Control', 'no-store')
+
+    const token = await verified(c, verify)
+    if (!token) return fail(c, 'unauthenticated')
+
+    const attemptId = c.req.param('attemptId')
+    if (!UUID_V7.test(attemptId)) return fail(c, 'invalid-request')
+
+    const stepCode = readSkip(await readJson(c))
+    if (!stepCode) return fail(c, 'invalid-request')
+
+    try {
+      await onboarding().skipStep(token, { attemptId, stepCode })
+      return c.body(null, 204)
+    } catch (error) {
+      return operationFailure(c, error)
+    }
+  })
+
   return routes
+}
+
+/** The answer shape the wire uses, which differs only in the key casing. */
+function side(
+  measure: { value: number; unit: string; originalUnit: string | null } | null,
+): { value: number; unit: string; original_unit: string | null } | null {
+  if (!measure) return null
+  return { value: measure.value, unit: measure.unit, original_unit: measure.originalUnit }
 }
 
 async function verified(c: Context, verify: TokenVerifier): Promise<VerifiedToken | undefined> {
@@ -454,6 +527,59 @@ function readFocusAreas(body: unknown): readonly FocusArea[] | undefined {
   if (new Set(areas).size !== areas.length) return undefined
   if (areas.includes('whole_body') && areas.length > 1) return undefined
   return areas
+}
+
+const MASS_UNITS: readonly MassUnit[] = ['kg', 'lb']
+const LENGTH_UNITS: readonly LengthUnit[] = ['cm', 'in']
+
+/** Steps `HU-SP-015` allows skipping. Never the age, the name or the terms. */
+const SKIPPABLE_STEPS: readonly string[] = ['body_measures']
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
+
+/**
+ * One variant per metric, and the unit has to belong to the metric's dimension. The
+ * database refuses a weight in centimetres too; refusing it here is what makes it a
+ * `400` rather than a constraint violation.
+ */
+function readBodyProgress(body: unknown): BodyProgressDeclaration | undefined {
+  if (typeof body !== 'object' || body === null) return undefined
+  const keys = Object.keys(body).sort()
+  if (keys.length !== 4) return undefined
+  if (keys[0] !== 'measured_on' || keys[1] !== 'metric_code') return undefined
+  if (keys[2] !== 'unit' || keys[3] !== 'value') return undefined
+
+  const {
+    metric_code: metric,
+    value,
+    unit,
+    measured_on: measuredOn,
+  } = body as { metric_code: unknown; value: unknown; unit: unknown; measured_on: unknown }
+
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return undefined
+  if (typeof unit !== 'string') return undefined
+  if (typeof measuredOn !== 'string' || !ISO_DATE.test(measuredOn)) return undefined
+  if (Number.isNaN(Date.parse(measuredOn))) return undefined
+
+  if (metric === 'body_weight') {
+    return MASS_UNITS.includes(unit as MassUnit)
+      ? { metricCode: metric, value, unit: unit as MassUnit, measuredOn }
+      : undefined
+  }
+  if (metric === 'body_height') {
+    return LENGTH_UNITS.includes(unit as LengthUnit)
+      ? { metricCode: metric, value, unit: unit as LengthUnit, measuredOn }
+      : undefined
+  }
+  return undefined
+}
+
+function readSkip(body: unknown): string | undefined {
+  if (typeof body !== 'object' || body === null) return undefined
+  const keys = Object.keys(body)
+  if (keys.length !== 1 || keys[0] !== 'step_code') return undefined
+  const { step_code: step } = body as { step_code: unknown }
+  return typeof step === 'string' && SKIPPABLE_STEPS.includes(step) ? step : undefined
 }
 
 function trimmedName(value: unknown): string | undefined {

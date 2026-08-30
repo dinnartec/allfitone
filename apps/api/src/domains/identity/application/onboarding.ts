@@ -29,6 +29,8 @@ import type {
   AccountActor,
   AdultEligibilityEvidence,
   BiologicalSex,
+  BodyProgressDeclaration,
+  BodyProgressRecord,
   CommandContext,
   CurrentOnboardingAttempt,
   FocusArea,
@@ -71,6 +73,11 @@ export interface OnboardingService {
     actor: AccountActor,
     input: CommandContext & { areas: readonly FocusArea[] },
   ): Promise<readonly FocusArea[]>
+  recordBodyProgress(
+    actor: AccountActor,
+    input: CommandContext & BodyProgressDeclaration,
+  ): Promise<BodyProgressRecord>
+  skipStep(actor: AccountActor, input: { attemptId: string; stepCode: string }): Promise<void>
   readCurrentAttempt(actor: AccountActor): Promise<CurrentOnboardingAttempt>
   complete(
     actor: AccountActor,
@@ -98,6 +105,10 @@ export function createOnboardingService(database: IdentityOnboardingDatabase): O
       database.declareProfileClaim({ accountId: actor.accountId, ...input }),
     declareFocusAreas: (actor, input) =>
       database.declareFocusAreas({ accountId: actor.accountId, ...input }),
+    recordBodyProgress: (actor, input) =>
+      database.recordBodyProgress({ accountId: actor.accountId, ...input }),
+    skipStep: (actor, input) =>
+      database.skipOnboardingStep({ accountId: actor.accountId, ...input }),
     readCurrentAttempt: (actor) => database.readCurrentAttempt(actor.accountId),
     complete: (actor, input) => database.activatePerson({ accountId: actor.accountId, ...input }),
   }
@@ -154,6 +165,11 @@ export interface SpaceOnboardingService {
     token: VerifiedToken,
     input: CommandContext & { areas: readonly FocusArea[] },
   ): Promise<readonly FocusArea[]>
+  recordBodyProgress(
+    token: VerifiedToken,
+    input: CommandContext & BodyProgressDeclaration,
+  ): Promise<BodyProgressRecord>
+  skipStep(token: VerifiedToken, input: { attemptId: string; stepCode: string }): Promise<void>
   readCurrentAttempt(token: VerifiedToken): Promise<CurrentOnboardingAttempt>
 }
 
@@ -203,6 +219,14 @@ export function createSpaceOnboardingService(
 
     async declareFocusAreas(token, input) {
       return dependencies.onboarding.declareFocusAreas(await actorFor(token), input)
+    },
+
+    async recordBodyProgress(token, input) {
+      return dependencies.onboarding.recordBodyProgress(await actorFor(token), input)
+    },
+
+    async skipStep(token, input) {
+      return dependencies.onboarding.skipStep(await actorFor(token), input)
     },
 
     async declareBiologicalSex(token, input) {

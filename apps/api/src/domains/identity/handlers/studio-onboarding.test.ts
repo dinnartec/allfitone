@@ -68,6 +68,15 @@ function onboarding(overrides: Partial<OnboardingService> = {}): OnboardingServi
     declareBiologicalSex: async (_actor, input) => input.biologicalSex,
     declareProfileClaim: async (_actor, input) => echoClaim(input),
     declareFocusAreas: async (_actor, input) => input.areas,
+    recordBodyProgress: async (_actor, input) => ({
+      id: '019fe000-0000-7000-8000-000000000001',
+      metricCode: input.metricCode,
+      value: input.value,
+      unit: input.unit,
+      originalValue: null,
+      originalUnit: null,
+    }),
+    skipStep: async () => undefined,
     readCurrentAttempt: async () => ({
       attempt: null,
       answers: {
@@ -76,6 +85,7 @@ function onboarding(overrides: Partial<OnboardingService> = {}): OnboardingServi
         primaryTrainingGoal: { answered: false, value: null },
         trainingExperience: { answered: false, value: null },
         focusAreas: { answered: false, value: [] },
+        bodyMeasures: { answered: false, value: null },
       },
     }),
     complete: async () => '0198d000-0000-7000-8000-000000000031',
