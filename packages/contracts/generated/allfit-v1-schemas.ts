@@ -675,6 +675,12 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
     description:
       'Biological sex, used to calibrate energy expenditure estimates and reference ranges. Classified as training data. Absent means the person declined or has not been asked.',
   },
+  BodyMetric: {
+    type: 'string',
+    enum: ['body_weight', 'body_height'],
+    description:
+      'The two metrics V1 records. The `body_` prefix is not decoration: `metric_code` also names execution results, where `weight` is the load on the bar rather than the weight of the person.',
+  },
   CompletenessLevel: {
     type: 'string',
     enum: ['partial', 'summary', 'detailed', 'sensor_enriched'],
@@ -999,6 +1005,12 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  LengthUnit: {
+    type: 'string',
+    enum: ['cm', 'in'],
+    description:
+      'Centimetres are canonical. Feet and inches are sent as **total inches**, an integer like any other, and only the label renders them as `5\' 10"` — so no control has to hold two fields that can disagree.',
+  },
   Load: {
     type: 'object',
     additionalProperties: false,
@@ -1013,6 +1025,11 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         enum: ['kg', 'lb'],
       },
     },
+  },
+  MassUnit: {
+    type: 'string',
+    enum: ['kg', 'lb'],
+    description: 'Kilograms are canonical; a pound is 0.45359237 of one.',
   },
   MealType: {
     type: 'string',
@@ -3391,6 +3408,166 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
     description:
       'Null declines. It is a value the request must carry explicitly, not an omission, because the server records that the question was answered even when no sex was given — otherwise a screen that skips itself once answered would ask a decliner again on every cold start.',
   },
+  SpaceBodyHeightDeclaration: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['metric_code', 'value', 'unit', 'measured_on'],
+    properties: {
+      metric_code: {
+        type: 'string',
+        const: 'body_height',
+      },
+      value: {
+        type: 'number',
+        exclusiveMinimum: 0,
+      },
+      unit: {
+        $ref: '#/components/schemas/LengthUnit',
+      },
+      measured_on: {
+        type: 'string',
+        format: 'date',
+      },
+    },
+  },
+  SpaceBodyMeasure: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['value', 'unit', 'original_unit'],
+    properties: {
+      value: {
+        type: 'number',
+      },
+      unit: {
+        type: 'string',
+      },
+      original_unit: {
+        oneOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description: 'The unit she chose last time, so the screen reopens in it.',
+      },
+    },
+  },
+  SpaceBodyMeasures: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['weight', 'height'],
+    properties: {
+      weight: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/SpaceBodyMeasure',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      height: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/SpaceBodyMeasure',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+    },
+    description:
+      'The latest of each. Either can be null on its own, which is what a half-finished pair looks like and why `answered` is not derived from presence alone.',
+  },
+  SpaceBodyProgressDeclaration: {
+    oneOf: [
+      {
+        $ref: '#/components/schemas/SpaceBodyWeightDeclaration',
+      },
+      {
+        $ref: '#/components/schemas/SpaceBodyHeightDeclaration',
+      },
+    ],
+    discriminator: {
+      propertyName: 'metric_code',
+      mapping: {
+        body_weight: '#/components/schemas/SpaceBodyWeightDeclaration',
+        body_height: '#/components/schemas/SpaceBodyHeightDeclaration',
+      },
+    },
+    description:
+      'One variant per metric, so a weight cannot be sent in centimetres. The database refuses that too; refusing it in the contract means it cannot be expressed.',
+  },
+  SpaceBodyProgressRecord: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['id', 'metric_code', 'value', 'unit', 'original_value', 'original_unit'],
+    properties: {
+      id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      metric_code: {
+        $ref: '#/components/schemas/BodyMetric',
+      },
+      value: {
+        type: 'number',
+        description: 'The canonical figure, computed by the server from the unit catalogue.',
+      },
+      unit: {
+        type: 'string',
+        description: "The canonical unit of the metric's dimension.",
+      },
+      original_value: {
+        oneOf: [
+          {
+            type: 'number',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      original_unit: {
+        oneOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description:
+          'What she actually read, and null when she was already using the canonical unit — so a non-null original means exactly "she read it in another unit".',
+      },
+    },
+  },
+  SpaceBodyWeightDeclaration: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['metric_code', 'value', 'unit', 'measured_on'],
+    properties: {
+      metric_code: {
+        type: 'string',
+        const: 'body_weight',
+      },
+      value: {
+        type: 'number',
+        exclusiveMinimum: 0,
+        description: 'What the person read on the ruler, in the unit below.',
+      },
+      unit: {
+        $ref: '#/components/schemas/MassUnit',
+      },
+      measured_on: {
+        type: 'string',
+        format: 'date',
+      },
+    },
+  },
   SpaceCurrentOnboardingAttempt: {
     type: 'object',
     additionalProperties: false,
@@ -3457,6 +3634,7 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       'primary_training_goal',
       'focus_areas',
       'training_experience',
+      'body_measures',
     ],
     properties: {
       identity: {
@@ -3562,6 +3740,28 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         description:
           'The level in force. A superseded level never appears here: requalifying writes another claim and this reads the current one.',
       },
+      body_measures: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['answered', 'value'],
+        properties: {
+          answered: {
+            type: 'boolean',
+          },
+          value: {
+            oneOf: [
+              {
+                $ref: '#/components/schemas/SpaceBodyMeasures',
+              },
+              {
+                type: 'null',
+              },
+            ],
+          },
+        },
+        description:
+          'The latest measurement of each metric. `answered` is true when **both** were recorded or the step was skipped — a half-finished pair leaves the step owed, and the value still comes back so the ruler reopens where she left it. Answered with a null value is a skip, exactly as it is for the declined biological sex.',
+      },
     },
     description:
       "One entry per step, all the same shape. This is what keeps a step from widening the reader's signature: a new step adds an entry here, and the database function that builds it changes its body rather than its return type. Every answer is derived on read from the data itself — the person's name, the mark on the attempt, the claim in force — because storing a progress pointer would be a second truth that drifts, and a pointer cannot survive people going back to correct what they already answered.",
@@ -3587,6 +3787,19 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
     },
     description:
       'The same attempt Studio reads, without the legal versions. Space asks for those acceptances on a later screen and there are no consultable texts to name yet, so quoting a version here would assert something the product cannot honour.',
+  },
+  SpaceOnboardingSkip: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['step_code'],
+    properties: {
+      step_code: {
+        type: 'string',
+        enum: ['body_measures'],
+        description:
+          'Closed on purpose, and it grows as screens become skippable. `HU-SP-015` never allows skipping the age, the name or the terms: those are the condition for a person to exist at all, so they can never join this list.',
+      },
+    },
   },
   SpacePasswordResetCreate: {
     type: 'object',

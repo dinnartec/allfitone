@@ -432,6 +432,56 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/space/v1/body-progress': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Record one body measurement for the account holder
+     * @description HU-SP-011. The only onboarding answer that is **not** a profile claim: weight and height are a time series, and criterion 2 asks for exactly that — "they stay as my first progress record".
+     *
+     *     **One measurement per call.** `OP-IDN-006` fixes the record's id as the device's `Command-Id`, so weight and height are two commands with two keys. They are independent: later somebody updates their weight without touching their height, and if the second call fails the first stays saved.
+     *
+     *     The body carries **what the person chose**, not the canonical value. The server converts with the factor in the unit catalogue, and stores both — the canonical figure and what she read. Converting in the client would put the factor in two places, and keeping only what was displayed makes 74 kg → 163 lb → 73.9 kg, so somebody's weight moves on its own for changing units and back.
+     *
+     *     Body progress is its own privacy category: a gym allowed to see training loads is **not** thereby allowed to see body weight.
+     */
+    post: operations['recordSpaceBodyProgress']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/onboarding-attempts/{attemptId}/skips': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Record that the account holder skipped a step of the onboarding
+     * @description HU-SP-015, first exercised by `HU-SP-011` criterion 3. Without recording it, the step stays unanswered and the person falls into it again on every cold start — the same trap the declined biological sex had.
+     *
+     *     **Skipping is not declining.** Declining the biological sex is an answer to that question and leaves a mark with an absent value; skipping is not answering. They agree that the step stops being asked, and differ in that a skip asserts nothing about the person.
+     *
+     *     Idempotent by construction rather than by receipt: the record's primary key is `(attempt, step)`, so skipping twice writes one row and there is no body a replay could contradict.
+     */
+    post: operations['skipSpaceOnboardingStep']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/studio/v1/telemetry-config': {
     parameters: {
       query?: never
@@ -1668,6 +1718,11 @@ export interface components {
         answered: boolean
         value: components['schemas']['TrainingExperience'] | null
       }
+      /** @description The latest measurement of each metric. `answered` is true when **both** were recorded or the step was skipped — a half-finished pair leaves the step owed, and the value still comes back so the ruler reopens where she left it. Answered with a null value is a skip, exactly as it is for the declined biological sex. */
+      body_measures: {
+        answered: boolean
+        value: components['schemas']['SpaceBodyMeasures'] | null
+      }
     }
     /**
      * @description The five goals offered in the initial V1 launch. The attribute catalogue in the database also holds `improve_performance`, deferred rather than deleted, and this operation refuses it: it is the only one of the six whose progress does not show on the body, so the screen cannot show what it promises.
@@ -1691,6 +1746,77 @@ export interface components {
     /** @description The emphasis in force after the command, which on a replay is simply the emphasis in force. */
     SpaceFocusAreas: {
       areas: components['schemas']['FocusAreaSet']
+    }
+    /**
+     * @description The two metrics V1 records. The `body_` prefix is not decoration: `metric_code` also names execution results, where `weight` is the load on the bar rather than the weight of the person.
+     * @enum {string}
+     */
+    BodyMetric: 'body_weight' | 'body_height'
+    /**
+     * @description Kilograms are canonical; a pound is 0.45359237 of one.
+     * @enum {string}
+     */
+    MassUnit: 'kg' | 'lb'
+    /**
+     * @description Centimetres are canonical. Feet and inches are sent as **total inches**, an integer like any other, and only the label renders them as `5' 10"` — so no control has to hold two fields that can disagree.
+     * @enum {string}
+     */
+    LengthUnit: 'cm' | 'in'
+    /** @description One variant per metric, so a weight cannot be sent in centimetres. The database refuses that too; refusing it in the contract means it cannot be expressed. */
+    SpaceBodyProgressDeclaration:
+      | components['schemas']['SpaceBodyWeightDeclaration']
+      | components['schemas']['SpaceBodyHeightDeclaration']
+    SpaceBodyWeightDeclaration: {
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      metric_code: 'body_weight'
+      /** @description What the person read on the ruler, in the unit below. */
+      value: number
+      unit: components['schemas']['MassUnit']
+      /** Format: date */
+      measured_on: string
+    }
+    SpaceBodyHeightDeclaration: {
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      metric_code: 'body_height'
+      value: number
+      unit: components['schemas']['LengthUnit']
+      /** Format: date */
+      measured_on: string
+    }
+    SpaceBodyProgressRecord: {
+      id: components['schemas']['UuidV7']
+      metric_code: components['schemas']['BodyMetric']
+      /** @description The canonical figure, computed by the server from the unit catalogue. */
+      value: number
+      /** @description The canonical unit of the metric's dimension. */
+      unit: string
+      original_value: number | null
+      /** @description What she actually read, and null when she was already using the canonical unit — so a non-null original means exactly "she read it in another unit". */
+      original_unit: string | null
+    }
+    SpaceBodyMeasure: {
+      value: number
+      unit: string
+      /** @description The unit she chose last time, so the screen reopens in it. */
+      original_unit: string | null
+    }
+    /** @description The latest of each. Either can be null on its own, which is what a half-finished pair looks like and why `answered` is not derived from presence alone. */
+    SpaceBodyMeasures: {
+      weight: components['schemas']['SpaceBodyMeasure'] | null
+      height: components['schemas']['SpaceBodyMeasure'] | null
+    }
+    SpaceOnboardingSkip: {
+      /**
+       * @description Closed on purpose, and it grows as screens become skippable. `HU-SP-015` never allows skipping the age, the name or the terms: those are the condition for a person to exist at all, so they can never join this list.
+       * @enum {string}
+       */
+      step_code: 'body_measures'
     }
     /**
      * @description The three simple terms of HU-SP-012 criterion 2, least to most.
@@ -4205,6 +4331,70 @@ export interface operations {
       401: components['responses']['Unauthenticated']
       403: components['responses']['Forbidden']
       409: components['responses']['Conflict']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  recordSpaceBodyProgress: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SpaceBodyProgressDeclaration']
+      }
+    }
+    responses: {
+      /** @description The measurement as recorded, in canonical units */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SpaceBodyProgressRecord']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      409: components['responses']['Conflict']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  skipSpaceOnboardingStep: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        attemptId: components['parameters']['OnboardingAttemptId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SpaceOnboardingSkip']
+      }
+    }
+    responses: {
+      /** @description The skip is recorded, or was already */
+      204: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
       503: components['responses']['UpstreamUnavailable']
     }
   }

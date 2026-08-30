@@ -98,6 +98,13 @@ export const allfitV1ContractManifest = {
     },
     {
       method: 'POST',
+      path: '/space/v1/body-progress',
+      operationId: 'recordSpaceBodyProgress',
+      allfitOperation: 'OP-IDN-006',
+      responses: ['200', '400', '401', '403', '409', '503'],
+    },
+    {
+      method: 'POST',
       path: '/space/v1/consents/{grantId}/revocation',
       operationId: 'revokeConsentGrant',
       allfitOperation: 'OP-PRV-005',
@@ -200,6 +207,13 @@ export const allfitV1ContractManifest = {
       operationId: 'createSpacePendingFitnessId',
       allfitOperation: 'OP-IDN-043',
       responses: ['200', '400', '401', '403', '409', '503'],
+    },
+    {
+      method: 'POST',
+      path: '/space/v1/onboarding-attempts/{attemptId}/skips',
+      operationId: 'skipSpaceOnboardingStep',
+      allfitOperation: 'OP-IDN-047',
+      responses: ['204', '400', '401', '403', '503'],
     },
     {
       method: 'GET',

@@ -995,6 +995,113 @@ paths:
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
 
+  /space/v1/body-progress:
+    post:
+      tags: [Space Identity]
+      operationId: recordSpaceBodyProgress
+      x-allfit-operation: OP-IDN-006
+      x-allfit-cache: no-store
+      summary: Record one body measurement for the account holder
+      description: >-
+        HU-SP-011. The only onboarding answer that is **not** a profile claim: weight
+        and height are a time series, and criterion 2 asks for exactly that — "they
+        stay as my first progress record".
+
+
+        **One measurement per call.** `OP-IDN-006` fixes the record's id as the
+        device's `Command-Id`, so weight and height are two commands with two keys.
+        They are independent: later somebody updates their weight without touching
+        their height, and if the second call fails the first stays saved.
+
+
+        The body carries **what the person chose**, not the canonical value. The
+        server converts with the factor in the unit catalogue, and stores both — the
+        canonical figure and what she read. Converting in the client would put the
+        factor in two places, and keeping only what was displayed makes 74 kg → 163 lb
+        → 73.9 kg, so somebody's weight moves on its own for changing units and back.
+
+
+        Body progress is its own privacy category: a gym allowed to see training loads
+        is **not** thereby allowed to see body weight.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SpaceBodyProgressDeclaration'
+      responses:
+        '200':
+          description: The measurement as recorded, in canonical units
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpaceBodyProgressRecord'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /space/v1/onboarding-attempts/{attemptId}/skips:
+    post:
+      tags: [Space Identity]
+      operationId: skipSpaceOnboardingStep
+      x-allfit-operation: OP-IDN-047
+      x-allfit-cache: no-store
+      summary: Record that the account holder skipped a step of the onboarding
+      description: >-
+        HU-SP-015, first exercised by `HU-SP-011` criterion 3. Without recording it,
+        the step stays unanswered and the person falls into it again on every cold
+        start — the same trap the declined biological sex had.
+
+
+        **Skipping is not declining.** Declining the biological sex is an answer to
+        that question and leaves a mark with an absent value; skipping is not
+        answering. They agree that the step stops being asked, and differ in that a
+        skip asserts nothing about the person.
+
+
+        Idempotent by construction rather than by receipt: the record's primary key is
+        `(attempt, step)`, so skipping twice writes one row and there is no body a
+        replay could contradict.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OnboardingAttemptId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SpaceOnboardingSkip'
+      responses:
+        '204':
+          description: The skip is recorded, or was already
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
   /studio/v1/telemetry-config:
     get:
       tags: [Platform Telemetry]
@@ -4577,7 +4684,8 @@ components:
     SpaceOnboardingAnswers:
       type: object
       additionalProperties: false
-      required: [identity, biological_sex, primary_training_goal, focus_areas, training_experience]
+      required:
+        [identity, biological_sex, primary_training_goal, focus_areas, training_experience, body_measures]
       properties:
         identity:
           type: object
@@ -4651,6 +4759,23 @@ components:
           description: >-
             The level in force. A superseded level never appears here: requalifying
             writes another claim and this reads the current one.
+        body_measures:
+          type: object
+          additionalProperties: false
+          required: [answered, value]
+          properties:
+            answered:
+              type: boolean
+            value:
+              oneOf:
+                - $ref: '#/components/schemas/SpaceBodyMeasures'
+                - type: 'null'
+          description: >-
+            The latest measurement of each metric. `answered` is true when **both**
+            were recorded or the step was skipped — a half-finished pair leaves the
+            step owed, and the value still comes back so the ruler reopens where she
+            left it. Answered with a null value is a skip, exactly as it is for the
+            declined biological sex.
       description: >-
         One entry per step, all the same shape. This is what keeps a step from
         widening the reader's signature: a new step adds an entry here, and the
@@ -4716,6 +4841,137 @@ components:
       description: >-
         The emphasis in force after the command, which on a replay is simply the
         emphasis in force.
+    BodyMetric:
+      type: string
+      enum: [body_weight, body_height]
+      description: >-
+        The two metrics V1 records. The `body_` prefix is not decoration: `metric_code`
+        also names execution results, where `weight` is the load on the bar rather than
+        the weight of the person.
+    MassUnit:
+      type: string
+      enum: [kg, lb]
+      description: Kilograms are canonical; a pound is 0.45359237 of one.
+    LengthUnit:
+      type: string
+      enum: [cm, in]
+      description: >-
+        Centimetres are canonical. Feet and inches are sent as **total inches**, an
+        integer like any other, and only the label renders them as `5' 10"` — so no
+        control has to hold two fields that can disagree.
+    SpaceBodyProgressDeclaration:
+      oneOf:
+        - $ref: '#/components/schemas/SpaceBodyWeightDeclaration'
+        - $ref: '#/components/schemas/SpaceBodyHeightDeclaration'
+      discriminator:
+        propertyName: metric_code
+        mapping:
+          body_weight: '#/components/schemas/SpaceBodyWeightDeclaration'
+          body_height: '#/components/schemas/SpaceBodyHeightDeclaration'
+      description: >-
+        One variant per metric, so a weight cannot be sent in centimetres. The database
+        refuses that too; refusing it in the contract means it cannot be expressed.
+    SpaceBodyWeightDeclaration:
+      type: object
+      additionalProperties: false
+      required: [metric_code, value, unit, measured_on]
+      properties:
+        metric_code:
+          type: string
+          const: body_weight
+        value:
+          type: number
+          exclusiveMinimum: 0
+          description: What the person read on the ruler, in the unit below.
+        unit:
+          $ref: '#/components/schemas/MassUnit'
+        measured_on:
+          type: string
+          format: date
+    SpaceBodyHeightDeclaration:
+      type: object
+      additionalProperties: false
+      required: [metric_code, value, unit, measured_on]
+      properties:
+        metric_code:
+          type: string
+          const: body_height
+        value:
+          type: number
+          exclusiveMinimum: 0
+        unit:
+          $ref: '#/components/schemas/LengthUnit'
+        measured_on:
+          type: string
+          format: date
+    SpaceBodyProgressRecord:
+      type: object
+      additionalProperties: false
+      required: [id, metric_code, value, unit, original_value, original_unit]
+      properties:
+        id:
+          $ref: '#/components/schemas/UuidV7'
+        metric_code:
+          $ref: '#/components/schemas/BodyMetric'
+        value:
+          type: number
+          description: The canonical figure, computed by the server from the unit catalogue.
+        unit:
+          type: string
+          description: The canonical unit of the metric's dimension.
+        original_value:
+          oneOf:
+            - type: number
+            - type: 'null'
+        original_unit:
+          oneOf:
+            - type: string
+            - type: 'null'
+          description: >-
+            What she actually read, and null when she was already using the canonical
+            unit — so a non-null original means exactly "she read it in another unit".
+    SpaceBodyMeasure:
+      type: object
+      additionalProperties: false
+      required: [value, unit, original_unit]
+      properties:
+        value:
+          type: number
+        unit:
+          type: string
+        original_unit:
+          oneOf:
+            - type: string
+            - type: 'null'
+          description: The unit she chose last time, so the screen reopens in it.
+    SpaceBodyMeasures:
+      type: object
+      additionalProperties: false
+      required: [weight, height]
+      properties:
+        weight:
+          oneOf:
+            - $ref: '#/components/schemas/SpaceBodyMeasure'
+            - type: 'null'
+        height:
+          oneOf:
+            - $ref: '#/components/schemas/SpaceBodyMeasure'
+            - type: 'null'
+      description: >-
+        The latest of each. Either can be null on its own, which is what a half-finished
+        pair looks like and why `answered` is not derived from presence alone.
+    SpaceOnboardingSkip:
+      type: object
+      additionalProperties: false
+      required: [step_code]
+      properties:
+        step_code:
+          type: string
+          enum: [body_measures]
+          description: >-
+            Closed on purpose, and it grows as screens become skippable. `HU-SP-015`
+            never allows skipping the age, the name or the terms: those are the
+            condition for a person to exist at all, so they can never join this list.
     TrainingExperience:
       type: string
       enum: [starting, some_practice, experienced]
