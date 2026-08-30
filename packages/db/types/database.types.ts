@@ -597,6 +597,53 @@ export type Database = {
           },
         ]
       }
+      body_progress_records: {
+        Row: {
+          has_media: boolean
+          id: string
+          measured_on: string
+          media_ref: string | null
+          metric_code: string
+          original_unit_code: string | null
+          original_value: number | null
+          person_id: string
+          unit_code: string
+          value_numeric: number
+        }
+        Insert: {
+          has_media?: boolean
+          id: string
+          measured_on?: string
+          media_ref?: string | null
+          metric_code: string
+          original_unit_code?: string | null
+          original_value?: number | null
+          person_id: string
+          unit_code: string
+          value_numeric: number
+        }
+        Update: {
+          has_media?: boolean
+          id?: string
+          measured_on?: string
+          media_ref?: string | null
+          metric_code?: string
+          original_unit_code?: string | null
+          original_value?: number | null
+          person_id?: string
+          unit_code?: string
+          value_numeric?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_body_progress_records_person'
+            columns: ['person_id']
+            isOneToOne: false
+            referencedRelation: 'people'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       eligibility_evidence: {
         Row: {
           evaluated_at: string
@@ -918,6 +965,32 @@ export type Database = {
             columns: ['person_id']
             isOneToOne: false
             referencedRelation: 'people'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      onboarding_step_skips: {
+        Row: {
+          onboarding_attempt_id: string
+          skipped_at: string
+          step_code: string
+        }
+        Insert: {
+          onboarding_attempt_id: string
+          skipped_at?: string
+          step_code: string
+        }
+        Update: {
+          onboarding_attempt_id?: string
+          skipped_at?: string
+          step_code?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_onboarding_step_skips_attempt'
+            columns: ['onboarding_attempt_id']
+            isOneToOne: false
+            referencedRelation: 'onboarding_attempts'
             referencedColumns: ['id']
           },
         ]
@@ -1567,6 +1640,7 @@ export type Database = {
           provider_session_id: string
         }[]
       }
+      metric_dimension: { Args: { p_metric_code: string }; Returns: string }
       prepare_backoffice_auth_cleanup: {
         Args: { p_event_id: string }
         Returns: {
@@ -1654,6 +1728,27 @@ export type Database = {
         Returns: {
           remaining_attempts: number
           terminal: boolean
+        }[]
+      }
+      record_body_progress: {
+        Args: {
+          p_account_id: string
+          p_command_id: string
+          p_idempotency_key: string
+          p_measured_on: string
+          p_metric_code: string
+          p_request_hash: string
+          p_unit_code: string
+          p_value: number
+        }
+        Returns: {
+          metric_code: string
+          original_unit_code: string
+          original_value: number
+          record_id: string
+          replayed: boolean
+          unit_code: string
+          value_numeric: number
         }[]
       }
       recover_backoffice_totp_factor: {
@@ -1767,6 +1862,14 @@ export type Database = {
           p_token_ciphertext: string
         }
         Returns: boolean
+      }
+      skip_onboarding_step: {
+        Args: {
+          p_account_id: string
+          p_attempt_id: string
+          p_step_code: string
+        }
+        Returns: undefined
       }
       start_backoffice_authentication_attempt: {
         Args: {
