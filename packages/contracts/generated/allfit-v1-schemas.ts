@@ -3369,6 +3369,17 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  SpaceActivatedPerson: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['person_id'],
+    properties: {
+      person_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+    },
+    description: 'The Fitness ID, the same one on every retry.',
+  },
   SpaceBiologicalSex: {
     type: 'object',
     additionalProperties: false,
@@ -3787,6 +3798,31 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
     },
     description:
       'The same attempt Studio reads, without the legal versions. Space asks for those acceptances on a later screen and there are no consultable texts to name yet, so quoting a version here would assert something the product cannot honour.',
+  },
+  SpaceOnboardingCompletion: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['given_name', 'family_name', 'terms_accepted', 'privacy_notice_accepted'],
+    properties: {
+      given_name: {
+        type: 'string',
+        minLength: 1,
+      },
+      family_name: {
+        type: 'string',
+        minLength: 1,
+      },
+      terms_accepted: {
+        type: 'boolean',
+        const: true,
+      },
+      privacy_notice_accepted: {
+        type: 'boolean',
+        const: true,
+      },
+    },
+    description:
+      'The acceptances are `true` and nothing else: a `false` is not a way to decline here, it is an attempt to activate without accepting, and the database refuses it. Declining happens at the terms step, by not going on.',
   },
   SpaceOnboardingSkip: {
     type: 'object',

@@ -196,6 +196,13 @@ export const allfitV1ContractManifest = {
     },
     {
       method: 'POST',
+      path: '/space/v1/onboarding-attempts/{attemptId}/completion',
+      operationId: 'completeSpaceOnboarding',
+      allfitOperation: 'OP-IDN-003',
+      responses: ['200', '400', '401', '403', '409', '503'],
+    },
+    {
+      method: 'POST',
       path: '/space/v1/onboarding-attempts/{attemptId}/eligibility-evidence',
       operationId: 'recordSpaceAdultEligibilityEvidence',
       allfitOperation: 'OP-IDN-002',

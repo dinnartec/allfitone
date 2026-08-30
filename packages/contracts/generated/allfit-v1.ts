@@ -432,6 +432,30 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/space/v1/onboarding-attempts/{attemptId}/completion': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Close the onboarding and activate the account holder's Fitness ID
+     * @description HU-SP-099, and the guarantees are HU-SP-008's. This is the **only** path that takes a Fitness ID to `active`, and it no longer creates the person: the row has existed in `pending_activation` since the name was given, so everything answered after that was already written on it. Nothing moves here.
+     *
+     *     A retry on an already activated attempt answers the same person and never seals `activated_at` twice, which is what makes "exactly one Fitness ID" (criterion 1) hold under a lost response rather than only under a good one.
+     *
+     *     The name and the legal acceptances travel in the body because the database function refuses without them — it is the same entry point Studio uses, where the person does not exist yet. On this surface they are a restatement of what was already given, not a second chance to change it.
+     */
+    post: operations['completeSpaceOnboarding']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/space/v1/body-progress': {
     parameters: {
       query?: never
@@ -1746,6 +1770,19 @@ export interface components {
     /** @description The emphasis in force after the command, which on a replay is simply the emphasis in force. */
     SpaceFocusAreas: {
       areas: components['schemas']['FocusAreaSet']
+    }
+    /** @description The acceptances are `true` and nothing else: a `false` is not a way to decline here, it is an attempt to activate without accepting, and the database refuses it. Declining happens at the terms step, by not going on. */
+    SpaceOnboardingCompletion: {
+      given_name: string
+      family_name: string
+      /** @constant */
+      terms_accepted: true
+      /** @constant */
+      privacy_notice_accepted: true
+    }
+    /** @description The Fitness ID, the same one on every retry. */
+    SpaceActivatedPerson: {
+      person_id: components['schemas']['UuidV7']
     }
     /**
      * @description The two metrics V1 records. The `body_` prefix is not decoration: `metric_code` also names execution results, where `weight` is the load on the bar rather than the weight of the person.
@@ -4325,6 +4362,43 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['SpaceFocusAreas']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      409: components['responses']['Conflict']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  completeSpaceOnboarding: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        attemptId: components['parameters']['OnboardingAttemptId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SpaceOnboardingCompletion']
+      }
+    }
+    responses: {
+      /** @description The Fitness ID, now active */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SpaceActivatedPerson']
         }
       }
       400: components['responses']['BadRequest']

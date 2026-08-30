@@ -995,6 +995,62 @@ paths:
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
 
+  /space/v1/onboarding-attempts/{attemptId}/completion:
+    post:
+      tags: [Space Identity]
+      operationId: completeSpaceOnboarding
+      x-allfit-operation: OP-IDN-003
+      x-allfit-cache: no-store
+      summary: Close the onboarding and activate the account holder's Fitness ID
+      description: >-
+        HU-SP-099, and the guarantees are HU-SP-008's. This is the **only** path that
+        takes a Fitness ID to `active`, and it no longer creates the person: the row
+        has existed in `pending_activation` since the name was given, so everything
+        answered after that was already written on it. Nothing moves here.
+
+
+        A retry on an already activated attempt answers the same person and never
+        seals `activated_at` twice, which is what makes "exactly one Fitness ID"
+        (criterion 1) hold under a lost response rather than only under a good one.
+
+
+        The name and the legal acceptances travel in the body because the database
+        function refuses without them — it is the same entry point Studio uses, where
+        the person does not exist yet. On this surface they are a restatement of what
+        was already given, not a second chance to change it.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OnboardingAttemptId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SpaceOnboardingCompletion'
+      responses:
+        '200':
+          description: The Fitness ID, now active
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpaceActivatedPerson'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
   /space/v1/body-progress:
     post:
       tags: [Space Identity]
@@ -4841,6 +4897,35 @@ components:
       description: >-
         The emphasis in force after the command, which on a replay is simply the
         emphasis in force.
+    SpaceOnboardingCompletion:
+      type: object
+      additionalProperties: false
+      required: [given_name, family_name, terms_accepted, privacy_notice_accepted]
+      properties:
+        given_name:
+          type: string
+          minLength: 1
+        family_name:
+          type: string
+          minLength: 1
+        terms_accepted:
+          type: boolean
+          const: true
+        privacy_notice_accepted:
+          type: boolean
+          const: true
+      description: >-
+        The acceptances are `true` and nothing else: a `false` is not a way to decline
+        here, it is an attempt to activate without accepting, and the database refuses
+        it. Declining happens at the terms step, by not going on.
+    SpaceActivatedPerson:
+      type: object
+      additionalProperties: false
+      required: [person_id]
+      properties:
+        person_id:
+          $ref: '#/components/schemas/UuidV7'
+      description: The Fitness ID, the same one on every retry.
     BodyMetric:
       type: string
       enum: [body_weight, body_height]
