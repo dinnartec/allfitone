@@ -310,6 +310,30 @@ export function spaceOnboardingRoutes(
     }
   })
 
+  // The only route that takes a Fitness ID to `active`. It does not create the person:
+  // the row has been in `pending_activation` since the name was given.
+  routes.post('/onboarding-attempts/:attemptId/completion', async (c) => {
+    c.header('Cache-Control', 'no-store')
+
+    const token = await verified(c, verify)
+    if (!token) return fail(c, 'unauthenticated')
+
+    const attemptId = c.req.param('attemptId')
+    if (!UUID_V7.test(attemptId)) return fail(c, 'invalid-request')
+
+    const body = await readJson(c)
+    const completion = readCompletion(body)
+    const command = commandContext(c, body)
+    if (!completion || !command) return fail(c, 'invalid-request')
+
+    try {
+      const personId = await onboarding().complete(token, { ...command, attemptId, ...completion })
+      return c.json({ person_id: personId }, 200)
+    } catch (error) {
+      return operationFailure(c, error)
+    }
+  })
+
   // Skipping carries no idempotency headers: the record's primary key is the whole
   // guarantee, and there is no body a replay could contradict.
   routes.post('/onboarding-attempts/:attemptId/skips', async (c) => {
@@ -527,6 +551,44 @@ function readFocusAreas(body: unknown): readonly FocusArea[] | undefined {
   if (new Set(areas).size !== areas.length) return undefined
   if (areas.includes('whole_body') && areas.length > 1) return undefined
   return areas
+}
+
+/**
+ * The acceptances have to be `true`. A `false` is not a way to decline here — that
+ * happens at the terms step, by not going on — it is an attempt to activate without
+ * accepting, and the database refuses it anyway.
+ */
+function readCompletion(body: unknown):
+  | {
+      givenName: string
+      familyName: string
+      termsAccepted: boolean
+      privacyNoticeAccepted: boolean
+    }
+  | undefined {
+  if (typeof body !== 'object' || body === null) return undefined
+  const keys = Object.keys(body).sort()
+  if (keys.length !== 4) return undefined
+  if (keys[0] !== 'family_name' || keys[1] !== 'given_name') return undefined
+  if (keys[2] !== 'privacy_notice_accepted' || keys[3] !== 'terms_accepted') return undefined
+
+  const {
+    given_name: given,
+    family_name: family,
+    terms_accepted: terms,
+    privacy_notice_accepted: privacy,
+  } = body as {
+    given_name: unknown
+    family_name: unknown
+    terms_accepted: unknown
+    privacy_notice_accepted: unknown
+  }
+
+  const givenName = trimmedName(given)
+  const familyName = trimmedName(family)
+  if (!givenName || !familyName) return undefined
+  if (terms !== true || privacy !== true) return undefined
+  return { givenName, familyName, termsAccepted: true, privacyNoticeAccepted: true }
 }
 
 const MASS_UNITS: readonly MassUnit[] = ['kg', 'lb']

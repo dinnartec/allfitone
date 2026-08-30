@@ -170,6 +170,14 @@ export interface SpaceOnboardingService {
     input: CommandContext & BodyProgressDeclaration,
   ): Promise<BodyProgressRecord>
   skipStep(token: VerifiedToken, input: { attemptId: string; stepCode: string }): Promise<void>
+  /**
+   * The only path that takes a Fitness ID to `active`. It does not create the person:
+   * the row has existed in `pending_activation` since the name was given.
+   */
+  complete(
+    token: VerifiedToken,
+    input: Omit<Parameters<OnboardingService['complete']>[1], never>,
+  ): Promise<string>
   readCurrentAttempt(token: VerifiedToken): Promise<CurrentOnboardingAttempt>
 }
 
@@ -227,6 +235,10 @@ export function createSpaceOnboardingService(
 
     async skipStep(token, input) {
       return dependencies.onboarding.skipStep(await actorFor(token), input)
+    },
+
+    async complete(token, input) {
+      return dependencies.onboarding.complete(await actorFor(token), input)
     },
 
     async declareBiologicalSex(token, input) {

@@ -87,6 +87,7 @@ function appWith(overrides: Partial<SpaceOnboardingService> = {}): Hono {
       originalUnit: null,
     }),
     skipStep: async () => undefined,
+    complete: async () => '019ff100-0000-7000-8000-000000000001',
     readCurrentAttempt: async () => ({
       attempt: ATTEMPT,
       answers: {
@@ -164,6 +165,7 @@ describe('POST /space/v1/onboarding-attempts', () => {
             originalUnit: null,
           }),
           skipStep: async () => undefined,
+          complete: async () => '019ff100-0000-7000-8000-000000000001',
           readCurrentAttempt: async () => ({ attempt: ATTEMPT, answers: emptyAnswers() }),
         },
         async () => {
@@ -512,6 +514,7 @@ describe('GET /space/v1/onboarding-attempts/current', () => {
         originalUnit: null,
       }),
       skipStep: async () => undefined,
+      complete: async () => '019ff100-0000-7000-8000-000000000001',
       readCurrentAttempt: async () => ({
         attempt: ATTEMPT,
         answers: {
@@ -563,6 +566,7 @@ describe('GET /space/v1/onboarding-attempts/current', () => {
         originalUnit: null,
       }),
       skipStep: async () => undefined,
+      complete: async () => '019ff100-0000-7000-8000-000000000001',
       readCurrentAttempt: async () => ({ attempt: null, answers: emptyAnswers() }),
     })
 
@@ -937,6 +941,82 @@ describe('POST /space/v1/body-progress', () => {
     const response = await post(appWith(), route(), {
       body: { metric_code: 'body_weight', value: 74, unit: 'kg', measured_on: measured },
     })
+
+    expect(response.headers.get('Cache-Control')).toBe('no-store')
+  })
+})
+
+describe('POST /space/v1/onboarding-attempts/{id}/completion', () => {
+  const route = () => `/space/v1/onboarding-attempts/${ATTEMPT.id}/completion`
+  const body = {
+    given_name: 'Ada',
+    family_name: 'Lovelace',
+    terms_accepted: true,
+    privacy_notice_accepted: true,
+  }
+
+  test('answers the Fitness ID it activated', async () => {
+    const app = appWith({ complete: async () => '019ff100-0000-7000-8000-0000000000aa' })
+
+    const response = await post(app, route(), { body })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ person_id: '019ff100-0000-7000-8000-0000000000aa' })
+  })
+
+  test('refuses an acceptance that is not true, without reaching the service', async () => {
+    let called = false
+    const app = appWith({
+      complete: async () => {
+        called = true
+        return '019ff100-0000-7000-8000-0000000000ab'
+      },
+    })
+
+    const bodies: unknown[] = [
+      // `false` is not a way to decline here: declining happens at the terms step, by
+      // not going on. Here it is an attempt to activate without accepting.
+      { ...body, terms_accepted: false },
+      { ...body, privacy_notice_accepted: false },
+      { ...body, terms_accepted: 'true' },
+      { ...body, given_name: '  ' },
+      { ...body, family_name: '' },
+      { given_name: 'Ada', family_name: 'Lovelace', terms_accepted: true },
+      { ...body, extra: 1 },
+    ]
+
+    for (const invalid of bodies) {
+      expect((await post(app, route(), { body: invalid })).status).toBe(400)
+    }
+    expect(called).toBe(false)
+  })
+
+  test('refuses an attempt id that is not a v7 uuid', async () => {
+    const response = await post(appWith(), '/space/v1/onboarding-attempts/not-a-uuid/completion', {
+      body,
+    })
+
+    expect(response.status).toBe(400)
+  })
+
+  test('maps a foreign actor to 403 and a refused activation to 400', async () => {
+    const forbidden = appWith({
+      complete: async () => {
+        throw { code: '42501' }
+      },
+    })
+    const refused = appWith({
+      complete: async () => {
+        throw { code: '23514' }
+      },
+    })
+
+    expect((await post(forbidden, route(), { body })).status).toBe(403)
+    expect((await post(refused, route(), { body })).status).toBe(400)
+  })
+
+  test('is never cached', async () => {
+    const response = await post(appWith(), route(), { body })
 
     expect(response.headers.get('Cache-Control')).toBe('no-store')
   })
