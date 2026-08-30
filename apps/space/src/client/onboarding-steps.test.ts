@@ -57,6 +57,23 @@ describe('resolveOnboardingRoute', () => {
     )
   })
 
+  test('lands an activated person on the end, not on the gate', () => {
+    // The whole point of `20260830120000_resume_after_activation.sql`: before it the
+    // read went empty after activation and this returned the eligibility gate.
+    expect(
+      resolveOnboardingRoute({
+        attempt: { status: 'activated', eligibility_status: 'pass' },
+        answers: answers('identity'),
+      }),
+    ).toBe('/onboarding/continues')
+  })
+
+  test('and does so even with every step reading unanswered', () => {
+    expect(
+      resolveOnboardingRoute({ attempt: { status: 'activated', eligibility_status: 'pending' } }),
+    ).toBe('/onboarding/continues')
+  })
+
   test('asks for the name once the age is behind', () => {
     expect(resolveOnboardingRoute({ attempt: PASSED })).toBe('/onboarding/identity')
   })

@@ -39,7 +39,11 @@ export type OnboardingRoute = OnboardingStepRoute | typeof AGE_ROUTE | typeof CO
 
 /** Only the shape the decisions read, so a test needs no generated DTO. */
 export interface OnboardingProgress {
-  attempt: { eligibility_status: 'pending' | 'pass' | 'fail' } | null
+  attempt: {
+    /** `activated` is the end of the onboarding, and the only status that ends it. */
+    status?: 'open' | 'activated' | 'ineligible' | 'expired'
+    eligibility_status: 'pending' | 'pass' | 'fail'
+  } | null
   /**
    * One entry per step, each carrying whether it was answered. `answered` is
    * separate from the value on purpose: declining the sex records no value, so
@@ -154,6 +158,10 @@ export function nextRouteAfter(step: OnboardingStepRoute): OnboardingRoute {
  * step still owed.
  */
 export function resolveOnboardingRoute(current: OnboardingProgress | null): OnboardingRoute {
+  // Checked before anything else, and not derived from the answers: activation is
+  // what ends the onboarding, so nothing an answer says can send an activated
+  // person back to a step.
+  if (current?.attempt?.status === 'activated') return CONTINUES_ROUTE
   // A `fail` is not eligibility and must not be walked past either.
   if (!current || !eligible(current)) return ELIGIBILITY_GATE_ROUTE
   // Everything declared so far is answered.

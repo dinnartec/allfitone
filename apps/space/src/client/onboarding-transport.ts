@@ -22,6 +22,8 @@ import {
   type FocusArea,
   type OnboardingFlow,
   type BodyProgressRecord,
+  type ActivatedPerson,
+  type OnboardingCompletion,
   type ProfileClaim,
   type TrainingExperienceClaim,
 } from './onboarding'
@@ -114,6 +116,15 @@ export function createSpaceOnboardingFlow(): OnboardingFlow {
             token,
           )
         }),
+      complete: (command, attemptId, completion) =>
+        authenticated((token) =>
+          authorizedPost<ActivatedPerson>(
+            `/space/v1/onboarding-attempts/${attemptId}/completion`,
+            command,
+            completion satisfies OnboardingCompletion,
+            token,
+          ),
+        ),
       readCurrent: () =>
         authenticated((token) =>
           authorizedGet<CurrentOnboardingAttempt>('/space/v1/onboarding-attempts/current', token),

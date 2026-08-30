@@ -50,6 +50,7 @@ function flowWith(transport: Partial<OnboardingTransport> = {}) {
   const levels: Array<{ idempotencyKey: string; value: string }> = []
   const measures: Array<{ idempotencyKey: string; metric: string; value: number }> = []
   const skips: string[] = []
+  const activations: Array<{ idempotencyKey: string; name: string }> = []
   let issued = 0
 
   const flow = createOnboardingFlow({
@@ -105,6 +106,10 @@ function flowWith(transport: Partial<OnboardingTransport> = {}) {
       skipStep: async (_attemptId, stepCode) => {
         skips.push(stepCode)
       },
+      complete: async (command, _attemptId, completion) => {
+        activations.push({ idempotencyKey: command.idempotencyKey, name: completion.given_name })
+        return { person_id: '019ff100-0000-7000-8000-000000000001' }
+      },
       readCurrent: async () => ({
         attempt: ATTEMPT,
         answers: {
@@ -124,7 +129,7 @@ function flowWith(transport: Partial<OnboardingTransport> = {}) {
     },
   })
 
-  return { flow, sent, declared, sexes, goals, focuses, levels, measures, skips }
+  return { flow, sent, declared, sexes, goals, focuses, levels, measures, skips, activations }
 }
 
 describe('declareAdult', () => {
@@ -775,6 +780,59 @@ describe('skipStep', () => {
     })
 
     await flow.skipStep('body_measures')
+
+    expect(starts).toBe(1)
+  })
+})
+
+describe('activate', () => {
+  const completion = {
+    given_name: 'Ada',
+    family_name: 'Lovelace',
+    terms_accepted: true as const,
+    privacy_notice_accepted: true as const,
+  }
+
+  test('closes the onboarding and answers the Fitness ID', async () => {
+    const { flow, activations } = flowWith()
+
+    const person = await flow.activate(completion)
+
+    expect(person.person_id).toBe('019ff100-0000-7000-8000-000000000001')
+    expect(activations.map((entry) => entry.name)).toEqual(['Ada'])
+  })
+
+  test('holds the key across retries, because this is the one command that must not run twice', async () => {
+    let attempts = 0
+    const keys: string[] = []
+    const { flow } = flowWith({
+      complete: async (command) => {
+        keys.push(command.idempotencyKey)
+        attempts += 1
+        if (attempts === 1) throw new Error('network')
+        return { person_id: '019ff100-0000-7000-8000-000000000002' }
+      },
+    })
+
+    await expect(flow.activate(completion)).rejects.toThrow('network')
+    await expect(flow.activate(completion)).resolves.toBeDefined()
+
+    // A second key would be a second command, and "exactly one Fitness ID" has to
+    // hold under a lost response, not only under a good one.
+    expect(keys).toHaveLength(2)
+    expect(keys[0]).toBe(keys[1])
+  })
+
+  test('opens an attempt when there is none, because activation belongs to one', async () => {
+    let starts = 0
+    const { flow } = flowWith({
+      startAttempt: async () => {
+        starts += 1
+        return ATTEMPT
+      },
+    })
+
+    await flow.activate(completion)
 
     expect(starts).toBe(1)
   })

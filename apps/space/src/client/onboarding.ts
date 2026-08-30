@@ -38,6 +38,8 @@ export type TrainingExperienceClaim = AllfitV1Schemas['SpaceTrainingExperienceCl
 export type BodyProgressDeclaration = AllfitV1Schemas['SpaceBodyProgressDeclaration']
 export type BodyProgressRecord = AllfitV1Schemas['SpaceBodyProgressRecord']
 export type BodyMetric = AllfitV1Schemas['BodyMetric']
+export type OnboardingCompletion = AllfitV1Schemas['SpaceOnboardingCompletion']
+export type ActivatedPerson = AllfitV1Schemas['SpaceActivatedPerson']
 
 export interface OnboardingTransport {
   startAttempt(command: CommandHeaders): Promise<OnboardingAttempt>
@@ -71,6 +73,11 @@ export interface OnboardingTransport {
   ): Promise<BodyProgressRecord>
   /** No command headers: the skip's primary key is the whole idempotency. */
   skipStep(attemptId: string, stepCode: string): Promise<void>
+  complete(
+    command: CommandHeaders,
+    attemptId: string,
+    completion: OnboardingCompletion,
+  ): Promise<ActivatedPerson>
   readCurrent(): Promise<CurrentOnboardingAttempt>
 }
 
@@ -114,6 +121,12 @@ export interface OnboardingFlow {
   recordBodyProgress(declaration: BodyProgressDeclaration): Promise<BodyProgressRecord>
   /** Skipping a step, which needs an open attempt and so opens one if there is none. */
   skipStep(stepCode: string): Promise<void>
+  /**
+   * Closes the onboarding and activates the Fitness ID. The person already exists in
+   * `pending_activation`; this is the only path that takes it to `active`, and a
+   * retry answers the same one rather than making a second.
+   */
+  activate(completion: OnboardingCompletion): Promise<ActivatedPerson>
   /** What was already answered, so coming back does not start over. */
   resume(): Promise<CurrentOnboardingAttempt>
 }
@@ -129,6 +142,7 @@ export function createOnboardingFlow(dependencies: OnboardingFlowDependencies): 
   let pendingExperience: { command: CommandHeaders; value: TrainingExperience } | undefined
   // One pending command per metric: they are two commands, so one key each.
   const pendingMeasures = new Map<BodyMetric, { command: CommandHeaders; value: string }>()
+  let pendingActivation: CommandHeaders | undefined
 
   const openAttempt = async (): Promise<OnboardingAttempt> => {
     attempt ??= await dependencies.transport.startAttempt(issue())
@@ -247,6 +261,16 @@ export function createOnboardingFlow(dependencies: OnboardingFlowDependencies): 
     async skipStep(stepCode) {
       const open = await openAttempt()
       await dependencies.transport.skipStep(open.id, stepCode)
+    },
+
+    async activate(completion) {
+      const open = await openAttempt()
+      // The key is held across retries and never renewed: a second key would be a
+      // second command, and this is the one command that must not run twice.
+      pendingActivation ??= issue()
+      const person = await dependencies.transport.complete(pendingActivation, open.id, completion)
+      pendingActivation = undefined
+      return person
     },
 
     async resume() {
