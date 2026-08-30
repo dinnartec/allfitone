@@ -35,6 +35,9 @@ export type ProfileClaim = AllfitV1Schemas['SpaceProfileClaim']
 export type FocusArea = AllfitV1Schemas['FocusArea']
 export type TrainingExperience = AllfitV1Schemas['TrainingExperience']
 export type TrainingExperienceClaim = AllfitV1Schemas['SpaceTrainingExperienceClaim']
+export type BodyProgressDeclaration = AllfitV1Schemas['SpaceBodyProgressDeclaration']
+export type BodyProgressRecord = AllfitV1Schemas['SpaceBodyProgressRecord']
+export type BodyMetric = AllfitV1Schemas['BodyMetric']
 
 export interface OnboardingTransport {
   startAttempt(command: CommandHeaders): Promise<OnboardingAttempt>
@@ -62,6 +65,12 @@ export interface OnboardingTransport {
     command: CommandHeaders,
     level: TrainingExperience,
   ): Promise<TrainingExperienceClaim>
+  recordBodyProgress(
+    command: CommandHeaders,
+    declaration: BodyProgressDeclaration,
+  ): Promise<BodyProgressRecord>
+  /** No command headers: the skip's primary key is the whole idempotency. */
+  skipStep(attemptId: string, stepCode: string): Promise<void>
   readCurrent(): Promise<CurrentOnboardingAttempt>
 }
 
@@ -97,6 +106,14 @@ export interface OnboardingFlow {
    * the previous claim is sealed, so the level someone signed up with stays readable.
    */
   declareTrainingExperience(level: TrainingExperience): Promise<TrainingExperienceClaim>
+  /**
+   * One measurement. Weight and height are two calls with two keys, because
+   * `OP-IDN-006` makes the record's id the command's own — and because they are
+   * independent measurements that will later be updated apart.
+   */
+  recordBodyProgress(declaration: BodyProgressDeclaration): Promise<BodyProgressRecord>
+  /** Skipping a step, which needs an open attempt and so opens one if there is none. */
+  skipStep(stepCode: string): Promise<void>
   /** What was already answered, so coming back does not start over. */
   resume(): Promise<CurrentOnboardingAttempt>
 }
@@ -110,6 +127,8 @@ export function createOnboardingFlow(dependencies: OnboardingFlowDependencies): 
   let pendingGoal: { command: CommandHeaders; value: PrimaryTrainingGoal } | undefined
   let pendingFocus: { command: CommandHeaders; value: string } | undefined
   let pendingExperience: { command: CommandHeaders; value: TrainingExperience } | undefined
+  // One pending command per metric: they are two commands, so one key each.
+  const pendingMeasures = new Map<BodyMetric, { command: CommandHeaders; value: string }>()
 
   const openAttempt = async (): Promise<OnboardingAttempt> => {
     attempt ??= await dependencies.transport.startAttempt(issue())
@@ -209,6 +228,25 @@ export function createOnboardingFlow(dependencies: OnboardingFlowDependencies): 
       )
       pendingExperience = undefined
       return claim
+    },
+
+    async recordBodyProgress(declaration) {
+      // The key follows the measurement, not the call: retrying the same number
+      // replays, and changing it is a different command rather than a replay under a
+      // key the server already answered.
+      const identity = `${declaration.value} ${declaration.unit} ${declaration.measured_on}`
+      const pending = pendingMeasures.get(declaration.metric_code)
+      const command = pending && pending.value === identity ? pending.command : issue()
+      pendingMeasures.set(declaration.metric_code, { command, value: identity })
+
+      const record = await dependencies.transport.recordBodyProgress(command, declaration)
+      pendingMeasures.delete(declaration.metric_code)
+      return record
+    },
+
+    async skipStep(stepCode) {
+      const open = await openAttempt()
+      await dependencies.transport.skipStep(open.id, stepCode)
     },
 
     async resume() {

@@ -48,6 +48,8 @@ function flowWith(transport: Partial<OnboardingTransport> = {}) {
   const goals: Array<{ idempotencyKey: string; value: string }> = []
   const focuses: Array<{ idempotencyKey: string; value: string[] }> = []
   const levels: Array<{ idempotencyKey: string; value: string }> = []
+  const measures: Array<{ idempotencyKey: string; metric: string; value: number }> = []
+  const skips: string[] = []
   let issued = 0
 
   const flow = createOnboardingFlow({
@@ -85,6 +87,24 @@ function flowWith(transport: Partial<OnboardingTransport> = {}) {
           superseded_claim_id: null,
         }
       },
+      recordBodyProgress: async (command, declaration) => {
+        measures.push({
+          idempotencyKey: command.idempotencyKey,
+          metric: declaration.metric_code,
+          value: declaration.value,
+        })
+        return {
+          id: '019fe000-0000-7000-8000-000000000001',
+          metric_code: declaration.metric_code,
+          value: declaration.value,
+          unit: declaration.unit,
+          original_value: null,
+          original_unit: null,
+        }
+      },
+      skipStep: async (_attemptId, stepCode) => {
+        skips.push(stepCode)
+      },
       readCurrent: async () => ({
         attempt: ATTEMPT,
         answers: {
@@ -93,6 +113,7 @@ function flowWith(transport: Partial<OnboardingTransport> = {}) {
           primary_training_goal: { answered: false, value: null },
           focus_areas: { answered: false, value: [] },
           training_experience: { answered: false, value: null },
+          body_measures: { answered: false, value: null },
         },
       }),
       ...transport,
@@ -103,7 +124,7 @@ function flowWith(transport: Partial<OnboardingTransport> = {}) {
     },
   })
 
-  return { flow, sent, declared, sexes, goals, focuses, levels }
+  return { flow, sent, declared, sexes, goals, focuses, levels, measures, skips }
 }
 
 describe('declareAdult', () => {
@@ -262,6 +283,7 @@ describe('resume', () => {
           primary_training_goal: { answered: false, value: null },
           focus_areas: { answered: false, value: [] },
           training_experience: { answered: false, value: null },
+          body_measures: { answered: false, value: null },
         },
       }),
     })
@@ -274,6 +296,7 @@ describe('resume', () => {
         primary_training_goal: { answered: false, value: null },
         focus_areas: { answered: false, value: [] },
         training_experience: { answered: false, value: null },
+        body_measures: { answered: false, value: null },
       },
     })
   })
@@ -293,6 +316,7 @@ describe('resume', () => {
           primary_training_goal: { answered: false, value: null },
           focus_areas: { answered: false, value: [] },
           training_experience: { answered: false, value: null },
+          body_measures: { answered: false, value: null },
         },
       }),
     })
@@ -318,6 +342,7 @@ describe('resume', () => {
           primary_training_goal: { answered: false, value: null },
           focus_areas: { answered: false, value: [] },
           training_experience: { answered: false, value: null },
+          body_measures: { answered: false, value: null },
         },
       }),
     })
@@ -627,5 +652,130 @@ describe('declareTrainingExperience', () => {
     await flow.declareTrainingExperience('experienced')
 
     expect(keys[0]).not.toBe(keys[1])
+  })
+})
+
+describe('recordBodyProgress', () => {
+  const weight = {
+    metric_code: 'body_weight' as const,
+    value: 74,
+    unit: 'kg' as const,
+    measured_on: '2026-08-24',
+  }
+  const height = {
+    metric_code: 'body_height' as const,
+    value: 170,
+    unit: 'cm' as const,
+    measured_on: '2026-08-24',
+  }
+
+  test('sends what the person read, not the canonical figure', async () => {
+    // The database converts, because the factor lives in the unit catalogue and a
+    // factor with two homes is a factor with two answers.
+    const { flow, measures } = flowWith()
+
+    await flow.recordBodyProgress({ ...weight, value: 163, unit: 'lb' })
+
+    expect(measures).toEqual([{ idempotencyKey: 'key_1', metric: 'body_weight', value: 163 }])
+  })
+
+  test('gives weight and height different keys, because they are two commands', async () => {
+    const { flow, measures } = flowWith()
+
+    await flow.recordBodyProgress(weight)
+    await flow.recordBodyProgress(height)
+
+    expect(measures[0]?.idempotencyKey).not.toBe(measures[1]?.idempotencyKey)
+  })
+
+  test('reuses the key while the same measurement keeps failing', async () => {
+    let attempts = 0
+    const keys: string[] = []
+    const { flow } = flowWith({
+      recordBodyProgress: async (command, declaration) => {
+        keys.push(command.idempotencyKey)
+        attempts += 1
+        if (attempts === 1) throw new Error('network')
+        return {
+          id: '019fe000-0000-7000-8000-000000000002',
+          metric_code: declaration.metric_code,
+          value: declaration.value,
+          unit: declaration.unit,
+          original_value: null,
+          original_unit: null,
+        }
+      },
+    })
+
+    await expect(flow.recordBodyProgress(weight)).rejects.toThrow('network')
+    await expect(flow.recordBodyProgress(weight)).resolves.toBeDefined()
+
+    // One lost response must replay, not record the same weight twice in the series.
+    expect(keys).toHaveLength(2)
+    expect(keys[0]).toBe(keys[1])
+  })
+
+  test('starts a new submission when the number changes', async () => {
+    const keys: string[] = []
+    const { flow } = flowWith({
+      recordBodyProgress: async (command) => {
+        keys.push(command.idempotencyKey)
+        throw new Error('network')
+      },
+    })
+
+    await expect(flow.recordBodyProgress(weight)).rejects.toThrow('network')
+    await expect(flow.recordBodyProgress({ ...weight, value: 75 })).rejects.toThrow('network')
+
+    expect(keys[0]).not.toBe(keys[1])
+  })
+
+  test('a failed height leaves the saved weight alone', async () => {
+    // They are independent measurements, so a partial failure is not a rollback: the
+    // retry replays the weight and completes the height.
+    const saved: string[] = []
+    const { flow } = flowWith({
+      recordBodyProgress: async (_command, declaration) => {
+        if (declaration.metric_code === 'body_height') throw new Error('network')
+        saved.push(declaration.metric_code)
+        return {
+          id: '019fe000-0000-7000-8000-000000000003',
+          metric_code: declaration.metric_code,
+          value: declaration.value,
+          unit: declaration.unit,
+          original_value: null,
+          original_unit: null,
+        }
+      },
+    })
+
+    await flow.recordBodyProgress(weight)
+    await expect(flow.recordBodyProgress(height)).rejects.toThrow('network')
+
+    expect(saved).toEqual(['body_weight'])
+  })
+})
+
+describe('skipStep', () => {
+  test('records the skip against the open attempt', async () => {
+    const { flow, skips } = flowWith()
+
+    await flow.skipStep('body_measures')
+
+    expect(skips).toEqual(['body_measures'])
+  })
+
+  test('opens an attempt when there is none, because a skip belongs to one', async () => {
+    let starts = 0
+    const { flow } = flowWith({
+      startAttempt: async () => {
+        starts += 1
+        return ATTEMPT
+      },
+    })
+
+    await flow.skipStep('body_measures')
+
+    expect(starts).toBe(1)
   })
 })

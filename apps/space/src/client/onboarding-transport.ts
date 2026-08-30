@@ -21,6 +21,7 @@ import {
   type CurrentOnboardingAttempt,
   type FocusArea,
   type OnboardingFlow,
+  type BodyProgressRecord,
   type ProfileClaim,
   type TrainingExperienceClaim,
 } from './onboarding'
@@ -95,6 +96,24 @@ export function createSpaceOnboardingFlow(): OnboardingFlow {
             token,
           ),
         ),
+      recordBodyProgress: (command, declaration) =>
+        authenticated((token) =>
+          authorizedPost<BodyProgressRecord>(
+            '/space/v1/body-progress',
+            command,
+            declaration,
+            token,
+          ),
+        ),
+      skipStep: (attemptId, stepCode) =>
+        authenticated(async (token) => {
+          await authorizedPost<void>(
+            `/space/v1/onboarding-attempts/${attemptId}/skips`,
+            undefined,
+            { step_code: stepCode },
+            token,
+          )
+        }),
       readCurrent: () =>
         authenticated((token) =>
           authorizedGet<CurrentOnboardingAttempt>('/space/v1/onboarding-attempts/current', token),

@@ -26,6 +26,7 @@ const SEX_ROUTE = '/onboarding/sex'
 const GOAL_ROUTE = '/onboarding/goal'
 const FOCUS_ROUTE = '/onboarding/focus'
 const EXPERIENCE_ROUTE = '/onboarding/experience'
+const MEASURES_ROUTE = '/onboarding/measures'
 
 export type OnboardingStepRoute =
   | typeof IDENTITY_ROUTE
@@ -33,6 +34,7 @@ export type OnboardingStepRoute =
   | typeof GOAL_ROUTE
   | typeof FOCUS_ROUTE
   | typeof EXPERIENCE_ROUTE
+  | typeof MEASURES_ROUTE
 export type OnboardingRoute = OnboardingStepRoute | typeof AGE_ROUTE | typeof CONTINUES_ROUTE
 
 /** Only the shape the decisions read, so a test needs no generated DTO. */
@@ -50,6 +52,15 @@ export interface OnboardingProgress {
     primary_training_goal?: { answered?: boolean }
     focus_areas?: { answered?: boolean }
     training_experience?: { answered?: boolean }
+    /**
+     * The two measurements are one entry with two members, and each screen reads its
+     * own. `answered` on the entry means both were given; a step needs to know about
+     * its own half, or answering the weight would carry the height with it.
+     */
+    body_measures?: {
+      answered?: boolean
+      value?: { weight?: unknown | null; height?: unknown | null } | null
+    }
   }
 }
 
@@ -109,6 +120,15 @@ export const ONBOARDING_STEPS: readonly OnboardingStep[] = [
   {
     route: EXPERIENCE_ROUTE,
     answered: (progress) => answered(progress, 'training_experience'),
+    revisitable: true,
+  },
+  {
+    route: MEASURES_ROUTE,
+    // Both members, not the entry's own `answered`: a half-finished pair leaves the
+    // step owed and the screen reopens on what it already has.
+    answered: (progress) =>
+      progress.answers?.body_measures?.value?.weight != null &&
+      progress.answers?.body_measures?.value?.height != null,
     revisitable: true,
   },
 ]

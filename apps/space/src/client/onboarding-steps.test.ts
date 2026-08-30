@@ -17,7 +17,13 @@ const PASSED = { eligibility_status: 'pass' as const }
 /** Every step, so a test can say which ones are behind it. */
 const answers = (
   ...steps: Array<
-    'identity' | 'biological_sex' | 'primary_training_goal' | 'focus_areas' | 'training_experience'
+    | 'identity'
+    | 'biological_sex'
+    | 'primary_training_goal'
+    | 'focus_areas'
+    | 'training_experience'
+    | 'body_weight'
+    | 'body_height'
   >
 ) => ({
   identity: { answered: steps.includes('identity') },
@@ -25,6 +31,13 @@ const answers = (
   primary_training_goal: { answered: steps.includes('primary_training_goal') },
   focus_areas: { answered: steps.includes('focus_areas') },
   training_experience: { answered: steps.includes('training_experience') },
+  body_measures: {
+    answered: steps.includes('body_weight') && steps.includes('body_height'),
+    value: {
+      weight: steps.includes('body_weight') ? { value: 74 } : null,
+      height: steps.includes('body_height') ? { value: 170 } : null,
+    },
+  },
 })
 
 describe('resolveOnboardingRoute', () => {
@@ -107,6 +120,16 @@ describe('stepPosition', () => {
         attempt: PASSED,
         answers: answers('identity', 'biological_sex', 'primary_training_goal', 'focus_areas'),
       }),
+      resolveOnboardingRoute({
+        attempt: PASSED,
+        answers: answers(
+          'identity',
+          'biological_sex',
+          'primary_training_goal',
+          'focus_areas',
+          'training_experience',
+        ),
+      }),
     ]
 
     expect(walked).toEqual(ONBOARDING_STEPS.map((step) => step.route))
@@ -142,7 +165,7 @@ describe('guardStep', () => {
 
 describe('lastRevisitableStep', () => {
   test('is the last declared step a person may change', () => {
-    expect(lastRevisitableStep()).toBe('/onboarding/experience')
+    expect(lastRevisitableStep()).toBe('/onboarding/measures')
   })
 
   test('follows the declared order rather than a name written once', () => {
@@ -209,8 +232,8 @@ describe('the experience step', () => {
     expect(nextRouteAfter('/onboarding/focus')).toBe('/onboarding/experience')
   })
 
-  test('is the last step, so it hands over to the terminal', () => {
-    expect(nextRouteAfter('/onboarding/experience')).toBe('/onboarding/continues')
+  test('hands over to the measures, which were appended after it', () => {
+    expect(nextRouteAfter('/onboarding/experience')).toBe('/onboarding/measures')
   })
 
   test('is owed until it is answered', () => {
@@ -225,7 +248,7 @@ describe('the experience step', () => {
         attempt: passed,
         answers: { ...upTo, training_experience: { answered: true } },
       }),
-    ).toBe('/onboarding/continues')
+    ).toBe('/onboarding/measures')
   })
 
   test('cannot be reached before the focus is answered', () => {
@@ -239,3 +262,53 @@ describe('the experience step', () => {
     )
   })
 })
+
+describe('the measures step', () => {
+  const passed = { eligibility_status: 'pass' as const }
+  const upTo = answers(
+    'identity',
+    'biological_sex',
+    'primary_training_goal',
+    'focus_areas',
+    'training_experience',
+  )
+
+  test('comes after the experience and hands over to the terminal', () => {
+    expect(nextRouteAfter('/onboarding/experience')).toBe('/onboarding/measures')
+    expect(nextRouteAfter('/onboarding/measures')).toBe('/onboarding/continues')
+  })
+
+  test('stays owed until both measurements are given', () => {
+    // One entry with two members, and half of it is not an answer: the screen has to
+    // reopen on what it already has rather than move on.
+    expect(resolveOnboardingRoute({ attempt: passed, answers: upTo })).toBe('/onboarding/measures')
+    expect(
+      resolveOnboardingRoute({ attempt: passed, answers: { ...upTo, ...half('body_weight') } }),
+    ).toBe('/onboarding/measures')
+    expect(
+      resolveOnboardingRoute({
+        attempt: passed,
+        answers: { ...upTo, ...half('body_weight', 'body_height') },
+      }),
+    ).toBe('/onboarding/continues')
+  })
+
+  test('stays editable once answered', () => {
+    const done = { ...upTo, ...half('body_weight', 'body_height') }
+
+    expect(guardStep('/onboarding/measures', { attempt: passed, answers: done })).toBeNull()
+  })
+})
+
+/** Just the measurement half of the answers, for combining with `upTo`. */
+function half(...steps: Array<'body_weight' | 'body_height'>) {
+  return {
+    body_measures: {
+      answered: steps.length === 2,
+      value: {
+        weight: steps.includes('body_weight') ? { value: 74 } : null,
+        height: steps.includes('body_height') ? { value: 170 } : null,
+      },
+    },
+  }
+}

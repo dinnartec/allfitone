@@ -7,7 +7,13 @@ const PASSED = { eligibility_status: 'pass' as const }
 /** Every step, so a test can say which ones are behind it. */
 const answers = (
   ...steps: Array<
-    'identity' | 'biological_sex' | 'primary_training_goal' | 'focus_areas' | 'training_experience'
+    | 'identity'
+    | 'biological_sex'
+    | 'primary_training_goal'
+    | 'focus_areas'
+    | 'training_experience'
+    | 'body_weight'
+    | 'body_height'
   >
 ) => ({
   identity: { answered: steps.includes('identity') },
@@ -15,6 +21,13 @@ const answers = (
   primary_training_goal: { answered: steps.includes('primary_training_goal') },
   focus_areas: { answered: steps.includes('focus_areas') },
   training_experience: { answered: steps.includes('training_experience') },
+  body_measures: {
+    answered: steps.includes('body_weight') && steps.includes('body_height'),
+    value: {
+      weight: steps.includes('body_weight') ? { value: 74 } : null,
+      height: steps.includes('body_height') ? { value: 170 } : null,
+    },
+  },
 })
 
 describe('routeAfterAuthentication', () => {
@@ -42,6 +55,8 @@ describe('routeAfterAuthentication', () => {
           'primary_training_goal',
           'focus_areas',
           'training_experience',
+          'body_weight',
+          'body_height',
         ),
       })),
     ).resolves.toBe('/onboarding/continues')

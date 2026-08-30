@@ -208,12 +208,17 @@ export function refreshSession(refreshToken: string): Promise<SessionRefreshed> 
 }
 
 /**
- * Authenticated POST. Command headers travel here because every authenticated
+ * Authenticated POST. Command headers travel here because almost every authenticated
  * command in this contract carries them.
+ *
+ * `undefined` is for the ones that do not, and there is exactly one: skipping an
+ * onboarding step, whose idempotency is the primary key of the record rather than a
+ * durable receipt. Sending headers the route does not read would be noise on the
+ * wire pretending to be a guarantee.
  */
 export async function authorizedPost<T>(
   path: string,
-  command: { idempotencyKey: string; commandId: string },
+  command: { idempotencyKey: string; commandId: string } | undefined,
   body: unknown,
   token?: string,
 ): Promise<T> {
@@ -224,8 +229,9 @@ export async function authorizedPost<T>(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Idempotency-Key': command.idempotencyKey,
-        'Command-Id': command.commandId,
+        ...(command
+          ? { 'Idempotency-Key': command.idempotencyKey, 'Command-Id': command.commandId }
+          : {}),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
