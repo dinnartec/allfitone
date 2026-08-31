@@ -9,8 +9,10 @@
 import { newCommand } from '@allfitone/contracts/commands'
 import * as Crypto from 'expo-crypto'
 
-import { authorizedGet, authorizedPost, refreshSession } from './index'
+import { authorizedGet, authorizedPost, authorizedPut, refreshSession } from './index'
 import {
+  type MyProgram,
+  type WeekPlan,
   createProgramFlow,
   type ProgramAssignment,
   type ProgramCatalogue,
@@ -29,6 +31,26 @@ export function createSpaceProgramFlow(): ProgramFlow {
         Date.now(),
       ),
     transport: {
+      readWeekPlan: (timezone) =>
+        authenticated((token) =>
+          authorizedGet<WeekPlan>(
+            `/space/v1/week-plan?timezone=${encodeURIComponent(timezone)}`,
+            token,
+          ),
+        ),
+      readMyPrograms: () =>
+        authenticated((token) =>
+          authorizedGet<readonly MyProgram[]>('/space/v1/programs/mine', token),
+        ),
+      reorder: (command, assignmentIds) =>
+        authenticated((token) =>
+          authorizedPut<readonly MyProgram[]>(
+            '/space/v1/programs/mine/order',
+            command,
+            { assignment_ids: assignmentIds },
+            token,
+          ),
+        ),
       readCatalogue: () =>
         authenticated((token) => authorizedGet<ProgramCatalogue>('/space/v1/programs', token)),
       readDetail: (programVersionId) =>

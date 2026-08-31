@@ -71,9 +71,6 @@ const PENDING: Record<string, string> = {
   history: 'El historial completo llega con su propia pantalla.',
 }
 
-/** Seven days ending today, which is the window the reader answers for. */
-const WINDOW_DAYS = 7
-
 const HERO_ASPECT = 390 / 468
 
 export default function Today() {
@@ -140,6 +137,14 @@ export default function Today() {
   const date = useMemo(() => longDateLabel(new Date()), [])
   const assigned = today?.current_assignment ?? null
   const session = today?.session ?? null
+  // The week is done when the plan says so, not when today happens to be empty: a
+  // person who is simply ahead has finished something, and the screen should say it
+  // rather than pull next week forward.
+  const weekDone =
+    assigned !== null &&
+    session === null &&
+    (today?.week.sessions_planned ?? 0) > 0 &&
+    today?.week.sessions_completed === today?.week.sessions_planned
 
   const train = () => {
     if (!session) return
@@ -234,15 +239,37 @@ export default function Today() {
 
         {assigned && !session ? (
           <View style={styles.session}>
-            <Text role="eyebrow" size="xs" color="accent">
-              {`HOY · ${assigned.title.toUpperCase()}`}
+            <Text role="eyebrow" size="xs" color={weekDone ? 'success' : 'accent'}>
+              {`ESTA SEMANA · ${assigned.title.toUpperCase()}`}
             </Text>
-            <Text role="display" size="4xl" uppercase accessibilityRole="header">
-              Día de descanso
+            <Text
+              role="display"
+              size="5xl"
+              uppercase
+              style={styles.sessionTitle}
+              accessibilityRole="header"
+            >
+              {weekDone ? 'Semana cumplida' : 'Día de descanso'}
             </Text>
-            {/* A rest day is an answer, not an absence. */}
             <Text role="body" size="sm" color="secondary">
-              Tu programa no pide nada hoy. Descansar también es entrenar.
+              {weekDone
+                ? `${today?.week.sessions_completed} de ${today?.week.sessions_planned} sesiones · ${trainedLabel(today?.week.trained_seconds ?? 0)}`
+                : 'Tu programa no pide nada hoy. Descansar también es entrenar.'}
+            </Text>
+            {/* Free training rather than next week's session: finishing early is
+                finishing, and pulling the next week forward would quietly turn a
+                good week into a longer one. */}
+            <Button
+              label="Entrenar libre"
+              variant="secondary"
+              icon="freestyle"
+              onPress={() => setPending(PENDING.free)}
+              style={styles.start}
+            />
+            <Text role="body" size="2xs" color="muted">
+              {weekDone
+                ? 'La semana que viene empieza limpia. Lo de esta no se arrastra.'
+                : 'Puedes adelantar cualquier rutina de la semana desde Entrenar.'}
             </Text>
           </View>
         ) : null}
@@ -383,10 +410,16 @@ function open(router: ReturnType<typeof useRouter>, program: ProgramSummary) {
   router.push(`/programs/${program.program_version_id}`)
 }
 
-/** The seven days ending today, and the two things we can honestly say about them. */
+/**
+ * The week, counted in the sessions it asks for.
+ *
+ * One bar per planned session, not per day: the week is the unit and the day is a
+ * suggestion, so seven bars would be counting something nobody is trying to fill.
+ */
 function Week({ week }: { readonly week: TodayPayload['week'] }) {
   const theme = useTheme()
-  const done = Math.min(week.sessions_completed, WINDOW_DAYS)
+  const planned = Math.max(week.sessions_planned, 1)
+  const done = Math.min(week.sessions_completed, planned)
 
   return (
     <View style={styles.section}>
@@ -394,12 +427,16 @@ function Week({ week }: { readonly week: TodayPayload['week'] }) {
         <Text role="eyebrow" size="xs" color="muted">
           ESTA SEMANA
         </Text>
-        <Text role="display" size="md">
-          {`${week.sessions_completed} de ${WINDOW_DAYS}`}
+        <Text
+          role="display"
+          size="md"
+          color={week.sessions_planned > 0 && done === planned ? 'success' : 'primary'}
+        >
+          {`${week.sessions_completed} de ${week.sessions_planned}`}
         </Text>
       </View>
       <View style={styles.bars}>
-        {Array.from({ length: WINDOW_DAYS }, (_unused, index) => (
+        {Array.from({ length: planned }, (_unused, index) => (
           <View
             key={index}
             style={[
@@ -554,7 +591,9 @@ function Bell({ onPress }: { readonly onPress: () => void }) {
 
   return (
     <Pressable accessibilityRole="button" accessibilityLabel="Tus avisos" onPress={onPress}>
-      <GlassPanel style={styles.bell}>
+      {/* The chip material, not the chrome one: this sits on a photograph, and at
+          the dock's opacity it would read as a sticker stuck over it. */}
+      <GlassPanel material="chip" style={styles.bell}>
         <FoundationIcon name="notification" size="sm" color={theme.color.icon.primary} decorative />
       </GlassPanel>
     </Pressable>

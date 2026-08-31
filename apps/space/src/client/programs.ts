@@ -17,8 +17,14 @@ export type ProgramChoice = AllfitV1Schemas['SpaceProgramChoice']
 export type ProgramDetail = AllfitV1Schemas['SpaceProgramDetail']
 export type ProgramDay = AllfitV1Schemas['SpaceProgramDay']
 export type ProgramStep = AllfitV1Schemas['SpaceProgramStep']
+export type WeekPlan = AllfitV1Schemas['SpaceWeekPlan']
+export type WeekRoutine = AllfitV1Schemas['SpaceWeekRoutine']
+export type MyProgram = AllfitV1Schemas['SpaceMyProgram']
 
 export interface ProgramTransport {
+  readWeekPlan(timezone: string): Promise<WeekPlan>
+  readMyPrograms(): Promise<readonly MyProgram[]>
+  reorder(command: CommandHeaders, assignmentIds: readonly string[]): Promise<readonly MyProgram[]>
   readCatalogue(): Promise<ProgramCatalogue>
   readDetail(programVersionId: string): Promise<ProgramDetail>
   choose(command: CommandHeaders, choice: ProgramChoice): Promise<ProgramAssignment>
@@ -30,6 +36,9 @@ export interface ProgramFlowDependencies {
 }
 
 export interface ProgramFlow {
+  readWeekPlan(timezone: string): Promise<WeekPlan>
+  readMyPrograms(): Promise<readonly MyProgram[]>
+  reorder(assignmentIds: readonly string[]): Promise<readonly MyProgram[]>
   readCatalogue(): Promise<ProgramCatalogue>
   readDetail(programVersionId: string): Promise<ProgramDetail>
   choose(choice: ProgramChoice): Promise<ProgramAssignment>
@@ -41,6 +50,12 @@ export function createProgramFlow(dependencies: ProgramFlowDependencies): Progra
   const pending = new Map<string, CommandHeaders>()
 
   return {
+    readWeekPlan: (timezone) => dependencies.transport.readWeekPlan(timezone),
+    readMyPrograms: () => dependencies.transport.readMyPrograms(),
+    // A new command every time: it is the order as it now stands, not a retry of
+    // the previous one.
+    reorder: (assignmentIds) =>
+      dependencies.transport.reorder(dependencies.newCommand(), assignmentIds),
     readCatalogue: () => dependencies.transport.readCatalogue(),
 
     readDetail: (programVersionId) => dependencies.transport.readDetail(programVersionId),

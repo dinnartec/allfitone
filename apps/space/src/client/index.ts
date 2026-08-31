@@ -256,18 +256,23 @@ export async function authorizedPost<T>(
 }
 
 /**
- * Authenticated PUT with a precondition.
+ * Authenticated PUT, optionally with a precondition.
  *
- * `If-Match` carries the revision the client believes it is editing. It is a
- * precondition on the resource, not a field of the body: in the body a client could
- * send one number and mean another, and the server would have no way to tell.
+ * `If-Match` carries the revision the client believes it is editing, for the
+ * resources that have one. It is a precondition on the resource, not a field of the
+ * body: in the body a client could send one number and mean another, and the server
+ * would have no way to tell.
+ *
+ * It is omitted where there is no revision to carry — reordering a list has no
+ * optimistic lock because the whole list is the write, and sending a made-up number
+ * would be worse than sending none.
  */
 export async function authorizedPut<T>(
   path: string,
   command: { idempotencyKey: string; commandId: string },
   body: unknown,
   token: string | undefined,
-  ifMatch: number,
+  ifMatch?: number,
 ): Promise<T> {
   const { signal, done } = timeoutSignal(TIMEOUT_MS)
   let response: Response | undefined
@@ -278,7 +283,7 @@ export async function authorizedPut<T>(
         'Content-Type': 'application/json',
         'Idempotency-Key': command.idempotencyKey,
         'Command-Id': command.commandId,
-        'If-Match': String(ifMatch),
+        ...(ifMatch === undefined ? {} : { 'If-Match': String(ifMatch) }),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       body: JSON.stringify(body),

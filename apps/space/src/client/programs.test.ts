@@ -20,6 +20,15 @@ function harness(overrides?: Partial<ProgramTransport>) {
   let issued = 0
 
   const transport: ProgramTransport = {
+    readWeekPlan: async () => {
+      throw new Error('not used in this test')
+    },
+    readMyPrograms: async () => {
+      throw new Error('not used in this test')
+    },
+    reorder: async () => {
+      throw new Error('not used in this test')
+    },
     readDetail: async () => {
       throw new Error('not used in this test')
     },

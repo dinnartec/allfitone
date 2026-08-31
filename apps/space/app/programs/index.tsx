@@ -1,7 +1,8 @@
 /**
- * E-1b · Entrenar · persona nueva — `HU-SP-100`.
+ * El catálogo de Allfit — `HU-SP-100`.
  *
- * The Entrenar tab before anybody has anything of their own. It asks the one thing
+ * Reached from "Ver los de Allfit", and it is where the Entrenar tab sends somebody
+ * who has nothing of their own yet. It asks the one thing
  * the onboarding never asked — how many days a week you can actually train — and
  * answers with the three programs for that frequency.
  *
@@ -20,6 +21,7 @@
  * held the same books. One list that grows is one thing to keep right.
  */
 
+import { IconButton } from '@allfitone/react-native/icon-button'
 import { InlineAlert } from '@allfitone/react-native/inline-alert'
 import { Screen } from '@allfitone/react-native/screen'
 import { Text } from '@allfitone/react-native/text'
@@ -29,9 +31,9 @@ import { useRouter } from 'expo-router'
 import { useEffect, useMemo, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
 
-import { ApiError } from '../src/client'
-import { createSpaceProgramFlow } from '../src/client/programs-transport'
-import type { ProgramCatalogue } from '../src/client/programs'
+import { ApiError } from '../../src/client'
+import { createSpaceProgramFlow } from '../../src/client/programs-transport'
+import type { ProgramCatalogue } from '../../src/client/programs'
 import {
   applyFilter,
   cardsFor,
@@ -39,9 +41,9 @@ import {
   suggestedFrequency,
   type ProgramSummary,
   type TrainingProfile,
-} from '../src/client/program-catalogue'
-import { ProgramCard } from '../src/components/program-card'
-import { DOCK_HEIGHT, TabBar, type TabKey } from '../src/components/tab-bar'
+} from '../../src/client/program-catalogue'
+import { ProgramCard } from '../../src/components/program-card'
+import { DOCK_HEIGHT, TabBar, type TabKey } from '../../src/components/tab-bar'
 
 const EXPIRED = 'Tu sesión venció. Vuelve a entrar para continuar.'
 const READ_FAILED = 'No pudimos cargar los programas. Inténtalo otra vez.'
@@ -129,13 +131,16 @@ export default function Train() {
   return (
     <Screen edges={['top', 'bottom']}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.heading}>
-          <Text role="display" size="2xl" uppercase accessibilityRole="header">
-            Entrenar
-          </Text>
-          <Text role="body" size="sm" color="muted">
-            Lo tuyo y lo de Allfit, en un solo sitio.
-          </Text>
+        <View style={styles.top}>
+          <IconButton icon="back" accessibilityLabel="Volver" onPress={() => router.back()} />
+          <View style={styles.heading}>
+            <Text role="display" size="2xl" uppercase accessibilityRole="header">
+              Los de Allfit
+            </Text>
+            <Text role="body" size="sm" color="muted">
+              Programas escritos para tu objetivo y tu nivel.
+            </Text>
+          </View>
         </View>
 
         <View
@@ -339,7 +344,8 @@ function Alternative({
 
 const styles = StyleSheet.create({
   content: { gap: 18, paddingBottom: DOCK_HEIGHT + 40 },
-  heading: { gap: 4 },
+  top: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  heading: { flex: 1, gap: 4 },
   segmented: { flexDirection: 'row', borderRadius: 22, borderWidth: 1, padding: 3, gap: 3 },
   segment: {
     flex: 1,
