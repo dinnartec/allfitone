@@ -337,6 +337,21 @@ create temporary table curated_program (
   ordinal integer, slug text, band text, frequency integer, title text, weeks integer,
   goals text[], levels text[], emphases text[]
 ) on commit drop;
+
+-- What the program is, in the words somebody deciding needs. One per band-family
+-- rather than per program: the three frequencies of a band are the same training
+-- with more or fewer days of it, and twenty-four near-identical paragraphs would be
+-- twenty-four things to keep in step.
+create temporary table curated_band (band text, description text) on commit drop;
+insert into curated_band (band, description) values
+  ('me', 'Los patrones fundamentales con poco peso y muchas repeticiones, para que el cuerpo aprenda el movimiento antes de cargarlo.'),
+  ('mp', 'Un reparto clásico de empuje, tirón y pierna. La progresión es por carga: el mismo esquema de series, más peso cuando las repeticiones salen limpias.'),
+  ('be', 'Fuerza ligera y caminata, alternadas. El objetivo de estas primeras semanas es la constancia, no la intensidad.'),
+  ('bp', 'Fuerza básica combinada con circuitos y carrera continua. El gasto viene del volumen, no de llegar al fallo.'),
+  ('fe', 'Un poco de todo: fuerza general, movilidad y cardio suave, sin especializarte en nada todavía.'),
+  ('fp', 'Fuerza, carrera e intervalos en la misma semana, para sostener una condición general amplia.'),
+  ('ce', 'Rodajes suaves y caminata-carrera, con una sesión de fuerza para las piernas. Se construye la base antes que la velocidad.'),
+  ('cp', 'Rodajes, series y una tirada larga, más fuerza específica. La carga sube por distancia, no por ritmo.');
 insert into curated_program (ordinal, slug, band, frequency, title, weeks, goals, levels, emphases) values
   (1,  'me3', 'me', 3, 'Cuerpo completo',              6,  array['build_muscle'], array['starting'], array['whole_body']),
   (2,  'me4', 'me', 4, 'Fuerza inicial en cuatro',     8,  array['build_muscle'], array['starting'], array['whole_body','chest']),
@@ -383,7 +398,7 @@ begin
       program.id,
       jsonb_build_object(
         'title', program.title,
-        'notes', null,
+        'notes', (select band.description from curated_band as band where band.band = program.band),
         'sessions', (
           select jsonb_agg(jsonb_build_object(
             'position', ((week.number - 1) * program.frequency + slot.slot),

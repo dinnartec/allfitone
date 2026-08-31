@@ -3363,6 +3363,21 @@ export type Database = {
           weeks: number
         }[]
       }
+      read_program_version: {
+        Args: { p_person_id: string; p_program_version_id: string }
+        Returns: {
+          days: Json
+          days_per_week: number
+          emphases: string[]
+          goals: string[]
+          levels: string[]
+          notes: string
+          program_version_id: string
+          sex_affinity: string
+          title: string
+          weeks: number
+        }[]
+      }
       read_session_template_version: {
         Args: {
           p_organization_id: string
