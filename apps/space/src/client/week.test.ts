@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 
-import { weekFromToday } from './week'
+import { longDateLabel, weekFromToday } from './week'
 
 describe('weekFromToday', () => {
   it('starts today and runs six days on', () => {
@@ -41,5 +41,20 @@ describe('weekFromToday', () => {
     // Martes and miércoles share `M`, so the letter cannot be the key.
     expect(letters.filter((letter) => letter === 'M')).toHaveLength(2)
     expect(keys.size).toBe(7)
+  })
+})
+
+describe('longDateLabel', () => {
+  it('writes the day and month out in Spanish', () => {
+    expect(longDateLabel(new Date(2026, 7, 25))).toBe('martes 25 de agosto')
+  })
+
+  it('names every month, so none of them can be missing', () => {
+    const labels = Array.from({ length: 12 }, (_unused, month) =>
+      longDateLabel(new Date(2026, month, 1)),
+    )
+
+    expect(labels.some((label) => label.includes('undefined'))).toBe(false)
+    expect(new Set(labels).size).toBe(12)
   })
 })

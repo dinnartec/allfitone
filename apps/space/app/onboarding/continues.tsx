@@ -24,12 +24,13 @@
  * The back arrow stays, which is criterion 4: closing the onboarding does not
  * close the answers.
  *
- * **There is no screen after this one yet**, so activating holds here and says the
- * Fitness ID is active rather than routing somewhere that does not exist. Coming
- * back to it cold lands here too: the resume read reports the attempt as
- * `activated`, which is what `20260830120000_resume_after_activation.sql` was
- * written for — before it, an activated person read exactly like an account that
- * never started and was sent back to the eligibility gate.
+ * Activating hands over to **Hoy**, which `HU-SP-100` built. Before it there was no
+ * screen after this one and the button held here, saying the Fitness ID was active
+ * and going nowhere. Coming back cold no longer lands here at all: the resume read
+ * reports the attempt as `activated` and the entry decision goes straight to Hoy —
+ * which is what `20260830120000_resume_after_activation.sql` was written for, since
+ * before it an activated person read exactly like an account that never started and
+ * was sent back to the eligibility gate.
  */
 
 import { Button } from '@allfitone/react-native/button'
@@ -46,7 +47,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { OnboardingBack } from '../../src/components/onboarding-header'
 import { ApiError } from '../../src/client'
 import { createSpaceOnboardingFlow } from '../../src/client/onboarding-transport'
-import { lastRevisitableStep } from '../../src/client/onboarding-steps'
+import { lastRevisitableStep, TODAY } from '../../src/client/onboarding-steps'
 import {
   canActivate,
   completionFor,
@@ -131,6 +132,7 @@ export default function OnboardingContinues() {
     try {
       await flow.activate(completionFor(identity))
       setActivated(true)
+      router.replace(TODAY)
     } catch (cause: unknown) {
       if (cause instanceof ApiError && cause.failure === 'unauthenticated') {
         setSessionExpired(true)

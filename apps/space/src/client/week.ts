@@ -40,3 +40,32 @@ export function weekFromToday(from: Date): readonly WeekDay[] {
     }
   })
 }
+
+/** Spanish month names, for the same reason the letters are literal: no ICU to trust. */
+const MONTHS = [
+  'enero',
+  'febrero',
+  'marzo',
+  'abril',
+  'mayo',
+  'junio',
+  'julio',
+  'agosto',
+  'septiembre',
+  'octubre',
+  'noviembre',
+  'diciembre',
+]
+
+const WEEKDAYS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado']
+
+/**
+ * "martes 26 de agosto", written out rather than formatted.
+ *
+ * `Intl` with a Spanish locale is not something to depend on across two engines and
+ * two operating systems for a line of copy, and a wrong month name would be visible
+ * to everybody on the first screen after signing up.
+ */
+export function longDateLabel(date: Date): string {
+  return `${WEEKDAYS[date.getDay()]} ${date.getDate()} de ${MONTHS[date.getMonth()]}`
+}

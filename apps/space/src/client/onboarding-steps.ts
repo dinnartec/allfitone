@@ -20,6 +20,12 @@
  * looked like starting over and looped — signing in again resolved to it right back.
  */
 const CONTINUES_ROUTE = '/onboarding/continues'
+/**
+ * Where an activated person goes. Until `HU-SP-100` there was no such place, and the
+ * onboarding's terminal screen doubled as one — which is why activating used to hold
+ * on that screen instead of going anywhere.
+ */
+const TODAY_ROUTE = '/today'
 const AGE_ROUTE = '/onboarding/age'
 const IDENTITY_ROUTE = '/onboarding/identity'
 const SEX_ROUTE = '/onboarding/sex'
@@ -35,7 +41,8 @@ export type OnboardingStepRoute =
   | typeof FOCUS_ROUTE
   | typeof EXPERIENCE_ROUTE
   | typeof MEASURES_ROUTE
-export type OnboardingRoute = OnboardingStepRoute | typeof AGE_ROUTE | typeof CONTINUES_ROUTE
+export type OnboardingRoute =
+  OnboardingStepRoute | typeof AGE_ROUTE | typeof CONTINUES_ROUTE | typeof TODAY_ROUTE
 
 /** Only the shape the decisions read, so a test needs no generated DTO. */
 export interface OnboardingProgress {
@@ -91,6 +98,9 @@ export const ELIGIBILITY_GATE_ROUTE = AGE_ROUTE
 
 /** Exported so the screens and the entry decision agree on the terminal. */
 export const ONBOARDING_CONTINUES_ROUTE = CONTINUES_ROUTE
+
+/** The first screen of the app proper, and where activation now hands over. */
+export const TODAY = TODAY_ROUTE
 
 /** One reader for every step, so adding a step stays a line of data. */
 const answered = (
@@ -160,8 +170,8 @@ export function nextRouteAfter(step: OnboardingStepRoute): OnboardingRoute {
 export function resolveOnboardingRoute(current: OnboardingProgress | null): OnboardingRoute {
   // Checked before anything else, and not derived from the answers: activation is
   // what ends the onboarding, so nothing an answer says can send an activated
-  // person back to a step.
-  if (current?.attempt?.status === 'activated') return CONTINUES_ROUTE
+  // person back to a step — nor to the screen that ends it.
+  if (current?.attempt?.status === 'activated') return TODAY_ROUTE
   // A `fail` is not eligibility and must not be walked past either.
   if (!current || !eligible(current)) return ELIGIBILITY_GATE_ROUTE
   // Everything declared so far is answered.
