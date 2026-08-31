@@ -63,6 +63,13 @@ export const allfitV1ContractManifest = {
     },
     {
       method: 'POST',
+      path: '/space/v1/assignments',
+      operationId: 'selfAssignSpaceProgram',
+      allfitOperation: 'OP-PLN-011',
+      responses: ['200', '400', '401', '403', '409', '503'],
+    },
+    {
+      method: 'POST',
       path: '/space/v1/auth/password-resets',
       operationId: 'requestSpacePasswordReset',
       allfitOperation: 'OP-IDN-042',
@@ -249,6 +256,13 @@ export const allfitV1ContractManifest = {
       operationId: 'declareSpaceFocusAreas',
       allfitOperation: 'OP-IDN-046',
       responses: ['200', '400', '401', '403', '409', '503'],
+    },
+    {
+      method: 'GET',
+      path: '/space/v1/programs',
+      operationId: 'listSpacePrograms',
+      allfitOperation: 'OP-PLN-020',
+      responses: ['200', '401', '403', '503'],
     },
     {
       method: 'GET',

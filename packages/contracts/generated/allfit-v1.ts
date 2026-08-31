@@ -1237,6 +1237,56 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/space/v1/programs': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Read the program catalogue and what the person already chose
+     * @description HU-SP-100. The catalogue Allfit publishes, plus the two things the screen needs to make sense of it: what the person declared in the onboarding, and whether they already have a program.
+     *
+     *     **Everything global, in one answer.** The catalogue is twenty-four programs and it is not paginated: the whole point of the screen is to pick a frequency for a goal, and a cursor over that would mean the app could not tell whether the five-day option exists without asking again.
+     *
+     *     **Days per week and duration are derived, never stored.** They are facts about how a version is composed, and a stored copy would be a second truth about the number this screen is chosen on.
+     *
+     *     The profile travels because the matching happens in the app, where it can be tested against every combination of goal, level and frequency rather than judged from a screenshot. It is the person's own answers coming back to them, not a new disclosure.
+     */
+    get: operations['listSpacePrograms']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/assignments': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Choose a program and put its sessions on the calendar
+     * @description HU-SP-100 criterion 6. Choosing is not an intention: the calendar is materialised in the same transaction, so the person leaves this screen with sessions rather than with a preference.
+     *
+     *     **Only the timezone travels, never the start date.** It is always today in the person's own zone, and taking the date from a client would let a plan be backdated into a history that never happened.
+     *
+     *     A personal assignment has no manager. `OP-PLN-011` says so in as many words — no origin relationship, no management period — and no organization sees it unless a grant names it explicitly.
+     */
+    post: operations['selfAssignSpaceProgram']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/space/v1/agenda': {
     parameters: {
       query?: never
@@ -1825,6 +1875,52 @@ export interface components {
       unit: components['schemas']['LengthUnit']
       /** Format: date */
       measured_on: string
+    }
+    /** @description Everything the first-day screen needs in one answer: what Allfit publishes, what the person told us, and whether they already chose. */
+    SpaceProgramCatalogue: {
+      profile: components['schemas']['SpaceTrainingProfile']
+      programs: components['schemas']['SpaceProgramSummary'][]
+      /** @description Null is what makes this the first day. A person who already chose is not asked to choose again. */
+      current_assignment: components['schemas']['SpaceProgramAssignment'] | null
+    }
+    /** @description The onboarding answers the catalogue is matched against, and the name the screen greets somebody by — their own, which is what makes the first screen after signing up feel addressed to them rather than to anybody. Every one of them can be absent: somebody may have declined their sex, and the steps that record the rest can be revisited, so nothing here may be assumed present. */
+    SpaceTrainingProfile: {
+      given_name: string
+      primary_training_goal: components['schemas']['PrimaryTrainingGoal'] | null
+      training_experience: components['schemas']['TrainingExperience'] | null
+      biological_sex: components['schemas']['BiologicalSex'] | null
+      focus_areas: components['schemas']['FocusAreaSet']
+    }
+    /** @description A published version of a global program, with the segmentation it was published with. The segmentation is part of the version and immutable with it: re-aiming a program means publishing another version. */
+    SpaceProgramSummary: {
+      program_version_id: components['schemas']['UuidV7']
+      program_id: components['schemas']['UuidV7']
+      title: string
+      /** @description Derived from the composition, never stored. */
+      weeks: number
+      /** @description Derived too, and the axis the three cards are chosen on: three, four and five days exist for every goal and every level. */
+      days_per_week: number
+      /** @description Which way the content leans, when it leans. It **orders and never filters**, so everybody sees the same catalogue and somebody who declined needs no rule of their own. Null on every curated program today. */
+      sex_affinity: components['schemas']['BiologicalSex'] | null
+      goals: components['schemas']['PrimaryTrainingGoal'][]
+      levels: components['schemas']['TrainingExperience'][]
+      emphases: components['schemas']['FocusAreaSet']
+    }
+    SpaceProgramChoice: {
+      program_version_id: components['schemas']['UuidV7']
+      /** @description An IANA zone. The start date is **not** sent: it is always today in this zone, and a client-supplied date could backdate a plan into a history that never happened. */
+      timezone: string
+    }
+    /** @description The program in force, and the same one on every retry. */
+    SpaceProgramAssignment: {
+      assignment_id: components['schemas']['UuidV7']
+      program_version_id: components['schemas']['UuidV7']
+      title: string
+      /** Format: date */
+      starts_on: string
+      timezone: string
+      /** @description How many sessions the choice actually put on the calendar. It is the evidence that choosing produced a plan and not a preference. */
+      sessions_planned: number
     }
     SpaceBodyProgressRecord: {
       id: components['schemas']['UuidV7']
@@ -6084,6 +6180,65 @@ export interface operations {
       404: components['responses']['NotFound']
       409: components['responses']['Conflict']
       422: components['responses']['ValidationFailed']
+    }
+  }
+  listSpacePrograms: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The catalogue, the person's answers, and their current program */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SpaceProgramCatalogue']
+        }
+      }
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  selfAssignSpaceProgram: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SpaceProgramChoice']
+      }
+    }
+    responses: {
+      /** @description The assignment, the same one on every retry */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SpaceProgramAssignment']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      409: components['responses']['Conflict']
+      503: components['responses']['UpstreamUnavailable']
     }
   }
   listMyAgenda: {

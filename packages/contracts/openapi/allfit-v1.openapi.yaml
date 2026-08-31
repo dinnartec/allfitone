@@ -3033,6 +3033,106 @@ paths:
         '422':
           $ref: '#/components/responses/ValidationFailed'
 
+  /space/v1/programs:
+    get:
+      tags: [Space Planning]
+      operationId: listSpacePrograms
+      x-allfit-operation: OP-PLN-020
+      x-allfit-cache: no-store
+      summary: Read the program catalogue and what the person already chose
+      description: >-
+        HU-SP-100. The catalogue Allfit publishes, plus the two things the screen
+        needs to make sense of it: what the person declared in the onboarding, and
+        whether they already have a program.
+
+
+        **Everything global, in one answer.** The catalogue is twenty-four programs
+        and it is not paginated: the whole point of the screen is to pick a frequency
+        for a goal, and a cursor over that would mean the app could not tell whether
+        the five-day option exists without asking again.
+
+
+        **Days per week and duration are derived, never stored.** They are facts
+        about how a version is composed, and a stored copy would be a second truth
+        about the number this screen is chosen on.
+
+
+        The profile travels because the matching happens in the app, where it can be
+        tested against every combination of goal, level and frequency rather than
+        judged from a screenshot. It is the person's own answers coming back to
+        them, not a new disclosure.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: The catalogue, the person's answers, and their current program
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpaceProgramCatalogue'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /space/v1/assignments:
+    post:
+      tags: [Space Planning]
+      operationId: selfAssignSpaceProgram
+      x-allfit-operation: OP-PLN-011
+      x-allfit-cache: no-store
+      summary: Choose a program and put its sessions on the calendar
+      description: >-
+        HU-SP-100 criterion 6. Choosing is not an intention: the calendar is
+        materialised in the same transaction, so the person leaves this screen with
+        sessions rather than with a preference.
+
+
+        **Only the timezone travels, never the start date.** It is always today in
+        the person's own zone, and taking the date from a client would let a plan be
+        backdated into a history that never happened.
+
+
+        A personal assignment has no manager. `OP-PLN-011` says so in as many words —
+        no origin relationship, no management period — and no organization sees it
+        unless a grant names it explicitly.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SpaceProgramChoice'
+      responses:
+        '200':
+          description: The assignment, the same one on every retry
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpaceProgramAssignment'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
   /space/v1/agenda:
     get:
       tags: [Space Agenda]
@@ -4989,6 +5089,137 @@ components:
         measured_on:
           type: string
           format: date
+    SpaceProgramCatalogue:
+      type: object
+      additionalProperties: false
+      required: [profile, programs, current_assignment]
+      description: >-
+        Everything the first-day screen needs in one answer: what Allfit publishes,
+        what the person told us, and whether they already chose.
+      properties:
+        profile:
+          $ref: '#/components/schemas/SpaceTrainingProfile'
+        programs:
+          type: array
+          items:
+            $ref: '#/components/schemas/SpaceProgramSummary'
+        current_assignment:
+          oneOf:
+            - $ref: '#/components/schemas/SpaceProgramAssignment'
+            - type: 'null'
+          description: >-
+            Null is what makes this the first day. A person who already chose is not
+            asked to choose again.
+    SpaceTrainingProfile:
+      type: object
+      additionalProperties: false
+      required: [given_name, primary_training_goal, training_experience, biological_sex, focus_areas]
+      description: >-
+        The onboarding answers the catalogue is matched against, and the name the
+        screen greets somebody by — their own, which is what makes the first screen
+        after signing up feel addressed to them rather than to anybody. Every one of them can
+        be absent: somebody may have declined their sex, and the steps that record the
+        rest can be revisited, so nothing here may be assumed present.
+      properties:
+        given_name:
+          type: string
+        primary_training_goal:
+          oneOf:
+            - $ref: '#/components/schemas/PrimaryTrainingGoal'
+            - type: 'null'
+        training_experience:
+          oneOf:
+            - $ref: '#/components/schemas/TrainingExperience'
+            - type: 'null'
+        biological_sex:
+          oneOf:
+            - $ref: '#/components/schemas/BiologicalSex'
+            - type: 'null'
+        focus_areas:
+          $ref: '#/components/schemas/FocusAreaSet'
+    SpaceProgramSummary:
+      type: object
+      additionalProperties: false
+      required:
+        [program_version_id, program_id, title, weeks, days_per_week, sex_affinity, goals, levels, emphases]
+      description: >-
+        A published version of a global program, with the segmentation it was
+        published with. The segmentation is part of the version and immutable with it:
+        re-aiming a program means publishing another version.
+      properties:
+        program_version_id:
+          $ref: '#/components/schemas/UuidV7'
+        program_id:
+          $ref: '#/components/schemas/UuidV7'
+        title:
+          type: string
+        weeks:
+          type: integer
+          minimum: 1
+          description: Derived from the composition, never stored.
+        days_per_week:
+          type: integer
+          minimum: 1
+          maximum: 7
+          description: >-
+            Derived too, and the axis the three cards are chosen on: three, four and
+            five days exist for every goal and every level.
+        sex_affinity:
+          oneOf:
+            - $ref: '#/components/schemas/BiologicalSex'
+            - type: 'null'
+          description: >-
+            Which way the content leans, when it leans. It **orders and never
+            filters**, so everybody sees the same catalogue and somebody who declined
+            needs no rule of their own. Null on every curated program today.
+        goals:
+          type: array
+          items:
+            $ref: '#/components/schemas/PrimaryTrainingGoal'
+        levels:
+          type: array
+          items:
+            $ref: '#/components/schemas/TrainingExperience'
+        emphases:
+          $ref: '#/components/schemas/FocusAreaSet'
+    SpaceProgramChoice:
+      type: object
+      additionalProperties: false
+      required: [program_version_id, timezone]
+      properties:
+        program_version_id:
+          $ref: '#/components/schemas/UuidV7'
+        timezone:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: >-
+            An IANA zone. The start date is **not** sent: it is always today in this
+            zone, and a client-supplied date could backdate a plan into a history that
+            never happened.
+    SpaceProgramAssignment:
+      type: object
+      additionalProperties: false
+      required: [assignment_id, program_version_id, title, starts_on, timezone, sessions_planned]
+      description: The program in force, and the same one on every retry.
+      properties:
+        assignment_id:
+          $ref: '#/components/schemas/UuidV7'
+        program_version_id:
+          $ref: '#/components/schemas/UuidV7'
+        title:
+          type: string
+        starts_on:
+          type: string
+          format: date
+        timezone:
+          type: string
+        sessions_planned:
+          type: integer
+          minimum: 0
+          description: >-
+            How many sessions the choice actually put on the calendar. It is the
+            evidence that choosing produced a plan and not a preference.
     SpaceBodyProgressRecord:
       type: object
       additionalProperties: false

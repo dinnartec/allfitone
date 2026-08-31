@@ -3928,6 +3928,157 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
     description:
       'One member of the attribute catalogue per variant. This was a single object while only the goal existed; the second member is what earns the union, and it is what keeps a goal code from being sent with an experience value.',
   },
+  SpaceProgramAssignment: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'assignment_id',
+      'program_version_id',
+      'title',
+      'starts_on',
+      'timezone',
+      'sessions_planned',
+    ],
+    description: 'The program in force, and the same one on every retry.',
+    properties: {
+      assignment_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      program_version_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      title: {
+        type: 'string',
+      },
+      starts_on: {
+        type: 'string',
+        format: 'date',
+      },
+      timezone: {
+        type: 'string',
+      },
+      sessions_planned: {
+        type: 'integer',
+        minimum: 0,
+        description:
+          'How many sessions the choice actually put on the calendar. It is the evidence that choosing produced a plan and not a preference.',
+      },
+    },
+  },
+  SpaceProgramCatalogue: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['profile', 'programs', 'current_assignment'],
+    description:
+      'Everything the first-day screen needs in one answer: what Allfit publishes, what the person told us, and whether they already chose.',
+    properties: {
+      profile: {
+        $ref: '#/components/schemas/SpaceTrainingProfile',
+      },
+      programs: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/SpaceProgramSummary',
+        },
+      },
+      current_assignment: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/SpaceProgramAssignment',
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description:
+          'Null is what makes this the first day. A person who already chose is not asked to choose again.',
+      },
+    },
+  },
+  SpaceProgramChoice: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['program_version_id', 'timezone'],
+    properties: {
+      program_version_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      timezone: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 64,
+        description:
+          'An IANA zone. The start date is **not** sent: it is always today in this zone, and a client-supplied date could backdate a plan into a history that never happened.',
+      },
+    },
+  },
+  SpaceProgramSummary: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'program_version_id',
+      'program_id',
+      'title',
+      'weeks',
+      'days_per_week',
+      'sex_affinity',
+      'goals',
+      'levels',
+      'emphases',
+    ],
+    description:
+      'A published version of a global program, with the segmentation it was published with. The segmentation is part of the version and immutable with it: re-aiming a program means publishing another version.',
+    properties: {
+      program_version_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      program_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      title: {
+        type: 'string',
+      },
+      weeks: {
+        type: 'integer',
+        minimum: 1,
+        description: 'Derived from the composition, never stored.',
+      },
+      days_per_week: {
+        type: 'integer',
+        minimum: 1,
+        maximum: 7,
+        description:
+          'Derived too, and the axis the three cards are chosen on: three, four and five days exist for every goal and every level.',
+      },
+      sex_affinity: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/BiologicalSex',
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description:
+          'Which way the content leans, when it leans. It **orders and never filters**, so everybody sees the same catalogue and somebody who declined needs no rule of their own. Null on every curated program today.',
+      },
+      goals: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/PrimaryTrainingGoal',
+        },
+      },
+      levels: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/TrainingExperience',
+        },
+      },
+      emphases: {
+        $ref: '#/components/schemas/FocusAreaSet',
+      },
+    },
+  },
   SpaceRegistrationAccepted: {
     type: 'object',
     additionalProperties: false,
@@ -4128,6 +4279,57 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
     },
     description:
       'Only one goal is principal, so declaring a second time replaces which one that is rather than adding to a set.',
+  },
+  SpaceTrainingProfile: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'given_name',
+      'primary_training_goal',
+      'training_experience',
+      'biological_sex',
+      'focus_areas',
+    ],
+    description:
+      'The onboarding answers the catalogue is matched against, and the name the screen greets somebody by — their own, which is what makes the first screen after signing up feel addressed to them rather than to anybody. Every one of them can be absent: somebody may have declined their sex, and the steps that record the rest can be revisited, so nothing here may be assumed present.',
+    properties: {
+      given_name: {
+        type: 'string',
+      },
+      primary_training_goal: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/PrimaryTrainingGoal',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      training_experience: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/TrainingExperience',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      biological_sex: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/BiologicalSex',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      focus_areas: {
+        $ref: '#/components/schemas/FocusAreaSet',
+      },
+    },
   },
   StrengthSet: {
     type: 'object',
