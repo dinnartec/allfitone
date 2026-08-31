@@ -287,6 +287,20 @@ export const allfitV1ContractManifest = {
     },
     {
       method: 'GET',
+      path: '/space/v1/programs/mine',
+      operationId: 'listMyPrograms',
+      allfitOperation: 'OP-PLN-020',
+      responses: ['200', '401', '403', '503'],
+    },
+    {
+      method: 'PUT',
+      path: '/space/v1/programs/mine/order',
+      operationId: 'reorderMyPrograms',
+      allfitOperation: 'OP-PLN-024',
+      responses: ['200', '400', '401', '403'],
+    },
+    {
+      method: 'GET',
       path: '/space/v1/telemetry-config',
       operationId: 'getSpaceTelemetryConfig',
       allfitOperation: 'OP-SYS-011',
@@ -298,6 +312,13 @@ export const allfitV1ContractManifest = {
       operationId: 'getMyToday',
       allfitOperation: 'OP-PLN-022',
       responses: ['200', '400', '401', '403', '503'],
+    },
+    {
+      method: 'GET',
+      path: '/space/v1/week-plan',
+      operationId: 'getMyWeekPlan',
+      allfitOperation: 'OP-PLN-022',
+      responses: ['200', '401', '403', '503'],
     },
     {
       method: 'GET',

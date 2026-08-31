@@ -3847,6 +3847,51 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
     description:
       'Declaring replaces the set. It is not additive, so the client sends what the person has selected rather than a difference.',
   },
+  SpaceMyProgram: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'assignment_id',
+      'program_version_id',
+      'title',
+      'weeks',
+      'days_per_week',
+      'starts_on',
+      'sessions_done',
+      'sessions_planned',
+    ],
+    properties: {
+      assignment_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      program_version_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      title: {
+        type: 'string',
+      },
+      weeks: {
+        type: 'integer',
+        minimum: 1,
+      },
+      days_per_week: {
+        type: 'integer',
+        minimum: 1,
+      },
+      starts_on: {
+        type: 'string',
+        format: 'date',
+      },
+      sessions_done: {
+        type: 'integer',
+        minimum: 0,
+      },
+      sessions_planned: {
+        type: 'integer',
+        minimum: 0,
+      },
+    },
+  },
   SpaceOnboardingAnswers: {
     type: 'object',
     additionalProperties: false,
@@ -4319,6 +4364,23 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         type: 'array',
         items: {
           $ref: '#/components/schemas/SpaceProgramDay',
+        },
+      },
+    },
+  },
+  SpaceProgramOrder: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['assignment_ids'],
+    description:
+      "Every one of the person's assignments, exactly once, in the order they want them. Anything less is refused rather than merged.",
+    properties: {
+      assignment_ids: {
+        type: 'array',
+        minItems: 1,
+        maxItems: 100,
+        items: {
+          $ref: '#/components/schemas/UuidV7',
         },
       },
     },
@@ -4809,12 +4871,113 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  SpaceWeekPlan: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'assignment_id',
+      'program_version_id',
+      'program_title',
+      'program_week',
+      'week_starts_on',
+      'sessions',
+    ],
+    description:
+      'Null-free by construction: a person with no programme gets a 404 rather than an object full of nulls the screen would have to interpret.',
+    properties: {
+      assignment_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      program_version_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      program_title: {
+        type: 'string',
+      },
+      program_week: {
+        type: 'integer',
+        minimum: 1,
+        description:
+          "The programme's own week number, which is what its content is written against.",
+      },
+      week_starts_on: {
+        type: 'string',
+        format: 'date',
+        description: 'The Monday of the calendar week in progress.',
+      },
+      sessions: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/SpaceWeekRoutine',
+        },
+      },
+    },
+  },
+  SpaceWeekRoutine: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'planned_session_id',
+      'title',
+      'discipline_code',
+      'status',
+      'exercise_count',
+      'set_count',
+      'done',
+      'open_execution_id',
+    ],
+    properties: {
+      planned_session_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      title: {
+        type: 'string',
+      },
+      discipline_code: {
+        type: 'string',
+      },
+      status: {
+        type: 'string',
+      },
+      exercise_count: {
+        type: 'integer',
+        minimum: 0,
+      },
+      set_count: {
+        type: 'integer',
+        minimum: 0,
+      },
+      done: {
+        type: 'boolean',
+        description:
+          'Whether it was ever closed. It marks, it does not bar: starting it again creates another attempt and the first one keeps what it earned.',
+      },
+      open_execution_id: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/UuidV7',
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description:
+          'An attempt already open on this routine, which is what turns "empezar" into "continuar".',
+      },
+    },
+  },
   SpaceWeekSummary: {
     type: 'object',
     additionalProperties: false,
-    required: ['trained_seconds', 'sessions_completed', 'latest_weight', 'history'],
+    required: [
+      'trained_seconds',
+      'sessions_completed',
+      'sessions_planned',
+      'latest_weight',
+      'history',
+    ],
     description:
-      "The seven days ending today, in the person's zone — not a calendar week, which would reset the number on a Monday nobody trained differently.",
+      "The calendar week in progress, Monday to Sunday, in the person's zone. The week is the unit and the day inside it is a suggestion, so what counts is how much of the week is done — and what is left undone does not carry over.",
     properties: {
       trained_seconds: {
         type: 'number',
@@ -4823,6 +4986,14 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       sessions_completed: {
         type: 'integer',
         minimum: 0,
+        description:
+          'Planned sessions of this week that were closed, not executions. A repeat is a second execution of the same session and must not move the number.',
+      },
+      sessions_planned: {
+        type: 'integer',
+        minimum: 0,
+        description:
+          'How many the week asks for. Equal to `sessions_completed` means the week is done.',
       },
       latest_weight: {
         oneOf: [

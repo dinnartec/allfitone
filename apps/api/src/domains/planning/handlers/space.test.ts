@@ -4,7 +4,7 @@ import { Hono } from 'hono'
 
 import { SpaceActorError, type SpaceActorResolver } from '../../identity/index.js'
 import type { ProgramCatalogue, SpacePlanningService } from '../application/space.js'
-import type { ProgramAssignment, ProgramDetail } from '../domain/space.js'
+import type { MyProgram, ProgramAssignment, ProgramDetail, WeekPlan } from '../domain/space.js'
 import { spacePlanningRoutes } from './space.js'
 
 const PERSON_ID = '019f9000-0000-7000-8000-000000000001'
@@ -49,6 +49,39 @@ const detail: ProgramDetail = {
   ],
 }
 
+const SESSION_ID = '019f9000-0000-7000-8000-000000000031'
+
+const weekPlan: WeekPlan = {
+  assignment_id: ASSIGNMENT_ID,
+  program_version_id: VERSION_ID,
+  program_title: 'Torso y pierna',
+  program_week: 2,
+  week_starts_on: '2026-08-31',
+  sessions: [
+    {
+      planned_session_id: SESSION_ID,
+      title: 'Empuje',
+      discipline_code: 'strength',
+      status: 'completed',
+      exercise_count: 5,
+      set_count: 16,
+      done: true,
+      open_execution_id: null,
+    },
+  ],
+}
+
+const myProgram: MyProgram = {
+  assignment_id: ASSIGNMENT_ID,
+  program_version_id: VERSION_ID,
+  title: 'Torso y pierna',
+  weeks: 10,
+  days_per_week: 4,
+  starts_on: '2026-08-31',
+  sessions_done: 1,
+  sessions_planned: 40,
+}
+
 const catalogue: ProgramCatalogue = {
   profile: {
     given_name: 'Walberto',
@@ -79,6 +112,9 @@ function harness(overrides?: {
 }): Hono {
   const service: SpacePlanningService = {
     readCatalogue: async () => catalogue,
+    readWeekPlan: async () => weekPlan,
+    readMyPrograms: async () => [myProgram],
+    reorderMyPrograms: async () => [myProgram],
     readTodaySession: async () => null,
     readProgram: async () => detail,
     chooseProgram: async () => assignment,
@@ -110,17 +146,23 @@ const commanded = {
 }
 
 describe('the Space planning surface honours the contract', () => {
-  test('T-PLN-API-050 both routes are declared with their operations', () => {
+  test('T-PLN-API-050 every route is declared with its operation', () => {
     const declared = allfitV1ContractManifest.operations.filter(
       (operation) =>
         operation.path.startsWith('/space/v1/programs') ||
-        operation.path.startsWith('/space/v1/assignments'),
+        operation.path.startsWith('/space/v1/assignments') ||
+        operation.path.startsWith('/space/v1/week-plan'),
     )
-    expect(declared).toHaveLength(3)
+    expect(declared).toHaveLength(6)
     expect(declared.map((operation) => operation.allfitOperation).sort()).toEqual([
       'OP-PLN-011',
       'OP-PLN-020',
+      // Listing the catalogue and listing what the person owns are the same
+      // operation seen from two surfaces.
+      'OP-PLN-020',
       'OP-PLN-021',
+      'OP-PLN-022',
+      'OP-PLN-024',
     ])
   })
 })

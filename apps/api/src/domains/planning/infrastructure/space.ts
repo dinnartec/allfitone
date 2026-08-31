@@ -15,6 +15,8 @@ import type postgres from 'postgres'
 import { database } from '../../../platform/db/index.js'
 import { measureStudioRequestPhase } from '../../../platform/observability/index.js'
 import type {
+  MyProgram,
+  WeekPlan,
   ProgramAssignment,
   ProgramDetail,
   ProgramSummary,
@@ -64,6 +66,19 @@ interface TodayRow {
   status: string
   exercise_count: number
   executed_session_id: string | null
+}
+
+interface WeekPlanRow {
+  assignment_id: string
+  program_version_id: string
+  program_title: string
+  program_week: number
+  week_starts_on: Date | string
+  sessions: WeekPlan['sessions']
+}
+
+interface MyProgramRow extends Omit<MyProgram, 'starts_on'> {
+  starts_on: Date | string
 }
 
 interface ProfileRow {
@@ -118,6 +133,47 @@ export function createSpacePlanningDatabase(): SpacePlanningDatabase {
           )
         `
         return row ? detail(row) : null
+      }),
+
+    readWeekPlan: (input) =>
+      transact(sql, input.personId, input.requestId, async (transaction) => {
+        const [row] = await transaction<WeekPlanRow[]>`
+          select * from planning.read_week_plan(${input.personId}::uuid, ${input.timezone})
+        `
+        return row
+          ? {
+              assignment_id: row.assignment_id,
+              program_version_id: row.program_version_id,
+              program_title: row.program_title,
+              program_week: row.program_week,
+              week_starts_on: date(row.week_starts_on),
+              sessions: row.sessions ?? [],
+            }
+          : null
+      }),
+
+    readMyPrograms: (input) =>
+      transact(sql, input.personId, input.requestId, async (transaction) => {
+        const rows = await transaction<MyProgramRow[]>`
+          select * from planning.read_my_programs(${input.personId}::uuid)
+        `
+        return rows.map((row) => ({ ...row, starts_on: date(row.starts_on) }))
+      }),
+
+    reorderMyPrograms: (input) =>
+      transact(sql, input.personId, '', async (transaction) => {
+        await transaction`
+          select planning.reorder_my_programs(
+            ${input.personId}::uuid, ${input.assignmentIds as string[]}::uuid[],
+            ${input.idempotencyKey}::uuid, ${input.commandId}::uuid, ${input.requestHash}
+          )
+        `
+        // Answered from the same transaction: the client renders what it just wrote,
+        // not what it hoped it wrote.
+        const rows = await transaction<MyProgramRow[]>`
+          select * from planning.read_my_programs(${input.personId}::uuid)
+        `
+        return rows.map((row) => ({ ...row, starts_on: date(row.starts_on) }))
       }),
 
     readTodaySession: (input) =>
@@ -199,6 +255,11 @@ function detail(row: DetailRow): ProgramDetail {
     emphases: row.emphases as ProgramDetail['emphases'],
     days: row.days,
   }
+}
+
+/** `postgres.js` hands a `date` back as a Date; the contract says a plain date. */
+function date(value: Date | string): string {
+  return value instanceof Date ? value.toISOString().slice(0, 10) : String(value)
 }
 
 function profile(row: ProfileRow): TrainingProfile {

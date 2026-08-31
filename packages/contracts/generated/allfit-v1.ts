@@ -1263,6 +1263,26 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/space/v1/programs/mine/order': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    /**
+     * Put my programmes in the order I want them
+     * @description The first one is the programme the training tab opens on, so the order lives here rather than on a device: reinstalling the app must not change which programme somebody trains. Sent whole, like replacing session results — a partial order would leave whatever was omitted wherever it happened to be.
+     */
+    put: operations['reorderMyPrograms']
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/space/v1/programs/{programVersionId}': {
     parameters: {
       query?: never
@@ -1344,6 +1364,46 @@ export interface paths {
      *     Calories are absent on purpose. The canvas shows them beside the hours trained and the body weight; those two are derivable and nutrition has no tables, so a number here would be a number somebody trusts.
      */
     get: operations['getMyToday']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/week-plan': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * The programme in force and the routines of this week
+     * @description What `E-2` draws. The week is the calendar week, Monday to Sunday, and the day inside it is a suggestion: every routine listed here can be started today, in any order. A routine already done stays in the list with its state, because doing it again is legitimate and the history should say so.
+     */
+    get: operations['getMyWeekPlan']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/programs/mine': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * The programmes this person owns
+     * @description Newest first, which is the order the selector opens on. An explicit order is its own column and its own command; ordering by when it was taken is a fact that already exists rather than a preference invented here.
+     */
+    get: operations['listMyPrograms']
     put?: never
     post?: never
     delete?: never
@@ -2014,10 +2074,13 @@ export interface components {
       /** @description The attempt already open on today's session, if there is one. It is what turns "Empezar" into "Continuar" and what stops a second attempt being started by accident. */
       executed_session_id: components['schemas']['UuidV7'] | null
     }
-    /** @description The seven days ending today, in the person's zone — not a calendar week, which would reset the number on a Monday nobody trained differently. */
+    /** @description The calendar week in progress, Monday to Sunday, in the person's zone. The week is the unit and the day inside it is a suggestion, so what counts is how much of the week is done — and what is left undone does not carry over. */
     SpaceWeekSummary: {
       trained_seconds: number
+      /** @description Planned sessions of this week that were closed, not executions. A repeat is a second execution of the same session and must not move the number. */
       sessions_completed: number
+      /** @description How many the week asks for. Equal to `sessions_completed` means the week is done. */
+      sessions_planned: number
       latest_weight: components['schemas']['SpaceBodyMeasure'] | null
       history: components['schemas']['SpaceTrainedSession'][]
     }
@@ -2027,6 +2090,47 @@ export interface components {
       trained_on: string
       title: string | null
       sets_recorded: number
+    }
+    /** @description Null-free by construction: a person with no programme gets a 404 rather than an object full of nulls the screen would have to interpret. */
+    SpaceWeekPlan: {
+      assignment_id: components['schemas']['UuidV7']
+      program_version_id: components['schemas']['UuidV7']
+      program_title: string
+      /** @description The programme's own week number, which is what its content is written against. */
+      program_week: number
+      /**
+       * Format: date
+       * @description The Monday of the calendar week in progress.
+       */
+      week_starts_on: string
+      sessions: components['schemas']['SpaceWeekRoutine'][]
+    }
+    SpaceWeekRoutine: {
+      planned_session_id: components['schemas']['UuidV7']
+      title: string
+      discipline_code: string
+      status: string
+      exercise_count: number
+      set_count: number
+      /** @description Whether it was ever closed. It marks, it does not bar: starting it again creates another attempt and the first one keeps what it earned. */
+      done: boolean
+      /** @description An attempt already open on this routine, which is what turns "empezar" into "continuar". */
+      open_execution_id: components['schemas']['UuidV7'] | null
+    }
+    /** @description Every one of the person's assignments, exactly once, in the order they want them. Anything less is refused rather than merged. */
+    SpaceProgramOrder: {
+      assignment_ids: components['schemas']['UuidV7'][]
+    }
+    SpaceMyProgram: {
+      assignment_id: components['schemas']['UuidV7']
+      program_version_id: components['schemas']['UuidV7']
+      title: string
+      weeks: number
+      days_per_week: number
+      /** Format: date */
+      starts_on: string
+      sessions_done: number
+      sessions_planned: number
     }
     SpaceExecution: {
       executed_session_id: components['schemas']['UuidV7']
@@ -6421,6 +6525,40 @@ export interface operations {
       503: components['responses']['UpstreamUnavailable']
     }
   }
+  reorderMyPrograms: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SpaceProgramOrder']
+      }
+    }
+    responses: {
+      /** @description The order as it now stands */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SpaceMyProgram'][]
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+    }
+  }
   getSpaceProgramVersion: {
     parameters: {
       query?: never
@@ -6548,6 +6686,57 @@ export interface operations {
         }
       }
       400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  getMyWeekPlan: {
+    parameters: {
+      query: {
+        /** @description The device's zone. Which calendar week is in progress is a local question and the server must not answer it in UTC. */
+        timezone: components['schemas']['IanaTimeZone']
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The week as its owner sees it */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SpaceWeekPlan']
+        }
+      }
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listMyPrograms: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The person's own programmes */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SpaceMyProgram'][]
+        }
+      }
       401: components['responses']['Unauthenticated']
       403: components['responses']['Forbidden']
       503: components['responses']['UpstreamUnavailable']

@@ -70,6 +70,7 @@ interface FinalizedRow {
 interface WeekRow {
   trained_seconds: string | number | null
   sessions_completed: number | null
+  sessions_planned: number | null
   latest_weight_value: string | number | null
   latest_weight_unit: string | null
   history: WeekSummary['history']
@@ -238,11 +239,18 @@ function execution(row: ExecutionRow): Execution {
 
 function week(row: WeekRow | undefined): WeekSummary {
   if (!row) {
-    return { trained_seconds: 0, sessions_completed: 0, latest_weight: null, history: [] }
+    return {
+      trained_seconds: 0,
+      sessions_completed: 0,
+      sessions_planned: 0,
+      latest_weight: null,
+      history: [],
+    }
   }
   return {
     trained_seconds: Number(row.trained_seconds ?? 0),
     sessions_completed: row.sessions_completed ?? 0,
+    sessions_planned: row.sessions_planned ?? 0,
     latest_weight:
       row.latest_weight_value === null || row.latest_weight_unit === null
         ? null

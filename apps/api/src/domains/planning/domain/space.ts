@@ -13,6 +13,9 @@ export type ProgramAssignment = AllfitV1Schemas['SpaceProgramAssignment']
 export type TrainingProfile = AllfitV1Schemas['SpaceTrainingProfile']
 export type ProgramDetail = AllfitV1Schemas['SpaceProgramDetail']
 export type TodaySession = AllfitV1Schemas['SpaceTodaySession']
+export type WeekPlan = AllfitV1Schemas['SpaceWeekPlan']
+export type MyProgram = AllfitV1Schemas['SpaceMyProgram']
+export type ProgramOrder = AllfitV1Schemas['SpaceProgramOrder']
 
 export interface SpacePlanningDatabase {
   readProgramCatalogue(input: { personId: string; requestId: string }): Promise<ProgramSummary[]>
@@ -33,6 +36,20 @@ export interface SpacePlanningDatabase {
     timezone: string
     requestId: string
   }): Promise<TodaySession | null>
+  /** Null when the person has no programme: an object full of nulls is not an answer. */
+  readWeekPlan(input: {
+    personId: string
+    timezone: string
+    requestId: string
+  }): Promise<WeekPlan | null>
+  readMyPrograms(input: { personId: string; requestId: string }): Promise<readonly MyProgram[]>
+  reorderMyPrograms(input: {
+    personId: string
+    assignmentIds: readonly string[]
+    idempotencyKey: string
+    commandId: string
+    requestHash: Buffer
+  }): Promise<readonly MyProgram[]>
   selfAssignProgram(input: {
     personId: string
     programVersionId: string

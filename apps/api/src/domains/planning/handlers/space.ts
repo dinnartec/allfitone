@@ -96,6 +96,72 @@ export function spacePlanningRoutes(
     }
   })
 
+  routes.get('/week-plan', async (c) => {
+    c.header('Cache-Control', 'no-store')
+
+    const token = await verified(c, verify)
+    if (!token) return fail(c, 'unauthenticated')
+
+    const timezone = (c.req.query('timezone') ?? '').trim()
+    if (timezone === '' || timezone.length > MAX_TIMEZONE) return fail(c, 'invalid-request')
+
+    try {
+      const personId = await actors().personFor(token.subject)
+      const plan = await planning().readWeekPlan({
+        personId,
+        timezone,
+        requestId: c.req.header('x-request-id') ?? '',
+      })
+      // No programme is not an empty week; it is a different screen.
+      if (!plan) return fail(c, 'not-found')
+      return c.json(plan, 200)
+    } catch (cause) {
+      return failure(c, cause)
+    }
+  })
+
+  routes.get('/programs/mine', async (c) => {
+    c.header('Cache-Control', 'no-store')
+
+    const token = await verified(c, verify)
+    if (!token) return fail(c, 'unauthenticated')
+
+    try {
+      const personId = await actors().personFor(token.subject)
+      const mine = await planning().readMyPrograms({
+        personId,
+        requestId: c.req.header('x-request-id') ?? '',
+      })
+      return c.json(mine, 200)
+    } catch (cause) {
+      return failure(c, cause)
+    }
+  })
+
+  routes.put('/programs/mine/order', async (c) => {
+    c.header('Cache-Control', 'no-store')
+
+    const token = await verified(c, verify)
+    if (!token) return fail(c, 'unauthenticated')
+
+    const body = await readJson(c)
+    const order = readOrder(body)
+    const command = commandContext(c, body)
+    if (!order || !command) return fail(c, 'invalid-request')
+
+    try {
+      const personId = await actors().personFor(token.subject)
+      const mine = await planning().reorderMyPrograms({
+        personId,
+        assignmentIds: order,
+        ...command,
+      })
+      return c.json(mine, 200)
+    } catch (cause) {
+      return failure(c, cause)
+    }
+  })
+
   routes.get('/programs/:programVersionId', async (c) => {
     c.header('Cache-Control', 'no-store')
 
@@ -197,6 +263,18 @@ function readChoice(body: unknown): { programVersionId: string; timezone: string
   const trimmed = timezone.trim()
   if (trimmed === '' || trimmed.length > MAX_TIMEZONE) return undefined
   return { programVersionId: version, timezone: trimmed }
+}
+
+/** Every assignment, once, in order. A partial list is refused rather than merged. */
+function readOrder(body: unknown): readonly string[] | undefined {
+  if (typeof body !== 'object' || body === null) return undefined
+  const keys = Object.keys(body)
+  if (keys.length !== 1 || keys[0] !== 'assignment_ids') return undefined
+  const ids = (body as { assignment_ids: unknown }).assignment_ids
+  if (!Array.isArray(ids) || ids.length === 0 || ids.length > 100) return undefined
+  if (!ids.every((id) => typeof id === 'string' && UUID_V7.test(id))) return undefined
+  if (new Set(ids).size !== ids.length) return undefined
+  return ids as readonly string[]
 }
 
 function commandContext(c: Context, body: unknown) {

@@ -24,6 +24,9 @@ import type {
 export type ProgramCatalogue = AllfitV1Schemas['SpaceProgramCatalogue']
 
 export interface SpacePlanningService {
+  readWeekPlan: SpacePlanningDatabase['readWeekPlan']
+  readMyPrograms: SpacePlanningDatabase['readMyPrograms']
+  reorderMyPrograms: SpacePlanningDatabase['reorderMyPrograms']
   readCatalogue(input: { personId: string; requestId: string }): Promise<ProgramCatalogue>
   readTodaySession(input: {
     personId: string
@@ -57,6 +60,9 @@ export function createSpacePlanningService(database: SpacePlanningDatabase): Spa
     },
 
     readTodaySession: (input) => database.readTodaySession(input),
+    readWeekPlan: (input) => database.readWeekPlan(input),
+    readMyPrograms: (input) => database.readMyPrograms(input),
+    reorderMyPrograms: (input) => database.reorderMyPrograms(input),
 
     readProgram: (input) => database.readProgramVersion(input),
 

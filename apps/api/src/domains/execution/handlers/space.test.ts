@@ -73,6 +73,7 @@ function harness(overrides?: Partial<SpaceExecutionService>, actorFails = false)
     readWeekSummary: async () => ({
       trained_seconds: 0,
       sessions_completed: 0,
+      sessions_planned: 0,
       latest_weight: null,
       history: [],
     }),
