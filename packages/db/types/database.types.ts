@@ -1709,6 +1709,16 @@ export type Database = {
           status: string
         }[]
       }
+      read_training_profile: {
+        Args: { p_person_id: string }
+        Returns: {
+          biological_sex: string
+          focus_areas: string[]
+          given_name: string
+          primary_training_goal: string
+          training_experience: string
+        }[]
+      }
       record_adult_eligibility: {
         Args: {
           p_account_id: string
@@ -2622,6 +2632,51 @@ export type Database = {
           },
         ]
       }
+      planned_sessions: {
+        Row: {
+          assignment_id: string
+          id: string
+          person_id: string
+          scheduled_at: string
+          status: string
+          template_version_id: string
+          timezone: string
+        }
+        Insert: {
+          assignment_id: string
+          id?: string
+          person_id: string
+          scheduled_at: string
+          status?: string
+          template_version_id: string
+          timezone: string
+        }
+        Update: {
+          assignment_id?: string
+          id?: string
+          person_id?: string
+          scheduled_at?: string
+          status?: string
+          template_version_id?: string
+          timezone?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_planned_sessions_assignment'
+            columns: ['assignment_id', 'person_id']
+            isOneToOne: false
+            referencedRelation: 'program_assignments'
+            referencedColumns: ['id', 'person_id']
+          },
+          {
+            foreignKeyName: 'fk_planned_sessions_template_version'
+            columns: ['template_version_id']
+            isOneToOne: false
+            referencedRelation: 'session_template_versions'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       planned_steps: {
         Row: {
           activity_type_id: string | null
@@ -2657,6 +2712,47 @@ export type Database = {
           },
         ]
       }
+      program_assignments: {
+        Row: {
+          assigned_at: string
+          id: string
+          lifecycle: Database['planning']['Enums']['assignment_lifecycle']
+          origin_relationship_id: string | null
+          person_id: string
+          program_version_id: string
+          starts_on: string
+          timezone: string
+        }
+        Insert: {
+          assigned_at?: string
+          id?: string
+          lifecycle: Database['planning']['Enums']['assignment_lifecycle']
+          origin_relationship_id?: string | null
+          person_id: string
+          program_version_id: string
+          starts_on: string
+          timezone: string
+        }
+        Update: {
+          assigned_at?: string
+          id?: string
+          lifecycle?: Database['planning']['Enums']['assignment_lifecycle']
+          origin_relationship_id?: string | null
+          person_id?: string
+          program_version_id?: string
+          starts_on?: string
+          timezone?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_program_assignments_version'
+            columns: ['program_version_id']
+            isOneToOne: false
+            referencedRelation: 'program_versions'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       program_drafts: {
         Row: {
           content: Json
@@ -2685,6 +2781,75 @@ export type Database = {
             columns: ['program_id']
             isOneToOne: true
             referencedRelation: 'programs'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      program_version_emphases: {
+        Row: {
+          focus_area_code: string
+          program_version_id: string
+        }
+        Insert: {
+          focus_area_code: string
+          program_version_id: string
+        }
+        Update: {
+          focus_area_code?: string
+          program_version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_program_version_emphases_version'
+            columns: ['program_version_id']
+            isOneToOne: false
+            referencedRelation: 'program_versions'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      program_version_goals: {
+        Row: {
+          goal_code: string
+          program_version_id: string
+        }
+        Insert: {
+          goal_code: string
+          program_version_id: string
+        }
+        Update: {
+          goal_code?: string
+          program_version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_program_version_goals_version'
+            columns: ['program_version_id']
+            isOneToOne: false
+            referencedRelation: 'program_versions'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      program_version_levels: {
+        Row: {
+          experience_code: string
+          program_version_id: string
+        }
+        Insert: {
+          experience_code: string
+          program_version_id: string
+        }
+        Update: {
+          experience_code?: string
+          program_version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_program_version_levels_version'
+            columns: ['program_version_id']
+            isOneToOne: false
+            referencedRelation: 'program_versions'
             referencedColumns: ['id']
           },
         ]
@@ -2738,6 +2903,7 @@ export type Database = {
           notes: string | null
           program_id: string
           published_at: string
+          sex_affinity: Database['identity']['Enums']['biological_sex'] | null
           status: Database['catalog']['Enums']['publication_status']
           title: string
           version_number: number
@@ -2748,6 +2914,7 @@ export type Database = {
           notes?: string | null
           program_id: string
           published_at?: string
+          sex_affinity?: Database['identity']['Enums']['biological_sex'] | null
           status?: Database['catalog']['Enums']['publication_status']
           title: string
           version_number: number
@@ -2758,6 +2925,7 @@ export type Database = {
           notes?: string | null
           program_id?: string
           published_at?: string
+          sex_affinity?: Database['identity']['Enums']['biological_sex'] | null
           status?: Database['catalog']['Enums']['publication_status']
           title?: string
           version_number?: number
@@ -2774,7 +2942,8 @@ export type Database = {
       }
       programs: {
         Row: {
-          author_person_id: string
+          author_person_id: string | null
+          content_scope: Database['catalog']['Enums']['content_scope']
           created_at: string
           id: string
           owner_organization_id: string | null
@@ -2783,7 +2952,8 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          author_person_id: string
+          author_person_id?: string | null
+          content_scope: Database['catalog']['Enums']['content_scope']
           created_at?: string
           id?: string
           owner_organization_id?: string | null
@@ -2792,7 +2962,8 @@ export type Database = {
           updated_at?: string
         }
         Update: {
-          author_person_id?: string
+          author_person_id?: string | null
+          content_scope?: Database['catalog']['Enums']['content_scope']
           created_at?: string
           id?: string
           owner_organization_id?: string | null
@@ -2900,7 +3071,8 @@ export type Database = {
       }
       session_templates: {
         Row: {
-          author_person_id: string
+          author_person_id: string | null
+          content_scope: Database['catalog']['Enums']['content_scope']
           created_at: string
           discipline_code: string
           id: string
@@ -2910,7 +3082,8 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          author_person_id: string
+          author_person_id?: string | null
+          content_scope: Database['catalog']['Enums']['content_scope']
           created_at?: string
           discipline_code: string
           id?: string
@@ -2920,7 +3093,8 @@ export type Database = {
           updated_at?: string
         }
         Update: {
-          author_person_id?: string
+          author_person_id?: string | null
+          content_scope?: Database['catalog']['Enums']['content_scope']
           created_at?: string
           discipline_code?: string
           id?: string
@@ -3115,6 +3289,25 @@ export type Database = {
         Args: { p_version_id: string }
         Returns: Json
       }
+      publish_global_program: {
+        Args: {
+          p_content: Json
+          p_emphases: string[]
+          p_goals: string[]
+          p_levels: string[]
+          p_program_id: string
+          p_sex_affinity: Database['identity']['Enums']['biological_sex']
+        }
+        Returns: string
+      }
+      publish_global_session_template: {
+        Args: {
+          p_content: Json
+          p_discipline_code: string
+          p_template_id: string
+        }
+        Returns: string
+      }
       publish_program_version: {
         Args: {
           p_command_id: string
@@ -3143,6 +3336,31 @@ export type Database = {
         Returns: {
           replayed: boolean
           result: Json
+        }[]
+      }
+      read_current_assignment: {
+        Args: { p_person_id: string }
+        Returns: {
+          assignment_id: string
+          program_version_id: string
+          sessions_planned: number
+          starts_on: string
+          timezone: string
+          title: string
+        }[]
+      }
+      read_program_catalogue: {
+        Args: { p_person_id: string }
+        Returns: {
+          days_per_week: number
+          emphases: string[]
+          goals: string[]
+          levels: string[]
+          program_id: string
+          program_version_id: string
+          sex_affinity: string
+          title: string
+          weeks: number
         }[]
       }
       read_session_template_version: {
@@ -3186,6 +3404,17 @@ export type Database = {
           result: Json
         }[]
       }
+      self_assign_program: {
+        Args: {
+          p_command_id: string
+          p_idempotency_key: string
+          p_person_id: string
+          p_program_version_id: string
+          p_request_hash: string
+          p_timezone: string
+        }
+        Returns: string
+      }
       session_content_errors: {
         Args: {
           p_content: Json
@@ -3206,7 +3435,7 @@ export type Database = {
       }
     }
     Enums: {
-      [_ in never]: never
+      assignment_lifecycle: 'active' | 'detached_pending_choice' | 'personal' | 'ended'
     }
     CompositeTypes: {
       [_ in never]: never
@@ -3372,6 +3601,8 @@ export const Constants = {
     },
   },
   planning: {
-    Enums: {},
+    Enums: {
+      assignment_lifecycle: ['active', 'detached_pending_choice', 'personal', 'ended'],
+    },
   },
 } as const
