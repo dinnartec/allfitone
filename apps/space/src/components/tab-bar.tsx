@@ -16,6 +16,7 @@
  */
 
 import { GlassPanel } from '@allfitone/react-native/glass'
+import { resolveShadowStyle } from '@allfitone/react-native/shadow-style'
 import { FoundationIcon, type IconName } from '@allfitone/react-native/icons'
 import { Text } from '@allfitone/react-native/text'
 import { useTheme } from '@allfitone/react-native/theme'
@@ -78,7 +79,11 @@ export function TabBar({ active, onPending, onNavigate }: TabBarProps) {
         accessibilityRole="button"
         accessibilityLabel="Registrar una comida"
         onPress={() => onPending(PENDING.food)}
-        style={[styles.capture, { backgroundColor: theme.color.action.primary }]}
+        style={[
+          styles.capture,
+          resolveShadowStyle('floating'),
+          { backgroundColor: theme.color.action.primary },
+        ]}
       >
         <FoundationIcon name="camera" size="md" color={theme.color.action.onPrimary} decorative />
         <Text role="control" size="2xs" style={{ color: theme.color.action.onPrimary }}>
@@ -150,10 +155,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 2,
-    shadowColor: '#000000',
-    shadowOpacity: 0.4,
-    shadowOffset: { width: 0, height: 10 },
-    shadowRadius: 12,
-    elevation: 8,
   },
 })

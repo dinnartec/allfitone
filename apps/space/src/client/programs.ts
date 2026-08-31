@@ -14,9 +14,13 @@ import type { CommandHeaders } from '@allfitone/contracts/commands'
 export type ProgramCatalogue = AllfitV1Schemas['SpaceProgramCatalogue']
 export type ProgramAssignment = AllfitV1Schemas['SpaceProgramAssignment']
 export type ProgramChoice = AllfitV1Schemas['SpaceProgramChoice']
+export type ProgramDetail = AllfitV1Schemas['SpaceProgramDetail']
+export type ProgramDay = AllfitV1Schemas['SpaceProgramDay']
+export type ProgramStep = AllfitV1Schemas['SpaceProgramStep']
 
 export interface ProgramTransport {
   readCatalogue(): Promise<ProgramCatalogue>
+  readDetail(programVersionId: string): Promise<ProgramDetail>
   choose(command: CommandHeaders, choice: ProgramChoice): Promise<ProgramAssignment>
 }
 
@@ -27,6 +31,7 @@ export interface ProgramFlowDependencies {
 
 export interface ProgramFlow {
   readCatalogue(): Promise<ProgramCatalogue>
+  readDetail(programVersionId: string): Promise<ProgramDetail>
   choose(choice: ProgramChoice): Promise<ProgramAssignment>
 }
 
@@ -37,6 +42,8 @@ export function createProgramFlow(dependencies: ProgramFlowDependencies): Progra
 
   return {
     readCatalogue: () => dependencies.transport.readCatalogue(),
+
+    readDetail: (programVersionId) => dependencies.transport.readDetail(programVersionId),
 
     async choose(choice) {
       let command = pending.get(choice.program_version_id)

@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'bun:test'
+import { describe, expect, it, test } from 'bun:test'
 
-import { longDateLabel, weekFromToday } from './week'
+import { longDateLabel, shortDayLabel, trainedLabel, weekFromToday } from './week'
 
 describe('weekFromToday', () => {
   it('starts today and runs six days on', () => {
@@ -56,5 +56,21 @@ describe('longDateLabel', () => {
 
     expect(labels.some((label) => label.includes('undefined'))).toBe(false)
     expect(new Set(labels).size).toBe(12)
+  })
+})
+
+describe('what a history row says', () => {
+  test('T-SPC-UNIT-59 names the day in the reader’s own timezone', () => {
+    // A bare date parsed through `Date.parse` is read as UTC, which lands on the
+    // previous day for anybody west of Greenwich.
+    expect(shortDayLabel('2026-08-24')).toBe('LUN 24')
+    expect(shortDayLabel('2026-08-22')).toBe('SÁB 22')
+    expect(shortDayLabel('nonsense')).toBe('')
+  })
+
+  test('T-SPC-UNIT-60 reads a week in hours only once it has one', () => {
+    expect(trainedLabel(16_200)).toBe('4h 30m')
+    expect(trainedLabel(2_700)).toBe('45m')
+    expect(trainedLabel(0)).toBe('0m')
   })
 })

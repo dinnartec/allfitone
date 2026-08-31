@@ -1,98 +1,114 @@
 /**
- * Hoy · el primer día — HU-SP-100.
+ * Hoy — HU-SP-100 y HU-SP-089.
  *
- * The first screen after the onboarding, and until now there was none: activation
- * left `Empezar hoy` with nowhere to go. This is where it goes.
+ * One route, two screens, because it is one question: what am I doing today.
  *
- * **The three cards are three frequencies**, not the three highest scores. Same goal
- * and same level, and the only thing that changes is how many days a week somebody
- * can commit — which is the one thing the onboarding never asked. A first cut of the
- * catalogue hung the frequency off each program instead, and somebody starting who
- * could train five days was offered content written for somebody advanced.
+ * **Without a program it is `H-D · primer día`**: three cards, one per frequency, and
+ * choosing is the only thing on offer. Same goal and same level, and the only thing
+ * that changes is how many days a week somebody can commit — the one thing the
+ * onboarding never asked.
  *
- * Choosing is not an intention. `POST /space/v1/assignments` materialises the
- * calendar in the same transaction, so the person leaves with sessions rather than
- * with a preference — criterion 6 — and the count comes back as the evidence.
+ * **With a program it is `H-D · oscuro con imagen`**: the session, the week behind it,
+ * and one way in. The photograph is not decoration; it is what makes the session read
+ * as today rather than as a row in a list, and the veil under it is the contrast the
+ * type depends on.
  *
- * **The shell is painted, and none of it leads anywhere yet.** The tab bar, the quick
- * accesses and the two alternatives are on the canvas and belong to screens that do
- * not exist — `HU-SP-090`, free training, building your own. They are rendered rather
- * than omitted, and pressing one says which screen it is waiting on instead of
- * navigating into nothing. A dead end that explains itself is not the empty screen
- * `HU-SP-090` criterion 3 forbids; a blank one would be.
+ * **Nothing on this screen is invented.** The canvas carries a time and a venue, a
+ * calorie count and a per-session duration, and none of those exist: there are no
+ * bookings, no nutrition tables, and no stored session length. They are left out
+ * rather than filled with plausible numbers, which is the one thing a screen somebody
+ * trusts must never do. The week is seven days ending today, in the person's zone —
+ * not a calendar week, which would reset the count on a Monday nobody trained
+ * differently.
  *
- * **Every icon comes from the Design System.** A first pass borrowed near misses —
- * `heart` for food, `add` for a camera, `forward` for a chevron — and the screen did
- * not look like the design it was built from. The ten that were missing were added to
- * `@allfitone/icons` instead, which is what DT-008 asks for: a product never decides
- * what an icon means, so what is absent gets created there and consumed from there.
+ * **Two blurred panels, against the Design System's budget of one.** The dock and the
+ * bell both ask for glass on the canvas, and the bell is 42 points across; the cost is
+ * a fraction of the dock's and the alternative — a solid chip on a photograph — reads
+ * as a sticker. Worth knowing before a third one is added.
  */
 
 import { Button } from '@allfitone/react-native/button'
+import { GlassPanel } from '@allfitone/react-native/glass'
+import { Scrim } from '@allfitone/react-native/gradient'
 import { InlineAlert } from '@allfitone/react-native/inline-alert'
 import { Screen } from '@allfitone/react-native/screen'
 import { Text } from '@allfitone/react-native/text'
 import { useTheme } from '@allfitone/react-native/theme'
 import { useRouter } from 'expo-router'
 import { useEffect, useMemo, useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import { Image, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { FoundationIcon, type IconName } from '@allfitone/react-native/icons'
+import { semanticSpacing } from '@allfitone/react-native/tokens'
 
 import { ApiError } from '../src/client'
+import { createSpaceExecutionFlow } from '../src/client/execution-transport'
+import type { Today as TodayPayload } from '../src/client/execution'
 import { createSpaceProgramFlow } from '../src/client/programs-transport'
-import type { ProgramAssignment, ProgramCatalogue } from '../src/client/programs'
+import type { ProgramCatalogue } from '../src/client/programs'
 import {
   cardsFor,
   type ProgramSummary,
   type TrainingProfile,
 } from '../src/client/program-catalogue'
-import { longDateLabel } from '../src/client/week'
+import { longDateLabel, shortDayLabel, trainedLabel } from '../src/client/week'
+import todayHero from '../assets/images/today/today-hero.webp'
 import { ProgramCard } from '../src/components/program-card'
 import { DOCK_HEIGHT, TabBar, type TabKey } from '../src/components/tab-bar'
 
 const EXPIRED = 'Tu sesión venció. Vuelve a entrar para continuar.'
-const READ_FAILED = 'No pudimos cargar los programas. Inténtalo otra vez.'
-const CHOOSE_FAILED = 'No pudimos guardar tu programa. Inténtalo otra vez.'
+const READ_FAILED = 'No pudimos cargar tu día. Inténtalo otra vez.'
+const START_FAILED = 'No pudimos empezar la sesión. Inténtalo otra vez.'
 
 /** What a destination that does not exist yet answers, instead of a blank screen. */
 const PENDING: Record<string, string> = {
-  free: 'Entrenar libre llega con el registro de ejecución.',
+  free: 'Entrenar libre llega con tu contenido personal.',
   own: 'Crear tu propio programa llega con tu contenido personal.',
   routines: 'Tus rutinas llegan con tu contenido personal.',
   food: 'Comida llega con el registro de nutrición.',
   progress: 'Tu progreso llega con el historial.',
   notices: 'Tus avisos llegan con las notificaciones.',
+  history: 'El historial completo llega con su propia pantalla.',
 }
 
-/** The device's own zone. The server refuses to take a start date from a client. */
-function deviceTimezone(): string {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
-  } catch {
-    return 'UTC'
-  }
-}
+/** Seven days ending today, which is the window the reader answers for. */
+const WINDOW_DAYS = 7
+
+const HERO_ASPECT = 390 / 468
 
 export default function Today() {
   const router = useRouter()
-  const flow = useMemo(() => createSpaceProgramFlow(), [])
+  const { width } = useWindowDimensions()
+  const insets = useSafeAreaInsets()
+  const programs = useMemo(() => createSpaceProgramFlow(), [])
+  const training = useMemo(() => createSpaceExecutionFlow(), [])
+  const timezone = useMemo(
+    () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Bogota',
+    [],
+  )
 
+  const [today, setToday] = useState<TodayPayload | undefined>(undefined)
   const [catalogue, setCatalogue] = useState<ProgramCatalogue | undefined>(undefined)
-  const [assignment, setAssignment] = useState<ProgramAssignment | null>(null)
-  const [choosing, setChoosing] = useState<string | undefined>(undefined)
   const [pending, setPending] = useState<string | undefined>(undefined)
   const [sessionExpired, setSessionExpired] = useState(false)
+  const [starting, setStarting] = useState(false)
   const [failure, setFailure] = useState<string | undefined>(undefined)
 
   useEffect(() => {
     let active = true
 
-    flow
-      .readCatalogue()
+    training
+      .readToday(timezone)
       .then((current) => {
         if (!active) return
-        setCatalogue(current)
-        setAssignment(current.current_assignment)
+        setToday(current)
+        // The catalogue is only read when there is a choice to make: somebody with a
+        // program does not need twenty-four of them fetched behind their session.
+        if (current.current_assignment === null) return programs.readCatalogue()
+        return undefined
+      })
+      .then((available) => {
+        if (active && available) setCatalogue(available)
       })
       .catch((cause: unknown) => {
         if (!active) return
@@ -107,63 +123,131 @@ export default function Today() {
     return () => {
       active = false
     }
-  }, [flow])
+  }, [programs, training, timezone])
 
-  const profile: TrainingProfile = catalogue?.profile ?? {
-    given_name: '',
-    primary_training_goal: null,
-    training_experience: null,
-    biological_sex: null,
-    focus_areas: [],
+  const profile: TrainingProfile = today?.profile ??
+    catalogue?.profile ?? {
+      given_name: '',
+      primary_training_goal: null,
+      training_experience: null,
+      biological_sex: null,
+      focus_areas: [],
+    }
+  const cards = useMemo(
+    () => cardsFor(catalogue?.programs ?? [], profile),
+    [catalogue?.programs, profile],
+  )
+  const date = useMemo(() => longDateLabel(new Date()), [])
+  const assigned = today?.current_assignment ?? null
+  const session = today?.session ?? null
+
+  const train = () => {
+    if (!session) return
+    if (session.executed_session_id) {
+      router.push(`/session/${session.executed_session_id}`)
+      return
+    }
+    setStarting(true)
+    training
+      .start(session.planned_session_id, timezone)
+      .then((id) => router.push(`/session/${id}`))
+      .catch(() => setFailure(START_FAILED))
+      .finally(() => setStarting(false))
   }
-  const programs = catalogue?.programs ?? []
-  const cards = useMemo(() => cardsFor(programs, profile), [programs, profile])
-  const today = useMemo(() => longDateLabel(new Date()), [])
 
   const navigate = (tab: TabKey) => {
-    if (tab === 'train') router.push('/programs')
-  }
-
-  const choose = async (program: ProgramSummary) => {
-    setChoosing(program.program_version_id)
-    setFailure(undefined)
-    try {
-      setAssignment(
-        await flow.choose({
-          program_version_id: program.program_version_id,
-          timezone: deviceTimezone(),
-        }),
-      )
-    } catch (cause: unknown) {
-      if (cause instanceof ApiError && cause.failure === 'unauthenticated') {
-        setSessionExpired(true)
-        setFailure(EXPIRED)
-      } else {
-        setFailure(CHOOSE_FAILED)
-      }
-    } finally {
-      setChoosing(undefined)
-    }
+    if (tab === 'train') router.push('/train')
   }
 
   return (
-    <Screen edges={['top', 'bottom']}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+    <Screen edges={assigned ? [] : ['top', 'bottom']} style={assigned ? styles.bare : undefined}>
+      {assigned ? (
+        <Image
+          source={todayHero}
+          style={[styles.hero, { width, height: width / HERO_ASPECT }]}
+          resizeMode="cover"
+          accessible={false}
+        />
+      ) : null}
+      {/* The fade must complete above the photograph's bottom edge, or the last few
+          percent still shows image and leaves a seam across the screen. */}
+      {assigned ? (
+        <Scrim
+          height={(width / HERO_ASPECT) * 0.82}
+          coverage={0.58}
+          onset={0.24}
+          style={styles.veil}
+        />
+      ) : null}
+
+      <ScrollView
+        contentContainerStyle={[
+          styles.content,
+          // The photograph runs under the status bar, so this screen pays for the safe
+          // area itself. Measured, rather than a guess at where a notch ends.
+          assigned
+            ? { paddingHorizontal: 24, paddingTop: insets.top + semanticSpacing.screenTop }
+            : null,
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.header}>
           <View style={styles.greeting}>
             <Text role="display" size="2xl" uppercase accessibilityRole="header">
               {profile.given_name ? `Hola, ${profile.given_name}` : 'Hola'}
             </Text>
             <Text role="eyebrow" size="xs" color="muted">
-              {today.toUpperCase()}
+              {date.toUpperCase()}
             </Text>
           </View>
-          <Bell onPress={() => setPending(PENDING.notices ?? '')} />
+          <Bell onPress={() => setPending(PENDING.notices)} />
         </View>
 
-        {assignment ? (
-          <Chosen assignment={assignment} />
-        ) : (
+        {assigned && session ? (
+          <View style={styles.session}>
+            <Text role="eyebrow" size="xs" color="accent">
+              {`HOY · ${assigned.title.toUpperCase()}`}
+            </Text>
+            <Text
+              role="display"
+              size="5xl"
+              uppercase
+              style={styles.sessionTitle}
+              accessibilityRole="header"
+            >
+              {session.session_title}
+            </Text>
+            <Text role="body" size="sm" color="secondary">
+              {`${session.exercise_count} ${session.exercise_count === 1 ? 'ejercicio' : 'ejercicios'}`}
+            </Text>
+            <Button
+              label={
+                session.executed_session_id ? 'Continuar entrenamiento' : 'Empezar entrenamiento'
+              }
+              icon="start"
+              onPress={train}
+              loading={starting}
+              style={styles.start}
+            />
+          </View>
+        ) : null}
+
+        {assigned && !session ? (
+          <View style={styles.session}>
+            <Text role="eyebrow" size="xs" color="accent">
+              {`HOY · ${assigned.title.toUpperCase()}`}
+            </Text>
+            <Text role="display" size="4xl" uppercase accessibilityRole="header">
+              Día de descanso
+            </Text>
+            {/* A rest day is an answer, not an absence. */}
+            <Text role="body" size="sm" color="secondary">
+              Tu programa no pide nada hoy. Descansar también es entrenar.
+            </Text>
+          </View>
+        ) : null}
+
+        {!assigned ? (
           <View style={styles.heading}>
             <Text role="eyebrow" size="xs" color="accent">
               EMPIEZA POR AQUÍ
@@ -175,64 +259,56 @@ export default function Today() {
               Todavía no tienes ninguno. Estos tres encajan con lo que nos contaste.
             </Text>
           </View>
-        )}
+        ) : null}
 
         {failure ? <InlineAlert message={failure} /> : null}
 
-        {!assignment && cards.length > 0 ? (
+        {!assigned && cards.length > 0 ? (
           <View style={styles.cards}>
             {cards.map((card) => (
               <ProgramCard
                 key={card.program.program_version_id}
                 program={card.program}
                 suggested={card.suggested}
-                busy={choosing === card.program.program_version_id}
-                disabled={choosing !== undefined || sessionExpired}
-                onPress={() => void choose(card.program)}
+                busy={false}
+                disabled={sessionExpired}
+                onPress={() => open(router, card.program)}
               />
             ))}
           </View>
-        ) : null}
-
-        {!assignment && programs.length > cards.length ? (
-          <Text
-            role="body"
-            size="sm"
-            color="accent"
-            accessibilityRole="button"
-            onPress={() => router.push('/programs')}
-          >
-            Ver todos los programas ›
-          </Text>
         ) : null}
 
         {sessionExpired ? (
           <Button label="Iniciar sesión" onPress={() => router.replace('/sign-in')} />
         ) : null}
 
-        {catalogue === undefined && !failure ? (
+        {today === undefined && !failure ? (
           <Text role="body" size="sm" color="muted">
-            Cargando programas…
+            Cargando tu día…
           </Text>
         ) : null}
 
-        <View style={styles.section}>
-          <Text role="eyebrow" size="xs" color="muted">
-            O SI PREFIERES
-          </Text>
-          <View style={styles.alternatives}>
-            <Alternative
-              icon="freestyle"
-              label="Entrenar libre"
-              onPress={() => setPending(PENDING.free)}
-            />
-            <Alternative
-              icon="create"
-              label="Crear el mío"
-              onPress={() => setPending(PENDING.own)}
-            />
+        {assigned && today ? <Week week={today.week} /> : null}
+
+        {!assigned ? (
+          <View style={styles.section}>
+            <Text role="eyebrow" size="xs" color="muted">
+              O SI PREFIERES
+            </Text>
+            <View style={styles.alternatives}>
+              <Alternative
+                icon="checklist"
+                label="Ver catálogo completo"
+                onPress={() => router.push('/train')}
+              />
+              <Alternative
+                icon="create"
+                label="Crear el mío"
+                onPress={() => setPending(PENDING.own)}
+              />
+            </View>
           </View>
-        </View>
+        ) : null}
 
         <View style={styles.section}>
           <Text role="eyebrow" size="xs" color="muted">
@@ -254,6 +330,43 @@ export default function Today() {
           </View>
         </View>
 
+        {assigned && today ? (
+          <View style={styles.section}>
+            <View style={styles.sectionHead}>
+              <Text role="eyebrow" size="xs" color="muted">
+                HISTORIAL DE ENTRENAMIENTO
+              </Text>
+              {today.week.history.length > 0 ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Ver todo el historial"
+                  onPress={() => setPending(PENDING.history)}
+                >
+                  <Text role="control" size="xs" color="accent">
+                    Ver todos ›
+                  </Text>
+                </Pressable>
+              ) : null}
+            </View>
+            {today.week.history.length > 0 ? (
+              today.week.history.map((trained) => (
+                <TrainedRow
+                  key={trained.executed_session_id}
+                  day={shortDayLabel(trained.trained_on)}
+                  title={trained.title ?? 'Sesión'}
+                  detail={`${trained.sets_recorded} ${trained.sets_recorded === 1 ? 'serie' : 'series'}`}
+                />
+              ))
+            ) : (
+              // The section stays rather than disappearing: an absent section reads as
+              // a screen that is still loading, and "nothing yet" is an answer.
+              <Text role="body" size="sm" color="muted">
+                Todavía no has terminado ninguna sesión. La primera aparece aquí.
+              </Text>
+            )}
+          </View>
+        ) : null}
+
         {pending ? (
           <Text role="body" size="sm" color="muted">
             {pending}
@@ -266,19 +379,107 @@ export default function Today() {
   )
 }
 
-function Chosen({ assignment }: { readonly assignment: ProgramAssignment }) {
+function open(router: ReturnType<typeof useRouter>, program: ProgramSummary) {
+  router.push(`/programs/${program.program_version_id}`)
+}
+
+/** The seven days ending today, and the two things we can honestly say about them. */
+function Week({ week }: { readonly week: TodayPayload['week'] }) {
+  const theme = useTheme()
+  const done = Math.min(week.sessions_completed, WINDOW_DAYS)
+
   return (
-    <View style={styles.heading}>
-      <Text role="eyebrow" size="xs" color="accent">
-        TU PROGRAMA
+    <View style={styles.section}>
+      <View style={styles.sectionHead}>
+        <Text role="eyebrow" size="xs" color="muted">
+          ESTA SEMANA
+        </Text>
+        <Text role="display" size="md">
+          {`${week.sessions_completed} de ${WINDOW_DAYS}`}
+        </Text>
+      </View>
+      <View style={styles.bars}>
+        {Array.from({ length: WINDOW_DAYS }, (_unused, index) => (
+          <View
+            key={index}
+            style={[
+              styles.bar,
+              {
+                backgroundColor:
+                  index < done ? theme.color.action.primary : theme.color.background.surfaceMuted,
+              },
+            ]}
+          />
+        ))}
+      </View>
+      <View style={styles.figures}>
+        <Figure
+          icon="time"
+          tint={theme.color.status.success}
+          value={trainedLabel(week.trained_seconds)}
+        />
+        {/* Zero, and honestly zero: nutrition has no tables, so nothing has been
+            logged and nothing is being estimated. */}
+        <Figure icon="nutrition" tint={theme.color.status.warning} value="0 kcal" />
+        <Figure
+          icon="weight"
+          tint={theme.color.status.info}
+          value={week.latest_weight ? weightLabel(week.latest_weight) : '—'}
+        />
+      </View>
+    </View>
+  )
+}
+
+/** "70,2 kg", with the comma this market writes and no locale to trust. */
+function weightLabel(measure: NonNullable<TodayPayload['week']['latest_weight']>): string {
+  return `${String(measure.value).replace('.', ',')} ${measure.unit}`
+}
+
+function Figure({
+  icon,
+  tint,
+  value,
+}: {
+  readonly icon: IconName
+  readonly tint: string
+  readonly value: string
+}) {
+  return (
+    <View style={styles.figure}>
+      <FoundationIcon name={icon} size="xs" color={tint} decorative />
+      <Text role="control" size="xs" color="secondary">
+        {value}
       </Text>
-      <Text role="display" size="4xl" uppercase accessibilityRole="header">
-        {assignment.title}
+    </View>
+  )
+}
+
+function TrainedRow({
+  day,
+  title,
+  detail,
+}: {
+  readonly day: string
+  readonly title: string
+  readonly detail: string
+}) {
+  const theme = useTheme()
+
+  return (
+    <View style={[styles.trained, { borderColor: theme.color.border.subtle }]}>
+      <Text role="eyebrow" size="2xs" color="muted" style={styles.trainedDay}>
+        {day}
       </Text>
-      {/* The count is the evidence that choosing produced a plan and not a preference. */}
-      <Text role="body" size="sm" color="secondary">
-        {`Empieza hoy, con ${assignment.sessions_planned} sesiones en tu agenda. Entrenar desde aquí llega en la siguiente pantalla.`}
-      </Text>
+      <View style={styles.trainedBody}>
+        <Text role="control" size="sm">
+          {title}
+        </Text>
+        <Text role="body" size="2xs" color="muted">
+          {detail}
+        </Text>
+      </View>
+      <FoundationIcon name="success" size="xs" color={theme.color.status.success} decorative />
     </View>
   )
 }
@@ -309,7 +510,9 @@ function Alternative({
       ]}
     >
       <FoundationIcon name={icon} size="sm" color={theme.color.icon.accent} decorative />
-      <Text role="label" size="xs" numberOfLines={1}>
+      {/* Two lines rather than an ellipsis: "Ver catálogo completo" does not fit a
+          half-width pill on one, and a truncated label is a label nobody can read. */}
+      <Text role="control" size="xs" numberOfLines={2} style={styles.alternativeLabel}>
         {label}
       </Text>
     </Pressable>
@@ -338,52 +541,65 @@ function Shortcut({
       ]}
     >
       <FoundationIcon name={icon} size="md" color={theme.color.icon.accent} decorative />
-      <Text role="label" size="xs">
+      <Text role="control" size="xs">
         {label}
       </Text>
     </Pressable>
   )
 }
 
+/** Glass, not a solid chip: it sits on a photograph, where a solid one reads as a sticker. */
 function Bell({ onPress }: { readonly onPress: () => void }) {
   const theme = useTheme()
 
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel="Tus avisos"
-      onPress={onPress}
-      style={[
-        styles.bell,
-        { backgroundColor: theme.color.background.surface, borderColor: theme.color.border.subtle },
-      ]}
-    >
-      <FoundationIcon name="notification" size="sm" color={theme.color.icon.primary} decorative />
+    <Pressable accessibilityRole="button" accessibilityLabel="Tus avisos" onPress={onPress}>
+      <GlassPanel style={styles.bell}>
+        <FoundationIcon name="notification" size="sm" color={theme.color.icon.primary} decorative />
+      </GlassPanel>
     </Pressable>
   )
 }
 
 const styles = StyleSheet.create({
+  // The photograph runs to the top edge, so the screen keeps no inset of its own and
+  // the scroll pays for the status bar instead.
+  bare: { paddingHorizontal: 0 },
+  hero: { position: 'absolute', top: 0, left: 0 },
+  veil: { top: 100 },
   // The dock floats over the scroll, so the last section has to clear it.
   content: { gap: 20, paddingBottom: DOCK_HEIGHT + 40 },
   header: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
   greeting: { flex: 1, gap: 4 },
-  bell: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    borderWidth: 1.5,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  bell: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
   heading: { gap: 8 },
+  // The photograph carries the space above it, so the session sits well down the frame.
+  session: { gap: 8, paddingTop: 124 },
+  sessionTitle: { lineHeight: 44 },
+  start: { marginTop: 12, height: 50 },
   cards: { gap: 12 },
   section: { gap: 10 },
+  sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  bars: { flexDirection: 'row', gap: 6 },
+  bar: { flex: 1, height: 7, borderRadius: 3.5 },
+  figures: { flexDirection: 'row', gap: 18, flexWrap: 'wrap' },
+  figure: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  trained: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 9,
+    borderTopWidth: 1,
+  },
+  trainedDay: { width: 52 },
+  trainedBody: { flex: 1, gap: 1 },
   alternatives: { flexDirection: 'row', gap: 8 },
+  alternativeLabel: { flexShrink: 1 },
   alternative: {
     flex: 1,
     minHeight: 48,
-    paddingHorizontal: 18,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
     borderRadius: 999,
     borderWidth: 1.5,
     flexDirection: 'row',

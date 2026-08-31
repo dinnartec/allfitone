@@ -2,6 +2,8 @@ import { describe, expect, test } from 'bun:test'
 
 import {
   applyFilter,
+  estimatedMinutes,
+  targetLabel,
   cardsFor,
   filtersFor,
   programCaption,
@@ -249,5 +251,87 @@ describe('applyFilter', () => {
 
   test('an unknown filter shows everything rather than nothing', () => {
     expect(applyFilter('days:nonsense', catalogue, profile)).toHaveLength(catalogue.length)
+  })
+})
+
+describe('targetLabel', () => {
+  test('reads strength as sets by reps, and as sets alone when there are none', () => {
+    expect(targetLabel({ family: 'strength', target_sets: 4, target_reps: 8 })).toBe('4 × 8')
+    // A plank is three sets of "as long as you can", and it has no rep count.
+    expect(targetLabel({ family: 'strength', target_sets: 3 })).toBe('3 series')
+  })
+
+  test('prefers a distance over a duration when a run declares one', () => {
+    expect(
+      targetLabel({
+        family: 'endurance',
+        target_distance_value: 5,
+        target_distance_unit_code: 'km',
+        target_duration_seconds: 1800,
+      }),
+    ).toBe('5 km')
+    expect(targetLabel({ family: 'endurance', target_duration_seconds: 1800 })).toBe('30 min')
+  })
+
+  test('reads intervals as rounds by work', () => {
+    expect(
+      targetLabel({
+        family: 'interval',
+        rounds: 8,
+        work_duration_seconds: 40,
+        rest_duration_seconds: 20,
+      }),
+    ).toBe('8 × 40s')
+  })
+
+  test('says nothing rather than something wrong for a shape it does not know', () => {
+    expect(targetLabel({ family: 'nonsense' })).toBe('')
+    expect(targetLabel({ family: 'strength' })).toBe('')
+  })
+})
+
+describe('estimatedMinutes', () => {
+  const day = (steps: Array<Record<string, unknown>>) => ({
+    day: 1,
+    title: 'Día',
+    discipline_code: 'strength',
+    steps: steps.map((target, index) => ({
+      position: index + 1,
+      movement_id: null,
+      movement: null,
+      target,
+    })),
+  })
+
+  test('adds up the sets at three minutes each, rounded to five', () => {
+    expect(
+      estimatedMinutes(
+        day([
+          { family: 'strength', target_sets: 4, target_reps: 8 },
+          { family: 'strength', target_sets: 3, target_reps: 10 },
+          { family: 'strength', target_sets: 3, target_reps: 12 },
+        ]),
+      ),
+    ).toBe(30)
+  })
+
+  test('takes a run at its declared duration, and a distance at six minutes a kilometre', () => {
+    expect(estimatedMinutes(day([{ family: 'endurance', target_duration_seconds: 1800 }]))).toBe(30)
+    expect(estimatedMinutes(day([{ family: 'endurance', target_distance_value: 5 }]))).toBe(30)
+  })
+
+  test('counts an interval as its rounds of work plus rest', () => {
+    expect(
+      estimatedMinutes(
+        day([
+          { family: 'interval', rounds: 10, work_duration_seconds: 45, rest_duration_seconds: 15 },
+        ]),
+      ),
+    ).toBe(10)
+  })
+
+  test('answers zero for a day with nothing measurable, so nothing is shown', () => {
+    expect(estimatedMinutes(day([{ family: 'nonsense' }]))).toBe(0)
+    expect(estimatedMinutes(day([]))).toBe(0)
   })
 })

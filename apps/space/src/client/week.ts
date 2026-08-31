@@ -69,3 +69,20 @@ const WEEKDAYS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes
 export function longDateLabel(date: Date): string {
   return `${WEEKDAYS[date.getDay()]} ${date.getDate()} de ${MONTHS[date.getMonth()]}`
 }
+
+/** "LUN 25", for a history row. Same reason as the month names: no ICU to trust. */
+export function shortDayLabel(isoDate: string): string {
+  // Parsed as parts, not through `Date.parse`: a bare `YYYY-MM-DD` is read as UTC,
+  // which lands on the previous day for anybody west of Greenwich.
+  const [year, month, day] = isoDate.split('-').map(Number)
+  if (year === undefined || month === undefined || day === undefined) return ''
+  const date = new Date(year, month - 1, day)
+  return `${(WEEKDAYS[date.getDay()] ?? '').slice(0, 3).toUpperCase()} ${day}`
+}
+
+/** "4h 30m", or "45m" while a week has not reached an hour. */
+export function trainedLabel(totalSeconds: number): string {
+  const minutes = Math.round(Math.max(0, totalSeconds) / 60)
+  const hours = Math.floor(minutes / 60)
+  return hours > 0 ? `${hours}h ${minutes % 60}m` : `${minutes}m`
+}

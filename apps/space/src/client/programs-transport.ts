@@ -14,6 +14,7 @@ import {
   createProgramFlow,
   type ProgramAssignment,
   type ProgramCatalogue,
+  type ProgramDetail,
   type ProgramFlow,
 } from './programs'
 import { readSession, storeSession } from './session'
@@ -30,6 +31,10 @@ export function createSpaceProgramFlow(): ProgramFlow {
     transport: {
       readCatalogue: () =>
         authenticated((token) => authorizedGet<ProgramCatalogue>('/space/v1/programs', token)),
+      readDetail: (programVersionId) =>
+        authenticated((token) =>
+          authorizedGet<ProgramDetail>(`/space/v1/programs/${programVersionId}`, token),
+        ),
       choose: (command, choice) =>
         authenticated((token) =>
           authorizedPost<ProgramAssignment>('/space/v1/assignments', command, choice, token),

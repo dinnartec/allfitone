@@ -18,7 +18,7 @@ import { Pressable, StyleSheet, View } from 'react-native'
 
 import { programCaption, type ProgramSummary } from '../client/program-catalogue'
 
-const ZONE_LABEL: Record<string, string> = {
+export const ZONE_LABEL: Record<string, string> = {
   chest: 'Pecho',
   back: 'Espalda',
   shoulders: 'Hombros',
@@ -70,7 +70,9 @@ export function ProgramCard({
     >
       {suggested ? (
         <View style={[styles.badge, { backgroundColor: theme.color.action.primary }]}>
-          <Text role="eyebrow" size="2xs" style={{ color: theme.color.action.onPrimary }}>
+          {/* `control` and not `eyebrow`: the eyebrow's 0.2em tracking made a ten-point
+              label physically wider than the eighteen-point name beneath it. */}
+          <Text role="control" size="2xs" style={{ color: theme.color.action.onPrimary }}>
             {badge}
           </Text>
         </View>
@@ -78,10 +80,11 @@ export function ProgramCard({
 
       <View style={[styles.body, suggested ? styles.belowBadge : null]}>
         <View style={styles.copy}>
-          <Text role="display" size="lg" uppercase>
+          <Text role="display" size="xl" uppercase>
             {program.title}
           </Text>
-          <Text role="body" size="sm" color="muted">
+          {/* A size under the name: it qualifies the program, it does not announce it. */}
+          <Text role="body" size="xs" color="muted">
             {programCaption(program)}
           </Text>
           <View style={styles.zones}>
@@ -96,7 +99,7 @@ export function ProgramCard({
                   },
                 ]}
               >
-                <Text role="label" size="2xs" color="accent">
+                <Text role="control" size="2xs" color="accent">
                   {ZONE_LABEL[zone] ?? zone}
                 </Text>
               </View>

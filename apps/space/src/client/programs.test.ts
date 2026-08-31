@@ -20,6 +20,9 @@ function harness(overrides?: Partial<ProgramTransport>) {
   let issued = 0
 
   const transport: ProgramTransport = {
+    readDetail: async () => {
+      throw new Error('not used in this test')
+    },
     readCatalogue: async () => ({
       profile: {
         given_name: 'Ada',

@@ -48,6 +48,12 @@ export type ApiFailure =
   | 'weak-password'
   /** Something else already holds what was asked for. Only a username, today. */
   | 'conflict'
+  /**
+   * Not there, or not yours. The API answers both the same way on purpose: a
+   * distinguishable "forbidden" would make somebody else's catalogue enumerable one
+   * identifier at a time.
+   */
+  | 'not-found'
   /** The API or the provider did not answer. Retryable; nothing else is. */
   | 'unavailable'
 
@@ -128,6 +134,7 @@ async function post<T>(
 function failureFor(status: number): ApiFailure {
   if (status === 400) return 'invalid-request'
   if (status === 401) return 'unauthenticated'
+  if (status === 404) return 'not-found'
   if (status === 409) return 'conflict'
   if (status === 422) return 'weak-password'
   return 'unavailable'
@@ -235,6 +242,46 @@ export async function authorizedPost<T>(
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      signal,
+    })
+  } catch {
+    throw new ApiError('unavailable')
+  } finally {
+    done()
+  }
+
+  if (!response.ok) throw new ApiError(failureFor(response.status))
+
+  return (await readJsonBody<T>(response)) as T
+}
+
+/**
+ * Authenticated PUT with a precondition.
+ *
+ * `If-Match` carries the revision the client believes it is editing. It is a
+ * precondition on the resource, not a field of the body: in the body a client could
+ * send one number and mean another, and the server would have no way to tell.
+ */
+export async function authorizedPut<T>(
+  path: string,
+  command: { idempotencyKey: string; commandId: string },
+  body: unknown,
+  token: string | undefined,
+  ifMatch: number,
+): Promise<T> {
+  const { signal, done } = timeoutSignal(TIMEOUT_MS)
+  let response: Response | undefined
+  try {
+    response = await fetch(`${BASE_URL}${path}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Idempotency-Key': command.idempotencyKey,
+        'Command-Id': command.commandId,
+        'If-Match': String(ifMatch),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(body),
       signal,
     })
   } catch {

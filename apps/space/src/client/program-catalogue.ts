@@ -20,6 +20,9 @@
 
 import type { AllfitV1Schemas } from '@allfitone/contracts'
 
+export type ProgramDay = AllfitV1Schemas['SpaceProgramDay']
+export type ProgramStep = AllfitV1Schemas['SpaceProgramStep']
+
 export type ProgramSummary = AllfitV1Schemas['SpaceProgramSummary']
 export type TrainingProfile = AllfitV1Schemas['SpaceTrainingProfile']
 export type TrainingExperience = AllfitV1Schemas['TrainingExperience']
@@ -132,7 +135,10 @@ function bestAt(
 
 /** What the card says under the title: "5 días · con práctica". */
 export const LEVEL_LABEL: Record<TrainingExperience, string> = {
-  starting: 'empieza',
+  // Short forms of what the onboarding calls them — "Estoy empezando", "Tengo algo de
+  // práctica", "Tengo experiencia". Never "principiante": that vocabulary was
+  // rejected there, and a chip is not the place to bring it back.
+  starting: 'empezando',
   some_practice: 'con práctica',
   experienced: 'con experiencia',
 }
@@ -183,4 +189,94 @@ export function applyFilter(
   const days = key.startsWith('days:') ? Number(key.slice('days:'.length)) : undefined
   if (days === undefined || Number.isNaN(days)) return ranked
   return ranked.filter((program) => program.days_per_week === days)
+}
+
+/**
+ * How a target reads on screen: "4 × 8", "5 km", "30 min", "8 × 40s".
+ *
+ * The server sends the target structured rather than formatted so this can be
+ * asserted in a test instead of being judged from a screenshot, and so the same
+ * numbers can be shown differently somewhere else without a second endpoint.
+ */
+export function targetLabel(target: ProgramStep['target']): string {
+  const value = (key: string): number | undefined => {
+    const raw = (target as Record<string, unknown>)[key]
+    return typeof raw === 'number' ? raw : undefined
+  }
+  const family = (target as { family?: unknown }).family
+
+  if (family === 'strength') {
+    const sets = value('target_sets')
+    const reps = value('target_reps')
+    if (sets === undefined) return ''
+    // No reps is a hold — a plank is three sets of "as long as you can".
+    return reps === undefined ? `${sets} series` : `${sets} × ${reps}`
+  }
+  if (family === 'endurance') {
+    const distance = value('target_distance_value')
+    if (distance !== undefined) {
+      const unit = (target as { target_distance_unit_code?: unknown }).target_distance_unit_code
+      return `${distance} ${typeof unit === 'string' ? unit : ''}`.trim()
+    }
+    const seconds = value('target_duration_seconds')
+    return seconds === undefined ? '' : `${Math.round(seconds / 60)} min`
+  }
+  if (family === 'interval') {
+    const rounds = value('rounds')
+    const work = value('work_duration_seconds')
+    if (rounds === undefined || work === undefined) return ''
+    return `${rounds} × ${work}s`
+  }
+  if (family === 'mobility') {
+    const hold = value('hold_duration_seconds')
+    const reps = value('target_repetitions')
+    if (hold !== undefined) return `${hold}s`
+    return reps === undefined ? '' : `${reps} rep`
+  }
+  return ''
+}
+
+/** Rest between strength sets, which nothing in the catalogue records. */
+const SECONDS_PER_SET = 180
+/** A kilometre at a conversational pace, which is what these programs prescribe. */
+const SECONDS_PER_KM = 360
+const MOBILITY_DEFAULT_SECONDS = 60
+
+/**
+ * Roughly how long a day takes, in minutes, rounded to five.
+ *
+ * **It is an estimate and the screen says so with a `~`.** Nothing in the catalogue
+ * records rest between sets or the pace somebody runs at, so two coefficients are
+ * assumed and named above rather than buried: three minutes a set, six minutes a
+ * kilometre. Everything else comes from the targets themselves.
+ *
+ * Zero when a day carries nothing measurable, and the caller shows nothing rather
+ * than "~0 min".
+ */
+export function estimatedMinutes(day: ProgramDay): number {
+  const seconds = day.steps.reduce((total, step) => {
+    const target = step.target as Record<string, unknown>
+    const number = (key: string): number => (typeof target[key] === 'number' ? target[key] : 0)
+
+    switch (target.family) {
+      case 'strength':
+        return total + number('target_sets') * SECONDS_PER_SET
+      case 'endurance':
+        return (
+          total +
+          (number('target_duration_seconds') || number('target_distance_value') * SECONDS_PER_KM)
+        )
+      case 'interval':
+        return (
+          total +
+          number('rounds') * (number('work_duration_seconds') + number('rest_duration_seconds'))
+        )
+      case 'mobility':
+        return total + (number('hold_duration_seconds') || MOBILITY_DEFAULT_SECONDS)
+      default:
+        return total
+    }
+  }, 0)
+
+  return Math.round(seconds / 60 / 5) * 5
 }
