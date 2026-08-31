@@ -11,6 +11,8 @@ import type { AllfitV1Schemas } from '@allfitone/contracts'
 export type ProgramSummary = AllfitV1Schemas['SpaceProgramSummary']
 export type ProgramAssignment = AllfitV1Schemas['SpaceProgramAssignment']
 export type TrainingProfile = AllfitV1Schemas['SpaceTrainingProfile']
+export type ProgramDetail = AllfitV1Schemas['SpaceProgramDetail']
+export type TodaySession = AllfitV1Schemas['SpaceTodaySession']
 
 export interface SpacePlanningDatabase {
   readProgramCatalogue(input: { personId: string; requestId: string }): Promise<ProgramSummary[]>
@@ -19,6 +21,18 @@ export interface SpacePlanningDatabase {
     requestId: string
   }): Promise<ProgramAssignment | null>
   readTrainingProfile(input: { personId: string; requestId: string }): Promise<TrainingProfile>
+  /** Null when the version does not exist or is not this person's to read. */
+  readProgramVersion(input: {
+    personId: string
+    programVersionId: string
+    requestId: string
+  }): Promise<ProgramDetail | null>
+  /** Null on a day the program does not ask for anything. A rest day is an answer. */
+  readTodaySession(input: {
+    personId: string
+    timezone: string
+    requestId: string
+  }): Promise<TodaySession | null>
   selfAssignProgram(input: {
     personId: string
     programVersionId: string

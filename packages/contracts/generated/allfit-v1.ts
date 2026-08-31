@@ -1263,6 +1263,30 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/space/v1/programs/{programVersionId}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Read everything a published program contains
+     * @description HU-SP-100. Somebody about to hand eight weeks of their life to a program deserves to see every session in it first: "8 semanas · 3 días" is a summary, not the content.
+     *
+     *     Same access rule as `OP-PLN-011`, and for the same reason — a version reachable to assign is a version reachable to read. Global published content, or the person's own. Nothing else.
+     *
+     *     **One entry per distinct day of the first week, not per session.** A twelve-week program composes sixty rows out of five templates, and returning sixty would be returning the calendar. The split is what is being chosen.
+     */
+    get: operations['getSpaceProgramVersion']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/space/v1/assignments': {
     parameters: {
       query?: never
@@ -1304,6 +1328,52 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/space/v1/today': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Read today — what is scheduled, what is open, and the week behind it
+     * @description `HU-SP-089`, and the operation its traceability row had marked as missing.
+     *
+     *     **Composed, not centralised.** Planning answers for what is scheduled today, Execution for what has been trained this week and for the history, Identity for the weight in force. The surface joins them because the screen cannot draw any of them without the others, and no domain reads another's tables.
+     *
+     *     Calories are absent on purpose. The canvas shows them beside the hours trained and the body weight; those two are derivable and nutrition has no tables, so a number here would be a number somebody trusts.
+     */
+    get: operations['getMyToday']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/executions/{executionId}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Read one of my own executions, planned content and all
+     * @description What `X-1` reads when a session is opened or resumed: the session, what it was planned to be, and what has been recorded so far.
+     *
+     *     The revision number travels because it is the optimistic lock the next write has to carry. Two phones cannot both win.
+     */
+    get: operations['getMyExecution']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/space/v1/planned-sessions/{plannedSessionId}/attempts': {
     parameters: {
       query?: never
@@ -1332,6 +1402,26 @@ export interface paths {
     /** Replace working results under optimistic concurrency */
     put: operations['replaceExecutionResults']
     post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/executions/{executionId}/abandonment': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Close an attempt as abandoned, keeping what it recorded
+     * @description Leaving a session is not the same as never having trained. The attempt closes as abandoned and stays in the history with whatever it reached; it is never the primary attempt for its day and does not count towards adherence, and the day itself goes back to being scheduled.
+     */
+    post: operations['abandonExecution']
     delete?: never
     options?: never
     head?: never
@@ -1905,6 +1995,90 @@ export interface components {
       goals: components['schemas']['PrimaryTrainingGoal'][]
       levels: components['schemas']['TrainingExperience'][]
       emphases: components['schemas']['FocusAreaSet']
+    }
+    SpaceToday: {
+      profile: components['schemas']['SpaceTrainingProfile']
+      current_assignment: components['schemas']['SpaceProgramAssignment'] | null
+      /** @description Null on a day the program does not ask for anything. A rest day is an answer, not an absence. */
+      session: components['schemas']['SpaceTodaySession'] | null
+      week: components['schemas']['SpaceWeekSummary']
+    }
+    SpaceTodaySession: {
+      planned_session_id: components['schemas']['UuidV7']
+      /** @description How many exercises the day asks for, which is what the screen promises. */
+      exercise_count: number
+      program_title: string
+      session_title: string
+      discipline_code: string
+      status: string
+      /** @description The attempt already open on today's session, if there is one. It is what turns "Empezar" into "Continuar" and what stops a second attempt being started by accident. */
+      executed_session_id: components['schemas']['UuidV7'] | null
+    }
+    /** @description The seven days ending today, in the person's zone — not a calendar week, which would reset the number on a Monday nobody trained differently. */
+    SpaceWeekSummary: {
+      trained_seconds: number
+      sessions_completed: number
+      latest_weight: components['schemas']['SpaceBodyMeasure'] | null
+      history: components['schemas']['SpaceTrainedSession'][]
+    }
+    SpaceTrainedSession: {
+      executed_session_id: components['schemas']['UuidV7']
+      /** Format: date */
+      trained_on: string
+      title: string | null
+      sets_recorded: number
+    }
+    SpaceExecution: {
+      executed_session_id: components['schemas']['UuidV7']
+      execution_status: components['schemas']['ExecutionStatus']
+      /** Format: date-time */
+      started_at: string
+      /** @description The optimistic lock the next write has to carry. */
+      revision_number: number
+      title: string | null
+      discipline_code: string | null
+      program_title: string | null
+      /** @description Derived from the assignment's start date, not stored: the same number kept in two places is one of them wrong. */
+      week: number | null
+      planned: components['schemas']['SpaceProgramStep'][]
+      results: {
+        [key: string]: unknown
+      }[]
+    }
+    SpaceProgramDetail: {
+      program_version_id: components['schemas']['UuidV7']
+      title: string
+      /** @description What the program is, in the words somebody deciding needs. */
+      notes: string | null
+      weeks: number
+      days_per_week: number
+      sex_affinity: components['schemas']['BiologicalSex'] | null
+      goals: components['schemas']['PrimaryTrainingGoal'][]
+      levels: components['schemas']['TrainingExperience'][]
+      emphases: components['schemas']['FocusAreaSet']
+      days: components['schemas']['SpaceProgramDay'][]
+    }
+    /** @description One training day of the split, with everything it asks for. */
+    SpaceProgramDay: {
+      day: number
+      title: string
+      discipline_code: string
+      steps: components['schemas']['SpaceProgramStep'][]
+    }
+    SpaceProgramStep: {
+      position: number
+      /** @description What a recorded set points back at. The name alone would leave the app guessing which movement it just logged, and a set that names no movement is a set nobody can read later. */
+      movement_id: components['schemas']['UuidV7'] | null
+      movement: string | null
+      /** @description The target as the planning domain stores it, discriminated by `family`. It travels structured rather than as a formatted string so the app can render "4 × 8" or "5 km" in its own words and test that it does. */
+      target: {
+        [key: string]: unknown
+      }
+      /** @description What this movement weighed last time, set by set, from the most recent session that finished. Absent when there is nothing to look back at — and on the program detail, where there is no session to look back from. */
+      previous?: {
+        load_value: number | null
+        achieved_reps: number | null
+      }[]
     }
     SpaceProgramChoice: {
       program_version_id: components['schemas']['UuidV7']
@@ -2735,7 +2909,34 @@ export interface components {
       version: number
       requested_level: components['schemas']['CompletenessLevel']
     }
+    EnduranceLapReplace: {
+      lap_number: number
+      distance_value: number
+      distance_unit_code: string
+      duration_seconds: number
+    }
+    IntervalResultReplace: {
+      interval_number: number
+      work_duration_seconds: number
+      rest_duration_seconds?: number
+      achieved_repetitions?: number
+      completed?: boolean
+    }
+    /** @description At least one of the two measures, because a held nothing is not a result. */
+    MobilityResultReplace: {
+      sequence_position: number
+      movement_id?: components['schemas']['UuidV7']
+      /** @enum {string} */
+      side?: 'left' | 'right' | 'bilateral' | 'not_applicable'
+      hold_duration_seconds?: number
+      completed_repetitions?: number
+    }
     /**
+     * @description The working state, whole. `OP-EXE-005` is a replace and not a patch: somebody editing the set they logged four sets ago sends the session as it now stands, so there is never a half-applied session and never a merge to reason about.
+     *
+     *     The four families each have their own array. `strength_sets` is required and may be empty — a running session records no sets and must still be able to say so — while the other three are omitted when the session has none of them.
+     *
+     *     `segments` is optional, and Space omits it. The session's activity type is frozen onto the execution when the attempt starts, from the template it came from; a client restating it could only contradict what was already frozen.
      * @example {
      *       "segments": [
      *         {
@@ -2760,7 +2961,10 @@ export interface components {
      *     }
      */
     ExecutionResultsReplace: {
-      segments: components['schemas']['ExecutionSegment'][]
+      segments?: components['schemas']['ExecutionSegment'][]
+      endurance_laps?: components['schemas']['EnduranceLapReplace'][]
+      interval_results?: components['schemas']['IntervalResultReplace'][]
+      mobility_results?: components['schemas']['MobilityResultReplace'][]
       strength_sets: components['schemas']['StrengthSet'][]
     }
     ExecutionSegment: {
@@ -2768,7 +2972,8 @@ export interface components {
       activity_type_code: string
     }
     StrengthSet: {
-      segment_position: number
+      /** @description Which segment the set belongs to. Omitted when the session declares none, which is every Space session today: a position pointing at a segment that was never sent would name something that does not exist. */
+      segment_position?: number
       order: number
       /** Format: uuid */
       movement_id?: string | null
@@ -2797,7 +3002,9 @@ export interface components {
       /** @enum {string} */
       status: 'in_progress' | 'paused'
       revision_number: number
+      /** @description Zero while a session declares no segmentation, which is every Space session today. It is a count of what is stored, not of what was sent. */
       segment_count: number
+      /** @description Zero on a session somebody has opened and not yet recorded into. */
       result_count: number
     }
     /**
@@ -2808,6 +3015,14 @@ export interface components {
     ExecutionFinalize: {
       /** Format: date-time */
       ended_at: string
+    }
+    ExecutionAbandoned: {
+      id: components['schemas']['UuidV7']
+      /** @constant */
+      status: 'abandoned'
+      revision_number: number
+      /** @description What the attempt keeps. Abandoning does not delete training that happened; it says the session was not finished. */
+      result_count: number
     }
     /**
      * @example {
@@ -6206,6 +6421,33 @@ export interface operations {
       503: components['responses']['UpstreamUnavailable']
     }
   }
+  getSpaceProgramVersion: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        programVersionId: components['schemas']['UuidV7']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The version, its segmentation and its whole content */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SpaceProgramDetail']
+        }
+      }
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
   selfAssignSpaceProgram: {
     parameters: {
       query?: never
@@ -6281,6 +6523,61 @@ export interface operations {
       400: components['responses']['BadRequest']
       401: components['responses']['Unauthenticated']
       422: components['responses']['ValidationFailed']
+    }
+  }
+  getMyToday: {
+    parameters: {
+      query: {
+        /** @description The device's zone. "Today" is a local question and the server must not answer it in UTC, or somebody in Bogotá loses their session at seven in the evening. */
+        timezone: components['schemas']['IanaTimeZone']
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Today, and the week behind it */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SpaceToday']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  getMyExecution: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        executionId: components['parameters']['ExecutionId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The execution as its owner sees it */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SpaceExecution']
+        }
+      }
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      503: components['responses']['UpstreamUnavailable']
     }
   }
   startPlannedSessionAttempt: {
@@ -6364,6 +6661,44 @@ export interface operations {
       409: components['responses']['StaleDraft']
       422: components['responses']['ContractValidationFailed']
       428: components['responses']['PreconditionRequired']
+    }
+  }
+  abandonExecution: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        executionId: components['parameters']['ExecutionId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ExecutionFinalize']
+      }
+    }
+    responses: {
+      /** @description Attempt abandoned */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ExecutionAbandoned']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
     }
   }
   finalizeExecution: {

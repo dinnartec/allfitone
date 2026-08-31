@@ -21,6 +21,7 @@ import {
 } from '../../identity/index.js'
 import { authProvider } from '../../../platform/auth/index.js'
 import { spacePlanningService } from '../dependencies.js'
+import { spaceExecutionService, type SpaceExecutionService } from '../../execution/index.js'
 import type { SpacePlanningService } from '../application/space.js'
 
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -34,8 +35,10 @@ export function spacePlanningRoutes(
   injectedService?: SpacePlanningService,
   injectedVerifier?: TokenVerifier,
   injectedActors?: SpaceActorResolver,
+  injectedExecutions?: SpaceExecutionService,
 ): Hono {
   const planning = () => injectedService ?? spacePlanningService()
+  const executions = () => injectedExecutions ?? spaceExecutionService()
   const actors = () => injectedActors ?? spaceActorResolver()
   const verify: TokenVerifier =
     injectedVerifier ?? ((token) => authProvider().verifyAccessToken(token, 'space'))
@@ -53,6 +56,66 @@ export function spacePlanningRoutes(
         await planning().readCatalogue({ personId, requestId: c.req.header('x-request-id') ?? '' }),
         200,
       )
+    } catch (cause) {
+      return failure(c, cause)
+    }
+  })
+
+  routes.get('/today', async (c) => {
+    c.header('Cache-Control', 'no-store')
+
+    const token = await verified(c, verify)
+    if (!token) return fail(c, 'unauthenticated')
+
+    // "Today" is a local question and the server must not answer it in UTC, or
+    // somebody in Bogotá loses their session at seven in the evening.
+    const timezone = (c.req.query('timezone') ?? '').trim()
+    if (timezone === '' || timezone.length > MAX_TIMEZONE) return fail(c, 'invalid-request')
+
+    try {
+      const personId = await actors().personFor(token.subject)
+      const requestId = c.req.header('x-request-id') ?? ''
+      // Composed, not centralised: each domain answers for its own, and the surface
+      // joins them because the screen cannot draw any of them without the others.
+      const [catalogue, session, week] = await Promise.all([
+        planning().readCatalogue({ personId, requestId }),
+        planning().readTodaySession({ personId, timezone, requestId }),
+        executions().readWeekSummary({ personId, timezone, requestId }),
+      ])
+      return c.json(
+        {
+          profile: catalogue.profile,
+          current_assignment: catalogue.current_assignment,
+          session,
+          week,
+        },
+        200,
+      )
+    } catch (cause) {
+      return failure(c, cause)
+    }
+  })
+
+  routes.get('/programs/:programVersionId', async (c) => {
+    c.header('Cache-Control', 'no-store')
+
+    const token = await verified(c, verify)
+    if (!token) return fail(c, 'unauthenticated')
+
+    const programVersionId = c.req.param('programVersionId')
+    if (!UUID_V7.test(programVersionId)) return fail(c, 'invalid-request')
+
+    try {
+      const personId = await actors().personFor(token.subject)
+      const detail = await planning().readProgram({
+        personId,
+        programVersionId,
+        requestId: c.req.header('x-request-id') ?? '',
+      })
+      // Absent and forbidden answer the same way on purpose: a version somebody may
+      // not read must not be distinguishable from one that does not exist.
+      if (!detail) return fail(c, 'not-found')
+      return c.json(detail, 200)
     } catch (cause) {
       return failure(c, cause)
     }

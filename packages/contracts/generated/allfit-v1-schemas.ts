@@ -708,6 +708,28 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  EnduranceLapReplace: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['lap_number', 'distance_value', 'distance_unit_code', 'duration_seconds'],
+    properties: {
+      lap_number: {
+        type: 'integer',
+        minimum: 1,
+      },
+      distance_value: {
+        type: 'number',
+        exclusiveMinimum: 0,
+      },
+      distance_unit_code: {
+        type: 'string',
+      },
+      duration_seconds: {
+        type: 'number',
+        exclusiveMinimum: 0,
+      },
+    },
+  },
   EnduranceTarget: {
     type: 'object',
     additionalProperties: false,
@@ -761,6 +783,30 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
       target_pace_unit_code: {
         type: ['string', 'null'],
+      },
+    },
+  },
+  ExecutionAbandoned: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['id', 'status', 'revision_number', 'result_count'],
+    properties: {
+      id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      status: {
+        type: 'string',
+        const: 'abandoned',
+      },
+      revision_number: {
+        type: 'integer',
+        minimum: 1,
+      },
+      result_count: {
+        type: 'integer',
+        minimum: 0,
+        description:
+          'What the attempt keeps. Abandoning does not delete training that happened; it says the session was not finished.',
       },
     },
   },
@@ -832,7 +878,9 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
   ExecutionResultsReplace: {
     type: 'object',
     additionalProperties: false,
-    required: ['segments', 'strength_sets'],
+    required: ['strength_sets'],
+    description:
+      "The working state, whole. `OP-EXE-005` is a replace and not a patch: somebody editing the set they logged four sets ago sends the session as it now stands, so there is never a half-applied session and never a merge to reason about.\n\nThe four families each have their own array. `strength_sets` is required and may be empty — a running session records no sets and must still be able to say so — while the other three are omitted when the session has none of them.\n\n`segments` is optional, and Space omits it. The session's activity type is frozen onto the execution when the attempt starts, from the template it came from; a client restating it could only contradict what was already frozen.",
     example: {
       segments: [
         {
@@ -858,15 +906,31 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
     properties: {
       segments: {
         type: 'array',
-        minItems: 1,
         maxItems: 100,
         items: {
           $ref: '#/components/schemas/ExecutionSegment',
         },
       },
+      endurance_laps: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/EnduranceLapReplace',
+        },
+      },
+      interval_results: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/IntervalResultReplace',
+        },
+      },
+      mobility_results: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/MobilityResultReplace',
+        },
+      },
       strength_sets: {
         type: 'array',
-        minItems: 1,
         maxItems: 1000,
         items: {
           $ref: '#/components/schemas/StrengthSet',
@@ -899,11 +963,14 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
       segment_count: {
         type: 'integer',
-        minimum: 1,
+        minimum: 0,
+        description:
+          'Zero while a session declares no segmentation, which is every Space session today. It is a count of what is stored, not of what was sent.',
       },
       result_count: {
         type: 'integer',
-        minimum: 1,
+        minimum: 0,
+        description: 'Zero on a session somebody has opened and not yet recorded into.',
       },
     },
   },
@@ -976,6 +1043,32 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     ],
   },
+  IntervalResultReplace: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['interval_number', 'work_duration_seconds'],
+    properties: {
+      interval_number: {
+        type: 'integer',
+        minimum: 1,
+      },
+      work_duration_seconds: {
+        type: 'number',
+        exclusiveMinimum: 0,
+      },
+      rest_duration_seconds: {
+        type: 'number',
+        minimum: 0,
+      },
+      achieved_repetitions: {
+        type: 'integer',
+        minimum: 1,
+      },
+      completed: {
+        type: 'boolean',
+      },
+    },
+  },
   IntervalTarget: {
     type: 'object',
     additionalProperties: false,
@@ -1047,6 +1140,33 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         type: 'string',
         minLength: 1,
         maxLength: 16,
+      },
+    },
+  },
+  MobilityResultReplace: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['sequence_position'],
+    description: 'At least one of the two measures, because a held nothing is not a result.',
+    properties: {
+      sequence_position: {
+        type: 'integer',
+        minimum: 1,
+      },
+      movement_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      side: {
+        type: 'string',
+        enum: ['left', 'right', 'bilateral', 'not_applicable'],
+      },
+      hold_duration_seconds: {
+        type: 'number',
+        exclusiveMinimum: 0,
+      },
+      completed_repetitions: {
+        type: 'integer',
+        minimum: 1,
       },
     },
   },
@@ -3603,6 +3723,97 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
     description:
       'Enough to resume the onboarding and nothing more. Absent answers are null rather than omitted, so the app never has to guess whether a step was skipped or the field simply did not travel.',
   },
+  SpaceExecution: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'executed_session_id',
+      'execution_status',
+      'started_at',
+      'revision_number',
+      'title',
+      'discipline_code',
+      'program_title',
+      'week',
+      'planned',
+      'results',
+    ],
+    properties: {
+      executed_session_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      execution_status: {
+        $ref: '#/components/schemas/ExecutionStatus',
+      },
+      started_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      revision_number: {
+        type: 'integer',
+        minimum: 0,
+        description: 'The optimistic lock the next write has to carry.',
+      },
+      title: {
+        oneOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      discipline_code: {
+        oneOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      program_title: {
+        oneOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      week: {
+        oneOf: [
+          {
+            type: 'integer',
+            minimum: 1,
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description:
+          "Derived from the assignment's start date, not stored: the same number kept in two places is one of them wrong.",
+      },
+      planned: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/SpaceProgramStep',
+        },
+      },
+      results: {
+        type: 'array',
+        items: {
+          type: 'object',
+          additionalProperties: true,
+          description:
+            'A recorded result, discriminated by `family`, in the shape the replace command accepts. It travels structured so the app can render and edit it without a second endpoint.',
+        },
+      },
+    },
+  },
   SpaceFocusAreas: {
     type: 'object',
     additionalProperties: false,
@@ -4012,6 +4223,163 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  SpaceProgramDay: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['day', 'title', 'discipline_code', 'steps'],
+    description: 'One training day of the split, with everything it asks for.',
+    properties: {
+      day: {
+        type: 'integer',
+        minimum: 1,
+        maximum: 7,
+      },
+      title: {
+        type: 'string',
+      },
+      discipline_code: {
+        type: 'string',
+      },
+      steps: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/SpaceProgramStep',
+        },
+      },
+    },
+  },
+  SpaceProgramDetail: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'program_version_id',
+      'title',
+      'notes',
+      'weeks',
+      'days_per_week',
+      'sex_affinity',
+      'goals',
+      'levels',
+      'emphases',
+      'days',
+    ],
+    properties: {
+      program_version_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      title: {
+        type: 'string',
+      },
+      notes: {
+        oneOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description: 'What the program is, in the words somebody deciding needs.',
+      },
+      weeks: {
+        type: 'integer',
+        minimum: 1,
+      },
+      days_per_week: {
+        type: 'integer',
+        minimum: 1,
+        maximum: 7,
+      },
+      sex_affinity: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/BiologicalSex',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      goals: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/PrimaryTrainingGoal',
+        },
+      },
+      levels: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/TrainingExperience',
+        },
+      },
+      emphases: {
+        $ref: '#/components/schemas/FocusAreaSet',
+      },
+      days: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/SpaceProgramDay',
+        },
+      },
+    },
+  },
+  SpaceProgramStep: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['position', 'movement_id', 'movement', 'target'],
+    properties: {
+      position: {
+        type: 'integer',
+        minimum: 1,
+      },
+      movement_id: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/UuidV7',
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description:
+          'What a recorded set points back at. The name alone would leave the app guessing which movement it just logged, and a set that names no movement is a set nobody can read later.',
+      },
+      movement: {
+        oneOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      target: {
+        type: 'object',
+        additionalProperties: true,
+        description:
+          'The target as the planning domain stores it, discriminated by `family`. It travels structured rather than as a formatted string so the app can render "4 × 8" or "5 km" in its own words and test that it does.',
+      },
+      previous: {
+        type: 'array',
+        description:
+          'What this movement weighed last time, set by set, from the most recent session that finished. Absent when there is nothing to look back at — and on the program detail, where there is no session to look back from.',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['load_value', 'achieved_reps'],
+          properties: {
+            load_value: {
+              type: ['number', 'null'],
+            },
+            achieved_reps: {
+              type: ['integer', 'null'],
+            },
+          },
+        },
+      },
+    },
+  },
   SpaceProgramSummary: {
     type: 'object',
     additionalProperties: false,
@@ -4214,6 +4582,116 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  SpaceToday: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['profile', 'current_assignment', 'session', 'week'],
+    properties: {
+      profile: {
+        $ref: '#/components/schemas/SpaceTrainingProfile',
+      },
+      current_assignment: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/SpaceProgramAssignment',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      session: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/SpaceTodaySession',
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description:
+          'Null on a day the program does not ask for anything. A rest day is an answer, not an absence.',
+      },
+      week: {
+        $ref: '#/components/schemas/SpaceWeekSummary',
+      },
+    },
+  },
+  SpaceTodaySession: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'planned_session_id',
+      'program_title',
+      'session_title',
+      'discipline_code',
+      'status',
+      'exercise_count',
+      'executed_session_id',
+    ],
+    properties: {
+      planned_session_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      exercise_count: {
+        type: 'integer',
+        minimum: 0,
+        description: 'How many exercises the day asks for, which is what the screen promises.',
+      },
+      program_title: {
+        type: 'string',
+      },
+      session_title: {
+        type: 'string',
+      },
+      discipline_code: {
+        type: 'string',
+      },
+      status: {
+        type: 'string',
+      },
+      executed_session_id: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/UuidV7',
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description:
+          'The attempt already open on today\'s session, if there is one. It is what turns "Empezar" into "Continuar" and what stops a second attempt being started by accident.',
+      },
+    },
+  },
+  SpaceTrainedSession: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['executed_session_id', 'trained_on', 'title', 'sets_recorded'],
+    properties: {
+      executed_session_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      trained_on: {
+        type: 'string',
+        format: 'date',
+      },
+      title: {
+        oneOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      sets_recorded: {
+        type: 'integer',
+        minimum: 0,
+      },
+    },
+  },
   SpaceTrainingExperienceClaim: {
     type: 'object',
     additionalProperties: false,
@@ -4331,15 +4809,50 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  SpaceWeekSummary: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['trained_seconds', 'sessions_completed', 'latest_weight', 'history'],
+    description:
+      "The seven days ending today, in the person's zone — not a calendar week, which would reset the number on a Monday nobody trained differently.",
+    properties: {
+      trained_seconds: {
+        type: 'number',
+        minimum: 0,
+      },
+      sessions_completed: {
+        type: 'integer',
+        minimum: 0,
+      },
+      latest_weight: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/SpaceBodyMeasure',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      history: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/SpaceTrainedSession',
+        },
+      },
+    },
+  },
   StrengthSet: {
     type: 'object',
     additionalProperties: false,
-    required: ['segment_position', 'order'],
+    required: ['order'],
     properties: {
       segment_position: {
         type: 'integer',
         minimum: 1,
         maximum: 100,
+        description:
+          'Which segment the set belongs to. Omitted when the session declares none, which is every Space session today: a position pointing at a segment that was never sent would name something that does not exist.',
       },
       order: {
         type: 'integer',

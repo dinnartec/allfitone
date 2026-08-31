@@ -14,12 +14,27 @@
 
 import type { AllfitV1Schemas } from '@allfitone/contracts'
 
-import type { ProgramAssignment, SpacePlanningDatabase } from '../domain/space.js'
+import type {
+  ProgramAssignment,
+  ProgramDetail,
+  SpacePlanningDatabase,
+  TodaySession,
+} from '../domain/space.js'
 
 export type ProgramCatalogue = AllfitV1Schemas['SpaceProgramCatalogue']
 
 export interface SpacePlanningService {
   readCatalogue(input: { personId: string; requestId: string }): Promise<ProgramCatalogue>
+  readTodaySession(input: {
+    personId: string
+    timezone: string
+    requestId: string
+  }): Promise<TodaySession | null>
+  readProgram(input: {
+    personId: string
+    programVersionId: string
+    requestId: string
+  }): Promise<ProgramDetail | null>
   chooseProgram(input: {
     personId: string
     programVersionId: string
@@ -40,6 +55,10 @@ export function createSpacePlanningService(database: SpacePlanningDatabase): Spa
       ])
       return { profile, programs, current_assignment: currentAssignment }
     },
+
+    readTodaySession: (input) => database.readTodaySession(input),
+
+    readProgram: (input) => database.readProgramVersion(input),
 
     chooseProgram: (input) => database.selfAssignProgram(input),
   }

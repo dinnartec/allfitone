@@ -4,7 +4,7 @@ import { Hono } from 'hono'
 
 import { SpaceActorError, type SpaceActorResolver } from '../../identity/index.js'
 import type { ProgramCatalogue, SpacePlanningService } from '../application/space.js'
-import type { ProgramAssignment } from '../domain/space.js'
+import type { ProgramAssignment, ProgramDetail } from '../domain/space.js'
 import { spacePlanningRoutes } from './space.js'
 
 const PERSON_ID = '019f9000-0000-7000-8000-000000000001'
@@ -20,6 +20,33 @@ const assignment: ProgramAssignment = {
   starts_on: '2026-08-31',
   timezone: 'America/Bogota',
   sessions_planned: 60,
+}
+
+const detail: ProgramDetail = {
+  program_version_id: VERSION_ID,
+  title: 'Empuje · tirón · pierna',
+  notes: 'Un reparto clásico de empuje, tirón y pierna.',
+  weeks: 12,
+  days_per_week: 5,
+  sex_affinity: null,
+  goals: ['build_muscle'],
+  levels: ['some_practice', 'experienced'],
+  emphases: ['back', 'chest', 'legs'],
+  days: [
+    {
+      day: 1,
+      title: 'Empuje',
+      discipline_code: 'strength',
+      steps: [
+        {
+          position: 1,
+          movement_id: null,
+          movement: 'Press de banca con barra',
+          target: { family: 'strength', target_sets: 4, target_reps: 8 },
+        },
+      ],
+    },
+  ],
 }
 
 const catalogue: ProgramCatalogue = {
@@ -52,6 +79,8 @@ function harness(overrides?: {
 }): Hono {
   const service: SpacePlanningService = {
     readCatalogue: async () => catalogue,
+    readTodaySession: async () => null,
+    readProgram: async () => detail,
     chooseProgram: async () => assignment,
     ...overrides?.service,
   }
@@ -87,10 +116,11 @@ describe('the Space planning surface honours the contract', () => {
         operation.path.startsWith('/space/v1/programs') ||
         operation.path.startsWith('/space/v1/assignments'),
     )
-    expect(declared).toHaveLength(2)
+    expect(declared).toHaveLength(3)
     expect(declared.map((operation) => operation.allfitOperation).sort()).toEqual([
       'OP-PLN-011',
       'OP-PLN-020',
+      'OP-PLN-021',
     ])
   })
 })
@@ -121,6 +151,35 @@ describe('GET /space/v1/programs', () => {
     }).request('/space/v1/programs', { headers: authorized })
 
     expect(response.status).toBe(403)
+  })
+})
+
+describe('GET /space/v1/programs/{programVersionId}', () => {
+  test('T-PLN-API-060 answers the whole content of the version', async () => {
+    const response = await harness().request(`/space/v1/programs/${VERSION_ID}`, {
+      headers: authorized,
+    })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual(detail)
+  })
+
+  test('T-PLN-API-061 refuses an identifier that is not a version', async () => {
+    const response = await harness().request('/space/v1/programs/not-a-uuid', {
+      headers: authorized,
+    })
+    expect(response.status).toBe(400)
+  })
+
+  test('T-PLN-API-062 answers not-found for a version this person may not read', async () => {
+    // Absent and forbidden are deliberately the same answer: otherwise the catalogue
+    // of every organization becomes enumerable one identifier at a time.
+    const response = await harness({ service: { readProgram: async () => null } }).request(
+      `/space/v1/programs/${VERSION_ID}`,
+      { headers: authorized },
+    )
+
+    expect(response.status).toBe(404)
   })
 })
 

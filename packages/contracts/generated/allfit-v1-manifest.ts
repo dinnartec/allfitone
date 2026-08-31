@@ -118,6 +118,20 @@ export const allfitV1ContractManifest = {
       responses: ['200', '400', '401', '404', '409', '410'],
     },
     {
+      method: 'GET',
+      path: '/space/v1/executions/{executionId}',
+      operationId: 'getMyExecution',
+      allfitOperation: 'OP-EXE-015',
+      responses: ['200', '401', '403', '404', '503'],
+    },
+    {
+      method: 'POST',
+      path: '/space/v1/executions/{executionId}/abandonment',
+      operationId: 'abandonExecution',
+      allfitOperation: 'OP-EXE-003',
+      responses: ['200', '400', '401', '403', '404', '409'],
+    },
+    {
       method: 'POST',
       path: '/space/v1/executions/{executionId}/finalize',
       operationId: 'finalizeExecution',
@@ -266,10 +280,24 @@ export const allfitV1ContractManifest = {
     },
     {
       method: 'GET',
+      path: '/space/v1/programs/{programVersionId}',
+      operationId: 'getSpaceProgramVersion',
+      allfitOperation: 'OP-PLN-021',
+      responses: ['200', '401', '403', '404', '503'],
+    },
+    {
+      method: 'GET',
       path: '/space/v1/telemetry-config',
       operationId: 'getSpaceTelemetryConfig',
       allfitOperation: 'OP-SYS-011',
       responses: ['200'],
+    },
+    {
+      method: 'GET',
+      path: '/space/v1/today',
+      operationId: 'getMyToday',
+      allfitOperation: 'OP-PLN-022',
+      responses: ['200', '400', '401', '403', '503'],
     },
     {
       method: 'GET',

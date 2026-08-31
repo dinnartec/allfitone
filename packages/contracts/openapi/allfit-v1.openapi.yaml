@@ -3080,6 +3080,54 @@ paths:
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
 
+  /space/v1/programs/{programVersionId}:
+    get:
+      tags: [Space Planning]
+      operationId: getSpaceProgramVersion
+      x-allfit-operation: OP-PLN-021
+      x-allfit-cache: no-store
+      summary: Read everything a published program contains
+      description: >-
+        HU-SP-100. Somebody about to hand eight weeks of their life to a program
+        deserves to see every session in it first: "8 semanas · 3 días" is a summary,
+        not the content.
+
+
+        Same access rule as `OP-PLN-011`, and for the same reason — a version
+        reachable to assign is a version reachable to read. Global published content,
+        or the person's own. Nothing else.
+
+
+        **One entry per distinct day of the first week, not per session.** A
+        twelve-week program composes sixty rows out of five templates, and returning
+        sixty would be returning the calendar. The split is what is being chosen.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: programVersionId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/UuidV7'
+      responses:
+        '200':
+          description: The version, its segmentation and its whole content
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpaceProgramDetail'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
   /space/v1/assignments:
     post:
       tags: [Space Planning]
@@ -3173,6 +3221,94 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '422':
           $ref: '#/components/responses/ValidationFailed'
+
+  /space/v1/today:
+    get:
+      tags: [Space Planning]
+      operationId: getMyToday
+      x-allfit-operation: OP-PLN-022
+      x-allfit-cache: no-store
+      summary: Read today — what is scheduled, what is open, and the week behind it
+      description: >-
+        `HU-SP-089`, and the operation its traceability row had marked as missing.
+
+
+        **Composed, not centralised.** Planning answers for what is scheduled today,
+        Execution for what has been trained this week and for the history, Identity
+        for the weight in force. The surface joins them because the screen cannot draw
+        any of them without the others, and no domain reads another's tables.
+
+
+        Calories are absent on purpose. The canvas shows them beside the hours trained
+        and the body weight; those two are derivable and nutrition has no tables, so a
+        number here would be a number somebody trusts.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: timezone
+          in: query
+          required: true
+          description: >-
+            The device's zone. "Today" is a local question and the server must not
+            answer it in UTC, or somebody in Bogotá loses their session at seven in
+            the evening.
+          schema:
+            $ref: '#/components/schemas/IanaTimeZone'
+      responses:
+        '200':
+          description: Today, and the week behind it
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpaceToday'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /space/v1/executions/{executionId}:
+    get:
+      tags: [Space Execution]
+      operationId: getMyExecution
+      x-allfit-operation: OP-EXE-015
+      x-allfit-cache: no-store
+      summary: Read one of my own executions, planned content and all
+      description: >-
+        What `X-1` reads when a session is opened or resumed: the session, what it was
+        planned to be, and what has been recorded so far.
+
+
+        The revision number travels because it is the optimistic lock the next write
+        has to carry. Two phones cannot both win.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ExecutionId'
+      responses:
+        '200':
+          description: The execution as its owner sees it
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpaceExecution'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
 
   /space/v1/planned-sessions/{plannedSessionId}/attempts:
     post:
@@ -3269,6 +3405,53 @@ paths:
           $ref: '#/components/responses/ContractValidationFailed'
         '428':
           $ref: '#/components/responses/PreconditionRequired'
+
+  /space/v1/executions/{executionId}/abandonment:
+    post:
+      tags: [Space Execution]
+      operationId: abandonExecution
+      x-allfit-operation: OP-EXE-003
+      x-allfit-cache: no-store
+      summary: Close an attempt as abandoned, keeping what it recorded
+      description: >-
+        Leaving a session is not the same as never having trained. The attempt closes
+        as abandoned and stays in the history with whatever it reached; it is never the
+        primary attempt for its day and does not count towards adherence, and the day
+        itself goes back to being scheduled.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ExecutionId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExecutionFinalize'
+      responses:
+        '200':
+          description: Attempt abandoned
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExecutionAbandoned'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
 
   /space/v1/executions/{executionId}/finalize:
     post:
@@ -5182,6 +5365,244 @@ components:
             $ref: '#/components/schemas/TrainingExperience'
         emphases:
           $ref: '#/components/schemas/FocusAreaSet'
+    SpaceToday:
+      type: object
+      additionalProperties: false
+      required: [profile, current_assignment, session, week]
+      properties:
+        profile:
+          $ref: '#/components/schemas/SpaceTrainingProfile'
+        current_assignment:
+          oneOf:
+            - $ref: '#/components/schemas/SpaceProgramAssignment'
+            - type: 'null'
+        session:
+          oneOf:
+            - $ref: '#/components/schemas/SpaceTodaySession'
+            - type: 'null'
+          description: >-
+            Null on a day the program does not ask for anything. A rest day is an
+            answer, not an absence.
+        week:
+          $ref: '#/components/schemas/SpaceWeekSummary'
+    SpaceTodaySession:
+      type: object
+      additionalProperties: false
+      required:
+        [planned_session_id, program_title, session_title, discipline_code, status,
+         exercise_count, executed_session_id]
+      properties:
+        planned_session_id:
+          $ref: '#/components/schemas/UuidV7'
+        exercise_count:
+          type: integer
+          minimum: 0
+          description: How many exercises the day asks for, which is what the screen promises.
+        program_title:
+          type: string
+        session_title:
+          type: string
+        discipline_code:
+          type: string
+        status:
+          type: string
+        executed_session_id:
+          oneOf:
+            - $ref: '#/components/schemas/UuidV7'
+            - type: 'null'
+          description: >-
+            The attempt already open on today's session, if there is one. It is what
+            turns "Empezar" into "Continuar" and what stops a second attempt being
+            started by accident.
+    SpaceWeekSummary:
+      type: object
+      additionalProperties: false
+      required: [trained_seconds, sessions_completed, latest_weight, history]
+      description: >-
+        The seven days ending today, in the person's zone — not a calendar week, which
+        would reset the number on a Monday nobody trained differently.
+      properties:
+        trained_seconds:
+          type: number
+          minimum: 0
+        sessions_completed:
+          type: integer
+          minimum: 0
+        latest_weight:
+          oneOf:
+            - $ref: '#/components/schemas/SpaceBodyMeasure'
+            - type: 'null'
+        history:
+          type: array
+          items:
+            $ref: '#/components/schemas/SpaceTrainedSession'
+    SpaceTrainedSession:
+      type: object
+      additionalProperties: false
+      required: [executed_session_id, trained_on, title, sets_recorded]
+      properties:
+        executed_session_id:
+          $ref: '#/components/schemas/UuidV7'
+        trained_on:
+          type: string
+          format: date
+        title:
+          oneOf:
+            - type: string
+            - type: 'null'
+        sets_recorded:
+          type: integer
+          minimum: 0
+    SpaceExecution:
+      type: object
+      additionalProperties: false
+      required:
+        [executed_session_id, execution_status, started_at, revision_number, title, discipline_code,
+         program_title, week, planned, results]
+      properties:
+        executed_session_id:
+          $ref: '#/components/schemas/UuidV7'
+        execution_status:
+          $ref: '#/components/schemas/ExecutionStatus'
+        started_at:
+          type: string
+          format: date-time
+        revision_number:
+          type: integer
+          minimum: 0
+          description: The optimistic lock the next write has to carry.
+        title:
+          oneOf:
+            - type: string
+            - type: 'null'
+        discipline_code:
+          oneOf:
+            - type: string
+            - type: 'null'
+        program_title:
+          oneOf:
+            - type: string
+            - type: 'null'
+        week:
+          oneOf:
+            - type: integer
+              minimum: 1
+            - type: 'null'
+          description: >-
+            Derived from the assignment's start date, not stored: the same number kept
+            in two places is one of them wrong.
+        planned:
+          type: array
+          items:
+            $ref: '#/components/schemas/SpaceProgramStep'
+        results:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+            description: >-
+              A recorded result, discriminated by `family`, in the shape the replace
+              command accepts. It travels structured so the app can render and edit it
+              without a second endpoint.
+    SpaceProgramDetail:
+      type: object
+      additionalProperties: false
+      required: [program_version_id, title, notes, weeks, days_per_week, sex_affinity, goals, levels, emphases, days]
+      properties:
+        program_version_id:
+          $ref: '#/components/schemas/UuidV7'
+        title:
+          type: string
+        notes:
+          oneOf:
+            - type: string
+            - type: 'null'
+          description: What the program is, in the words somebody deciding needs.
+        weeks:
+          type: integer
+          minimum: 1
+        days_per_week:
+          type: integer
+          minimum: 1
+          maximum: 7
+        sex_affinity:
+          oneOf:
+            - $ref: '#/components/schemas/BiologicalSex'
+            - type: 'null'
+        goals:
+          type: array
+          items:
+            $ref: '#/components/schemas/PrimaryTrainingGoal'
+        levels:
+          type: array
+          items:
+            $ref: '#/components/schemas/TrainingExperience'
+        emphases:
+          $ref: '#/components/schemas/FocusAreaSet'
+        days:
+          type: array
+          items:
+            $ref: '#/components/schemas/SpaceProgramDay'
+    SpaceProgramDay:
+      type: object
+      additionalProperties: false
+      required: [day, title, discipline_code, steps]
+      description: One training day of the split, with everything it asks for.
+      properties:
+        day:
+          type: integer
+          minimum: 1
+          maximum: 7
+        title:
+          type: string
+        discipline_code:
+          type: string
+        steps:
+          type: array
+          items:
+            $ref: '#/components/schemas/SpaceProgramStep'
+    SpaceProgramStep:
+      type: object
+      additionalProperties: false
+      required: [position, movement_id, movement, target]
+      properties:
+        position:
+          type: integer
+          minimum: 1
+        movement_id:
+          oneOf:
+            - $ref: '#/components/schemas/UuidV7'
+            - type: 'null'
+          description: >-
+            What a recorded set points back at. The name alone would leave the app
+            guessing which movement it just logged, and a set that names no movement is
+            a set nobody can read later.
+        movement:
+          oneOf:
+            - type: string
+            - type: 'null'
+        target:
+          type: object
+          additionalProperties: true
+          description: >-
+            The target as the planning domain stores it, discriminated by `family`.
+            It travels structured rather than as a formatted string so the app can
+            render "4 × 8" or "5 km" in its own words and test that it does.
+        previous:
+          type: array
+          description: >-
+            What this movement weighed last time, set by set, from the most recent
+            session that finished. Absent when there is nothing to look back at — and
+            on the program detail, where there is no session to look back from.
+          items:
+            type: object
+            additionalProperties: false
+            required: [load_value, achieved_reps]
+            properties:
+              load_value:
+                type: [number, 'null']
+              achieved_reps:
+                type: [integer, 'null']
     SpaceProgramChoice:
       type: object
       additionalProperties: false
@@ -6966,10 +7387,79 @@ components:
         requested_level:
           $ref: '#/components/schemas/CompletenessLevel'
 
+    EnduranceLapReplace:
+      type: object
+      additionalProperties: false
+      required: [lap_number, distance_value, distance_unit_code, duration_seconds]
+      properties:
+        lap_number:
+          type: integer
+          minimum: 1
+        distance_value:
+          type: number
+          exclusiveMinimum: 0
+        distance_unit_code:
+          type: string
+        duration_seconds:
+          type: number
+          exclusiveMinimum: 0
+    IntervalResultReplace:
+      type: object
+      additionalProperties: false
+      required: [interval_number, work_duration_seconds]
+      properties:
+        interval_number:
+          type: integer
+          minimum: 1
+        work_duration_seconds:
+          type: number
+          exclusiveMinimum: 0
+        rest_duration_seconds:
+          type: number
+          minimum: 0
+        achieved_repetitions:
+          type: integer
+          minimum: 1
+        completed:
+          type: boolean
+    MobilityResultReplace:
+      type: object
+      additionalProperties: false
+      required: [sequence_position]
+      description: At least one of the two measures, because a held nothing is not a result.
+      properties:
+        sequence_position:
+          type: integer
+          minimum: 1
+        movement_id:
+          $ref: '#/components/schemas/UuidV7'
+        side:
+          type: string
+          enum: [left, right, bilateral, not_applicable]
+        hold_duration_seconds:
+          type: number
+          exclusiveMinimum: 0
+        completed_repetitions:
+          type: integer
+          minimum: 1
     ExecutionResultsReplace:
       type: object
       additionalProperties: false
-      required: [segments, strength_sets]
+      required: [strength_sets]
+      description: >-
+        The working state, whole. `OP-EXE-005` is a replace and not a patch: somebody
+        editing the set they logged four sets ago sends the session as it now stands,
+        so there is never a half-applied session and never a merge to reason about.
+
+
+        The four families each have their own array. `strength_sets` is required and
+        may be empty — a running session records no sets and must still be able to say
+        so — while the other three are omitted when the session has none of them.
+
+
+        `segments` is optional, and Space omits it. The session's activity type is
+        frozen onto the execution when the attempt starts, from the template it came
+        from; a client restating it could only contradict what was already frozen.
       example:
         segments:
           - position: 1
@@ -6987,13 +7477,23 @@ components:
       properties:
         segments:
           type: array
-          minItems: 1
           maxItems: 100
           items:
             $ref: '#/components/schemas/ExecutionSegment'
+        endurance_laps:
+          type: array
+          items:
+            $ref: '#/components/schemas/EnduranceLapReplace'
+        interval_results:
+          type: array
+          items:
+            $ref: '#/components/schemas/IntervalResultReplace'
+        mobility_results:
+          type: array
+          items:
+            $ref: '#/components/schemas/MobilityResultReplace'
         strength_sets:
           type: array
-          minItems: 1
           maxItems: 1000
           items:
             $ref: '#/components/schemas/StrengthSet'
@@ -7012,12 +7512,16 @@ components:
     StrengthSet:
       type: object
       additionalProperties: false
-      required: [segment_position, order]
+      required: [order]
       properties:
         segment_position:
           type: integer
           minimum: 1
           maximum: 100
+          description: >-
+            Which segment the set belongs to. Omitted when the session declares none,
+            which is every Space session today: a position pointing at a segment that
+            was never sent would name something that does not exist.
         order:
           type: integer
           minimum: 1
@@ -7071,10 +7575,14 @@ components:
           minimum: 1
         segment_count:
           type: integer
-          minimum: 1
+          minimum: 0
+          description: >-
+            Zero while a session declares no segmentation, which is every Space
+            session today. It is a count of what is stored, not of what was sent.
         result_count:
           type: integer
-          minimum: 1
+          minimum: 0
+          description: Zero on a session somebody has opened and not yet recorded into.
 
     ExecutionFinalize:
       type: object
@@ -7086,6 +7594,25 @@ components:
         ended_at:
           type: string
           format: date-time
+    ExecutionAbandoned:
+      type: object
+      additionalProperties: false
+      required: [id, status, revision_number, result_count]
+      properties:
+        id:
+          $ref: '#/components/schemas/UuidV7'
+        status:
+          type: string
+          const: abandoned
+        revision_number:
+          type: integer
+          minimum: 1
+        result_count:
+          type: integer
+          minimum: 0
+          description: >-
+            What the attempt keeps. Abandoning does not delete training that happened;
+            it says the session was not finished.
     ExecutionFinalized:
       type: object
       additionalProperties: false

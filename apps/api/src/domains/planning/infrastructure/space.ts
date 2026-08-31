@@ -16,6 +16,7 @@ import { database } from '../../../platform/db/index.js'
 import { measureStudioRequestPhase } from '../../../platform/observability/index.js'
 import type {
   ProgramAssignment,
+  ProgramDetail,
   ProgramSummary,
   SpacePlanningDatabase,
   TrainingProfile,
@@ -40,6 +41,29 @@ interface AssignmentRow {
   starts_on: Date | string
   timezone: string
   sessions_planned: number
+}
+
+interface DetailRow {
+  program_version_id: string
+  title: string
+  notes: string | null
+  weeks: number
+  days_per_week: number
+  sex_affinity: 'male' | 'female' | null
+  goals: string[]
+  levels: string[]
+  emphases: string[]
+  days: ProgramDetail['days']
+}
+
+interface TodayRow {
+  planned_session_id: string
+  program_title: string
+  session_title: string
+  discipline_code: string
+  status: string
+  exercise_count: number
+  executed_session_id: string | null
 }
 
 interface ProfileRow {
@@ -84,6 +108,34 @@ export function createSpacePlanningDatabase(): SpacePlanningDatabase {
           select * from identity.read_training_profile(${input.personId}::uuid)
         `
         return row ? profile(row) : EMPTY_PROFILE
+      }),
+
+    readProgramVersion: (input) =>
+      transact(sql, input.personId, input.requestId, async (transaction) => {
+        const [row] = await transaction<DetailRow[]>`
+          select * from planning.read_program_version(
+            ${input.personId}::uuid, ${input.programVersionId}::uuid
+          )
+        `
+        return row ? detail(row) : null
+      }),
+
+    readTodaySession: (input) =>
+      transact(sql, input.personId, input.requestId, async (transaction) => {
+        const [row] = await transaction<TodayRow[]>`
+          select * from planning.read_today_session(${input.personId}::uuid, ${input.timezone})
+        `
+        return row
+          ? {
+              planned_session_id: row.planned_session_id,
+              program_title: row.program_title,
+              session_title: row.session_title,
+              discipline_code: row.discipline_code,
+              status: row.status,
+              exercise_count: row.exercise_count,
+              executed_session_id: row.executed_session_id,
+            }
+          : null
       }),
 
     selfAssignProgram: (input) =>
@@ -131,6 +183,21 @@ function assignment(row: AssignmentRow): ProgramAssignment {
       row.starts_on instanceof Date ? row.starts_on.toISOString().slice(0, 10) : row.starts_on,
     timezone: row.timezone,
     sessions_planned: row.sessions_planned,
+  }
+}
+
+function detail(row: DetailRow): ProgramDetail {
+  return {
+    program_version_id: row.program_version_id,
+    title: row.title,
+    notes: row.notes,
+    weeks: row.weeks,
+    days_per_week: row.days_per_week,
+    sex_affinity: row.sex_affinity,
+    goals: row.goals as ProgramDetail['goals'],
+    levels: row.levels as ProgramDetail['levels'],
+    emphases: row.emphases as ProgramDetail['emphases'],
+    days: row.days,
   }
 }
 
