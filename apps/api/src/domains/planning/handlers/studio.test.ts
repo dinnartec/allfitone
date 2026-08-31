@@ -167,8 +167,13 @@ describe('Studio planning API contract', () => {
       'OP-PLN-020',
       'OP-PLN-021',
     ])
+    // Scoped to the Studio surface: `OP-PLN-020` now answers on `/space/v1` as well,
+    // and this assertion is about what **this** router mounts.
     const contract = allfitV1ContractManifest.operations
-      .filter((operation) => approved.has(operation.allfitOperation))
+      .filter(
+        (operation) =>
+          approved.has(operation.allfitOperation) && operation.path.startsWith('/studio/v1'),
+      )
       .map((operation) => `${operation.method} ${colonPath(operation.path)}`)
       .sort()
     const mounted = studioPlanningRoutes()
@@ -493,7 +498,8 @@ describe('Studio planning API contract', () => {
     }
     for (const [operationId, statuses] of Object.entries(expected)) {
       const operation = allfitV1ContractManifest.operations.find(
-        (candidate) => candidate.allfitOperation === operationId,
+        (candidate) =>
+          candidate.allfitOperation === operationId && candidate.path.startsWith('/studio/v1'),
       )
       const actual: readonly string[] = operation?.responses ?? []
       expect(actual).toEqual(statuses.sort())

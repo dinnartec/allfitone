@@ -25,7 +25,7 @@ import {
   trustedStudioWebUrl,
 } from './domains/identity/index.js'
 import { studioOrganizationRoutes } from './domains/organizations/index.js'
-import { studioPlanningRoutes } from './domains/planning/index.js'
+import { spacePlanningRoutes, studioPlanningRoutes } from './domains/planning/index.js'
 import { clientTelemetryConfigRoutes } from './platform/telemetry/client-config.js'
 
 export function mountSurfaces(app: Hono): void {
@@ -47,6 +47,7 @@ export function mountSurfaces(app: Hono): void {
   app.route('/studio/v1', studioPlanningRoutes())
   app.route('/space/v1', spaceIdentityRoutes())
   app.route('/space/v1', spaceOnboardingRoutes())
+  app.route('/space/v1', spacePlanningRoutes())
   app.route('/backoffice/v1', backofficeIdentityRoutes())
 
   // Mounted as each vertical slice lands:
