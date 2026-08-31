@@ -91,8 +91,8 @@ insert into catalog.movements (
   '019e0000-0000-7000-8000-000000000111', 'test_strength', 'RLS Movement',
   'rls movement', 'organization', '019e0000-0000-7000-8000-000000000101', 'published'
 );
-insert into planning.session_templates (id, owner_organization_id, discipline_code, author_person_id)
-values ('019e0000-0000-7000-8000-000000000201', '019e0000-0000-7000-8000-000000000101', 'test_strength', '019e0000-0000-7000-8000-000000000001');
+insert into planning.session_templates (id, content_scope, owner_organization_id, discipline_code, author_person_id)
+values ('019e0000-0000-7000-8000-000000000201', 'organization', '019e0000-0000-7000-8000-000000000101', 'test_strength', '019e0000-0000-7000-8000-000000000001');
 insert into planning.session_template_drafts (id, template_id, content)
 values ('019e0000-0000-7000-8000-000000000202', '019e0000-0000-7000-8000-000000000201',
   '{"title":"RLS","activity_type_id":"019c0000-0000-7000-8000-000000000011","steps":[]}');
@@ -117,8 +117,8 @@ insert into planning.interval_targets (planned_step_id, rounds, work_duration_se
 values ('019e0000-0000-7000-8000-000000000213', 1, 30);
 insert into planning.mobility_targets (planned_step_id, sequence_position, hold_duration_seconds, side)
 values ('019e0000-0000-7000-8000-000000000214', 1, 30, 'bilateral');
-insert into planning.programs (id, owner_organization_id, author_person_id)
-values ('019e0000-0000-7000-8000-000000000301', '019e0000-0000-7000-8000-000000000101', '019e0000-0000-7000-8000-000000000001');
+insert into planning.programs (id, content_scope, owner_organization_id, author_person_id)
+values ('019e0000-0000-7000-8000-000000000301', 'organization', '019e0000-0000-7000-8000-000000000101', '019e0000-0000-7000-8000-000000000001');
 insert into planning.program_drafts (id, program_id, content)
 values ('019e0000-0000-7000-8000-000000000302', '019e0000-0000-7000-8000-000000000301',
   '{"title":"RLS","sessions":[]}');

@@ -108,10 +108,10 @@ beforeAll(async () => {
       values (${MEMBERSHIP_ID}::uuid, 'owner')
     `
     await transaction`
-      insert into planning.session_templates (id, owner_organization_id, discipline_code, author_person_id, status)
+      insert into planning.session_templates (id, content_scope, owner_organization_id, discipline_code, author_person_id, status)
       values
-        (${COMPOSITION_TEMPLATE_ID}::uuid, ${ORGANIZATION_ID}::uuid, 'test_strength', ${PERSON_ID}::uuid, 'published'),
-        (${DERIVATION_TEMPLATE_ID}::uuid, ${ORGANIZATION_ID}::uuid, 'test_strength', ${PERSON_ID}::uuid, 'published')
+        (${COMPOSITION_TEMPLATE_ID}::uuid, 'organization', ${ORGANIZATION_ID}::uuid, 'test_strength', ${PERSON_ID}::uuid, 'published'),
+        (${DERIVATION_TEMPLATE_ID}::uuid, 'organization', ${ORGANIZATION_ID}::uuid, 'test_strength', ${PERSON_ID}::uuid, 'published')
     `
     await transaction`
       insert into planning.session_template_drafts (id, template_id, content)
@@ -131,8 +131,8 @@ beforeAll(async () => {
           '019c0000-0000-7000-8000-000000000011'::uuid, 'Derivation', decode(repeat('d1', 32), 'hex'))
     `
     await transaction`
-      insert into planning.programs (id, owner_organization_id, author_person_id)
-      values (${PROGRAM_ID}::uuid, ${ORGANIZATION_ID}::uuid, ${PERSON_ID}::uuid)
+      insert into planning.programs (id, content_scope, owner_organization_id, author_person_id)
+      values (${PROGRAM_ID}::uuid, 'organization', ${ORGANIZATION_ID}::uuid, ${PERSON_ID}::uuid)
     `
     await transaction`
       insert into planning.program_drafts (id, program_id, content)

@@ -115,8 +115,8 @@ select ok(cardinality(planning.program_content_errors(
   'T-PLN-UNIT-11 program draft array limits match OpenAPI');
 
 select throws_ok(
-  $$ insert into planning.session_templates (owner_organization_id, owner_person_id, discipline_code, author_person_id) values ('019d0000-0000-7000-8000-000000000101', '019d0000-0000-7000-8000-000000000001', 'test_strength', '019d0000-0000-7000-8000-000000000001') $$,
-  '23514', null, 'T-PLN-INT-02 stable template ownership is XOR'
+  $$ insert into planning.session_templates (content_scope, owner_organization_id, owner_person_id, discipline_code, author_person_id) values ('organization', '019d0000-0000-7000-8000-000000000101', '019d0000-0000-7000-8000-000000000001', 'test_strength', '019d0000-0000-7000-8000-000000000001') $$,
+  '23514', null, 'T-PLN-INT-02 stable template ownership follows the scope'
 );
 
 set local role allfit_api;
