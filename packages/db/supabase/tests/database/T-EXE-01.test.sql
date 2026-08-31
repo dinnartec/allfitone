@@ -35,15 +35,16 @@ insert into planning.program_version_sessions (program_version_id, template_vers
 values ('019e3000-0000-7000-8000-000000000202', '019e3000-0000-7000-8000-000000000102', 1, 1, 1);
 select set_config('app.planning_publication', '', true);
 
-insert into planning.program_assignments (id, person_id, program_version_id, lifecycle, starts_on, timezone)
-values ('019e3000-0000-7000-8000-000000000301', '019e3000-0000-7000-8000-000000000001',
-  '019e3000-0000-7000-8000-000000000202', 'personal', current_date, 'America/Bogota');
+insert into planning.program_assignments (
+  id, person_id, program_version_id, lifecycle, starts_on, timezone, display_order
+) values ('019e3000-0000-7000-8000-000000000301', '019e3000-0000-7000-8000-000000000001',
+  '019e3000-0000-7000-8000-000000000202', 'personal', current_date, 'America/Bogota', 1);
 insert into planning.planned_sessions (
-  id, assignment_id, person_id, template_version_id, scheduled_at, timezone
+  id, assignment_id, person_id, template_version_id, week_starts_on, scheduled_at, timezone
 ) values (
   '019e3000-0000-7000-8000-000000000401', '019e3000-0000-7000-8000-000000000301',
   '019e3000-0000-7000-8000-000000000001', '019e3000-0000-7000-8000-000000000102',
-  clock_timestamp(), 'America/Bogota'
+  date_trunc('week', current_date::timestamp)::date, clock_timestamp(), 'America/Bogota'
 );
 
 set local role allfit_owner;
@@ -129,11 +130,11 @@ select is(
 -- Abandoning keeps what was recorded rather than deleting it, and the attempt can
 -- never be the primary one for its day.
 insert into planning.planned_sessions (
-  id, assignment_id, person_id, template_version_id, scheduled_at, timezone
+  id, assignment_id, person_id, template_version_id, week_starts_on, scheduled_at, timezone
 ) values (
   '019e3000-0000-7000-8000-000000000402', '019e3000-0000-7000-8000-000000000301',
   '019e3000-0000-7000-8000-000000000001', '019e3000-0000-7000-8000-000000000102',
-  clock_timestamp(), 'America/Bogota'
+  date_trunc('week', current_date::timestamp)::date, clock_timestamp(), 'America/Bogota'
 );
 select execution.start_planned_session_attempt(
   '019e3000-0000-7000-8000-000000000001', '019e3000-0000-7000-8000-000000000402',
