@@ -83,6 +83,35 @@ test('a revocation that lost the race explains the invitation was already decide
   await expect(page.getByText('No pudimos revocar la invitación.')).toHaveCount(0)
 })
 
+/**
+ * The OpenAPI contract declares 403 as a response of
+ * `GET /studio/v1/me/memberships`, and every screen-level list already tells a
+ * permission denial apart from a transient failure. The organization
+ * verification layer did not: it reported "the connection failed temporarily"
+ * and offered a retry the query layer refuses to perform for a 403.
+ */
+test('a forbidden membership check offers another space instead of a futile retry', async ({
+  page,
+}) => {
+  const fixture = createStudioApiFixture({
+    memberships: [],
+    intercept: (request) =>
+      request.method === 'GET' && request.path === '/studio/v1/me/memberships'
+        ? { status: 403, body: error('forbidden') }
+        : undefined,
+  })
+  await installStudioApiMock(page, fixture)
+  await page.goto(`/organizations/${activeMembership.organization_id}`)
+
+  await expect(page.getByText('Este espacio no está disponible')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Elegir otro espacio' })).toBeVisible()
+
+  // A denial is not a connection problem, and retrying it never succeeds:
+  // shouldRetryStudioQuery returns false for 403.
+  await expect(page.getByText('La conexión falló de forma temporal')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Reintentar' })).toHaveCount(0)
+})
+
 test('retiring a credential that already changed refreshes the profile instead of failing', async ({
   page,
 }) => {
