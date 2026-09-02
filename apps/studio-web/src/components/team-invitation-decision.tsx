@@ -30,6 +30,7 @@ import {
   type StudioEntryContext,
   type TeamInvitationPresentation,
 } from '@/lib/studio-api'
+import { isStudioForbidden } from '@/lib/studio-query'
 import { invitationRoleLabel } from '@/lib/team-invitations'
 
 type Flow =
@@ -140,7 +141,7 @@ export function TeamInvitationDecision() {
       }
       setFlow({ kind: 'rejected', organizationName: flow.invitation.organization.display_name })
     } catch (error) {
-      if (error instanceof StudioApiError && error.status === 403) {
+      if (isStudioForbidden(error)) {
         decisionCommandIntent.reset()
         setFlow({ kind: 'mismatch', invitation: flow.invitation })
       } else if (error instanceof StudioApiError && error.status === 404) {

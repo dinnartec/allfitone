@@ -43,6 +43,7 @@ import {
 } from '@/lib/studio-api'
 import {
   flattenInvitationPages,
+  isStudioForbidden,
   isStudioQuerySessionCancelled,
   organizationInvitationsQueryOptions,
   removeInvitationFromPages,
@@ -71,7 +72,7 @@ export function TeamInvitationList() {
   const [revokeCommandIntent] = useState(() => createCommandIntentManager(newCommand))
   const options = organizationInvitationsQueryOptions(current.organization_id, filter, 50)
   const query = useInfiniteQuery(options)
-  const forbidden = query.error instanceof StudioApiError && query.error.status === 403
+  const forbidden = isStudioForbidden(query.error)
   const staleCursor =
     query.isFetchNextPageError &&
     query.error instanceof StudioApiError &&

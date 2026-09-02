@@ -27,6 +27,7 @@ import { LogoutForm } from './logout-form'
 import { useStudioEntryContext } from './studio-entry-context'
 import { resolveOrganizationContext } from '@/lib/membership-routing'
 import { StudioApiError, studioApi, type Membership } from '@/lib/studio-api'
+import { isStudioForbidden } from '@/lib/studio-query'
 
 interface OrganizationContextValue {
   current: Membership
@@ -95,11 +96,9 @@ export function OrganizationContextBoundary({
           router.replace('/')
           return
         }
-        // A denial is terminal, not a blip. shouldRetryStudioQuery never retries
-        // a 403, so the transient-failure screen would offer a retry that cannot
-        // succeed. The contract declares 403 on this operation, and every
-        // screen-level list already separates the two.
-        if (caught instanceof StudioApiError && caught.status === 403) {
+        // A denial is terminal, not a blip: the transient-failure screen below
+        // would offer a retry that cannot succeed.
+        if (isStudioForbidden(caught)) {
           setState({ kind: 'forbidden' })
           return
         }

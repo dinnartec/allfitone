@@ -23,8 +23,8 @@ import { useState } from 'react'
 
 import { useOrganizationContext } from './organization-context'
 import { WorkspacePageHeader } from './workspace-page-header'
-import { StudioApiError, type OrganizationRole } from '@/lib/studio-api'
-import { organizationRolesQueryOptions } from '@/lib/studio-query'
+import type { OrganizationRole } from '@/lib/studio-api'
+import { isStudioForbidden, organizationRolesQueryOptions } from '@/lib/studio-query'
 
 type CatalogState =
   | { kind: 'loading' }
@@ -37,7 +37,7 @@ const EXPECTED_ROLE_CODES = ['owner', 'admin', 'coach', 'staff'] as const
 export function OrganizationRoleCatalog() {
   const { current } = useOrganizationContext()
   const query = useQuery(organizationRolesQueryOptions(current.organization_id))
-  const forbidden = query.error instanceof StudioApiError && query.error.status === 403
+  const forbidden = isStudioForbidden(query.error)
   const roles =
     !forbidden && query.data?.items && hasExpectedRoles(query.data.items)
       ? query.data.items

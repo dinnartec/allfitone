@@ -34,8 +34,9 @@ import {
 } from '@/lib/organization-overview'
 import { canViewTeamDirectory, memberInitials, organizationRoleLabel } from '@/lib/team-directory'
 import { canInviteTeam } from '@/lib/team-invitations'
-import { StudioApiError, type Membership } from '@/lib/studio-api'
+import type { Membership } from '@/lib/studio-api'
 import {
+  isStudioForbidden,
   organizationInvitationsQueryOptions,
   organizationMembershipsQueryOptions,
 } from '@/lib/studio-query'
@@ -61,10 +62,8 @@ export function OrganizationWorkspace() {
     ...organizationInvitationsQueryOptions(current.organization_id, 'pending', OVERVIEW_PAGE_SIZE),
     enabled: canSeeInvitations,
   })
-  const membersForbidden =
-    membersQuery.error instanceof StudioApiError && membersQuery.error.status === 403
-  const invitationsForbidden =
-    invitationsQuery.error instanceof StudioApiError && invitationsQuery.error.status === 403
+  const membersForbidden = isStudioForbidden(membersQuery.error)
+  const invitationsForbidden = isStudioForbidden(invitationsQuery.error)
   const memberPage = canSeeDirectory && !membersForbidden ? membersQuery.data?.pages[0] : undefined
   const invitationPage =
     canSeeInvitations && !invitationsForbidden ? invitationsQuery.data?.pages[0] : undefined

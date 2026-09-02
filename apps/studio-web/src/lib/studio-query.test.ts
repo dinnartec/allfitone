@@ -4,6 +4,7 @@ import {
   createStudioQueryRuntime,
   flattenMembershipPages,
   createStudioQueryClient,
+  isStudioForbidden,
   isStudioQuerySessionCancelled,
   nextPageCursor,
   prependCredentialToMe,
@@ -59,6 +60,32 @@ describe('Studio query retry policy', () => {
     expect(shouldRetryStudioQuery(0, new StudioApiError(403, 'forbidden'))).toBe(false)
     expect(shouldRetryStudioQuery(0, new StudioApiError(422, 'invalid-cursor'))).toBe(false)
     expect(shouldRetryStudioQuery(0, new Error('unexpected'))).toBe(false)
+  })
+})
+
+describe('Studio denial', () => {
+  test('recognises a denial and nothing else', () => {
+    expect(isStudioForbidden(new StudioApiError(403, 'forbidden'))).toBe(true)
+
+    // An outage, a sign-out and a rejected payload are not denials: each one
+    // leads to different copy and a different offer on screen.
+    expect(isStudioForbidden(new StudioApiError(503, 'unavailable'))).toBe(false)
+    expect(isStudioForbidden(new StudioApiError(401, 'unauthenticated'))).toBe(false)
+    expect(isStudioForbidden(new StudioApiError(422, 'invalid-cursor'))).toBe(false)
+  })
+
+  test('survives whatever a catch block actually receives', () => {
+    expect(isStudioForbidden(new TypeError('network failed'))).toBe(false)
+    expect(isStudioForbidden(new Error('unexpected'))).toBe(false)
+    expect(isStudioForbidden(undefined)).toBe(false)
+    expect(isStudioForbidden(null)).toBe(false)
+    expect(isStudioForbidden({ status: 403 })).toBe(false)
+  })
+
+  test('agrees with the retry policy: a denial is never retried', () => {
+    const denial = new StudioApiError(403, 'forbidden')
+    expect(isStudioForbidden(denial)).toBe(true)
+    expect(shouldRetryStudioQuery(0, denial)).toBe(false)
   })
 })
 

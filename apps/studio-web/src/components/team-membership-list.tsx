@@ -43,7 +43,11 @@ import {
   type OrganizationMembership,
   type OrganizationMembershipStatus,
 } from '@/lib/studio-api'
-import { flattenMembershipPages, organizationMembershipsQueryOptions } from '@/lib/studio-query'
+import {
+  flattenMembershipPages,
+  isStudioForbidden,
+  organizationMembershipsQueryOptions,
+} from '@/lib/studio-query'
 
 type MembershipFilter = 'all' | OrganizationMembershipStatus
 type LoadError = 'forbidden' | 'stale-cursor' | 'unavailable'
@@ -66,7 +70,7 @@ export function TeamMembershipList() {
   const [filter, setFilter] = useState<MembershipFilter>('all')
   const options = organizationMembershipsQueryOptions(current.organization_id, filter, PAGE_SIZE)
   const query = useInfiniteQuery({ ...options, enabled: canViewDirectory })
-  const forbidden = query.error instanceof StudioApiError && query.error.status === 403
+  const forbidden = isStudioForbidden(query.error)
   const items = forbidden ? [] : flattenMembershipPages(query.data)
   const loading = canViewDirectory && query.isPending
   const loadingMore = query.isFetchingNextPage
