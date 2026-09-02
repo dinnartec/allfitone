@@ -83,6 +83,82 @@ test('a revocation that lost the race explains the invitation was already decide
   await expect(page.getByText('No pudimos revocar la invitación.')).toHaveCount(0)
 })
 
+const membershipsPath = `/studio/v1/organizations/${activeMembership.organization_id}/memberships`
+const invitationsPath = `/studio/v1/organizations/${activeMembership.organization_id}/invitations`
+const emptyPage = { status: 200, body: { data: [], page: { next_cursor: null } } } as const
+
+/**
+ * Empty is not the same as fabricated. Each of these loads a screen against an
+ * API that returns nothing and asserts the screen says so, with no rows behind
+ * it — which is also how the audit closes the "no plausible data left in a
+ * production journey" item: hardcoded content would survive an empty API.
+ */
+test('an empty invitation register says so instead of showing rows', async ({ page }) => {
+  const fixture = createStudioApiFixture({
+    memberships: [activeMembership],
+    intercept: (request) =>
+      request.method === 'GET' && request.path === invitationsPath ? emptyPage : undefined,
+  })
+  await installStudioApiMock(page, fixture)
+  await page.goto(`/organizations/${activeMembership.organization_id}/team/invitations`)
+
+  await expect(page.getByText('Todavía no hay invitaciones emitidas')).toBeVisible()
+  // The empty notice occupies a row of its own, so counting rows proves little.
+  // What matters is that no invitation is on screen: every real row carries a
+  // contact and a Revocar action.
+  await expect(page.getByRole('table')).not.toContainText('@')
+  await expect(page.getByRole('button', { name: 'Revocar' })).toHaveCount(0)
+  expect(fixture.requests.some((request) => request.path === invitationsPath)).toBe(true)
+})
+
+test('an organization with no team yet says so instead of inventing members', async ({ page }) => {
+  const fixture = createStudioApiFixture({
+    memberships: [activeMembership],
+    intercept: (request) =>
+      request.method === 'GET' &&
+      (request.path === membershipsPath || request.path === invitationsPath)
+        ? emptyPage
+        : undefined,
+  })
+  await installStudioApiMock(page, fixture)
+  await page.goto(`/organizations/${activeMembership.organization_id}`)
+
+  await expect(page.getByText('Trabajas en solitario por ahora')).toBeVisible()
+  await expect(page.getByText('Cuando alguien acepte una invitación aparecerá aquí.')).toBeVisible()
+  await expect(page.locator('[data-overview-team-list] li')).toHaveCount(0)
+  await expect(page.locator('[data-overview-attention-list] li')).toHaveCount(0)
+})
+
+/**
+ * The loading state is held open deliberately rather than raced against a
+ * timeout: the response is released only after the assertion, so the test
+ * cannot pass because the machine was slow or fail because it was fast.
+ */
+test('the team directory announces that it is loading before any row exists', async ({ page }) => {
+  let release: (() => void) | undefined
+  const held = new Promise<void>((resolve) => {
+    release = resolve
+  })
+
+  const fixture = createStudioApiFixture({
+    memberships: [activeMembership],
+    intercept: async (request) => {
+      if (request.method === 'GET' && request.path === membershipsPath) await held
+      return undefined
+    },
+  })
+  await installStudioApiMock(page, fixture)
+  await page.goto(`/organizations/${activeMembership.organization_id}/team`)
+
+  await expect(page.getByText('Cargando integrantes')).toBeVisible()
+  await expect(
+    page.getByText('Estamos comprobando las membresías de esta organización.'),
+  ).toBeVisible()
+
+  release?.()
+  await expect(page.getByText('Cargando integrantes')).toHaveCount(0)
+})
+
 /**
  * The OpenAPI contract declares 403 as a response of
  * `GET /studio/v1/me/memberships`, and every screen-level list already tells a
