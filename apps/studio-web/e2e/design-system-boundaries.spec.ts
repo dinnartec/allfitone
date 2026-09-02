@@ -1,6 +1,26 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 
+import { SCREENS } from './screens'
 import { activeMembership, createStudioApiFixture, installStudioApiMock } from './studio-api-mock'
+
+/**
+ * Every visible control must come from the Design System: it carries a
+ * `data-slot`, or sits inside something that does. Raw markup here is how a
+ * surface drifts away from the shared library one element at a time.
+ */
+function designSystemViolations(page: Page): Promise<string[]> {
+  return page.locator('button, input, select, textarea, table, dialog').evaluateAll((controls) =>
+    controls
+      .filter((control) => {
+        const element = control as HTMLElement
+        if (element.matches('[data-next-mark]')) return false
+        const visible = element.getClientRects().length > 0
+        if (!visible) return false
+        return !element.matches('[data-slot]') && !element.closest('[data-slot]')
+      })
+      .map((control) => control.outerHTML.slice(0, 160)),
+  )
+}
 
 test('uses canonical setup choices and one page heading without overflow', async ({ page }) => {
   await installStudioApiMock(page, createStudioApiFixture())
@@ -32,23 +52,25 @@ test('keeps visible controls inside a Design System contract', async ({ page }) 
   await installStudioApiMock(page, createStudioApiFixture({ memberships: [activeMembership] }))
   await page.goto(`/organizations/${activeMembership.organization_id}/team`)
 
-  const violations = await page
-    .locator('button, input, select, textarea, table, dialog')
-    .evaluateAll((controls) =>
-      controls
-        .filter((control) => {
-          const element = control as HTMLElement
-          if (element.matches('[data-next-mark]')) return false
-          const visible = element.getClientRects().length > 0
-          if (!visible) return false
-          return !element.matches('[data-slot]') && !element.closest('[data-slot]')
-        })
-        .map((control) => control.outerHTML.slice(0, 160)),
-    )
-
-  expect(violations).toEqual([])
+  expect(await designSystemViolations(page)).toEqual([])
   await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1)
 })
+
+/**
+ * The contract above was only ever enforced on the team directory. The AFO-40
+ * brief asks for Design System consistency across the fourteen implemented
+ * stories, so the same check now sweeps every one of their screens.
+ */
+for (const screen of SCREENS) {
+  test(`keeps ${screen.stories} inside the Design System contract`, async ({ page }) => {
+    await installStudioApiMock(page, screen.fixture())
+    await page.goto(screen.path)
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+    await screen.reveal?.(page)
+
+    expect(await designSystemViolations(page), screen.stories).toEqual([])
+  })
+}
 
 test('ports the dark Studio sidebar to mobile and closes it after navigation', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })

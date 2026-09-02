@@ -14,75 +14,13 @@
  * calls.
  */
 import AxeBuilder from '@axe-core/playwright'
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test } from '@playwright/test'
 
-import {
-  activeMembership,
-  createStudioApiFixture,
-  installStudioApiMock,
-  professionalCredential,
-  professionalProfile,
-  secondActiveMembership,
-  terminatedMembership,
-  type StudioApiFixture,
-} from './studio-api-mock'
+import { SCREENS } from './screens'
+import { createStudioApiFixture, installStudioApiMock } from './studio-api-mock'
 
 const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'] as const
 const BLOCKING_IMPACTS = new Set(['serious', 'critical'])
-
-const workspace = `/organizations/${activeMembership.organization_id}`
-
-interface Screen {
-  stories: string
-  path: string
-  fixture: () => StudioApiFixture
-  /** Interaction needed before the screen under audit is on the page. */
-  reveal?: (page: Page) => Promise<void>
-}
-
-const memberOfTwo = () =>
-  createStudioApiFixture({
-    memberships: [activeMembership, secondActiveMembership, terminatedMembership],
-  })
-
-const withProfile = () =>
-  createStudioApiFixture({
-    me: {
-      profile: { ...professionalProfile, credentials: [professionalCredential] },
-      memberships: [activeMembership, terminatedMembership],
-    },
-    memberships: [activeMembership],
-  })
-
-const SCREENS: Screen[] = [
-  {
-    stories: 'HU-001 / HU-007 · entry and organization setup',
-    path: '/',
-    fixture: createStudioApiFixture,
-  },
-  { stories: 'HU-004 / HU-006 · workspace and memberships', path: workspace, fixture: memberOfTwo },
-  { stories: 'HU-005 · professional profile', path: '/account', fixture: withProfile },
-  {
-    stories: 'HU-005 · declared credentials',
-    path: '/account',
-    fixture: withProfile,
-    reveal: async (page) => {
-      await page.getByRole('tab', { name: 'Credenciales opcionales' }).click()
-    },
-  },
-  { stories: 'HU-017 · team directory', path: `${workspace}/team`, fixture: memberOfTwo },
-  { stories: 'HU-018 · role catalog', path: `${workspace}/team/roles`, fixture: memberOfTwo },
-  {
-    stories: 'HU-015 / HU-016 · issued invitations',
-    path: `${workspace}/team/invitations`,
-    fixture: memberOfTwo,
-  },
-  {
-    stories: 'HU-014 · invite a teammate',
-    path: `${workspace}/team/invitations/new`,
-    fixture: memberOfTwo,
-  },
-]
 
 const VIEWPORTS = [
   { name: 'desktop', width: 1440, height: 900 },
