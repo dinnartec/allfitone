@@ -87,6 +87,12 @@ const withProfile = () =>
     memberships: [activeMembership],
   })
 
+const withoutProfile = () =>
+  createStudioApiFixture({
+    me: { profile: null, memberships: [activeMembership] },
+    memberships: [activeMembership],
+  })
+
 /** Holds one endpoint open so a pending stage can be audited before it resolves. */
 const stall = (path: string) => () =>
   createStudioApiFixture({
@@ -299,8 +305,36 @@ export const SCREENS: Screen[] = [
     fixture: () => invitationFixture({ resolve: { status: 503, body: error('unavailable') } }),
   },
 
-  // --- the rest ---------------------------------------------------------------
+  // --- `/organizations/[id]` · the workspace and the states that replace it ---
   { stories: 'HU-004 / HU-006 · workspace and memberships', path: workspace, fixture: memberOfTwo },
+  {
+    // A coach reads neither the directory nor the invitation register, so the
+    // overview has nothing to count and orientation is the honest content.
+    stories: 'HU-018 · orientation for a role that reads nothing',
+    path: `/organizations/${secondActiveMembership.organization_id}`,
+    fixture: () => createStudioApiFixture({ memberships: [secondActiveMembership] }),
+  },
+  {
+    stories: 'organization · verifying your access',
+    path: workspace,
+    fixture: stall('/studio/v1/me/memberships'),
+    hasHeading: false,
+    settled: async (page) => {
+      await expect(page.getByText('Comprobando tu acceso…')).toBeVisible()
+    },
+  },
+  {
+    stories: 'organization · the membership was revoked',
+    path: workspace,
+    fixture: failing('/studio/v1/me/memberships', 403, 'forbidden'),
+  },
+  {
+    stories: 'organization · the access check failed',
+    path: workspace,
+    fixture: failing('/studio/v1/me/memberships', 500, 'upstream-error'),
+  },
+
+  // --- `/account` · one route, five views -------------------------------------
   { stories: 'HU-005 · professional profile', path: '/account', fixture: withProfile },
   {
     stories: 'HU-005 · declared credentials',
@@ -310,7 +344,43 @@ export const SCREENS: Screen[] = [
       await page.getByRole('tab', { name: 'Credenciales opcionales' }).click()
     },
   },
+  {
+    stories: 'HU-006 · my spaces',
+    path: '/account',
+    fixture: withProfile,
+    reveal: async (page) => {
+      await page.getByRole('tab', { name: 'Mis espacios' }).click()
+      await expect(page.getByText('Espacios activos')).toBeVisible()
+    },
+  },
+  {
+    // HU-005 keeps professional setup dormant until the person opts in.
+    stories: 'HU-005 · professional setup is dormant',
+    path: '/account',
+    fixture: withoutProfile,
+  },
+  {
+    stories: 'HU-005 · configure the professional profile',
+    path: '/account',
+    fixture: withoutProfile,
+    reveal: async (page) => {
+      await page.getByRole('button', { name: 'Configurar perfil profesional' }).click()
+      await expect(
+        page.getByRole('heading', { name: 'Configura tu perfil profesional' }),
+      ).toBeVisible()
+    },
+  },
+
+  // --- the team section -------------------------------------------------------
   { stories: 'HU-017 · team directory', path: `${workspace}/team`, fixture: memberOfTwo },
+  {
+    // Below 720px the directory renders a card list instead of the table, and
+    // the two are separate markup rather than one behind a CSS toggle.
+    stories: 'HU-017 · team directory as cards',
+    path: `${workspace}/team`,
+    fixture: memberOfTwo,
+    viewport: MOBILE,
+  },
   { stories: 'HU-018 · role catalog', path: `${workspace}/team/roles`, fixture: memberOfTwo },
   {
     stories: 'HU-015 / HU-016 · issued invitations',
