@@ -1,5 +1,5 @@
 /**
- * Accessibility audit over the screens of the fourteen implemented Studio user
+ * Accessibility audit over every screen of the fourteen implemented Studio user
  * stories (HU-STUDIO-001..007, 014..018, 085..086).
  *
  * Why axe rather than hand-written colour maths: measuring contrast by walking
@@ -16,26 +16,17 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
 
-import { SCREENS } from './screens'
+import { DESKTOP, MOBILE, SCREENS, openScreen } from './screens'
 import { createStudioApiFixture, installStudioApiMock } from './studio-api-mock'
 
 const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'] as const
 const BLOCKING_IMPACTS = new Set(['serious', 'critical'])
 
-const VIEWPORTS = [
-  { name: 'desktop', width: 1440, height: 900 },
-  { name: 'mobile', width: 390, height: 844 },
-] as const
-
-for (const viewport of VIEWPORTS) {
+for (const viewport of [DESKTOP, MOBILE]) {
   test.describe(`accessibility · ${viewport.name}`, () => {
     for (const screen of SCREENS) {
       test(`${screen.stories}`, async ({ page }) => {
-        await page.setViewportSize({ width: viewport.width, height: viewport.height })
-        await installStudioApiMock(page, screen.fixture())
-        await page.goto(screen.path)
-        await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
-        await screen.reveal?.(page)
+        await openScreen(page, screen, viewport)
 
         const results = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze()
 
@@ -83,11 +74,7 @@ test('the audit detects a contrast failure', async ({ page }) => {
 test.describe('layout', () => {
   for (const screen of SCREENS) {
     test(`${screen.stories} fits the mobile viewport`, async ({ page }) => {
-      await page.setViewportSize({ width: 390, height: 844 })
-      await installStudioApiMock(page, screen.fixture())
-      await page.goto(screen.path)
-      await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
-      await screen.reveal?.(page)
+      await openScreen(page, screen, MOBILE)
 
       const overflow = await page.evaluate(() => ({
         document: document.documentElement.scrollWidth,
@@ -98,8 +85,11 @@ test.describe('layout', () => {
       )
 
       // One h1 per screen: the audit brief asks for visual hierarchy, and a
-      // page with zero or several top-level headings has none to speak of.
-      await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1)
+      // page with zero or several top-level headings has none to speak of. A
+      // spinner stage is exempt — it has no content to rank.
+      if (screen.hasHeading ?? true) {
+        await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1)
+      }
     })
   }
 })

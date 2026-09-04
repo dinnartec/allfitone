@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 
-import { SCREENS } from './screens'
+import { DESKTOP, SCREENS, openScreen } from './screens'
 import { activeMembership, createStudioApiFixture, installStudioApiMock } from './studio-api-mock'
 
 /**
@@ -63,10 +63,7 @@ test('keeps visible controls inside a Design System contract', async ({ page }) 
  */
 for (const screen of SCREENS) {
   test(`keeps ${screen.stories} inside the Design System contract`, async ({ page }) => {
-    await installStudioApiMock(page, screen.fixture())
-    await page.goto(screen.path)
-    await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
-    await screen.reveal?.(page)
+    await openScreen(page, screen, DESKTOP)
 
     expect(await designSystemViolations(page), screen.stories).toEqual([])
   })

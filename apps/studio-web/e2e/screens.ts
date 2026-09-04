@@ -1,14 +1,21 @@
 /**
- * The screens of the fourteen implemented Studio user stories, shared by the
- * suites that sweep all of them: the accessibility audit and the Design System
- * contract. Kept in one place so a new screen is added once and both sweeps
- * pick it up, rather than drifting apart.
+ * Every screen of the fourteen implemented Studio user stories, shared by the
+ * suites that sweep all of them: the accessibility audit, the mobile layout
+ * check and the Design System contract.
+ *
+ * A screen is what a person can be looking at, not a route. Most of these live
+ * as states of a machine inside one route — `/` alone renders nine of them — so
+ * counting `page.tsx` files undercounts the surface an audit has to cover.
+ *
+ * Kept in one place so a new screen is declared once and every sweep picks it
+ * up, rather than three lists drifting apart.
  */
-import type { Page } from '@playwright/test'
+import { expect, type Page } from '@playwright/test'
 
 import {
   activeMembership,
   createStudioApiFixture,
+  installStudioApiMock,
   professionalCredential,
   professionalProfile,
   secondActiveMembership,
@@ -16,12 +23,50 @@ import {
   type StudioApiFixture,
 } from './studio-api-mock'
 
+export interface Viewport {
+  name: string
+  width: number
+  height: number
+}
+
+export const DESKTOP: Viewport = { name: 'desktop', width: 1440, height: 900 }
+export const MOBILE: Viewport = { name: 'mobile', width: 390, height: 844 }
+
 export interface Screen {
   stories: string
   path: string
   fixture: () => StudioApiFixture
-  /** Interaction needed before the screen under audit is on the page. */
+  /** Runs before the mock is installed — seeding storage a screen reads on load. */
+  setup?: (page: Page) => Promise<void>
+  /**
+   * Proves the screen is on the page. Defaults to a level-1 heading, which is
+   * wrong for a spinner stage, so those declare their own.
+   */
+  settled?: (page: Page) => Promise<void>
+  /** Interaction needed to reach the screen once the route has loaded. */
   reveal?: (page: Page) => Promise<void>
+  /** Pins a screen that only exists at one width, such as the mobile card list. */
+  viewport?: Viewport
+  /**
+   * False for stages that legitimately carry no heading — a spinner announces
+   * itself through a live region instead, and demanding an h1 there would be
+   * asserting a hierarchy the screen has no content to build.
+   */
+  hasHeading?: boolean
+}
+
+async function settledByHeading(page: Page): Promise<void> {
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+}
+
+/** Arranges a screen and waits until it is really on the page. */
+export async function openScreen(page: Page, screen: Screen, viewport: Viewport): Promise<void> {
+  await page.setViewportSize(screen.viewport ?? { width: viewport.width, height: viewport.height })
+  await screen.setup?.(page)
+  await installStudioApiMock(page, screen.fixture())
+  await page.goto(screen.path)
+  await (screen.settled ?? settledByHeading)(page)
+  await screen.reveal?.(page)
 }
 
 const workspace = `/organizations/${activeMembership.organization_id}`
