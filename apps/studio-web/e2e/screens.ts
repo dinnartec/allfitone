@@ -101,6 +101,77 @@ const failing = (path: string, status: number, code: string) => () =>
     intercept: (request) => (request.path === path ? { status, body: error(code) } : undefined),
   })
 
+/**
+ * `/invitations` reads its token from the URL fragment, which a beforeInteractive
+ * script moves into sessionStorage and wipes before anything renders. Navigating
+ * with the fragment is therefore the real way in — no storage seeding required.
+ */
+const INVITATION_TOKEN = 'A'.repeat(43)
+const INVITATION_ID = '01991600-7000-7000-8000-000000000201'
+const INTENT_ID = '01991600-7000-7000-8000-000000000202'
+const invitationWithToken = `/invitations#token=${INVITATION_TOKEN}`
+
+const invitationPresentation = {
+  id: INVITATION_ID,
+  status: 'pending',
+  organization: {
+    id: activeMembership.organization_id,
+    display_name: activeMembership.display_name,
+    responsible_party: { kind: 'natural_person', name: 'Ada Owner' },
+  },
+  expires_at: '2030-08-18T12:00:00.000Z',
+  intents: [{ id: INTENT_ID, kind: 'membership', status: 'pending', proposed_role_code: 'staff' }],
+}
+
+interface InvitationOptions {
+  stallResolve?: boolean
+  registrationIncomplete?: boolean
+  resolve?: { status: number; body: unknown }
+  decision?: { status: number; body: unknown }
+  decisionOutcome?: 'accepted' | 'rejected'
+}
+
+function invitationFixture(options: InvitationOptions = {}): StudioApiFixture {
+  const session = {
+    authenticated: true,
+    registration_status: options.registrationIncomplete ? 'registration_incomplete' : 'complete',
+    identity: { given_name: 'Ada', family_name: 'Lovelace' },
+    analytics: { distinct_id: TEST_ANALYTICS_ID },
+  }
+
+  return createStudioApiFixture({
+    session,
+    memberships: [activeMembership],
+    intercept: async (request) => {
+      if (request.path === '/studio/v1/invitations/resolve') {
+        if (options.stallResolve) await new Promise((resolve) => setTimeout(resolve, 15_000))
+        return options.resolve ?? { status: 200, body: invitationPresentation }
+      }
+      if (request.path === '/studio/v1/invitations/decisions') {
+        if (options.decision) return options.decision
+        const decision = options.decisionOutcome ?? 'accepted'
+        return {
+          status: 200,
+          body: {
+            invitation_id: INVITATION_ID,
+            invitation_status: 'completed',
+            organization_id: activeMembership.organization_id,
+            intent: {
+              id: INTENT_ID,
+              kind: 'membership',
+              status: decision,
+              proposed_role_code: 'staff',
+              membership_id: decision === 'accepted' ? activeMembership.membership_id : null,
+            },
+            replayed: false,
+          },
+        }
+      }
+      return undefined
+    },
+  })
+}
+
 export const SCREENS: Screen[] = [
   // --- `/` · StudioEntry renders nine screens through one state machine -------
   {
@@ -175,6 +246,57 @@ export const SCREENS: Screen[] = [
     stories: 'entry · the identity service is unreachable',
     path: '/',
     fixture: failing('/studio/v1/entry-context', 503, 'upstream-unavailable'),
+  },
+
+  // --- `/invitations` · TeamInvitationDecision renders seven screens ----------
+  {
+    stories: 'invitation · consulting the invitation',
+    path: invitationWithToken,
+    fixture: () => invitationFixture({ stallResolve: true }),
+    hasHeading: false,
+    settled: async (page) => {
+      await expect(page.getByText('Consultando la invitación…')).toBeVisible()
+    },
+  },
+  {
+    stories: 'HU-085 / HU-086 · decide on a team invitation',
+    path: invitationWithToken,
+    fixture: () => invitationFixture(),
+  },
+  {
+    stories: 'invitation · activate the identity first',
+    path: invitationWithToken,
+    fixture: () => invitationFixture({ registrationIncomplete: true }),
+  },
+  {
+    stories: 'HU-085 · the invitation is no longer available',
+    path: '/invitations',
+    fixture: () => invitationFixture(),
+  },
+  {
+    stories: 'HU-086 · the invitation was sent to another account',
+    path: invitationWithToken,
+    fixture: () => invitationFixture({ decision: { status: 403, body: error('forbidden') } }),
+    reveal: async (page) => {
+      await page.getByRole('button', { name: 'Rechazar' }).click()
+      await expect(
+        page.getByRole('heading', { level: 1, name: /enviada a otra cuenta/ }),
+      ).toBeVisible()
+    },
+  },
+  {
+    stories: 'HU-086 · the invitation was rejected',
+    path: invitationWithToken,
+    fixture: () => invitationFixture({ decisionOutcome: 'rejected' }),
+    reveal: async (page) => {
+      await page.getByRole('button', { name: 'Rechazar' }).click()
+      await expect(page.getByRole('heading', { level: 1, name: /Rechazaste/ })).toBeVisible()
+    },
+  },
+  {
+    stories: 'invitation · the invitation could not be opened',
+    path: invitationWithToken,
+    fixture: () => invitationFixture({ resolve: { status: 503, body: error('unavailable') } }),
   },
 
   // --- the rest ---------------------------------------------------------------
