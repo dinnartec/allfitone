@@ -50,6 +50,12 @@ export interface Screen {
   /** Pins a screen that only exists at one width, such as the mobile card list. */
   viewport?: Viewport
   /**
+   * The mock seeds a denied analytics decision by default, so every screen
+   * renders the collapsed privacy control. `undecided` leaves the consent panel
+   * open instead — the state a person meets on their very first visit.
+   */
+  consent?: 'denied' | 'undecided'
+  /**
    * False for stages that legitimately carry no heading — a spinner announces
    * itself through a live region instead, and demanding an h1 there would be
    * asserting a hierarchy the screen has no content to build.
@@ -65,7 +71,11 @@ async function settledByHeading(page: Page): Promise<void> {
 export async function openScreen(page: Page, screen: Screen, viewport: Viewport): Promise<void> {
   await page.setViewportSize(screen.viewport ?? { width: viewport.width, height: viewport.height })
   await screen.setup?.(page)
-  await installStudioApiMock(page, screen.fixture())
+  await installStudioApiMock(
+    page,
+    screen.fixture(),
+    screen.consent ? { consent: screen.consent } : {},
+  )
   await page.goto(screen.path)
   await (screen.settled ?? settledByHeading)(page)
   await screen.reveal?.(page)
@@ -193,6 +203,18 @@ export const SCREENS: Screen[] = [
     stories: 'HU-001 · access landing',
     path: '/',
     fixture: () => createStudioApiFixture({ signedOut: true }),
+  },
+  {
+    // Every other screen renders the collapsed privacy control because the mock
+    // seeds a denied decision. The open panel is what a first-time visitor
+    // actually meets, and until now nothing had measured it.
+    stories: 'privacy · the consent panel on a first visit',
+    path: '/',
+    fixture: () => createStudioApiFixture({ signedOut: true }),
+    consent: 'undecided',
+    settled: async (page) => {
+      await expect(page.getByText('Analítica opcional')).toBeVisible()
+    },
   },
   {
     stories: 'entry · personal activation',

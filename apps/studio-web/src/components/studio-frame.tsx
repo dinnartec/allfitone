@@ -15,12 +15,19 @@ import { LogoutForm } from './logout-form'
 
 export type StudioStep = 'identity' | 'space' | 'ready'
 
+/**
+ * `step` is optional on purpose. The progress bar asserts where a person is in
+ * setup, and a stage that has not resolved yet does not know: a signed-out
+ * visitor is heading for the access landing, which has no setup at all, and
+ * someone with a membership is heading straight into their organization.
+ * Omitting the step renders the frame without claiming a position.
+ */
 export function StudioFrame({
   step,
   children,
   showLogout = true,
 }: {
-  step: StudioStep
+  step?: StudioStep
   children: ReactNode
   showLogout?: boolean
 }) {
@@ -41,7 +48,7 @@ export function StudioFrame({
         ) : null}
       </SetupHeader>
       <SetupMain>
-        <StudioProgress step={step} />
+        {step ? <StudioProgress step={step} /> : null}
         <SetupStage data-studio-stage>{children}</SetupStage>
       </SetupMain>
     </SetupShell>
@@ -68,7 +75,7 @@ export function StudioProgress({ step }: { step: StudioStep }) {
 
 export function LoadingStage({ label = 'Preparando tu espacio…' }: { label?: string }) {
   return (
-    <StudioFrame step="identity" showLogout={false}>
+    <StudioFrame showLogout={false}>
       <Card data-studio-loading>
         <CardContent data-studio-loading-body>
           <Spinner label={label} />

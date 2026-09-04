@@ -47,7 +47,10 @@ export function AnalyticsControls() {
     })
   })
 
-  const open = telemetry.decision === 'undecided' || expanded
+  // Until the stored decision has been read, the collapsed control is the
+  // honest thing to show: it is the steady state of almost every load, and
+  // opening the panel first would ask again of everyone who already answered.
+  const open = telemetry.resolved && (telemetry.decision === 'undecided' || expanded)
   return (
     <aside
       data-analytics-controls
