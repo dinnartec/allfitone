@@ -199,7 +199,9 @@ export function OrganizationContextBoundary({
       <OrganizationStateFrame>
         <div data-organization-state>
           <Alert variant="warning">
-            <AlertTitle>Este espacio no está disponible</AlertTitle>
+            <AlertTitle role="heading" aria-level={1}>
+              Este espacio no está disponible
+            </AlertTitle>
             <AlertDescription>
               No tienes una membresía activa para esta organización.
             </AlertDescription>
@@ -275,7 +277,9 @@ function OrganizationVerificationError({ onRetry }: { onRetry: () => void }) {
   return (
     <div data-organization-state>
       <Alert variant="danger" live="assertive">
-        <AlertTitle>No pudimos comprobar tu acceso</AlertTitle>
+        <AlertTitle role="heading" aria-level={1}>
+          No pudimos comprobar tu acceso
+        </AlertTitle>
         <AlertDescription>
           La conexión falló de forma temporal. El contenido permanecerá bloqueado hasta comprobar
           nuevamente tu membresía.

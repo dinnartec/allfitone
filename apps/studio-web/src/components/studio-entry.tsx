@@ -182,7 +182,10 @@ export function StudioEntry() {
     <StudioFrame step="identity" showLogout={false}>
       <div data-studio-error-stage>
         <Alert variant="danger" live="assertive">
-          <AlertTitle>No pudimos abrir Studio</AlertTitle>
+          {/* This stage replaces the page, so its title is the page heading. */}
+          <AlertTitle role="heading" aria-level={1}>
+            No pudimos abrir Studio
+          </AlertTitle>
           <AlertDescription>{flow.message}</AlertDescription>
           <Button onClick={() => void bootstrap()}>Reintentar</Button>
         </Alert>

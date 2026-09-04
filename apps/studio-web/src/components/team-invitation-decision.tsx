@@ -302,7 +302,11 @@ function InvitationMessage({
     <StudioFrame step="identity" showLogout={false}>
       <div data-studio-error-stage>
         <Alert variant="warning" live="polite">
-          <AlertTitle>{title}</AlertTitle>
+          {/* Shared by the invalid, mismatch, rejected and error stages. Each
+              replaces the page, so this title is the page heading. */}
+          <AlertTitle role="heading" aria-level={1}>
+            {title}
+          </AlertTitle>
           <AlertDescription>{description}</AlertDescription>
           {children}
         </Alert>

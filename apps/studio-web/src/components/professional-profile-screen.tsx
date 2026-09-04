@@ -123,7 +123,9 @@ export function ProfessionalProfileScreen() {
       ) : !meQuery.data ? (
         <div data-profile-state>
           <Alert variant="danger" live="assertive">
-            <AlertTitle>No pudimos abrir tu cuenta</AlertTitle>
+            <AlertTitle role="heading" aria-level={1}>
+              No pudimos abrir tu cuenta
+            </AlertTitle>
             <AlertDescription>
               {meQuery.error instanceof StudioApiError && meQuery.error.status === 503
                 ? 'El servicio no está disponible en este momento. Puedes reintentar.'
@@ -348,7 +350,9 @@ function ProfessionalCatalogError({
   return (
     <div data-profile-state>
       <Alert variant="danger" live="assertive">
-        <AlertTitle>No pudimos preparar el perfil profesional</AlertTitle>
+        <AlertTitle role="heading" aria-level={1}>
+          No pudimos preparar el perfil profesional
+        </AlertTitle>
         <AlertDescription>
           {retryable
             ? 'Los catálogos profesionales no están disponibles en este momento.'
