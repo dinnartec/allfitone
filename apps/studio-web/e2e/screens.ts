@@ -13,8 +13,10 @@
 import { expect, type Page } from '@playwright/test'
 
 import {
+  TEST_ANALYTICS_ID,
   activeMembership,
   createStudioApiFixture,
+  error,
   installStudioApiMock,
   professionalCredential,
   professionalProfile,
@@ -85,12 +87,97 @@ const withProfile = () =>
     memberships: [activeMembership],
   })
 
+/** Holds one endpoint open so a pending stage can be audited before it resolves. */
+const stall = (path: string) => () =>
+  createStudioApiFixture({
+    intercept: async (request) => {
+      if (request.path === path) await new Promise((resolve) => setTimeout(resolve, 15_000))
+      return undefined
+    },
+  })
+
+const failing = (path: string, status: number, code: string) => () =>
+  createStudioApiFixture({
+    intercept: (request) => (request.path === path ? { status, body: error(code) } : undefined),
+  })
+
 export const SCREENS: Screen[] = [
+  // --- `/` · StudioEntry renders nine screens through one state machine -------
   {
-    stories: 'HU-001 / HU-007 · entry and organization setup',
+    stories: 'entry · resolving the account',
+    path: '/',
+    fixture: stall('/studio/v1/entry-context'),
+    hasHeading: false,
+    settled: async (page) => {
+      await expect(page.getByText('Preparando tu espacio…')).toBeVisible()
+    },
+  },
+  {
+    stories: 'HU-001 · access landing',
+    path: '/',
+    fixture: () => createStudioApiFixture({ signedOut: true }),
+  },
+  {
+    stories: 'entry · personal activation',
+    path: '/',
+    fixture: () =>
+      createStudioApiFixture({
+        session: {
+          authenticated: true,
+          registration_status: 'registration_incomplete',
+          identity: { given_name: 'Ada', family_name: 'Lovelace' },
+          analytics: { distinct_id: TEST_ANALYTICS_ID },
+        },
+      }),
+  },
+  {
+    stories: 'HU-007 · how do you work today',
     path: '/',
     fixture: createStudioApiFixture,
   },
+  {
+    stories: 'HU-007 · name your independent space',
+    path: '/',
+    fixture: createStudioApiFixture,
+    reveal: async (page) => {
+      await page.getByRole('button', { name: /Trabajo por mi cuenta/ }).click()
+      await expect(page.getByLabel('Nombre visible')).toBeVisible()
+    },
+  },
+  {
+    stories: 'HU-007 · the space is ready',
+    path: '/',
+    fixture: createStudioApiFixture,
+    reveal: async (page) => {
+      await page.getByRole('button', { name: /Trabajo por mi cuenta/ }).click()
+      await page.getByLabel('Nombre visible').fill('Estudio de Ada')
+      await page.getByRole('button', { name: 'Crear mi espacio' }).click()
+      await expect(
+        page.getByRole('heading', { level: 1, name: /Tu espacio está listo/ }),
+      ).toBeVisible()
+    },
+  },
+  {
+    stories: 'entry · waiting for an invitation',
+    path: '/',
+    fixture: createStudioApiFixture,
+    reveal: async (page) => {
+      await page.getByRole('button', { name: /Esperar una invitación/ }).click()
+    },
+  },
+  {
+    stories: 'HU-004 · choose where to work today',
+    path: '/',
+    fixture: () =>
+      createStudioApiFixture({ memberships: [activeMembership, secondActiveMembership] }),
+  },
+  {
+    stories: 'entry · the identity service is unreachable',
+    path: '/',
+    fixture: failing('/studio/v1/entry-context', 503, 'upstream-unavailable'),
+  },
+
+  // --- the rest ---------------------------------------------------------------
   { stories: 'HU-004 / HU-006 · workspace and memberships', path: workspace, fixture: memberOfTwo },
   { stories: 'HU-005 · professional profile', path: '/account', fixture: withProfile },
   {
