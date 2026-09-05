@@ -69,6 +69,32 @@ for (const screen of SCREENS) {
   })
 }
 
+/**
+ * A control fixed to the viewport lands on whatever the page puts behind it, so
+ * it cannot borrow a background from a parent the way a control inside a panel
+ * can. The privacy control used an outline variant, whose transparent fill left
+ * only a border at roughly 1.24:1 against the entry background — invisible, and
+ * not something the WCAG sweep catches, because axe does not automate non-text
+ * contrast.
+ */
+test('the floating privacy control carries its own surface', async ({ page }) => {
+  await installStudioApiMock(page, createStudioApiFixture({ signedOut: true }))
+  await page.goto('/')
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+
+  const measured = await page.getByRole('button', { name: 'Privacidad' }).evaluate((element) => ({
+    background: getComputedStyle(element).backgroundColor,
+    anchoring: getComputedStyle(element.parentElement as HTMLElement).position,
+  }))
+
+  expect(measured.anchoring, 'the control floats, so this test is about the right thing').toBe(
+    'fixed',
+  )
+  expect(measured.background, 'a floating control with no surface reads as loose text').not.toBe(
+    'rgba(0, 0, 0, 0)',
+  )
+})
+
 test('ports the dark Studio sidebar to mobile and closes it after navigation', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await installStudioApiMock(page, createStudioApiFixture({ memberships: [activeMembership] }))
