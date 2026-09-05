@@ -95,6 +95,42 @@ test('the floating privacy control carries its own surface', async ({ page }) =>
   )
 })
 
+/**
+ * Analytics is optional, so the panel asking about it may never stand between a
+ * person and signing in. This is the constraint that decides where the panel
+ * opens: moving it to the corner the collapsed control uses looks tidier and
+ * puts it straight on top of "Entrar a Studio" at 1280x720 and 390x844, because
+ * the access landing places its primary action low.
+ *
+ * The check is what the browser would actually dispatch a click to, not a box
+ * intersection, so a panel that overlaps harmlessly still passes.
+ */
+for (const viewport of [
+  { name: 'desktop', width: 1440, height: 900 },
+  { name: 'laptop', width: 1280, height: 720 },
+  { name: 'mobile', width: 390, height: 844 },
+]) {
+  test(`the consent panel leaves the primary action clickable at ${viewport.name}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height })
+    await installStudioApiMock(page, createStudioApiFixture({ signedOut: true }), {
+      consent: 'undecided',
+    })
+    await page.goto('/')
+    await expect(page.getByText('Analítica opcional')).toBeVisible()
+
+    const action = page.getByRole('link', { name: /Entrar a Studio/ })
+    const reachable = await action.evaluate((element) => {
+      const box = element.getBoundingClientRect()
+      const topmost = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2)
+      return topmost === element || element.contains(topmost)
+    })
+
+    expect(reachable, 'the consent panel is covering "Entrar a Studio"').toBe(true)
+  })
+}
+
 test('ports the dark Studio sidebar to mobile and closes it after navigation', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await installStudioApiMock(page, createStudioApiFixture({ memberships: [activeMembership] }))

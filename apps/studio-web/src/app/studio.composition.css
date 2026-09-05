@@ -540,6 +540,16 @@
   max-width: min(390px, calc(100vw - 32px));
 }
 
+/*
+ * The open panel moves to the opposite corner, which reads as odd next to the
+ * collapsed control. It is deliberate: the access landing puts its primary
+ * action low on the page, and at 1280x720 and 390x844 a bottom-anchored panel
+ * covers "Entrar a Studio" outright — nobody could sign in without answering an
+ * optional analytics question first. Measured, after trying it.
+ *
+ * The cost is that it opens over the wordmark and the first line of the hero.
+ * Removing that cost means reserving space for the panel rather than moving it.
+ */
 [data-analytics-controls][data-expanded='true'] {
   top: 16px;
   right: auto;
