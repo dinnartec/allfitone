@@ -105,14 +105,17 @@ test('the floating privacy control carries its own surface', async ({ page }) =>
  * The check is what the browser would actually dispatch a click to, not a box
  * intersection, so a panel that overlaps harmlessly still passes.
  */
-for (const viewport of [
-  { name: 'desktop', width: 1440, height: 900 },
-  { name: 'laptop', width: 1280, height: 720 },
-  { name: 'mobile', width: 390, height: 844 },
-]) {
-  test(`the consent panel leaves the primary action clickable at ${viewport.name}`, async ({
-    page,
-  }) => {
+const CONSENT_VIEWPORTS = [
+  // The panel spans almost the whole width below roughly 420px, so no placement
+  // clears the header there and the wordmark is not asserted.
+  { name: 'desktop', width: 1440, height: 900, clearsHeader: true },
+  { name: 'laptop', width: 1280, height: 720, clearsHeader: true },
+  { name: 'tablet', width: 768, height: 1024, clearsHeader: true },
+  { name: 'mobile', width: 390, height: 844, clearsHeader: false },
+]
+
+for (const viewport of CONSENT_VIEWPORTS) {
+  test(`the consent panel stays out of the way at ${viewport.name}`, async ({ page }) => {
     await page.setViewportSize({ width: viewport.width, height: viewport.height })
     await installStudioApiMock(page, createStudioApiFixture({ signedOut: true }), {
       consent: 'undecided',
@@ -120,14 +123,38 @@ for (const viewport of [
     await page.goto('/')
     await expect(page.getByText('Analítica opcional')).toBeVisible()
 
-    const action = page.getByRole('link', { name: /Entrar a Studio/ })
-    const reachable = await action.evaluate((element) => {
-      const box = element.getBoundingClientRect()
-      const topmost = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2)
-      return topmost === element || element.contains(topmost)
-    })
+    const reachable = (selector: string) =>
+      page
+        .locator(selector)
+        .first()
+        .evaluate((element) => {
+          const box = element.getBoundingClientRect()
+          const topmost = document.elementFromPoint(
+            box.left + box.width / 2,
+            box.top + box.height / 2,
+          )
+          return topmost === element || element.contains(topmost)
+        })
 
-    expect(reachable, 'the consent panel is covering "Entrar a Studio"').toBe(true)
+    expect(
+      await page.getByRole('link', { name: /Entrar a Studio/ }).evaluate((element) => {
+        const box = element.getBoundingClientRect()
+        const topmost = document.elementFromPoint(
+          box.left + box.width / 2,
+          box.top + box.height / 2,
+        )
+        return topmost === element || element.contains(topmost)
+      }),
+      'the consent panel is covering "Entrar a Studio"',
+    ).toBe(true)
+
+    if (viewport.clearsHeader) {
+      expect(
+        await reachable('[data-slot="access-header"] svg'),
+        'the consent panel is covering the wordmark',
+      ).toBe(true)
+      expect(await reachable('h1'), 'the consent panel is covering the heading').toBe(true)
+    }
   })
 }
 

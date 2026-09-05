@@ -541,20 +541,26 @@
 }
 
 /*
- * The open panel moves to the opposite corner, which reads as odd next to the
- * collapsed control. It is deliberate: the access landing puts its primary
- * action low on the page, and at 1280x720 and 390x844 a bottom-anchored panel
- * covers "Entrar a Studio" outright — nobody could sign in without answering an
- * optional analytics question first. Measured, after trying it.
+ * The open panel sits at the top, away from the collapsed control, because the
+ * access landing puts its primary action low: a bottom-anchored panel covers
+ * "Entrar a Studio" at 1280x720 and 390x844, and nobody should have to answer a
+ * question about optional analytics before they can sign in.
  *
- * The cost is that it opens over the wordmark and the first line of the hero.
- * Removing that cost means reserving space for the panel rather than moving it.
+ * Centred rather than tucked left, which was where it started. Left put it on
+ * top of the wordmark at every width; centred clears the wordmark and the
+ * heading at 1440, 1280 and 768. Below roughly 420px the panel spans the width
+ * whatever it does, so no placement clears the header there.
+ *
+ * `width` rather than `max-width` alone: a centred element with an auto width
+ * collapses to the space between its left edge and the viewport.
  */
 [data-analytics-controls][data-expanded='true'] {
   top: 16px;
   right: auto;
   bottom: auto;
-  left: 16px;
+  left: 50%;
+  width: min(390px, calc(100vw - 32px));
+  transform: translateX(-50%);
 }
 
 [data-analytics-panel] {
