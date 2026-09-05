@@ -13,6 +13,7 @@ import { OrganizationReadyScreen } from './organization-ready-screen'
 import { SpaceSetup } from './space-setup'
 import { useStudioEntryContext } from './studio-entry-context'
 import { LoadingStage, StudioFrame } from './studio-frame'
+import { useAnnouncedWait } from '@/lib/announced-wait'
 import { resolveMembershipDestination } from '@/lib/membership-routing'
 import { readPendingInvitationToken } from '@/lib/invitation-token'
 import { studioSessionConfirmedEnded } from '@/lib/session-activity'
@@ -132,7 +133,9 @@ export function StudioEntry() {
     void bootstrap()
   }, [bootstrap])
 
-  if (flow.kind === 'loading') return <LoadingStage />
+  const announceWait = useAnnouncedWait(flow.kind === 'loading')
+
+  if (flow.kind === 'loading') return announceWait ? <LoadingStage /> : null
   if (flow.kind === 'access') return <AccessLanding logoutPartial={logoutPartial} />
   if (flow.kind === 'activation') {
     return (
