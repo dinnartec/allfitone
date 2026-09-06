@@ -23,12 +23,26 @@ import {
 import { problem, type ApiErrorCode } from '../../../platform/http/index.js'
 import type { PlatformAccessService } from '../application/index.js'
 import { platformAccessService } from '../dependencies.js'
-import { PLATFORM_DUTY_CODES, type PlatformDutyCode } from '../domain/index.js'
+import {
+  PLATFORM_DUTY_CODES,
+  type PlatformDutyCursor,
+  type PlatformDutyStatus,
+  type PlatformDutyCode,
+  type PlatformRoleCursor,
+} from '../domain/index.js'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const UUID_V7 = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const REASON_CODE = /^[A-Za-z0-9][A-Za-z0-9 ._:-]*$/
+const DUTY_STATUSES: readonly PlatformDutyStatus[] = [
+  'scheduled',
+  'active',
+  'suspended',
+  'expired',
+  'revoked',
+]
+const MAX_PAGE = 100
 
 export function backofficePlatformAccessRoutes(
   injectedAccess?: PlatformAccessService,
@@ -44,7 +58,7 @@ export function backofficePlatformAccessRoutes(
     cors({
       origin,
       credentials: true,
-      allowMethods: ['POST', 'OPTIONS'],
+      allowMethods: ['GET', 'POST', 'OPTIONS'],
       allowHeaders: ['Content-Type', 'Idempotency-Key', 'Command-Id'],
       exposeHeaders: ['Idempotent-Replay', 'Retry-After', 'Server-Timing'],
       maxAge: 600,
@@ -55,6 +69,42 @@ export function backofficePlatformAccessRoutes(
     c.header('Cache-Control', 'no-store')
     c.header('Referrer-Policy', 'no-referrer')
     c.header('Vary', 'Origin')
+  })
+
+  routes.get('/platform/role-assignments', async (c) => {
+    if (!exactOrigin(c, origin)) return problem(c, 'forbidden')
+    const pagination = parsePagination(c, roleCursor)
+    if (!pagination) return problem(c, 'validation-failed')
+    try {
+      const actor = await backofficeActor(c, sessions())
+      if (actor instanceof Response) return actor
+      const result = await access().listRoles(actor, {
+        requestId: randomUUID(),
+        ...pagination,
+      })
+      return c.json(pageBody(result))
+    } catch (error) {
+      return operationFailure(c, error)
+    }
+  })
+
+  routes.get('/platform/duty-assignments', async (c) => {
+    if (!exactOrigin(c, origin)) return problem(c, 'forbidden')
+    const pagination = parsePagination(c, dutyCursor)
+    const filters = dutyFilters(c)
+    if (!pagination || !filters) return problem(c, 'validation-failed')
+    try {
+      const actor = await backofficeActor(c, sessions())
+      if (actor instanceof Response) return actor
+      const result = await access().listDuties(actor, {
+        requestId: randomUUID(),
+        ...filters,
+        ...pagination,
+      })
+      return c.json(pageBody(result))
+    } catch (error) {
+      return operationFailure(c, error)
+    }
   })
 
   routes.post('/platform/role-assignments', async (c) => {
@@ -134,6 +184,77 @@ export function backofficePlatformAccessRoutes(
   })
 
   return routes
+}
+
+function pageBody<T>(result: { items: T[]; hasMore: boolean; nextCursor?: string }) {
+  return {
+    data: result.items,
+    page: { has_more: result.hasMore, next_cursor: result.nextCursor ?? null },
+  }
+}
+
+/**
+ * The cursor is opaque to the client and validated here, because it feeds a sort
+ * key the database trusts. A malformed one is rejected rather than defaulted to
+ * the first page, which would silently restart a caller's pagination.
+ */
+function parsePagination<Cursor>(
+  c: Context,
+  decode: (value: unknown) => Cursor | undefined,
+): { limit: number; cursor?: Cursor } | undefined {
+  const rawLimit = c.req.query('limit') ?? '25'
+  if (!/^[1-9][0-9]*$/.test(rawLimit)) return undefined
+  const limit = Number(rawLimit)
+  if (limit > MAX_PAGE) return undefined
+
+  const rawCursor = c.req.query('cursor')
+  if (!rawCursor) return { limit }
+  try {
+    const cursor = decode(JSON.parse(Buffer.from(rawCursor, 'base64url').toString('utf8')))
+    return cursor ? { limit, cursor } : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function roleCursor(value: unknown): PlatformRoleCursor | undefined {
+  if (!isObject(value) || !Number.isInteger(value.rank)) return undefined
+  if (typeof value.grantedAt !== 'string' || !isInstant(value.grantedAt)) return undefined
+  if (typeof value.id !== 'string' || !UUID.test(value.id)) return undefined
+  return { rank: value.rank as number, grantedAt: value.grantedAt, id: value.id }
+}
+
+function dutyCursor(value: unknown): PlatformDutyCursor | undefined {
+  if (!isObject(value) || !Number.isInteger(value.rank)) return undefined
+  if (typeof value.validTo !== 'string' || !isInstant(value.validTo)) return undefined
+  if (typeof value.createdAt !== 'string' || !isInstant(value.createdAt)) return undefined
+  if (typeof value.id !== 'string' || !UUID.test(value.id)) return undefined
+  return {
+    rank: value.rank as number,
+    validTo: value.validTo,
+    createdAt: value.createdAt,
+    id: value.id,
+  }
+}
+
+function dutyFilters(
+  c: Context,
+): { personId?: string; dutyCode?: PlatformDutyCode; status?: PlatformDutyStatus } | undefined {
+  const personId = c.req.query('person_id')
+  const dutyCode = c.req.query('duty_code')
+  const status = c.req.query('status')
+  if (personId !== undefined && !UUID.test(personId)) return undefined
+  if (dutyCode !== undefined && !PLATFORM_DUTY_CODES.includes(dutyCode as PlatformDutyCode)) {
+    return undefined
+  }
+  if (status !== undefined && !DUTY_STATUSES.includes(status as PlatformDutyStatus)) {
+    return undefined
+  }
+  return {
+    ...(personId === undefined ? {} : { personId }),
+    ...(dutyCode === undefined ? {} : { dutyCode: dutyCode as PlatformDutyCode }),
+    ...(status === undefined ? {} : { status: status as PlatformDutyStatus }),
+  }
 }
 
 /** Suspension and revocation differ only in the command they run. */
