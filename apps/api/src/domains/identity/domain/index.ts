@@ -2,6 +2,7 @@ import type { AuthenticatedIdentity, SessionTokens } from '@allfitone/auth-provi
 import type { AnalyticsIdentity } from '@allfitone/telemetry/node'
 
 export type {
+  BackofficeActor,
   BackofficeAttemptSecret,
   BackofficeAttemptState,
   BackofficeAuthenticationDatabase,
