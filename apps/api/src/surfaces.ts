@@ -12,7 +12,7 @@
 
 import type { Hono } from 'hono'
 
-import { studioCatalogRoutes } from './domains/catalog/index.js'
+import { backofficeCatalogRoutes, studioCatalogRoutes } from './domains/catalog/index.js'
 import {
   backofficeIdentityRoutes,
   spaceIdentityRoutes,
@@ -50,6 +50,7 @@ export function mountSurfaces(app: Hono): void {
   app.route('/space/v1', spaceOnboardingRoutes())
   app.route('/backoffice/v1', backofficeIdentityRoutes())
   app.route('/backoffice/v1', backofficePlatformAccessRoutes())
+  app.route('/backoffice/v1', backofficeCatalogRoutes())
 
   // Mounted as each vertical slice lands:
   // app.route('/catalog/v1', catalogSurface())
