@@ -15,7 +15,11 @@ import type {
   PlatformCommandResult,
   PlatformDutyAssignment,
   PlatformDutyCode,
+  PlatformDutyCursor,
+  PlatformDutyStatus,
+  PlatformPage,
   PlatformRoleAssignment,
+  PlatformRoleCursor,
 } from '../domain/index.js'
 
 export interface PlatformAccessService {
@@ -45,6 +49,21 @@ export interface PlatformAccessService {
     actor: BackofficeActor,
     input: PlatformCommandContext & { assignmentId: string },
   ): Promise<PlatformCommandResult<PlatformDutyAssignment>>
+  listRoles(
+    actor: BackofficeActor,
+    input: { requestId: string; limit: number; cursor?: PlatformRoleCursor },
+  ): Promise<PlatformPage<PlatformRoleAssignment>>
+  listDuties(
+    actor: BackofficeActor,
+    input: {
+      requestId: string
+      limit: number
+      personId?: string
+      dutyCode?: PlatformDutyCode
+      status?: PlatformDutyStatus
+      cursor?: PlatformDutyCursor
+    },
+  ): Promise<PlatformPage<PlatformDutyAssignment>>
 }
 
 export function createPlatformAccessService(
@@ -61,5 +80,7 @@ export function createPlatformAccessService(
     grantDuty: (actor, input) => database.grantDuty({ ...from(actor), ...input }),
     suspendDuty: (actor, input) => database.suspendDuty({ ...from(actor), ...input }),
     revokeDuty: (actor, input) => database.revokeDuty({ ...from(actor), ...input }),
+    listRoles: (actor, input) => database.listRoles({ ...from(actor), ...input }),
+    listDuties: (actor, input) => database.listDuties({ ...from(actor), ...input }),
   }
 }

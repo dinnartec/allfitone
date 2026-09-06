@@ -81,7 +81,50 @@ export interface PlatformAccessDatabase {
   // target state: the caller never chooses which transition it is asking for.
   suspendDuty(input: PlatformDutyClosure): Promise<PlatformCommandResult<PlatformDutyAssignment>>
   revokeDuty(input: PlatformDutyClosure): Promise<PlatformCommandResult<PlatformDutyAssignment>>
+  listRoles(input: {
+    actorPersonId: string
+    actorSessionId: string
+    requestId: string
+    limit: number
+    cursor?: PlatformRoleCursor
+  }): Promise<PlatformPage<PlatformRoleAssignment>>
+  listDuties(input: {
+    actorPersonId: string
+    actorSessionId: string
+    requestId: string
+    limit: number
+    personId?: string
+    dutyCode?: PlatformDutyCode
+    status?: PlatformDutyStatus
+    cursor?: PlatformDutyCursor
+  }): Promise<PlatformPage<PlatformDutyAssignment>>
 }
+
+/**
+ * The inventory is read-only evidence, never an authorization cache, so its page
+ * has no revision and no ETag: a caller must not be able to reuse yesterday's
+ * answer to decide anything.
+ */
+export interface PlatformPage<T> {
+  items: T[]
+  hasMore: boolean
+  nextCursor?: string
+}
+
+export interface PlatformRoleCursor {
+  rank: number
+  grantedAt: string
+  id: string
+}
+
+export interface PlatformDutyCursor {
+  rank: number
+  validTo: string
+  createdAt: string
+  id: string
+}
+
+export type PlatformDutyStatus = 'scheduled' | 'active' | 'suspended' | 'expired' | 'revoked'
 
 export type PlatformDutyClosure = PlatformCommandContext & {
   actorPersonId: string

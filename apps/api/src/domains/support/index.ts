@@ -12,5 +12,7 @@ export type { PlatformAccessService } from './application/index.js'
 export type {
   PlatformDutyAssignment,
   PlatformDutyCode,
+  PlatformDutyStatus,
+  PlatformPage,
   PlatformRoleAssignment,
 } from './domain/index.js'
