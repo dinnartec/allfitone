@@ -90,6 +90,20 @@ export const allfitV1ContractManifest = {
       responses: ['200', '400', '401', '403', '404', '409', '415', '422', '503'],
     },
     {
+      method: 'POST',
+      path: '/backoffice/v1/result-contracts',
+      operationId: 'publishResultContract',
+      allfitOperation: 'OP-CAT-006',
+      responses: ['201', '400', '401', '403', '404', '409', '415', '422', '503'],
+    },
+    {
+      method: 'POST',
+      path: '/backoffice/v1/result-contracts/{contractId}/deprecation',
+      operationId: 'deprecateResultContract',
+      allfitOperation: 'OP-CAT-006',
+      responses: ['200', '400', '401', '403', '404', '409', '415', '422', '503'],
+    },
+    {
       method: 'GET',
       path: '/backoffice/v1/session',
       operationId: 'getBackofficeSession',

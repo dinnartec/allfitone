@@ -8,6 +8,34 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
     type: 'string',
     enum: ['read', 'contribute'],
   },
+  ActivityFamily: {
+    type: 'string',
+    enum: ['strength', 'endurance', 'interval', 'mobility'],
+  },
+  ActivityTypeContractBinding: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['id', 'activity_type_id', 'is_default', 'valid_from', 'valid_to'],
+    properties: {
+      id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      activity_type_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      is_default: {
+        type: 'boolean',
+      },
+      valid_from: {
+        type: 'string',
+        format: 'date-time',
+      },
+      valid_to: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+    },
+  },
   ActivityTypeRef: {
     type: 'object',
     additionalProperties: false,
@@ -693,6 +721,28 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       revoked_at: {
         type: 'string',
         format: 'date-time',
+      },
+    },
+  },
+  ContractFixture: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['kind', 'payload', 'expected'],
+    description:
+      'One case the contract must accept or reject. A rule nobody demonstrated failing is a rule nobody tested, so both kinds are required to publish.',
+    properties: {
+      kind: {
+        type: 'string',
+        enum: ['valid', 'invalid'],
+      },
+      payload: {
+        type: 'object',
+        additionalProperties: true,
+      },
+      expected: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 200,
       },
     },
   },
@@ -3253,6 +3303,33 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
     type: 'string',
     enum: ['draft', 'published', 'deprecated', 'archived'],
   },
+  PublishedContractFixture: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['id', 'kind', 'payload_schema_version', 'payload', 'expected'],
+    properties: {
+      id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      kind: {
+        type: 'string',
+        enum: ['valid', 'invalid'],
+      },
+      payload_schema_version: {
+        type: 'integer',
+        const: 1,
+      },
+      payload: {
+        type: 'object',
+        additionalProperties: true,
+      },
+      expected: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 200,
+      },
+    },
+  },
   RequiredScope: {
     type: 'object',
     additionalProperties: false,
@@ -3279,6 +3356,116 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         type: 'string',
         minLength: 1,
         maxLength: 160,
+      },
+    },
+  },
+  ResultContract: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'id',
+      'contract_code',
+      'version_number',
+      'activity_family',
+      'contract_schema_version',
+      'envelope',
+      'minimums',
+      'status',
+      'published_at',
+      'fixtures',
+      'activity_type_bindings',
+    ],
+    properties: {
+      id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      contract_code: {
+        type: 'string',
+        pattern: '^[a-z][a-z0-9_.]{1,63}$',
+      },
+      version_number: {
+        type: 'integer',
+        minimum: 1,
+      },
+      activity_family: {
+        $ref: '#/components/schemas/ActivityFamily',
+      },
+      contract_schema_version: {
+        type: 'integer',
+        const: 1,
+      },
+      envelope: {
+        type: 'object',
+        additionalProperties: true,
+      },
+      minimums: {
+        type: 'object',
+        additionalProperties: true,
+      },
+      status: {
+        type: 'string',
+        enum: ['published', 'deprecated'],
+      },
+      published_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      fixtures: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/PublishedContractFixture',
+        },
+      },
+      activity_type_bindings: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/ActivityTypeContractBinding',
+        },
+      },
+    },
+  },
+  ResultContractPublication: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'contract_code',
+      'activity_family',
+      'envelope',
+      'minimums',
+      'fixtures',
+      'activity_type_id',
+    ],
+    properties: {
+      contract_code: {
+        type: 'string',
+        pattern: '^[a-z][a-z0-9_.]{1,63}$',
+      },
+      activity_family: {
+        $ref: '#/components/schemas/ActivityFamily',
+      },
+      envelope: {
+        type: 'object',
+        additionalProperties: true,
+      },
+      minimums: {
+        type: 'object',
+        additionalProperties: true,
+      },
+      fixtures: {
+        type: 'array',
+        minItems: 2,
+        maxItems: 100,
+        items: {
+          $ref: '#/components/schemas/ContractFixture',
+        },
+      },
+      activity_type_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      is_default: {
+        type: 'boolean',
+        description:
+          'Defaults to true on the server. Publishing a new default closes the previous one with a window instead of overwriting it.',
       },
     },
   },

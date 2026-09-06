@@ -231,6 +231,46 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/backoffice/v1/result-contracts': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Publish the validation rules an activity must satisfy to count as complete
+     * @description A published version is immutable: correcting one publishes the next, and a newer version never reinterprets a session already recorded, because each execution freezes the contract and version it was validated against. The server assigns the version number. Publishing is refused unless the request carries at least one fixture the contract accepts and one it rejects.
+     */
+    post: operations['publishResultContract']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/result-contracts/{contractId}/deprecation': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Stop new executions from freezing a published contract
+     * @description Deprecating closes the contract's activity bindings so nothing new can be validated against it. It does not invalidate the executions that already froze it, and it never deletes a version.
+     */
+    post: operations['deprecateResultContract']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/space/v1/telemetry-config': {
     parameters: {
       query?: never
@@ -1484,6 +1524,71 @@ export interface components {
     PlatformDutyAssignmentPage: {
       data: components['schemas']['PlatformDutyAssignment'][]
       page: components['schemas']['Page']
+    }
+    /** @enum {string} */
+    ActivityFamily: 'strength' | 'endurance' | 'interval' | 'mobility'
+    /** @description One case the contract must accept or reject. A rule nobody demonstrated failing is a rule nobody tested, so both kinds are required to publish. */
+    ContractFixture: {
+      /** @enum {string} */
+      kind: 'valid' | 'invalid'
+      payload: {
+        [key: string]: unknown
+      }
+      expected: string
+    }
+    PublishedContractFixture: {
+      id: components['schemas']['UuidV7']
+      /** @enum {string} */
+      kind: 'valid' | 'invalid'
+      /** @constant */
+      payload_schema_version: 1
+      payload: {
+        [key: string]: unknown
+      }
+      expected: string
+    }
+    ActivityTypeContractBinding: {
+      id: components['schemas']['UuidV7']
+      activity_type_id: components['schemas']['Uuid']
+      is_default: boolean
+      /** Format: date-time */
+      valid_from: string
+      /** Format: date-time */
+      valid_to: string | null
+    }
+    ResultContractPublication: {
+      contract_code: string
+      activity_family: components['schemas']['ActivityFamily']
+      envelope: {
+        [key: string]: unknown
+      }
+      minimums: {
+        [key: string]: unknown
+      }
+      fixtures: components['schemas']['ContractFixture'][]
+      activity_type_id: components['schemas']['Uuid']
+      /** @description Defaults to true on the server. Publishing a new default closes the previous one with a window instead of overwriting it. */
+      is_default?: boolean
+    }
+    ResultContract: {
+      id: components['schemas']['UuidV7']
+      contract_code: string
+      version_number: number
+      activity_family: components['schemas']['ActivityFamily']
+      /** @constant */
+      contract_schema_version: 1
+      envelope: {
+        [key: string]: unknown
+      }
+      minimums: {
+        [key: string]: unknown
+      }
+      /** @enum {string} */
+      status: 'published' | 'deprecated'
+      /** Format: date-time */
+      published_at: string
+      fixtures: components['schemas']['PublishedContractFixture'][]
+      activity_type_bindings: components['schemas']['ActivityTypeContractBinding'][]
     }
     /**
      * @description Closed duty catalogue fixed by ADR-028. Growing it is a documented decision.
@@ -3535,6 +3640,7 @@ export interface components {
     GrantId: components['schemas']['Uuid']
     MealId: components['schemas']['Uuid']
     GoalVersionId: components['schemas']['Uuid']
+    ResultContractId: components['schemas']['UuidV7']
     PlatformPersonFilter: components['schemas']['Uuid']
     PlatformDutyFilter: components['schemas']['PlatformDutyCode']
     /** @description Filters on the effective state, so `expired` reflects the clock, not a job. */
@@ -4053,6 +4159,88 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['PlatformDutyAssignment']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  publishResultContract: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ResultContractPublication']
+      }
+    }
+    responses: {
+      /** @description Contract published with its fixtures and its activity binding */
+      201: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ResultContract']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  deprecateResultContract: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        contractId: components['parameters']['ResultContractId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': Record<string, never>
+      }
+    }
+    responses: {
+      /** @description Deprecated contract, or the already deprecated one */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ResultContract']
         }
       }
       400: components['responses']['BadRequest']
