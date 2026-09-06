@@ -12,6 +12,9 @@ export type PlatformDutyCode = AllfitV1Schemas['PlatformDutyCode']
 export type PlatformRoleAssignmentPage = AllfitV1Schemas['PlatformRoleAssignmentPage']
 export type PlatformDutyAssignmentPage = AllfitV1Schemas['PlatformDutyAssignmentPage']
 
+export type ResultContract = AllfitV1Schemas['ResultContract']
+export type ResultContractPublication = AllfitV1Schemas['ResultContractPublication']
+
 export interface PlatformDutyFilters {
   personId?: string
   dutyCode?: PlatformDutyCode
@@ -140,6 +143,20 @@ export const backofficeApi = {
       { method: 'POST', headers: commandHeaders(command), body: '{}' },
     ),
 
+  publishResultContract: (publication: ResultContractPublication, command: BackofficeCommand) =>
+    requestJson<ResultContract>('/backoffice/v1/result-contracts', {
+      method: 'POST',
+      headers: commandHeaders(command),
+      body: JSON.stringify(publication),
+    }),
+
+  deprecateResultContract: (contractId: string, command: BackofficeCommand) =>
+    requestJson<ResultContract>(`/backoffice/v1/result-contracts/${contractId}/deprecation`, {
+      method: 'POST',
+      headers: commandHeaders(command),
+      body: '{}',
+    }),
+
   passwordReset: (email: string) =>
     requestVoid('/backoffice/v1/auth/password-resets', {
       method: 'POST',
@@ -250,6 +267,11 @@ function backofficeOperation(path: string): ClientOperation {
 /** Assignment identifiers vary per row, so these routes are matched by shape. */
 function platformOperation(route: string): ClientOperation | undefined {
   const segments = route.split('/').filter(Boolean)
+  if (segments[0] === 'backoffice' && segments[1] === 'v1' && segments[2] === 'result-contracts') {
+    return segments.length === 3
+      ? 'backoffice.catalog.result_contract_publish'
+      : 'backoffice.catalog.result_contract_deprecate'
+  }
   if (segments[0] !== 'backoffice' || segments[1] !== 'v1' || segments[2] !== 'platform') {
     return undefined
   }
