@@ -186,7 +186,7 @@ begin
 end
 $function$;
 
-create or replace function support.grant_platform_role(
+create or replace function support.assign_platform_role(
   p_actor_person_id uuid,
   p_actor_session_id uuid,
   p_person_id uuid,
@@ -341,7 +341,7 @@ begin
 end
 $function$;
 
-create or replace function support.grant_platform_duty(
+create or replace function support.assign_platform_duty(
   p_actor_person_id uuid,
   p_actor_session_id uuid,
   p_person_id uuid,
@@ -558,40 +558,94 @@ begin
 end
 $function$;
 
+-- The data dictionary names one function per transition, and each one is what
+-- the runtime role may execute. The shared body stays internal so suspension and
+-- revocation cannot drift apart, and so no caller chooses the target state.
+create or replace function support.suspend_platform_duty(
+  p_actor_person_id uuid,
+  p_actor_session_id uuid,
+  p_assignment_id uuid,
+  p_idempotency_key uuid,
+  p_command_id uuid,
+  p_request_hash bytea
+)
+returns table (result jsonb, replayed boolean)
+language sql
+security definer
+set search_path = pg_catalog
+as $function$
+  select *
+  from support.close_platform_duty(
+    p_actor_person_id, p_actor_session_id, p_assignment_id, 'suspended',
+    p_idempotency_key, p_command_id, p_request_hash
+  )
+$function$;
+
+create or replace function support.revoke_platform_duty(
+  p_actor_person_id uuid,
+  p_actor_session_id uuid,
+  p_assignment_id uuid,
+  p_idempotency_key uuid,
+  p_command_id uuid,
+  p_request_hash bytea
+)
+returns table (result jsonb, replayed boolean)
+language sql
+security definer
+set search_path = pg_catalog
+as $function$
+  select *
+  from support.close_platform_duty(
+    p_actor_person_id, p_actor_session_id, p_assignment_id, 'revoked',
+    p_idempotency_key, p_command_id, p_request_hash
+  )
+$function$;
+
 alter function support.platform_role_assignment_projection(uuid) owner to allfit_owner;
 alter function support.platform_duty_assignment_projection(uuid) owner to allfit_owner;
 alter function support.require_platform_access_manager(uuid, uuid) owner to allfit_owner;
-alter function support.grant_platform_role(uuid, uuid, uuid, text, uuid, uuid, bytea)
+alter function support.assign_platform_role(uuid, uuid, uuid, text, uuid, uuid, bytea)
   owner to allfit_owner;
 alter function support.revoke_platform_role(uuid, uuid, uuid, uuid, uuid, bytea)
   owner to allfit_owner;
-alter function support.grant_platform_duty(
+alter function support.assign_platform_duty(
   uuid, uuid, uuid, text, timestamptz, timestamptz, text, uuid, uuid, bytea
 ) owner to allfit_owner;
 alter function support.close_platform_duty(uuid, uuid, uuid, text, uuid, uuid, bytea)
+  owner to allfit_owner;
+alter function support.suspend_platform_duty(uuid, uuid, uuid, uuid, uuid, bytea)
+  owner to allfit_owner;
+alter function support.revoke_platform_duty(uuid, uuid, uuid, uuid, uuid, bytea)
   owner to allfit_owner;
 
 revoke all on function support.platform_role_assignment_projection(uuid) from public;
 revoke all on function support.platform_duty_assignment_projection(uuid) from public;
 revoke all on function support.require_platform_access_manager(uuid, uuid) from public;
-revoke all on function support.grant_platform_role(uuid, uuid, uuid, text, uuid, uuid, bytea)
+revoke all on function support.assign_platform_role(uuid, uuid, uuid, text, uuid, uuid, bytea)
   from public;
 revoke all on function support.revoke_platform_role(uuid, uuid, uuid, uuid, uuid, bytea)
   from public;
-revoke all on function support.grant_platform_duty(
+revoke all on function support.assign_platform_duty(
   uuid, uuid, uuid, text, timestamptz, timestamptz, text, uuid, uuid, bytea
 ) from public;
 revoke all on function support.close_platform_duty(uuid, uuid, uuid, text, uuid, uuid, bytea)
+  from public, allfit_api;
+revoke all on function support.suspend_platform_duty(uuid, uuid, uuid, uuid, uuid, bytea)
+  from public;
+revoke all on function support.revoke_platform_duty(uuid, uuid, uuid, uuid, uuid, bytea)
   from public;
 
 -- The runtime role reaches these tables only through these four commands. The
--- projections stay internal: reading the inventory is `OP-SUP-008`/`OP-SUP-011`.
-grant execute on function support.grant_platform_role(uuid, uuid, uuid, text, uuid, uuid, bytea)
+-- projections and the shared closure body stay internal, and reading the
+-- inventory is `OP-SUP-008`/`OP-SUP-011`.
+grant execute on function support.assign_platform_role(uuid, uuid, uuid, text, uuid, uuid, bytea)
   to allfit_api;
 grant execute on function support.revoke_platform_role(uuid, uuid, uuid, uuid, uuid, bytea)
   to allfit_api;
-grant execute on function support.grant_platform_duty(
+grant execute on function support.assign_platform_duty(
   uuid, uuid, uuid, text, timestamptz, timestamptz, text, uuid, uuid, bytea
 ) to allfit_api;
-grant execute on function support.close_platform_duty(uuid, uuid, uuid, text, uuid, uuid, bytea)
+grant execute on function support.suspend_platform_duty(uuid, uuid, uuid, uuid, uuid, bytea)
+  to allfit_api;
+grant execute on function support.revoke_platform_duty(uuid, uuid, uuid, uuid, uuid, bytea)
   to allfit_api;

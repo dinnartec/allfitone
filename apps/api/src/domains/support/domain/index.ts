@@ -77,12 +77,14 @@ export interface PlatformAccessDatabase {
       reasonCode: string
     },
   ): Promise<PlatformCommandResult<PlatformDutyAssignment>>
-  closeDuty(
-    input: PlatformCommandContext & {
-      actorPersonId: string
-      actorSessionId: string
-      assignmentId: string
-      targetStatus: 'suspended' | 'revoked'
-    },
-  ): Promise<PlatformCommandResult<PlatformDutyAssignment>>
+  // Suspension and revocation are separate closed functions, not one call with a
+  // target state: the caller never chooses which transition it is asking for.
+  suspendDuty(input: PlatformDutyClosure): Promise<PlatformCommandResult<PlatformDutyAssignment>>
+  revokeDuty(input: PlatformDutyClosure): Promise<PlatformCommandResult<PlatformDutyAssignment>>
+}
+
+export type PlatformDutyClosure = PlatformCommandContext & {
+  actorPersonId: string
+  actorSessionId: string
+  assignmentId: string
 }

@@ -59,9 +59,7 @@ export function createPlatformAccessService(
     grantRole: (actor, input) => database.grantRole({ ...from(actor), ...input }),
     revokeRole: (actor, input) => database.revokeRole({ ...from(actor), ...input }),
     grantDuty: (actor, input) => database.grantDuty({ ...from(actor), ...input }),
-    suspendDuty: (actor, input) =>
-      database.closeDuty({ ...from(actor), ...input, targetStatus: 'suspended' }),
-    revokeDuty: (actor, input) =>
-      database.closeDuty({ ...from(actor), ...input, targetStatus: 'revoked' }),
+    suspendDuty: (actor, input) => database.suspendDuty({ ...from(actor), ...input }),
+    revokeDuty: (actor, input) => database.revokeDuty({ ...from(actor), ...input }),
   }
 }

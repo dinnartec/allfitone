@@ -7,7 +7,7 @@
 
 begin;
 
-select plan(36);
+select plan(37);
 
 insert into identity.people (id, given_name, family_name)
 values
@@ -91,7 +91,7 @@ select throws_ok(
 
 -- T-ROLE-4 / T-DUTY-01 · the base role alone authorizes nothing.
 select lives_ok(
-  $$ select support.grant_platform_role(
+  $$ select support.assign_platform_role(
     '019a3000-0000-7000-8000-000000000001', '019a3000-0000-7000-8000-000000000021',
     '019a3000-0000-7000-8000-000000000004', 'allfit_admin',
     '019a3000-0000-7000-8000-000000000101', '019a3000-0000-7000-8000-000000000201',
@@ -100,7 +100,7 @@ select lives_ok(
   'an access manager grants the base role to another active person'
 );
 
-select support.grant_platform_role(
+select support.assign_platform_role(
   '019a3000-0000-7000-8000-000000000001', '019a3000-0000-7000-8000-000000000021',
   '019a3000-0000-7000-8000-000000000003', 'allfit_admin',
   '019a3000-0000-7000-8000-000000000102', '019a3000-0000-7000-8000-000000000202',
@@ -123,7 +123,7 @@ select ok(
 );
 
 select throws_ok(
-  $$ select support.grant_platform_role(
+  $$ select support.assign_platform_role(
     '019a3000-0000-7000-8000-000000000003', '019a3000-0000-7000-8000-000000000023',
     '019a3000-0000-7000-8000-000000000004', 'allfit_admin',
     '019a3000-0000-7000-8000-000000000103', '019a3000-0000-7000-8000-000000000203',
@@ -136,7 +136,7 @@ select throws_ok(
 
 -- T-ROLE-1 through the closed function, with a precise answer.
 select throws_ok(
-  $$ select support.grant_platform_role(
+  $$ select support.assign_platform_role(
     '019a3000-0000-7000-8000-000000000001', '019a3000-0000-7000-8000-000000000021',
     '019a3000-0000-7000-8000-000000000001', 'allfit_admin',
     '019a3000-0000-7000-8000-000000000104', '019a3000-0000-7000-8000-000000000204',
@@ -148,7 +148,7 @@ select throws_ok(
 );
 
 select throws_ok(
-  $$ select support.grant_platform_role(
+  $$ select support.assign_platform_role(
     '019a3000-0000-7000-8000-000000000001', '019a3000-0000-7000-8000-000000000021',
     '019a3000-0000-7000-8000-000000000003', 'allfit_support',
     '019a3000-0000-7000-8000-000000000105', '019a3000-0000-7000-8000-000000000205',
@@ -161,7 +161,7 @@ select throws_ok(
 
 -- Repeating the same command converges instead of creating a second grant.
 select is(
-  (select replayed from support.grant_platform_role(
+  (select replayed from support.assign_platform_role(
     '019a3000-0000-7000-8000-000000000001', '019a3000-0000-7000-8000-000000000021',
     '019a3000-0000-7000-8000-000000000003', 'allfit_admin',
     '019a3000-0000-7000-8000-000000000102', '019a3000-0000-7000-8000-000000000202',
@@ -180,7 +180,7 @@ select is(
 
 -- T-DUTY-04 · the ninety-day bound belongs to the database.
 select throws_ok(
-  $$ select support.grant_platform_duty(
+  $$ select support.assign_platform_duty(
     '019a3000-0000-7000-8000-000000000001', '019a3000-0000-7000-8000-000000000021',
     '019a3000-0000-7000-8000-000000000003', 'diagnose_support_metadata',
     null, clock_timestamp() + interval '91 days', 'CASE-001',
@@ -193,7 +193,7 @@ select throws_ok(
 );
 
 select throws_ok(
-  $$ select support.grant_platform_duty(
+  $$ select support.assign_platform_duty(
     '019a3000-0000-7000-8000-000000000001', '019a3000-0000-7000-8000-000000000021',
     '019a3000-0000-7000-8000-000000000001', 'diagnose_support_metadata',
     null, clock_timestamp() + interval '30 days', 'CASE-002',
@@ -207,7 +207,7 @@ select throws_ok(
 
 -- Epsilon exists and is active, but was never granted the base role.
 select throws_ok(
-  $$ select support.grant_platform_duty(
+  $$ select support.assign_platform_duty(
     '019a3000-0000-7000-8000-000000000001', '019a3000-0000-7000-8000-000000000021',
     '019a3000-0000-7000-8000-000000000005', 'diagnose_support_metadata',
     null, clock_timestamp() + interval '30 days', 'CASE-003',
@@ -221,7 +221,7 @@ select throws_ok(
 
 -- T-DUTY-02 · the actor mode is derived from the code, never supplied.
 select is(
-  (select (result->>'actor_mode') from support.grant_platform_duty(
+  (select (result->>'actor_mode') from support.assign_platform_duty(
     '019a3000-0000-7000-8000-000000000001', '019a3000-0000-7000-8000-000000000021',
     '019a3000-0000-7000-8000-000000000003', 'diagnose_support_metadata',
     null, clock_timestamp() + interval '30 days', 'CASE-004',
@@ -233,7 +233,7 @@ select is(
 );
 
 select is(
-  (select (result->>'actor_mode') from support.grant_platform_duty(
+  (select (result->>'actor_mode') from support.assign_platform_duty(
     '019a3000-0000-7000-8000-000000000001', '019a3000-0000-7000-8000-000000000021',
     '019a3000-0000-7000-8000-000000000003', 'manage_platform_commercial',
     null, clock_timestamp() + interval '30 days', 'CASE-005',
@@ -245,7 +245,7 @@ select is(
 );
 
 select is(
-  (select (result->>'required_aal')::smallint from support.grant_platform_duty(
+  (select (result->>'required_aal')::smallint from support.assign_platform_duty(
     '019a3000-0000-7000-8000-000000000001', '019a3000-0000-7000-8000-000000000021',
     '019a3000-0000-7000-8000-000000000003', 'approve_break_glass',
     null, clock_timestamp() + interval '30 days', 'CASE-006',
@@ -266,12 +266,11 @@ select ok(
 
 -- T-DUTY-04 · suspension cuts authority in the very next resolution.
 select lives_ok(
-  $$ select support.close_platform_duty(
+  $$ select support.suspend_platform_duty(
     '019a3000-0000-7000-8000-000000000001', '019a3000-0000-7000-8000-000000000021',
     (select id from support.platform_duty_assignments
       where person_id = '019a3000-0000-7000-8000-000000000003'
         and duty_code = 'diagnose_support_metadata'),
-    'suspended',
     '019a3000-0000-7000-8000-00000000020c', '019a3000-0000-7000-8000-00000000030c',
     decode(repeat('0c', 32), 'hex')
   ) $$,
@@ -426,15 +425,24 @@ select ok(
 select ok(
   has_function_privilege(
     'allfit_api',
-    'support.grant_platform_role(uuid,uuid,uuid,text,uuid,uuid,bytea)',
+    'support.assign_platform_role(uuid,uuid,uuid,text,uuid,uuid,bytea)',
     'EXECUTE'
   )
     and has_function_privilege(
       'allfit_api',
-      'support.close_platform_duty(uuid,uuid,uuid,text,uuid,uuid,bytea)',
+      'support.suspend_platform_duty(uuid,uuid,uuid,uuid,uuid,bytea)',
       'EXECUTE'
     ),
   'the runtime role executes the closed platform access commands'
+);
+
+select ok(
+  not has_function_privilege(
+    'allfit_api',
+    'support.close_platform_duty(uuid,uuid,uuid,text,uuid,uuid,bytea)',
+    'EXECUTE'
+  ),
+  'the runtime role cannot choose the duty transition by calling the shared body'
 );
 
 select * from finish();

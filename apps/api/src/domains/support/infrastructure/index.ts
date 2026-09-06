@@ -2,7 +2,7 @@
  * PostgreSQL access for platform role and duty administration.
  *
  * The runtime role holds no privilege on `support.platform_role_assignments` or
- * `support.platform_duty_assignments`; it can only execute the four closed
+ * `support.platform_duty_assignments`; it can only execute the five closed
  * commands. There is nothing to hide behind a repository abstraction here — the
  * functions are the contract, and the actor context is transaction-local because
  * a session-scoped setting does not survive the pooler.
@@ -28,7 +28,7 @@ export function createPlatformAccessDatabase(): PlatformAccessDatabase {
     grantRole: (input) =>
       command(sql, input.actorPersonId, input.requestId, async (transaction) => {
         const [row] = await transaction<CommandRow<PlatformRoleAssignment>[]>`
-          select * from support.grant_platform_role(
+          select * from support.assign_platform_role(
             ${input.actorPersonId}::uuid, ${input.actorSessionId}::uuid,
             ${input.personId}::uuid, ${input.platformRole},
             ${input.idempotencyKey}::uuid, ${input.commandId}::uuid, ${input.requestHash}
@@ -52,7 +52,7 @@ export function createPlatformAccessDatabase(): PlatformAccessDatabase {
     grantDuty: (input) =>
       command(sql, input.actorPersonId, input.requestId, async (transaction) => {
         const [row] = await transaction<CommandRow<PlatformDutyAssignment>[]>`
-          select * from support.grant_platform_duty(
+          select * from support.assign_platform_duty(
             ${input.actorPersonId}::uuid, ${input.actorSessionId}::uuid,
             ${input.personId}::uuid, ${input.dutyCode},
             ${input.validFrom ?? null}::timestamptz, ${input.validTo}::timestamptz,
@@ -63,16 +63,28 @@ export function createPlatformAccessDatabase(): PlatformAccessDatabase {
         return required(row, 'grant the platform duty')
       }),
 
-    closeDuty: (input) =>
+    suspendDuty: (input) =>
       command(sql, input.actorPersonId, input.requestId, async (transaction) => {
         const [row] = await transaction<CommandRow<PlatformDutyAssignment>[]>`
-          select * from support.close_platform_duty(
+          select * from support.suspend_platform_duty(
             ${input.actorPersonId}::uuid, ${input.actorSessionId}::uuid,
-            ${input.assignmentId}::uuid, ${input.targetStatus},
+            ${input.assignmentId}::uuid,
             ${input.idempotencyKey}::uuid, ${input.commandId}::uuid, ${input.requestHash}
           )
         `
-        return required(row, 'close the platform duty')
+        return required(row, 'suspend the platform duty')
+      }),
+
+    revokeDuty: (input) =>
+      command(sql, input.actorPersonId, input.requestId, async (transaction) => {
+        const [row] = await transaction<CommandRow<PlatformDutyAssignment>[]>`
+          select * from support.revoke_platform_duty(
+            ${input.actorPersonId}::uuid, ${input.actorSessionId}::uuid,
+            ${input.assignmentId}::uuid,
+            ${input.idempotencyKey}::uuid, ${input.commandId}::uuid, ${input.requestHash}
+          )
+        `
+        return required(row, 'revoke the platform duty')
       }),
   }
 }
