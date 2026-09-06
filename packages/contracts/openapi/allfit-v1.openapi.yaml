@@ -21,6 +21,8 @@ tags:
     description: Hosted authentication and opaque browser sessions for Allfit Studio.
   - name: Backoffice Identity
     description: Password and TOTP authentication with application-owned AAL2 sessions.
+  - name: Backoffice Platform Access
+    description: Base role and temporary platform duty administration for Allfit staff.
   - name: Studio Organizations
     description: Studio entry context, organization creation and membership resolution.
   - name: Studio Catalog
@@ -333,6 +335,263 @@ paths:
         '429':
           $ref: '#/components/responses/TooManyRequests'
 
+  /backoffice/v1/platform/role-assignments:
+    post:
+      tags: [Backoffice Platform Access]
+      operationId: grantBackofficePlatformRole
+      x-allfit-operation: OP-SUP-007
+      x-allfit-cache: no-store
+      summary: Grant the Backoffice base role to another active person
+      description: >-
+        The base role only allows signing in. It grants no operation and implies no
+        duty. Self-assignment is rejected by the database, not by this handler.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlatformRoleGrant'
+      responses:
+        '201':
+          description: Base role granted, or the converged assignment for a repeated command
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformRoleAssignment'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/platform/role-assignments/{assignmentId}/revocation:
+    post:
+      tags: [Backoffice Platform Access]
+      operationId: revokeBackofficePlatformRole
+      x-allfit-operation: OP-SUP-007
+      x-allfit-cache: no-store
+      summary: Withdraw the Backoffice base role from another person
+      description: >-
+        Withdrawing the role revokes that person's Backoffice sessions and closes every
+        effective duty without deleting history. The last active administrator cannot
+        be withdrawn.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PlatformAssignmentId'
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+      responses:
+        '200':
+          description: Base role withdrawn, or the already withdrawn assignment
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformRoleAssignment'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/platform/duty-assignments:
+    post:
+      tags: [Backoffice Platform Access]
+      operationId: grantBackofficePlatformDuty
+      x-allfit-operation: OP-SUP-010
+      x-allfit-cache: no-store
+      summary: Grant a closed-catalogue platform duty for at most ninety days
+      description: >-
+        The actor mode is derived from the duty code and never accepted from the
+        client. The target must already hold an active base role.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlatformDutyGrant'
+      responses:
+        '201':
+          description: Duty granted, or the converged assignment for a repeated command
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformDutyAssignment'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/platform/duty-assignments/{assignmentId}/suspension:
+    post:
+      tags: [Backoffice Platform Access]
+      operationId: suspendBackofficePlatformDuty
+      x-allfit-operation: OP-SUP-010
+      x-allfit-cache: no-store
+      summary: Suspend an effective platform duty
+      description: >-
+        Suspension cuts the duty's operations from the next transaction onwards. The
+        assignment row stays, so the history remains readable.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PlatformAssignmentId'
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+      responses:
+        '200':
+          description: Duty suspended, or the already suspended assignment
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformDutyAssignment'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/platform/duty-assignments/{assignmentId}/revocation:
+    post:
+      tags: [Backoffice Platform Access]
+      operationId: revokeBackofficePlatformDuty
+      x-allfit-operation: OP-SUP-010
+      x-allfit-cache: no-store
+      summary: Revoke a platform duty permanently
+      description: >-
+        Revocation is terminal for that assignment and cuts its operations from the
+        next transaction onwards. History is never rewritten.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PlatformAssignmentId'
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+      responses:
+        '200':
+          description: Duty revoked, or the already revoked assignment
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformDutyAssignment'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
   /space/v1/telemetry-config:
     get:
       tags: [Platform Telemetry]
@@ -3521,6 +3780,12 @@ components:
       required: true
       schema:
         $ref: '#/components/schemas/Uuid'
+    PlatformAssignmentId:
+      name: assignmentId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/UuidV7'
     IdempotencyKey:
       name: Idempotency-Key
       in: header
@@ -3937,6 +4202,163 @@ components:
             request_id: 01JEXAMPLE0000000000000000
 
   schemas:
+    PlatformDutyCode:
+      type: string
+      description: Closed duty catalogue fixed by ADR-028. Growing it is a documented decision.
+      enum:
+        - view_platform_metrics
+        - diagnose_support_metadata
+        - view_billing_metadata
+        - manage_organization_lifecycle
+        - request_break_glass
+        - verify_professional_credentials
+        - curate_global_catalog
+        - manage_platform_commercial
+        - manage_platform_access
+        - audit_platform_access
+        - approve_break_glass
+        - audit_break_glass
+        - manage_privacy_requests
+    PlatformActorMode:
+      type: string
+      description: Derived from the duty code by the database; never accepted from a client.
+      enum: [A10, A11, A12]
+    PlatformAccessReasonCode:
+      type: string
+      minLength: 1
+      maxLength: 120
+      pattern: '^[A-Za-z0-9][A-Za-z0-9 ._:-]*$'
+      description: Opaque operational reference. Never a name, a contact or free narrative.
+    PlatformRoleGrant:
+      type: object
+      additionalProperties: false
+      required: [person_id, platform_role]
+      properties:
+        person_id:
+          $ref: '#/components/schemas/Uuid'
+        platform_role:
+          type: string
+          enum: [allfit_admin]
+    PlatformRoleAssignment:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - person_id
+        - platform_role
+        - status
+        - granted_by_person_id
+        - granted_at
+        - revoked_by_person_id
+        - revoked_at
+      properties:
+        id:
+          $ref: '#/components/schemas/UuidV7'
+        person_id:
+          $ref: '#/components/schemas/Uuid'
+        platform_role:
+          type: string
+          enum: [allfit_admin]
+        status:
+          type: string
+          enum: [active, revoked]
+        granted_by_person_id:
+          $ref: '#/components/schemas/Uuid'
+        granted_at:
+          type: string
+          format: date-time
+        revoked_by_person_id:
+          oneOf:
+            - $ref: '#/components/schemas/Uuid'
+            - type: 'null'
+        revoked_at:
+          type: [string, 'null']
+          format: date-time
+    PlatformDutyGrant:
+      type: object
+      additionalProperties: false
+      required: [person_id, duty_code, valid_to, reason_code]
+      properties:
+        person_id:
+          $ref: '#/components/schemas/Uuid'
+        duty_code:
+          $ref: '#/components/schemas/PlatformDutyCode'
+        valid_from:
+          type: string
+          format: date-time
+          description: Defaults to the command instant. A future value schedules the duty.
+        valid_to:
+          type: string
+          format: date-time
+          description: At most ninety days after valid_from; the database enforces the bound.
+        reason_code:
+          $ref: '#/components/schemas/PlatformAccessReasonCode'
+    PlatformDutyAssignment:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - person_id
+        - duty_code
+        - actor_mode
+        - status
+        - valid_from
+        - valid_to
+        - required_aal
+        - granted_by_person_id
+        - recertified_by_person_id
+        - recertified_at
+        - suspended_by_person_id
+        - suspended_at
+        - revoked_by_person_id
+        - revoked_at
+        - reason_code
+      properties:
+        id:
+          $ref: '#/components/schemas/UuidV7'
+        person_id:
+          $ref: '#/components/schemas/Uuid'
+        duty_code:
+          $ref: '#/components/schemas/PlatformDutyCode'
+        actor_mode:
+          $ref: '#/components/schemas/PlatformActorMode'
+        status:
+          type: string
+          enum: [scheduled, active, suspended, expired, revoked]
+        valid_from:
+          type: string
+          format: date-time
+        valid_to:
+          type: string
+          format: date-time
+        required_aal:
+          type: integer
+          const: 2
+        granted_by_person_id:
+          $ref: '#/components/schemas/Uuid'
+        recertified_by_person_id:
+          oneOf:
+            - $ref: '#/components/schemas/Uuid'
+            - type: 'null'
+        recertified_at:
+          type: [string, 'null']
+          format: date-time
+        suspended_by_person_id:
+          oneOf:
+            - $ref: '#/components/schemas/Uuid'
+            - type: 'null'
+        suspended_at:
+          type: [string, 'null']
+          format: date-time
+        revoked_by_person_id:
+          oneOf:
+            - $ref: '#/components/schemas/Uuid'
+            - type: 'null'
+        revoked_at:
+          type: [string, 'null']
+          format: date-time
+        reason_code:
+          $ref: '#/components/schemas/PlatformAccessReasonCode'
     BackofficePasswordRequest:
       type: object
       additionalProperties: false

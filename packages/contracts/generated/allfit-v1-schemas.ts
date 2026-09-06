@@ -2336,6 +2336,228 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  PlatformAccessReasonCode: {
+    type: 'string',
+    minLength: 1,
+    maxLength: 120,
+    pattern: '^[A-Za-z0-9][A-Za-z0-9 ._:-]*$',
+    description: 'Opaque operational reference. Never a name, a contact or free narrative.',
+  },
+  PlatformActorMode: {
+    type: 'string',
+    description: 'Derived from the duty code by the database; never accepted from a client.',
+    enum: ['A10', 'A11', 'A12'],
+  },
+  PlatformDutyAssignment: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'id',
+      'person_id',
+      'duty_code',
+      'actor_mode',
+      'status',
+      'valid_from',
+      'valid_to',
+      'required_aal',
+      'granted_by_person_id',
+      'recertified_by_person_id',
+      'recertified_at',
+      'suspended_by_person_id',
+      'suspended_at',
+      'revoked_by_person_id',
+      'revoked_at',
+      'reason_code',
+    ],
+    properties: {
+      id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      person_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      duty_code: {
+        $ref: '#/components/schemas/PlatformDutyCode',
+      },
+      actor_mode: {
+        $ref: '#/components/schemas/PlatformActorMode',
+      },
+      status: {
+        type: 'string',
+        enum: ['scheduled', 'active', 'suspended', 'expired', 'revoked'],
+      },
+      valid_from: {
+        type: 'string',
+        format: 'date-time',
+      },
+      valid_to: {
+        type: 'string',
+        format: 'date-time',
+      },
+      required_aal: {
+        type: 'integer',
+        const: 2,
+      },
+      granted_by_person_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      recertified_by_person_id: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/Uuid',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      recertified_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      suspended_by_person_id: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/Uuid',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      suspended_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      revoked_by_person_id: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/Uuid',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      revoked_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      reason_code: {
+        $ref: '#/components/schemas/PlatformAccessReasonCode',
+      },
+    },
+  },
+  PlatformDutyCode: {
+    type: 'string',
+    description: 'Closed duty catalogue fixed by ADR-028. Growing it is a documented decision.',
+    enum: [
+      'view_platform_metrics',
+      'diagnose_support_metadata',
+      'view_billing_metadata',
+      'manage_organization_lifecycle',
+      'request_break_glass',
+      'verify_professional_credentials',
+      'curate_global_catalog',
+      'manage_platform_commercial',
+      'manage_platform_access',
+      'audit_platform_access',
+      'approve_break_glass',
+      'audit_break_glass',
+      'manage_privacy_requests',
+    ],
+  },
+  PlatformDutyGrant: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['person_id', 'duty_code', 'valid_to', 'reason_code'],
+    properties: {
+      person_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      duty_code: {
+        $ref: '#/components/schemas/PlatformDutyCode',
+      },
+      valid_from: {
+        type: 'string',
+        format: 'date-time',
+        description: 'Defaults to the command instant. A future value schedules the duty.',
+      },
+      valid_to: {
+        type: 'string',
+        format: 'date-time',
+        description: 'At most ninety days after valid_from; the database enforces the bound.',
+      },
+      reason_code: {
+        $ref: '#/components/schemas/PlatformAccessReasonCode',
+      },
+    },
+  },
+  PlatformRoleAssignment: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'id',
+      'person_id',
+      'platform_role',
+      'status',
+      'granted_by_person_id',
+      'granted_at',
+      'revoked_by_person_id',
+      'revoked_at',
+    ],
+    properties: {
+      id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      person_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      platform_role: {
+        type: 'string',
+        enum: ['allfit_admin'],
+      },
+      status: {
+        type: 'string',
+        enum: ['active', 'revoked'],
+      },
+      granted_by_person_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      granted_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      revoked_by_person_id: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/Uuid',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      revoked_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+    },
+  },
+  PlatformRoleGrant: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['person_id', 'platform_role'],
+    properties: {
+      person_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      platform_role: {
+        type: 'string',
+        enum: ['allfit_admin'],
+      },
+    },
+  },
   Problem: {
     type: 'object',
     additionalProperties: false,
