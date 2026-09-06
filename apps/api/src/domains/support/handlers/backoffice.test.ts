@@ -76,6 +76,28 @@ function accessService(overrides: Partial<PlatformAccessService> = {}): Platform
   } as PlatformAccessService
 }
 
+function listService(overrides: Partial<PlatformAccessService> = {}): PlatformAccessService {
+  return accessService({
+    listRoles: (_actor, input) => {
+      captured.push({ operation: 'listRoles', input })
+      return Promise.resolve({ items: [roleAssignment], hasMore: false })
+    },
+    listDuties: (_actor, input) => {
+      captured.push({ operation: 'listDuties', input })
+      return Promise.resolve({ items: [dutyAssignment], hasMore: false })
+    },
+    ...overrides,
+  })
+}
+
+function read(path: string, init: { origin?: string; cookie?: boolean } = {}): Request {
+  const headers = new Headers({ origin: init.origin ?? ORIGIN })
+  if (init.cookie !== false) {
+    headers.set('cookie', `${BACKOFFICE_SESSION_COOKIE}=session-secret`)
+  }
+  return new Request(`https://api.example.test/backoffice/v1${path}`, { headers })
+}
+
 function sessionService(
   overrides: Partial<BackofficeAuthenticationService> = {},
 ): BackofficeAuthenticationService {
@@ -133,7 +155,11 @@ beforeEach(() => {
 describe('Backoffice platform access API contract', () => {
   test('T-SUP-API-01 mounts every platform access operation with its contract method', () => {
     const contract = allfitV1ContractManifest.operations
-      .filter((operation) => ['OP-SUP-007', 'OP-SUP-010'].includes(operation.allfitOperation))
+      .filter((operation) =>
+        ['OP-SUP-007', 'OP-SUP-008', 'OP-SUP-010', 'OP-SUP-011'].includes(
+          operation.allfitOperation,
+        ),
+      )
       .map((operation) => `${operation.method} ${colonPath(operation.path)}`)
       .sort()
     const mounted = backofficePlatformAccessRoutes()
@@ -148,6 +174,8 @@ describe('Backoffice platform access API contract', () => {
     const mounted = mountedSurfacePaths()
     expect(mounted).toContain('POST /backoffice/v1/platform/role-assignments')
     expect(mounted).toContain('POST /backoffice/v1/platform/duty-assignments')
+    expect(mounted).toContain('GET /backoffice/v1/platform/role-assignments')
+    expect(mounted).toContain('GET /backoffice/v1/platform/duty-assignments')
   })
 
   test('T-SUP-API-03 grants a base role and returns the assignment projection', async () => {
@@ -356,6 +384,91 @@ describe('Backoffice platform access API contract', () => {
     )
 
     expect(response.status).toBe(401)
+    expect(captured).toHaveLength(0)
+  })
+
+  test('T-SUP-API-15 lists the base role inventory with its page envelope', async () => {
+    const response = await routes(listService()).fetch(read('/platform/role-assignments'))
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('cache-control')).toBe('no-store')
+    expect(await response.json()).toEqual({
+      data: [roleAssignment],
+      page: { has_more: false, next_cursor: null },
+    })
+    expect(captured[0]?.input).toMatchObject({ limit: 25 })
+  })
+
+  test('T-SUP-API-16 passes the duty filters through untouched', async () => {
+    const response = await routes(listService()).fetch(
+      read(
+        `/platform/duty-assignments?person_id=${TARGET_PERSON_ID}` +
+          '&duty_code=audit_platform_access&status=expired&limit=5',
+      ),
+    )
+
+    expect(response.status).toBe(200)
+    expect(captured[0]?.input).toMatchObject({
+      personId: TARGET_PERSON_ID,
+      dutyCode: 'audit_platform_access',
+      status: 'expired',
+      limit: 5,
+    })
+  })
+
+  test('T-SUP-API-17 refuses a filter outside its closed vocabulary', async () => {
+    const app = routes(listService())
+    const badDuty = await app.fetch(read('/platform/duty-assignments?duty_code=read_everything'))
+    const badStatus = await app.fetch(read('/platform/duty-assignments?status=pending'))
+    const badPerson = await app.fetch(read('/platform/duty-assignments?person_id=not-a-uuid'))
+
+    expect([badDuty.status, badStatus.status, badPerson.status]).toEqual([422, 422, 422])
+    expect(captured).toHaveLength(0)
+  })
+
+  test('T-SUP-API-18 refuses a page size outside the contract bounds', async () => {
+    const app = routes(listService())
+    const tooLarge = await app.fetch(read('/platform/role-assignments?limit=101'))
+    const zero = await app.fetch(read('/platform/role-assignments?limit=0'))
+    const notANumber = await app.fetch(read('/platform/role-assignments?limit=many'))
+
+    expect([tooLarge.status, zero.status, notANumber.status]).toEqual([422, 422, 422])
+    expect(captured).toHaveLength(0)
+  })
+
+  test('T-SUP-API-19 round-trips its own opaque cursor and rejects a forged one', async () => {
+    const cursor = Buffer.from(
+      JSON.stringify({ rank: 0, grantedAt: NOW, id: ROLE_ASSIGNMENT_ID }),
+    ).toString('base64url')
+    const app = routes(
+      listService({
+        listRoles: (_actor, input) => {
+          captured.push({ operation: 'listRoles', input })
+          return Promise.resolve({ items: [roleAssignment], hasMore: true, nextCursor: cursor })
+        },
+      }),
+    )
+
+    const first = await app.fetch(read('/platform/role-assignments'))
+    const next = await app.fetch(read(`/platform/role-assignments?cursor=${cursor}`))
+    const forged = await app.fetch(read('/platform/role-assignments?cursor=not-base64url'))
+
+    expect(await first.json()).toMatchObject({ page: { has_more: true, next_cursor: cursor } })
+    expect(next.status).toBe(200)
+    expect(captured[1]?.input).toMatchObject({
+      cursor: { rank: 0, grantedAt: NOW, id: ROLE_ASSIGNMENT_ID },
+    })
+    expect(forged.status).toBe(422)
+  })
+
+  test('T-SUP-API-20 keeps the inventory unauthenticated without a session and closed to others', async () => {
+    const app = routes(listService())
+    const anonymous = await app.fetch(read('/platform/role-assignments', { cookie: false }))
+    const foreign = await app.fetch(
+      read('/platform/duty-assignments', { origin: 'https://attacker.example.test' }),
+    )
+
+    expect([anonymous.status, foreign.status]).toEqual([401, 403])
     expect(captured).toHaveLength(0)
   })
 
