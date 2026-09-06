@@ -88,3 +88,19 @@
   font-size: var(--afo-font-size-xs);
   white-space: nowrap;
 }
+
+[data-result-contracts] {
+  display: grid;
+  gap: 24px;
+  align-content: start;
+}
+
+[data-result-contract-form] {
+  display: grid;
+  gap: 12px;
+}
+
+[data-result-contracts] code {
+  font-family: var(--afo-font-family-mono, monospace);
+  font-size: var(--afo-font-size-xs);
+}

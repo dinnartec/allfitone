@@ -48,11 +48,12 @@ import { backofficeApi } from '@/lib/backoffice-api'
 interface WorkspaceRoute {
   href: string
   title: string
-  icon: 'permissions' | 'people'
+  icon: 'permissions' | 'people' | 'operation'
 }
 
 const ROUTES: readonly WorkspaceRoute[] = [
   { href: '/team', title: 'Equipo de Allfit', icon: 'permissions' },
+  { href: '/catalogue/result-contracts', title: 'Catálogo global', icon: 'operation' },
 ]
 
 export function resolveBackofficeRoute(pathname: string): WorkspaceRoute {
