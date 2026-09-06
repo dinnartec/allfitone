@@ -11,7 +11,42 @@ export interface BackofficeFixture {
   logoutFails?: boolean
   sessionUnavailable?: boolean
   platformAccess?: PlatformAccessFixture
+  resultContracts?: ResultContractFixture
   requests: MockRequest[]
+}
+
+export interface ResultContractFixture {
+  /** The next command is refused with this code, once. */
+  nextCommandFailure?: { status: number; code: string }
+  /** Versions already published for a contract code, so the next one increments. */
+  versions: Record<string, number>
+  published: ResultContractRow[]
+}
+
+interface ResultContractRow {
+  id: string
+  contract_code: string
+  version_number: number
+  activity_family: string
+  contract_schema_version: 1
+  envelope: Record<string, unknown>
+  minimums: Record<string, unknown>
+  status: 'published' | 'deprecated'
+  published_at: string
+  fixtures: Array<{
+    id: string
+    kind: 'valid' | 'invalid'
+    payload_schema_version: 1
+    payload: Record<string, unknown>
+    expected: string
+  }>
+  activity_type_bindings: Array<{
+    id: string
+    activity_type_id: string
+    is_default: boolean
+    valid_from: string
+    valid_to: string | null
+  }>
 }
 
 export interface PlatformAccessFixture {
@@ -182,6 +217,10 @@ export async function mockBackofficeApi(
       await routePlatformAccess(route, request, fixture)
       return
     }
+    if (request.path.startsWith('/backoffice/v1/result-contracts')) {
+      await routeResultContracts(route, request, fixture)
+      return
+    }
     await fulfill(route, 404, error('not-found'))
   })
 }
@@ -274,6 +313,98 @@ async function routePlatformAccess(
     return
   }
   await fulfillProblem(route, 404, 'not-found')
+}
+
+/**
+ * The version number is assigned by the server, and publishing a new default
+ * closes the previous association with a window instead of removing it. The mock
+ * reproduces both, because they are what the screen shows as evidence.
+ */
+async function routeResultContracts(
+  route: Route,
+  request: MockRequest,
+  fixture: BackofficeFixture,
+): Promise<void> {
+  const contracts = fixture.resultContracts ?? { versions: {}, published: [] }
+  fixture.resultContracts = contracts
+  const failure = contracts.nextCommandFailure
+  if (failure) {
+    contracts.nextCommandFailure = undefined
+    await fulfillProblem(route, failure.status, failure.code)
+    return
+  }
+
+  const segments = request.path.split('/').filter(Boolean)
+  if (segments.length === 5) {
+    const target = contracts.published.find((contract) => contract.id === segments[3])
+    if (!target) {
+      await fulfillProblem(route, 404, 'not-found')
+      return
+    }
+    target.status = 'deprecated'
+    for (const binding of target.activity_type_bindings) {
+      binding.valid_to = binding.valid_to ?? new Date().toISOString()
+    }
+    await fulfill(route, 200, target)
+    return
+  }
+
+  const body = request.body as
+    | {
+        contract_code?: string
+        activity_family?: string
+        envelope?: Record<string, unknown>
+        minimums?: Record<string, unknown>
+        fixtures?: Array<{
+          kind: 'valid' | 'invalid'
+          payload: Record<string, unknown>
+          expected: string
+        }>
+        activity_type_id?: string
+      }
+    | undefined
+  const code = body?.contract_code ?? 'test.contract'
+  const version = (contracts.versions[code] ?? 0) + 1
+  contracts.versions[code] = version
+  const now = new Date().toISOString()
+  const activityTypeId = body?.activity_type_id ?? SUBJECT_PERSON_ID
+
+  // A previous default for the same activity type is closed, never deleted.
+  const superseded = contracts.published
+    .flatMap((contract) => contract.activity_type_bindings)
+    .filter((binding) => binding.activity_type_id === activityTypeId && binding.valid_to === null)
+  for (const binding of superseded) binding.valid_to = now
+
+  const created: ResultContractRow = {
+    id: nextAssignmentId(),
+    contract_code: code,
+    version_number: version,
+    activity_family: body?.activity_family ?? 'strength',
+    contract_schema_version: 1,
+    envelope: body?.envelope ?? {},
+    minimums: body?.minimums ?? {},
+    status: 'published',
+    published_at: now,
+    fixtures: (body?.fixtures ?? []).map((entry) => ({
+      id: nextAssignmentId(),
+      kind: entry.kind,
+      payload_schema_version: 1,
+      payload: entry.payload,
+      expected: entry.expected,
+    })),
+    activity_type_bindings: [
+      ...superseded.map((binding) => ({ ...binding })),
+      {
+        id: nextAssignmentId(),
+        activity_type_id: activityTypeId,
+        is_default: true,
+        valid_from: now,
+        valid_to: null,
+      },
+    ],
+  }
+  contracts.published.push(created)
+  await fulfill(route, 201, created)
 }
 
 function isClosedDuty(status: PlatformDutyFixture['status']): boolean {
