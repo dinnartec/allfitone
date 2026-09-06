@@ -6,6 +6,18 @@ import { captureBackofficeApiRequest, setBackofficeTelemetryIdentity } from './t
 export type BackofficeAuthenticationAttempt = AllfitV1Schemas['BackofficeAuthenticationAttempt']
 export type BackofficeSession = AllfitV1Schemas['BackofficeSession']
 export type BackofficeLogoutReason = 'manual' | 'inactivity' | 'recovery'
+export type PlatformRoleAssignment = AllfitV1Schemas['PlatformRoleAssignment']
+export type PlatformDutyAssignment = AllfitV1Schemas['PlatformDutyAssignment']
+export type PlatformDutyCode = AllfitV1Schemas['PlatformDutyCode']
+export type PlatformRoleAssignmentPage = AllfitV1Schemas['PlatformRoleAssignmentPage']
+export type PlatformDutyAssignmentPage = AllfitV1Schemas['PlatformDutyAssignmentPage']
+
+export interface PlatformDutyFilters {
+  personId?: string
+  dutyCode?: PlatformDutyCode
+  status?: PlatformDutyAssignment['status']
+  cursor?: string
+}
 
 export interface BackofficeCommand {
   idempotencyKey: string
@@ -70,6 +82,63 @@ export const backofficeApi = {
     })
     setBackofficeTelemetryIdentity(null)
   },
+
+  platformRoles: (cursor?: string, signal?: AbortSignal) =>
+    requestJson<PlatformRoleAssignmentPage>(
+      `/backoffice/v1/platform/role-assignments${query({ cursor })}`,
+      signal ? { signal } : {},
+    ),
+
+  platformDuties: (filters: PlatformDutyFilters = {}, signal?: AbortSignal) =>
+    requestJson<PlatformDutyAssignmentPage>(
+      `/backoffice/v1/platform/duty-assignments${query({
+        person_id: filters.personId,
+        duty_code: filters.dutyCode,
+        status: filters.status,
+        cursor: filters.cursor,
+      })}`,
+      signal ? { signal } : {},
+    ),
+
+  grantPlatformRole: (personId: string, command: BackofficeCommand) =>
+    requestJson<PlatformRoleAssignment>('/backoffice/v1/platform/role-assignments', {
+      method: 'POST',
+      headers: commandHeaders(command),
+      body: JSON.stringify({ person_id: personId, platform_role: 'allfit_admin' }),
+    }),
+
+  revokePlatformRole: (assignmentId: string, command: BackofficeCommand) =>
+    requestJson<PlatformRoleAssignment>(
+      `/backoffice/v1/platform/role-assignments/${assignmentId}/revocation`,
+      { method: 'POST', headers: commandHeaders(command), body: '{}' },
+    ),
+
+  grantPlatformDuty: (
+    input: { personId: string; dutyCode: PlatformDutyCode; validTo: string; reasonCode: string },
+    command: BackofficeCommand,
+  ) =>
+    requestJson<PlatformDutyAssignment>('/backoffice/v1/platform/duty-assignments', {
+      method: 'POST',
+      headers: commandHeaders(command),
+      body: JSON.stringify({
+        person_id: input.personId,
+        duty_code: input.dutyCode,
+        valid_to: input.validTo,
+        reason_code: input.reasonCode,
+      }),
+    }),
+
+  suspendPlatformDuty: (assignmentId: string, command: BackofficeCommand) =>
+    requestJson<PlatformDutyAssignment>(
+      `/backoffice/v1/platform/duty-assignments/${assignmentId}/suspension`,
+      { method: 'POST', headers: commandHeaders(command), body: '{}' },
+    ),
+
+  revokePlatformDuty: (assignmentId: string, command: BackofficeCommand) =>
+    requestJson<PlatformDutyAssignment>(
+      `/backoffice/v1/platform/duty-assignments/${assignmentId}/revocation`,
+      { method: 'POST', headers: commandHeaders(command), body: '{}' },
+    ),
 
   passwordReset: (email: string) =>
     requestVoid('/backoffice/v1/auth/password-resets', {
@@ -173,7 +242,35 @@ function backofficeOperation(path: string): ClientOperation {
     '/backoffice/v1/auth/logout': 'backoffice.auth.logout',
     '/backoffice/v1/auth/password-resets': 'backoffice.auth.password_reset',
   }
-  return operations[path] ?? 'backoffice.session'
+  const [route] = path.split('?')
+  const platform = platformOperation(route ?? path)
+  return platform ?? operations[route ?? path] ?? 'backoffice.session'
+}
+
+/** Assignment identifiers vary per row, so these routes are matched by shape. */
+function platformOperation(route: string): ClientOperation | undefined {
+  const segments = route.split('/').filter(Boolean)
+  if (segments[0] !== 'backoffice' || segments[1] !== 'v1' || segments[2] !== 'platform') {
+    return undefined
+  }
+  const resource = segments[3]
+  const action = segments[5]
+  if (segments.length === 4) {
+    if (resource === 'role-assignments') return 'backoffice.platform.role_list'
+    if (resource === 'duty-assignments') return 'backoffice.platform.duty_list'
+    return undefined
+  }
+  if (segments.length !== 6) return undefined
+  if (resource === 'role-assignments' && action === 'revocation') {
+    return 'backoffice.platform.role_revoke'
+  }
+  if (resource === 'duty-assignments' && action === 'suspension') {
+    return 'backoffice.platform.duty_suspend'
+  }
+  if (resource === 'duty-assignments' && action === 'revocation') {
+    return 'backoffice.platform.duty_revoke'
+  }
+  return undefined
 }
 
 async function responseError(response: Response): Promise<BackofficeApiError> {
@@ -193,8 +290,26 @@ function commandHeaders(command: BackofficeCommand): HeadersInit {
 }
 
 function errorCode(value: unknown): string | undefined {
-  if (!value || typeof value !== 'object' || !('error' in value)) return undefined
-  const error = value.error
-  if (!error || typeof error !== 'object' || !('code' in error)) return undefined
-  return typeof error.code === 'string' ? error.code : undefined
+  if (!value || typeof value !== 'object') return undefined
+  if ('error' in value) {
+    const error = value.error
+    if (!error || typeof error !== 'object' || !('code' in error)) return undefined
+    return typeof error.code === 'string' ? error.code : undefined
+  }
+  // RFC 9457: the code is the last segment of the problem type.
+  if ('type' in value && typeof value.type === 'string') {
+    const code = value.type.split('/').pop()
+    return code && code.length > 0 ? code : undefined
+  }
+  return undefined
+}
+
+/** Absent filters are omitted, so an empty value never becomes a literal filter. */
+function query(parameters: Record<string, string | undefined>): string {
+  const search = new URLSearchParams()
+  for (const [key, value] of Object.entries(parameters)) {
+    if (value !== undefined && value !== '') search.set(key, value)
+  }
+  const serialized = search.toString()
+  return serialized ? `?${serialized}` : ''
 }
