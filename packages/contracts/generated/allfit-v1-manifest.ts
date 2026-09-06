@@ -41,6 +41,13 @@ export const allfitV1ContractManifest = {
       responses: ['204', '400', '401', '403', '409', '429', '503'],
     },
     {
+      method: 'GET',
+      path: '/backoffice/v1/platform/duty-assignments',
+      operationId: 'listBackofficePlatformDuties',
+      allfitOperation: 'OP-SUP-011',
+      responses: ['200', '400', '401', '403', '422', '503'],
+    },
+    {
       method: 'POST',
       path: '/backoffice/v1/platform/duty-assignments',
       operationId: 'grantBackofficePlatformDuty',
@@ -60,6 +67,13 @@ export const allfitV1ContractManifest = {
       operationId: 'suspendBackofficePlatformDuty',
       allfitOperation: 'OP-SUP-010',
       responses: ['200', '400', '401', '403', '404', '409', '415', '422', '503'],
+    },
+    {
+      method: 'GET',
+      path: '/backoffice/v1/platform/role-assignments',
+      operationId: 'listBackofficePlatformRoles',
+      allfitOperation: 'OP-SUP-008',
+      responses: ['200', '400', '401', '403', '422', '503'],
     },
     {
       method: 'POST',

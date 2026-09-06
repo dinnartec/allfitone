@@ -336,6 +336,42 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
 
   /backoffice/v1/platform/role-assignments:
+    get:
+      tags: [Backoffice Platform Access]
+      operationId: listBackofficePlatformRoles
+      x-allfit-operation: OP-SUP-008
+      x-allfit-cache: no-store
+      summary: List who holds the Backoffice base role today and who held it before
+      description: >-
+        The internal Allfit catalogue. It is read-only evidence of who can reach the
+        data and is never an authorization cache: every operation resolves its own
+        duty in its own transaction.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Assignments ordered by effective state first, then by most recent grant
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformRoleAssignmentPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
     post:
       tags: [Backoffice Platform Access]
       operationId: grantBackofficePlatformRole
@@ -439,6 +475,45 @@ paths:
           $ref: '#/components/responses/UpstreamUnavailable'
 
   /backoffice/v1/platform/duty-assignments:
+    get:
+      tags: [Backoffice Platform Access]
+      operationId: listBackofficePlatformDuties
+      x-allfit-operation: OP-SUP-011
+      x-allfit-cache: no-store
+      summary: List platform duties with their window, AAL, grantor and last recertification
+      description: >-
+        Shows effective, scheduled, suspended, expired and revoked assignments. A
+        window that has elapsed reads as expired whether or not a job has moved the
+        row, because validity is evaluated against the clock.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/PlatformPersonFilter'
+        - $ref: '#/components/parameters/PlatformDutyFilter'
+        - $ref: '#/components/parameters/PlatformDutyStatusFilter'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Assignments ordered by effective state first, then by newest window
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformDutyAssignmentPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
     post:
       tags: [Backoffice Platform Access]
       operationId: grantBackofficePlatformDuty
@@ -3780,6 +3855,26 @@ components:
       required: true
       schema:
         $ref: '#/components/schemas/Uuid'
+    PlatformPersonFilter:
+      name: person_id
+      in: query
+      required: false
+      schema:
+        $ref: '#/components/schemas/Uuid'
+    PlatformDutyFilter:
+      name: duty_code
+      in: query
+      required: false
+      schema:
+        $ref: '#/components/schemas/PlatformDutyCode'
+    PlatformDutyStatusFilter:
+      name: status
+      in: query
+      required: false
+      description: Filters on the effective state, so `expired` reflects the clock, not a job.
+      schema:
+        type: string
+        enum: [scheduled, active, suspended, expired, revoked]
     PlatformAssignmentId:
       name: assignmentId
       in: path
@@ -4202,6 +4297,28 @@ components:
             request_id: 01JEXAMPLE0000000000000000
 
   schemas:
+    PlatformRoleAssignmentPage:
+      type: object
+      additionalProperties: false
+      required: [data, page]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlatformRoleAssignment'
+        page:
+          $ref: '#/components/schemas/Page'
+    PlatformDutyAssignmentPage:
+      type: object
+      additionalProperties: false
+      required: [data, page]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlatformDutyAssignment'
+        page:
+          $ref: '#/components/schemas/Page'
     PlatformDutyCode:
       type: string
       description: Closed duty catalogue fixed by ADR-028. Growing it is a documented decision.

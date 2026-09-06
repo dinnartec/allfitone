@@ -2448,6 +2448,22 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  PlatformDutyAssignmentPage: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['data', 'page'],
+    properties: {
+      data: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/PlatformDutyAssignment',
+        },
+      },
+      page: {
+        $ref: '#/components/schemas/Page',
+      },
+    },
+  },
   PlatformDutyCode: {
     type: 'string',
     description: 'Closed duty catalogue fixed by ADR-028. Growing it is a documented decision.',
@@ -2541,6 +2557,22 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       revoked_at: {
         type: ['string', 'null'],
         format: 'date-time',
+      },
+    },
+  },
+  PlatformRoleAssignmentPage: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['data', 'page'],
+    properties: {
+      data: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/PlatformRoleAssignment',
+        },
+      },
+      page: {
+        $ref: '#/components/schemas/Page',
       },
     },
   },

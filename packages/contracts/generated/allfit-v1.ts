@@ -130,7 +130,11 @@ export interface paths {
       path?: never
       cookie?: never
     }
-    get?: never
+    /**
+     * List who holds the Backoffice base role today and who held it before
+     * @description The internal Allfit catalogue. It is read-only evidence of who can reach the data and is never an authorization cache: every operation resolves its own duty in its own transaction.
+     */
+    get: operations['listBackofficePlatformRoles']
     put?: never
     /**
      * Grant the Backoffice base role to another active person
@@ -170,7 +174,11 @@ export interface paths {
       path?: never
       cookie?: never
     }
-    get?: never
+    /**
+     * List platform duties with their window, AAL, grantor and last recertification
+     * @description Shows effective, scheduled, suspended, expired and revoked assignments. A window that has elapsed reads as expired whether or not a job has moved the row, because validity is evaluated against the clock.
+     */
+    get: operations['listBackofficePlatformDuties']
     put?: never
     /**
      * Grant a closed-catalogue platform duty for at most ninety days
@@ -1469,6 +1477,14 @@ export interface paths {
 export type webhooks = Record<string, never>
 export interface components {
   schemas: {
+    PlatformRoleAssignmentPage: {
+      data: components['schemas']['PlatformRoleAssignment'][]
+      page: components['schemas']['Page']
+    }
+    PlatformDutyAssignmentPage: {
+      data: components['schemas']['PlatformDutyAssignment'][]
+      page: components['schemas']['Page']
+    }
     /**
      * @description Closed duty catalogue fixed by ADR-028. Growing it is a documented decision.
      * @enum {string}
@@ -3519,6 +3535,10 @@ export interface components {
     GrantId: components['schemas']['Uuid']
     MealId: components['schemas']['Uuid']
     GoalVersionId: components['schemas']['Uuid']
+    PlatformPersonFilter: components['schemas']['Uuid']
+    PlatformDutyFilter: components['schemas']['PlatformDutyCode']
+    /** @description Filters on the effective state, so `expired` reflects the clock, not a job. */
+    PlatformDutyStatusFilter: 'scheduled' | 'active' | 'suspended' | 'expired' | 'revoked'
     PlatformAssignmentId: components['schemas']['UuidV7']
     /** @description UUIDv4 reused only for HTTP retries of this operation. */
     IdempotencyKey: components['schemas']['UuidV4']
@@ -3775,6 +3795,37 @@ export interface operations {
       429: components['responses']['TooManyRequests']
     }
   }
+  listBackofficePlatformRoles: {
+    parameters: {
+      query?: {
+        limit?: components['parameters']['Limit']
+        cursor?: components['parameters']['Cursor']
+      }
+      header: {
+        Origin: components['parameters']['Origin']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Assignments ordered by effective state first, then by most recent grant */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['PlatformRoleAssignmentPage']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
   grantBackofficePlatformRole: {
     parameters: {
       query?: never
@@ -3852,6 +3903,41 @@ export interface operations {
       404: components['responses']['NotFound']
       409: components['responses']['Conflict']
       415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listBackofficePlatformDuties: {
+    parameters: {
+      query?: {
+        person_id?: components['parameters']['PlatformPersonFilter']
+        duty_code?: components['parameters']['PlatformDutyFilter']
+        /** @description Filters on the effective state, so `expired` reflects the clock, not a job. */
+        status?: components['parameters']['PlatformDutyStatusFilter']
+        limit?: components['parameters']['Limit']
+        cursor?: components['parameters']['Cursor']
+      }
+      header: {
+        Origin: components['parameters']['Origin']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Assignments ordered by effective state first, then by newest window */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['PlatformDutyAssignmentPage']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
       422: components['responses']['ValidationFailed']
       503: components['responses']['UpstreamUnavailable']
     }
