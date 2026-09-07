@@ -76,7 +76,9 @@ export function OrganizationReadyScreen({
           </header>
           <Card>
             <CardHeader>
-              <CardTitle>Sumar al equipo</CardTitle>
+              <CardTitle role="heading" aria-level={3}>
+                Sumar al equipo
+              </CardTitle>
               <CardAction>
                 <Badge variant="outline">Opcional</Badge>
               </CardAction>
@@ -90,7 +92,9 @@ export function OrganizationReadyScreen({
           </Card>
           <Card>
             <CardHeader>
-              <CardTitle>Configurar la operación</CardTitle>
+              <CardTitle role="heading" aria-level={3}>
+                Configurar la operación
+              </CardTitle>
               <CardAction>
                 <Badge variant="outline">Opcional</Badge>
               </CardAction>
