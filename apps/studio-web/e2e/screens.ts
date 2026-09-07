@@ -275,6 +275,29 @@ export const SCREENS: Screen[] = [
     },
   },
   {
+    // The team choice leads somewhere else entirely: a type selector, a radio
+    // group and a conditional field the independent form never renders.
+    stories: 'HU-007 · name your team space',
+    path: '/',
+    fixture: createStudioApiFixture,
+    reveal: async (page) => {
+      await page.getByRole('button', { name: /Tengo un equipo o centro/ }).click()
+      await expect(page.getByLabel('Nombre visible')).toBeVisible()
+    },
+  },
+  {
+    // Choosing an entity reveals a required field the natural-person path never
+    // shows, so this is a screen of its own rather than the same one toggled.
+    stories: 'HU-007 · name your team space for an entity',
+    path: '/',
+    fixture: createStudioApiFixture,
+    reveal: async (page) => {
+      await page.getByRole('button', { name: /Tengo un equipo o centro/ }).click()
+      await page.getByRole('radio', { name: 'Entidad' }).click()
+      await expect(page.getByLabel('Nombre legal de la entidad')).toBeVisible()
+    },
+  },
+  {
     stories: 'HU-007 · the space is ready',
     path: '/',
     fixture: createStudioApiFixture,
