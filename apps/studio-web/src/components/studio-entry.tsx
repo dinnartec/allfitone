@@ -34,7 +34,9 @@ type FlowState =
   | { kind: 'activation'; attempt: OnboardingAttempt; identity: StudioEntryContext['identity'] }
   | { kind: 'space'; organizationTypes: OrganizationType[]; fullName?: string }
   | { kind: 'ready'; organization: OrganizationCreated }
-  | { kind: 'waiting' }
+  // Waiting carries what the choice screen needs to render, because choosing to
+  // wait must not be the one decision here that cannot be taken back.
+  | { kind: 'waiting'; organizationTypes: OrganizationType[]; fullName?: string }
   | { kind: 'select'; memberships: Membership[] }
   | { kind: 'error'; message: string }
 
@@ -64,7 +66,9 @@ export function StudioEntry() {
         return
       }
       if (emptyDestination === 'waiting') {
-        setFlow({ kind: 'waiting' })
+        // Only the waiting screen asks for this, and no membership arrived, so it
+        // stays exactly as it is. Rebuilding the state would drop what it needs to
+        // offer the way back.
         return
       }
       const typeList = await studioApi.organizationTypes()
@@ -157,7 +161,13 @@ export function StudioEntry() {
         organizationTypes={flow.organizationTypes}
         fullName={flow.fullName}
         onCreated={(organization) => setFlow({ kind: 'ready', organization })}
-        onWait={() => setFlow({ kind: 'waiting' })}
+        onWait={() =>
+          setFlow({
+            kind: 'waiting',
+            organizationTypes: flow.organizationTypes,
+            ...(flow.fullName ? { fullName: flow.fullName } : {}),
+          })
+        }
         onSessionExpired={() => setFlow({ kind: 'access' })}
       />
     )
@@ -171,7 +181,18 @@ export function StudioEntry() {
     )
   }
   if (flow.kind === 'waiting') {
-    return <InvitationWaiting onCheck={checkWaitingMemberships} />
+    return (
+      <InvitationWaiting
+        onCheck={checkWaitingMemberships}
+        onBack={() =>
+          setFlow({
+            kind: 'space',
+            organizationTypes: flow.organizationTypes,
+            ...(flow.fullName ? { fullName: flow.fullName } : {}),
+          })
+        }
+      />
+    )
   }
   if (flow.kind === 'select') {
     return (

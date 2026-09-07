@@ -251,6 +251,30 @@ test('waits without mutations and rechecks an empty membership list', async ({ p
   ).toHaveLength(1)
 })
 
+/**
+ * Choosing to wait is one click with no confirmation, and it used to be the only
+ * decision in setup that could not be taken back: the state dropped what the
+ * choice screen needs to render, so the way out was to log out.
+ */
+test('returns from the invitation wait to the choice it came from', async ({ page }) => {
+  const fixture = createStudioApiFixture()
+  await installStudioApiMock(page, fixture)
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Esperar una invitación' }).click()
+  await expect(
+    page.getByRole('heading', { name: 'Tu espacio puede llegar después.' }),
+  ).toBeVisible()
+
+  await page.getByRole('button', { name: 'Volver' }).click()
+
+  await expect(page.getByRole('heading', { name: '¿Cómo trabajas hoy?' })).toBeVisible()
+  // The organization types have to survive the round trip. Losing them leaves the
+  // choice rendering perfectly and the type selector empty one screen later.
+  await page.getByRole('button', { name: /Tengo un equipo o centro/ }).click()
+  await expect(page.locator('[data-studio-select-trigger]')).toContainText('Estudio')
+  expect(fixture.requests.filter((request) => request.method !== 'GET')).toHaveLength(0)
+})
+
 test('enters a newly active membership from the invitation wait', async ({ page }) => {
   const fixture = createStudioApiFixture()
   await installStudioApiMock(page, fixture)

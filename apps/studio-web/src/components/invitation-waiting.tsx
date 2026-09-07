@@ -23,10 +23,15 @@ import { FoundationIcon } from '@allfitone/react/icons'
 import { useState } from 'react'
 
 import { StudioFrame } from './studio-frame'
-import { LogoutForm } from './logout-form'
 import { StudioApiError } from '@/lib/studio-api'
 
-export function InvitationWaiting({ onCheck }: { onCheck: () => Promise<void> }) {
+export function InvitationWaiting({
+  onCheck,
+  onBack,
+}: {
+  onCheck: () => Promise<void>
+  onBack: () => void
+}) {
   const [checking, setChecking] = useState(false)
   const [error, setError] = useState<string>()
 
@@ -48,7 +53,7 @@ export function InvitationWaiting({ onCheck }: { onCheck: () => Promise<void> })
   }
 
   return (
-    <StudioFrame step="space" showLogout={false}>
+    <StudioFrame step="space">
       <SetupPanel>
         <SetupPanelIntro>
           <SetupPanelEyebrow>Esperando una invitación</SetupPanelEyebrow>
@@ -87,7 +92,9 @@ export function InvitationWaiting({ onCheck }: { onCheck: () => Promise<void> })
             <Button size="lg" onClick={() => void checkAgain()} disabled={checking}>
               {checking ? 'Comprobando…' : 'Comprobar de nuevo'}
             </Button>
-            <LogoutForm size="lg" variant="outline" disabled={checking} />
+            <Button size="lg" variant="outline" onClick={onBack} disabled={checking}>
+              Volver
+            </Button>
           </SetupPanelActions>
         </SetupPanelContent>
       </SetupPanel>
