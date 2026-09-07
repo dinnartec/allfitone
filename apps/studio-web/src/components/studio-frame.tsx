@@ -43,7 +43,9 @@ export function StudioFrame({
         />
         {showLogout ? (
           <div data-studio-header-actions>
-            <LogoutForm />
+            {/* Setup runs on a gradient, where a transparent control has no edge of
+                its own — the same reason the privacy control got a surface. */}
+            <LogoutForm variant="secondary" />
           </div>
         ) : null}
       </SetupHeader>

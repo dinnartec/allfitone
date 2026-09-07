@@ -95,6 +95,12 @@
   justify-content: flex-end;
 }
 
+/* The Design System note aligns an icon to the top of its text. This one holds a
+   text badge instead, and two runs of text align on their baselines. */
+[data-studio-age-note] {
+  align-items: baseline;
+}
+
 /* ----------------------------------------------------------------- sidebar */
 
 [data-organization-brand] {
@@ -504,7 +510,9 @@
     align-items: stretch;
   }
 
-  [data-studio-header-actions],
+  /* The setup header is not one of these. It stays a row at every width, so a
+     full-width action box leaves `justify-between` nothing to distribute and
+     strands the button against the wordmark. */
   [data-page-header-actions],
   [data-profile-setup-actions],
   [data-team-invitation-actions] {
