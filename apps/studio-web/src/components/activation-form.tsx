@@ -150,10 +150,11 @@ export function ActivationForm({
           <SetupPanelEyebrow>Activación personal</SetupPanelEyebrow>
           <SetupPanelTitle>Confirma y deja tu identidad lista.</SetupPanelTitle>
           <SetupPanelDescription>
-            Tu nombre ya viene de tu cuenta. Solo tú puedes confirmar tu mayoría de edad y las
-            aceptaciones.
+            Tu nombre ya viene de tu cuenta. Las confirmaciones solo puedes hacerlas tú.
           </SetupPanelDescription>
-          <SetupPanelNote>
+          {/* The note is built for an icon beside its text; a badge and a paragraph
+              need their first baselines aligned by hand. */}
+          <SetupPanelNote data-studio-age-note>
             <span aria-hidden="true">18+</span>
             <p>Declaras ser mayor de edad. No pedimos ni guardamos tu fecha de nacimiento.</p>
           </SetupPanelNote>
@@ -165,7 +166,9 @@ export function ActivationForm({
               {identity.name ? (
                 <Card data-studio-identity-summary>
                   <CardHeader>
-                    <CardTitle>Nombre de tu cuenta</CardTitle>
+                    <CardTitle role="heading" aria-level={2}>
+                      Nombre de tu cuenta
+                    </CardTitle>
                     <CardDescription>
                       Usaremos este nombre para crear tu identidad personal en Allfit One.
                     </CardDescription>
@@ -256,9 +259,9 @@ export function ActivationForm({
               <Button type="submit" size="lg" disabled={!valid || submitting || expired}>
                 {submitting ? 'Confirmando…' : 'Confirmar mi identidad'}
               </Button>
-              <p aria-live="polite">
-                {submitting ? 'Guardando la declaración y las aceptaciones…' : 'Paso 1 de 3'}
-              </p>
+              {/* The progress bar above already says which step this is, so the
+                  region stays empty until it has something new to announce. */}
+              <p aria-live="polite">{submitting ? 'Guardando tus confirmaciones…' : null}</p>
             </SetupPanelActions>
           </form>
         </SetupPanelContent>
