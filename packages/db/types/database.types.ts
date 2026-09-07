@@ -27,6 +27,14 @@ export type Database = {
         Args: { p_duty_code: string; p_person_id: string; p_session_id: string }
         Returns: boolean
       }
+      has_platform_role: {
+        Args: {
+          p_person_id: string
+          p_platform_role: string
+          p_session_id: string
+        }
+        Returns: boolean
+      }
       is_self: { Args: { target_person_id: string }; Returns: boolean }
       org: { Args: never; Returns: string }
       owns_membership: { Args: { p_membership_id: string }; Returns: boolean }
@@ -121,6 +129,41 @@ export type Database = {
             isOneToOne: false
             referencedRelation: 'disciplines'
             referencedColumns: ['code']
+          },
+        ]
+      }
+      contract_fixtures: {
+        Row: {
+          expected: string
+          id: string
+          kind: string
+          payload: Json
+          payload_schema_version: number
+          result_contract_id: string
+        }
+        Insert: {
+          expected: string
+          id?: string
+          kind: string
+          payload: Json
+          payload_schema_version?: number
+          result_contract_id: string
+        }
+        Update: {
+          expected?: string
+          id?: string
+          kind?: string
+          payload?: Json
+          payload_schema_version?: number
+          result_contract_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_contract_fixtures_result_contract'
+            columns: ['result_contract_id']
+            isOneToOne: false
+            referencedRelation: 'result_contracts'
+            referencedColumns: ['id']
           },
         ]
       }
@@ -331,6 +374,20 @@ export type Database = {
         Args: { p_activity_type_id: string }
         Returns: Database['catalog']['Enums']['activity_family']
       }
+      deprecate_result_contract: {
+        Args: {
+          p_actor_person_id: string
+          p_actor_session_id: string
+          p_command_id: string
+          p_contract_id: string
+          p_idempotency_key: string
+          p_request_hash: string
+        }
+        Returns: {
+          replayed: boolean
+          result: Json
+        }[]
+      }
       list_professional_credential_types: {
         Args: never
         Returns: {
@@ -346,6 +403,34 @@ export type Database = {
           description: string
           name: string
         }[]
+      }
+      publish_result_contract: {
+        Args: {
+          p_activity_family: Database['catalog']['Enums']['activity_family']
+          p_activity_type_id: string
+          p_actor_person_id: string
+          p_actor_session_id: string
+          p_command_id: string
+          p_contract_code: string
+          p_envelope: Json
+          p_fixtures: Json
+          p_idempotency_key: string
+          p_is_default: boolean
+          p_minimums: Json
+          p_request_hash: string
+        }
+        Returns: {
+          replayed: boolean
+          result: Json
+        }[]
+      }
+      require_global_catalog_curator: {
+        Args: { p_actor_person_id: string; p_actor_session_id: string }
+        Returns: undefined
+      }
+      result_contract_projection: {
+        Args: { p_contract_id: string }
+        Returns: Json
       }
     }
     Enums: {
