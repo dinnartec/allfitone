@@ -117,6 +117,37 @@ const failing = (path: string, status: number, code: string) => () =>
     intercept: (request) => (request.path === path ? { status, body: error(code) } : undefined),
   })
 
+const SESSION_STORAGE_KEY = 'allfit-studio-session:v1'
+
+/**
+ * Seeds the locally ended session the guard finds on load. Which screen it then
+ * shows depends on what the API answers when it verifies: a session still alive
+ * locks the recovery closed, an unreachable one leaves the retry open.
+ */
+const endedSession = (reason: 'manual' | 'inactivity') => async (page: Page) => {
+  await page.addInitScript(
+    ([key, record]) => {
+      localStorage.setItem(key, record)
+    },
+    [
+      SESSION_STORAGE_KEY,
+      JSON.stringify({ version: 1, status: 'ended', endedAt: Date.now(), reason }),
+    ] as const,
+  )
+}
+
+/** Holds the guard's recovery verification open so a session screen stays put. */
+const withStalledVerification = () =>
+  createStudioApiFixture({
+    memberships: [activeMembership],
+    intercept: async (request) => {
+      if (request.path === '/studio/v1/session') {
+        await new Promise((resolve) => setTimeout(resolve, 15_000))
+      }
+      return undefined
+    },
+  })
+
 /**
  * `/invitations` reads its token from the URL fragment, which a beforeInteractive
  * script moves into sessionStorage and wipes before anything renders. Navigating
@@ -413,5 +444,82 @@ export const SCREENS: Screen[] = [
     stories: 'HU-014 · invite a teammate',
     path: `${workspace}/team/invitations/new`,
     fixture: memberOfTwo,
+  },
+
+  // --- HU-002 · the screens the session guard puts in front of the app --------
+  // `session-logout.spec.ts` proves all five behave correctly, but none of them
+  // had ever gone through the three sweeps. One entry per rendering: the end
+  // reason swaps a single sentence and nothing else a sweep can measure, and
+  // that wording is already asserted per reason in the spec.
+  {
+    stories: 'HU-002 · the remote logout could not be confirmed',
+    path: '/?logout=partial',
+    fixture: () => createStudioApiFixture({ signedOut: true }),
+    settled: async (page) => {
+      await expect(page.getByText('La sesión se cerró en este equipo')).toBeVisible()
+    },
+  },
+  {
+    stories: 'HU-002 · closing your session in this tab',
+    path: workspace,
+    fixture: () => createStudioApiFixture({ memberships: [activeMembership] }),
+    // The workspace keeps its heading but goes `inert`, which withdraws it from
+    // the accessibility tree on purpose. Demanding a heading here would be
+    // demanding the screen expose what it is deliberately hiding; the live
+    // region carrying "Cerrando tu sesión…" is what speaks for this state.
+    hasHeading: false,
+    reveal: async (page) => {
+      // The logout POST *is* the navigation away, so neutralising the submit is
+      // what holds this state on screen long enough to measure it.
+      await page.evaluate(() => {
+        HTMLFormElement.prototype.submit = function holdLogout() {
+          document.documentElement.dataset.logoutPending = 'true'
+        }
+      })
+      // Below the sidebar's breakpoint the control lives inside the collapsed
+      // navigation, so reaching it is one click further on a phone.
+      const logout = page.getByRole('button', { name: 'Cerrar sesión' })
+      if (!(await logout.isVisible())) {
+        await page.getByRole('button', { name: 'Abrir o cerrar navegación' }).click()
+        await expect(logout).toBeVisible()
+      }
+      await logout.click()
+      await expect(page.getByRole('status')).toHaveText('Cerrando tu sesión…')
+    },
+  },
+  {
+    stories: 'HU-002 · the session was closed in another tab',
+    path: workspace,
+    fixture: withStalledVerification,
+    reveal: async (page) => {
+      await page.evaluate((key) => {
+        localStorage.setItem(
+          key,
+          JSON.stringify({ version: 1, status: 'ended', endedAt: Date.now(), reason: 'manual' }),
+        )
+        // Writing storage from the tab that owns it fires no event, so the guard's
+        // cross-tab listener has to be handed the one the browser sends elsewhere.
+        window.dispatchEvent(new StorageEvent('storage', { key }))
+      }, SESSION_STORAGE_KEY)
+      await expect(page.locator('[data-session-closing]')).toBeVisible()
+    },
+  },
+  {
+    stories: 'HU-002 · complete the close before signing in again',
+    path: workspace,
+    fixture: () => createStudioApiFixture({ memberships: [activeMembership] }),
+    setup: endedSession('manual'),
+    settled: async (page) => {
+      await expect(page.getByRole('heading', { name: 'Tu sesión está protegida' })).toBeVisible()
+    },
+  },
+  {
+    stories: 'HU-002 · the close could not be verified',
+    path: workspace,
+    fixture: failing('/studio/v1/session', 503, 'upstream-unavailable'),
+    setup: endedSession('inactivity'),
+    settled: async (page) => {
+      await expect(page.getByRole('button', { name: 'Reintentar' })).toBeVisible()
+    },
   },
 ]
