@@ -43,6 +43,15 @@ export interface TelemetryCommonProperties {
 
 export const clientOperations = [
   'backoffice.auth.attempt',
+  'backoffice.catalog.result_contract_deprecate',
+  'backoffice.catalog.result_contract_publish',
+  'backoffice.platform.duty_grant',
+  'backoffice.platform.duty_list',
+  'backoffice.platform.duty_revoke',
+  'backoffice.platform.duty_suspend',
+  'backoffice.platform.role_grant',
+  'backoffice.platform.role_list',
+  'backoffice.platform.role_revoke',
   'backoffice.auth.logout',
   'backoffice.auth.password',
   'backoffice.auth.password_reset',
@@ -81,6 +90,8 @@ export type ClientOperation = (typeof clientOperations)[number]
 
 export const telemetryScreens = [
   'backoffice.access',
+  'backoffice.catalogue_contracts',
+  'backoffice.platform_access',
   'backoffice.authentication_attempt',
   'backoffice.session',
   'space.create_account',
