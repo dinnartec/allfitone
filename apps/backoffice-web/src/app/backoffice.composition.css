@@ -47,3 +47,60 @@
   flex-wrap: wrap;
   gap: 8px;
 }
+
+/* Authenticated shell. The Design System owns the components; this file only
+   composes them, because a literal visual class is forbidden in product apps. */
+[data-backoffice-gate] {
+  display: grid;
+  min-height: 100dvh;
+  place-items: center;
+}
+
+[data-backoffice-content] {
+  display: grid;
+  gap: 24px;
+  align-content: start;
+}
+
+[data-backoffice-brand] {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding-inline: 4px;
+}
+
+[data-platform-access] {
+  display: grid;
+  gap: 24px;
+  align-content: start;
+}
+
+[data-platform-form] {
+  display: grid;
+  margin-block-end: 24px;
+  gap: 12px;
+}
+
+/* The identifier is the column an operator quotes in a case, so it stays
+   readable and selectable rather than wrapping mid-value. */
+[data-platform-access] code {
+  font-family: var(--afo-font-family-mono, monospace);
+  font-size: var(--afo-font-size-xs);
+  white-space: nowrap;
+}
+
+[data-result-contracts] {
+  display: grid;
+  gap: 24px;
+  align-content: start;
+}
+
+[data-result-contract-form] {
+  display: grid;
+  gap: 12px;
+}
+
+[data-result-contracts] code {
+  font-family: var(--afo-font-family-mono, monospace);
+  font-size: var(--afo-font-size-xs);
+}

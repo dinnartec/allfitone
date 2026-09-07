@@ -13,6 +13,7 @@ import {
 import { measureRequestPhase } from '../../../platform/observability/index.js'
 
 import type {
+  BackofficeActor,
   BackofficeAuthenticationDatabase,
   SessionCipherContext,
   SessionTokenVault,
@@ -67,6 +68,13 @@ export interface BackofficeAuthenticationService {
     commandId: string
   }): Promise<{ sessionToken: string }>
   readSession(sessionToken: string): Promise<BackofficeSessionPresentation>
+  /**
+   * The actor a Backoffice business operation authorizes against. It runs the
+   * same session ritual as `readSession` — provider verification, refresh and
+   * the revocation race — because a live cookie is not on its own evidence that
+   * the base role survived.
+   */
+  resolveActor(sessionToken: string): Promise<BackofficeActor>
   logout(sessionToken: string | undefined): Promise<'already-absent' | 'partial' | 'revoked'>
   requestPasswordReset(email: string): Promise<void>
 }
@@ -293,6 +301,14 @@ export function createBackofficeAuthenticationService(dependencies: {
           resolved.session.externalSubject,
         ),
       }
+    },
+
+    async resolveActor(sessionToken) {
+      const resolved = await authenticatedSession(
+        dependencies.tokenVault.hashOpaqueToken(sessionToken),
+        true,
+      )
+      return { personId: resolved.session.personId, sessionId: resolved.session.sessionId }
     },
 
     async logout(sessionToken) {

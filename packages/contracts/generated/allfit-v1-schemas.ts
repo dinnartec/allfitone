@@ -8,6 +8,34 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
     type: 'string',
     enum: ['read', 'contribute'],
   },
+  ActivityFamily: {
+    type: 'string',
+    enum: ['strength', 'endurance', 'interval', 'mobility'],
+  },
+  ActivityTypeContractBinding: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['id', 'activity_type_id', 'is_default', 'valid_from', 'valid_to'],
+    properties: {
+      id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      activity_type_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      is_default: {
+        type: 'boolean',
+      },
+      valid_from: {
+        type: 'string',
+        format: 'date-time',
+      },
+      valid_to: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+    },
+  },
   ActivityTypeRef: {
     type: 'object',
     additionalProperties: false,
@@ -693,6 +721,28 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       revoked_at: {
         type: 'string',
         format: 'date-time',
+      },
+    },
+  },
+  ContractFixture: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['kind', 'payload', 'expected'],
+    description:
+      'One case the contract must accept or reject. A rule nobody demonstrated failing is a rule nobody tested, so both kinds are required to publish.',
+    properties: {
+      kind: {
+        type: 'string',
+        enum: ['valid', 'invalid'],
+      },
+      payload: {
+        type: 'object',
+        additionalProperties: true,
+      },
+      expected: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 200,
       },
     },
   },
@@ -2336,6 +2386,260 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  PlatformAccessReasonCode: {
+    type: 'string',
+    minLength: 1,
+    maxLength: 120,
+    pattern: '^[A-Za-z0-9][A-Za-z0-9 ._:-]*$',
+    description: 'Opaque operational reference. Never a name, a contact or free narrative.',
+  },
+  PlatformActorMode: {
+    type: 'string',
+    description: 'Derived from the duty code by the database; never accepted from a client.',
+    enum: ['A10', 'A11', 'A12'],
+  },
+  PlatformDutyAssignment: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'id',
+      'person_id',
+      'duty_code',
+      'actor_mode',
+      'status',
+      'valid_from',
+      'valid_to',
+      'required_aal',
+      'granted_by_person_id',
+      'recertified_by_person_id',
+      'recertified_at',
+      'suspended_by_person_id',
+      'suspended_at',
+      'revoked_by_person_id',
+      'revoked_at',
+      'reason_code',
+    ],
+    properties: {
+      id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      person_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      duty_code: {
+        $ref: '#/components/schemas/PlatformDutyCode',
+      },
+      actor_mode: {
+        $ref: '#/components/schemas/PlatformActorMode',
+      },
+      status: {
+        type: 'string',
+        enum: ['scheduled', 'active', 'suspended', 'expired', 'revoked'],
+      },
+      valid_from: {
+        type: 'string',
+        format: 'date-time',
+      },
+      valid_to: {
+        type: 'string',
+        format: 'date-time',
+      },
+      required_aal: {
+        type: 'integer',
+        const: 2,
+      },
+      granted_by_person_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      recertified_by_person_id: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/Uuid',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      recertified_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      suspended_by_person_id: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/Uuid',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      suspended_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      revoked_by_person_id: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/Uuid',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      revoked_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      reason_code: {
+        $ref: '#/components/schemas/PlatformAccessReasonCode',
+      },
+    },
+  },
+  PlatformDutyAssignmentPage: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['data', 'page'],
+    properties: {
+      data: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/PlatformDutyAssignment',
+        },
+      },
+      page: {
+        $ref: '#/components/schemas/Page',
+      },
+    },
+  },
+  PlatformDutyCode: {
+    type: 'string',
+    description: 'Closed duty catalogue fixed by ADR-028. Growing it is a documented decision.',
+    enum: [
+      'view_platform_metrics',
+      'diagnose_support_metadata',
+      'view_billing_metadata',
+      'manage_organization_lifecycle',
+      'request_break_glass',
+      'verify_professional_credentials',
+      'curate_global_catalog',
+      'manage_platform_commercial',
+      'manage_platform_access',
+      'audit_platform_access',
+      'approve_break_glass',
+      'audit_break_glass',
+      'manage_privacy_requests',
+    ],
+  },
+  PlatformDutyGrant: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['person_id', 'duty_code', 'valid_to', 'reason_code'],
+    properties: {
+      person_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      duty_code: {
+        $ref: '#/components/schemas/PlatformDutyCode',
+      },
+      valid_from: {
+        type: 'string',
+        format: 'date-time',
+        description: 'Defaults to the command instant. A future value schedules the duty.',
+      },
+      valid_to: {
+        type: 'string',
+        format: 'date-time',
+        description: 'At most ninety days after valid_from; the database enforces the bound.',
+      },
+      reason_code: {
+        $ref: '#/components/schemas/PlatformAccessReasonCode',
+      },
+    },
+  },
+  PlatformRoleAssignment: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'id',
+      'person_id',
+      'platform_role',
+      'status',
+      'granted_by_person_id',
+      'granted_at',
+      'revoked_by_person_id',
+      'revoked_at',
+    ],
+    properties: {
+      id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      person_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      platform_role: {
+        type: 'string',
+        enum: ['allfit_admin'],
+      },
+      status: {
+        type: 'string',
+        enum: ['active', 'revoked'],
+      },
+      granted_by_person_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      granted_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      revoked_by_person_id: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/Uuid',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      revoked_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+    },
+  },
+  PlatformRoleAssignmentPage: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['data', 'page'],
+    properties: {
+      data: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/PlatformRoleAssignment',
+        },
+      },
+      page: {
+        $ref: '#/components/schemas/Page',
+      },
+    },
+  },
+  PlatformRoleGrant: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['person_id', 'platform_role'],
+    properties: {
+      person_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      platform_role: {
+        type: 'string',
+        enum: ['allfit_admin'],
+      },
+    },
+  },
   Problem: {
     type: 'object',
     additionalProperties: false,
@@ -2999,6 +3303,33 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
     type: 'string',
     enum: ['draft', 'published', 'deprecated', 'archived'],
   },
+  PublishedContractFixture: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['id', 'kind', 'payload_schema_version', 'payload', 'expected'],
+    properties: {
+      id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      kind: {
+        type: 'string',
+        enum: ['valid', 'invalid'],
+      },
+      payload_schema_version: {
+        type: 'integer',
+        const: 1,
+      },
+      payload: {
+        type: 'object',
+        additionalProperties: true,
+      },
+      expected: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 200,
+      },
+    },
+  },
   RequiredScope: {
     type: 'object',
     additionalProperties: false,
@@ -3025,6 +3356,116 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         type: 'string',
         minLength: 1,
         maxLength: 160,
+      },
+    },
+  },
+  ResultContract: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'id',
+      'contract_code',
+      'version_number',
+      'activity_family',
+      'contract_schema_version',
+      'envelope',
+      'minimums',
+      'status',
+      'published_at',
+      'fixtures',
+      'activity_type_bindings',
+    ],
+    properties: {
+      id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      contract_code: {
+        type: 'string',
+        pattern: '^[a-z][a-z0-9_.]{1,63}$',
+      },
+      version_number: {
+        type: 'integer',
+        minimum: 1,
+      },
+      activity_family: {
+        $ref: '#/components/schemas/ActivityFamily',
+      },
+      contract_schema_version: {
+        type: 'integer',
+        const: 1,
+      },
+      envelope: {
+        type: 'object',
+        additionalProperties: true,
+      },
+      minimums: {
+        type: 'object',
+        additionalProperties: true,
+      },
+      status: {
+        type: 'string',
+        enum: ['published', 'deprecated'],
+      },
+      published_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      fixtures: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/PublishedContractFixture',
+        },
+      },
+      activity_type_bindings: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/ActivityTypeContractBinding',
+        },
+      },
+    },
+  },
+  ResultContractPublication: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'contract_code',
+      'activity_family',
+      'envelope',
+      'minimums',
+      'fixtures',
+      'activity_type_id',
+    ],
+    properties: {
+      contract_code: {
+        type: 'string',
+        pattern: '^[a-z][a-z0-9_.]{1,63}$',
+      },
+      activity_family: {
+        $ref: '#/components/schemas/ActivityFamily',
+      },
+      envelope: {
+        type: 'object',
+        additionalProperties: true,
+      },
+      minimums: {
+        type: 'object',
+        additionalProperties: true,
+      },
+      fixtures: {
+        type: 'array',
+        minItems: 2,
+        maxItems: 100,
+        items: {
+          $ref: '#/components/schemas/ContractFixture',
+        },
+      },
+      activity_type_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      is_default: {
+        type: 'boolean',
+        description:
+          'Defaults to true on the server. Publishing a new default closes the previous one with a window instead of overwriting it.',
       },
     },
   },
@@ -3324,6 +3765,39 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  SpaceCurrentOnboardingAttempt: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['attempt', 'identity'],
+    properties: {
+      attempt: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/SpaceOnboardingAttempt',
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description:
+          'Null when the account has no open attempt, which is also what an already activated person sees.',
+      },
+      identity: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/SpacePendingFitnessId',
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description:
+          'Null until the Fitness ID exists. Non-null is how the app knows that step is behind it.',
+      },
+    },
+    description:
+      'Enough to resume the onboarding and nothing more. Absent answers are null rather than omitted, so the app never has to guess whether a step was skipped or the field simply did not travel.',
+  },
   SpaceOnboardingAttempt: {
     type: 'object',
     additionalProperties: false,
@@ -3359,6 +3833,46 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
           'Shape only. Whether it has an account is precisely what the response must not reveal.',
       },
     },
+  },
+  SpacePendingFitnessId: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['given_name', 'family_name', 'username'],
+    properties: {
+      given_name: {
+        type: 'string',
+      },
+      family_name: {
+        type: 'string',
+      },
+      username: {
+        $ref: '#/components/schemas/Username',
+      },
+    },
+    description:
+      'The Fitness ID as it now exists on the person, pending activation. No person identifier travels here: the app never needs one, and the API resolves it from the token on every call.',
+  },
+  SpacePendingFitnessIdCreate: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['given_name', 'family_name', 'username'],
+    properties: {
+      given_name: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 120,
+      },
+      family_name: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 120,
+      },
+      username: {
+        $ref: '#/components/schemas/Username',
+      },
+    },
+    description:
+      "The email is absent on purpose. It is the credential's address, it already travels with the session, and changing it is another operation with its own verification.",
   },
   SpaceRegistrationAccepted: {
     type: 'object',
@@ -3449,7 +3963,7 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
     description:
-      'Carries no analytics identity, unlike a fresh sign-in: refreshing returns tokens without a subject, and the app already holds the identity it was given when the session began.',
+      'Carries no analytics identity, unlike a fresh sign-in, and carries no contact either: the verified address is server-only and never travels in a token response. The onboarding shows it from what the app stored when the person signed in, and reads everything else back from the attempt.',
   },
   SpaceSessionTokens: {
     type: 'object',
@@ -4187,6 +4701,14 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         const: 'analytics-v1',
       },
     },
+  },
+  Username: {
+    type: 'string',
+    minLength: 3,
+    maxLength: 30,
+    pattern: '^[a-z][a-z0-9_]{2,29}$',
+    description:
+      'Lowercase, starts with a letter, then letters, digits or underscore. Stored lowercased, and compared case-insensitively, so two handles that differ only in case are the same handle.',
   },
   Uuid: {
     type: 'string',

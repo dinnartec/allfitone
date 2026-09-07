@@ -27,6 +27,8 @@ import type { CommandHeaders } from '@allfitone/contracts/commands'
 
 export type OnboardingAttempt = AllfitV1Schemas['SpaceOnboardingAttempt']
 export type AdultEligibilityEvidence = AllfitV1Schemas['AdultEligibilityEvidence']
+export type PendingFitnessId = AllfitV1Schemas['SpacePendingFitnessId']
+export type CurrentOnboardingAttempt = AllfitV1Schemas['SpaceCurrentOnboardingAttempt']
 
 export interface OnboardingTransport {
   startAttempt(command: CommandHeaders): Promise<OnboardingAttempt>
@@ -35,6 +37,12 @@ export interface OnboardingTransport {
     attemptId: string,
     declaredAdult: boolean,
   ): Promise<AdultEligibilityEvidence>
+  createFitnessId(
+    command: CommandHeaders,
+    attemptId: string,
+    identity: PendingFitnessId,
+  ): Promise<PendingFitnessId>
+  readCurrent(): Promise<CurrentOnboardingAttempt>
 }
 
 export interface OnboardingFlowDependencies {
@@ -48,28 +56,63 @@ export interface OnboardingFlowDependencies {
 
 export interface OnboardingFlow {
   declareAdult(declaredAdult: boolean): Promise<AdultEligibilityEvidence>
+  createFitnessId(identity: PendingFitnessId): Promise<PendingFitnessId>
+  /** What was already answered, so coming back does not start over. */
+  resume(): Promise<CurrentOnboardingAttempt>
 }
 
 export function createOnboardingFlow(dependencies: OnboardingFlowDependencies): OnboardingFlow {
   const issue = dependencies.newCommand
   let attempt: OnboardingAttempt | undefined
-  let pending: { command: CommandHeaders; declaredAdult: boolean } | undefined
+  let pendingAdult: { command: CommandHeaders; declaredAdult: boolean } | undefined
+  let pendingIdentity: { command: CommandHeaders; identity: string } | undefined
+
+  const openAttempt = async (): Promise<OnboardingAttempt> => {
+    attempt ??= await dependencies.transport.startAttempt(issue())
+    return attempt
+  }
 
   return {
     async declareAdult(declaredAdult) {
-      attempt ??= await dependencies.transport.startAttempt(issue())
+      const open = await openAttempt()
 
-      if (!pending || pending.declaredAdult !== declaredAdult) {
-        pending = { command: issue(), declaredAdult }
+      if (!pendingAdult || pendingAdult.declaredAdult !== declaredAdult) {
+        pendingAdult = { command: issue(), declaredAdult }
       }
 
       const evidence = await dependencies.transport.recordEligibility(
-        pending.command,
-        attempt.id,
+        pendingAdult.command,
+        open.id,
         declaredAdult,
       )
-      pending = undefined
+      pendingAdult = undefined
       return evidence
+    },
+
+    async createFitnessId(identity) {
+      const open = await openAttempt()
+      const answer = `${identity.given_name}\u0000${identity.family_name}\u0000${identity.username}`
+
+      // The key belongs to the submission: a retry of the same answer replays,
+      // and a corrected one is a different command that must not reuse it.
+      if (!pendingIdentity || pendingIdentity.identity !== answer) {
+        pendingIdentity = { command: issue(), identity: answer }
+      }
+
+      const created = await dependencies.transport.createFitnessId(
+        pendingIdentity.command,
+        open.id,
+        identity,
+      )
+      pendingIdentity = undefined
+      return created
+    },
+
+    async resume() {
+      const current = await dependencies.transport.readCurrent()
+      // Reuse what the server already has rather than opening a second attempt.
+      if (current.attempt) attempt = current.attempt
+      return current
     },
   }
 }

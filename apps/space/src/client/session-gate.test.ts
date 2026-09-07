@@ -13,7 +13,7 @@
 
 import { describe, expect, test } from 'bun:test'
 
-import { resolveEntryRoute } from './session-gate'
+import { resolveEntryRoute, resolveOnboardingRoute } from './session-gate'
 
 describe('resolveEntryRoute', () => {
   test('sends somebody with no session to the welcome screen', () => {
@@ -24,6 +24,37 @@ describe('resolveEntryRoute', () => {
     expect(resolveEntryRoute({ session: { accessToken: 'at_1', refreshToken: 'rt_1' } })).toBe(
       '/onboarding/age',
     )
+  })
+
+  test('resumes at the step the person had reached instead of the first one', () => {
+    expect(
+      resolveEntryRoute({
+        session: { accessToken: 'at_1', refreshToken: 'rt_1' },
+        onboarding: { attempt: { eligibility_status: 'pass' } },
+      }),
+    ).toBe('/onboarding/identity')
+  })
+
+  test('a refusal outranks the progress that came with it', () => {
+    // The declaration passed, but the credential is gone: there is nothing to
+    // resume with, and landing on a step would repeat the dead end.
+    expect(
+      resolveEntryRoute({
+        session: { accessToken: 'at_1', refreshToken: 'rt_1' },
+        rejected: true,
+        onboarding: { attempt: { eligibility_status: 'pass' } },
+      }),
+    ).toBe('/welcome')
+  })
+
+  test('an outage lands on the first step rather than assuming progress', () => {
+    expect(
+      resolveEntryRoute({
+        session: { accessToken: 'at_1', refreshToken: 'rt_1' },
+        unreachable: true,
+        onboarding: { attempt: { eligibility_status: 'pass' } },
+      }),
+    ).toBe('/onboarding/age')
   })
 
   test('treats a session the API refused as no session at all', () => {
@@ -41,5 +72,33 @@ describe('resolveEntryRoute', () => {
         unreachable: true,
       }),
     ).toBe('/onboarding/age')
+  })
+})
+
+describe('resolveOnboardingRoute', () => {
+  test('sends a session with no attempt to the first step', () => {
+    expect(resolveOnboardingRoute({ attempt: null })).toBe('/onboarding/age')
+  })
+
+  test('keeps a pending declaration on the first step', () => {
+    expect(resolveOnboardingRoute({ attempt: { eligibility_status: 'pending' } })).toBe(
+      '/onboarding/age',
+    )
+  })
+
+  test('never walks past a refusal, because a fail is not eligibility', () => {
+    expect(resolveOnboardingRoute({ attempt: { eligibility_status: 'fail' } })).toBe(
+      '/onboarding/age',
+    )
+  })
+
+  test('moves on once the declaration passed', () => {
+    expect(resolveOnboardingRoute({ attempt: { eligibility_status: 'pass' } })).toBe(
+      '/onboarding/identity',
+    )
+  })
+
+  test('treats an unreadable answer as the first step rather than guessing forward', () => {
+    expect(resolveOnboardingRoute(null)).toBe('/onboarding/age')
   })
 })

@@ -14,8 +14,12 @@
 import { newCommand, type CommandHeaders } from '@allfitone/contracts/commands'
 import * as Crypto from 'expo-crypto'
 
-import { ApiError, authorizedPost, refreshSession } from './index'
-import { createOnboardingFlow, type OnboardingFlow } from './onboarding'
+import { ApiError, authorizedGet, authorizedPost, refreshSession } from './index'
+import {
+  createOnboardingFlow,
+  type CurrentOnboardingAttempt,
+  type OnboardingFlow,
+} from './onboarding'
 import { readSession, storeSession } from './session'
 import { withRefresh } from './with-refresh'
 
@@ -39,6 +43,19 @@ export function createSpaceOnboardingFlow(): OnboardingFlow {
             { declared_adult: declaredAdult },
             token,
           ),
+        ),
+      createFitnessId: (command, attemptId, identity) =>
+        authenticated((token) =>
+          authorizedPost(
+            `/space/v1/onboarding-attempts/${attemptId}/fitness-id`,
+            command,
+            identity,
+            token,
+          ),
+        ),
+      readCurrent: () =>
+        authenticated((token) =>
+          authorizedGet<CurrentOnboardingAttempt>('/space/v1/onboarding-attempts/current', token),
         ),
     },
   })

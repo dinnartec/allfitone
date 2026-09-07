@@ -2,6 +2,7 @@ import type { AuthenticatedIdentity, SessionTokens } from '@allfitone/auth-provi
 import type { AnalyticsIdentity } from '@allfitone/telemetry/node'
 
 export type {
+  BackofficeActor,
   BackofficeAttemptSecret,
   BackofficeAttemptState,
   BackofficeAuthenticationDatabase,
@@ -59,6 +60,22 @@ export interface AdultEligibilityEvidence {
   evaluatedAt: Date
 }
 
+/**
+ * The Fitness ID as it exists on the person while pending activation. Written
+ * straight onto `identity.people`: nothing about it is staged anywhere.
+ */
+export interface PendingFitnessId {
+  givenName: string
+  familyName: string
+  username: string
+}
+
+export interface CurrentOnboardingAttempt {
+  attempt: OnboardingAttempt | null
+  /** Non-null once the Fitness ID exists, which is how the app knows to move on. */
+  identity: PendingFitnessId | null
+}
+
 export interface IdentityOnboardingDatabase {
   startAttempt(
     input: CommandContext & { accountId: string; invitationTokenHash?: Uint8Array },
@@ -66,6 +83,10 @@ export interface IdentityOnboardingDatabase {
   recordAdultEligibility(
     input: CommandContext & { accountId: string; attemptId: string; declaredAdult: boolean },
   ): Promise<AdultEligibilityEvidence>
+  createPendingPerson(
+    input: CommandContext & { accountId: string; attemptId: string } & PendingFitnessId,
+  ): Promise<PendingFitnessId>
+  readCurrentAttempt(accountId: string): Promise<CurrentOnboardingAttempt>
   activatePerson(
     input: CommandContext & {
       accountId: string

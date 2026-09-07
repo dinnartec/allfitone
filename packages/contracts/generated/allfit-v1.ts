@@ -123,6 +123,154 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/backoffice/v1/platform/role-assignments': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * List who holds the Backoffice base role today and who held it before
+     * @description The internal Allfit catalogue. It is read-only evidence of who can reach the data and is never an authorization cache: every operation resolves its own duty in its own transaction.
+     */
+    get: operations['listBackofficePlatformRoles']
+    put?: never
+    /**
+     * Grant the Backoffice base role to another active person
+     * @description The base role only allows signing in. It grants no operation and implies no duty. Self-assignment is rejected by the database, not by this handler.
+     */
+    post: operations['grantBackofficePlatformRole']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/platform/role-assignments/{assignmentId}/revocation': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Withdraw the Backoffice base role from another person
+     * @description Withdrawing the role revokes that person's Backoffice sessions and closes every effective duty without deleting history. The last active administrator cannot be withdrawn.
+     */
+    post: operations['revokeBackofficePlatformRole']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/platform/duty-assignments': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * List platform duties with their window, AAL, grantor and last recertification
+     * @description Shows effective, scheduled, suspended, expired and revoked assignments. A window that has elapsed reads as expired whether or not a job has moved the row, because validity is evaluated against the clock.
+     */
+    get: operations['listBackofficePlatformDuties']
+    put?: never
+    /**
+     * Grant a closed-catalogue platform duty for at most ninety days
+     * @description The actor mode is derived from the duty code and never accepted from the client. The target must already hold an active base role.
+     */
+    post: operations['grantBackofficePlatformDuty']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/platform/duty-assignments/{assignmentId}/suspension': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Suspend an effective platform duty
+     * @description Suspension cuts the duty's operations from the next transaction onwards. The assignment row stays, so the history remains readable.
+     */
+    post: operations['suspendBackofficePlatformDuty']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/platform/duty-assignments/{assignmentId}/revocation': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Revoke a platform duty permanently
+     * @description Revocation is terminal for that assignment and cuts its operations from the next transaction onwards. History is never rewritten.
+     */
+    post: operations['revokeBackofficePlatformDuty']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/result-contracts': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Publish the validation rules an activity must satisfy to count as complete
+     * @description A published version is immutable: correcting one publishes the next, and a newer version never reinterprets a session already recorded, because each execution freezes the contract and version it was validated against. The server assigns the version number. Publishing is refused unless the request carries at least one fixture the contract accepts and one it rejects.
+     */
+    post: operations['publishResultContract']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/result-contracts/{contractId}/deprecation': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Stop new executions from freezing a published contract
+     * @description Deprecating closes the contract's activity bindings so nothing new can be validated against it. It does not invalidate the executions that already froze it, and it never deletes a version.
+     */
+    post: operations['deprecateResultContract']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/space/v1/telemetry-config': {
     parameters: {
       query?: never
@@ -302,6 +450,54 @@ export interface paths {
      *     The evidence freezes the policy version it was judged against, which is criterion 5. A refusal is recorded as evidence too, and it does not make the attempt eligible — `fail` is not eligibility, and neither is absence.
      */
     post: operations['recordSpaceAdultEligibilityEvidence']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/onboarding-attempts/current': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Read the authenticated account's open onboarding attempt
+     * @description What HU-SP-015 criterion 3 and HU-SP-098 criterion 5 need: coming back resumes where the person left off instead of starting over. Space makes activation the last step, so every answer given before it rests on the attempt, and this is how the app reads them back.
+     *
+     *     No contact travels here. The verified address is server-only, and the app already holds the one the person signed in with.
+     */
+    get: operations['getSpaceCurrentOnboardingAttempt']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/onboarding-attempts/{attemptId}/fitness-id': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Create the account holder's Fitness ID, pending activation
+     * @description HU-SP-098. The Fitness ID is created here, in `pending_activation`, as soon as the name is known — not at the end of the onboarding. That is what lets every answer given afterwards be written straight onto the person: profile claims require a `person_id`, so with the person created last there would be nowhere for them to go and every step would need a staging table and a second write path.
+     *
+     *     Adult eligibility is still required first. Creating the row earlier does not move any control earlier.
+     *
+     *     There is deliberately no way to ask whether a username is free. A collision comes back as `409` from this command and nothing else: an availability query would reveal that somebody exists, which is the guarantee the whole registration flow is built on. What makes the collision itself tolerable is that a handle, unlike an email address, is not an identifier that exists outside the platform.
+     *
+     *     The email is not accepted as input. It belongs to the credential, and changing it is `OP-IDN-021` with its own verification.
+     */
+    post: operations['createSpacePendingFitnessId']
     delete?: never
     options?: never
     head?: never
@@ -1321,6 +1517,163 @@ export interface paths {
 export type webhooks = Record<string, never>
 export interface components {
   schemas: {
+    PlatformRoleAssignmentPage: {
+      data: components['schemas']['PlatformRoleAssignment'][]
+      page: components['schemas']['Page']
+    }
+    PlatformDutyAssignmentPage: {
+      data: components['schemas']['PlatformDutyAssignment'][]
+      page: components['schemas']['Page']
+    }
+    /** @enum {string} */
+    ActivityFamily: 'strength' | 'endurance' | 'interval' | 'mobility'
+    /** @description One case the contract must accept or reject. A rule nobody demonstrated failing is a rule nobody tested, so both kinds are required to publish. */
+    ContractFixture: {
+      /** @enum {string} */
+      kind: 'valid' | 'invalid'
+      payload: {
+        [key: string]: unknown
+      }
+      expected: string
+    }
+    PublishedContractFixture: {
+      id: components['schemas']['UuidV7']
+      /** @enum {string} */
+      kind: 'valid' | 'invalid'
+      /** @constant */
+      payload_schema_version: 1
+      payload: {
+        [key: string]: unknown
+      }
+      expected: string
+    }
+    ActivityTypeContractBinding: {
+      id: components['schemas']['UuidV7']
+      activity_type_id: components['schemas']['Uuid']
+      is_default: boolean
+      /** Format: date-time */
+      valid_from: string
+      /** Format: date-time */
+      valid_to: string | null
+    }
+    ResultContractPublication: {
+      contract_code: string
+      activity_family: components['schemas']['ActivityFamily']
+      envelope: {
+        [key: string]: unknown
+      }
+      minimums: {
+        [key: string]: unknown
+      }
+      fixtures: components['schemas']['ContractFixture'][]
+      activity_type_id: components['schemas']['Uuid']
+      /** @description Defaults to true on the server. Publishing a new default closes the previous one with a window instead of overwriting it. */
+      is_default?: boolean
+    }
+    ResultContract: {
+      id: components['schemas']['UuidV7']
+      contract_code: string
+      version_number: number
+      activity_family: components['schemas']['ActivityFamily']
+      /** @constant */
+      contract_schema_version: 1
+      envelope: {
+        [key: string]: unknown
+      }
+      minimums: {
+        [key: string]: unknown
+      }
+      /** @enum {string} */
+      status: 'published' | 'deprecated'
+      /** Format: date-time */
+      published_at: string
+      fixtures: components['schemas']['PublishedContractFixture'][]
+      activity_type_bindings: components['schemas']['ActivityTypeContractBinding'][]
+    }
+    /**
+     * @description Closed duty catalogue fixed by ADR-028. Growing it is a documented decision.
+     * @enum {string}
+     */
+    PlatformDutyCode:
+      | 'view_platform_metrics'
+      | 'diagnose_support_metadata'
+      | 'view_billing_metadata'
+      | 'manage_organization_lifecycle'
+      | 'request_break_glass'
+      | 'verify_professional_credentials'
+      | 'curate_global_catalog'
+      | 'manage_platform_commercial'
+      | 'manage_platform_access'
+      | 'audit_platform_access'
+      | 'approve_break_glass'
+      | 'audit_break_glass'
+      | 'manage_privacy_requests'
+    /**
+     * @description Derived from the duty code by the database; never accepted from a client.
+     * @enum {string}
+     */
+    PlatformActorMode: 'A10' | 'A11' | 'A12'
+    /** @description Opaque operational reference. Never a name, a contact or free narrative. */
+    PlatformAccessReasonCode: string
+    PlatformRoleGrant: {
+      person_id: components['schemas']['Uuid']
+      /** @enum {string} */
+      platform_role: 'allfit_admin'
+    }
+    PlatformRoleAssignment: {
+      id: components['schemas']['UuidV7']
+      person_id: components['schemas']['Uuid']
+      /** @enum {string} */
+      platform_role: 'allfit_admin'
+      /** @enum {string} */
+      status: 'active' | 'revoked'
+      granted_by_person_id: components['schemas']['Uuid']
+      /** Format: date-time */
+      granted_at: string
+      revoked_by_person_id: components['schemas']['Uuid'] | null
+      /** Format: date-time */
+      revoked_at: string | null
+    }
+    PlatformDutyGrant: {
+      person_id: components['schemas']['Uuid']
+      duty_code: components['schemas']['PlatformDutyCode']
+      /**
+       * Format: date-time
+       * @description Defaults to the command instant. A future value schedules the duty.
+       */
+      valid_from?: string
+      /**
+       * Format: date-time
+       * @description At most ninety days after valid_from; the database enforces the bound.
+       */
+      valid_to: string
+      reason_code: components['schemas']['PlatformAccessReasonCode']
+    }
+    PlatformDutyAssignment: {
+      id: components['schemas']['UuidV7']
+      person_id: components['schemas']['Uuid']
+      duty_code: components['schemas']['PlatformDutyCode']
+      actor_mode: components['schemas']['PlatformActorMode']
+      /** @enum {string} */
+      status: 'scheduled' | 'active' | 'suspended' | 'expired' | 'revoked'
+      /** Format: date-time */
+      valid_from: string
+      /** Format: date-time */
+      valid_to: string
+      /** @constant */
+      required_aal: 2
+      granted_by_person_id: components['schemas']['Uuid']
+      recertified_by_person_id: components['schemas']['Uuid'] | null
+      /** Format: date-time */
+      recertified_at: string | null
+      suspended_by_person_id: components['schemas']['Uuid'] | null
+      /** Format: date-time */
+      suspended_at: string | null
+      revoked_by_person_id: components['schemas']['Uuid'] | null
+      /** Format: date-time */
+      revoked_at: string | null
+      reason_code: components['schemas']['PlatformAccessReasonCode']
+    }
     BackofficePasswordRequest: {
       /** Format: email */
       email: string
@@ -1411,7 +1764,7 @@ export interface components {
     SpaceSessionRefreshCreate: {
       refreshToken: string
     }
-    /** @description Carries no analytics identity, unlike a fresh sign-in: refreshing returns tokens without a subject, and the app already holds the identity it was given when the session began. */
+    /** @description Carries no analytics identity, unlike a fresh sign-in, and carries no contact either: the verified address is server-only and never travels in a token response. The onboarding shows it from what the app stored when the person signed in, and reads everything else back from the attempt. */
     SpaceSessionRefreshed: {
       accessToken: string
       /** @description Rotates on use — the previous value stops working. */
@@ -1482,6 +1835,27 @@ export interface components {
     }
     AdultEligibilityEvidenceCreate: {
       declared_adult: boolean
+    }
+    /** @description The email is absent on purpose. It is the credential's address, it already travels with the session, and changing it is another operation with its own verification. */
+    SpacePendingFitnessIdCreate: {
+      given_name: string
+      family_name: string
+      username: components['schemas']['Username']
+    }
+    /** @description Lowercase, starts with a letter, then letters, digits or underscore. Stored lowercased, and compared case-insensitively, so two handles that differ only in case are the same handle. */
+    Username: string
+    /** @description The Fitness ID as it now exists on the person, pending activation. No person identifier travels here: the app never needs one, and the API resolves it from the token on every call. */
+    SpacePendingFitnessId: {
+      given_name: string
+      family_name: string
+      username: components['schemas']['Username']
+    }
+    /** @description Enough to resume the onboarding and nothing more. Absent answers are null rather than omitted, so the app never has to guess whether a step was skipped or the field simply did not travel. */
+    SpaceCurrentOnboardingAttempt: {
+      /** @description Null when the account has no open attempt, which is also what an already activated person sees. */
+      attempt: components['schemas']['SpaceOnboardingAttempt'] | null
+      /** @description Null until the Fitness ID exists. Non-null is how the app knows that step is behind it. */
+      identity: components['schemas']['SpacePendingFitnessId'] | null
     }
     AdultEligibilityPolicy: {
       /** @constant */
@@ -3266,6 +3640,12 @@ export interface components {
     GrantId: components['schemas']['Uuid']
     MealId: components['schemas']['Uuid']
     GoalVersionId: components['schemas']['Uuid']
+    ResultContractId: components['schemas']['UuidV7']
+    PlatformPersonFilter: components['schemas']['Uuid']
+    PlatformDutyFilter: components['schemas']['PlatformDutyCode']
+    /** @description Filters on the effective state, so `expired` reflects the clock, not a job. */
+    PlatformDutyStatusFilter: 'scheduled' | 'active' | 'suspended' | 'expired' | 'revoked'
+    PlatformAssignmentId: components['schemas']['UuidV7']
     /** @description UUIDv4 reused only for HTTP retries of this operation. */
     IdempotencyKey: components['schemas']['UuidV4']
     /** @description UUIDv7 durable identity generated when the user intention is created. */
@@ -3521,6 +3901,358 @@ export interface operations {
       429: components['responses']['TooManyRequests']
     }
   }
+  listBackofficePlatformRoles: {
+    parameters: {
+      query?: {
+        limit?: components['parameters']['Limit']
+        cursor?: components['parameters']['Cursor']
+      }
+      header: {
+        Origin: components['parameters']['Origin']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Assignments ordered by effective state first, then by most recent grant */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['PlatformRoleAssignmentPage']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  grantBackofficePlatformRole: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformRoleGrant']
+      }
+    }
+    responses: {
+      /** @description Base role granted, or the converged assignment for a repeated command */
+      201: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['PlatformRoleAssignment']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  revokeBackofficePlatformRole: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        assignmentId: components['parameters']['PlatformAssignmentId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': Record<string, never>
+      }
+    }
+    responses: {
+      /** @description Base role withdrawn, or the already withdrawn assignment */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['PlatformRoleAssignment']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listBackofficePlatformDuties: {
+    parameters: {
+      query?: {
+        person_id?: components['parameters']['PlatformPersonFilter']
+        duty_code?: components['parameters']['PlatformDutyFilter']
+        /** @description Filters on the effective state, so `expired` reflects the clock, not a job. */
+        status?: components['parameters']['PlatformDutyStatusFilter']
+        limit?: components['parameters']['Limit']
+        cursor?: components['parameters']['Cursor']
+      }
+      header: {
+        Origin: components['parameters']['Origin']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Assignments ordered by effective state first, then by newest window */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['PlatformDutyAssignmentPage']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  grantBackofficePlatformDuty: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformDutyGrant']
+      }
+    }
+    responses: {
+      /** @description Duty granted, or the converged assignment for a repeated command */
+      201: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['PlatformDutyAssignment']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  suspendBackofficePlatformDuty: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        assignmentId: components['parameters']['PlatformAssignmentId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': Record<string, never>
+      }
+    }
+    responses: {
+      /** @description Duty suspended, or the already suspended assignment */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['PlatformDutyAssignment']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  revokeBackofficePlatformDuty: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        assignmentId: components['parameters']['PlatformAssignmentId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': Record<string, never>
+      }
+    }
+    responses: {
+      /** @description Duty revoked, or the already revoked assignment */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['PlatformDutyAssignment']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  publishResultContract: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ResultContractPublication']
+      }
+    }
+    responses: {
+      /** @description Contract published with its fixtures and its activity binding */
+      201: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ResultContract']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  deprecateResultContract: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        contractId: components['parameters']['ResultContractId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': Record<string, never>
+      }
+    }
+    responses: {
+      /** @description Deprecated contract, or the already deprecated one */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ResultContract']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
   getSpaceTelemetryConfig: {
     parameters: {
       query?: never
@@ -3768,6 +4500,66 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['AdultEligibilityEvidence']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      409: components['responses']['Conflict']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  getSpaceCurrentOnboardingAttempt: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The open attempt, or none */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SpaceCurrentOnboardingAttempt']
+        }
+      }
+      401: components['responses']['Unauthenticated']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  createSpacePendingFitnessId: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        attemptId: components['parameters']['OnboardingAttemptId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SpacePendingFitnessIdCreate']
+      }
+    }
+    responses: {
+      /** @description The Fitness ID, created and pending activation */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SpacePendingFitnessId']
         }
       }
       400: components['responses']['BadRequest']

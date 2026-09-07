@@ -105,6 +105,73 @@ export function spaceOnboardingRoutes(
     }
   })
 
+  // Placed before the parameterised route so `current` is never read as an id.
+  routes.get('/onboarding-attempts/current', async (c) => {
+    c.header('Cache-Control', 'no-store')
+
+    const token = await verified(c, verify)
+    if (!token) return fail(c, 'unauthenticated')
+
+    try {
+      const current = await onboarding().readCurrentAttempt(token)
+      return c.json(
+        {
+          attempt: current.attempt
+            ? {
+                id: current.attempt.id,
+                status: current.attempt.status,
+                eligibility_status: current.attempt.eligibilityStatus,
+                expires_at: current.attempt.expiresAt.toISOString(),
+              }
+            : null,
+          identity: current.identity
+            ? {
+                given_name: current.identity.givenName,
+                family_name: current.identity.familyName,
+                username: current.identity.username,
+              }
+            : null,
+        },
+        200,
+      )
+    } catch {
+      return fail(c, 'upstream-unavailable')
+    }
+  })
+
+  routes.post('/onboarding-attempts/:attemptId/fitness-id', async (c) => {
+    c.header('Cache-Control', 'no-store')
+
+    const token = await verified(c, verify)
+    if (!token) return fail(c, 'unauthenticated')
+
+    const attemptId = c.req.param('attemptId')
+    if (!UUID_V7.test(attemptId)) return fail(c, 'invalid-request')
+
+    const body = await readJson(c)
+    const identity = readIdentity(body)
+    const command = commandContext(c, body)
+    if (!identity || !command) return fail(c, 'invalid-request')
+
+    try {
+      const created = await onboarding().createFitnessId(token, {
+        ...command,
+        attemptId,
+        ...identity,
+      })
+      return c.json(
+        {
+          given_name: created.givenName,
+          family_name: created.familyName,
+          username: created.username,
+        },
+        200,
+      )
+    } catch (error) {
+      return operationFailure(c, error)
+    }
+  })
+
   return routes
 }
 
@@ -168,4 +235,51 @@ function canonicalJson(value: unknown): string {
     return `{${entries.map(([key, item]) => `${JSON.stringify(key)}:${canonicalJson(item)}`).join(',')}}`
   }
   return JSON.stringify(value)
+}
+
+const USERNAME = /^[a-z][a-z0-9_]{2,29}$/
+const NAME_MAX_LENGTH = 120
+
+/**
+ * Strict, like `readDeclaration`. The username is validated here as well as in
+ * the database so a malformed one never reaches a command and burns a key.
+ */
+function readIdentity(
+  body: unknown,
+): { givenName: string; familyName: string; username: string } | undefined {
+  if (typeof body !== 'object' || body === null) return undefined
+  const keys = Object.keys(body).sort()
+  if (keys.length !== 3 || keys[0] !== 'family_name' || keys[1] !== 'given_name') return undefined
+  if (keys[2] !== 'username') return undefined
+
+  const record = body as { given_name: unknown; family_name: unknown; username: unknown }
+  const givenName = trimmedName(record.given_name)
+  const familyName = trimmedName(record.family_name)
+  if (!givenName || !familyName) return undefined
+  if (typeof record.username !== 'string' || !USERNAME.test(record.username)) return undefined
+
+  return { givenName, familyName, username: record.username }
+}
+
+function trimmedName(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined
+  const name = value.trim()
+  if (name.length === 0 || name.length > NAME_MAX_LENGTH) return undefined
+  return name
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/** Same mapping the sibling handlers use: the SQLSTATE is the signal. */
+function operationFailure(c: Context, error: unknown) {
+  const sqlState = isObject(error) && typeof error.code === 'string' ? error.code : undefined
+  if (sqlState === '42501') return fail(c, 'forbidden')
+  if (sqlState === '23505' || sqlState === '40001') return fail(c, 'conflict')
+  if (sqlState === '22023' || sqlState === '23514' || sqlState === '22P02') {
+    return fail(c, 'invalid-request')
+  }
+  console.error('[space-onboarding] operation failed')
+  return fail(c, 'upstream-unavailable')
 }

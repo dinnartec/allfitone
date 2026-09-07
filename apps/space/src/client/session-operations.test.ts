@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 
 import {
   ACCESS_TOKEN_KEY,
+  EMAIL_KEY,
   REFRESH_TOKEN_KEY,
   createSessionOperations,
   type SessionStorage,
@@ -62,8 +63,43 @@ describe('Space session operations', () => {
     await expect(operations.readSession()).resolves.toEqual({
       accessToken: 'access',
       refreshToken: 'refresh',
+      email: 'ada@example.test',
       analytics: { distinct_id: null },
     })
+  })
+
+  test('omits the address when none was stored, rather than reporting an empty one', async () => {
+    const operations = createSessionOperations({
+      storage: {
+        ...storage({}),
+        getItemAsync: async (key) => (key === EMAIL_KEY ? null : 'value'),
+      },
+      analyticsIdentityKey: 'analytics',
+      setTelemetryIdentity: () => undefined,
+    })
+
+    await expect(operations.readSession()).resolves.toEqual({
+      accessToken: 'value',
+      refreshToken: 'value',
+      analytics: { distinct_id: null },
+    })
+  })
+
+  test('a refresh that knows no address leaves the stored one alone', async () => {
+    const writes: string[] = []
+    const operations = createSessionOperations({
+      storage: storage({ writes }),
+      analyticsIdentityKey: 'analytics',
+      setTelemetryIdentity: () => undefined,
+    })
+
+    await operations.storeSession({
+      accessToken: 'access',
+      refreshToken: 'refresh',
+      analytics: { distinct_id: null },
+    })
+
+    expect(writes).not.toContain(EMAIL_KEY)
   })
 
   test('deactivates immediately and does not await analytics deletion on logout', async () => {
@@ -98,6 +134,7 @@ function storage(options: {
       if (key === options.pendingGetKey) await never
       if (key === ACCESS_TOKEN_KEY) return 'access'
       if (key === REFRESH_TOKEN_KEY) return 'refresh'
+      if (key === EMAIL_KEY) return 'ada@example.test'
       return distinctId
     },
     async deleteItemAsync(key) {

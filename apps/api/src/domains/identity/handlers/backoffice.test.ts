@@ -36,6 +36,10 @@ function service(overrides: Partial<BackofficeAuthenticationService> = {}) {
       inactivity_expires_at: '2026-08-12T12:15:00.000Z',
       absolute_expires_at: '2026-08-12T20:00:00.000Z',
     }),
+    resolveActor: async () => ({
+      personId: '019a2000-0000-7000-8000-000000000001',
+      sessionId: '019a2000-0000-7000-8000-000000000031',
+    }),
     logout: async () => 'revoked',
     requestPasswordReset: async () => undefined,
     ...overrides,

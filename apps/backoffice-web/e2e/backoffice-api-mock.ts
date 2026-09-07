@@ -10,7 +10,82 @@ export interface BackofficeFixture {
   invalidTotpCount?: number
   logoutFails?: boolean
   sessionUnavailable?: boolean
+  platformAccess?: PlatformAccessFixture
+  resultContracts?: ResultContractFixture
   requests: MockRequest[]
+}
+
+export interface ResultContractFixture {
+  /** The next command is refused with this code, once. */
+  nextCommandFailure?: { status: number; code: string }
+  /** Versions already published for a contract code, so the next one increments. */
+  versions: Record<string, number>
+  published: ResultContractRow[]
+}
+
+interface ResultContractRow {
+  id: string
+  contract_code: string
+  version_number: number
+  activity_family: string
+  contract_schema_version: 1
+  envelope: Record<string, unknown>
+  minimums: Record<string, unknown>
+  status: 'published' | 'deprecated'
+  published_at: string
+  fixtures: Array<{
+    id: string
+    kind: 'valid' | 'invalid'
+    payload_schema_version: 1
+    payload: Record<string, unknown>
+    expected: string
+  }>
+  activity_type_bindings: Array<{
+    id: string
+    activity_type_id: string
+    is_default: boolean
+    valid_from: string
+    valid_to: string | null
+  }>
+}
+
+export interface PlatformAccessFixture {
+  /** The inventory answers 403 when no reading duty is effective. */
+  forbidden?: boolean
+  roles: PlatformRoleFixture[]
+  duties: PlatformDutyFixture[]
+  /** The next command is refused with this code, once. */
+  nextCommandFailure?: { status: number; code: string }
+}
+
+export interface PlatformRoleFixture {
+  id: string
+  person_id: string
+  platform_role: 'allfit_admin'
+  status: 'active' | 'revoked'
+  granted_by_person_id: string
+  granted_at: string
+  revoked_by_person_id: string | null
+  revoked_at: string | null
+}
+
+export interface PlatformDutyFixture {
+  id: string
+  person_id: string
+  duty_code: string
+  actor_mode: 'A10' | 'A11' | 'A12'
+  status: 'scheduled' | 'active' | 'suspended' | 'expired' | 'revoked'
+  valid_from: string
+  valid_to: string
+  required_aal: 2
+  granted_by_person_id: string
+  recertified_by_person_id: string | null
+  recertified_at: string | null
+  suspended_by_person_id: string | null
+  suspended_at: string | null
+  revoked_by_person_id: string | null
+  revoked_at: string | null
+  reason_code: string
 }
 
 interface SessionFixture {
@@ -138,8 +213,275 @@ export async function mockBackofficeApi(
       await fulfill(route, 202)
       return
     }
+    if (request.path.startsWith('/backoffice/v1/platform/')) {
+      await routePlatformAccess(route, request, fixture)
+      return
+    }
+    if (request.path.startsWith('/backoffice/v1/result-contracts')) {
+      await routeResultContracts(route, request, fixture)
+      return
+    }
     await fulfill(route, 404, error('not-found'))
   })
+}
+
+/**
+ * The platform routes answer RFC 9457, unlike the authentication ones. The mock
+ * reproduces that difference on purpose: a client that only understood the legacy
+ * envelope would show a generic failure for every real refusal.
+ */
+async function routePlatformAccess(
+  route: Route,
+  request: MockRequest,
+  fixture: BackofficeFixture,
+): Promise<void> {
+  const access = fixture.platformAccess ?? { roles: [], duties: [] }
+  if (access.forbidden) {
+    await fulfillProblem(route, 403, 'forbidden')
+    return
+  }
+  if (request.method === 'GET') {
+    const rows =
+      request.path === '/backoffice/v1/platform/role-assignments' ? access.roles : access.duties
+    await fulfill(route, 200, { data: rows, page: { has_more: false, next_cursor: null } })
+    return
+  }
+  const failure = access.nextCommandFailure
+  if (failure) {
+    access.nextCommandFailure = undefined
+    await fulfillProblem(route, failure.status, failure.code)
+    return
+  }
+  const segments = request.path.split('/').filter(Boolean)
+  const resource = segments[3]
+  const action = segments[5]
+  const now = new Date().toISOString()
+
+  if (resource === 'role-assignments' && action === 'revocation') {
+    const target = access.roles.find((role) => role.id === segments[4])
+    if (target) {
+      target.status = 'revoked'
+      target.revoked_at = now
+      target.revoked_by_person_id = ACTOR_PERSON_ID
+      // Withdrawing the base role closes every effective duty, as the command does.
+      for (const duty of access.duties) {
+        if (duty.person_id === target.person_id && !isClosedDuty(duty.status)) {
+          duty.status = 'revoked'
+          duty.revoked_at = now
+          duty.revoked_by_person_id = ACTOR_PERSON_ID
+        }
+      }
+    }
+    await fulfill(route, 200, target ?? {})
+    return
+  }
+  if (resource === 'duty-assignments' && (action === 'suspension' || action === 'revocation')) {
+    const target = access.duties.find((duty) => duty.id === segments[4])
+    if (target) {
+      if (action === 'suspension') {
+        target.status = 'suspended'
+        target.suspended_at = now
+        target.suspended_by_person_id = ACTOR_PERSON_ID
+      } else {
+        target.status = 'revoked'
+        target.revoked_at = now
+        target.revoked_by_person_id = ACTOR_PERSON_ID
+      }
+    }
+    await fulfill(route, 200, target ?? {})
+    return
+  }
+  if (resource === 'role-assignments') {
+    const body = request.body as { person_id?: string } | undefined
+    const created = platformRole({ person_id: body?.person_id ?? SUBJECT_PERSON_ID })
+    access.roles.push(created)
+    await fulfill(route, 201, created)
+    return
+  }
+  if (resource === 'duty-assignments') {
+    const body = request.body as
+      | { person_id?: string; duty_code?: string; valid_to?: string; reason_code?: string }
+      | undefined
+    const created = platformDuty({
+      person_id: body?.person_id ?? SUBJECT_PERSON_ID,
+      duty_code: body?.duty_code ?? 'diagnose_support_metadata',
+      valid_to: body?.valid_to ?? new Date(Date.now() + 30 * 86400000).toISOString(),
+      reason_code: body?.reason_code ?? 'CASE-000',
+    })
+    access.duties.push(created)
+    await fulfill(route, 201, created)
+    return
+  }
+  await fulfillProblem(route, 404, 'not-found')
+}
+
+/**
+ * The version number is assigned by the server, and publishing a new default
+ * closes the previous association with a window instead of removing it. The mock
+ * reproduces both, because they are what the screen shows as evidence.
+ */
+async function routeResultContracts(
+  route: Route,
+  request: MockRequest,
+  fixture: BackofficeFixture,
+): Promise<void> {
+  const contracts = fixture.resultContracts ?? { versions: {}, published: [] }
+  fixture.resultContracts = contracts
+  const failure = contracts.nextCommandFailure
+  if (failure) {
+    contracts.nextCommandFailure = undefined
+    await fulfillProblem(route, failure.status, failure.code)
+    return
+  }
+
+  const segments = request.path.split('/').filter(Boolean)
+  if (segments.length === 5) {
+    const target = contracts.published.find((contract) => contract.id === segments[3])
+    if (!target) {
+      await fulfillProblem(route, 404, 'not-found')
+      return
+    }
+    target.status = 'deprecated'
+    for (const binding of target.activity_type_bindings) {
+      binding.valid_to = binding.valid_to ?? new Date().toISOString()
+    }
+    await fulfill(route, 200, target)
+    return
+  }
+
+  const body = request.body as
+    | {
+        contract_code?: string
+        activity_family?: string
+        envelope?: Record<string, unknown>
+        minimums?: Record<string, unknown>
+        fixtures?: Array<{
+          kind: 'valid' | 'invalid'
+          payload: Record<string, unknown>
+          expected: string
+        }>
+        activity_type_id?: string
+      }
+    | undefined
+  const code = body?.contract_code ?? 'test.contract'
+  const version = (contracts.versions[code] ?? 0) + 1
+  contracts.versions[code] = version
+  const now = new Date().toISOString()
+  const activityTypeId = body?.activity_type_id ?? SUBJECT_PERSON_ID
+
+  // A previous default for the same activity type is closed, never deleted.
+  const superseded = contracts.published
+    .flatMap((contract) => contract.activity_type_bindings)
+    .filter((binding) => binding.activity_type_id === activityTypeId && binding.valid_to === null)
+  for (const binding of superseded) binding.valid_to = now
+
+  const created: ResultContractRow = {
+    id: nextAssignmentId(),
+    contract_code: code,
+    version_number: version,
+    activity_family: body?.activity_family ?? 'strength',
+    contract_schema_version: 1,
+    envelope: body?.envelope ?? {},
+    minimums: body?.minimums ?? {},
+    status: 'published',
+    published_at: now,
+    fixtures: (body?.fixtures ?? []).map((entry) => ({
+      id: nextAssignmentId(),
+      kind: entry.kind,
+      payload_schema_version: 1,
+      payload: entry.payload,
+      expected: entry.expected,
+    })),
+    activity_type_bindings: [
+      ...superseded.map((binding) => ({ ...binding })),
+      {
+        id: nextAssignmentId(),
+        activity_type_id: activityTypeId,
+        is_default: true,
+        valid_from: now,
+        valid_to: null,
+      },
+    ],
+  }
+  contracts.published.push(created)
+  await fulfill(route, 201, created)
+}
+
+function isClosedDuty(status: PlatformDutyFixture['status']): boolean {
+  return status === 'expired' || status === 'revoked'
+}
+
+export const ACTOR_PERSON_ID = '019a3000-0000-7000-8000-000000000001'
+export const SUBJECT_PERSON_ID = '019a3000-0000-7000-8000-000000000002'
+
+let identifierSequence = 0
+
+function nextAssignmentId(): string {
+  identifierSequence += 1
+  return `019a3000-0000-7000-8000-${String(identifierSequence).padStart(12, '0')}`
+}
+
+export function platformRole(overrides: Partial<PlatformRoleFixture> = {}): PlatformRoleFixture {
+  return {
+    id: nextAssignmentId(),
+    person_id: SUBJECT_PERSON_ID,
+    platform_role: 'allfit_admin',
+    status: 'active',
+    granted_by_person_id: ACTOR_PERSON_ID,
+    granted_at: new Date().toISOString(),
+    revoked_by_person_id: null,
+    revoked_at: null,
+    ...overrides,
+  }
+}
+
+/** The mode is derived from the duty code by a CHECK, never chosen. */
+export function actorModeFor(dutyCode: string): PlatformDutyFixture['actor_mode'] {
+  if (
+    [
+      'curate_global_catalog',
+      'verify_professional_credentials',
+      'manage_platform_commercial',
+    ].includes(dutyCode)
+  ) {
+    return 'A11'
+  }
+  if (
+    [
+      'manage_platform_access',
+      'audit_platform_access',
+      'approve_break_glass',
+      'audit_break_glass',
+      'manage_privacy_requests',
+    ].includes(dutyCode)
+  ) {
+    return 'A12'
+  }
+  return 'A10'
+}
+
+export function platformDuty(overrides: Partial<PlatformDutyFixture> = {}): PlatformDutyFixture {
+  const now = Date.now()
+  const dutyCode = overrides.duty_code ?? 'diagnose_support_metadata'
+  return {
+    id: nextAssignmentId(),
+    person_id: SUBJECT_PERSON_ID,
+    duty_code: dutyCode,
+    actor_mode: actorModeFor(dutyCode),
+    status: 'active',
+    valid_from: new Date(now).toISOString(),
+    valid_to: new Date(now + 30 * 86400000).toISOString(),
+    required_aal: 2,
+    granted_by_person_id: ACTOR_PERSON_ID,
+    recertified_by_person_id: null,
+    recertified_at: null,
+    suspended_by_person_id: null,
+    suspended_at: null,
+    revoked_by_person_id: null,
+    revoked_at: null,
+    reason_code: 'CASE-2026-001',
+    ...overrides,
+  }
 }
 
 export function activeSession(): SessionFixture {
@@ -191,6 +533,15 @@ function parseBody(value: string | null): unknown {
   } catch {
     return value
   }
+}
+
+async function fulfillProblem(route: Route, status: number, code: string): Promise<void> {
+  await fulfill(route, status, {
+    type: `https://errors.allfit.invalid/${code}`,
+    title: code,
+    status,
+    request_id: '01JEXAMPLE0000000000000000',
+  })
 }
 
 async function fulfill(

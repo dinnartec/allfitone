@@ -14,6 +14,7 @@ import type {
   IdentityInvitationDatabase,
   BackofficeAuthenticationDatabase,
   BackofficeAttemptSecret,
+  OnboardingAttempt,
   ProfessionalCredential,
   ProfessionalProfile,
   StudioProfessionalContext,
@@ -238,6 +239,69 @@ export function createIdentityOnboardingDatabase(): IdentityOnboardingDatabase {
         `
         if (!row) throw new Error('PostgreSQL did not record eligibility evidence')
         return { result: row.result, evaluatedAt: new Date(row.evaluated_at) }
+      })
+    },
+
+    async createPendingPerson(input) {
+      return sql.begin(async (transaction) => {
+        await setAccountActor(transaction, input.accountId)
+        // A taken handle surfaces as SQLSTATE 23505 and the handler maps it to
+        // conflict, the same way its siblings do. Nothing is translated here.
+        const [row] = await transaction<
+          { given_name: string; family_name: string; username: string }[]
+        >`
+          select given_name, family_name, username from identity.create_pending_person(
+            ${input.accountId}::uuid,
+            ${input.attemptId}::uuid,
+            ${input.givenName},
+            ${input.familyName},
+            ${input.username},
+            ${input.idempotencyKey}::uuid,
+            ${input.commandId}::uuid,
+            ${input.requestHash}
+          )
+        `
+        if (!row) throw new Error('PostgreSQL did not create the pending Fitness ID')
+        return { givenName: row.given_name, familyName: row.family_name, username: row.username }
+      })
+    },
+
+    async readCurrentAttempt(accountId) {
+      return sql.begin(async (transaction) => {
+        await setAccountActor(transaction, accountId)
+        // A governed read, not a join: during the onboarding the actor is an
+        // account, and `people` is only visible to a person actor.
+        const [row] = await transaction<
+          {
+            attempt_id: string
+            status: OnboardingAttempt['status']
+            eligibility_status: OnboardingAttempt['eligibilityStatus']
+            expires_at: Date
+            given_name: string | null
+            family_name: string | null
+            username: string | null
+          }[]
+        >`select * from identity.read_current_onboarding(${accountId}::uuid)`
+
+        // No open attempt is an answer, not a failure: it is also what an
+        // already activated person sees.
+        if (!row) return { attempt: null, identity: null }
+        return {
+          attempt: {
+            id: row.attempt_id,
+            status: row.status,
+            eligibilityStatus: row.eligibility_status,
+            expiresAt: new Date(row.expires_at),
+          },
+          identity:
+            row.given_name && row.family_name && row.username
+              ? {
+                  givenName: row.given_name,
+                  familyName: row.family_name,
+                  username: row.username,
+                }
+              : null,
+        }
       })
     },
 
