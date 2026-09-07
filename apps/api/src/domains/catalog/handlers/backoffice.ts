@@ -136,11 +136,15 @@ function resultContractPublication(body: unknown): ResultContractPublication | u
   if (typeof body.activity_type_id !== 'string' || !UUID.test(body.activity_type_id)) {
     return undefined
   }
-  // Read into a local before the checks below. Narrowing a property of an index
-  // signature is not guaranteed to survive the calls between the guard and the
-  // return, and CI caught this one still typed as unknown at the return.
-  const isDefault = body.is_default
-  if (isDefault !== undefined && typeof isDefault !== 'boolean') return undefined
+  // Declared, not inferred. Reading an optional property of an index signature
+  // and relying on control flow to keep it narrowed until the return failed on
+  // CI while passing here, so the type is written down and the only assignment
+  // happens immediately after its own guard, with nothing in between.
+  let isDefault: boolean | undefined
+  if (body.is_default !== undefined) {
+    if (typeof body.is_default !== 'boolean') return undefined
+    isDefault = body.is_default
+  }
 
   const fixtures = body.fixtures
   if (!Array.isArray(fixtures) || fixtures.length < 2 || fixtures.length > MAX_FIXTURES) {

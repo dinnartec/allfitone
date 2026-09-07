@@ -308,11 +308,11 @@ function dutyGrant(body: unknown):
     return undefined
   }
   if (typeof body.valid_to !== 'string' || !isInstant(body.valid_to)) return undefined
-  // Same reason as the catalogue handler: the guard and the use are separated by
-  // calls, so the value is captured rather than re-narrowed at the return.
-  const validFrom = body.valid_from
-  if (validFrom !== undefined && (typeof validFrom !== 'string' || !isInstant(validFrom))) {
-    return undefined
+  // Same shape as the catalogue handler, and declared for the same reason.
+  let validFrom: string | undefined
+  if (body.valid_from !== undefined) {
+    if (typeof body.valid_from !== 'string' || !isInstant(body.valid_from)) return undefined
+    validFrom = body.valid_from
   }
   if (
     typeof body.reason_code !== 'string' ||
