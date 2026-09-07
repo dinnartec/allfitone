@@ -112,6 +112,9 @@ test('finishes a new organization in a dedicated ready step before entering the 
   // of the "your space is ready" message the person just dismissed.
   await expect(page.getByRole('heading', { name: 'Equipo reciente' })).toBeVisible()
   await expect(page.getByText('Studio está listo para operar')).toHaveCount(0)
+  // A new organization has exactly one member, so the singular is the first
+  // count its owner ever reads. The plural cases are unit-tested.
+  await expect(page.getByText('Integrante activo', { exact: true })).toBeVisible()
 
   await page.goto(`/organizations/${createdOrganizationId}/ready`)
   await expect(page.getByRole('heading', { name: 'Tu espacio está listo.' })).toHaveCount(0)

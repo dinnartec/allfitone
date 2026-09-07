@@ -27,6 +27,7 @@ import Link from 'next/link'
 
 import { useOrganizationContext } from './organization-context'
 import {
+  countLabel,
   countPage,
   formatTotal,
   invitationsExpiringWithin,
@@ -113,12 +114,19 @@ export function OrganizationWorkspace() {
         ) : (
           <StatStrip>
             {members ? (
-              <StatStripItem value={formatTotal(members.total)} label="Integrantes activos" />
+              <StatStripItem
+                value={formatTotal(members.total)}
+                label={countLabel(members.total, 'Integrante activo', 'Integrantes activos')}
+              />
             ) : null}
             {invitations ? (
               <StatStripItem
                 value={formatTotal(invitations.total)}
-                label="Invitaciones pendientes"
+                label={countLabel(
+                  invitations.total,
+                  'Invitación pendiente',
+                  'Invitaciones pendientes',
+                )}
               />
             ) : null}
           </StatStrip>
