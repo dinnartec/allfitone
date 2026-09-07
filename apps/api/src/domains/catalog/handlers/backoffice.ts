@@ -136,7 +136,11 @@ function resultContractPublication(body: unknown): ResultContractPublication | u
   if (typeof body.activity_type_id !== 'string' || !UUID.test(body.activity_type_id)) {
     return undefined
   }
-  if (body.is_default !== undefined && typeof body.is_default !== 'boolean') return undefined
+  // Read into a local before the checks below. Narrowing a property of an index
+  // signature is not guaranteed to survive the calls between the guard and the
+  // return, and CI caught this one still typed as unknown at the return.
+  const isDefault = body.is_default
+  if (isDefault !== undefined && typeof isDefault !== 'boolean') return undefined
 
   const fixtures = body.fixtures
   if (!Array.isArray(fixtures) || fixtures.length < 2 || fixtures.length > MAX_FIXTURES) {
@@ -158,7 +162,7 @@ function resultContractPublication(body: unknown): ResultContractPublication | u
     minimums: body.minimums,
     fixtures: parsed as ResultContractPublication['fixtures'],
     activity_type_id: body.activity_type_id,
-    ...(body.is_default === undefined ? {} : { is_default: body.is_default }),
+    ...(isDefault === undefined ? {} : { is_default: isDefault }),
   }
 }
 

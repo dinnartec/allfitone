@@ -308,10 +308,10 @@ function dutyGrant(body: unknown):
     return undefined
   }
   if (typeof body.valid_to !== 'string' || !isInstant(body.valid_to)) return undefined
-  if (
-    body.valid_from !== undefined &&
-    (typeof body.valid_from !== 'string' || !isInstant(body.valid_from))
-  ) {
+  // Same reason as the catalogue handler: the guard and the use are separated by
+  // calls, so the value is captured rather than re-narrowed at the return.
+  const validFrom = body.valid_from
+  if (validFrom !== undefined && (typeof validFrom !== 'string' || !isInstant(validFrom))) {
     return undefined
   }
   if (
@@ -324,7 +324,7 @@ function dutyGrant(body: unknown):
   return {
     personId: body.person_id,
     dutyCode: body.duty_code as PlatformDutyCode,
-    validFrom: typeof body.valid_from === 'string' ? body.valid_from : undefined,
+    validFrom,
     validTo: body.valid_to,
     reasonCode: body.reason_code,
   }
