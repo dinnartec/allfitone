@@ -95,12 +95,6 @@
   justify-content: flex-end;
 }
 
-/* The Design System note aligns an icon to the top of its text. This one holds a
-   text badge instead, and two runs of text align on their baselines. */
-[data-studio-age-note] {
-  align-items: baseline;
-}
-
 /* ----------------------------------------------------------------- sidebar */
 
 [data-organization-brand] {

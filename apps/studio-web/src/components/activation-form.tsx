@@ -152,11 +152,9 @@ export function ActivationForm({
           <SetupPanelDescription>
             Tu nombre ya viene de tu cuenta. Las confirmaciones solo puedes hacerlas tú.
           </SetupPanelDescription>
-          {/* The note is built for an icon beside its text; a badge and a paragraph
-              need their first baselines aligned by hand. */}
-          <SetupPanelNote data-studio-age-note>
+          <SetupPanelNote>
             <span aria-hidden="true">18+</span>
-            <p>Declaras ser mayor de edad. No pedimos ni guardamos tu fecha de nacimiento.</p>
+            Declaras ser mayor de edad. No pedimos ni guardamos tu fecha de nacimiento.
           </SetupPanelNote>
         </SetupPanelIntro>
 

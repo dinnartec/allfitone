@@ -59,10 +59,7 @@ export function InvitationWaiting({ onCheck }: { onCheck: () => Promise<void> })
           </SetupPanelDescription>
           <SetupPanelNote>
             <FoundationIcon name="activity" decorative />
-            <p>
-              Las membresías se consultan de nuevo solo cuando tú lo pides o cuando vuelves a
-              entrar.
-            </p>
+            Las membresías se consultan de nuevo solo cuando tú lo pides o cuando vuelves a entrar.
           </SetupPanelNote>
         </SetupPanelIntro>
 
