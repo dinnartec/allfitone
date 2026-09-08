@@ -3,6 +3,7 @@
 import { ProductWordmark } from '@allfitone/react/brand'
 import { Alert, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
 import { Button } from '@allfitone/react/components/button'
+import { Card, CardContent } from '@allfitone/react/components/card'
 import { Spinner } from '@allfitone/react/components/spinner'
 import {
   WorkspaceActions,
@@ -234,10 +235,14 @@ export function OrganizationContextBoundary({
         {blocked ? (
           <div data-organization-verification-overlay>
             {state.verification === 'checking' ? (
-              <div data-organization-state role="status" aria-live="polite">
-                <Spinner label="Comprobando tu acceso…" />
-                <p>Comprobando tu acceso…</p>
-              </div>
+              // The card carries its own surface because it now sits over the
+              // blurred workspace rather than over an emptied page.
+              <Card data-organization-verification-status>
+                <CardContent data-organization-verification-body role="status" aria-live="polite">
+                  <Spinner role={undefined} aria-hidden="true" />
+                  <p>Comprobando tu acceso…</p>
+                </CardContent>
+              </Card>
             ) : (
               <OrganizationVerificationError onRetry={() => void load()} />
             )}

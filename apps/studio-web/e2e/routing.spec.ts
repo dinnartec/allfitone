@@ -563,6 +563,11 @@ test('blocks revalidation without remounting the workspace state', async ({ page
   const protectedContent = page.locator('[data-organization-protected-content]')
   await expect(protectedContent).toHaveAttribute('inert', '')
   await expect(protectedContent).toHaveAttribute('aria-hidden', 'true')
+  // Illegible and out of reach, but still there. Hiding it outright blanked the
+  // page for a check that usually resolves in milliseconds, which reads as a
+  // reload; a logout in flight already answers this with the same blur.
+  await expect(protectedContent).toBeVisible()
+  await expect(protectedContent).toHaveCSS('filter', /blur\(7px\)/)
   await expect(page.locator('[data-organization-verification-overlay]')).toBeVisible()
 
   releaseRevalidation?.()

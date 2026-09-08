@@ -167,7 +167,8 @@
 
 [data-studio-loading-body],
 [data-role-catalog-state],
-[data-session-ending-body] {
+[data-session-ending-body],
+[data-organization-verification-body] {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -428,8 +429,13 @@
 
 /* ----------------------------------------------------------------- session */
 
+/* Illegible and out of reach, not gone. Hiding it outright blanked the whole
+   page for the length of a check that usually resolves in milliseconds, which
+   reads as a reload. This is the treatment a logout in flight already uses. */
 [data-organization-protected-content][aria-hidden='true'] {
-  visibility: hidden;
+  pointer-events: none;
+  filter: blur(7px);
+  user-select: none;
 }
 
 [data-organization-verification-overlay] {
