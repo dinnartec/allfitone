@@ -48,12 +48,6 @@ import { DOCK_HEIGHT, TabBar, type TabKey } from '../../src/components/tab-bar'
 const EXPIRED = 'Tu sesión venció. Vuelve a entrar para continuar.'
 const READ_FAILED = 'No pudimos cargar los programas. Inténtalo otra vez.'
 
-const PENDING = {
-  routines: 'Tus rutinas llegan con tu contenido personal.',
-  mine: 'Tu biblioteca propia llega con tu contenido personal.',
-  own: 'Crear tu propio programa llega con tu contenido personal.',
-}
-
 /** As many as the canvas shows: this screen is the shortcut, not the shelf. */
 const SHOWN = 3
 
@@ -124,6 +118,7 @@ export default function Train() {
 
   const navigate = (tab: TabKey) => {
     if (tab === 'today') router.replace('/today')
+    if (tab === 'profile') router.push('/profile')
   }
 
   const open = (program: ProgramSummary) => router.push(`/programs/${program.program_version_id}`)
@@ -153,7 +148,7 @@ export default function Train() {
           ]}
         >
           <Segment label="Programas" active />
-          <Segment label="Rutinas" active={false} onPress={() => setPending(PENDING.routines)} />
+          <Segment label="Rutinas" active={false} onPress={() => router.push('/routines/new')} />
         </View>
 
         <View style={styles.section}>
@@ -247,13 +242,13 @@ export default function Train() {
               icon="checklist"
               label="Ver las mías"
               hint="tu biblioteca"
-              onPress={() => setPending(PENDING.mine)}
+              onPress={() => router.push('/train')}
             />
             <Alternative
               icon="add"
               label="Crear el mío"
               hint="desde cero"
-              onPress={() => setPending(PENDING.own)}
+              onPress={() => router.push('/programs/new')}
             />
           </View>
           <Text role="body" size="xs" color="muted">
