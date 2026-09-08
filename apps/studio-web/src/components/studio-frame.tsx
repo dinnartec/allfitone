@@ -75,17 +75,32 @@ export function StudioProgress({ step }: { step: StudioStep }) {
   )
 }
 
-export function LoadingStage({ label = 'Preparando tu espacio…' }: { label?: string }) {
+const LOADING_LABEL = 'Preparando tu espacio…'
+
+/**
+ * The card with no chrome around it, for a wait that has none to show yet.
+ * A route whose fallback sits above the workspace shell has no header of its
+ * own, and borrowing the setup frame's announces one that is replaced a moment
+ * later.
+ */
+export function LoadingCard({ label = LOADING_LABEL }: { label?: string }) {
+  return (
+    <div data-studio-loading-overlay>
+      <Card data-studio-loading>
+        <CardContent data-studio-loading-body role="status" aria-live="polite">
+          <Spinner role={undefined} aria-hidden="true" />
+          <p>{label}</p>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+/** The same card inside the setup frame, for the waits that happen during setup. */
+export function LoadingStage({ label = LOADING_LABEL }: { label?: string }) {
   return (
     <StudioFrame showLogout={false}>
-      <div data-studio-loading-overlay>
-        <Card data-studio-loading>
-          <CardContent data-studio-loading-body role="status" aria-live="polite">
-            <Spinner role={undefined} aria-hidden="true" />
-            <p>{label}</p>
-          </CardContent>
-        </Card>
-      </div>
+      <LoadingCard label={label} />
     </StudioFrame>
   )
 }
