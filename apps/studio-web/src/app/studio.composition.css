@@ -426,8 +426,11 @@ menu {
 
 /* ------------------------------------------------------------------- roles */
 
+/* `min(24rem, 100%)` and not a bare `24rem`: a fixed minimum cannot shrink, so
+   below 384px the track kept its width and the cards ran out of the screen with
+   their badges cut off. */
 [data-role-register] {
-  grid-template-columns: repeat(auto-fit, minmax(24rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(24rem, 100%), 1fr));
 }
 
 /* Roles read as a matrix, so paired cards end on the same line and their
@@ -486,8 +489,10 @@ menu {
   max-height: calc(100svh - 2rem);
 }
 
+/* Same fixed-minimum trap as the role register: below 352px the track would
+   keep its width and take the cards off the screen. */
 [data-account-map] {
-  grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(22rem, 100%), 1fr));
 }
 
 /* Two cards of unequal copy still have to end on the same line, so the body

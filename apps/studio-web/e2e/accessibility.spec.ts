@@ -84,6 +84,47 @@ test.describe('layout', () => {
         overflow.viewport,
       )
 
+      // The document check alone misses whatever an ancestor scrolls or clips on
+      // its own, which is how a grid whose tracks could not shrink kept its cards
+      // 384px wide on a 390px screen through thirty-nine audited screens.
+      //
+      // The question is whether anything sits off the screen, not whether a box
+      // is narrower than its own content: a long word in a heading exceeds its
+      // content box and still wraps and reads perfectly. Regions that declare a
+      // horizontal scroll are exempt, because scrolling a wide table is the
+      // sanctioned pattern rather than a fault.
+      const offscreen = await page.evaluate(() => {
+        const scrollable = new Set(
+          [...document.querySelectorAll<HTMLElement>('body *')].filter((element) =>
+            ['auto', 'scroll'].includes(getComputedStyle(element).overflowX),
+          ),
+        )
+        const insideScrollRegion = (element: HTMLElement) => {
+          for (let node = element.parentElement; node; node = node.parentElement) {
+            if (scrollable.has(node)) return true
+          }
+          return false
+        }
+        return [...document.querySelectorAll<HTMLElement>('body *')]
+          .filter((element) => {
+            const box = element.getBoundingClientRect()
+            if (box.width === 0 || box.height === 0) return false
+            return Math.round(box.right) > document.documentElement.clientWidth
+          })
+          .filter((element) => !insideScrollRegion(element))
+          .map((element) => {
+            const marker = [...element.attributes]
+              .map((attribute) => attribute.name)
+              .filter((name) => name.startsWith('data-'))
+              .join(' ')
+            const past =
+              Math.round(element.getBoundingClientRect().right) -
+              document.documentElement.clientWidth
+            return `${element.tagName.toLowerCase()}${marker ? ` ${marker}` : ''} past by ${past}px`
+          })
+      })
+      expect(offscreen, `${screen.stories} puts content off the screen`).toEqual([])
+
       // One h1 per screen: the audit brief asks for visual hierarchy, and a
       // page with zero or several top-level headings has none to speak of. A
       // spinner stage is exempt — it has no content to rank.
