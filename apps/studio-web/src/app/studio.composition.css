@@ -83,8 +83,14 @@ menu {
 }
 
 /* A sentence beside a control reads as one row; a title stack beside a badge
-   does not. */
+   does not.
+
+   The row keeps the height a button gives it whether or not it has one. Without
+   that it is 44px on the sections that carry an action and 22px on the ones that
+   do not, so everything below jumped by the difference on every move between
+   sibling tabs. */
 [data-page-header] {
+  min-height: 2.75rem;
   align-items: center;
 }
 
@@ -177,6 +183,7 @@ menu {
 [data-studio-form],
 [data-invitation-waiting],
 [data-team-page],
+[data-team-section],
 [data-profile-section],
 [data-profile-state],
 [data-organization-state],
