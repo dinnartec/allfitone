@@ -20,6 +20,30 @@
   --studio-canvas: 64rem;
 }
 
+/* ------------------------------------------------------------------- reset */
+
+/* `@allfitone/react/app.css` calls itself the application baseline and says it
+   holds "the global canvas, typography bridge, and browser reset". It resets
+   box-sizing, the body margin and control fonts, and stops there — so every
+   list in every consuming app keeps the browser's own 16px block margin and
+   40px inline indent.
+
+   This belongs in that file, not here: Space and Backoffice have the same hole.
+   It sits in Studio because the alternative was a seventh copy of `margin: 0;
+   padding: 0` on a seventh list, and because a Design System component cannot
+   be reached from here — `NavigationMenuList` sets `list-none` and leaves the
+   box, which is what put a 40px indent under the team section tabs.
+
+   Lists only. Paragraphs and headings carry the same leak, but resetting those
+   changes spacing on every screen at once and this app has no visual snapshots
+   to catch it; they are a separate change with a review behind it. */
+ul,
+ol,
+menu {
+  margin: 0;
+  padding: 0;
+}
+
 /* ---------------------------------------------------------------- canvases */
 
 [data-organization-content] > *,
@@ -308,6 +332,8 @@
   width: min(100%, 24rem);
 }
 
+/* No `margin: 0; padding: 0` any more: six lists carried that by hand to
+   compensate for the missing reset above. */
 [data-overview-attention-list],
 [data-overview-team-list],
 [data-team-directory-card-list],
@@ -315,8 +341,6 @@
 [data-credential-history] {
   display: grid;
   gap: var(--afo-space-3);
-  margin: 0;
-  padding: 0;
   list-style: none;
 }
 
