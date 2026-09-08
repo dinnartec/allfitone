@@ -37,7 +37,7 @@ test('owner consults the minimum team directory and navigates with real section 
     'page',
   )
   await expect(sectionNavigation.getByRole('link', { name: 'Invitaciones' })).toBeVisible()
-  await expect(sectionNavigation.getByRole('link', { name: 'Roles y permisos' })).toBeVisible()
+  await expect(sectionNavigation.getByRole('link', { name: 'Roles', exact: true })).toBeVisible()
   await expect(
     page.getByRole('region', { name: 'Tabla de integrantes de la organización' }),
   ).toBeVisible()
@@ -60,10 +60,10 @@ test('owner consults the minimum team directory and navigates with real section 
     ),
   ).toBe(true)
 
-  await sectionNavigation.getByRole('link', { name: 'Roles y permisos' }).focus()
+  await sectionNavigation.getByRole('link', { name: 'Roles', exact: true }).focus()
   await page.keyboard.press('Enter')
   await expect(page).toHaveURL(`/organizations/${activeMembership.organization_id}/team/roles`)
-  await expect(sectionNavigation.getByRole('link', { name: 'Roles y permisos' })).toHaveAttribute(
+  await expect(sectionNavigation.getByRole('link', { name: 'Roles', exact: true })).toHaveAttribute(
     'aria-current',
     'page',
   )
@@ -83,7 +83,7 @@ test('coach sees only the governed role catalog and never requests the team dire
   await expect(page.getByText('No tienes acceso a este directorio')).toBeVisible()
   const sectionNavigation = page.getByRole('navigation', { name: 'Secciones del equipo' })
   await expect(sectionNavigation.getByRole('link', { name: 'Integrantes' })).toBeVisible()
-  await expect(sectionNavigation.getByRole('link', { name: 'Roles y permisos' })).toBeVisible()
+  await expect(sectionNavigation.getByRole('link', { name: 'Roles', exact: true })).toBeVisible()
   await expect(sectionNavigation.getByRole('link', { name: 'Invitaciones' })).toHaveCount(0)
   await expect(
     page.locator('[data-organization-sidebar]').getByRole('link', { name: 'Equipo' }),
@@ -351,7 +351,7 @@ for (const viewport of [
         true,
       )
 
-      await page.getByRole('link', { name: 'Roles y permisos' }).click()
+      await page.getByRole('link', { name: 'Roles', exact: true }).click()
       await expect(page.locator('[data-role-card]')).toHaveCount(4)
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
         true,

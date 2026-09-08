@@ -52,14 +52,14 @@ export function OrganizationRoleCatalog() {
 
   return (
     <section data-team-page data-role-page aria-label="Roles y permisos">
+      {/* The panel this replaced said the roles were four, fixed and read-only.
+          The count is on screen to be counted and the screen carries no control
+          to change anything; that they cannot be customised is the one fact a
+          reader could not get anywhere else, so it moves into the sentence that
+          already explains the view. */}
       <WorkspacePageHeader
-        description={`Consulta para qué sirve cada rol antes de decidir cómo debe participar una persona en ${current.display_name}.`}
+        description={`Allfit One tiene cuatro roles fijos. Consulta para qué sirve cada uno antes de decidir cómo debe participar una persona en ${current.display_name}.`}
       />
-
-      <Alert variant="info">
-        <AlertTitle>Cuatro roles fijos, solo consulta</AlertTitle>
-        <AlertDescription>Desde esta pantalla no se cambian roles.</AlertDescription>
-      </Alert>
 
       {query.isFetching && state.kind === 'ready' ? (
         <p data-query-refreshing role="status" aria-live="polite">
