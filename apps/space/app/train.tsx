@@ -46,7 +46,6 @@ import { DOCK_HEIGHT, TabBar, type TabKey } from '../src/components/tab-bar'
 const EXPIRED = 'Tu sesión venció. Vuelve a entrar para continuar.'
 const READ_FAILED = 'No pudimos cargar tu semana. Inténtalo otra vez.'
 const START_FAILED = 'No pudimos empezar la sesión. Inténtalo otra vez.'
-const PENDING_CREATE = 'Crear un programa propio llega con tu contenido personal.'
 const ORDER_FAILED = 'No pudimos guardar el orden. Inténtalo otra vez.'
 
 /** Tall enough for the name and the line under it, and the same for every row. */
@@ -131,6 +130,7 @@ export default function Train() {
 
   const navigate = (tab: TabKey) => {
     if (tab === 'today') router.replace('/today')
+    if (tab === 'profile') router.push('/profile')
   }
 
   return (
@@ -261,7 +261,7 @@ export default function Train() {
             icon="create"
             onPress={() => {
               setChoosing(false)
-              setPending(PENDING_CREATE)
+              router.push('/programs/new')
             }}
           />
           <Button

@@ -36,11 +36,11 @@ export interface TabBarProps {
   readonly onNavigate: (tab: TabKey) => void
 }
 
-const PENDING: Record<TabKey | 'food', string> = {
+// Only the tabs that are not built yet. A built tab navigates and never explains.
+const PENDING: Partial<Record<TabKey | 'food', string>> = {
   today: '',
   train: 'Entrenar llega con el registro de ejecución.',
   history: 'Tu historial llega con las sesiones registradas.',
-  profile: 'Tu perfil llega con la pantalla de datos y permisos.',
   food: 'Comida llega con el registro de nutrición.',
 }
 
@@ -48,7 +48,7 @@ const TABS: ReadonlyArray<{ key: TabKey; icon: IconName; label: string; built: b
   { key: 'today', icon: 'home', label: 'Hoy', built: true },
   { key: 'train', icon: 'training', label: 'Entrenar', built: true },
   { key: 'history', icon: 'history', label: 'Historial', built: false },
-  { key: 'profile', icon: 'person', label: 'Perfil', built: false },
+  { key: 'profile', icon: 'person', label: 'Perfil', built: true },
 ]
 
 export function TabBar({ active, onPending, onNavigate }: TabBarProps) {
@@ -69,7 +69,7 @@ export function TabBar({ active, onPending, onNavigate }: TabBarProps) {
                 ? undefined
                 : tab.built
                   ? () => onNavigate(tab.key)
-                  : () => onPending(PENDING[tab.key])
+                  : () => onPending(PENDING[tab.key] ?? '')
             }
           />
         ))}
@@ -78,7 +78,7 @@ export function TabBar({ active, onPending, onNavigate }: TabBarProps) {
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Registrar una comida"
-        onPress={() => onPending(PENDING.food)}
+        onPress={() => onPending(PENDING.food ?? '')}
         style={[
           styles.capture,
           resolveShadowStyle('floating'),

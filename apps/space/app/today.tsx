@@ -162,6 +162,7 @@ export default function Today() {
 
   const navigate = (tab: TabKey) => {
     if (tab === 'train') router.push('/train')
+    if (tab === 'profile') router.push('/profile')
   }
 
   return (

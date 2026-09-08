@@ -228,6 +228,7 @@ export async function authorizedPost<T>(
   command: { idempotencyKey: string; commandId: string } | undefined,
   body: unknown,
   token?: string,
+  ifMatch?: string,
 ): Promise<T> {
   const { signal, done } = timeoutSignal(TIMEOUT_MS)
   let response: Response | undefined
@@ -239,6 +240,9 @@ export async function authorizedPost<T>(
         ...(command
           ? { 'Idempotency-Key': command.idempotencyKey, 'Command-Id': command.commandId }
           : {}),
+        // Publishing is a precondition on the draft, not on a revision: an etag is
+        // what says which draft this press meant.
+        ...(ifMatch === undefined ? {} : { 'If-Match': ifMatch }),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
@@ -272,7 +276,7 @@ export async function authorizedPut<T>(
   command: { idempotencyKey: string; commandId: string },
   body: unknown,
   token: string | undefined,
-  ifMatch?: number,
+  ifMatch?: number | string,
 ): Promise<T> {
   const { signal, done } = timeoutSignal(TIMEOUT_MS)
   let response: Response | undefined
@@ -304,6 +308,25 @@ export async function authorizedPut<T>(
  * Authenticated GET. No command headers: a read is not a command, and sending
  * them would claim an idempotency key for something that changes nothing.
  */
+/**
+ * `OP-IDN-048`. Resolves whatever happens, because the operation has no rejection and
+ * the device erases regardless — see `sign-out.ts`.
+ */
+export async function revokeSpaceSession(token: string | undefined): Promise<void> {
+  const { signal, done } = timeoutSignal(TIMEOUT_MS)
+  try {
+    await fetch(`${BASE_URL}/space/v1/auth/sessions`, {
+      method: 'DELETE',
+      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      signal,
+    })
+  } catch {
+    // Deliberate. A phone with no network still has to be able to sign out.
+  } finally {
+    done()
+  }
+}
+
 export async function authorizedGet<T>(path: string, token?: string): Promise<T> {
   const { signal, done } = timeoutSignal(TIMEOUT_MS)
   let response: Response | undefined
