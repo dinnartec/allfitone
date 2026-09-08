@@ -9,9 +9,15 @@
 
 :root {
   /* One measure for reading, one for the workspace canvas. Without them the
-     product stretches a single sentence across 1400px on a wide display. */
+     product stretches a single sentence across 1400px on a wide display.
+
+     The canvas is 64rem because that is what the content it holds turned out to
+     want: the overview had already been pulled back to it on its own, since at
+     82rem its rows put a name at one edge and a badge at the other. Leaving the
+     two at different widths made the page jump 144px per side on every move
+     between sections. A workspace has one canvas. */
   --studio-measure: 58rem;
-  --studio-canvas: 82rem;
+  --studio-canvas: 64rem;
 }
 
 /* ---------------------------------------------------------------- canvases */
@@ -280,10 +286,9 @@
 /* One column. A two-column grid left the whole right half empty whenever the
    organization had a single card to show, which is the common case.
 
-   The overview summarises; it is not a register. At the full canvas width its
-   rows put a name at one edge and a badge at the other with 700px between. */
+   No width of its own any more: the canvas is now the width this panel had
+   asked for, so the exception it used to carry is the rule. */
 [data-organization-overview] {
-  width: min(100%, 64rem);
   grid-template-columns: minmax(0, 1fr);
 }
 
