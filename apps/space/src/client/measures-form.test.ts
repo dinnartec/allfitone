@@ -11,11 +11,9 @@ import {
   readingFor,
   RESTING_HEIGHT_CM,
   RESTING_WEIGHT_KG,
-  MARK_PITCH,
+  runFor,
   SCALES,
   toCanonical,
-  tapeOffsetFor,
-  tapeValueFor,
   unitFromSaved,
   type MeasureUnit,
 } from './measures-form'
@@ -181,31 +179,34 @@ describe('canSubmitMeasure', () => {
   })
 })
 
-describe('the weight tape', () => {
-  const { min, max } = SCALES.kg
+describe('the run the wheel scrolls through', () => {
+  test('holds every value of the scale, ends included', () => {
+    const { min, max } = SCALES.kg
+    const run = runFor('kg')
 
-  test('places the value under the pointer, not between two marks', () => {
-    // Each stroke is centred in its own cell, so the offset carries half a pitch.
-    // Without it the pointer sat between the marks and looked misaligned by a hair.
-    expect(tapeOffsetFor(min, min)).toBe(-MARK_PITCH / 2)
-    expect(tapeOffsetFor(min + 1, min)).toBe(-MARK_PITCH - MARK_PITCH / 2)
+    expect(run[0]).toBe(min)
+    expect(run.at(-1)).toBe(max)
+    expect(run).toHaveLength(max - min + 1)
   })
 
-  test('reads back every value it can place', () => {
-    for (let weight = min; weight <= max; weight += 1) {
-      expect(tapeValueFor(tapeOffsetFor(weight, min), min, max)).toBe(weight)
+  test('ascends one unit at a time, so no weight is unreachable', () => {
+    // A wheel that skips is a wheel somebody cannot land their own number on.
+    const run = runFor('lb')
+
+    const gaps = run.filter((entry, index) => index > 0 && entry - Number(run[index - 1]) !== 1)
+
+    expect(gaps).toEqual([])
+  })
+
+  test('every unit has a run, and each starts where its scale starts', () => {
+    for (const unit of ['kg', 'lb', 'cm', 'in'] as const) {
+      expect(runFor(unit)[0]).toBe(SCALES[unit].min)
     }
   })
 
-  test('snaps to the nearest mark rather than drifting between them', () => {
-    const at70 = tapeOffsetFor(70, min)
-
-    expect(tapeValueFor(at70 + MARK_PITCH * 0.4, min, max)).toBe(70)
-    expect(tapeValueFor(at70 + MARK_PITCH * 0.6, min, max)).toBe(69)
-  })
-
-  test('clamps at both ends, so dragging past the tape does not invent a weight', () => {
-    expect(tapeValueFor(tapeOffsetFor(min, min) + 500, min, max)).toBe(min)
-    expect(tapeValueFor(tapeOffsetFor(max, min) - 500, min, max)).toBe(max)
+  test('the resting values are on their runs', () => {
+    // They are what the wheel opens on; off the run it would open somewhere else.
+    expect(runFor('kg')).toContain(RESTING_WEIGHT_KG)
+    expect(runFor('cm')).toContain(RESTING_HEIGHT_CM)
   })
 })

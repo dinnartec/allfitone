@@ -144,44 +144,13 @@ export function unitFromSaved(
   return canonicalUnit
 }
 
-/** Points between two marks on the weight tape. */
-export const MARK_PITCH = 11
-
 /**
- * Where the tape has to sit for a value to fall under the fixed pointer.
+ * Every value the wheel can land on, in the unit shown.
  *
- * Half a cell is added because each stroke is centred inside its own mark: without it
- * the pointer lands between two marks rather than on one.
- *
- * Marked as a worklet because the pan handler calls it on the UI thread while the
- * effect that follows the state calls it from JavaScript. A plain function reached
- * from a worklet throws at the first drag — which is exactly how it was found.
+ * Built rather than stored because the run is the scale: two homes for "which numbers
+ * exist" is two answers, and the one people scroll past would be the wrong one.
  */
-export function tapeOffsetFor(value: number, min: number): number {
-  'worklet'
-  return -((value - min) * MARK_PITCH + MARK_PITCH / 2)
-}
-
-/** And back: which value sits under the pointer for a given tape offset. */
-export function tapeValueFor(offset: number, min: number, max: number): number {
-  'worklet'
-  const raw = min + (-offset - MARK_PITCH / 2) / MARK_PITCH
-  return Math.round(Math.min(max, Math.max(min, raw)))
-}
-
-/**
- * The same two functions for a tape that runs down instead of across.
- *
- * The tallest reading sits at the top, which is how a height is read off a wall, so
- * the tape is ordered from `max` down and the offset counts from there.
- */
-export function verticalOffsetFor(value: number, max: number): number {
-  'worklet'
-  return -((max - value) * MARK_PITCH + MARK_PITCH / 2)
-}
-
-export function verticalValueFor(offset: number, min: number, max: number): number {
-  'worklet'
-  const raw = max - (-offset - MARK_PITCH / 2) / MARK_PITCH
-  return Math.round(Math.min(max, Math.max(min, raw)))
+export function runFor(unit: MeasureUnit): readonly number[] {
+  const { min, max } = SCALES[unit]
+  return Array.from({ length: max - min + 1 }, (_, step) => min + step)
 }

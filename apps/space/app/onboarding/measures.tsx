@@ -36,16 +36,17 @@ import { FoundationIcon } from '@allfitone/react-native/icons'
 import { InlineAlert } from '@allfitone/react-native/inline-alert'
 import { Screen } from '@allfitone/react-native/screen'
 import { Text } from '@allfitone/react-native/text'
+import { WheelPicker } from '@allfitone/react-native/wheel-picker'
 import { useTheme } from '@allfitone/react-native/theme'
 import { useRouter } from 'expo-router'
 import { useEffect, useMemo, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
 
-import { MeasureTape } from '../../src/components/measure-tape'
 import { OnboardingHeader } from '../../src/components/onboarding-header'
 import { ApiError } from '../../src/client'
 import { createSpaceOnboardingFlow } from '../../src/client/onboarding-transport'
 import { guardStep, nextRouteAfter } from '../../src/client/onboarding-steps'
+import { selectionTick } from '../../src/client/selection-tick'
 import {
   CANONICAL_LENGTH,
   CANONICAL_MASS,
@@ -54,7 +55,7 @@ import {
   readingFor,
   RESTING_HEIGHT_CM,
   RESTING_WEIGHT_KG,
-  SCALES,
+  runFor,
   toCanonical,
   unitFromSaved,
   type LengthUnit,
@@ -67,22 +68,25 @@ const EXPIRED = 'Tu sesión venció. Vuelve a entrar para guardar tu respuesta.'
 const READ_FAILED = 'No pudimos leer tus respuestas. Inténtalo otra vez.'
 const SAVE_FAILED = 'No pudimos guardar tus medidas. Inténtalo otra vez.'
 
-const UNIT_LABEL: Record<MeasureUnit, string> = {
-  kg: 'KILOS',
-  lb: 'LIBRAS',
-  cm: 'CENTÍMETROS',
-  in: 'PIES',
+/** Drawn on the pill. Short because the pill sits beside the caption, not under it. */
+const UNIT_LABEL: Record<MeasureUnit, string> = { kg: 'KG', lb: 'LB', cm: 'CM', in: 'FT' }
+
+/** Said out loud. `FT` is two letters a screen reader spells rather than reads. */
+const UNIT_SPOKEN: Record<MeasureUnit, string> = {
+  kg: 'Kilos',
+  lb: 'Libras',
+  cm: 'Centímetros',
+  in: 'Pies',
 }
 
-/** Both segments the same width: a long label beside a short one skews the pill. */
-const SEGMENT = 108
+/** What hangs off the reading inside the wheel. */
+const UNIT_SUFFIX: Record<MeasureUnit, string> = { kg: 'kg', lb: 'lb', cm: 'cm', in: '' }
 
 export default function OnboardingMeasures() {
   const router = useRouter()
   const theme = useTheme()
   const flow = useMemo(() => createSpaceOnboardingFlow(), [])
 
-  const [tapeWidth, setTapeWidth] = useState(0)
   const [weightKg, setWeightKg] = useState(RESTING_WEIGHT_KG)
   const [heightCm, setHeightCm] = useState(RESTING_HEIGHT_CM)
   const [massUnit, setMassUnit] = useState<MassUnit>(CANONICAL_MASS)
@@ -188,13 +192,12 @@ export default function OnboardingMeasures() {
             key={option}
             accessibilityRole="radio"
             accessibilityState={{ selected: on, disabled: !pressable }}
-            accessibilityLabel={UNIT_LABEL[option]}
+            accessibilityLabel={UNIT_SPOKEN[option]}
             disabled={!pressable}
             onPress={() => choose(option)}
             hitSlop={8}
             style={[
               styles.unit,
-              { width: SEGMENT },
               on
                 ? {
                     backgroundColor: theme.color.accent.tonal,
@@ -214,6 +217,10 @@ export default function OnboardingMeasures() {
 
   const weightReading = readingFor(weightKg, massUnit)
   const heightReading = readingFor(heightCm, lengthUnit)
+  // Memoised because the run is a hundred-odd rows: rebuilding it per render would
+  // re-render every one of them on every scroll frame.
+  const weightRun = useMemo(() => runFor(massUnit), [massUnit])
+  const heightRun = useMemo(() => runFor(lengthUnit), [lengthUnit])
 
   return (
     <Screen edges={['top', 'bottom']}>
@@ -229,80 +236,56 @@ export default function OnboardingMeasures() {
           ¿Cuánto pesas{'\n'}y cuánto mides?
         </Text>
 
-        <View
-          style={styles.blocks}
-          onLayout={(event) => setTapeWidth(event.nativeEvent.layout.width)}
-        >
-          {/* Two blocks of the same shape. That sameness is what lets them share a
-              screen: as different objects they competed, as one repeated object they
-              read as a pair. */}
+        <View style={styles.blocks}>
+          {/* One control, two orientations. Weight runs across and height runs down —
+              the pairing is the point, and it is why they are one component: as two
+              they would drift apart the first time either was touched. */}
           <View style={styles.block}>
-            <Text role="body" size="xs" color="muted" style={styles.caption}>
-              PESO
-            </Text>
-            {units(['kg', 'lb'] as const, massUnit, setMassUnit)}
-            <View style={styles.reading}>
-              <Text role="display" size="6xl" style={styles.number}>
-                {weightReading.text}
+            <View style={styles.head}>
+              <Text role="body" size="xs" color="muted" style={styles.caption}>
+                PESO
               </Text>
-              <Text role="body" size="sm" color="accent" style={styles.unitSuffix}>
-                {weightReading.suffix.toUpperCase()}
-              </Text>
+              {units(['kg', 'lb'] as const, massUnit, setMassUnit)}
             </View>
-            {tapeWidth > 0 ? (
-              <MeasureTape
-                min={SCALES[massUnit].min}
-                max={SCALES[massUnit].max}
-                major={SCALES[massUnit].major}
-                value={displayIn(weightKg, massUnit)}
-                onChange={(shown) => {
-                  setWeightKg(toCanonical(shown, massUnit))
-                  setWeightTouched(true)
-                }}
-                width={tapeWidth}
-                disabled={!pressable}
-                accessibilityLabel="Peso"
-                accessibilityText={`${weightReading.text} ${weightReading.suffix}`}
-              />
-            ) : null}
+            <WheelPicker
+              orientation="horizontal"
+              values={weightRun}
+              value={displayIn(weightKg, massUnit)}
+              onChange={(shown) => {
+                setWeightKg(toCanonical(shown, massUnit))
+                setWeightTouched(true)
+                selectionTick()
+              }}
+              suffix={UNIT_SUFFIX[massUnit]}
+              disabled={!pressable}
+              accessibilityLabel="Peso"
+              accessibilityText={`${weightReading.text} ${weightReading.suffix}`}
+            />
           </View>
 
           <View style={styles.block}>
-            <Text role="body" size="xs" color="muted" style={styles.caption}>
-              ESTATURA
-            </Text>
-            {units(['cm', 'in'] as const, lengthUnit, setLengthUnit)}
-            <View style={styles.reading}>
-              <Text role="display" size="6xl" style={styles.number}>
-                {heightReading.text}
+            <View style={styles.head}>
+              <Text role="body" size="xs" color="muted" style={styles.caption}>
+                ESTATURA
               </Text>
-              {heightReading.suffix ? (
-                <Text role="body" size="sm" color="accent" style={styles.unitSuffix}>
-                  {heightReading.suffix.toUpperCase()}
-                </Text>
-              ) : null}
+              {units(['cm', 'in'] as const, lengthUnit, setLengthUnit)}
             </View>
-            {tapeWidth > 0 ? (
-              <MeasureTape
-                min={SCALES[lengthUnit].min}
-                max={SCALES[lengthUnit].max}
-                major={SCALES[lengthUnit].major}
-                value={displayIn(heightCm, lengthUnit)}
-                onChange={(shown) => {
-                  setHeightCm(toCanonical(shown, lengthUnit))
-                  setHeightTouched(true)
-                }}
-                width={tapeWidth}
-                disabled={!pressable}
-                accessibilityLabel="Estatura"
-                accessibilityText={`${heightReading.text} ${heightReading.suffix}`}
-                formatLabel={(mark) =>
-                  lengthUnit === 'in'
-                    ? readingFor(toCanonical(mark, 'in'), 'in').text
-                    : String(mark)
-                }
-              />
-            ) : null}
+            <WheelPicker
+              values={heightRun}
+              value={displayIn(heightCm, lengthUnit)}
+              onChange={(shown) => {
+                setHeightCm(toCanonical(shown, lengthUnit))
+                setHeightTouched(true)
+                selectionTick()
+              }}
+              suffix={UNIT_SUFFIX[lengthUnit]}
+              disabled={!pressable}
+              accessibilityLabel="Estatura"
+              accessibilityText={`${heightReading.text} ${heightReading.suffix}`}
+              formatValue={(mark) =>
+                lengthUnit === 'in' ? readingFor(toCanonical(mark, 'in'), 'in').text : String(mark)
+              }
+            />
           </View>
         </View>
       </ScrollView>
@@ -341,20 +324,22 @@ export default function OnboardingMeasures() {
 const styles = StyleSheet.create({
   scroll: { flex: 1 },
   content: { flexGrow: 1, paddingBottom: 4 },
-  // The two blocks share what the title and the footer leave, so neither is crowded
-  // and no dead band opens under them.
-  blocks: { flex: 1, justifyContent: 'space-evenly', marginTop: 8 },
-  block: { gap: 10 },
+  // The leftover split three ways rather than gathered anywhere. This phone is taller
+  // than the canvas, so several hundred points have to go somewhere: centring the pair
+  // put it all in the margins and left the two blocks stuck against each other, and
+  // anchoring them at both ends put it all between them, which stopped them reading as
+  // a pair at all. Evenly is the only division that crowds nothing.
+  blocks: { flex: 1, justifyContent: 'space-evenly' },
+  block: { gap: 6 },
   caption: { letterSpacing: 1.6 },
-  units: {
-    flexDirection: 'row',
-    alignSelf: 'flex-start',
-    padding: 3,
-    borderWidth: 1,
-    borderRadius: 999,
-  },
+  // Caption and pill share a line. Stacked, the pill read as a second control the
+  // person had to deal with before reaching the wheel.
+  head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  units: { flexDirection: 'row', padding: 3, borderWidth: 1, borderRadius: 999 },
   unit: {
-    minHeight: 34,
+    minWidth: 40,
+    minHeight: 25,
+    paddingHorizontal: 12,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
@@ -362,9 +347,6 @@ const styles = StyleSheet.create({
   },
   unitOff: { borderColor: 'transparent' },
   unitText: { letterSpacing: 1.4 },
-  reading: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center', gap: 8 },
-  number: { letterSpacing: -2 },
-  unitSuffix: { letterSpacing: 1.6, marginBottom: 10 },
   note: { flexDirection: 'row', gap: 8, alignItems: 'flex-start', marginTop: 12 },
   noteText: { flex: 1 },
   footer: { paddingTop: 4, paddingBottom: FOOTER_LIFT },
