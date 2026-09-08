@@ -127,6 +127,17 @@ menu {
 
 /* ----------------------------------------------------------------- sidebar */
 
+/* The rail animates its width, but `data-collapsible` flips at once, so the
+   content sized for the open sidebar is mounted while the container is still
+   56px wide. The Design System's SidebarHeader does not clip, so it spilled out
+   of the rail for the length of the animation. Clipping turns that into a
+   reveal. The organization switcher's popover is portalled, so it is not caught
+   by this. */
+[data-organization-brand],
+[data-sidebar-organization] {
+  overflow: hidden;
+}
+
 [data-organization-brand] {
   display: flex;
   min-height: 2.75rem;
