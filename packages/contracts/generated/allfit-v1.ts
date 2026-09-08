@@ -212,7 +212,15 @@ export interface paths {
      *     Rate limiting is mandatory here for the same reason it is on verification.
      */
     post: operations['signInToSpace']
-    delete?: never
+    /**
+     * Sign out of this phone
+     * @description `HU-SP-003`. Revokes the provider session behind the bearer token so the refresh dies with it; the access token already issued keeps verifying until it expires, which is why the device's own erasure is the half that cannot fail.
+     *
+     *     **This operation has no rejection.** A missing, malformed or expired token answers `204` like any other: refusing would leave somebody inside with no way out, and there is nothing left to protect once the phone has erased what it held. The client erases regardless of what this answers.
+     *
+     *     Nothing is written in PostgreSQL. Space is stateless bearer — `identity.access_sessions` projects Studio's cookie sessions and no Space request consults it — so there is no local row to revoke.
+     */
+    delete: operations['signOutOfSpace']
     options?: never
     head?: never
     patch?: never
@@ -1256,7 +1264,11 @@ export interface paths {
      */
     get: operations['listSpacePrograms']
     put?: never
-    post?: never
+    /**
+     * Create a programme of my own
+     * @description Same as a routine: the identity comes first so the base week has somewhere to be saved while it is being built. Owned by the person, not by any organization. The same operation and the same content shape as Studio's: one definition of what a routine is, so a hash means the same thing everywhere.
+     */
+    post: operations['createMyProgram']
     delete?: never
     options?: never
     head?: never
@@ -1372,6 +1384,106 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/space/v1/session-templates': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Create a routine of my own
+     * @description The identity exists before anything is published, so the screen has somewhere to save a draft from the first keystroke. Owned by the person, not by any organization. The same operation and the same content shape as Studio's: one definition of what a routine is, so a hash means the same thing everywhere.
+     */
+    post: operations['createMySessionTemplate']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/session-templates/{templateId}/draft': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    /**
+     * Replace the content of my routine draft
+     * @description Saved as the person types, so the ETag is the only thing standing between two devices editing the same draft. An incomplete draft is legitimate; it just cannot be published.
+     */
+    put: operations['replaceMySessionTemplateDraft']
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/session-templates/{templateId}/versions': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Publish a version of my routine
+     * @description A published version is fixed forever; correcting means publishing another. Publishing the same content twice answers the version that already exists rather than making a second one that says the same thing.
+     */
+    post: operations['publishMySessionTemplate']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/programs/{programId}/draft': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    /**
+     * Replace the content of my programme draft
+     * @description The base week expanded into one entry per week, which is what the stored shape asks for. The screen edits one week; the draft holds them all.
+     */
+    put: operations['replaceMyProgramDraft']
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/programs/{programId}/versions': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Publish a version of my programme
+     * @description Its sessions point at the person\u2019s own routines. Publishing a new version does not change anybody who already took the programme: they keep the plan they took.
+     */
+    post: operations['publishMyProgram']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/space/v1/week-plan': {
     parameters: {
       query?: never
@@ -1404,6 +1516,46 @@ export interface paths {
      * @description Newest first, which is the order the selector opens on. An explicit order is its own column and its own command; ordering by when it was taken is a fact that already exists rather than a preference invented here.
      */
     get: operations['listMyPrograms']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/catalog/v1/movements': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Search the exercise library
+     * @description What `S-1` calls while somebody types. The library is curated content: it is read here and it is never written here. Only the published global subset is visible, which is what the operations matrix already says this operation answers.
+     */
+    get: operations['searchMovements']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/my-content': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * The routines this person has made
+     * @description Drafts and published together, newest first. `template_version_id` is what separates them: a programme points at a version, so a routine with none is a routine that exists and cannot yet go in a programme. The counts describe the published version, never the draft somebody is still typing into.
+     */
+    get: operations['listMyContent']
     put?: never
     post?: never
     delete?: never
@@ -2121,6 +2273,24 @@ export interface components {
     SpaceProgramOrder: {
       assignment_ids: components['schemas']['UuidV7'][]
     }
+    Movement: {
+      /** Format: uuid */
+      id: string
+      discipline_code: string
+      name: string
+    }
+    SpaceMyRoutine: {
+      /** Format: uuid */
+      template_id: string
+      title: string
+      discipline_code: string
+      status: string
+      /** @description The published version a programme can point at. Null means the routine is still only a draft. */
+      template_version_id: components['schemas']['UuidV7'] | null
+      exercise_count: number
+      set_count: number
+      has_unpublished_changes: boolean
+    }
     SpaceMyProgram: {
       assignment_id: components['schemas']['UuidV7']
       program_version_id: components['schemas']['UuidV7']
@@ -2789,7 +2959,8 @@ export interface components {
     }
     SessionTemplate: {
       id: components['schemas']['Uuid']
-      organization_id: components['schemas']['Uuid']
+      /** @description Null when the content belongs to a person rather than to an organization. Ownership is exactly one of the two and never both, so the projection says which by leaving this empty. */
+      organization_id: components['schemas']['Uuid'] | null
       discipline_code: string
       status: components['schemas']['PublicationStatus']
       author_person_id: components['schemas']['Uuid']
@@ -2827,7 +2998,8 @@ export interface components {
     }
     Program: {
       id: components['schemas']['Uuid']
-      organization_id: components['schemas']['Uuid']
+      /** @description Null when the content belongs to a person rather than to an organization. Ownership is exactly one of the two and never both, so the projection says which by leaving this empty. */
+      organization_id: components['schemas']['Uuid'] | null
       status: components['schemas']['PublicationStatus']
       author_person_id: components['schemas']['Uuid']
       draft: components['schemas']['ProgramDraft']
@@ -4487,6 +4659,25 @@ export interface operations {
       }
       429: components['responses']['TooManyRequests']
       503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  signOutOfSpace: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The session is closed, whether or not it existed */
+      204: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content?: never
+      }
     }
   }
   refreshSpaceSession: {
@@ -6525,6 +6716,45 @@ export interface operations {
       503: components['responses']['UpstreamUnavailable']
     }
   }
+  createMyProgram: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ProgramCreate']
+      }
+    }
+    responses: {
+      /** @description Stable programme identity and editable draft */
+      201: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          ETag: components['headers']['ETag']
+          Location: components['headers']['Location']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Program']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      422: components['responses']['ValidationFailed']
+    }
+  }
   reorderMyPrograms: {
     parameters: {
       query?: never
@@ -6691,6 +6921,205 @@ export interface operations {
       503: components['responses']['UpstreamUnavailable']
     }
   }
+  createMySessionTemplate: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SessionTemplateCreate']
+      }
+    }
+    responses: {
+      /** @description Stable template identity and editable draft */
+      201: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          ETag: components['headers']['ETag']
+          Location: components['headers']['Location']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SessionTemplate']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      422: components['responses']['ValidationFailed']
+    }
+  }
+  replaceMySessionTemplateDraft: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description Strong content ETag returned with the current editable draft. */
+        'If-Match': components['parameters']['PlanningDraftIfMatch']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        templateId: components['parameters']['TemplateId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SessionTemplateDraftContent']
+      }
+    }
+    responses: {
+      /** @description Current draft; unchanged replacements preserve its ETag */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          ETag: components['headers']['ETag']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SessionTemplateDraft']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      422: components['responses']['ValidationFailed']
+    }
+  }
+  publishMySessionTemplate: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description Strong content ETag returned with the current editable draft. */
+        'If-Match': components['parameters']['PlanningDraftIfMatch']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        templateId: components['parameters']['TemplateId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The published version */
+      201: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          ETag: components['headers']['ETag']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SessionTemplateVersion']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      422: components['responses']['ValidationFailed']
+    }
+  }
+  replaceMyProgramDraft: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description Strong content ETag returned with the current editable draft. */
+        'If-Match': components['parameters']['PlanningDraftIfMatch']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        programId: components['parameters']['ProgramId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ProgramDraftContent']
+      }
+    }
+    responses: {
+      /** @description Current draft; unchanged replacements preserve its ETag */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          ETag: components['headers']['ETag']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ProgramDraft']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      422: components['responses']['ValidationFailed']
+    }
+  }
+  publishMyProgram: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description Strong content ETag returned with the current editable draft. */
+        'If-Match': components['parameters']['PlanningDraftIfMatch']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        programId: components['parameters']['ProgramId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The published version */
+      201: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          ETag: components['headers']['ETag']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ProgramVersion']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      422: components['responses']['ValidationFailed']
+    }
+  }
   getMyWeekPlan: {
     parameters: {
       query: {
@@ -6735,6 +7164,61 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['SpaceMyProgram'][]
+        }
+      }
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  searchMovements: {
+    parameters: {
+      query?: {
+        /** @description Limit to the discipline the routine is written in. */
+        discipline?: string
+        /** @description Matched anywhere in the name, case-insensitively. Accents are not folded. */
+        q?: string
+        limit?: number
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The movements that match */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Movement'][]
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listMyContent: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The person's own routines */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SpaceMyRoutine'][]
         }
       }
       401: components['responses']['Unauthenticated']

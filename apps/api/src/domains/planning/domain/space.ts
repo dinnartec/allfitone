@@ -15,7 +15,27 @@ export type ProgramDetail = AllfitV1Schemas['SpaceProgramDetail']
 export type TodaySession = AllfitV1Schemas['SpaceTodaySession']
 export type WeekPlan = AllfitV1Schemas['SpaceWeekPlan']
 export type MyProgram = AllfitV1Schemas['SpaceMyProgram']
+export type MyRoutine = AllfitV1Schemas['SpaceMyRoutine']
 export type ProgramOrder = AllfitV1Schemas['SpaceProgramOrder']
+
+/**
+ * The content shapes are Studio's, deliberately. A routine is a routine whoever owns
+ * it, and a second definition would let the same content hash to two things.
+ */
+export type SessionTemplate = AllfitV1Schemas['SessionTemplate']
+export type SessionTemplateDraft = AllfitV1Schemas['SessionTemplateDraft']
+export type SessionTemplateDraftContent = AllfitV1Schemas['SessionTemplateDraftContent']
+export type SessionTemplateVersion = AllfitV1Schemas['SessionTemplateVersion']
+export type Program = AllfitV1Schemas['Program']
+export type ProgramDraft = AllfitV1Schemas['ProgramDraft']
+export type ProgramDraftContent = AllfitV1Schemas['ProgramDraftContent']
+export type ProgramVersion = AllfitV1Schemas['ProgramVersion']
+
+export interface OwnContentCommand {
+  idempotencyKey: string
+  commandId: string
+  requestHash: Buffer
+}
 
 export interface SpacePlanningDatabase {
   readProgramCatalogue(input: { personId: string; requestId: string }): Promise<ProgramSummary[]>
@@ -43,6 +63,7 @@ export interface SpacePlanningDatabase {
     requestId: string
   }): Promise<WeekPlan | null>
   readMyPrograms(input: { personId: string; requestId: string }): Promise<readonly MyProgram[]>
+  readMyContent(input: { personId: string; requestId: string }): Promise<readonly MyRoutine[]>
   reorderMyPrograms(input: {
     personId: string
     assignmentIds: readonly string[]
@@ -50,6 +71,32 @@ export interface SpacePlanningDatabase {
     commandId: string
     requestHash: Buffer
   }): Promise<readonly MyProgram[]>
+  createMySessionTemplate(
+    input: OwnContentCommand & { personId: string; disciplineCode: string; title: string },
+  ): Promise<SessionTemplate>
+  replaceMySessionTemplateDraft(
+    input: OwnContentCommand & {
+      personId: string
+      templateId: string
+      expectedEtag: string
+      content: SessionTemplateDraftContent
+    },
+  ): Promise<SessionTemplateDraft>
+  publishMySessionTemplate(
+    input: OwnContentCommand & { personId: string; templateId: string; expectedEtag: string },
+  ): Promise<SessionTemplateVersion>
+  createMyProgram(input: OwnContentCommand & { personId: string; title: string }): Promise<Program>
+  replaceMyProgramDraft(
+    input: OwnContentCommand & {
+      personId: string
+      programId: string
+      expectedEtag: string
+      content: ProgramDraftContent
+    },
+  ): Promise<ProgramDraft>
+  publishMyProgram(
+    input: OwnContentCommand & { personId: string; programId: string; expectedEtag: string },
+  ): Promise<ProgramVersion>
   selfAssignProgram(input: {
     personId: string
     programVersionId: string

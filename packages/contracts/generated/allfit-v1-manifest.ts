@@ -56,6 +56,13 @@ export const allfitV1ContractManifest = {
     },
     {
       method: 'GET',
+      path: '/catalog/v1/movements',
+      operationId: 'searchMovements',
+      allfitOperation: 'OP-CAT-009',
+      responses: ['200', '400', '401', '403', '503'],
+    },
+    {
+      method: 'GET',
       path: '/space/v1/agenda',
       operationId: 'listMyAgenda',
       allfitOperation: 'OP-PLN-016',
@@ -88,6 +95,13 @@ export const allfitV1ContractManifest = {
       operationId: 'verifySpaceRegistration',
       allfitOperation: 'OP-IDN-039',
       responses: ['200', '400', '401', '429', '503'],
+    },
+    {
+      method: 'DELETE',
+      path: '/space/v1/auth/sessions',
+      operationId: 'signOutOfSpace',
+      allfitOperation: 'OP-IDN-048',
+      responses: ['204'],
     },
     {
       method: 'POST',
@@ -144,6 +158,13 @@ export const allfitV1ContractManifest = {
       operationId: 'replaceExecutionResults',
       allfitOperation: 'OP-EXE-005',
       responses: ['200', '400', '401', '404', '409', '422', '428'],
+    },
+    {
+      method: 'GET',
+      path: '/space/v1/my-content',
+      operationId: 'listMyContent',
+      allfitOperation: 'OP-PLN-025',
+      responses: ['200', '401', '403', '503'],
     },
     {
       method: 'GET',
@@ -279,6 +300,27 @@ export const allfitV1ContractManifest = {
       responses: ['200', '401', '403', '503'],
     },
     {
+      method: 'POST',
+      path: '/space/v1/programs',
+      operationId: 'createMyProgram',
+      allfitOperation: 'OP-PLN-006',
+      responses: ['201', '400', '401', '403', '404', '409', '422'],
+    },
+    {
+      method: 'PUT',
+      path: '/space/v1/programs/{programId}/draft',
+      operationId: 'replaceMyProgramDraft',
+      allfitOperation: 'OP-PLN-007',
+      responses: ['200', '400', '401', '403', '404', '409', '422'],
+    },
+    {
+      method: 'POST',
+      path: '/space/v1/programs/{programId}/versions',
+      operationId: 'publishMyProgram',
+      allfitOperation: 'OP-PLN-008',
+      responses: ['201', '400', '401', '403', '404', '409', '422'],
+    },
+    {
       method: 'GET',
       path: '/space/v1/programs/{programVersionId}',
       operationId: 'getSpaceProgramVersion',
@@ -298,6 +340,27 @@ export const allfitV1ContractManifest = {
       operationId: 'reorderMyPrograms',
       allfitOperation: 'OP-PLN-024',
       responses: ['200', '400', '401', '403'],
+    },
+    {
+      method: 'POST',
+      path: '/space/v1/session-templates',
+      operationId: 'createMySessionTemplate',
+      allfitOperation: 'OP-PLN-001',
+      responses: ['201', '400', '401', '403', '404', '409', '422'],
+    },
+    {
+      method: 'PUT',
+      path: '/space/v1/session-templates/{templateId}/draft',
+      operationId: 'replaceMySessionTemplateDraft',
+      allfitOperation: 'OP-PLN-002',
+      responses: ['200', '400', '401', '403', '404', '409', '422'],
+    },
+    {
+      method: 'POST',
+      path: '/space/v1/session-templates/{templateId}/versions',
+      operationId: 'publishMySessionTemplate',
+      allfitOperation: 'OP-PLN-003',
+      responses: ['201', '400', '401', '403', '404', '409', '422'],
     },
     {
       method: 'GET',

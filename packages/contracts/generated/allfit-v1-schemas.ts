@@ -1224,6 +1224,23 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  Movement: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['id', 'discipline_code', 'name'],
+    properties: {
+      id: {
+        type: 'string',
+        format: 'uuid',
+      },
+      discipline_code: {
+        type: 'string',
+      },
+      name: {
+        type: 'string',
+      },
+    },
+  },
   NutrientCode: {
     type: 'string',
     enum: ['energy', 'protein', 'carbohydrates', 'fat', 'fiber', 'water'],
@@ -2882,7 +2899,16 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         $ref: '#/components/schemas/Uuid',
       },
       organization_id: {
-        $ref: '#/components/schemas/Uuid',
+        oneOf: [
+          {
+            $ref: '#/components/schemas/Uuid',
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description:
+          'Null when the content belongs to a person rather than to an organization. Ownership is exactly one of the two and never both, so the projection says which by leaving this empty.',
       },
       status: {
         $ref: '#/components/schemas/PublicationStatus',
@@ -3271,7 +3297,16 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         $ref: '#/components/schemas/Uuid',
       },
       organization_id: {
-        $ref: '#/components/schemas/Uuid',
+        oneOf: [
+          {
+            $ref: '#/components/schemas/Uuid',
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description:
+          'Null when the content belongs to a person rather than to an organization. Ownership is exactly one of the two and never both, so the projection says which by leaving this empty.',
       },
       discipline_code: {
         type: 'string',
@@ -3889,6 +3924,56 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       sessions_planned: {
         type: 'integer',
         minimum: 0,
+      },
+    },
+  },
+  SpaceMyRoutine: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'template_id',
+      'title',
+      'discipline_code',
+      'status',
+      'template_version_id',
+      'exercise_count',
+      'set_count',
+      'has_unpublished_changes',
+    ],
+    properties: {
+      template_id: {
+        type: 'string',
+        format: 'uuid',
+      },
+      title: {
+        type: 'string',
+      },
+      discipline_code: {
+        type: 'string',
+      },
+      status: {
+        type: 'string',
+      },
+      template_version_id: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/UuidV7',
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description:
+          'The published version a programme can point at. Null means the routine is still only a draft.',
+      },
+      exercise_count: {
+        type: 'integer',
+      },
+      set_count: {
+        type: 'integer',
+      },
+      has_unpublished_changes: {
+        type: 'boolean',
       },
     },
   },

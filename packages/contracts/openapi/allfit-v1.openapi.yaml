@@ -535,6 +535,36 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
+    delete:
+      tags: [Space Identity]
+      operationId: signOutOfSpace
+      x-allfit-operation: OP-IDN-048
+      x-allfit-cache: no-store
+      summary: Sign out of this phone
+      description: >-
+        `HU-SP-003`. Revokes the provider session behind the bearer token so the
+        refresh dies with it; the access token already issued keeps verifying until
+        it expires, which is why the device's own erasure is the half that cannot
+        fail.
+
+
+        **This operation has no rejection.** A missing, malformed or expired token
+        answers `204` like any other: refusing would leave somebody inside with no
+        way out, and there is nothing left to protect once the phone has erased what
+        it held. The client erases regardless of what this answers.
+
+
+        Nothing is written in PostgreSQL. Space is stateless bearer —
+        `identity.access_sessions` projects Studio's cookie sessions and no Space
+        request consults it — so there is no local row to revoke.
+      security:
+        - bearerAuth: []
+      responses:
+        '204':
+          description: The session is closed, whether or not it existed
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
 
   /space/v1/auth/sessions/refresh:
     post:
@@ -3079,6 +3109,53 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
+    post:
+      tags: [Space Planning]
+      operationId: createMyProgram
+      x-allfit-operation: OP-PLN-006
+      x-allfit-cache: no-store
+      summary: Create a programme of my own
+      description: >-
+        Same as a routine: the identity comes first so the base week has somewhere to be saved while it is being built. Owned by the person, not by any organization. The same operation and the same content shape as Studio's: one definition of what a routine is, so a hash means the same thing everywhere.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProgramCreate'
+      responses:
+        '201':
+          description: Stable programme identity and editable draft
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Location:
+              $ref: '#/components/headers/Location'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Program'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
 
   /space/v1/programs/mine/order:
     put:
@@ -3317,6 +3394,239 @@ paths:
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
 
+  /space/v1/session-templates:
+    post:
+      tags: [Space Planning]
+      operationId: createMySessionTemplate
+      x-allfit-operation: OP-PLN-001
+      x-allfit-cache: no-store
+      summary: Create a routine of my own
+      description: >-
+        The identity exists before anything is published, so the screen has somewhere to save a draft from the first keystroke. Owned by the person, not by any organization. The same operation and the same content shape as Studio's: one definition of what a routine is, so a hash means the same thing everywhere.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SessionTemplateCreate'
+      responses:
+        '201':
+          description: Stable template identity and editable draft
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Location:
+              $ref: '#/components/headers/Location'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionTemplate'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /space/v1/session-templates/{templateId}/draft:
+    put:
+      tags: [Space Planning]
+      operationId: replaceMySessionTemplateDraft
+      x-allfit-operation: OP-PLN-002
+      x-allfit-cache: no-store
+      summary: Replace the content of my routine draft
+      description: >-
+        Saved as the person types, so the ETag is the only thing standing between two devices editing the same draft. An incomplete draft is legitimate; it just cannot be published.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TemplateId'
+        - $ref: '#/components/parameters/PlanningDraftIfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SessionTemplateDraftContent'
+      responses:
+        '200':
+          description: Current draft; unchanged replacements preserve its ETag
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionTemplateDraft'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /space/v1/session-templates/{templateId}/versions:
+    post:
+      tags: [Space Planning]
+      operationId: publishMySessionTemplate
+      x-allfit-operation: OP-PLN-003
+      x-allfit-cache: no-store
+      summary: Publish a version of my routine
+      description: >-
+        A published version is fixed forever; correcting means publishing another. Publishing the same content twice answers the version that already exists rather than making a second one that says the same thing.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TemplateId'
+        - $ref: '#/components/parameters/PlanningDraftIfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      responses:
+        '201':
+          description: The published version
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionTemplateVersion'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /space/v1/programs/{programId}/draft:
+    put:
+      tags: [Space Planning]
+      operationId: replaceMyProgramDraft
+      x-allfit-operation: OP-PLN-007
+      x-allfit-cache: no-store
+      summary: Replace the content of my programme draft
+      description: >-
+        The base week expanded into one entry per week, which is what the stored shape asks for. The screen edits one week; the draft holds them all.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ProgramId'
+        - $ref: '#/components/parameters/PlanningDraftIfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProgramDraftContent'
+      responses:
+        '200':
+          description: Current draft; unchanged replacements preserve its ETag
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProgramDraft'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /space/v1/programs/{programId}/versions:
+    post:
+      tags: [Space Planning]
+      operationId: publishMyProgram
+      x-allfit-operation: OP-PLN-008
+      x-allfit-cache: no-store
+      summary: Publish a version of my programme
+      description: >-
+        Its sessions point at the person\u2019s own routines. Publishing a new version does not change anybody who already took the programme: they keep the plan they took.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ProgramId'
+        - $ref: '#/components/parameters/PlanningDraftIfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      responses:
+        '201':
+          description: The published version
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProgramVersion'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
   /space/v1/week-plan:
     get:
       tags: [Space Planning]
@@ -3382,6 +3692,98 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/SpaceMyProgram'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /catalog/v1/movements:
+    get:
+      tags: [Catalogue]
+      operationId: searchMovements
+      x-allfit-operation: OP-CAT-009
+      x-allfit-cache: no-store
+      summary: Search the exercise library
+      description: >-
+        What `S-1` calls while somebody types. The library is curated content: it is
+        read here and it is never written here. Only the published global subset is
+        visible, which is what the operations matrix already says this operation
+        answers.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: discipline
+          in: query
+          required: false
+          description: Limit to the discipline the routine is written in.
+          schema:
+            type: string
+            maxLength: 64
+        - name: q
+          in: query
+          required: false
+          description: >-
+            Matched anywhere in the name, case-insensitively. Accents are not folded.
+          schema:
+            type: string
+            maxLength: 120
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 40
+      responses:
+        '200':
+          description: The movements that match
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Movement'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /space/v1/my-content:
+    get:
+      tags: [Space Planning]
+      operationId: listMyContent
+      x-allfit-operation: OP-PLN-025
+      x-allfit-cache: no-store
+      summary: The routines this person has made
+      description: >-
+        Drafts and published together, newest first. `template_version_id` is what
+        separates them: a programme points at a version, so a routine with none is a
+        routine that exists and cannot yet go in a programme. The counts describe the
+        published version, never the draft somebody is still typing into.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: The person's own routines
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SpaceMyRoutine'
         '401':
           $ref: '#/components/responses/Unauthenticated'
         '403':
@@ -5648,6 +6050,53 @@ components:
           maxItems: 100
           items:
             $ref: '#/components/schemas/UuidV7'
+    Movement:
+      type: object
+      additionalProperties: false
+      required: [id, discipline_code, name]
+      properties:
+        id:
+          type: string
+          format: uuid
+        discipline_code:
+          type: string
+        name:
+          type: string
+    SpaceMyRoutine:
+      type: object
+      additionalProperties: false
+      required:
+        - template_id
+        - title
+        - discipline_code
+        - status
+        - template_version_id
+        - exercise_count
+        - set_count
+        - has_unpublished_changes
+      properties:
+        template_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        discipline_code:
+          type: string
+        status:
+          type: string
+        template_version_id:
+          oneOf:
+            - $ref: '#/components/schemas/UuidV7'
+            - type: 'null'
+          description: >-
+            The published version a programme can point at. Null means the routine is
+            still only a draft.
+        exercise_count:
+          type: integer
+        set_count:
+          type: integer
+        has_unpublished_changes:
+          type: boolean
     SpaceMyProgram:
       type: object
       additionalProperties: false
@@ -7198,7 +7647,13 @@ components:
         id:
           $ref: '#/components/schemas/Uuid'
         organization_id:
-          $ref: '#/components/schemas/Uuid'
+          oneOf:
+            - $ref: '#/components/schemas/Uuid'
+            - type: 'null'
+          description: >-
+            Null when the content belongs to a person rather than to an organization.
+            Ownership is exactly one of the two and never both, so the projection says
+            which by leaving this empty.
         discipline_code:
           type: string
         status:
@@ -7307,7 +7762,13 @@ components:
         id:
           $ref: '#/components/schemas/Uuid'
         organization_id:
-          $ref: '#/components/schemas/Uuid'
+          oneOf:
+            - $ref: '#/components/schemas/Uuid'
+            - type: 'null'
+          description: >-
+            Null when the content belongs to a person rather than to an organization.
+            Ownership is exactly one of the two and never both, so the projection says
+            which by leaving this empty.
         status:
           $ref: '#/components/schemas/PublicationStatus'
         author_person_id:

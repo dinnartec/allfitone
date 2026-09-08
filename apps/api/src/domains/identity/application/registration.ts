@@ -75,6 +75,14 @@ export interface SpaceRegistrationService {
    * because revealing it is what HU-SP-004 criterion 2 forbids.
    */
   requestPasswordReset(email: string): Promise<void>
+  /**
+   * `OP-IDN-048`. Revokes the provider session so the refresh dies with it.
+   *
+   * **Never rejects.** A token that cannot be verified, a session already gone, a
+   * provider outage — all resolve. The device erases what it holds regardless, and
+   * an error here would be the API telling somebody they may not leave.
+   */
+  signOut(accessToken: string): Promise<void>
 }
 
 export interface SpaceRegistrationDependencies {
@@ -154,6 +162,22 @@ export function createSpaceRegistrationService(
         )
       } catch (cause) {
         throw toRegistrationError(cause)
+      }
+    },
+
+    async signOut(accessToken) {
+      try {
+        // The `sid` is the only thing revocable, and it lives in the token rather
+        // than in our database: Space keeps no session row to look it up in.
+        const token = await measureRequestPhase('token-local', () =>
+          dependencies.authProvider.verifyAccessToken(accessToken, 'space'),
+        )
+        await measureRequestPhase('workos-refresh', () =>
+          dependencies.authProvider.revokeSession(token.sessionId, 'space'),
+        )
+      } catch {
+        // Swallowed on purpose, and this is the whole design of the operation.
+        // `OP-IDN-048` concedes signing out unconditionally.
       }
     },
 

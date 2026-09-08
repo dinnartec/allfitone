@@ -15,7 +15,14 @@ import type postgres from 'postgres'
 import { database } from '../../../platform/db/index.js'
 import { measureStudioRequestPhase } from '../../../platform/observability/index.js'
 import type {
+  Program,
+  ProgramDraft,
+  ProgramVersion,
+  SessionTemplate,
+  SessionTemplateDraft,
+  SessionTemplateVersion,
   MyProgram,
+  MyRoutine,
   WeekPlan,
   ProgramAssignment,
   ProgramDetail,
@@ -160,6 +167,82 @@ export function createSpacePlanningDatabase(): SpacePlanningDatabase {
         return rows.map((row) => ({ ...row, starts_on: date(row.starts_on) }))
       }),
 
+    readMyContent: (input) =>
+      transact(sql, input.personId, input.requestId, async (transaction) => {
+        const [row] = await transaction<{ mine: readonly MyRoutine[] }[]>`
+          select planning.read_my_content(${input.personId}::uuid) as mine
+        `
+        return row?.mine ?? []
+      }),
+
+    createMySessionTemplate: (input) =>
+      command(sql, input.personId, async (transaction) => {
+        const [row] = await transaction<{ template: SessionTemplate }[]>`
+          select template from planning.create_my_session_template(
+            ${input.personId}::uuid, ${input.disciplineCode}, ${input.title},
+            ${input.idempotencyKey}::uuid, ${input.commandId}::uuid, ${input.requestHash}
+          )
+        `
+        return answered(row?.template, 'create the session template')
+      }),
+
+    replaceMySessionTemplateDraft: (input) =>
+      command(sql, input.personId, async (transaction) => {
+        const [row] = await transaction<{ draft: SessionTemplateDraft }[]>`
+          select draft from planning.replace_my_session_template_draft(
+            ${input.personId}::uuid, ${input.templateId}::uuid, ${input.expectedEtag},
+            ${JSON.stringify(input.content)}::text::jsonb,
+            ${input.idempotencyKey}::uuid, ${input.commandId}::uuid, ${input.requestHash}
+          )
+        `
+        return answered(row?.draft, 'replace the draft')
+      }),
+
+    publishMySessionTemplate: (input) =>
+      command(sql, input.personId, async (transaction) => {
+        const [row] = await transaction<{ version: SessionTemplateVersion }[]>`
+          select version from planning.publish_my_session_template(
+            ${input.personId}::uuid, ${input.templateId}::uuid, ${input.expectedEtag},
+            ${input.idempotencyKey}::uuid, ${input.commandId}::uuid, ${input.requestHash}
+          )
+        `
+        return answered(row?.version, 'publish the session template')
+      }),
+
+    createMyProgram: (input) =>
+      command(sql, input.personId, async (transaction) => {
+        const [row] = await transaction<{ program: Program }[]>`
+          select program from planning.create_my_program(
+            ${input.personId}::uuid, ${input.title},
+            ${input.idempotencyKey}::uuid, ${input.commandId}::uuid, ${input.requestHash}
+          )
+        `
+        return answered(row?.program, 'create the program')
+      }),
+
+    replaceMyProgramDraft: (input) =>
+      command(sql, input.personId, async (transaction) => {
+        const [row] = await transaction<{ draft: ProgramDraft }[]>`
+          select draft from planning.replace_my_program_draft(
+            ${input.personId}::uuid, ${input.programId}::uuid, ${input.expectedEtag},
+            ${JSON.stringify(input.content)}::text::jsonb,
+            ${input.idempotencyKey}::uuid, ${input.commandId}::uuid, ${input.requestHash}
+          )
+        `
+        return answered(row?.draft, 'replace the draft')
+      }),
+
+    publishMyProgram: (input) =>
+      command(sql, input.personId, async (transaction) => {
+        const [row] = await transaction<{ version: ProgramVersion }[]>`
+          select version from planning.publish_my_program(
+            ${input.personId}::uuid, ${input.programId}::uuid, ${input.expectedEtag},
+            ${input.idempotencyKey}::uuid, ${input.commandId}::uuid, ${input.requestHash}
+          )
+        `
+        return answered(row?.version, 'publish the program')
+      }),
+
     reorderMyPrograms: (input) =>
       transact(sql, input.personId, '', async (transaction) => {
         await transaction`
@@ -270,6 +353,25 @@ function profile(row: ProfileRow): TrainingProfile {
     biological_sex: row.biological_sex as TrainingProfile['biological_sex'],
     focus_areas: row.focus_areas as TrainingProfile['focus_areas'],
   }
+}
+
+/** A command carries no request id: it is not a read and writes no access record. */
+function command<T>(
+  sql: ReturnType<typeof database>,
+  personId: string,
+  operation: (transaction: postgres.TransactionSql) => Promise<T>,
+): Promise<T> {
+  return transact(sql, personId, '', operation)
+}
+
+/**
+ * The projections always answer a row. A missing one is a function that changed
+ * shape, not a case to handle, so it fails loudly rather than returning something
+ * plausible.
+ */
+function answered<T>(value: T | undefined, what: string): T {
+  if (value === undefined) throw new Error(`PostgreSQL did not ${what}`)
+  return value
 }
 
 function transact<T>(

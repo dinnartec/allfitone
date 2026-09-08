@@ -1,5 +1,10 @@
 import type { AccountActor } from '../../identity/index.js'
-import type { ProfessionalCatalogDatabase } from '../domain/index.js'
+import type {
+  Movement,
+  MovementLibraryDatabase,
+  MovementQuery,
+  ProfessionalCatalogDatabase,
+} from '../domain/index.js'
 
 export class StudioCatalogError extends Error {
   constructor(readonly code: 'registration-incomplete') {
@@ -27,4 +32,14 @@ export function createStudioCatalogService(
     listSpecialties: (actor) => database.listSpecialties(personId(actor)),
     listCredentialTypes: (actor) => database.listCredentialTypes(personId(actor)),
   }
+}
+
+export interface MovementLibraryService {
+  search(request: MovementQuery): Promise<Movement[]>
+}
+
+export function createMovementLibraryService(
+  database: MovementLibraryDatabase,
+): MovementLibraryService {
+  return { search: (request) => database.readMovements(request) }
 }

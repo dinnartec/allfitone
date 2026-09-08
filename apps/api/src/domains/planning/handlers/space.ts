@@ -96,6 +96,155 @@ export function spacePlanningRoutes(
     }
   })
 
+  // The six that make content somebody's own. `If-Match` carries the draft's ETag,
+  // which is a precondition on the resource rather than a field of the body: in the
+  // body a client could send one value and mean another.
+  routes.post('/session-templates', async (c) => {
+    c.header('Cache-Control', 'no-store')
+    const token = await verified(c, verify)
+    if (!token) return fail(c, 'unauthenticated')
+
+    const body = await readJson(c)
+    const created = readTemplateCreate(body)
+    const command = commandContext(c, body)
+    if (!created || !command) return fail(c, 'invalid-request')
+
+    try {
+      const personId = await actors().personFor(token.subject)
+      const template = await planning().createMySessionTemplate({
+        personId,
+        ...created,
+        ...command,
+      })
+      c.header('Location', `/space/v1/session-templates/${template.id}`)
+      return c.json(template, 201)
+    } catch (cause) {
+      return failure(c, cause)
+    }
+  })
+
+  routes.put('/session-templates/:templateId/draft', async (c) => {
+    c.header('Cache-Control', 'no-store')
+    const token = await verified(c, verify)
+    if (!token) return fail(c, 'unauthenticated')
+
+    const templateId = c.req.param('templateId')
+    const body = await readJson(c)
+    const expectedEtag = c.req.header('if-match')
+    const command = commandContext(c, body)
+    if (!UUID_V7.test(templateId) || !expectedEtag || !command) return fail(c, 'invalid-request')
+    if (typeof body !== 'object' || body === null) return fail(c, 'invalid-request')
+
+    try {
+      const personId = await actors().personFor(token.subject)
+      const draft = await planning().replaceMySessionTemplateDraft({
+        personId,
+        templateId,
+        expectedEtag,
+        content: contentOf(body),
+        ...command,
+      })
+      return c.json(draft, 200)
+    } catch (cause) {
+      return failure(c, cause)
+    }
+  })
+
+  routes.post('/session-templates/:templateId/versions', async (c) => {
+    c.header('Cache-Control', 'no-store')
+    const token = await verified(c, verify)
+    if (!token) return fail(c, 'unauthenticated')
+
+    const templateId = c.req.param('templateId')
+    const expectedEtag = c.req.header('if-match')
+    const command = commandContext(c, undefined)
+    if (!UUID_V7.test(templateId) || !expectedEtag || !command) return fail(c, 'invalid-request')
+
+    try {
+      const personId = await actors().personFor(token.subject)
+      const version = await planning().publishMySessionTemplate({
+        personId,
+        templateId,
+        expectedEtag,
+        ...command,
+      })
+      return c.json(version, 201)
+    } catch (cause) {
+      return failure(c, cause)
+    }
+  })
+
+  routes.post('/programs', async (c) => {
+    c.header('Cache-Control', 'no-store')
+    const token = await verified(c, verify)
+    if (!token) return fail(c, 'unauthenticated')
+
+    const body = await readJson(c)
+    const title = readTitle(body)
+    const command = commandContext(c, body)
+    if (!title || !command) return fail(c, 'invalid-request')
+
+    try {
+      const personId = await actors().personFor(token.subject)
+      const program = await planning().createMyProgram({ personId, title, ...command })
+      c.header('Location', `/space/v1/programs/${program.id}`)
+      return c.json(program, 201)
+    } catch (cause) {
+      return failure(c, cause)
+    }
+  })
+
+  routes.put('/programs/:programId/draft', async (c) => {
+    c.header('Cache-Control', 'no-store')
+    const token = await verified(c, verify)
+    if (!token) return fail(c, 'unauthenticated')
+
+    const programId = c.req.param('programId')
+    const body = await readJson(c)
+    const expectedEtag = c.req.header('if-match')
+    const command = commandContext(c, body)
+    if (!UUID_V7.test(programId) || !expectedEtag || !command) return fail(c, 'invalid-request')
+    if (typeof body !== 'object' || body === null) return fail(c, 'invalid-request')
+
+    try {
+      const personId = await actors().personFor(token.subject)
+      const draft = await planning().replaceMyProgramDraft({
+        personId,
+        programId,
+        expectedEtag,
+        content: contentOf(body),
+        ...command,
+      })
+      return c.json(draft, 200)
+    } catch (cause) {
+      return failure(c, cause)
+    }
+  })
+
+  routes.post('/programs/:programId/versions', async (c) => {
+    c.header('Cache-Control', 'no-store')
+    const token = await verified(c, verify)
+    if (!token) return fail(c, 'unauthenticated')
+
+    const programId = c.req.param('programId')
+    const expectedEtag = c.req.header('if-match')
+    const command = commandContext(c, undefined)
+    if (!UUID_V7.test(programId) || !expectedEtag || !command) return fail(c, 'invalid-request')
+
+    try {
+      const personId = await actors().personFor(token.subject)
+      const version = await planning().publishMyProgram({
+        personId,
+        programId,
+        expectedEtag,
+        ...command,
+      })
+      return c.json(version, 201)
+    } catch (cause) {
+      return failure(c, cause)
+    }
+  })
+
   routes.get('/week-plan', async (c) => {
     c.header('Cache-Control', 'no-store')
 
@@ -133,6 +282,23 @@ export function spacePlanningRoutes(
         requestId: c.req.header('x-request-id') ?? '',
       })
       return c.json(mine, 200)
+    } catch (cause) {
+      return failure(c, cause)
+    }
+  })
+
+  routes.get('/my-content', async (c) => {
+    c.header('Cache-Control', 'no-store')
+
+    const token = await verified(c, verify)
+    if (!token) return fail(c, 'unauthenticated')
+
+    try {
+      const personId = await actors().personFor(token.subject)
+      return c.json(
+        await planning().readMyContent({ personId, requestId: c.req.header('x-request-id') ?? '' }),
+        200,
+      )
     } catch (cause) {
       return failure(c, cause)
     }
@@ -263,6 +429,34 @@ function readChoice(body: unknown): { programVersionId: string; timezone: string
   const trimmed = timezone.trim()
   if (trimmed === '' || trimmed.length > MAX_TIMEZONE) return undefined
   return { programVersionId: version, timezone: trimmed }
+}
+
+/**
+ * The draft content passes through as the contract declares it. PostgreSQL validates
+ * every field of it with `session_content_errors` and `program_content_errors`, and
+ * re-checking here would be a second, weaker copy of the rules that would drift.
+ */
+function contentOf(body: object): never {
+  return body as never
+}
+
+function readTemplateCreate(body: unknown): { disciplineCode: string; title: string } | undefined {
+  if (typeof body !== 'object' || body === null) return undefined
+  const keys = Object.keys(body)
+  if (keys.length !== 2) return undefined
+  const { discipline_code: discipline, title } = body as Record<string, unknown>
+  if (typeof discipline !== 'string' || !/^[a-z][a-z0-9_]{1,63}$/.test(discipline)) return undefined
+  if (typeof title !== 'string' || title.trim() === '' || title.length > 160) return undefined
+  return { disciplineCode: discipline, title: title.trim() }
+}
+
+function readTitle(body: unknown): string | undefined {
+  if (typeof body !== 'object' || body === null) return undefined
+  const keys = Object.keys(body)
+  if (keys.length !== 1 || keys[0] !== 'title') return undefined
+  const title = (body as { title: unknown }).title
+  if (typeof title !== 'string' || title.trim() === '' || title.length > 160) return undefined
+  return title.trim()
 }
 
 /** Every assignment, once, in order. A partial list is refused rather than merged. */

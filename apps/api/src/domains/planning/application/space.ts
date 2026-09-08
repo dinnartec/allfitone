@@ -24,8 +24,15 @@ import type {
 export type ProgramCatalogue = AllfitV1Schemas['SpaceProgramCatalogue']
 
 export interface SpacePlanningService {
+  createMySessionTemplate: SpacePlanningDatabase['createMySessionTemplate']
+  replaceMySessionTemplateDraft: SpacePlanningDatabase['replaceMySessionTemplateDraft']
+  publishMySessionTemplate: SpacePlanningDatabase['publishMySessionTemplate']
+  createMyProgram: SpacePlanningDatabase['createMyProgram']
+  replaceMyProgramDraft: SpacePlanningDatabase['replaceMyProgramDraft']
+  publishMyProgram: SpacePlanningDatabase['publishMyProgram']
   readWeekPlan: SpacePlanningDatabase['readWeekPlan']
   readMyPrograms: SpacePlanningDatabase['readMyPrograms']
+  readMyContent: SpacePlanningDatabase['readMyContent']
   reorderMyPrograms: SpacePlanningDatabase['reorderMyPrograms']
   readCatalogue(input: { personId: string; requestId: string }): Promise<ProgramCatalogue>
   readTodaySession(input: {
@@ -62,7 +69,14 @@ export function createSpacePlanningService(database: SpacePlanningDatabase): Spa
     readTodaySession: (input) => database.readTodaySession(input),
     readWeekPlan: (input) => database.readWeekPlan(input),
     readMyPrograms: (input) => database.readMyPrograms(input),
+    readMyContent: (input) => database.readMyContent(input),
     reorderMyPrograms: (input) => database.reorderMyPrograms(input),
+    createMySessionTemplate: (input) => database.createMySessionTemplate(input),
+    replaceMySessionTemplateDraft: (input) => database.replaceMySessionTemplateDraft(input),
+    publishMySessionTemplate: (input) => database.publishMySessionTemplate(input),
+    createMyProgram: (input) => database.createMyProgram(input),
+    replaceMyProgramDraft: (input) => database.replaceMyProgramDraft(input),
+    publishMyProgram: (input) => database.publishMyProgram(input),
 
     readProgram: (input) => database.readProgramVersion(input),
 
