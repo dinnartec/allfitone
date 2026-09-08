@@ -78,12 +78,14 @@ export function StudioProgress({ step }: { step: StudioStep }) {
 export function LoadingStage({ label = 'Preparando tu espacio…' }: { label?: string }) {
   return (
     <StudioFrame showLogout={false}>
-      <Card data-studio-loading>
-        <CardContent data-studio-loading-body>
-          <Spinner label={label} />
-          <p>{label}</p>
-        </CardContent>
-      </Card>
+      <div data-studio-loading-overlay>
+        <Card data-studio-loading>
+          <CardContent data-studio-loading-body role="status" aria-live="polite">
+            <Spinner role={undefined} aria-hidden="true" />
+            <p>{label}</p>
+          </CardContent>
+        </Card>
+      </div>
     </StudioFrame>
   )
 }

@@ -323,12 +323,14 @@ export function SessionGuard({ children }: { children: ReactNode }) {
         </div>
       )}
       {guard.kind === 'ending' ? (
-        <Card data-session-ending-status>
-          <CardContent data-session-ending-body role="status" aria-live="polite">
-            <Spinner role={undefined} aria-hidden="true" />
-            <p>Cerrando tu sesión…</p>
-          </CardContent>
-        </Card>
+        <div data-session-ending-overlay>
+          <Card data-session-ending-status>
+            <CardContent data-session-ending-body role="status" aria-live="polite">
+              <Spinner role={undefined} aria-hidden="true" />
+              <p>Cerrando tu sesión…</p>
+            </CardContent>
+          </Card>
+        </div>
       ) : null}
       <form
         ref={inactivityFormRef}

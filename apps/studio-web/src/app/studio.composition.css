@@ -191,7 +191,6 @@ menu {
    whole organization shell here put the wordmark and the logout button inside a
    672px column, so a check that lasts milliseconds made the product look like it
    had collapsed to a phone. */
-[data-studio-loading],
 [data-studio-error-stage],
 [data-team-invitation-state],
 [data-organization-state] {
@@ -203,7 +202,9 @@ menu {
    `place-items: center` already sizes a grid item to its content. A fixed width
    would only be right for one of the two sentences this card carries. The cap
    is there for a long one, not to set the size. */
-[data-organization-status] {
+[data-organization-status],
+[data-session-ending-status],
+[data-studio-loading] {
   max-width: min(100%, 26rem);
 }
 
@@ -488,23 +489,39 @@ menu {
   user-select: none;
 }
 
-[data-organization-verification-overlay] {
+/* Both hold a transient status card over a workspace that is still on screen,
+   so they put it in the same place. Neither sets a width: `place-items: center`
+   already sizes a grid item to its content. */
+[data-organization-verification-overlay],
+[data-session-ending-overlay],
+[data-studio-loading-overlay] {
   position: fixed;
   inset: 0;
-  z-index: 50;
   display: grid;
   place-items: center;
   padding: var(--afo-space-6);
 }
 
-[data-session-ending-status] {
-  position: fixed;
-  inset-inline: 0;
-  bottom: var(--afo-space-6);
-  z-index: 60;
-  width: min(100% - 2rem, 28rem);
-  margin-inline: auto;
+/* The other two are meant to swallow clicks: they cover content that must not be
+   reached while it is unverified. This one covers an empty page, so it must not
+   take the privacy control out of reach on its way past. */
+[data-studio-loading-overlay] {
+  pointer-events: none;
 }
+
+[data-studio-loading-overlay] > * {
+  pointer-events: auto;
+}
+
+[data-organization-verification-overlay] {
+  z-index: 50;
+}
+
+/* Above the access check: a session that is ending outranks one being verified. */
+[data-session-ending-overlay] {
+  z-index: 60;
+}
+
 
 [data-session-checking],
 [data-session-closing],
