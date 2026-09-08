@@ -188,10 +188,15 @@ export function OrganizationContextBoundary({
   if (state.kind === 'loading') {
     return (
       <OrganizationStateFrame>
-        <div data-organization-state role="status" aria-live="polite">
-          <Spinner label={state.label} />
-          <p>{state.label}</p>
-        </div>
+        {/* `data-organization-state` stacks its children in a column with a
+            section-sized gap, which is right for an alert and wrong for a
+            spinner beside its own label. */}
+        <Card data-organization-status>
+          <CardContent data-organization-status-body role="status" aria-live="polite">
+            <Spinner role={undefined} aria-hidden="true" />
+            <p>{state.label}</p>
+          </CardContent>
+        </Card>
       </OrganizationStateFrame>
     )
   }
@@ -237,8 +242,8 @@ export function OrganizationContextBoundary({
             {state.verification === 'checking' ? (
               // The card carries its own surface because it now sits over the
               // blurred workspace rather than over an emptied page.
-              <Card data-organization-verification-status>
-                <CardContent data-organization-verification-body role="status" aria-live="polite">
+              <Card data-organization-status>
+                <CardContent data-organization-status-body role="status" aria-live="polite">
                   <Spinner role={undefined} aria-hidden="true" />
                   <p>Comprobando tu acceso…</p>
                 </CardContent>
@@ -297,7 +302,7 @@ function OrganizationVerificationError({ onRetry }: { onRetry: () => void }) {
 
 function OrganizationStateFrame({ children }: { children: ReactNode }) {
   return (
-    <WorkspaceShell data-organization-state-shell>
+    <WorkspaceShell>
       <WorkspaceMain>
         <WorkspaceHeader>
           <ProductWordmark
@@ -311,7 +316,11 @@ function OrganizationStateFrame({ children }: { children: ReactNode }) {
             <LogoutForm />
           </WorkspaceActions>
         </WorkspaceHeader>
-        <WorkspaceContent>{children}</WorkspaceContent>
+        {/* Studio's own element: WorkspaceContent is a Design System component
+            and must keep laying itself out. */}
+        <WorkspaceContent>
+          <div data-organization-state-canvas>{children}</div>
+        </WorkspaceContent>
       </WorkspaceMain>
     </WorkspaceShell>
   )

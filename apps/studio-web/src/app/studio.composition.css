@@ -157,18 +157,39 @@
   gap: var(--afo-space-5);
 }
 
+/* A measure belongs to what is read, not to the frame around it. Capping the
+   whole organization shell here put the wordmark and the logout button inside a
+   672px column, so a check that lasts milliseconds made the product look like it
+   had collapsed to a phone. */
 [data-studio-loading],
 [data-studio-error-stage],
 [data-team-invitation-state],
-[data-organization-state-shell] {
+[data-organization-state] {
   width: min(100%, 42rem);
   margin-inline: auto;
+}
+
+/* No width of its own: both places that show this card centre it in a grid, and
+   `place-items: center` already sizes a grid item to its content. A fixed width
+   would only be right for one of the two sentences this card carries. The cap
+   is there for a long one, not to set the size. */
+[data-organization-status] {
+  max-width: min(100%, 26rem);
+}
+
+/* The state screen is the only thing on the page, so it sits in the middle of
+   it rather than against the top edge, which is where document flow left it and
+   where nothing decided it should be. */
+[data-organization-state-canvas] {
+  display: grid;
+  min-height: 100%;
+  place-items: center;
 }
 
 [data-studio-loading-body],
 [data-role-catalog-state],
 [data-session-ending-body],
-[data-organization-verification-body] {
+[data-organization-status-body] {
   display: flex;
   align-items: center;
   justify-content: center;
