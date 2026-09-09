@@ -119,7 +119,15 @@ test('coach sees only the governed role catalog and never requests the team dire
   ).toBeVisible()
 })
 
-test('a solo owner is told that inviting a team is optional', async ({ page }) => {
+/**
+ * The directory used to carry a panel telling a solo owner that inviting was
+ * optional. Onboarding says exactly that on the screen before this one, and the
+ * condition behind the panel is permanent, so a professional working alone read
+ * it on every visit forever. The invitation is still one click away.
+ */
+test('a solo owner keeps the invitation within reach and is not told about it again', async ({
+  page,
+}) => {
   const fixture = createStudioApiFixture({
     memberships: [activeMembership],
     organizationMemberships: [
@@ -133,9 +141,9 @@ test('a solo owner is told that inviting a team is optional', async ({ page }) =
   await installStudioApiMock(page, fixture)
   await page.goto(`/organizations/${activeMembership.organization_id}/team`)
 
-  await expect(page.getByText(/Invita a alguien solo cuando vayas a sumar equipo/i)).toBeVisible()
-  await expect(page.getByText('Opcional', { exact: true })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Invitar integrante' })).toBeVisible()
+  await expect(page.getByText(/sumar equipo/i)).toHaveCount(0)
+  await expect(page.getByText('Opcional', { exact: true })).toHaveCount(0)
 })
 
 test('reuses the fresh active-membership query when opening the matching filter', async ({

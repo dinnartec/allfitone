@@ -152,15 +152,6 @@ export function TeamMembershipList() {
               description: 'Cambia el filtro para consultar otro estado de membresía.',
             }
           : undefined
-  const soloOwner =
-    !loading &&
-    !error &&
-    filter === 'all' &&
-    nextCursor === null &&
-    items.length === 1 &&
-    items[0]?.membership_id === current.membership_id &&
-    items[0].roles.includes('owner')
-
   return (
     <section data-team-page aria-label="Directorio de integrantes">
       <WorkspacePageHeader
@@ -176,16 +167,6 @@ export function TeamMembershipList() {
           ) : null
         }
       />
-
-      {soloOwner ? (
-        <Alert variant="info">
-          <AlertTitle>Tu espacio ya está listo para trabajar contigo.</AlertTitle>
-          <AlertDescription data-solo-owner-note>
-            Invita a alguien solo cuando vayas a sumar equipo.
-            <Badge variant="outline">Opcional</Badge>
-          </AlertDescription>
-        </Alert>
-      ) : null}
 
       <ToggleGroup
         value={[filter]}

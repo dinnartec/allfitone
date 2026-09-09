@@ -387,12 +387,6 @@ menu {
   gap: var(--afo-space-3);
 }
 
-[data-solo-owner-note] {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--afo-space-3);
-}
 
 /* -------------------------------------------------------------------- team */
 
