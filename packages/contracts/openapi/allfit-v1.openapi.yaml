@@ -3675,9 +3675,11 @@ paths:
       x-allfit-cache: no-store
       summary: The programmes this person owns
       description: >-
-        Newest first, which is the order the selector opens on. An explicit order is
-        its own column and its own command; ordering by when it was taken is a fact
-        that already exists rather than a preference invented here.
+        In the order the person chose, which is the order the selector opens on and the
+        order the Entrenar tab follows: the first one is the programme being trained.
+        The order lives in `display_order`, is written by OP-PLN-024, and a newly taken
+        programme enters in front — so taking one is choosing it, without a second step.
+        Ties fall back to when it was taken.
       security:
         - bearerAuth: []
       responses:
@@ -5972,10 +5974,16 @@ components:
           description: >-
             Planned sessions of this week that were closed, not executions. A repeat
             is a second execution of the same session and must not move the number.
+            **Of the selected programme only** — the one this screen names. Somebody
+            following two programmes has two weeks in progress, and a count spanning
+            both would not match the name above it.
         sessions_planned:
           type: integer
           minimum: 0
-          description: How many the week asks for. Equal to `sessions_completed` means the week is done.
+          description: >-
+            How many the selected programme's week asks for. Equal to
+            `sessions_completed` means the week is done. Zero with no programme at all,
+            which is a different screen rather than an error.
         latest_weight:
           oneOf:
             - $ref: '#/components/schemas/SpaceBodyMeasure'

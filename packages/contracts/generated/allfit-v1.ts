@@ -1513,7 +1513,7 @@ export interface paths {
     }
     /**
      * The programmes this person owns
-     * @description Newest first, which is the order the selector opens on. An explicit order is its own column and its own command; ordering by when it was taken is a fact that already exists rather than a preference invented here.
+     * @description In the order the person chose, which is the order the selector opens on and the order the Entrenar tab follows: the first one is the programme being trained. The order lives in `display_order`, is written by OP-PLN-024, and a newly taken programme enters in front — so taking one is choosing it, without a second step. Ties fall back to when it was taken.
      */
     get: operations['listMyPrograms']
     put?: never
@@ -2234,9 +2234,9 @@ export interface components {
     /** @description The calendar week in progress, Monday to Sunday, in the person's zone. The week is the unit and the day inside it is a suggestion, so what counts is how much of the week is done — and what is left undone does not carry over. */
     SpaceWeekSummary: {
       trained_seconds: number
-      /** @description Planned sessions of this week that were closed, not executions. A repeat is a second execution of the same session and must not move the number. */
+      /** @description Planned sessions of this week that were closed, not executions. A repeat is a second execution of the same session and must not move the number. **Of the selected programme only** — the one this screen names. Somebody following two programmes has two weeks in progress, and a count spanning both would not match the name above it. */
       sessions_completed: number
-      /** @description How many the week asks for. Equal to `sessions_completed` means the week is done. */
+      /** @description How many the selected programme's week asks for. Equal to `sessions_completed` means the week is done. Zero with no programme at all, which is a different screen rather than an error. */
       sessions_planned: number
       latest_weight: components['schemas']['SpaceBodyMeasure'] | null
       history: components['schemas']['SpaceTrainedSession'][]

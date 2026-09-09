@@ -77,17 +77,21 @@ export function spacePlanningRoutes(
       const requestId = c.req.header('x-request-id') ?? ''
       // Composed, not centralised: each domain answers for its own, and the surface
       // joins them because the screen cannot draw any of them without the others.
-      const [catalogue, session, week] = await Promise.all([
+      const [catalogue, session, week, progress] = await Promise.all([
         planning().readCatalogue({ personId, requestId }),
         planning().readTodaySession({ personId, timezone, requestId }),
         executions().readWeekSummary({ personId, timezone, requestId }),
+        planning().readWeekProgress({ personId, timezone, requestId }),
       ])
       return c.json(
         {
           profile: catalogue.profile,
           current_assignment: catalogue.current_assignment,
           session,
-          week,
+          // Execution answers for what was trained; Planning answers for what was
+          // planned. Execution's own counts are person-wide — every programme at once —
+          // and this screen names one programme, so the counts come from Planning.
+          week: { ...week, ...progress },
         },
         200,
       )

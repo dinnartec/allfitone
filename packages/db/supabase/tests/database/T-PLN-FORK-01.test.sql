@@ -10,7 +10,7 @@
 -- it, which is exactly the state this migration exists to leave behind.
 begin;
 
-select plan(16);
+select plan(18);
 
 insert into identity.people (id, given_name, family_name)
 values
@@ -213,6 +213,19 @@ select is(
   (select assignment_id from planning.read_my_programs('019e6000-0000-7000-8000-000000000001') limit 1),
   :'assignment'::uuid,
   'T-PLN-FORK-13 which is what the list answers afterwards');
+
+-- The Hoy screen asks this one and the Entrenar tab asks `read_week_plan`, so the two
+-- have to agree on which programme is current. Ordering by when it was taken made them
+-- disagree the moment somebody reordered, each screen naming a different programme.
+select is(
+  (select assignment_id from planning.read_current_assignment('019e6000-0000-7000-8000-000000000001')),
+  :'assignment'::uuid,
+  'T-PLN-FORK-15 the current assignment is the one chosen, not the one taken last');
+
+select is(
+  (select program_version_id from planning.read_current_assignment('019e6000-0000-7000-8000-000000000001')),
+  (select program_version_id from planning.read_my_programs('019e6000-0000-7000-8000-000000000001') limit 1),
+  'T-PLN-FORK-16 so Hoy and Entrenar name the same version');
 
 -- A partial order would silently leave whatever was omitted wherever it was.
 select throws_ok(

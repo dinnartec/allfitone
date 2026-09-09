@@ -3,6 +3,7 @@ import { allfitV1ContractManifest } from '@allfitone/contracts'
 import { Hono } from 'hono'
 
 import { SpaceActorError, type SpaceActorResolver } from '../../identity/index.js'
+import type { SpaceExecutionService } from '../../execution/index.js'
 import type { ProgramCatalogue, SpacePlanningService } from '../application/space.js'
 import type {
   MyProgram,
@@ -169,9 +170,24 @@ const catalogue: ProgramCatalogue = {
   current_assignment: null,
 }
 
+/**
+ * What Execution answers for the week. Its two session counts are person-wide — every
+ * programme at once — which is exactly why `/today` must not use them: the screen names
+ * one programme. The numbers here are deliberately wrong for the selected programme so
+ * a test can prove they were not the ones that came out.
+ */
+const weekSummary = {
+  trained_seconds: 2700,
+  sessions_completed: 3,
+  sessions_planned: 5,
+  latest_weight: null,
+  history: [],
+}
+
 function harness(overrides?: {
   service?: Partial<SpacePlanningService>
   actors?: Partial<SpaceActorResolver>
+  executions?: Partial<SpaceExecutionService>
 }): Hono {
   const service: SpacePlanningService = {
     readCatalogue: async () => catalogue,
@@ -182,6 +198,7 @@ function harness(overrides?: {
     replaceMyProgramDraft: async () => programDraft,
     publishMyProgram: async () => ({}) as never,
     readWeekPlan: async () => weekPlan,
+    readWeekProgress: async () => ({ sessions_planned: 1, sessions_completed: 0 }),
     readMyPrograms: async () => [myProgram],
     readMyContent: async () => [myRoutine],
     reorderMyPrograms: async () => [myProgram],
@@ -195,6 +212,10 @@ function harness(overrides?: {
     personFor: async () => PERSON_ID,
     ...overrides?.actors,
   }
+  const executions = {
+    readWeekSummary: async () => weekSummary,
+    ...overrides?.executions,
+  } as unknown as SpaceExecutionService
   const app = new Hono()
   app.route(
     '/space/v1',
@@ -202,6 +223,7 @@ function harness(overrides?: {
       service,
       async () => ({ subject: 'sub', sessionId: 'sid', surface: 'space' as const }),
       actors,
+      executions,
     ),
   )
   return app
@@ -615,5 +637,48 @@ describe('POST /space/v1/assignments', () => {
     })
 
     expect(response.status).toBe(400)
+  })
+})
+
+describe('GET /space/v1/today', () => {
+  test('T-PLN-API-103 counts the selected programme, not everything the person follows', async () => {
+    // The defect: Execution's counts are by person and week, so a one-session programme
+    // read `0 de 5` under its own name because a second programme added four. Planning
+    // answers what is planned; Execution answers what was trained.
+    const response = await harness().request('/space/v1/today?timezone=America/Bogota', {
+      headers: authorized,
+    })
+
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as {
+      week: { sessions_planned: number; sessions_completed: number; trained_seconds: number }
+    }
+    expect(body.week.sessions_planned).toBe(1)
+    expect(body.week.sessions_completed).toBe(0)
+    // And what Execution does own still comes through.
+    expect(body.week.trained_seconds).toBe(2700)
+  })
+
+  test('T-PLN-API-104 refuses a request with no timezone, because today is local', async () => {
+    const response = await harness().request('/space/v1/today', { headers: authorized })
+
+    expect(response.status).toBe(400)
+  })
+
+  test('T-PLN-API-105 requires a bearer token', async () => {
+    const response = await harness().request('/space/v1/today?timezone=America/Bogota')
+
+    expect(response.status).toBe(401)
+  })
+
+  test('T-PLN-API-106 answers forbidden for an unactivated Fitness ID', async () => {
+    const response = await harness(unregistered).request(
+      '/space/v1/today?timezone=America/Bogota',
+      {
+        headers: authorized,
+      },
+    )
+
+    expect(response.status).toBe(403)
   })
 })

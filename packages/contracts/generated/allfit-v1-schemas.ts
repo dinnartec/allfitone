@@ -5136,13 +5136,13 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         type: 'integer',
         minimum: 0,
         description:
-          'Planned sessions of this week that were closed, not executions. A repeat is a second execution of the same session and must not move the number.',
+          'Planned sessions of this week that were closed, not executions. A repeat is a second execution of the same session and must not move the number. **Of the selected programme only** — the one this screen names. Somebody following two programmes has two weeks in progress, and a count spanning both would not match the name above it.',
       },
       sessions_planned: {
         type: 'integer',
         minimum: 0,
         description:
-          'How many the week asks for. Equal to `sessions_completed` means the week is done.',
+          "How many the selected programme's week asks for. Equal to `sessions_completed` means the week is done. Zero with no programme at all, which is a different screen rather than an error.",
       },
       latest_weight: {
         oneOf: [
