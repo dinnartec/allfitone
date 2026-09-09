@@ -47,8 +47,11 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import Animated, {
   Easing,
   FadeInDown,
-  LinearTransition,
+  interpolateColor,
+  useAnimatedStyle,
   useReducedMotion,
+  useSharedValue,
+  withSpring,
 } from 'react-native-reanimated'
 
 import { OnboardingHeader } from '../../src/components/onboarding-header'
@@ -60,6 +63,7 @@ import {
   PRESS_DURATION,
   PRESS_SCALE,
   shouldPlayEntrance,
+  SPRING,
   staggerDelays,
 } from '../../src/client/motion'
 import { ApiError } from '../../src/client'
@@ -76,9 +80,6 @@ import {
   type TrainingExperience,
 } from '../../src/client/experience-form'
 
-/** The reflow when a card reveals its consequence, built once at module scope. */
-const cardReflow = LinearTransition.duration(200)
-
 const PRESS_TRANSITION = {
   transitionProperty: 'transform',
   transitionDuration: cssDuration(PRESS_DURATION, false),
@@ -94,14 +95,12 @@ const SAVE_FAILED = 'No pudimos guardar tu respuesta. Inténtalo otra vez.'
 
 export default function OnboardingExperience() {
   const router = useRouter()
-  const theme = useTheme()
   const flow = useMemo(() => createSpaceOnboardingFlow(), [])
 
   const [level, setLevel] = useState<TrainingExperience | undefined>(undefined)
   const [submitting, setSubmitting] = useState(false)
   const [sessionExpired, setSessionExpired] = useState(false)
   const [failure, setFailure] = useState<string | undefined>(undefined)
-  const [pressing, setPressing] = useState<TrainingExperience | undefined>(undefined)
   const [entering, setEntering] = useState(false)
   const reduceMotion = useReducedMotion()
 
@@ -192,99 +191,17 @@ export default function OnboardingExperience() {
           </Text>
         </Animated.View>
 
-        {EXPERIENCE_LEVELS.map((entry, index) => {
-          const chosen = entry.level === level
-          // exactOptionalPropertyTypes rejects an explicit undefined, so the props
-          // are spread in only when there is something to spread.
-          const motionProps = {
-            ...(entering && entrances[index + 1] ? { entering: entrances[index + 1] } : {}),
-            ...(reduceMotion ? {} : { layout: cardReflow }),
-          }
-
-          return (
-            <Animated.View key={entry.level} {...motionProps} style={styles.slot}>
-              <Pressable
-                accessibilityRole="radio"
-                accessibilityState={{ selected: chosen, disabled: !pressable }}
-                // The consequence is part of the answer, so a screen reader hears it
-                // on the card that carries it rather than only seeing it.
-                accessibilityLabel={
-                  chosen
-                    ? `${entry.name}. ${entry.description} ${entry.outcome.before}${entry.outcome.emphasis}${entry.outcome.after}`
-                    : `${entry.name}. ${entry.description}`
-                }
-                disabled={!pressable}
-                onPress={() => setLevel((current) => chooseLevel(current, entry.level))}
-                onPressIn={() => setPressing(entry.level)}
-                onPressOut={() => setPressing(undefined)}
-                hitSlop={8}
-                pressRetentionOffset={16}
-              >
-                <Animated.View
-                  style={[
-                    styles.card,
-                    PRESS_TRANSITION,
-                    { transform: [{ scale: pressing === entry.level ? PRESS_SCALE : 1 }] },
-                    {
-                      borderColor: chosen ? theme.color.border.accent : theme.color.border.subtle,
-                      backgroundColor: chosen
-                        ? theme.color.accent.tonal
-                        : theme.color.background.surfaceSubtle,
-                    },
-                  ]}
-                >
-                  <View style={styles.head}>
-                    <Text role="display" size="lg" uppercase color={chosen ? 'accent' : 'primary'}>
-                      {entry.name}
-                    </Text>
-                    {/* Never colour alone: the bars carry the rank, the border and
-                        the tonal fill carry the selection, and the state is
-                        announced. That is DT-010 and it is what the other steps do. */}
-                    <View
-                      style={styles.bars}
-                      accessibilityElementsHidden
-                      importantForAccessibility="no-hide-descendants"
-                    >
-                      {barsFor(entry.level).map((filled, bar) => (
-                        <View
-                          key={bar}
-                          style={[
-                            styles.bar,
-                            {
-                              backgroundColor: filled
-                                ? theme.color.border.accent
-                                : theme.color.border.default,
-                            },
-                          ]}
-                        />
-                      ))}
-                    </View>
-                  </View>
-
-                  <Text role="body" size="xs" color="muted" style={styles.description}>
-                    {entry.description}
-                  </Text>
-
-                  {chosen ? (
-                    <View
-                      style={[styles.outcome, { borderTopColor: theme.color.border.subtle }]}
-                      accessibilityElementsHidden
-                      importantForAccessibility="no-hide-descendants"
-                    >
-                      <Text role="body" size="sm" color="secondary">
-                        {entry.outcome.before}
-                        <Text role="body" size="sm" color="accent">
-                          {entry.outcome.emphasis}
-                        </Text>
-                        {entry.outcome.after}
-                      </Text>
-                    </View>
-                  ) : null}
-                </Animated.View>
-              </Pressable>
-            </Animated.View>
-          )
-        })}
+        {EXPERIENCE_LEVELS.map((entry, index) => (
+          <ExperienceCard
+            key={entry.level}
+            entry={entry}
+            chosen={entry.level === level}
+            pressable={pressable}
+            reduceMotion={reduceMotion}
+            onPress={() => setLevel((current) => chooseLevel(current, entry.level))}
+            {...(entering && entrances[index + 1] ? { entering: entrances[index + 1] } : {})}
+          />
+        ))}
 
         {/* Fixed rather than revealed: it is what someone worried about being
             labelled needs before answering, not after. */}
@@ -329,6 +246,171 @@ export default function OnboardingExperience() {
   )
 }
 
+/**
+ * One level, chosen or not, and every state in between.
+ *
+ * The same shape as the session screen's `Exercise` and for the same reason: the
+ * consequence used to be `chosen ? <View/> : null`, so it appeared and vanished in a
+ * frame while a `LinearTransition` slid the cards below it. Now it never unmounts —
+ * a clipping drawer animates between zero and the height the content reports, and
+ * everything else the selection changes rides the same spring.
+ *
+ * The name is two copies stacked rather than one whose colour animates: the Design
+ * System's `Text` is a plain function component, so wrapping it in an animated one
+ * has no ref to drive on the UI thread. Both copies carry the same word in the same
+ * place, so the cross-fade is invisible — which is exactly what is wanted here, and
+ * the opposite of the goal screen, where the two faces sit apart and the handover
+ * had to be staged.
+ */
+function ExperienceCard({
+  entry,
+  chosen,
+  pressable,
+  reduceMotion,
+  onPress,
+  entering,
+}: {
+  readonly entry: (typeof EXPERIENCE_LEVELS)[number]
+  readonly chosen: boolean
+  readonly pressable: boolean
+  readonly reduceMotion: boolean
+  readonly onPress: () => void
+  readonly entering?: FadeInDown
+}) {
+  const theme = useTheme()
+  const progress = useSharedValue(chosen ? 1 : 0)
+  const outcomeHeight = useSharedValue(0)
+  const [pressing, setPressing] = useState(false)
+
+  useEffect(() => {
+    // Reduced motion keeps the change and drops the travel: which level is chosen is
+    // state the card exists to report, so the consequence still opens — it just does
+    // not slide.
+    const target = chosen ? 1 : 0
+    progress.value = reduceMotion ? target : withSpring(target, SPRING)
+  }, [chosen, progress, reduceMotion])
+
+  const subtle = theme.color.border.subtle
+  const accent = theme.color.border.accent
+  const resting = theme.color.background.surfaceSubtle
+  const tonal = theme.color.accent.tonal
+
+  const shell = useAnimatedStyle(() => ({
+    borderColor: interpolateColor(progress.value, [0, 1], [subtle, accent]),
+    backgroundColor: interpolateColor(progress.value, [0, 1], [resting, tonal]),
+  }))
+
+  const quiet = useAnimatedStyle(() => ({ opacity: 1 - progress.value }))
+  const loud = useAnimatedStyle(() => ({ opacity: progress.value }))
+
+  const drawer = useAnimatedStyle(() => ({
+    // Always a number. Falling back to `undefined` while the height is unknown lets a
+    // shut drawer take its natural height for a frame.
+    height: outcomeHeight.value * progress.value,
+  }))
+
+  // The consequence slides out from under the description on the same spring that
+  // opens the clip, so it reads as a drawer rather than as a box being resized.
+  const contents = useAnimatedStyle(() => ({
+    opacity: progress.value,
+    transform: [{ translateY: (progress.value - 1) * outcomeHeight.value }],
+  }))
+
+  return (
+    <Animated.View style={styles.slot} {...(entering ? { entering } : {})}>
+      <Pressable
+        accessibilityRole="radio"
+        accessibilityState={{ selected: chosen, disabled: !pressable }}
+        // The consequence is part of the answer, so a screen reader hears it on the
+        // card that carries it rather than only seeing it.
+        accessibilityLabel={
+          chosen
+            ? `${entry.name}. ${entry.description} ${entry.outcome.before}${entry.outcome.emphasis}${entry.outcome.after}`
+            : `${entry.name}. ${entry.description}`
+        }
+        disabled={!pressable}
+        onPress={onPress}
+        onPressIn={() => setPressing(true)}
+        onPressOut={() => setPressing(false)}
+        hitSlop={8}
+        pressRetentionOffset={16}
+      >
+        <Animated.View
+          style={[
+            styles.card,
+            shell,
+            PRESS_TRANSITION,
+            { transform: [{ scale: pressing ? PRESS_SCALE : 1 }] },
+          ]}
+        >
+          <View style={styles.head}>
+            <View>
+              <Animated.View style={quiet}>
+                <Text role="display" size="lg" uppercase>
+                  {entry.name}
+                </Text>
+              </Animated.View>
+              <Animated.View style={[styles.nameOver, loud]} pointerEvents="none">
+                <Text role="display" size="lg" uppercase color="accent">
+                  {entry.name}
+                </Text>
+              </Animated.View>
+            </View>
+
+            {/* Never colour alone: the bars carry the rank, the border and the tonal
+                fill carry the selection, and the state is announced. That is DT-010
+                and it is what the other steps do. */}
+            <View
+              style={styles.bars}
+              accessibilityElementsHidden
+              importantForAccessibility="no-hide-descendants"
+            >
+              {barsFor(entry.level).map((filled, bar) => (
+                <View
+                  key={bar}
+                  style={[
+                    styles.bar,
+                    { backgroundColor: filled ? accent : theme.color.border.default },
+                  ]}
+                />
+              ))}
+            </View>
+          </View>
+
+          <Text role="body" size="xs" color="muted" style={styles.description}>
+            {entry.description}
+          </Text>
+
+          <Animated.View style={[styles.drawer, drawer]}>
+            {/* Out of flow, so it can never add its height to the card it is
+                measuring. In flow it did, and a shut card briefly claimed the space
+                it would take if it were open. */}
+            <Animated.View
+              style={[styles.measure, contents]}
+              accessibilityElementsHidden
+              importantForAccessibility="no-hide-descendants"
+              onLayout={(event) => {
+                const measured = event.nativeEvent.layout.height
+                if (measured > 0) outcomeHeight.value = measured
+              }}
+            >
+              <View style={[styles.outcome, { borderTopColor: subtle }]}>
+                <Text role="body" size="sm" color="secondary">
+                  {entry.outcome.before}
+                  <Text role="body" size="sm" color="accent">
+                    {entry.outcome.emphasis}
+                  </Text>
+                  {entry.outcome.after}
+                </Text>
+              </View>
+            </Animated.View>
+          </Animated.View>
+        </Animated.View>
+      </Pressable>
+    </Animated.View>
+  )
+}
+
 const styles = StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: { paddingBottom: 4 },
@@ -347,6 +429,11 @@ const styles = StyleSheet.create({
   bars: { flexDirection: 'row', alignItems: 'flex-end', gap: 3 },
   bar: { width: 14, height: 6, borderRadius: 3 },
   description: { marginTop: 7 },
+  // The name in the accent, laid exactly over the resting one so the cross-fade has
+  // nowhere to drift to.
+  nameOver: { position: 'absolute', left: 0, top: 0 },
+  drawer: { overflow: 'hidden' },
+  measure: { position: 'absolute', left: 0, right: 0, top: 0 },
   outcome: { marginTop: 11, paddingTop: 10, borderTopWidth: 1 },
   notice: { marginTop: 5 },
   footer: { paddingTop: 4, paddingBottom: FOOTER_LIFT },
