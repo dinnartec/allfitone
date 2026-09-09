@@ -272,7 +272,7 @@ export default function Session() {
             {title}
           </Text>
           {caption ? (
-            <Text role="body" size="2xs" color="muted">
+            <Text role="body" size="sm" color="muted">
               {caption}
             </Text>
           ) : null}
@@ -324,6 +324,18 @@ export default function Session() {
             onExplain={() => setFailure(HOW_TO)}
           />
         ))}
+
+        {/* Its place in the layout, and nothing more. There is no operation for adding a
+            movement to a session in flight — not in the contract, not in the database —
+            so an enabled button would be a promise the app cannot keep. Disabled and
+            said out loud is the same answer the discipline carousel gives for the five
+            that are not built. */}
+        <View style={styles.addExercise}>
+          <Button label="Añadir ejercicio" variant="secondary" disabled onPress={() => undefined} />
+          <Text role="body" size="sm" color="muted">
+            Todavía no. Por ahora la sesión es la que trae tu rutina.
+          </Text>
+        </View>
       </ScrollView>
 
       <Sheet
@@ -342,7 +354,7 @@ export default function Session() {
           </Text>
 
           <Button label="Descartar entrenamiento" variant="secondary" onPress={leave} />
-          <Text role="body" size="xs" color="muted">
+          <Text role="body" size="sm" color="muted">
             No se borra. Queda en tu historial como una sesión sin terminar.
           </Text>
 
@@ -364,10 +376,10 @@ function Score({
 }) {
   return (
     <View style={styles.score}>
-      <Text role="display" size="md" color={accent ? 'accent' : 'primary'}>
+      <Text role="data" size="2xl" color={accent ? 'accent' : 'primary'}>
         {value}
       </Text>
-      <Text role="eyebrow" size="2xs" color="muted">
+      <Text role="eyebrow" size="xs" color="muted">
         {label}
       </Text>
     </View>
@@ -468,16 +480,16 @@ function Exercise({
       ) : null}
 
       <View style={styles.columns}>
-        <Text role="eyebrow" size="2xs" color="muted" align="center" style={styles.colSet}>
+        <Text role="eyebrow" size="xs" color="muted" align="center" style={styles.colSet}>
           SERIE
         </Text>
-        <Text role="eyebrow" size="2xs" color="muted" numberOfLines={1} style={styles.colPrevious}>
+        <Text role="eyebrow" size="xs" color="muted" numberOfLines={1} style={styles.colPrevious}>
           ANTERIOR
         </Text>
-        <Text role="eyebrow" size="2xs" color="muted" align="center" style={styles.colInput}>
+        <Text role="eyebrow" size="xs" color="muted" align="center" style={styles.colInput}>
           KG
         </Text>
-        <Text role="eyebrow" size="2xs" color="muted" align="center" style={styles.colInput}>
+        <Text role="eyebrow" size="xs" color="muted" align="center" style={styles.colInput}>
           REPS
         </Text>
         <View style={styles.colTick} />
@@ -501,7 +513,7 @@ function Exercise({
         hitSlop={8}
       >
         <FoundationIcon name="add" customSize={12} color={theme.color.icon.accent} decorative />
-        <Text role="control" size="xs" color="accent">
+        <Text role="control" size="sm" color="accent">
           Añadir serie
         </Text>
       </Pressable>
@@ -525,12 +537,12 @@ function Exercise({
             open exercise in display and the rest in body, and a font cannot animate. */}
         <View style={styles.headerTitle}>
           <Animated.View style={quiet}>
-            <Text role="control" size="sm" numberOfLines={1}>
+            <Text role="control" size="md" numberOfLines={1}>
               {exercise.movement}
             </Text>
           </Animated.View>
           <Animated.View style={[styles.headerOver, styles.headerOpen, loud]}>
-            <Text role="display" size="md" uppercase numberOfLines={1} style={styles.headerFlex}>
+            <Text role="display" size="xl" uppercase numberOfLines={1} style={styles.headerFlex}>
               {exercise.movement}
             </Text>
             <Pressable
@@ -638,7 +650,7 @@ function SetRow({
   return (
     <GestureDetector gesture={swipe}>
       <Animated.View style={[styles.setRow, row]}>
-        <Text role="control" size="sm" align="center" style={styles.colSet}>
+        <Text role="control" size="md" align="center" style={styles.colSet}>
           {index + 1}
         </Text>
         {/* What it weighed last time, so nobody has to remember the number they hit a
@@ -732,7 +744,7 @@ function Chip({ icon, label }: { readonly icon: 'target'; readonly label: string
       ]}
     >
       <FoundationIcon name={icon} customSize={11} color={theme.color.icon.secondary} decorative />
-      <Text role="body" size="2xs" color="secondary">
+      <Text role="body" size="xs" color="secondary">
         {label}
       </Text>
     </View>
@@ -788,13 +800,17 @@ const styles = StyleSheet.create({
   scoreboard: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 44,
+    // The clock is what somebody reads from a metre away with a bar in their hands, so
+    // 16px in a 44pt strip was too small — and 30 in 78 was too far the other way, most
+    // of it padding. 24 leads to 26, the label to 15, so the content is 42 and the strip
+    // gives it 8 either side.
+    height: 58,
     borderRadius: 14,
     borderWidth: 1,
     marginTop: 14,
   },
   score: { flex: 1, alignItems: 'center', gap: 1 },
-  divider: { width: 1, height: 20 },
+  divider: { width: 1, height: 30 },
   list: { gap: 6, paddingTop: 16, paddingBottom: 32 },
   shell: { borderRadius: 22, borderWidth: 1.5, paddingHorizontal: CARD_INSET },
   exerciseHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, height: 44 },
@@ -818,17 +834,24 @@ const styles = StyleSheet.create({
   },
   columns: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   setRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  // 'SERIE' at the label role's tracking needs the room, and the numbers ride the
-  // same column centred, so the two never drift apart.
-  colSet: { width: 40 },
-  // Wide enough for the header at the label role's tracking, which is what wrapped it.
-  colPrevious: { width: 76 },
+  // 'SERIE' at the eyebrow's 0.2em tracking needs the room, and the numbers ride the
+  // same column centred, so the two never drift apart. Five characters want about 41pt
+  // at 10 and 49 at 12, which is what wrapped the word when the header grew.
+  colSet: { width: 54 },
+  // Wide enough for `ANTERIOR` at the eyebrow's 0.2em tracking, which is what wrapped
+  // it: eight characters need about 66pt at 10 and 79 at 12, so the column grew with
+  // the type rather than clipping the one word that names it.
+  colPrevious: { width: 88 },
   addSet: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingTop: 4 },
   colInput: { flex: 1, textAlign: 'center' },
   colTick: { width: 34, height: 34 },
-  field: { height: 34, borderRadius: 10, fontSize: 13, paddingVertical: 0 },
+  // 16 rather than the 13 that was typed here: it is the only size in this file that
+  // never came from the scale, and it is the number somebody enters mid-set. The height
+  // stays 34 so the row keeps aligning with the tick beside it.
+  field: { height: 34, borderRadius: 10, fontSize: 16, paddingVertical: 0 },
   cell: { flex: 1, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   thread: { width: 2.5, height: 28, borderRadius: 1.5 },
   finish: { paddingHorizontal: 0, minWidth: 104 },
   decisions: { gap: 10, paddingBottom: 8 },
+  addExercise: { gap: 8, paddingTop: 10 },
 })
