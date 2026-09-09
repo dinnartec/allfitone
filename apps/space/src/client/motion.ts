@@ -23,7 +23,7 @@
  * movement goes.
  */
 
-import { motion } from '@allfitone/react-native/tokens'
+import { motion, semanticMotion } from '@allfitone/react-native/tokens'
 
 export type MotionDuration = keyof typeof motion.duration
 export type MotionEasing = keyof typeof motion.easing
@@ -103,3 +103,18 @@ export function shouldPlayEntrance(alreadyAnswered: boolean): boolean {
  */
 export const PRESS_SCALE = 0.97
 export const PRESS_DURATION: MotionDuration = 'fast'
+
+/**
+ * The spring a card opens on.
+ *
+ * `feedback`, not `transition`. This is the direct answer to a tap, and `transition`
+ * is tuned for something settling into place on its own — a beat too slow for a card
+ * somebody just chose. Spread rather than passed whole because Reanimated's config
+ * carries more keys than the token has, and handing it the token object would let a
+ * future field on the token silently become an animation setting.
+ */
+export const SPRING = {
+  damping: semanticMotion.feedback.spring.damping,
+  stiffness: semanticMotion.feedback.spring.stiffness,
+  mass: semanticMotion.feedback.spring.mass,
+}

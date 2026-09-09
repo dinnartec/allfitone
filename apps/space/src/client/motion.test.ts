@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { motion } from '@allfitone/react-native/tokens'
+import { motion, semanticMotion } from '@allfitone/react-native/tokens'
 
 import {
   cssDuration,
@@ -11,6 +11,7 @@ import {
   PRESS_DURATION,
   PRESS_SCALE,
   shouldPlayEntrance,
+  SPRING,
   staggerDelays,
   STAGGER_CAP_MS,
   STAGGER_STEP_MS,
@@ -130,5 +131,22 @@ describe('cssDuration', () => {
     // Row selection is touched tens of times a day, where the playbook allows
     // under 150ms or nothing at all.
     expect(durationFor(PRESS_DURATION, false)).toBeLessThanOrEqual(150)
+  })
+})
+
+describe('SPRING', () => {
+  test('is the feedback spring from the tokens, not numbers typed into a screen', () => {
+    // Two screens open a card on this. Typed by hand in each, they drift apart the
+    // first time the token moves, and nobody notices because both still animate.
+    expect(SPRING).toEqual({
+      damping: semanticMotion.feedback.spring.damping,
+      stiffness: semanticMotion.feedback.spring.stiffness,
+      mass: semanticMotion.feedback.spring.mass,
+    })
+  })
+
+  test('answers a tap rather than settling on its own', () => {
+    // `transition` is the slower one, for something arriving by itself.
+    expect(SPRING.stiffness).toBeGreaterThan(semanticMotion.transition.spring.stiffness)
   })
 })

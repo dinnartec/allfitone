@@ -40,7 +40,7 @@ import { Screen } from '@allfitone/react-native/screen'
 import { Sheet } from '@allfitone/react-native/sheet'
 import { Text } from '@allfitone/react-native/text'
 import { useTheme } from '@allfitone/react-native/theme'
-import { semanticMotion, transparent } from '@allfitone/react-native/tokens'
+import { transparent } from '@allfitone/react-native/tokens'
 import { FoundationIcon } from '@allfitone/react-native/icons'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -50,12 +50,14 @@ import Animated, {
   interpolateColor,
   runOnJS,
   useAnimatedStyle,
+  useReducedMotion,
   useSharedValue,
   withSpring,
 } from 'react-native-reanimated'
 
 import { ApiError } from '../../src/client'
 import { createSpaceExecutionFlow } from '../../src/client/execution-transport'
+import { SPRING } from '../../src/client/motion'
 import {
   canFinish,
   elapsedLabel,
@@ -93,17 +95,6 @@ const SAVE_DELAY_MS = 1_200
  * then animates between zero and that number. Nothing else can animate a height that
  * depends on how many sets an exercise has.
  */
-/**
- * The feedback spring, not the transition one. This is a direct answer to a tap, and
- * `transition` is tuned for something settling into place on its own — a beat too slow
- * for a drawer somebody opens between sets.
- */
-const SPRING = {
-  damping: semanticMotion.feedback.spring.damping,
-  stiffness: semanticMotion.feedback.spring.stiffness,
-  mass: semanticMotion.feedback.spring.mass,
-}
-
 /**
  * How far a row travels to offer its delete.
  *
@@ -414,13 +405,17 @@ function Exercise({
   const theme = useTheme()
   const progress = useSharedValue(0)
   const drawerHeight = useSharedValue(0)
+  const reduceMotion = useReducedMotion()
 
   const done = exercise.sets.filter((set) => set.done).length
   const complete = done === exercise.sets.length && done > 0
 
   useEffect(() => {
-    progress.value = withSpring(open ? 1 : 0, SPRING)
-  }, [open, progress])
+    // Reduced motion keeps the change and drops the travel: which exercise is open is
+    // state the drawer exists to report, so it still opens — it just does not fly.
+    const target = open ? 1 : 0
+    progress.value = reduceMotion ? target : withSpring(target, SPRING)
+  }, [open, progress, reduceMotion])
 
   // Each fade ramps the alpha of the token it lands on, so nothing in between is a
   // colour the Design System does not have. Fading from `transparent` instead would
