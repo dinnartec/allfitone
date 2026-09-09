@@ -41,7 +41,6 @@ import {
   type RoutineCard,
 } from '../src/client/week-plan'
 import { deviceTimezone } from '../src/client/timezone'
-import { Reorderable } from '../src/components/reorderable'
 import { DOCK_HEIGHT, TabBar, type TabKey } from '../src/components/tab-bar'
 
 const EXPIRED = 'Tu sesión venció. Vuelve a entrar para continuar.'
@@ -107,9 +106,30 @@ export default function Train() {
       .finally(() => setStarting(undefined))
   }
 
+  /**
+   * Choosing a programme, expressed as the order command that already exists.
+   *
+   * `OP-PLN-024` says the first assignment is the one this tab opens on, so selecting
+   * one is putting it in front and leaving the rest as they were. There is no separate
+   * "current programme" to write, and inventing one would be a second source of truth
+   * for a question the order already answers.
+   */
+  const select = (assignmentId: string) => {
+    const chosen = mine.find((program) => program.assignment_id === assignmentId)
+    if (!chosen || chosen.assignment_id === mine[0]?.assignment_id) {
+      setChoosing(false)
+      return
+    }
+    reorder([
+      assignmentId,
+      ...mine.filter((one) => one.assignment_id !== assignmentId).map((one) => one.assignment_id),
+    ])
+    setChoosing(false)
+  }
+
   const reorder = (assignmentIds: readonly string[]) => {
     // Shown in the new order at once, then written. Waiting for the round trip would
-    // make the row snap back under the finger that just moved it.
+    // make the row snap back under the finger that just chose it.
     setMine((current) =>
       assignmentIds
         .map((id) => current.find((program) => program.assignment_id === id))
@@ -164,7 +184,7 @@ export default function Train() {
             </Text>
           </View>
           {plan ? (
-            <Text role="body" size="2xs" color="muted">
+            <Text role="body" size="xs" color="muted">
               {`semana ${plan.program_week}`}
             </Text>
           ) : null}
@@ -236,23 +256,17 @@ export default function Train() {
 
       <Sheet visible={choosing} onDismiss={() => setChoosing(false)} title="Tus programas">
         <View style={styles.programs}>
-          <Text role="body" size="2xs" color="muted">
-            Arrastra para cambiar el orden. El primero es el que abre esta pestaña.
+          <Text role="body" size="sm" color="muted">
+            Toca el que quieras entrenar. Esta pestaña se abre en el que elijas.
           </Text>
-          <Reorderable
-            items={mine}
-            keyOf={(program) => program.assignment_id}
-            rowHeight={PROGRAM_ROW}
-            gap={10}
-            onReorder={reorder}
-          >
-            {(program) => (
-              <MyProgramRow
-                program={program}
-                active={program.program_version_id === plan?.program_version_id}
-              />
-            )}
-          </Reorderable>
+          {mine.map((program) => (
+            <MyProgramRow
+              key={program.assignment_id}
+              program={program}
+              active={program.program_version_id === plan?.program_version_id}
+              onPress={() => select(program.assignment_id)}
+            />
+          ))}
           <Button
             label="Crear un programa"
             variant="secondary"
@@ -311,7 +325,7 @@ function Routine({
           {card.state === 'open' ? <Badge label="A MEDIAS" tone="accent" /> : null}
           {card.state === 'done' ? <Badge label="HECHA" tone="success" /> : null}
         </View>
-        <Text role="body" size="2xs" color="muted">
+        <Text role="body" size="xs" color="muted">
           {routineCaption(card.routine)}
         </Text>
       </View>
@@ -343,14 +357,21 @@ function Badge({ label, tone }: { readonly label: string; readonly tone: 'accent
 function MyProgramRow({
   program,
   active,
+  onPress,
 }: {
   readonly program: MyProgram
   readonly active: boolean
+  readonly onPress: () => void
 }) {
   const theme = useTheme()
 
   return (
-    <View
+    <Pressable
+      accessibilityRole="radio"
+      accessibilityState={{ selected: active }}
+      accessibilityLabel={`${program.title}, ${program.sessions_done} de ${program.sessions_planned} sesiones`}
+      onPress={onPress}
+      hitSlop={4}
       style={[
         styles.program,
         {
@@ -363,14 +384,14 @@ function MyProgramRow({
         <Text role="display" size="md" uppercase numberOfLines={1}>
           {program.title}
         </Text>
-        <Text role="body" size="2xs" color="muted">
+        <Text role="body" size="xs" color="muted">
           {`${program.weeks} semanas · ${program.days_per_week} días · ${program.sessions_done} de ${program.sessions_planned}`}
         </Text>
       </View>
       {active ? (
         <FoundationIcon name="success" size="sm" color={theme.color.icon.accent} decorative />
       ) : null}
-    </View>
+    </Pressable>
   )
 }
 
@@ -401,7 +422,7 @@ function Alternative({
       <Text role="control" size="xs" numberOfLines={1}>
         {label}
       </Text>
-      <Text role="body" size="2xs" color="muted">
+      <Text role="body" size="xs" color="muted">
         {caption}
       </Text>
     </Pressable>
@@ -442,7 +463,7 @@ const styles = StyleSheet.create({
   badge: { borderRadius: 8, paddingHorizontal: 7, paddingVertical: 2 },
   programs: { gap: 10, paddingBottom: 8 },
   program: {
-    flex: 1,
+    minHeight: PROGRAM_ROW,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
