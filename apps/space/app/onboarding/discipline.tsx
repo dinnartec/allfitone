@@ -309,7 +309,7 @@ function Card({
         <Text role="display" size="6xl" uppercase>
           {entry.title[0]}
         </Text>
-        <Text role="display" size="4xl" uppercase style={{ color: tint }}>
+        <Text role="display" size="5xl" uppercase style={{ color: tint }}>
           {entry.title[1]}
         </Text>
         <View style={[styles.rule, { backgroundColor: tint }]} />
@@ -320,7 +320,7 @@ function Card({
               <Text role="label" size="2xs" color="muted">
                 {`0${position + 1}`}
               </Text>
-              <Text role="display" size="lg" uppercase style={styles.practiceName}>
+              <Text role="display" size="2xl" uppercase style={styles.practiceName}>
                 {practice}
               </Text>
             </View>
