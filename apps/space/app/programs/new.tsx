@@ -31,6 +31,8 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
 
 import { ApiError } from '../../src/client'
 import { createSpaceContentFlow } from '../../src/client/content-transport'
+import { createSpaceProgramFlow } from '../../src/client/programs-transport'
+import { deviceTimezone } from '../../src/client/timezone'
 import {
   expandBaseWeek,
   summarizeBaseWeek,
@@ -65,6 +67,7 @@ export default function NewProgram() {
   const router = useRouter()
   const theme = useTheme()
   const flow = useMemo(() => createSpaceContentFlow(), [])
+  const programs = useMemo(() => createSpaceProgramFlow(), [])
 
   const [title, setTitle] = useState('')
   const [weeks, setWeeks] = useState(DEFAULT_WEEKS)
@@ -100,10 +103,19 @@ export default function NewProgram() {
     }
   }, [flow])
 
+  /**
+   * Saves, and says whether it did. It reports a failure through `failure` as well,
+   * because the autosave has nobody waiting on it — but publishing does, and a caller
+   * that cannot tell a save from a silent failure will navigate away from the message.
+   */
   const persist = useCallback(
-    async (nextTitle: string, nextWeek: readonly BaseWeekDay[], nextWeeks: number) => {
+    async (
+      nextTitle: string,
+      nextWeek: readonly BaseWeekDay[],
+      nextWeeks: number,
+    ): Promise<boolean> => {
       const trimmed = nextTitle.trim()
-      if (trimmed === '') return
+      if (trimmed === '') return false
 
       setSaving(true)
       try {
@@ -118,10 +130,12 @@ export default function NewProgram() {
         })
         setSaved(true)
         setFailure(undefined)
+        return true
       } catch (cause: unknown) {
         setFailure(
           cause instanceof ApiError && cause.failure === 'unauthenticated' ? EXPIRED : SAVE_FAILED,
         )
+        return false
       } finally {
         setSaving(false)
       }
@@ -181,9 +195,23 @@ export default function NewProgram() {
     if (!publishable) return
     if (pending.current) clearTimeout(pending.current)
     try {
-      await persist(title, week, weeks)
-      if (identity.current) await flow.publishProgram(identity.current)
-      router.back()
+      // Stay put when the draft did not land. Leaving took the failure message with it,
+      // so a save that never happened looked exactly like one that did.
+      const stored = await persist(title, week, weeks)
+      if (!stored || !identity.current) return
+      const version = await flow.publishProgram(identity.current)
+      // Publishing it is not having it. Without this the programme was written,
+      // published and then invisible: the catalogue reads global content, the selector
+      // reads assignments, and `my-content` reads routines — so nothing showed it back.
+      // `OP-PLN-024` puts a new assignment in front, which is what makes taking one the
+      // same gesture as choosing it.
+      await programs.choose({
+        program_version_id: version.id,
+        timezone: deviceTimezone(),
+      })
+      // To Entrenar rather than back: this is now the programme being trained, and that
+      // is the tab that says so.
+      router.replace('/train')
     } catch (cause: unknown) {
       setFailure(
         cause instanceof ApiError && cause.failure === 'unauthenticated' ? EXPIRED : SAVE_FAILED,

@@ -83,10 +83,15 @@ export default function RoutineEditor() {
   // see the identity the creation produced, and state would still be the old one.
   const identity = useRef<string | undefined>(templateId)
 
+  /**
+   * Saves, and says whether it did. It reports a failure through `failure` as well,
+   * because the autosave has nobody waiting on it — but publishing does, and a caller
+   * that cannot tell a save from a silent failure will navigate away from the message.
+   */
   const persist = useCallback(
-    async (nextTitle: string, nextSteps: readonly WorkingStep[]) => {
+    async (nextTitle: string, nextSteps: readonly WorkingStep[]): Promise<boolean> => {
       const trimmed = nextTitle.trim()
-      if (trimmed === '') return
+      if (trimmed === '') return false
 
       setSaving(true)
       try {
@@ -98,10 +103,12 @@ export default function RoutineEditor() {
         await flow.saveTemplateDraft(identity.current, stepsToContent(trimmed, nextSteps))
         setSaved(true)
         setFailure(undefined)
+        return true
       } catch (cause: unknown) {
         setFailure(
           cause instanceof ApiError && cause.failure === 'unauthenticated' ? EXPIRED : SAVE_FAILED,
         )
+        return false
       } finally {
         setSaving(false)
       }
@@ -177,7 +184,10 @@ export default function RoutineEditor() {
     }
     if (pending.current) clearTimeout(pending.current)
     try {
-      await persist(title, steps)
+      // Stay put when the draft did not land. Publishing on top of a failed save would
+      // publish whatever the server still holds, and leaving hides the message.
+      const stored = await persist(title, steps)
+      if (!stored) return
       await flow.publishTemplate(templateId)
       router.back()
     } catch (cause: unknown) {

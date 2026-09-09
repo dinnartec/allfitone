@@ -17,6 +17,7 @@ const assignment: ProgramAssignment = {
 function harness(overrides?: Partial<ProgramTransport>) {
   const commands: string[] = []
   const chosen: Array<{ key: string; versionId: string }> = []
+  const ordered: Array<{ key: string; ids: readonly string[] }> = []
   let issued = 0
 
   const transport: ProgramTransport = {
@@ -26,8 +27,9 @@ function harness(overrides?: Partial<ProgramTransport>) {
     readMyPrograms: async () => {
       throw new Error('not used in this test')
     },
-    reorder: async () => {
-      throw new Error('not used in this test')
+    reorder: async (command, assignmentIds) => {
+      ordered.push({ key: command.idempotencyKey, ids: assignmentIds })
+      return []
     },
     readDetail: async () => {
       throw new Error('not used in this test')
@@ -60,7 +62,7 @@ function harness(overrides?: Partial<ProgramTransport>) {
     },
   })
 
-  return { flow, chosen, commands }
+  return { flow, chosen, commands, ordered }
 }
 
 describe('choose', () => {
@@ -112,5 +114,30 @@ describe('choose', () => {
     // Choosing the same program again after it succeeded is a new intention, not a
     // retry of the old one.
     expect(chosen[0]?.key).not.toBe(chosen[1]?.key)
+  })
+})
+
+describe('reorder', () => {
+  test('sends the order exactly as it was handed over', async () => {
+    // The command replaces every position in one pass, so the list the screen is
+    // showing is the list the server has to receive — not a diff of it.
+    const { flow, ordered } = harness()
+
+    await flow.reorder(['a', 'b', 'c'])
+
+    expect(ordered).toHaveLength(1)
+    expect(ordered[0]?.ids).toEqual(['a', 'b', 'c'])
+  })
+
+  test('mints a new key every time, because an order is not a retry', async () => {
+    // Unlike `choose`, where pressing the same card twice is one intention, dragging a
+    // row and dragging it back are two different orders. Reusing the key would make the
+    // second one converge on the first and the list would snap back.
+    const { flow, ordered } = harness()
+
+    await flow.reorder(['a', 'b'])
+    await flow.reorder(['b', 'a'])
+
+    expect(ordered.map((one) => one.key)).toEqual(['key-1', 'key-2'])
   })
 })

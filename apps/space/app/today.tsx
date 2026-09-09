@@ -52,6 +52,7 @@ import {
   type TrainingProfile,
 } from '../src/client/program-catalogue'
 import { longDateLabel, shortDayLabel, trainedLabel } from '../src/client/week'
+import { deviceTimezone } from '../src/client/timezone'
 import todayHero from '../assets/images/today/today-hero.webp'
 import { ProgramCard } from '../src/components/program-card'
 import { DOCK_HEIGHT, TabBar, type TabKey } from '../src/components/tab-bar'
@@ -79,10 +80,7 @@ export default function Today() {
   const insets = useSafeAreaInsets()
   const programs = useMemo(() => createSpaceProgramFlow(), [])
   const training = useMemo(() => createSpaceExecutionFlow(), [])
-  const timezone = useMemo(
-    () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Bogota',
-    [],
-  )
+  const timezone = useMemo(() => deviceTimezone(), [])
 
   const [today, setToday] = useState<TodayPayload | undefined>(undefined)
   const [catalogue, setCatalogue] = useState<ProgramCatalogue | undefined>(undefined)

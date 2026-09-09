@@ -40,6 +40,7 @@ import {
   weekProgress,
   type RoutineCard,
 } from '../src/client/week-plan'
+import { deviceTimezone } from '../src/client/timezone'
 import { Reorderable } from '../src/components/reorderable'
 import { DOCK_HEIGHT, TabBar, type TabKey } from '../src/components/tab-bar'
 
@@ -56,10 +57,7 @@ export default function Train() {
   const theme = useTheme()
   const programs = useMemo(() => createSpaceProgramFlow(), [])
   const training = useMemo(() => createSpaceExecutionFlow(), [])
-  const timezone = useMemo(
-    () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Bogota',
-    [],
-  )
+  const timezone = useMemo(() => deviceTimezone(), [])
 
   const [plan, setPlan] = useState<WeekPlan | undefined>(undefined)
   const [mine, setMine] = useState<readonly MyProgram[]>([])

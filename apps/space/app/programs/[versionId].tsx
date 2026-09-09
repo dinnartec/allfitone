@@ -36,6 +36,7 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
 
 import { ApiError } from '../../src/client'
 import { createSpaceProgramFlow } from '../../src/client/programs-transport'
+import { deviceTimezone } from '../../src/client/timezone'
 import type { ProgramDetail } from '../../src/client/programs'
 import {
   estimatedMinutes,
@@ -49,14 +50,6 @@ const EXPIRED = 'Tu sesión venció. Vuelve a entrar para continuar.'
 const READ_FAILED = 'No pudimos cargar este programa. Inténtalo otra vez.'
 const NOT_FOUND = 'Este programa ya no está disponible.'
 const CHOOSE_FAILED = 'No pudimos guardar tu programa. Inténtalo otra vez.'
-
-function deviceTimezone(): string {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
-  } catch {
-    return 'UTC'
-  }
-}
 
 export default function ProgramVersion() {
   const router = useRouter()
