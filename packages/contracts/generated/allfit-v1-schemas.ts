@@ -3983,6 +3983,7 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
     required: [
       'identity',
       'biological_sex',
+      'training_discipline',
       'primary_training_goal',
       'focus_areas',
       'training_experience',
@@ -4069,6 +4070,28 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         },
         description:
           'The set in force, and the one entry whose value is a set rather than a single value. `answered` is not redundant with emptiness for the app\'s purposes but it is derived from it: an unanswered step has no members, and saying "no emphasis" is answering with `whole_body`.',
+      },
+      training_discipline: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['answered', 'value'],
+        properties: {
+          answered: {
+            type: 'boolean',
+          },
+          value: {
+            oneOf: [
+              {
+                $ref: '#/components/schemas/TrainingDiscipline',
+              },
+              {
+                type: 'null',
+              },
+            ],
+          },
+        },
+        description:
+          'The discipline in force, read before the goal so the goal screen knows which goals to offer.',
       },
       training_experience: {
         type: 'object',
@@ -4240,12 +4263,16 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       {
         $ref: '#/components/schemas/SpaceTrainingExperienceClaim',
       },
+      {
+        $ref: '#/components/schemas/SpaceTrainingDisciplineClaim',
+      },
     ],
     discriminator: {
       propertyName: 'attribute_code',
       mapping: {
         primary_training_goal: '#/components/schemas/SpaceTrainingGoalClaim',
         training_experience: '#/components/schemas/SpaceTrainingExperienceClaim',
+        training_discipline: '#/components/schemas/SpaceTrainingDisciplineClaim',
       },
     },
     description: 'The claim as recorded, in the variant matching what was declared.',
@@ -4258,12 +4285,16 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       {
         $ref: '#/components/schemas/SpaceTrainingExperienceDeclaration',
       },
+      {
+        $ref: '#/components/schemas/SpaceTrainingDisciplineDeclaration',
+      },
     ],
     discriminator: {
       propertyName: 'attribute_code',
       mapping: {
         primary_training_goal: '#/components/schemas/SpaceTrainingGoalDeclaration',
         training_experience: '#/components/schemas/SpaceTrainingExperienceDeclaration',
+        training_discipline: '#/components/schemas/SpaceTrainingDisciplineDeclaration',
       },
     },
     description:
@@ -4838,6 +4869,39 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         minimum: 0,
       },
     },
+  },
+  SpaceTrainingDisciplineClaim: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['attribute_code', 'value_text', 'superseded_claim_id'],
+    properties: {
+      attribute_code: {
+        type: 'string',
+        const: 'training_discipline',
+      },
+      value_text: {
+        $ref: '#/components/schemas/TrainingDiscipline',
+      },
+      superseded_claim_id: {
+        $ref: '#/components/schemas/SupersededClaimId',
+      },
+    },
+  },
+  SpaceTrainingDisciplineDeclaration: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['attribute_code', 'value_text'],
+    properties: {
+      attribute_code: {
+        type: 'string',
+        const: 'training_discipline',
+      },
+      value_text: {
+        $ref: '#/components/schemas/TrainingDiscipline',
+      },
+    },
+    description:
+      'One principal discipline, exclusive. Declaring again seals the previous claim rather than editing it, so what somebody started out training stays readable.',
   },
   SpaceTrainingExperienceClaim: {
     type: 'object',
@@ -5804,6 +5868,12 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         const: 'analytics-v1',
       },
     },
+  },
+  TrainingDiscipline: {
+    type: 'string',
+    enum: ['strength'],
+    description:
+      'The discipline somebody trains, asked before the goal because the goal\'s list depends on it: with strength there is no point offering "run a race".\n\nOne value, and the enum says so. `identity.profile_attributes` holds all six — strength, high intensity, endurance and cardio, combat sports, wellbeing and control, rhythm and classes — because the catalogue is the vocabulary of the concept and its own constraint refuses an enum with fewer than two members. What a person may answer today is a launch decision, and the contract is where that decision belongs. `PrimaryTrainingGoal` already works this way, offering five of the six the catalogue holds.\n\nThe other five are shown in the onboarding, deliberately, so somebody can see what Allfit is going to cover — and they cannot be chosen. No interest is recorded and no notification is offered, so nothing there is a promise.\n\nNot `catalog.disciplines`: that holds the four activity families that type a target, one level below this.',
   },
   TrainingExperience: {
     type: 'string',

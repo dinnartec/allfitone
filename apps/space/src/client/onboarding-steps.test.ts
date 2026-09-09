@@ -19,6 +19,7 @@ const answers = (
   ...steps: Array<
     | 'identity'
     | 'biological_sex'
+    | 'training_discipline'
     | 'primary_training_goal'
     | 'focus_areas'
     | 'training_experience'
@@ -28,6 +29,7 @@ const answers = (
 ) => ({
   identity: { answered: steps.includes('identity') },
   biological_sex: { answered: steps.includes('biological_sex') },
+  training_discipline: { answered: steps.includes('training_discipline') },
   primary_training_goal: { answered: steps.includes('primary_training_goal') },
   focus_areas: { answered: steps.includes('focus_areas') },
   training_experience: { answered: steps.includes('training_experience') },
@@ -92,7 +94,7 @@ describe('resolveOnboardingRoute', () => {
       answers: answers('identity', 'biological_sex'),
     }
 
-    expect(resolveOnboardingRoute(declined)).toBe('/onboarding/goal')
+    expect(resolveOnboardingRoute(declined)).toBe('/onboarding/discipline')
   })
 })
 
@@ -131,17 +133,33 @@ describe('stepPosition', () => {
       resolveOnboardingRoute({ attempt: PASSED, answers: answers('identity', 'biological_sex') }),
       resolveOnboardingRoute({
         attempt: PASSED,
-        answers: answers('identity', 'biological_sex', 'primary_training_goal'),
-      }),
-      resolveOnboardingRoute({
-        attempt: PASSED,
-        answers: answers('identity', 'biological_sex', 'primary_training_goal', 'focus_areas'),
+        answers: answers('identity', 'biological_sex', 'training_discipline'),
       }),
       resolveOnboardingRoute({
         attempt: PASSED,
         answers: answers(
           'identity',
           'biological_sex',
+          'training_discipline',
+          'primary_training_goal',
+        ),
+      }),
+      resolveOnboardingRoute({
+        attempt: PASSED,
+        answers: answers(
+          'identity',
+          'biological_sex',
+          'training_discipline',
+          'primary_training_goal',
+          'focus_areas',
+        ),
+      }),
+      resolveOnboardingRoute({
+        attempt: PASSED,
+        answers: answers(
+          'identity',
+          'biological_sex',
+          'training_discipline',
           'primary_training_goal',
           'focus_areas',
           'training_experience',
@@ -158,7 +176,7 @@ describe('stepPosition', () => {
 describe('guardStep', () => {
   const ANSWERED: OnboardingProgress = {
     attempt: PASSED,
-    answers: answers('identity', 'biological_sex', 'primary_training_goal'),
+    answers: answers('identity', 'biological_sex', 'training_discipline', 'primary_training_goal'),
   }
 
   test('lets a step already answered be opened, because that is editing', () => {
@@ -198,7 +216,8 @@ describe('lastRevisitableStep', () => {
 describe('nextRouteAfter', () => {
   test('hands each step to the next one in the declared order', () => {
     expect(nextRouteAfter('/onboarding/identity')).toBe('/onboarding/sex')
-    expect(nextRouteAfter('/onboarding/sex')).toBe('/onboarding/goal')
+    expect(nextRouteAfter('/onboarding/sex')).toBe('/onboarding/discipline')
+    expect(nextRouteAfter('/onboarding/discipline')).toBe('/onboarding/goal')
   })
 
   test('sends the last step to the terminal, not to a step that does not exist', () => {
@@ -232,7 +251,12 @@ describe('the focus step', () => {
 
   test('reads answered rather than a value, because whole body leaves none', () => {
     const passed = { eligibility_status: 'pass' as const }
-    const upTo = answers('identity', 'biological_sex', 'primary_training_goal')
+    const upTo = answers(
+      'identity',
+      'biological_sex',
+      'training_discipline',
+      'primary_training_goal',
+    )
 
     expect(resolveOnboardingRoute({ attempt: passed, answers: upTo })).toBe('/onboarding/focus')
     expect(
@@ -255,7 +279,13 @@ describe('the experience step', () => {
 
   test('is owed until it is answered', () => {
     const passed = { eligibility_status: 'pass' as const }
-    const upTo = answers('identity', 'biological_sex', 'primary_training_goal', 'focus_areas')
+    const upTo = answers(
+      'identity',
+      'biological_sex',
+      'training_discipline',
+      'primary_training_goal',
+      'focus_areas',
+    )
 
     expect(resolveOnboardingRoute({ attempt: passed, answers: upTo })).toBe(
       '/onboarding/experience',
@@ -272,7 +302,12 @@ describe('the experience step', () => {
     // Not because the level depends on the zones, but because no screen may let a
     // prerequisite be skipped: that is what `guardStep` is for.
     const passed = { eligibility_status: 'pass' as const }
-    const upTo = answers('identity', 'biological_sex', 'primary_training_goal')
+    const upTo = answers(
+      'identity',
+      'biological_sex',
+      'training_discipline',
+      'primary_training_goal',
+    )
 
     expect(guardStep('/onboarding/experience', { attempt: passed, answers: upTo })).toBe(
       '/onboarding/focus',
@@ -285,6 +320,7 @@ describe('the measures step', () => {
   const upTo = answers(
     'identity',
     'biological_sex',
+    'training_discipline',
     'primary_training_goal',
     'focus_areas',
     'training_experience',

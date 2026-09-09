@@ -2089,6 +2089,11 @@ export interface components {
         answered: boolean
         value: components['schemas']['FocusAreaSet']
       }
+      /** @description The discipline in force, read before the goal so the goal screen knows which goals to offer. */
+      training_discipline: {
+        answered: boolean
+        value: components['schemas']['TrainingDiscipline'] | null
+      }
       /** @description The level in force. A superseded level never appears here: requalifying writes another claim and this reads the current one. */
       training_experience: {
         answered: boolean
@@ -2408,10 +2413,22 @@ export interface components {
      * @enum {string}
      */
     TrainingExperience: 'starting' | 'some_practice' | 'experienced'
+    /**
+     * @description The discipline somebody trains, asked before the goal because the goal's list depends on it: with strength there is no point offering "run a race".
+     *
+     *     One value, and the enum says so. `identity.profile_attributes` holds all six — strength, high intensity, endurance and cardio, combat sports, wellbeing and control, rhythm and classes — because the catalogue is the vocabulary of the concept and its own constraint refuses an enum with fewer than two members. What a person may answer today is a launch decision, and the contract is where that decision belongs. `PrimaryTrainingGoal` already works this way, offering five of the six the catalogue holds.
+     *
+     *     The other five are shown in the onboarding, deliberately, so somebody can see what Allfit is going to cover — and they cannot be chosen. No interest is recorded and no notification is offered, so nothing there is a promise.
+     *
+     *     Not `catalog.disciplines`: that holds the four activity families that type a target, one level below this.
+     * @enum {string}
+     */
+    TrainingDiscipline: 'strength'
     /** @description One member of the attribute catalogue per variant. This was a single object while only the goal existed; the second member is what earns the union, and it is what keeps a goal code from being sent with an experience value. */
     SpaceProfileClaimDeclaration:
       | components['schemas']['SpaceTrainingGoalDeclaration']
       | components['schemas']['SpaceTrainingExperienceDeclaration']
+      | components['schemas']['SpaceTrainingDisciplineDeclaration']
     /** @description Only one goal is principal, so declaring a second time replaces which one that is rather than adding to a set. */
     SpaceTrainingGoalDeclaration: {
       /**
@@ -2430,10 +2447,20 @@ export interface components {
       attribute_code: 'training_experience'
       value_text: components['schemas']['TrainingExperience']
     }
+    /** @description One principal discipline, exclusive. Declaring again seals the previous claim rather than editing it, so what somebody started out training stays readable. */
+    SpaceTrainingDisciplineDeclaration: {
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      attribute_code: 'training_discipline'
+      value_text: components['schemas']['TrainingDiscipline']
+    }
     /** @description The claim as recorded, in the variant matching what was declared. */
     SpaceProfileClaim:
       | components['schemas']['SpaceTrainingGoalClaim']
       | components['schemas']['SpaceTrainingExperienceClaim']
+      | components['schemas']['SpaceTrainingDisciplineClaim']
     SpaceTrainingGoalClaim: {
       /**
        * @description discriminator enum property added by openapi-typescript
@@ -2450,6 +2477,15 @@ export interface components {
        */
       attribute_code: 'training_experience'
       value_text: components['schemas']['TrainingExperience']
+      superseded_claim_id: components['schemas']['SupersededClaimId']
+    }
+    SpaceTrainingDisciplineClaim: {
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      attribute_code: 'training_discipline'
+      value_text: components['schemas']['TrainingDiscipline']
       superseded_claim_id: components['schemas']['SupersededClaimId']
     }
     /** @description The claim this one replaced, or null on a first declaration. Returned because it is the app's proof that a correction was recorded as a correction and not as an edit. */

@@ -29,6 +29,7 @@ const TODAY_ROUTE = '/today'
 const AGE_ROUTE = '/onboarding/age'
 const IDENTITY_ROUTE = '/onboarding/identity'
 const SEX_ROUTE = '/onboarding/sex'
+const DISCIPLINE_ROUTE = '/onboarding/discipline'
 const GOAL_ROUTE = '/onboarding/goal'
 const FOCUS_ROUTE = '/onboarding/focus'
 const EXPERIENCE_ROUTE = '/onboarding/experience'
@@ -37,6 +38,7 @@ const MEASURES_ROUTE = '/onboarding/measures'
 export type OnboardingStepRoute =
   | typeof IDENTITY_ROUTE
   | typeof SEX_ROUTE
+  | typeof DISCIPLINE_ROUTE
   | typeof GOAL_ROUTE
   | typeof FOCUS_ROUTE
   | typeof EXPERIENCE_ROUTE
@@ -60,6 +62,7 @@ export interface OnboardingProgress {
   answers?: {
     identity?: { answered?: boolean }
     biological_sex?: { answered?: boolean }
+    training_discipline?: { answered?: boolean }
     primary_training_goal?: { answered?: boolean }
     focus_areas?: { answered?: boolean }
     training_experience?: { answered?: boolean }
@@ -119,6 +122,13 @@ export const ONBOARDING_STEPS: readonly OnboardingStep[] = [
   {
     route: SEX_ROUTE,
     answered: (progress) => answered(progress, 'biological_sex'),
+    revisitable: true,
+  },
+  {
+    // Before the goal on purpose: the goal's list is filtered by the answer, so asking
+    // them the other way round would offer goals the discipline does not pursue.
+    route: DISCIPLINE_ROUTE,
+    answered: (progress) => answered(progress, 'training_discipline'),
     revisitable: true,
   },
   {

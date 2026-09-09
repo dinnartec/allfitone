@@ -35,6 +35,8 @@ export type ProfileClaim = AllfitV1Schemas['SpaceProfileClaim']
 export type FocusArea = AllfitV1Schemas['FocusArea']
 export type TrainingExperience = AllfitV1Schemas['TrainingExperience']
 export type TrainingExperienceClaim = AllfitV1Schemas['SpaceTrainingExperienceClaim']
+export type TrainingDiscipline = AllfitV1Schemas['TrainingDiscipline']
+export type TrainingDisciplineClaim = AllfitV1Schemas['SpaceTrainingDisciplineClaim']
 export type BodyProgressDeclaration = AllfitV1Schemas['SpaceBodyProgressDeclaration']
 export type BodyProgressRecord = AllfitV1Schemas['SpaceBodyProgressRecord']
 export type BodyMetric = AllfitV1Schemas['BodyMetric']
@@ -63,6 +65,10 @@ export interface OnboardingTransport {
     command: CommandHeaders,
     areas: readonly FocusArea[],
   ): Promise<readonly FocusArea[]>
+  declareTrainingDiscipline(
+    command: CommandHeaders,
+    discipline: TrainingDiscipline,
+  ): Promise<TrainingDisciplineClaim>
   declareTrainingExperience(
     command: CommandHeaders,
     level: TrainingExperience,
@@ -112,6 +118,7 @@ export interface OnboardingFlow {
    * One level, exclusive. Declaring again is a requalification rather than an edit:
    * the previous claim is sealed, so the level someone signed up with stays readable.
    */
+  declareTrainingDiscipline(discipline: TrainingDiscipline): Promise<TrainingDisciplineClaim>
   declareTrainingExperience(level: TrainingExperience): Promise<TrainingExperienceClaim>
   /**
    * One measurement. Weight and height are two calls with two keys, because
@@ -139,6 +146,7 @@ export function createOnboardingFlow(dependencies: OnboardingFlowDependencies): 
   let pendingSex: { command: CommandHeaders; value: BiologicalSex | null } | undefined
   let pendingGoal: { command: CommandHeaders; value: PrimaryTrainingGoal } | undefined
   let pendingFocus: { command: CommandHeaders; value: string } | undefined
+  let pendingDiscipline: { command: CommandHeaders; value: TrainingDiscipline } | undefined
   let pendingExperience: { command: CommandHeaders; value: TrainingExperience } | undefined
   // One pending command per metric: they are two commands, so one key each.
   const pendingMeasures = new Map<BodyMetric, { command: CommandHeaders; value: string }>()
@@ -227,6 +235,22 @@ export function createOnboardingFlow(dependencies: OnboardingFlowDependencies): 
       const declared = await dependencies.transport.declareFocusAreas(pendingFocus.command, areas)
       pendingFocus = undefined
       return declared
+    },
+
+    async declareTrainingDiscipline(discipline) {
+      // The same discipline as every other step, and the pun is not the reason: the
+      // key belongs to the submission, so a retry replays and a change of mind is a
+      // new command rather than a replay under a key the server already answered.
+      if (!pendingDiscipline || pendingDiscipline.value !== discipline) {
+        pendingDiscipline = { command: issue(), value: discipline }
+      }
+
+      const claim = await dependencies.transport.declareTrainingDiscipline(
+        pendingDiscipline.command,
+        discipline,
+      )
+      pendingDiscipline = undefined
+      return claim
     },
 
     async declareTrainingExperience(level) {

@@ -21,6 +21,8 @@ import type {
   OnboardingAnswers,
   OnboardingAttempt,
   PrimaryTrainingGoal,
+  ProfileClaimDeclaration,
+  TrainingDiscipline,
   TrainingExperience,
   ProfessionalCredential,
   ProfessionalProfile,
@@ -45,6 +47,7 @@ type RawOnboardingAnswers = {
   }
   biological_sex: { answered: boolean; value: BiologicalSex | null }
   primary_training_goal: { answered: boolean; value: PrimaryTrainingGoal | null }
+  training_discipline: { answered: boolean; value: TrainingDiscipline | null }
   training_experience: { answered: boolean; value: TrainingExperience | null }
   focus_areas: { answered: boolean; value: FocusArea[] }
   body_measures: { answered: boolean; value: RawBodyMeasures | null }
@@ -70,6 +73,7 @@ function emptyAnswers(): OnboardingAnswers {
     identity: { answered: false, value: null },
     biologicalSex: { answered: false, value: null },
     primaryTrainingGoal: { answered: false, value: null },
+    trainingDiscipline: { answered: false, value: null },
     trainingExperience: { answered: false, value: null },
     focusAreas: { answered: false, value: [] },
     bodyMeasures: { answered: false, value: null },
@@ -372,14 +376,11 @@ export function createIdentityOnboardingDatabase(): IdentityOnboardingDatabase {
         if (row.attribute_code !== input.attributeCode || row.value_text !== input.valueText) {
           throw new Error('PostgreSQL recorded a different claim than the one declared')
         }
-        const supersededClaimId = row.superseded_claim_id
-        return input.attributeCode === 'training_experience'
-          ? { attributeCode: 'training_experience', valueText: input.valueText, supersededClaimId }
-          : {
-              attributeCode: 'primary_training_goal',
-              valueText: input.valueText,
-              supersededClaimId,
-            }
+        // Spread rather than a chain of branches. The input already *is* the narrowed
+        // pair the union is made of, so re-deciding which arm it is once per attribute
+        // is exactly the place where the fourth one gets forgotten.
+        const declaration: ProfileClaimDeclaration = input
+        return { ...declaration, supersededClaimId: row.superseded_claim_id }
       })
     },
 
@@ -496,6 +497,7 @@ export function createIdentityOnboardingDatabase(): IdentityOnboardingDatabase {
             },
             biologicalSex: row.answers.biological_sex,
             primaryTrainingGoal: row.answers.primary_training_goal,
+            trainingDiscipline: row.answers.training_discipline,
             trainingExperience: row.answers.training_experience,
             focusAreas: row.answers.focus_areas,
             bodyMeasures: {

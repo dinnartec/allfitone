@@ -25,17 +25,15 @@ import {
 import type { ProfileClaim, ProfileClaimDeclaration } from '../domain/index.js'
 
 /**
- * Echoes a declaration back as the claim it would become, keeping the attribute
- * paired with its value. Spreading the two fields loses that pairing: destructuring
- * a discriminated union drops the correlation between its members.
+ * Echoes a declaration back as the claim it would become. The whole declaration is
+ * spread rather than its two fields: naming them separately loses the pairing, because
+ * destructuring a discriminated union drops the correlation between its members.
  */
 function echoClaim(
   input: ProfileClaimDeclaration,
   supersededClaimId: string | null = null,
 ): ProfileClaim {
-  return input.attributeCode === 'training_experience'
-    ? { attributeCode: 'training_experience', valueText: input.valueText, supersededClaimId }
-    : { attributeCode: 'primary_training_goal', valueText: input.valueText, supersededClaimId }
+  return { ...input, supersededClaimId }
 }
 
 /** The empty shape, repeated in enough doubles to be worth naming once. */
@@ -43,6 +41,7 @@ function emptyAnswers() {
   return {
     identity: { answered: false as boolean, value: null },
     biologicalSex: { answered: false as boolean, value: null },
+    trainingDiscipline: { answered: false as boolean, value: null },
     primaryTrainingGoal: { answered: false as boolean, value: null },
     trainingExperience: { answered: false as boolean, value: null },
     focusAreas: { answered: false as boolean, value: [] },

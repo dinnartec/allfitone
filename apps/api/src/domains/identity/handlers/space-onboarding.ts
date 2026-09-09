@@ -28,6 +28,7 @@ import type {
   MassUnit,
   PrimaryTrainingGoal,
   ProfileClaimDeclaration,
+  TrainingDiscipline,
   TrainingExperience,
 } from '../domain/index.js'
 import { fail } from '../../../platform/http/index.js'
@@ -150,6 +151,7 @@ export function spaceOnboardingRoutes(
             },
             biological_sex: current.answers.biologicalSex,
             primary_training_goal: current.answers.primaryTrainingGoal,
+            training_discipline: current.answers.trainingDiscipline,
             training_experience: current.answers.trainingExperience,
             focus_areas: current.answers.focusAreas,
             body_measures: {
@@ -486,6 +488,14 @@ const TRAINING_EXPERIENCE: readonly TrainingExperience[] = [
 ]
 
 /**
+ * The catalogue holds six disciplines and only this one is ready, so the other five
+ * arrive as invalid-request — the same shape of decision as `improve_performance`.
+ * They are drawn in the onboarding and cannot be chosen, which is why refusing them
+ * here is the honest answer rather than a gap.
+ */
+const TRAINING_DISCIPLINES: readonly TrainingDiscipline[] = ['strength']
+
+/**
  * One variant per member of the attribute catalogue, and the pairing is checked
  * rather than assumed: a goal code carrying an experience value is refused here as
  * well as by the database, which is what makes it a `400` instead of a constraint
@@ -511,6 +521,11 @@ function readProfileClaim(body: unknown): ProfileClaimDeclaration | undefined {
   if (code === 'training_experience') {
     return TRAINING_EXPERIENCE.includes(value as TrainingExperience)
       ? { attributeCode: code, valueText: value as TrainingExperience }
+      : undefined
+  }
+  if (code === 'training_discipline') {
+    return TRAINING_DISCIPLINES.includes(value as TrainingDiscipline)
+      ? { attributeCode: code, valueText: value as TrainingDiscipline }
       : undefined
   }
   return undefined

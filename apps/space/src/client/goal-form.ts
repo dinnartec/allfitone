@@ -136,6 +136,9 @@ export interface GoalSlot {
  * other row on every tap, so the thing you just chose jumped away from your
  * finger and the list had to be re-read to find out what happened.
  */
-export function goalSlots(chosen: TrainingGoal | undefined): readonly GoalSlot[] {
-  return TRAINING_GOALS.map((goal) => ({ goal, expanded: goal === chosen }))
+export function goalSlots(
+  chosen: TrainingGoal | undefined,
+  offered: readonly TrainingGoal[] = TRAINING_GOALS,
+): readonly GoalSlot[] {
+  return offered.map((goal) => ({ goal, expanded: goal === chosen }))
 }

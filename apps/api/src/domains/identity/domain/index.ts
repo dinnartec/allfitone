@@ -90,6 +90,17 @@ export type PrimaryTrainingGoal =
 export type TrainingExperience = 'starting' | 'some_practice' | 'experienced'
 
 /**
+ * The discipline somebody trains, asked before the goal because the goal's list
+ * depends on it.
+ *
+ * One value. The attribute catalogue holds all six the product will cover — its own
+ * constraint refuses an enum with fewer than two — but what a person may answer today
+ * is a launch decision, and this is where it belongs. `PrimaryTrainingGoal` is the
+ * same shape of decision: six in the catalogue, five offered.
+ */
+export type TrainingDiscipline = 'strength'
+
+/**
  * The two body metrics V1 records. The `body_` prefix is not decoration: `metric_code`
  * also names execution results, where `weight` is the load on the bar.
  */
@@ -146,6 +157,7 @@ export interface OnboardingAnswers {
   identity: OnboardingAnswer<PendingFitnessId>
   biologicalSex: OnboardingAnswer<BiologicalSex>
   primaryTrainingGoal: OnboardingAnswer<PrimaryTrainingGoal>
+  trainingDiscipline: OnboardingAnswer<TrainingDiscipline>
   trainingExperience: OnboardingAnswer<TrainingExperience>
   /**
    * Answered when both were recorded **or** the step was skipped. A half-finished
@@ -174,6 +186,7 @@ export interface CurrentOnboardingAttempt {
 export type ProfileClaimDeclaration =
   | { attributeCode: 'primary_training_goal'; valueText: PrimaryTrainingGoal }
   | { attributeCode: 'training_experience'; valueText: TrainingExperience }
+  | { attributeCode: 'training_discipline'; valueText: TrainingDiscipline }
 
 /** What the database records for a claim, including what it displaced. */
 export type ProfileClaim = ProfileClaimDeclaration & {

@@ -22,16 +22,15 @@ import type { ProfileClaim, ProfileClaimDeclaration } from '../domain/index.js'
 
 /**
  * Echoes a declaration back as the claim it would become, keeping the attribute
- * paired with its value. Spreading the two fields loses that pairing: destructuring
- * a discriminated union drops the correlation between its members.
+ * paired with its value. The whole declaration is spread rather than its two fields:
+ * naming them separately loses that pairing, because destructuring a discriminated
+ * union drops the correlation between its members.
  */
 function echoClaim(
   input: ProfileClaimDeclaration,
   supersededClaimId: string | null = null,
 ): ProfileClaim {
-  return input.attributeCode === 'training_experience'
-    ? { attributeCode: 'training_experience', valueText: input.valueText, supersededClaimId }
-    : { attributeCode: 'primary_training_goal', valueText: input.valueText, supersededClaimId }
+  return { ...input, supersededClaimId }
 }
 
 /** The empty shape, repeated in enough doubles to be worth naming once. */
@@ -39,6 +38,7 @@ function emptyAnswers() {
   return {
     identity: { answered: false as boolean, value: null },
     biologicalSex: { answered: false as boolean, value: null },
+    trainingDiscipline: { answered: false as boolean, value: null },
     primaryTrainingGoal: { answered: false as boolean, value: null },
     trainingExperience: { answered: false as boolean, value: null },
     focusAreas: { answered: false as boolean, value: [] },
@@ -93,6 +93,7 @@ function appWith(overrides: Partial<SpaceOnboardingService> = {}): Hono {
       answers: {
         identity: { answered: false, value: null },
         biologicalSex: { answered: false, value: null },
+        trainingDiscipline: { answered: false, value: null },
         primaryTrainingGoal: { answered: false, value: null },
         trainingExperience: { answered: false, value: null },
         focusAreas: { answered: false, value: [] },
@@ -523,6 +524,7 @@ describe('GET /space/v1/onboarding-attempts/current', () => {
             value: { givenName: 'Ada', familyName: 'Lovelace', username: 'ada_lovelace' },
           },
           biologicalSex: { answered: true, value: 'female' as const },
+          trainingDiscipline: { answered: true, value: 'strength' as const },
           primaryTrainingGoal: { answered: true, value: 'build_muscle' as const },
           trainingExperience: { answered: true, value: 'experienced' as const },
           focusAreas: { answered: true, value: ['chest', 'arms'] as const },
@@ -547,6 +549,7 @@ describe('GET /space/v1/onboarding-attempts/current', () => {
           value: { given_name: 'Ada', family_name: 'Lovelace', username: 'ada_lovelace' },
         },
         biological_sex: { answered: true, value: 'female' },
+        training_discipline: { answered: true, value: 'strength' },
         primary_training_goal: { answered: true, value: 'build_muscle' },
         training_experience: { answered: true, value: 'experienced' },
         focus_areas: { answered: true, value: ['chest', 'arms'] },
@@ -578,6 +581,7 @@ describe('GET /space/v1/onboarding-attempts/current', () => {
       answers: {
         identity: { answered: false, value: null },
         biological_sex: { answered: false, value: null },
+        training_discipline: { answered: false, value: null },
         primary_training_goal: { answered: false, value: null },
         training_experience: { answered: false, value: null },
         focus_areas: { answered: false, value: [] },
@@ -746,6 +750,72 @@ describe('POST /space/v1/profile/claims', () => {
     })
 
     expect(response.headers.get('Cache-Control')).toBe('no-store')
+  })
+})
+
+describe('POST /space/v1/profile/claims — the training discipline variant', () => {
+  const claims = () => '/space/v1/profile/claims'
+
+  test('records the discipline and reports what it displaced', async () => {
+    const app = appWith({
+      declareProfileClaim: async (_token, input) =>
+        echoClaim(input, '0198d000-0000-7000-8000-0000000000cc'),
+    })
+
+    const response = await post(app, claims(), {
+      body: { attribute_code: 'training_discipline', value_text: 'strength' },
+    })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({
+      attribute_code: 'training_discipline',
+      value_text: 'strength',
+      superseded_claim_id: '0198d000-0000-7000-8000-0000000000cc',
+    })
+  })
+
+  test('refuses the five the catalogue holds but the launch does not offer', async () => {
+    // They are drawn in the onboarding and cannot be chosen, so refusing them here is
+    // the honest answer rather than a gap. The database would take them.
+    let called = false
+    const app = appWith({
+      declareProfileClaim: async (_token, input) => {
+        called = true
+        return echoClaim(input)
+      },
+    })
+
+    for (const discipline of [
+      'high_intensity',
+      'endurance_cardio',
+      'combat_sports',
+      'wellbeing_control',
+      'rhythm_classes',
+    ]) {
+      const response = await post(app, claims(), {
+        body: { attribute_code: 'training_discipline', value_text: discipline },
+      })
+      expect(response.status).toBe(400)
+    }
+    expect(called).toBe(false)
+  })
+
+  test('refuses a discipline that is in no catalogue at all', async () => {
+    const response = await post(appWith(), claims(), {
+      body: { attribute_code: 'training_discipline', value_text: 'quidditch' },
+    })
+
+    expect(response.status).toBe(400)
+  })
+
+  test('refuses a discipline code carrying an experience value', async () => {
+    // The pairing is checked, not assumed: this is a 400 rather than a constraint
+    // violation coming back from PostgreSQL.
+    const response = await post(appWith(), claims(), {
+      body: { attribute_code: 'training_discipline', value_text: 'experienced' },
+    })
+
+    expect(response.status).toBe(400)
   })
 })
 

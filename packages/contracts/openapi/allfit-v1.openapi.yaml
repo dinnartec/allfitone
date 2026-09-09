@@ -5542,7 +5542,15 @@ components:
       type: object
       additionalProperties: false
       required:
-        [identity, biological_sex, primary_training_goal, focus_areas, training_experience, body_measures]
+        [
+          identity,
+          biological_sex,
+          training_discipline,
+          primary_training_goal,
+          focus_areas,
+          training_experience,
+          body_measures,
+        ]
       properties:
         identity:
           type: object
@@ -5602,6 +5610,20 @@ components:
             single value. `answered` is not redundant with emptiness for the app's
             purposes but it is derived from it: an unanswered step has no members,
             and saying "no emphasis" is answering with `whole_body`.
+        training_discipline:
+          type: object
+          additionalProperties: false
+          required: [answered, value]
+          properties:
+            answered:
+              type: boolean
+            value:
+              oneOf:
+                - $ref: '#/components/schemas/TrainingDiscipline'
+                - type: 'null'
+          description: >-
+            The discipline in force, read before the goal so the goal screen knows
+            which goals to offer.
         training_experience:
           type: object
           additionalProperties: false
@@ -6400,15 +6422,41 @@ components:
         runtime role and holds no production rows, so there is nothing to hang a
         per-discipline level on. Were that to change, a per-discipline level would be
         a new attribute — a member carrying its own value — not a widening of this one.
+    TrainingDiscipline:
+      type: string
+      enum: [strength]
+      description: >-
+        The discipline somebody trains, asked before the goal because the goal's list
+        depends on it: with strength there is no point offering "run a race".
+
+
+        One value, and the enum says so. `identity.profile_attributes` holds all six —
+        strength, high intensity, endurance and cardio, combat sports, wellbeing and
+        control, rhythm and classes — because the catalogue is the vocabulary of the
+        concept and its own constraint refuses an enum with fewer than two members.
+        What a person may answer today is a launch decision, and the contract is where
+        that decision belongs. `PrimaryTrainingGoal` already works this way, offering
+        five of the six the catalogue holds.
+
+
+        The other five are shown in the onboarding, deliberately, so somebody can see
+        what Allfit is going to cover — and they cannot be chosen. No interest is
+        recorded and no notification is offered, so nothing there is a promise.
+
+
+        Not `catalog.disciplines`: that holds the four activity families that type a
+        target, one level below this.
     SpaceProfileClaimDeclaration:
       oneOf:
         - $ref: '#/components/schemas/SpaceTrainingGoalDeclaration'
         - $ref: '#/components/schemas/SpaceTrainingExperienceDeclaration'
+        - $ref: '#/components/schemas/SpaceTrainingDisciplineDeclaration'
       discriminator:
         propertyName: attribute_code
         mapping:
           primary_training_goal: '#/components/schemas/SpaceTrainingGoalDeclaration'
           training_experience: '#/components/schemas/SpaceTrainingExperienceDeclaration'
+          training_discipline: '#/components/schemas/SpaceTrainingDisciplineDeclaration'
       description: >-
         One member of the attribute catalogue per variant. This was a single object
         while only the goal existed; the second member is what earns the union, and it
@@ -6440,15 +6488,30 @@ components:
         A single level, exclusive. Declaring again is a requalification: the previous
         claim is sealed rather than edited, so the level someone signed up with stays
         readable.
+    SpaceTrainingDisciplineDeclaration:
+      type: object
+      additionalProperties: false
+      required: [attribute_code, value_text]
+      properties:
+        attribute_code:
+          type: string
+          const: training_discipline
+        value_text:
+          $ref: '#/components/schemas/TrainingDiscipline'
+      description: >-
+        One principal discipline, exclusive. Declaring again seals the previous claim
+        rather than editing it, so what somebody started out training stays readable.
     SpaceProfileClaim:
       oneOf:
         - $ref: '#/components/schemas/SpaceTrainingGoalClaim'
         - $ref: '#/components/schemas/SpaceTrainingExperienceClaim'
+        - $ref: '#/components/schemas/SpaceTrainingDisciplineClaim'
       discriminator:
         propertyName: attribute_code
         mapping:
           primary_training_goal: '#/components/schemas/SpaceTrainingGoalClaim'
           training_experience: '#/components/schemas/SpaceTrainingExperienceClaim'
+          training_discipline: '#/components/schemas/SpaceTrainingDisciplineClaim'
       description: >-
         The claim as recorded, in the variant matching what was declared.
     SpaceTrainingGoalClaim:
@@ -6473,6 +6536,18 @@ components:
           const: training_experience
         value_text:
           $ref: '#/components/schemas/TrainingExperience'
+        superseded_claim_id:
+          $ref: '#/components/schemas/SupersededClaimId'
+    SpaceTrainingDisciplineClaim:
+      type: object
+      additionalProperties: false
+      required: [attribute_code, value_text, superseded_claim_id]
+      properties:
+        attribute_code:
+          type: string
+          const: training_discipline
+        value_text:
+          $ref: '#/components/schemas/TrainingDiscipline'
         superseded_claim_id:
           $ref: '#/components/schemas/SupersededClaimId'
     SupersededClaimId:

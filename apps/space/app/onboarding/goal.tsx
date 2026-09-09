@@ -68,6 +68,8 @@ import {
 import { ApiError } from '../../src/client'
 import { createSpaceOnboardingFlow } from '../../src/client/onboarding-transport'
 import { guardStep, nextRouteAfter } from '../../src/client/onboarding-steps'
+import { goalsFor } from '../../src/client/discipline-form'
+import type { TrainingDiscipline } from '../../src/client/onboarding'
 import {
   bodyVariant,
   canSubmitGoal,
@@ -200,6 +202,7 @@ export default function OnboardingTrainingGoal() {
 
   const [rowWidth, setRowWidth] = useState(0)
   const [goal, setGoal] = useState<TrainingGoal | undefined>(undefined)
+  const [discipline, setDiscipline] = useState<TrainingDiscipline | null>(null)
   const [declaredSex, setDeclaredSex] = useState<'male' | 'female' | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [sessionExpired, setSessionExpired] = useState(false)
@@ -207,6 +210,10 @@ export default function OnboardingTrainingGoal() {
   const reduceMotion = useReducedMotion()
   const [pressing, setPressing] = useState<TrainingGoal | undefined>(undefined)
   const [entering, setEntering] = useState(false)
+
+  // The discipline decides which goals exist here — with strength there is no point
+  // offering a race — and that is why it is asked one step earlier.
+  const offered = useMemo(() => goalsFor(discipline, TRAINING_GOALS), [discipline])
 
   // Built outside the JSX: an inline chain rebuilds the builder on every render,
   // and a per-index delay cannot live at module scope.
@@ -237,6 +244,7 @@ export default function OnboardingTrainingGoal() {
           return
         }
         setDeclaredSex(current.answers.biological_sex.value ?? null)
+        setDiscipline(current.answers.training_discipline.value ?? null)
         const declared = current.answers.primary_training_goal.value
         if (declared) setGoal(declared)
 
@@ -308,7 +316,7 @@ export default function OnboardingTrainingGoal() {
           accessibilityElementsHidden
           importantForAccessibility="no-hide-descendants"
         >
-          {TRAINING_GOALS.flatMap((option) => {
+          {offered.flatMap((option) => {
             const art = GOALS[option][bodyVariant(declaredSex, option)]
             return [art.before, art.after]
               .filter(Boolean)
@@ -324,7 +332,7 @@ export default function OnboardingTrainingGoal() {
         </View>
 
         <View onLayout={(event) => setRowWidth(event.nativeEvent.layout.width)}>
-          {goalSlots(goal).map((slot, index) => {
+          {goalSlots(goal, offered).map((slot, index) => {
             const entry = GOALS[slot.goal]
             // exactOptionalPropertyTypes rejects an explicit undefined, so the
             // props are spread in only when there is something to spread.

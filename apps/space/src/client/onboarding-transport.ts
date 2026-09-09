@@ -25,6 +25,7 @@ import {
   type ActivatedPerson,
   type OnboardingCompletion,
   type ProfileClaim,
+  type TrainingDisciplineClaim,
   type TrainingExperienceClaim,
 } from './onboarding'
 import { readSession, storeSession } from './session'
@@ -89,6 +90,15 @@ export function createSpaceOnboardingFlow(): OnboardingFlow {
           )
           return declared.areas
         }),
+      declareTrainingDiscipline: (command, discipline) =>
+        authenticated((token) =>
+          authorizedPost<TrainingDisciplineClaim>(
+            '/space/v1/profile/claims',
+            command,
+            { attribute_code: 'training_discipline', value_text: discipline },
+            token,
+          ),
+        ),
       declareTrainingExperience: (command, level) =>
         authenticated((token) =>
           authorizedPost<TrainingExperienceClaim>(
