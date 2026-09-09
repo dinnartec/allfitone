@@ -254,7 +254,7 @@ export default function RoutineEditor() {
                 <Text role="control" size="sm">
                   {issue.title}
                 </Text>
-                <Text role="body" size="xs" color="muted">
+                <Text role="body" size="sm" color="muted">
                   {issue.hint}
                 </Text>
               </View>
@@ -358,7 +358,7 @@ export default function RoutineEditor() {
           }}
         />
 
-        <Text role="body" size="xs" color="muted" style={styles.centered}>
+        <Text role="body" size="sm" color="muted" style={styles.centered}>
           Se guarda como borrador según escribes. Necesita conexión.
         </Text>
       </ScrollView>
@@ -416,7 +416,7 @@ export default function RoutineEditor() {
               </Text>
             ) : null}
           </ScrollView>
-          <Text role="body" size="xs" color="muted" style={styles.centered}>
+          <Text role="body" size="sm" color="muted" style={styles.centered}>
             Solo el catálogo global de Allfit.
           </Text>
         </View>

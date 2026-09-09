@@ -251,7 +251,7 @@ export default function Train() {
               onPress={() => router.push('/programs/new')}
             />
           </View>
-          <Text role="body" size="xs" color="muted">
+          <Text role="body" size="sm" color="muted">
             Nunca estás obligado a elegir uno.
           </Text>
         </View>
@@ -330,7 +330,7 @@ function Alternative({
       <Text role="control" size="sm">
         {label}
       </Text>
-      <Text role="body" size="2xs" color="muted">
+      <Text role="body" size="xs" color="muted">
         {hint}
       </Text>
     </Pressable>

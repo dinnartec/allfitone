@@ -112,7 +112,7 @@ export default function Profile() {
           loading={busy}
           onPress={() => void leave(false)}
         />
-        <Text role="body" size="xs" color="muted" style={styles.centered}>
+        <Text role="body" size="sm" color="muted" style={styles.centered}>
           No queda nada tuyo guardado en este teléfono.
         </Text>
       </ScrollView>

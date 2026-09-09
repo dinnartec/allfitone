@@ -204,7 +204,7 @@ export default function ProgramVersion() {
             disabled={sessionExpired}
             onPress={() => void take()}
           />
-          <Text role="body" size="xs" color="muted" align="center">
+          <Text role="body" size="sm" color="muted" align="center">
             Se añade a tu agenda y lo empiezas desde Hoy.
           </Text>
         </View>

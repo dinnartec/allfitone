@@ -273,7 +273,7 @@ export default function NewProgram() {
           <Text role="eyebrow" size="2xs" color="muted">
             LA SEMANA BASE
           </Text>
-          <Text role="body" size="xs" color="muted">
+          <Text role="body" size="sm" color="muted">
             Defínela una vez. Se repite en todas las semanas.
           </Text>
 
@@ -351,7 +351,7 @@ export default function NewProgram() {
             />
           </View>
 
-          <Text role="body" size="xs" color="muted" style={styles.centered}>
+          <Text role="body" size="sm" color="muted" style={styles.centered}>
             Toca un día para poner o cambiar su rutina.
           </Text>
         </View>
@@ -392,7 +392,7 @@ export default function NewProgram() {
 
         <View style={[styles.notice, { backgroundColor: theme.color.background.surfaceSubtle }]}>
           <FoundationIcon name="info" size="sm" color={theme.color.icon.secondary} decorative />
-          <Text role="body" size="xs" color="secondary" style={styles.noticeText}>
+          <Text role="body" size="sm" color="secondary" style={styles.noticeText}>
             {NOTICE}
           </Text>
         </View>
@@ -548,7 +548,7 @@ export default function NewProgram() {
                     color={theme.color.icon.secondary}
                     decorative
                   />
-                  <Text role="body" size="xs" color="muted" style={styles.noticeText}>
+                  <Text role="body" size="sm" color="muted" style={styles.noticeText}>
                     Tienes rutinas en borrador. Publícalas para poder ponerlas en un día.
                   </Text>
                 </View>

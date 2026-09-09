@@ -163,7 +163,7 @@ export default function CreateAccount() {
             style={styles.submit}
           />
 
-          <Text role="body" size="xs" color="muted" align="center" style={styles.legal}>
+          <Text role="body" size="sm" color="muted" align="center" style={styles.legal}>
             Al continuar aceptas los términos y la política de tratamiento de datos.
           </Text>
         </View>

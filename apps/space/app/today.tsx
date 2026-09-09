@@ -265,7 +265,7 @@ export default function Today() {
               onPress={() => setPending(PENDING.free)}
               style={styles.start}
             />
-            <Text role="body" size="2xs" color="muted">
+            <Text role="body" size="sm" color="muted">
               {weekDone
                 ? 'La semana que viene empieza limpia. Lo de esta no se arrastra.'
                 : 'Puedes adelantar cualquier rutina de la semana desde Entrenar.'}
@@ -511,7 +511,7 @@ function TrainedRow({
         <Text role="control" size="sm">
           {title}
         </Text>
-        <Text role="body" size="2xs" color="muted">
+        <Text role="body" size="xs" color="muted">
           {detail}
         </Text>
       </View>
