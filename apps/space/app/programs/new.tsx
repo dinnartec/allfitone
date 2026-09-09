@@ -207,7 +207,14 @@ export default function NewProgram() {
 
   return (
     <Screen edges={['top', 'bottom']}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      {/* The keyboard moves the scroll inset rather than resizing the container, the
+          same as every other screen here that takes typing. */}
+      <ScrollView
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        automaticallyAdjustKeyboardInsets
+      >
         <ScreenHeader
           title={title.trim() === '' ? 'Programa nuevo' : title}
           subtitle={subtitle()}

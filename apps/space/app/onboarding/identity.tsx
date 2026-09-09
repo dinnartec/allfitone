@@ -165,10 +165,15 @@ export default function OnboardingIdentity() {
 
       <OnboardingHeader step="/onboarding/identity" />
 
+      {/* The keyboard moves the scroll inset, not the container. Without this the
+          username field sat under the keyboard and no amount of dragging revealed it:
+          the content already fits, so there was nothing to scroll. */}
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
+        automaticallyAdjustKeyboardInsets
       >
         <Text role="display" size="4xl" uppercase accessibilityRole="header">
           {'Cómo te\nllamas'}
