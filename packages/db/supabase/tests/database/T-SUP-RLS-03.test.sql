@@ -7,7 +7,7 @@
 
 begin;
 
-select plan(21);
+select plan(22);
 
 insert into identity.people (
   id, given_name, family_name, contact_email, contact_phone, status
@@ -256,6 +256,15 @@ select ok(
      and resource = 'support.v_support_metadata'
      and purpose = 'support_diagnosis') >= 4,
   'every opened operational state was recorded before its content travelled'
+);
+
+select ok(
+  not exists (
+    select 1 from privacy.access_events
+    where resource = 'support.v_support_metadata'
+      and access_mode <> 'support_metadata'::privacy.access_mode
+  ),
+  'a support read is recorded under its own mode, not mixed in with product reads'
 );
 
 -- ---------------------------------------------------------------------------
