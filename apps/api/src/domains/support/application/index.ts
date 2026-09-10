@@ -10,6 +10,12 @@
 
 import type { BackofficeActor } from '../../identity/index.js'
 import type {
+  SupportDeliveryCircuit,
+  SupportDiagnosisDatabase,
+  SupportOperation,
+  SupportOperationCursor,
+  SupportOperationSourceKind,
+  SupportOperationState,
   SupportMetadataDatabase,
   SupportPeopleSearch,
   SupportPersonMetadata,
@@ -125,5 +131,37 @@ export function createSupportMetadataService(
       return found ? { outcome: 'found', items: [found] } : { outcome: 'not_found', items: [] }
     },
     read: (reader, input) => database.read({ ...reader, ...input }),
+  }
+}
+
+/**
+ * Technical diagnosis carries the reader through and nothing else. Every rule
+ * that matters — the duty, the derived states, and above all what the projection
+ * refuses to return — lives in the database.
+ */
+export interface SupportDiagnosisService {
+  listOperations(
+    reader: SupportReader,
+    input: {
+      requestId: string
+      limit: number
+      source?: SupportOperationSourceKind
+      state?: SupportOperationState
+      aggregateId?: string
+      cursor?: SupportOperationCursor
+    },
+  ): Promise<PlatformPage<SupportOperation>>
+  listDeliveryCircuits(
+    reader: SupportReader,
+    input: { requestId: string },
+  ): Promise<SupportDeliveryCircuit[]>
+}
+
+export function createSupportDiagnosisService(
+  database: SupportDiagnosisDatabase,
+): SupportDiagnosisService {
+  return {
+    listOperations: (reader, input) => database.listOperations({ ...reader, ...input }),
+    listDeliveryCircuits: (reader, input) => database.listDeliveryCircuits({ ...reader, ...input }),
   }
 }

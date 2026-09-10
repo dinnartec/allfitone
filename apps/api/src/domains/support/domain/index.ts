@@ -175,3 +175,52 @@ export interface SupportMetadataDatabase {
     },
   ): Promise<SupportPersonMetadata>
 }
+
+/**
+ * Technical diagnosis: `HU-BO-031`.
+ *
+ * The states are repeated here only so a query string can be refused before it
+ * reaches PostgreSQL. The derived-state logic stays in the database, where the
+ * data it derives from lives.
+ */
+export type SupportOperation = AllfitV1Schemas['SupportOperation']
+export type SupportOperationState = AllfitV1Schemas['SupportOperationState']
+export type SupportOperationSourceKind = AllfitV1Schemas['SupportOperationSourceKind']
+export type SupportDeliveryCircuit = AllfitV1Schemas['SupportDeliveryCircuit']
+
+export const SUPPORT_OPERATION_SOURCES: readonly SupportOperationSourceKind[] = [
+  'notification',
+  'command',
+]
+
+export const SUPPORT_OPERATION_STATES: readonly SupportOperationState[] = [
+  'pending',
+  'retrying',
+  'delivered',
+  'dead_lettered',
+  'processing',
+  'stalled',
+  'succeeded',
+  'rejected_final',
+]
+
+export interface SupportOperationCursor {
+  occurredAt: string
+  id: string
+}
+
+export interface SupportDiagnosisDatabase {
+  listOperations(
+    input: SupportReader & {
+      requestId: string
+      limit: number
+      source?: SupportOperationSourceKind
+      state?: SupportOperationState
+      aggregateId?: string
+      cursor?: SupportOperationCursor
+    },
+  ): Promise<PlatformPage<SupportOperation>>
+  listDeliveryCircuits(
+    input: SupportReader & { requestId: string },
+  ): Promise<SupportDeliveryCircuit[]>
+}

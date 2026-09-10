@@ -17,15 +17,16 @@ import type postgres from 'postgres'
 import { database } from '../../../platform/db/index.js'
 import { measureRequestPhase } from '../../../platform/observability/index.js'
 import type {
+  SupportDeliveryCircuit,
+  SupportDiagnosisDatabase,
+  SupportOperation,
   SupportMetadataDatabase,
   SupportPersonMetadata,
   PlatformAccessDatabase,
   PlatformCommandResult,
   PlatformDutyAssignment,
-  PlatformDutyCursor,
   PlatformPage,
   PlatformRoleAssignment,
-  PlatformRoleCursor,
 } from '../domain/index.js'
 
 type CommandRow<T> = { result: T; replayed: boolean }
@@ -121,11 +122,16 @@ export function createPlatformAccessDatabase(): PlatformAccessDatabase {
             ${input.cursor?.id ?? null}::uuid
           )
         `
-        return page(rows, input.limit, (row) => ({
-          rank: row.cursor_rank,
-          grantedAt: row.cursor_granted_at.toISOString(),
-          id: row.cursor_id,
-        }))
+        return page(
+          rows,
+          input.limit,
+          (row) => row.result,
+          (row) => ({
+            rank: row.cursor_rank,
+            grantedAt: row.cursor_granted_at.toISOString(),
+            id: row.cursor_id,
+          }),
+        )
       }),
 
     listDuties: (input) =>
@@ -141,12 +147,17 @@ export function createPlatformAccessDatabase(): PlatformAccessDatabase {
             ${input.cursor?.id ?? null}::uuid
           )
         `
-        return page(rows, input.limit, (row) => ({
-          rank: row.cursor_rank,
-          validTo: row.cursor_valid_to.toISOString(),
-          createdAt: row.cursor_created_at.toISOString(),
-          id: row.cursor_id,
-        }))
+        return page(
+          rows,
+          input.limit,
+          (row) => row.result,
+          (row) => ({
+            rank: row.cursor_rank,
+            validTo: row.cursor_valid_to.toISOString(),
+            createdAt: row.cursor_created_at.toISOString(),
+            id: row.cursor_id,
+          }),
+        )
       }),
   }
 }
@@ -170,16 +181,17 @@ function inTransaction<T>(
   })
 }
 
-function page<Row extends { result: T }, T, Cursor extends PlatformRoleCursor | PlatformDutyCursor>(
+function page<Row, T, Cursor extends object>(
   rows: Row[],
   limit: number,
+  project: (row: Row) => T,
   cursorOf: (row: Row) => Cursor,
 ): PlatformPage<T> {
   const hasMore = rows.length > limit
   const visible = rows.slice(0, limit)
   const last = visible.at(-1)
   return {
-    items: visible.map((row) => row.result),
+    items: visible.map(project),
     hasMore,
     ...(hasMore && last
       ? { nextCursor: Buffer.from(JSON.stringify(cursorOf(last))).toString('base64url') }
@@ -223,5 +235,47 @@ export function createSupportMetadataDatabase(): SupportMetadataDatabase {
         if (!row) throw new Error('PostgreSQL did not project the operational state')
         return row.person_metadata
       }),
+  }
+}
+
+export function createSupportDiagnosisDatabase(): SupportDiagnosisDatabase {
+  const sql = database()
+
+  return {
+    listOperations: (input) =>
+      inTransaction(sql, input.actorPersonId, input.requestId, async (transaction) => {
+        // One extra row answers "is there another page" without a second count.
+        const rows = await transaction<SupportOperation[]>`
+          select * from support.list_operational_events(
+            ${input.actorPersonId}::uuid, ${input.actorSessionId}::uuid,
+            ${input.source ?? null}::text, ${input.state ?? null}::text,
+            ${input.aggregateId ?? null}::uuid, ${input.limit + 1}::integer,
+            ${input.cursor?.occurredAt ?? null}::timestamptz,
+            ${input.cursor?.id ?? null}::uuid
+          )
+        `
+        return page(
+          rows,
+          input.limit,
+          (row) => row,
+          (row) => ({
+            occurredAt: new Date(row.occurred_at).toISOString(),
+            id: row.reference_id,
+          }),
+        )
+      }),
+
+    listDeliveryCircuits: (input) =>
+      inTransaction(
+        sql,
+        input.actorPersonId,
+        input.requestId,
+        (transaction) =>
+          transaction<SupportDeliveryCircuit[]>`
+          select * from support.list_delivery_circuits(
+            ${input.actorPersonId}::uuid, ${input.actorSessionId}::uuid
+          )
+        `,
+      ),
   }
 }
