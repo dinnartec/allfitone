@@ -95,6 +95,12 @@ export interface PlatformAccessFixture {
   duties: PlatformDutyFixture[]
   /** The next command is refused with this code, once. */
   nextCommandFailure?: { status: number; code: string }
+  /**
+   * Rows per page. Absent means one page, as most tests want. The real
+   * inventory pages on a cursor, and a screen that ignores it shows a truncated
+   * list as if it were the whole team.
+   */
+  pageSize?: number
 }
 
 export interface PlatformRoleFixture {
@@ -146,6 +152,7 @@ interface AttemptFixture {
 export interface MockRequest {
   method: string
   path: string
+  query: string
   headers: Record<string, string>
   body: unknown
 }
@@ -292,7 +299,7 @@ async function routePlatformAccess(
   if (request.method === 'GET') {
     const rows =
       request.path === '/backoffice/v1/platform/role-assignments' ? access.roles : access.duties
-    await fulfill(route, 200, { data: rows, page: { has_more: false, next_cursor: null } })
+    await fulfill(route, 200, paginate(rows, access.pageSize, cursorOf(request)))
     return
   }
   const failure = access.nextCommandFailure
@@ -511,6 +518,27 @@ function effectiveAssociations(fixture: BackofficeFixture, activityTypeId: strin
     )
 }
 
+/**
+ * The cursor is opaque to the client, so the mock uses the simplest thing that
+ * round-trips: the offset of the next row.
+ */
+function cursorOf(request: MockRequest): number {
+  return Number(new URLSearchParams(request.query).get('cursor') ?? 0)
+}
+
+function paginate<T>(rows: T[], pageSize: number | undefined, offset: number) {
+  if (!pageSize) return { data: rows, page: { has_more: false, next_cursor: null } }
+  const page = rows.slice(offset, offset + pageSize)
+  const next = offset + pageSize
+  return {
+    data: page,
+    page: {
+      has_more: next < rows.length,
+      next_cursor: next < rows.length ? String(next) : null,
+    },
+  }
+}
+
 function isClosedDuty(status: PlatformDutyFixture['status']): boolean {
   return status === 'expired' || status === 'revoked'
 }
@@ -622,9 +650,11 @@ export function enrollmentAttempt(): AttemptFixture {
 
 function toMockRequest(route: Route): MockRequest {
   const request = route.request()
+  const url = new URL(request.url())
   return {
     method: request.method(),
-    path: new URL(request.url()).pathname,
+    path: url.pathname,
+    query: url.search,
     headers: request.headers(),
     body: parseBody(request.postData()),
   }
