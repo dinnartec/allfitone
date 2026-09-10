@@ -34,8 +34,8 @@ import { InlineAlert } from '@allfitone/react-native/inline-alert'
 import { Screen } from '@allfitone/react-native/screen'
 import { Text } from '@allfitone/react-native/text'
 import { useTheme } from '@allfitone/react-native/theme'
-import { useRouter } from 'expo-router'
-import { useEffect, useMemo, useState } from 'react'
+import { useFocusEffect, useRouter } from 'expo-router'
+import { useCallback, useMemo, useState } from 'react'
 import { Image, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { FoundationIcon, type IconName } from '@allfitone/react-native/icons'
@@ -89,36 +89,49 @@ export default function Today() {
   const [starting, setStarting] = useState(false)
   const [failure, setFailure] = useState<string | undefined>(undefined)
 
-  useEffect(() => {
-    let active = true
+  /**
+   * Re-read every time this tab is looked at, and **never clear what is on screen
+   * first**.
+   *
+   * The tabs stay mounted now, which is what stopped the content jumping — and it
+   * also stopped them noticing that anything changed elsewhere: choosing a different
+   * programme in Entrenar left Hoy showing the old one. Reloading on focus fixes that
+   * without giving the jump back, because the previous answer stays drawn until the
+   * new one lands. An empty state in between would be a lie: the data is not gone,
+   * it is one request old.
+   */
+  useFocusEffect(
+    useCallback(() => {
+      let active = true
 
-    training
-      .readToday(timezone)
-      .then((current) => {
-        if (!active) return
-        setToday(current)
-        // The catalogue is only read when there is a choice to make: somebody with a
-        // program does not need twenty-four of them fetched behind their session.
-        if (current.current_assignment === null) return programs.readCatalogue()
-        return undefined
-      })
-      .then((available) => {
-        if (active && available) setCatalogue(available)
-      })
-      .catch((cause: unknown) => {
-        if (!active) return
-        if (cause instanceof ApiError && cause.failure === 'unauthenticated') {
-          setSessionExpired(true)
-          setFailure(EXPIRED)
-          return
-        }
-        setFailure(READ_FAILED)
-      })
+      training
+        .readToday(timezone)
+        .then((current) => {
+          if (!active) return
+          setToday(current)
+          // The catalogue is only read when there is a choice to make: somebody with a
+          // program does not need twenty-four of them fetched behind their session.
+          if (current.current_assignment === null) return programs.readCatalogue()
+          return undefined
+        })
+        .then((available) => {
+          if (active && available) setCatalogue(available)
+        })
+        .catch((cause: unknown) => {
+          if (!active) return
+          if (cause instanceof ApiError && cause.failure === 'unauthenticated') {
+            setSessionExpired(true)
+            setFailure(EXPIRED)
+            return
+          }
+          setFailure(READ_FAILED)
+        })
 
-    return () => {
-      active = false
-    }
-  }, [programs, training, timezone])
+      return () => {
+        active = false
+      }
+    }, [programs, training, timezone]),
+  )
 
   const profile: TrainingProfile = today?.profile ??
     catalogue?.profile ?? {

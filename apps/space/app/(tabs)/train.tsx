@@ -25,8 +25,8 @@ import { Text } from '@allfitone/react-native/text'
 import { useTheme } from '@allfitone/react-native/theme'
 import { FoundationIcon, type IconName } from '@allfitone/react-native/icons'
 import { InlineAlert } from '@allfitone/react-native/inline-alert'
-import { useRouter } from 'expo-router'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useFocusEffect, useRouter } from 'expo-router'
+import { useCallback, useMemo, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
 
 import { ApiError } from '../../src/client'
@@ -86,7 +86,10 @@ export default function Train() {
       })
   }, [programs, timezone, router])
 
-  useEffect(load, [load])
+  // On focus rather than on mount: the tab stays mounted, so mounting happens once
+  // and would never see a session finished or a programme taken somewhere else. The
+  // week already on screen stays drawn while the new one is fetched.
+  useFocusEffect(load)
 
   const cards = cardsFor(plan)
   const progress = weekProgress(plan)
