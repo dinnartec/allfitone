@@ -271,6 +271,66 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/catalog/v1/disciplines': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * List the published disciplines of the global catalogue
+     * @description The catalogue has no subject and no tenant: it is global published content shared by every surface. It still requires an authenticated active person, so it is not public. There is no pagination in V1 — the catalogue is small and closed, and the code is stable enough to cache against.
+     */
+    get: operations['listCatalogDisciplines']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/catalog/v1/activity-types': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * List the published global activity types
+     * @description Only global published content. An organisation's own activity types belong to its Studio surface and never appear here. The code is stable and never reused, so a client may cache against it.
+     */
+    get: operations['listCatalogActivityTypes']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/catalog/v1/activity-types/{activityTypeId}/result-contracts': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * List the effective result contracts of an activity type
+     * @description Returns the contracts currently associated with the activity type, their versions, which one is the default, and the minimums a session must carry. This exists so a client can explain a rejection before it syncs; the authoritative validation stays on the server.
+     */
+    get: operations['listCatalogActivityTypeResultContracts']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/space/v1/telemetry-config': {
     parameters: {
       query?: never
@@ -1524,6 +1584,43 @@ export interface components {
     PlatformDutyAssignmentPage: {
       data: components['schemas']['PlatformDutyAssignment'][]
       page: components['schemas']['Page']
+    }
+    CatalogDiscipline: {
+      code: string
+      name: string
+    }
+    CatalogDisciplineList: {
+      items: components['schemas']['CatalogDiscipline'][]
+    }
+    CatalogActivityType: {
+      id: components['schemas']['Uuid']
+      discipline_code: string
+      code: string
+      name: string
+    }
+    CatalogActivityTypeList: {
+      items: components['schemas']['CatalogActivityType'][]
+    }
+    /** @description One effective association. The minimums travel so a client can explain a rejection locally; they never replace the server's validation. */
+    ActivityTypeResultContract: {
+      result_contract_id: components['schemas']['UuidV7']
+      contract_code: string
+      version_number: number
+      activity_family: components['schemas']['ActivityFamily']
+      /** @constant */
+      contract_schema_version: 1
+      envelope: {
+        [key: string]: unknown
+      }
+      minimums: {
+        [key: string]: unknown
+      }
+      is_default: boolean
+      /** Format: date-time */
+      valid_from: string
+    }
+    ActivityTypeResultContractList: {
+      items: components['schemas']['ActivityTypeResultContract'][]
     }
     /** @enum {string} */
     ActivityFamily: 'strength' | 'endurance' | 'interval' | 'mobility'
@@ -3640,6 +3737,7 @@ export interface components {
     GrantId: components['schemas']['Uuid']
     MealId: components['schemas']['Uuid']
     GoalVersionId: components['schemas']['Uuid']
+    CatalogActivityTypeId: components['schemas']['Uuid']
     ResultContractId: components['schemas']['UuidV7']
     PlatformPersonFilter: components['schemas']['Uuid']
     PlatformDutyFilter: components['schemas']['PlatformDutyCode']
@@ -4250,6 +4348,118 @@ export interface operations {
       409: components['responses']['Conflict']
       415: components['responses']['UnsupportedMediaType']
       422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listCatalogDisciplines: {
+    parameters: {
+      query?: never
+      header?: {
+        'If-None-Match'?: components['parameters']['IfNoneMatch']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Published disciplines ordered by their stable code */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['PrivateRevalidate']
+          ETag: components['headers']['ETag']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CatalogDisciplineList']
+        }
+      }
+      /** @description Catalogue has not changed */
+      304: {
+        headers: {
+          'Cache-Control': components['headers']['PrivateRevalidate']
+          ETag: components['headers']['ETag']
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listCatalogActivityTypes: {
+    parameters: {
+      query?: never
+      header?: {
+        'If-None-Match'?: components['parameters']['IfNoneMatch']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Published global activity types ordered by discipline and code */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['PrivateRevalidate']
+          ETag: components['headers']['ETag']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CatalogActivityTypeList']
+        }
+      }
+      /** @description Catalogue has not changed */
+      304: {
+        headers: {
+          'Cache-Control': components['headers']['PrivateRevalidate']
+          ETag: components['headers']['ETag']
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listCatalogActivityTypeResultContracts: {
+    parameters: {
+      query?: never
+      header?: {
+        'If-None-Match'?: components['parameters']['IfNoneMatch']
+      }
+      path: {
+        activityTypeId: components['parameters']['CatalogActivityTypeId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Effective associations, the default first */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['PrivateRevalidate']
+          ETag: components['headers']['ETag']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ActivityTypeResultContractList']
+        }
+      }
+      /** @description Catalogue has not changed */
+      304: {
+        headers: {
+          'Cache-Control': components['headers']['PrivateRevalidate']
+          ETag: components['headers']['ETag']
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
       503: components['responses']['UpstreamUnavailable']
     }
   }

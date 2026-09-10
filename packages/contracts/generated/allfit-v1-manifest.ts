@@ -119,6 +119,27 @@ export const allfitV1ContractManifest = {
     },
     {
       method: 'GET',
+      path: '/catalog/v1/activity-types',
+      operationId: 'listCatalogActivityTypes',
+      allfitOperation: 'OP-CAT-008',
+      responses: ['200', '304', '401', '403', '503'],
+    },
+    {
+      method: 'GET',
+      path: '/catalog/v1/activity-types/{activityTypeId}/result-contracts',
+      operationId: 'listCatalogActivityTypeResultContracts',
+      allfitOperation: 'OP-CAT-012',
+      responses: ['200', '304', '400', '401', '403', '404', '503'],
+    },
+    {
+      method: 'GET',
+      path: '/catalog/v1/disciplines',
+      operationId: 'listCatalogDisciplines',
+      allfitOperation: 'OP-CAT-007',
+      responses: ['200', '304', '401', '403', '503'],
+    },
+    {
+      method: 'GET',
       path: '/space/v1/agenda',
       operationId: 'listMyAgenda',
       allfitOperation: 'OP-PLN-016',

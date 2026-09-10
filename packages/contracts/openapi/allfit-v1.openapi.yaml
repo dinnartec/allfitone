@@ -23,6 +23,8 @@ tags:
     description: Password and TOTP authentication with application-owned AAL2 sessions.
   - name: Backoffice Catalogue
     description: Global catalogue curation performed by Allfit staff.
+  - name: Global Catalogue
+    description: Global published catalogue shared by every surface.
   - name: Backoffice Platform Access
     description: Base role and temporary platform duty administration for Allfit staff.
   - name: Studio Organizations
@@ -774,6 +776,138 @@ paths:
           $ref: '#/components/responses/UnsupportedMediaType'
         '422':
           $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+  /catalog/v1/disciplines:
+    get:
+      tags: [Global Catalogue]
+      operationId: listCatalogDisciplines
+      x-allfit-operation: OP-CAT-007
+      x-allfit-cache: private-revalidate
+      summary: List the published disciplines of the global catalogue
+      description: >-
+        The catalogue has no subject and no tenant: it is global published content
+        shared by every surface. It still requires an authenticated active person,
+        so it is not public. There is no pagination in V1 — the catalogue is small
+        and closed, and the code is stable enough to cache against.
+      security:
+        - cookieAuth: []
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: Published disciplines ordered by their stable code
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/PrivateRevalidate'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogDisciplineList'
+        '304':
+          description: Catalogue has not changed
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/PrivateRevalidate'
+            ETag:
+              $ref: '#/components/headers/ETag'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /catalog/v1/activity-types:
+    get:
+      tags: [Global Catalogue]
+      operationId: listCatalogActivityTypes
+      x-allfit-operation: OP-CAT-008
+      x-allfit-cache: private-revalidate
+      summary: List the published global activity types
+      description: >-
+        Only global published content. An organisation's own activity types belong
+        to its Studio surface and never appear here. The code is stable and never
+        reused, so a client may cache against it.
+      security:
+        - cookieAuth: []
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: Published global activity types ordered by discipline and code
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/PrivateRevalidate'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogActivityTypeList'
+        '304':
+          description: Catalogue has not changed
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/PrivateRevalidate'
+            ETag:
+              $ref: '#/components/headers/ETag'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /catalog/v1/activity-types/{activityTypeId}/result-contracts:
+    get:
+      tags: [Global Catalogue]
+      operationId: listCatalogActivityTypeResultContracts
+      x-allfit-operation: OP-CAT-012
+      x-allfit-cache: private-revalidate
+      summary: List the effective result contracts of an activity type
+      description: >-
+        Returns the contracts currently associated with the activity type, their
+        versions, which one is the default, and the minimums a session must carry.
+        This exists so a client can explain a rejection before it syncs; the
+        authoritative validation stays on the server.
+      security:
+        - cookieAuth: []
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CatalogActivityTypeId'
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: Effective associations, the default first
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/PrivateRevalidate'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActivityTypeResultContractList'
+        '304':
+          description: Catalogue has not changed
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/PrivateRevalidate'
+            ETag:
+              $ref: '#/components/headers/ETag'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
   /space/v1/telemetry-config:
@@ -3964,6 +4098,12 @@ components:
       required: true
       schema:
         $ref: '#/components/schemas/Uuid'
+    CatalogActivityTypeId:
+      name: activityTypeId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Uuid'
     ResultContractId:
       name: contractId
       in: path
@@ -4434,6 +4574,103 @@ components:
             $ref: '#/components/schemas/PlatformDutyAssignment'
         page:
           $ref: '#/components/schemas/Page'
+    CatalogDiscipline:
+      type: object
+      additionalProperties: false
+      required: [code, name]
+      properties:
+        code:
+          type: string
+          pattern: '^[a-z][a-z0-9_]{1,63}$'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+    CatalogDisciplineList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CatalogDiscipline'
+    CatalogActivityType:
+      type: object
+      additionalProperties: false
+      required: [id, discipline_code, code, name]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        discipline_code:
+          type: string
+          pattern: '^[a-z][a-z0-9_]{1,63}$'
+        code:
+          type: string
+          pattern: '^[a-z][a-z0-9_]{1,63}$'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+    CatalogActivityTypeList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CatalogActivityType'
+    ActivityTypeResultContract:
+      type: object
+      additionalProperties: false
+      description: >-
+        One effective association. The minimums travel so a client can explain a
+        rejection locally; they never replace the server's validation.
+      required:
+        - result_contract_id
+        - contract_code
+        - version_number
+        - activity_family
+        - contract_schema_version
+        - envelope
+        - minimums
+        - is_default
+        - valid_from
+      properties:
+        result_contract_id:
+          $ref: '#/components/schemas/UuidV7'
+        contract_code:
+          type: string
+          pattern: '^[a-z][a-z0-9_.]{1,63}$'
+        version_number:
+          type: integer
+          minimum: 1
+        activity_family:
+          $ref: '#/components/schemas/ActivityFamily'
+        contract_schema_version:
+          type: integer
+          const: 1
+        envelope:
+          type: object
+          additionalProperties: true
+        minimums:
+          type: object
+          additionalProperties: true
+        is_default:
+          type: boolean
+        valid_from:
+          type: string
+          format: date-time
+    ActivityTypeResultContractList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActivityTypeResultContract'
     ActivityFamily:
       type: string
       enum: [strength, endurance, interval, mobility]

@@ -52,6 +52,71 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  ActivityTypeResultContract: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      "One effective association. The minimums travel so a client can explain a rejection locally; they never replace the server's validation.",
+    required: [
+      'result_contract_id',
+      'contract_code',
+      'version_number',
+      'activity_family',
+      'contract_schema_version',
+      'envelope',
+      'minimums',
+      'is_default',
+      'valid_from',
+    ],
+    properties: {
+      result_contract_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      contract_code: {
+        type: 'string',
+        pattern: '^[a-z][a-z0-9_.]{1,63}$',
+      },
+      version_number: {
+        type: 'integer',
+        minimum: 1,
+      },
+      activity_family: {
+        $ref: '#/components/schemas/ActivityFamily',
+      },
+      contract_schema_version: {
+        type: 'integer',
+        const: 1,
+      },
+      envelope: {
+        type: 'object',
+        additionalProperties: true,
+      },
+      minimums: {
+        type: 'object',
+        additionalProperties: true,
+      },
+      is_default: {
+        type: 'boolean',
+      },
+      valid_from: {
+        type: 'string',
+        format: 'date-time',
+      },
+    },
+  },
+  ActivityTypeResultContractList: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['items'],
+    properties: {
+      items: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/ActivityTypeResultContract',
+        },
+      },
+    },
+  },
   AdultEligibilityEvidence: {
     type: 'object',
     additionalProperties: false,
@@ -694,6 +759,71 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       absolute_expires_at: {
         type: 'string',
         format: 'date-time',
+      },
+    },
+  },
+  CatalogActivityType: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['id', 'discipline_code', 'code', 'name'],
+    properties: {
+      id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      discipline_code: {
+        type: 'string',
+        pattern: '^[a-z][a-z0-9_]{1,63}$',
+      },
+      code: {
+        type: 'string',
+        pattern: '^[a-z][a-z0-9_]{1,63}$',
+      },
+      name: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 120,
+      },
+    },
+  },
+  CatalogActivityTypeList: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['items'],
+    properties: {
+      items: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/CatalogActivityType',
+        },
+      },
+    },
+  },
+  CatalogDiscipline: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['code', 'name'],
+    properties: {
+      code: {
+        type: 'string',
+        pattern: '^[a-z][a-z0-9_]{1,63}$',
+      },
+      name: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 120,
+      },
+    },
+  },
+  CatalogDisciplineList: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['items'],
+    properties: {
+      items: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/CatalogDiscipline',
+        },
       },
     },
   },
