@@ -6,7 +6,12 @@ import {
   measureStudioRequestPhase,
 } from '../../../platform/observability/index.js'
 import type {
+  ActivityTypeResultContract,
+  CatalogActivityType,
   CatalogCommandResult,
+  CatalogDiscipline,
+  CatalogReader,
+  GlobalCatalogDatabase,
   ProfessionalCatalogDatabase,
   ProfessionalCatalogItem,
   ResultContract,
@@ -126,4 +131,52 @@ function required(
 ): CatalogCommandResult<ResultContract> {
   if (!row) throw new Error(`PostgreSQL did not ${operation}`)
   return { resource: row.result, replayed: row.replayed }
+}
+
+/**
+ * The global catalogue is read with the caller's own actor context: the policies
+ * refuse a null person, and the closed functions refuse one that is not active.
+ * The actor kind travels so a Backoffice read is recorded as support rather than
+ * as the person themselves.
+ */
+export function createGlobalCatalogDatabase(): GlobalCatalogDatabase {
+  const sql = database()
+
+  const read = <T>(reader: CatalogReader, run: (t: postgres.TransactionSql) => Promise<T[]>) =>
+    measureRequestPhase('business-db', async () => {
+      const result = await sql.begin(async (transaction) => {
+        await transaction`
+          select set_config('app.actor_kind', ${reader.actorKind}, true),
+                 set_config('app.actor_person_id', ${reader.personId}, true)
+        `
+        return { value: await run(transaction) }
+      })
+      return result.value
+    })
+
+  return {
+    listDisciplines: (reader) =>
+      read<CatalogDiscipline>(
+        reader,
+        (transaction) => transaction<CatalogDiscipline[]>`
+          select * from catalog.list_disciplines()
+        `,
+      ),
+
+    listActivityTypes: (reader) =>
+      read<CatalogActivityType>(
+        reader,
+        (transaction) => transaction<CatalogActivityType[]>`
+          select * from catalog.list_activity_types()
+        `,
+      ),
+
+    listActivityTypeResultContracts: (reader, activityTypeId) =>
+      read<ActivityTypeResultContract>(
+        reader,
+        (transaction) => transaction<ActivityTypeResultContract[]>`
+          select * from catalog.list_activity_type_result_contracts(${activityTypeId}::uuid)
+        `,
+      ),
+  }
 }

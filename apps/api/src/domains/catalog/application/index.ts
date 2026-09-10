@@ -1,6 +1,11 @@
 import type { AccountActor, BackofficeActor } from '../../identity/index.js'
 import type {
+  ActivityTypeResultContract,
+  CatalogActivityType,
   CatalogCommandContext,
+  CatalogDiscipline,
+  CatalogReader,
+  GlobalCatalogDatabase,
   CatalogCommandResult,
   ProfessionalCatalogDatabase,
   ResultContract,
@@ -65,5 +70,30 @@ export function createResultContractService(
   return {
     publish: (actor, input) => database.publish({ ...from(actor), ...input }),
     deprecate: (actor, input) => database.deprecate({ ...from(actor), ...input }),
+  }
+}
+
+/**
+ * Global catalogue reads.
+ *
+ * There is no authorization branch here: the database refuses a caller that is
+ * not an active person, and the read policies refuse anything unpublished or
+ * organisation-scoped. This layer only carries the reader through.
+ */
+export interface GlobalCatalogService {
+  listDisciplines(reader: CatalogReader): Promise<CatalogDiscipline[]>
+  listActivityTypes(reader: CatalogReader): Promise<CatalogActivityType[]>
+  listActivityTypeResultContracts(
+    reader: CatalogReader,
+    activityTypeId: string,
+  ): Promise<ActivityTypeResultContract[]>
+}
+
+export function createGlobalCatalogService(database: GlobalCatalogDatabase): GlobalCatalogService {
+  return {
+    listDisciplines: (reader) => database.listDisciplines(reader),
+    listActivityTypes: (reader) => database.listActivityTypes(reader),
+    listActivityTypeResultContracts: (reader, activityTypeId) =>
+      database.listActivityTypeResultContracts(reader, activityTypeId),
   }
 }

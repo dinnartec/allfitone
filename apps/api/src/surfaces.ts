@@ -12,7 +12,11 @@
 
 import type { Hono } from 'hono'
 
-import { backofficeCatalogRoutes, studioCatalogRoutes } from './domains/catalog/index.js'
+import {
+  backofficeCatalogRoutes,
+  catalogSurfaceRoutes,
+  studioCatalogRoutes,
+} from './domains/catalog/index.js'
 import {
   backofficeIdentityRoutes,
   spaceIdentityRoutes,
@@ -52,6 +56,7 @@ export function mountSurfaces(app: Hono): void {
   app.route('/backoffice/v1', backofficePlatformAccessRoutes())
   app.route('/backoffice/v1', backofficeCatalogRoutes())
 
-  // Mounted as each vertical slice lands:
-  // app.route('/catalog/v1', catalogSurface())
+  // The global catalogue is one surface, not a copy per product: it has no
+  // subject and no tenant, so every product reads the same mount.
+  app.route('/catalog/v1', catalogSurfaceRoutes())
 }
