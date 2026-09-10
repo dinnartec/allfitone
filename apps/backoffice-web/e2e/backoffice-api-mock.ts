@@ -14,7 +14,70 @@ export interface BackofficeFixture {
   resultContracts?: ResultContractFixture
   catalogue?: CatalogueFixture
   support?: SupportFixture
+  diagnosis?: DiagnosisFixture
   requests: MockRequest[]
+}
+
+export interface DiagnosisFixture {
+  refusal?: { status: number; code: string }
+  circuits: DiagnosisCircuitFixture[]
+  operations: DiagnosisOperationFixture[]
+  /** Rows per page, so the feed's cursor can be exercised. */
+  pageSize?: number
+}
+
+export interface DiagnosisCircuitFixture {
+  event_type: string
+  state: string
+  window_started_at: string
+  success_count: number
+  failure_count: number
+  opened_until: string | null
+}
+
+export interface DiagnosisOperationFixture {
+  source: 'notification' | 'command'
+  reference_id: string
+  subject_kind: string | null
+  subject_id: string | null
+  label: string
+  state: string
+  occurred_at: string
+  attempt_count: number
+  last_error_code: string | null
+  resolved_at: string | null
+}
+
+export function diagnosisOperation(
+  overrides: Partial<DiagnosisOperationFixture> = {},
+): DiagnosisOperationFixture {
+  return {
+    source: 'notification',
+    reference_id: nextAssignmentId(),
+    subject_kind: 'invitation',
+    subject_id: nextAssignmentId(),
+    label: 'identity.invitation_issued.v1',
+    state: 'retrying',
+    occurred_at: new Date(Date.now() - 600_000).toISOString(),
+    attempt_count: 3,
+    last_error_code: 'smtp_timeout',
+    resolved_at: null,
+    ...overrides,
+  }
+}
+
+export function diagnosisCircuit(
+  overrides: Partial<DiagnosisCircuitFixture> = {},
+): DiagnosisCircuitFixture {
+  return {
+    event_type: 'identity.invitation_issued.v1',
+    state: 'closed',
+    window_started_at: new Date(Date.now() - 3_600_000).toISOString(),
+    success_count: 40,
+    failure_count: 0,
+    opened_until: null,
+    ...overrides,
+  }
 }
 
 /**
@@ -338,6 +401,13 @@ export async function mockBackofficeApi(
       await routeResultContracts(route, request, fixture)
       return
     }
+    if (
+      request.path === '/backoffice/v1/support/operations' ||
+      request.path === '/backoffice/v1/support/delivery-circuits'
+    ) {
+      await routeDiagnosis(route, request, fixture)
+      return
+    }
     if (request.path.startsWith('/backoffice/v1/support/')) {
       await routeSupport(route, request, fixture)
       return
@@ -602,6 +672,47 @@ function paginate<T>(rows: T[], pageSize: number | undefined, offset: number) {
       next_cursor: next < rows.length ? String(next) : null,
     },
   }
+}
+
+/**
+ * The diagnosis feed has no subject, so unlike every other support read it takes
+ * no case reference. The mock reflects that rather than demanding one, or the
+ * E2E would enforce a rule the API does not have.
+ */
+async function routeDiagnosis(
+  route: Route,
+  request: MockRequest,
+  fixture: BackofficeFixture,
+): Promise<void> {
+  const diagnosis = fixture.diagnosis ?? { circuits: [], operations: [] }
+  if (diagnosis.refusal) {
+    await fulfillProblem(route, diagnosis.refusal.status, diagnosis.refusal.code)
+    return
+  }
+  if (request.path.endsWith('/delivery-circuits')) {
+    await fulfill(route, 200, { items: diagnosis.circuits })
+    return
+  }
+
+  const parameters = new URLSearchParams(request.query)
+  const source = parameters.get('source')
+  const state = parameters.get('state')
+  const matching = diagnosis.operations.filter(
+    (operation) =>
+      (source === null || operation.source === source) &&
+      (state === null || operation.state === state),
+  )
+  const offset = Number(parameters.get('cursor') ?? 0)
+  const size = diagnosis.pageSize ?? matching.length
+  const page = matching.slice(offset, offset + size)
+  const next = offset + size
+  await fulfill(route, 200, {
+    data: page,
+    page: {
+      has_more: next < matching.length,
+      next_cursor: next < matching.length ? String(next) : null,
+    },
+  })
 }
 
 /**
