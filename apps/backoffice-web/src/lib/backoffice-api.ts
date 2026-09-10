@@ -15,6 +15,9 @@ export type PlatformDutyAssignmentPage = AllfitV1Schemas['PlatformDutyAssignment
 export type CatalogDiscipline = AllfitV1Schemas['CatalogDiscipline']
 export type CatalogActivityType = AllfitV1Schemas['CatalogActivityType']
 export type ActivityTypeResultContract = AllfitV1Schemas['ActivityTypeResultContract']
+export type SupportOperation = AllfitV1Schemas['SupportOperation']
+export type SupportOperationPage = AllfitV1Schemas['SupportOperationPage']
+export type SupportDeliveryCircuit = AllfitV1Schemas['SupportDeliveryCircuit']
 export type SupportPersonMetadata = AllfitV1Schemas['SupportPersonMetadata']
 export type SupportPeopleSearch = AllfitV1Schemas['SupportPeopleSearch']
 export type ResultContract = AllfitV1Schemas['ResultContract']
@@ -202,6 +205,28 @@ export const backofficeApi = {
       signal ? { signal } : {},
     ),
 
+  // No case reference here, unlike the other support reads: this feed has no
+  // subject, so there is nothing to trace back to a case.
+  supportOperations: (
+    filters: { source?: string; state?: string; aggregateId?: string; cursor?: string } = {},
+    signal?: AbortSignal,
+  ) =>
+    requestJson<SupportOperationPage>(
+      `/backoffice/v1/support/operations${query({
+        source: filters.source,
+        state: filters.state,
+        aggregate_id: filters.aggregateId,
+        cursor: filters.cursor,
+      })}`,
+      signal ? { signal } : {},
+    ),
+
+  supportDeliveryCircuits: (signal?: AbortSignal) =>
+    requestJson<{ items: SupportDeliveryCircuit[] }>(
+      '/backoffice/v1/support/delivery-circuits',
+      signal ? { signal } : {},
+    ),
+
   passwordReset: (email: string) =>
     requestVoid('/backoffice/v1/auth/password-resets', {
       method: 'POST',
@@ -321,6 +346,8 @@ function supportOperation(route: string): ClientOperation | undefined {
   if (segments[0] !== 'backoffice' || segments[1] !== 'v1' || segments[2] !== 'support') {
     return undefined
   }
+  if (segments[3] === 'operations') return 'backoffice.support.operations'
+  if (segments[3] === 'delivery-circuits') return 'backoffice.support.delivery_circuits'
   if (segments[3] !== 'people') return undefined
   return segments.length === 4
     ? 'backoffice.support.people_search'

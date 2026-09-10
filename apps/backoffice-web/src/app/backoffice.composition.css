@@ -106,6 +106,7 @@
 }
 
 [data-support-search],
+[data-support-diagnosis],
 [data-support-person] {
   display: grid;
   gap: 24px;
@@ -120,6 +121,7 @@
 /* The identifier and the masked contact are what an operator quotes back into a
    case, so they stay selectable and do not wrap mid-value. */
 [data-support-search] code,
+[data-support-diagnosis] code,
 [data-support-person] code {
   font-family: var(--afo-font-family-mono, monospace);
   font-size: var(--afo-font-size-xs);
