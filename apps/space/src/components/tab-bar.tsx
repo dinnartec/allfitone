@@ -10,9 +10,16 @@
  * floating chrome and costs a real backdrop blur: one panel per screen is the budget,
  * and a screen that shows this bar spends it here.
  *
- * **Only Hoy and Entrenar lead anywhere today.** The rest answer with the screen they
- * are waiting on rather than navigating into nothing: a dead end that explains itself
- * is not the empty screen `HU-SP-090` criterion 3 forbids, and a blank one would be.
+ * **The bar no longer decides where anything goes.** It takes its destinations as
+ * children so the tab layout can wrap each one in a `TabTrigger`, which is the only
+ * shape Expo Router can see: `parseTriggersFromChildren` descends through fragments
+ * and one `asChild` level, and nothing else — a trigger created inside this file, or
+ * nested under the glass panel, would never be found and the tab would not exist.
+ *
+ * **Only Hoy, Entrenar and Perfil lead anywhere today.** The rest answer with the
+ * screen they are waiting on rather than navigating into nothing: a dead end that
+ * explains itself is not the empty screen `HU-SP-090` criterion 3 forbids, and a
+ * blank one would be.
  */
 
 import { GlassPanel } from '@allfitone/react-native/glass'
@@ -20,6 +27,7 @@ import { resolveShadowStyle } from '@allfitone/react-native/shadow-style'
 import { FoundationIcon, type IconName } from '@allfitone/react-native/icons'
 import { Text } from '@allfitone/react-native/text'
 import { useTheme } from '@allfitone/react-native/theme'
+import type { ReactNode } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
@@ -29,56 +37,32 @@ const DOCK_INSET = 16
 
 export type TabKey = 'today' | 'train' | 'history' | 'profile'
 
-export interface TabBarProps {
-  readonly active: TabKey
-  /** Where a destination that does not exist yet answers instead of navigating. */
-  readonly onPending: (message: string) => void
-  readonly onNavigate: (tab: TabKey) => void
-}
-
-// Only the tabs that are not built yet. A built tab navigates and never explains.
-const PENDING: Partial<Record<TabKey | 'food', string>> = {
-  today: '',
-  train: 'Entrenar llega con el registro de ejecución.',
+/** What a destination that does not exist yet answers instead of navigating. */
+export const PENDING: Record<'history' | 'food', string> = {
   history: 'Tu historial llega con las sesiones registradas.',
   food: 'Comida llega con el registro de nutrición.',
 }
 
-const TABS: ReadonlyArray<{ key: TabKey; icon: IconName; label: string; built: boolean }> = [
-  { key: 'today', icon: 'home', label: 'Hoy', built: true },
-  { key: 'train', icon: 'training', label: 'Entrenar', built: true },
-  { key: 'history', icon: 'history', label: 'Historial', built: false },
-  { key: 'profile', icon: 'person', label: 'Perfil', built: true },
-]
+export interface TabBarProps {
+  /** The destinations, already wrapped in whatever the router needs. */
+  readonly children: ReactNode
+  readonly onPending: (message: string) => void
+}
 
-export function TabBar({ active, onPending, onNavigate }: TabBarProps) {
+export function TabBar({ children, onPending }: TabBarProps) {
   const theme = useTheme()
   const insets = useSafeAreaInsets()
 
   return (
     <View style={[styles.dock, { bottom: Math.max(insets.bottom, 12) }]} pointerEvents="box-none">
       <GlassPanel radius="action" style={styles.glass}>
-        {TABS.map((tab) => (
-          <Tab
-            key={tab.key}
-            icon={tab.icon}
-            label={tab.label}
-            active={tab.key === active}
-            onPress={
-              tab.key === active
-                ? undefined
-                : tab.built
-                  ? () => onNavigate(tab.key)
-                  : () => onPending(PENDING[tab.key] ?? '')
-            }
-          />
-        ))}
+        {children}
       </GlassPanel>
 
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Registrar una comida"
-        onPress={() => onPending(PENDING.food ?? '')}
+        onPress={() => onPending(PENDING.food)}
         style={[
           styles.capture,
           resolveShadowStyle('floating'),
@@ -94,7 +78,12 @@ export function TabBar({ active, onPending, onNavigate }: TabBarProps) {
   )
 }
 
-function Tab({
+/**
+ * One destination. Exported because the tab layout composes these itself now, and
+ * because a `TabTrigger` hands its child the press handling but not the selection —
+ * whether this one is the current tab comes from the path, above.
+ */
+export function Tab({
   icon,
   label,
   active,

@@ -41,21 +41,21 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { FoundationIcon, type IconName } from '@allfitone/react-native/icons'
 import { semanticSpacing } from '@allfitone/react-native/tokens'
 
-import { ApiError } from '../src/client'
-import { createSpaceExecutionFlow } from '../src/client/execution-transport'
-import type { Today as TodayPayload } from '../src/client/execution'
-import { createSpaceProgramFlow } from '../src/client/programs-transport'
-import type { ProgramCatalogue } from '../src/client/programs'
+import { ApiError } from '../../src/client'
+import { createSpaceExecutionFlow } from '../../src/client/execution-transport'
+import type { Today as TodayPayload } from '../../src/client/execution'
+import { createSpaceProgramFlow } from '../../src/client/programs-transport'
+import type { ProgramCatalogue } from '../../src/client/programs'
 import {
   cardsFor,
   type ProgramSummary,
   type TrainingProfile,
-} from '../src/client/program-catalogue'
-import { longDateLabel, shortDayLabel, trainedLabel } from '../src/client/week'
-import { deviceTimezone } from '../src/client/timezone'
-import todayHero from '../assets/images/today/today-hero.webp'
-import { ProgramCard } from '../src/components/program-card'
-import { DOCK_HEIGHT, TabBar, type TabKey } from '../src/components/tab-bar'
+} from '../../src/client/program-catalogue'
+import { longDateLabel, shortDayLabel, trainedLabel } from '../../src/client/week'
+import { deviceTimezone } from '../../src/client/timezone'
+import todayHero from '../../assets/images/today/today-hero.webp'
+import { ProgramCard } from '../../src/components/program-card'
+import { DOCK_HEIGHT } from '../../src/components/tab-bar'
 
 const EXPIRED = 'Tu sesión venció. Vuelve a entrar para continuar.'
 const READ_FAILED = 'No pudimos cargar tu día. Inténtalo otra vez.'
@@ -156,11 +156,6 @@ export default function Today() {
       .then((id) => router.push(`/session/${id}`))
       .catch(() => setFailure(START_FAILED))
       .finally(() => setStarting(false))
-  }
-
-  const navigate = (tab: TabKey) => {
-    if (tab === 'train') router.push('/train')
-    if (tab === 'profile') router.push('/profile')
   }
 
   return (
@@ -399,8 +394,6 @@ export default function Today() {
           </Text>
         ) : null}
       </ScrollView>
-
-      <TabBar active="today" onPending={setPending} onNavigate={navigate} />
     </Screen>
   )
 }

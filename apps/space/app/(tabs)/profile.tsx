@@ -27,8 +27,8 @@ import { useRouter } from 'expo-router'
 import { useMemo, useState } from 'react'
 import { ScrollView, StyleSheet, View } from 'react-native'
 
-import { createSpaceSignOutFlow } from '../src/client/sign-out-transport'
-import { DOCK_HEIGHT, TabBar, type TabKey } from '../src/components/tab-bar'
+import { createSpaceSignOutFlow } from '../../src/client/sign-out-transport'
+import { DOCK_HEIGHT } from '../../src/components/tab-bar'
 
 const LOCAL_ONLY =
   'Cerramos sesión en este teléfono. No pudimos avisarle al servidor, así que hazlo otra vez cuando tengas conexión.'
@@ -47,7 +47,6 @@ export default function Profile() {
   const [busy, setBusy] = useState(false)
   const [warning, setWarning] = useState(false)
   const [notice, setNotice] = useState<string | undefined>(undefined)
-  const [pending, setPending] = useState<string | undefined>(undefined)
 
   const leave = async (force: boolean) => {
     setBusy(true)
@@ -64,11 +63,6 @@ export default function Profile() {
     } finally {
       setBusy(false)
     }
-  }
-
-  const navigate = (tab: TabKey) => {
-    if (tab === 'today') router.replace('/today')
-    if (tab === 'train') router.push('/train')
   }
 
   return (
@@ -141,13 +135,6 @@ export default function Profile() {
           />
         </View>
       </Sheet>
-
-      <TabBar active="profile" onPending={setPending} onNavigate={navigate} />
-      {pending ? (
-        <Text role="body" size="sm" color="muted" style={styles.pending}>
-          {pending}
-        </Text>
-      ) : null}
     </Screen>
   )
 }

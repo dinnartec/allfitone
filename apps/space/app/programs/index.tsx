@@ -43,7 +43,6 @@ import {
   type TrainingProfile,
 } from '../../src/client/program-catalogue'
 import { ProgramCard } from '../../src/components/program-card'
-import { DOCK_HEIGHT, TabBar, type TabKey } from '../../src/components/tab-bar'
 
 const EXPIRED = 'Tu sesión venció. Vuelve a entrar para continuar.'
 const READ_FAILED = 'No pudimos cargar los programas. Inténtalo otra vez.'
@@ -67,7 +66,6 @@ export default function Train() {
   const [catalogue, setCatalogue] = useState<ProgramCatalogue | undefined>(undefined)
   const [days, setDays] = useState<number | undefined>(undefined)
   const [expanded, setExpanded] = useState(false)
-  const [pending, setPending] = useState<string | undefined>(undefined)
   const [failure, setFailure] = useState<string | undefined>(undefined)
 
   useEffect(() => {
@@ -115,11 +113,6 @@ export default function Train() {
       })),
     [expanded, matching, suggested],
   )
-
-  const navigate = (tab: TabKey) => {
-    if (tab === 'today') router.replace('/today')
-    if (tab === 'profile') router.push('/profile')
-  }
 
   const open = (program: ProgramSummary) => router.push(`/programs/${program.program_version_id}`)
 
@@ -255,15 +248,7 @@ export default function Train() {
             Nunca estás obligado a elegir uno.
           </Text>
         </View>
-
-        {pending ? (
-          <Text role="body" size="sm" color="muted">
-            {pending}
-          </Text>
-        ) : null}
       </ScrollView>
-
-      <TabBar active="train" onPending={setPending} onNavigate={navigate} />
     </Screen>
   )
 }
@@ -338,7 +323,7 @@ function Alternative({
 }
 
 const styles = StyleSheet.create({
-  content: { gap: 18, paddingBottom: DOCK_HEIGHT + 40 },
+  content: { gap: 18, paddingBottom: 40 },
   top: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
   heading: { flex: 1, gap: 4 },
   segmented: { flexDirection: 'row', borderRadius: 22, borderWidth: 1, padding: 3, gap: 3 },

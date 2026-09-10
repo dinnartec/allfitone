@@ -29,19 +29,19 @@ import { useRouter } from 'expo-router'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
 
-import { ApiError } from '../src/client'
-import { createSpaceExecutionFlow } from '../src/client/execution-transport'
-import { createSpaceProgramFlow } from '../src/client/programs-transport'
-import type { MyProgram, WeekPlan } from '../src/client/programs'
+import { ApiError } from '../../src/client'
+import { createSpaceExecutionFlow } from '../../src/client/execution-transport'
+import { createSpaceProgramFlow } from '../../src/client/programs-transport'
+import type { MyProgram, WeekPlan } from '../../src/client/programs'
 import {
   actionLabel,
   cardsFor,
   routineCaption,
   weekProgress,
   type RoutineCard,
-} from '../src/client/week-plan'
-import { deviceTimezone } from '../src/client/timezone'
-import { DOCK_HEIGHT, TabBar, type TabKey } from '../src/components/tab-bar'
+} from '../../src/client/week-plan'
+import { deviceTimezone } from '../../src/client/timezone'
+import { DOCK_HEIGHT } from '../../src/components/tab-bar'
 
 const EXPIRED = 'Tu sesión venció. Vuelve a entrar para continuar.'
 const READ_FAILED = 'No pudimos cargar tu semana. Inténtalo otra vez.'
@@ -63,7 +63,6 @@ export default function Train() {
   const [choosing, setChoosing] = useState(false)
   const [starting, setStarting] = useState<string | undefined>(undefined)
   const [failure, setFailure] = useState<string | undefined>(undefined)
-  const [pending, setPending] = useState<string | undefined>(undefined)
 
   const load = useCallback(() => {
     programs
@@ -144,11 +143,6 @@ export default function Train() {
       })
       .then(setPlan)
       .catch(() => setFailure(ORDER_FAILED))
-  }
-
-  const navigate = (tab: TabKey) => {
-    if (tab === 'today') router.replace('/today')
-    if (tab === 'profile') router.push('/profile')
   }
 
   return (
@@ -246,12 +240,6 @@ export default function Train() {
             onPress={() => router.push('/programs')}
           />
         </View>
-
-        {pending ? (
-          <Text role="body" size="sm" color="muted">
-            {pending}
-          </Text>
-        ) : null}
       </ScrollView>
 
       <Sheet visible={choosing} onDismiss={() => setChoosing(false)} title="Tus programas">
@@ -286,8 +274,6 @@ export default function Train() {
           />
         </View>
       </Sheet>
-
-      <TabBar active="train" onPending={setPending} onNavigate={navigate} />
     </Screen>
   )
 }

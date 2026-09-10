@@ -18,6 +18,21 @@
  * and, more to the point, matches what every other iOS app does when going back.
  * The opening keeps its fade, because there is no spatial relationship between a
  * splash and the screen after it.
+ *
+ * **The tabs are a navigator, not screens on this stack.** They live in `(tabs)`,
+ * which owns their transition and keeps them mounted; this stack only knows the group
+ * exists. Everything that used to be here to make three stack peers behave — a
+ * cross-fade, a duration, a list of their names — went with them.
+ *
+ * **A session is a mode, not a page.** It presents from the bottom as a full-screen
+ * modal, which is what an app uses for something you are inside and then leave — and
+ * it costs the swipe-back gesture, which is the point: half a swipe should not drop
+ * somebody out of the workout they are recording.
+ *
+ * No `animationDuration` anywhere but the splash. It only applies to
+ * `slide_from_bottom`, `fade_from_bottom`, `fade` and `simple_push` on iOS, so the
+ * 220 that used to sit beside `slide_from_right` was configuring nothing, and the
+ * platform's own timing is what makes a push feel native.
  */
 
 import { useAllfitFonts } from '@allfitone/react-native/fonts'
@@ -25,6 +40,7 @@ import { ThemeProvider } from '@allfitone/react-native/theme'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { StyleSheet } from 'react-native'
 import { Stack } from 'expo-router'
+import { useReducedMotion } from 'react-native-reanimated'
 import { StatusBar } from 'expo-status-bar'
 import { useColorScheme } from 'react-native'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
@@ -32,6 +48,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context'
 export default function RootLayout() {
   const { loaded, error } = useAllfitFonts()
   const scheme = useColorScheme()
+  const reduceMotion = useReducedMotion()
 
   // A font that fails to load is not recoverable at runtime and must not be
   // hidden: rendering anyway would ship the wrong typeface without a trace.
@@ -50,11 +67,23 @@ export default function RootLayout() {
           <Stack
             screenOptions={{
               headerShown: false,
-              animation: 'slide_from_right',
-              animationDuration: 220,
+              // Reduced motion keeps the change and drops the travel, which for a screen
+              // transition is a cross-fade rather than nothing: something has to say the
+              // screen changed.
+              animation: reduceMotion ? 'fade' : 'slide_from_right',
             }}
           >
             <Stack.Screen name="welcome" options={{ animation: 'fade', animationDuration: 260 }} />
+            {/* The group carries its own navigator, so this stack pushes it once and
+                never animates between what is inside it. */}
+            <Stack.Screen name="(tabs)" options={{ animation: 'fade', animationDuration: 160 }} />
+            <Stack.Screen
+              name="session/[executionId]"
+              options={{
+                presentation: 'fullScreenModal',
+                animation: reduceMotion ? 'fade' : 'slide_from_bottom',
+              }}
+            />
           </Stack>
           {/* Withheld until onboarding completes: asking on the welcome screen,
             before the person knows what Allfit is, is not informed consent. */}
