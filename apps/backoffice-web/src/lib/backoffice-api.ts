@@ -12,6 +12,8 @@ export type PlatformDutyCode = AllfitV1Schemas['PlatformDutyCode']
 export type PlatformRoleAssignmentPage = AllfitV1Schemas['PlatformRoleAssignmentPage']
 export type PlatformDutyAssignmentPage = AllfitV1Schemas['PlatformDutyAssignmentPage']
 
+export type SupportPersonMetadata = AllfitV1Schemas['SupportPersonMetadata']
+export type SupportPeopleSearch = AllfitV1Schemas['SupportPeopleSearch']
 export type ResultContract = AllfitV1Schemas['ResultContract']
 export type ResultContractPublication = AllfitV1Schemas['ResultContractPublication']
 
@@ -157,6 +159,26 @@ export const backofficeApi = {
       body: '{}',
     }),
 
+  // The case reference travels on every support read: the server records it
+  // beside the query, so a read nobody can trace back to a case is refused.
+  searchSupportPeople: (
+    input: { caseReference: string; kind: 'identifier' | 'email' | 'phone'; value: string },
+    signal?: AbortSignal,
+  ) =>
+    requestJson<SupportPeopleSearch>(
+      `/backoffice/v1/support/people${query({
+        case_reference: input.caseReference,
+        [input.kind]: input.value,
+      })}`,
+      signal ? { signal } : {},
+    ),
+
+  supportPersonMetadata: (personId: string, caseReference: string, signal?: AbortSignal) =>
+    requestJson<SupportPersonMetadata>(
+      `/backoffice/v1/support/people/${personId}${query({ case_reference: caseReference })}`,
+      signal ? { signal } : {},
+    ),
+
   passwordReset: (email: string) =>
     requestVoid('/backoffice/v1/auth/password-resets', {
       method: 'POST',
@@ -260,8 +282,25 @@ function backofficeOperation(path: string): ClientOperation {
     '/backoffice/v1/auth/password-resets': 'backoffice.auth.password_reset',
   }
   const [route] = path.split('?')
-  const platform = platformOperation(route ?? path)
-  return platform ?? operations[route ?? path] ?? 'backoffice.session'
+  const resolved = route ?? path
+  return (
+    supportOperation(resolved) ??
+    platformOperation(resolved) ??
+    operations[resolved] ??
+    'backoffice.session'
+  )
+}
+
+/** The person identifier varies per row, so the card is matched by shape. */
+function supportOperation(route: string): ClientOperation | undefined {
+  const segments = route.split('/').filter(Boolean)
+  if (segments[0] !== 'backoffice' || segments[1] !== 'v1' || segments[2] !== 'support') {
+    return undefined
+  }
+  if (segments[3] !== 'people') return undefined
+  return segments.length === 4
+    ? 'backoffice.support.people_search'
+    : 'backoffice.support.person_metadata'
 }
 
 /** Assignment identifiers vary per row, so these routes are matched by shape. */

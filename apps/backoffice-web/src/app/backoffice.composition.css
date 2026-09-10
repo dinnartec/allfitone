@@ -104,3 +104,24 @@
   font-family: var(--afo-font-family-mono, monospace);
   font-size: var(--afo-font-size-xs);
 }
+
+[data-support-search],
+[data-support-person] {
+  display: grid;
+  gap: 24px;
+  align-content: start;
+}
+
+[data-support-search-form] {
+  display: grid;
+  gap: 12px;
+}
+
+/* The identifier and the masked contact are what an operator quotes back into a
+   case, so they stay selectable and do not wrap mid-value. */
+[data-support-search] code,
+[data-support-person] code {
+  font-family: var(--afo-font-family-mono, monospace);
+  font-size: var(--afo-font-size-xs);
+  white-space: nowrap;
+}
