@@ -25,6 +25,11 @@ tags:
     description: Global catalogue curation performed by Allfit staff.
   - name: Backoffice Platform Access
     description: Base role and temporary platform duty administration for Allfit staff.
+  - name: Backoffice Support
+    description: >-
+      The minimised operational projection Allfit staff read to resolve a case.
+      It carries identifiers, states, timestamps and counters, and never a name,
+      a full contact or the identity provider's subject.
   - name: Studio Organizations
     description: Studio entry context, organization creation and membership resolution.
   - name: Studio Catalog
@@ -776,6 +781,90 @@ paths:
           $ref: '#/components/responses/ValidationFailed'
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
+  /backoffice/v1/support/people:
+    get:
+      tags: [Backoffice Support]
+      operationId: searchBackofficeSupportPeople
+      x-allfit-operation: OP-SUP-005
+      x-allfit-cache: no-store
+      summary: Find a person by something they handed over in their own case
+      description: >-
+        Exact match on exactly one of an identifier, an email or a phone. There is
+        no exploratory search by name, so no parameter offers one. The search is
+        recorded whether or not it matched: a fruitless search is the one most
+        worth being able to review later.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/SupportCaseReference'
+        - $ref: '#/components/parameters/SupportLookupIdentifier'
+        - $ref: '#/components/parameters/SupportLookupEmail'
+        - $ref: '#/components/parameters/SupportLookupPhone'
+      responses:
+        '200':
+          description: >-
+            The match, or an explicit not-found outcome. Never a bare empty list:
+            the outcome says which of the two happened.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportPeopleSearch'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/support/people/{personId}:
+    get:
+      tags: [Backoffice Support]
+      operationId: readBackofficeSupportPersonMetadata
+      x-allfit-operation: OP-SUP-005
+      x-allfit-cache: no-store
+      summary: Open the minimised operational state of a person
+      description: >-
+        Identifiers, account and verification states, timestamps and counters. To
+        resolve a training case use the break-glass operations; no screen widens
+        the approved category silently. The read is recorded against the person
+        before its content is returned.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/SupportPersonId'
+        - $ref: '#/components/parameters/SupportCaseReference'
+      responses:
+        '200':
+          description: The minimised operational state
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportPersonMetadata'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
   /space/v1/telemetry-config:
     get:
       tags: [Platform Telemetry]
@@ -3865,6 +3954,46 @@ components:
       description: Opaque, host-only, HttpOnly AAL2 Backoffice session.
 
   parameters:
+    SupportCaseReference:
+      name: case_reference
+      in: query
+      required: true
+      description: >-
+        The case this read belongs to. A structured reference rather than free
+        prose, so the record can be followed back to a case months later.
+      schema:
+        type: string
+        pattern: '^[A-Z][A-Z0-9_-]{2,63}$'
+    SupportPersonId:
+      name: personId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Uuid'
+    SupportLookupIdentifier:
+      name: identifier
+      in: query
+      required: false
+      description: Exactly one lookup parameter is accepted per search.
+      schema:
+        $ref: '#/components/schemas/Uuid'
+    SupportLookupEmail:
+      name: email
+      in: query
+      required: false
+      description: Exact match only. Exactly one lookup parameter is accepted per search.
+      schema:
+        type: string
+        format: email
+        maxLength: 254
+    SupportLookupPhone:
+      name: phone
+      in: query
+      required: false
+      description: Exact match only. Exactly one lookup parameter is accepted per search.
+      schema:
+        type: string
+        pattern: '^\+[1-9][0-9]{6,14}$'
     OnboardingAttemptId:
       name: attemptId
       in: path
@@ -4412,6 +4541,108 @@ components:
             request_id: 01JEXAMPLE0000000000000000
 
   schemas:
+    SupportBlockAvailability:
+      type: string
+      description: >-
+        Whether a block of the projection can say anything. `unknown` is a
+        statement about the person; `not_modelled` is a statement about the
+        platform, and confusing the two makes the card lie by omission.
+      enum: [available, unknown, not_modelled]
+    SupportPersonMetadata:
+      type: object
+      additionalProperties: false
+      description: >-
+        The minimised operational state. No name, no full contact and no identity
+        provider subject appear here, by construction rather than by filtering.
+      required:
+        - person_id
+        - account_status
+        - created_at
+        - activated_at
+        - contact_email_masked
+        - contact_phone_masked
+        - email_verified_at
+        - phone_verified_at
+        - has_access_account
+        - access_account_linked_at
+        - active_session_count
+        - last_seen_at
+        - has_professional_profile
+        - membership_count
+        - active_membership_count
+        - relationships_availability
+        - plan_availability
+        - premium_availability
+        - permissions_availability
+      properties:
+        person_id:
+          $ref: '#/components/schemas/Uuid'
+        account_status:
+          type: string
+          minLength: 1
+          maxLength: 32
+        created_at:
+          type: string
+          format: date-time
+        activated_at:
+          type: [string, 'null']
+          format: date-time
+        contact_email_masked:
+          type: [string, 'null']
+          maxLength: 254
+        contact_phone_masked:
+          type: [string, 'null']
+          maxLength: 32
+        email_verified_at:
+          type: [string, 'null']
+          format: date-time
+        phone_verified_at:
+          type: [string, 'null']
+          format: date-time
+        has_access_account:
+          type: boolean
+        access_account_linked_at:
+          type: [string, 'null']
+          format: date-time
+        active_session_count:
+          type: integer
+          minimum: 0
+        last_seen_at:
+          type: [string, 'null']
+          format: date-time
+        has_professional_profile:
+          type: boolean
+        membership_count:
+          type: integer
+          minimum: 0
+        active_membership_count:
+          type: integer
+          minimum: 0
+        relationships_availability:
+          $ref: '#/components/schemas/SupportBlockAvailability'
+        plan_availability:
+          $ref: '#/components/schemas/SupportBlockAvailability'
+        premium_availability:
+          $ref: '#/components/schemas/SupportBlockAvailability'
+        permissions_availability:
+          $ref: '#/components/schemas/SupportBlockAvailability'
+    SupportPeopleSearch:
+      type: object
+      additionalProperties: false
+      description: >-
+        The outcome travels beside the items so a client cannot render an
+        unexplained empty list. `HU-BO-006` criterion 3 is a contract obligation
+        here, not a copy decision in one screen.
+      required: [outcome, items]
+      properties:
+        outcome:
+          type: string
+          enum: [found, not_found]
+        items:
+          type: array
+          maxItems: 1
+          items:
+            $ref: '#/components/schemas/SupportPersonMetadata'
     PlatformRoleAssignmentPage:
       type: object
       additionalProperties: false

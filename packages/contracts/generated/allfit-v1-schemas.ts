@@ -4350,6 +4350,131 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  SupportBlockAvailability: {
+    type: 'string',
+    description:
+      'Whether a block of the projection can say anything. `unknown` is a statement about the person; `not_modelled` is a statement about the platform, and confusing the two makes the card lie by omission.',
+    enum: ['available', 'unknown', 'not_modelled'],
+  },
+  SupportPeopleSearch: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      'The outcome travels beside the items so a client cannot render an unexplained empty list. `HU-BO-006` criterion 3 is a contract obligation here, not a copy decision in one screen.',
+    required: ['outcome', 'items'],
+    properties: {
+      outcome: {
+        type: 'string',
+        enum: ['found', 'not_found'],
+      },
+      items: {
+        type: 'array',
+        maxItems: 1,
+        items: {
+          $ref: '#/components/schemas/SupportPersonMetadata',
+        },
+      },
+    },
+  },
+  SupportPersonMetadata: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      'The minimised operational state. No name, no full contact and no identity provider subject appear here, by construction rather than by filtering.',
+    required: [
+      'person_id',
+      'account_status',
+      'created_at',
+      'activated_at',
+      'contact_email_masked',
+      'contact_phone_masked',
+      'email_verified_at',
+      'phone_verified_at',
+      'has_access_account',
+      'access_account_linked_at',
+      'active_session_count',
+      'last_seen_at',
+      'has_professional_profile',
+      'membership_count',
+      'active_membership_count',
+      'relationships_availability',
+      'plan_availability',
+      'premium_availability',
+      'permissions_availability',
+    ],
+    properties: {
+      person_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      account_status: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 32,
+      },
+      created_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      activated_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      contact_email_masked: {
+        type: ['string', 'null'],
+        maxLength: 254,
+      },
+      contact_phone_masked: {
+        type: ['string', 'null'],
+        maxLength: 32,
+      },
+      email_verified_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      phone_verified_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      has_access_account: {
+        type: 'boolean',
+      },
+      access_account_linked_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      active_session_count: {
+        type: 'integer',
+        minimum: 0,
+      },
+      last_seen_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      has_professional_profile: {
+        type: 'boolean',
+      },
+      membership_count: {
+        type: 'integer',
+        minimum: 0,
+      },
+      active_membership_count: {
+        type: 'integer',
+        minimum: 0,
+      },
+      relationships_availability: {
+        $ref: '#/components/schemas/SupportBlockAvailability',
+      },
+      plan_availability: {
+        $ref: '#/components/schemas/SupportBlockAvailability',
+      },
+      premium_availability: {
+        $ref: '#/components/schemas/SupportBlockAvailability',
+      },
+      permissions_availability: {
+        $ref: '#/components/schemas/SupportBlockAvailability',
+      },
+    },
+  },
   TeamInvitation: {
     type: 'object',
     additionalProperties: false,

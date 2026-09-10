@@ -112,6 +112,20 @@ export const allfitV1ContractManifest = {
     },
     {
       method: 'GET',
+      path: '/backoffice/v1/support/people',
+      operationId: 'searchBackofficeSupportPeople',
+      allfitOperation: 'OP-SUP-005',
+      responses: ['200', '400', '401', '403', '422', '503'],
+    },
+    {
+      method: 'GET',
+      path: '/backoffice/v1/support/people/{personId}',
+      operationId: 'readBackofficeSupportPersonMetadata',
+      allfitOperation: 'OP-SUP-005',
+      responses: ['200', '400', '401', '403', '404', '422', '503'],
+    },
+    {
+      method: 'GET',
       path: '/backoffice/v1/telemetry-config',
       operationId: 'getBackofficeTelemetryConfig',
       allfitOperation: 'OP-SYS-011',
