@@ -4,7 +4,7 @@ import { Alert, AlertDescription, AlertTitle } from '@allfitone/react/components
 import { Avatar, AvatarFallback } from '@allfitone/react/components/avatar'
 import { Badge } from '@allfitone/react/components/badge'
 import { Button, buttonVariants } from '@allfitone/react/components/button'
-import { Card, CardAction, CardContent, CardHeader } from '@allfitone/react/components/card'
+import { Card, CardContent, CardHeader } from '@allfitone/react/components/card'
 import {
   Empty,
   EmptyContent,
@@ -284,34 +284,68 @@ function MembershipCard({ item }: { item: OrganizationMembership }) {
             {item.display_name}
           </strong>
         </div>
-        <CardAction>
-          <Badge variant={item.status === 'active' ? 'success' : 'outline'}>
-            {item.status === 'active' ? 'Activo' : 'Terminado'}
-          </Badge>
-        </CardAction>
       </CardHeader>
       <CardContent>
-        <div data-team-role-badges>
-          {item.roles.map((role) => (
-            <Badge key={role} variant="secondary">
-              {organizationRoleLabel(role)}
-            </Badge>
-          ))}
-        </div>
-        <dl data-team-member-dates>
-          <div>
-            <dt>Ingreso</dt>
-            <dd>{formatDate(item.joined_at)}</dd>
-          </div>
+        {/* The table names every column it shows. The card used to name one of
+            them, so a badge reading "Propietario" sat next to a badge reading
+            "Activo" with nothing saying which was a role and which a state.
+            Same five facts as the row, in the same order, each one named. */}
+        <dl data-team-member-facts>
+          <dt>Estado</dt>
+          <dd>
+            <StatusBadge item={item} />
+          </dd>
+
+          <dt>Roles</dt>
+          <dd>
+            <RoleBadges item={item} />
+          </dd>
+
+          <dt>Ingreso</dt>
+          <dd>{formatDate(item.joined_at)}</dd>
+
           {item.ended_at ? (
-            <div>
+            <>
               <dt>Finalización</dt>
               <dd>{formatDate(item.ended_at)}</dd>
-            </div>
+            </>
           ) : null}
         </dl>
       </CardContent>
     </Card>
+  )
+}
+
+/**
+ * The table and the card list are two presentations of one row, so how a status
+ * or a role looks is decided once here. Keeping the choice in both is what let
+ * them drift: the card was given its colours and the table kept the old ones.
+ */
+function StatusBadge({ item }: { item: OrganizationMembership }) {
+  // `outline` sets a transparent background over the base's transparent border
+  // and so draws nothing at all. Ended is not an error, so a neutral surface
+  // says it without `destructive` overstating it.
+  return (
+    <Badge variant={item.status === 'active' ? 'success' : 'secondary'}>
+      {item.status === 'active' ? 'Activo' : 'Terminado'}
+    </Badge>
+  )
+}
+
+/**
+ * The accent family, not the semantic one: a role is not a state, and painting
+ * an admin amber would claim a warning that is not there. It also brings the
+ * directory closer to the catalog, which already marks roles in accent.
+ */
+function RoleBadges({ item }: { item: OrganizationMembership }) {
+  return (
+    <div data-team-role-badges>
+      {item.roles.map((role) => (
+        <Badge key={role} variant="default">
+          {organizationRoleLabel(role)}
+        </Badge>
+      ))}
+    </div>
   )
 }
 
@@ -327,18 +361,10 @@ function MembershipRow({ item }: { item: OrganizationMembership }) {
         </div>
       </TableCell>
       <TableCell>
-        <Badge variant={item.status === 'active' ? 'success' : 'outline'}>
-          {item.status === 'active' ? 'Activo' : 'Terminado'}
-        </Badge>
+        <StatusBadge item={item} />
       </TableCell>
       <TableCell>
-        <div data-team-role-badges>
-          {item.roles.map((role) => (
-            <Badge key={role} variant="secondary">
-              {organizationRoleLabel(role)}
-            </Badge>
-          ))}
-        </div>
+        <RoleBadges item={item} />
       </TableCell>
       <TableCell>{formatDate(item.joined_at)}</TableCell>
       <TableCell>{item.ended_at ? formatDate(item.ended_at) : '—'}</TableCell>

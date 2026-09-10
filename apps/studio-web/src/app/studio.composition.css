@@ -308,7 +308,6 @@ menu {
    membership card is the common case: a person who has not left has no end
    date. `auto-fit` gives the pair the row and still splits it when a second
    arrives, and the `min()` keeps the track from outgrowing a narrow card. */
-[data-team-member-dates],
 [data-credential-details] {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(10rem, 100%), 1fr));
@@ -317,15 +316,25 @@ menu {
 }
 
 [data-team-invitation-summary] > div,
-[data-team-member-dates] > div,
 [data-credential-details] > div {
   min-width: 0;
 }
 
 [data-team-invitation-summary] dd,
-[data-team-member-dates] dd,
+[data-team-member-facts] dd,
 [data-credential-details] dd {
   margin-inline: 0;
+}
+
+/* The card is the table row stacked, so every value keeps the name its column
+   had. The label track sizes to its widest word, which lines the values up
+   down the card instead of leaving each one to start wherever its label ends. */
+[data-team-member-facts] {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--afo-space-2) var(--afo-space-4);
+  margin: 0;
 }
 
 /* ---------------------------------------------------------------- overview */
@@ -583,7 +592,6 @@ menu {
   [data-membership-context-grid],
   [data-credential-grid],
   [data-team-invitation-summary],
-  [data-team-member-dates],
   [data-credential-details] {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -605,6 +613,14 @@ menu {
   [data-profile-setup-actions],
   [data-team-invitation-actions] {
     width: 100%;
+  }
+
+  /* The row above was already given the full width; what sat in it was not, so
+     a primary action ended up as a content-width pill floating at the left of
+     an empty row. Stretching what is in it finishes the intent that rule
+     started. Two actions still share the row rather than one taking it. */
+  [data-page-header-actions] > * {
+    flex: 1;
   }
 
   [data-credential-evidence] {
