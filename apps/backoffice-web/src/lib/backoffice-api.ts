@@ -15,6 +15,8 @@ export type PlatformDutyAssignmentPage = AllfitV1Schemas['PlatformDutyAssignment
 export type CatalogDiscipline = AllfitV1Schemas['CatalogDiscipline']
 export type CatalogActivityType = AllfitV1Schemas['CatalogActivityType']
 export type ActivityTypeResultContract = AllfitV1Schemas['ActivityTypeResultContract']
+export type ScopeDefinition = AllfitV1Schemas['ScopeDefinition']
+export type ScopeDefinitionPublication = AllfitV1Schemas['ScopeDefinitionPublication']
 export type SupportOperation = AllfitV1Schemas['SupportOperation']
 export type SupportOperationPage = AllfitV1Schemas['SupportOperationPage']
 export type SupportDeliveryCircuit = AllfitV1Schemas['SupportDeliveryCircuit']
@@ -227,6 +229,19 @@ export const backofficeApi = {
       signal ? { signal } : {},
     ),
 
+  scopeDefinitions: (signal?: AbortSignal) =>
+    requestJson<{ items: ScopeDefinition[] }>(
+      '/backoffice/v1/scope-definitions',
+      signal ? { signal } : {},
+    ),
+
+  publishScopeDefinition: (publication: ScopeDefinitionPublication, command: BackofficeCommand) =>
+    requestJson<ScopeDefinition>('/backoffice/v1/scope-definitions', {
+      method: 'POST',
+      headers: commandHeaders(command),
+      body: JSON.stringify(publication),
+    }),
+
   passwordReset: (email: string) =>
     requestVoid('/backoffice/v1/auth/password-resets', {
       method: 'POST',
@@ -280,7 +295,7 @@ async function requestVoid(
 async function fetchApi(path: string, init: RequestInit): Promise<Response> {
   const startedAt = performance.now()
   const method = requestMethod(init.method)
-  const operation = backofficeOperation(path)
+  const operation = backofficeOperation(path, method)
   let response: Response
   try {
     response = await fetch(`${API_URL}${path}`, {
@@ -320,7 +335,7 @@ function requestMethod(method: string | undefined): 'DELETE' | 'GET' | 'PATCH' |
     : 'GET'
 }
 
-function backofficeOperation(path: string): ClientOperation {
+function backofficeOperation(path: string, method: string): ClientOperation {
   const operations: Record<string, ClientOperation> = {
     '/backoffice/v1/auth/password': 'backoffice.auth.password',
     '/backoffice/v1/auth/attempt': 'backoffice.auth.attempt',
@@ -331,6 +346,11 @@ function backofficeOperation(path: string): ClientOperation {
   }
   const [route] = path.split('?')
   const resolved = route ?? path
+  if (resolved === '/backoffice/v1/scope-definitions') {
+    return method === 'POST'
+      ? 'backoffice.privacy.scope_definition_publish'
+      : 'backoffice.privacy.scope_definition_list'
+  }
   return (
     supportOperation(resolved) ??
     catalogOperation(resolved) ??

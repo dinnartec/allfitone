@@ -56,6 +56,7 @@ const ROUTES: readonly WorkspaceRoute[] = [
   { href: '/diagnosis', title: 'Diagnóstico técnico', icon: 'operation' },
   { href: '/team', title: 'Equipo de Allfit', icon: 'permissions' },
   { href: '/catalogue/result-contracts', title: 'Catálogo global', icon: 'operation' },
+  { href: '/permissions', title: 'Definiciones de permiso', icon: 'permissions' },
 ]
 
 export function resolveBackofficeRoute(pathname: string): WorkspaceRoute {
