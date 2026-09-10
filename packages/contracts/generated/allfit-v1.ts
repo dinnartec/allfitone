@@ -371,6 +371,47 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/backoffice/v1/support/operations': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Read the technical state of operations that failed
+     * @description Notifications waiting in the outbox and commands that never finished, in one feed. It carries identifiers, states, timestamps, error codes and retries — never a payload, a stored response, a principal fingerprint or a request hash, because the point of this read is diagnosing without opening anyone's data.
+     *     There is no case reference here, unlike the other support reads: this feed has no subject, so there is nothing to trace back to a case.
+     */
+    get: operations['listBackofficeSupportOperations']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/support/delivery-circuits': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Read whether a delivery channel is open or tripped
+     * @description Counters per event type. It answers "is the whole channel down" before anyone chases one notification, and nothing in it belongs to a person.
+     */
+    get: operations['listBackofficeSupportDeliveryCircuits']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/space/v1/telemetry-config': {
     parameters: {
       query?: never
@@ -1617,6 +1658,54 @@ export interface paths {
 export type webhooks = Record<string, never>
 export interface components {
   schemas: {
+    /** @enum {string} */
+    SupportOperationSourceKind: 'notification' | 'command'
+    /**
+     * @description `pending` is a notification not sent yet and `retrying` one that already failed, kept apart so a healthy queue does not read as a pile of failures. `stalled` is a command still processing long after it started.
+     * @enum {string}
+     */
+    SupportOperationState:
+      | 'pending'
+      | 'retrying'
+      | 'delivered'
+      | 'dead_lettered'
+      | 'processing'
+      | 'stalled'
+      | 'succeeded'
+      | 'rejected_final'
+    /** @description Identifiers, states, timestamps, error codes and retries. No payload, no stored response, no principal fingerprint and no request hash: this read exists to diagnose without opening anyone's data. */
+    SupportOperation: {
+      source: components['schemas']['SupportOperationSourceKind']
+      reference_id: components['schemas']['Uuid']
+      subject_kind: string | null
+      /** Format: uuid */
+      subject_id: string | null
+      label: string
+      state: components['schemas']['SupportOperationState']
+      /** Format: date-time */
+      occurred_at: string
+      attempt_count: number
+      last_error_code: string | null
+      /** Format: date-time */
+      resolved_at: string | null
+    }
+    SupportOperationPage: {
+      data: components['schemas']['SupportOperation'][]
+      page: components['schemas']['Page']
+    }
+    SupportDeliveryCircuit: {
+      event_type: string
+      state: string
+      /** Format: date-time */
+      window_started_at: string
+      success_count: number
+      failure_count: number
+      /** Format: date-time */
+      opened_until: string | null
+    }
+    SupportDeliveryCircuitList: {
+      items: components['schemas']['SupportDeliveryCircuit'][]
+    }
     /**
      * @description Whether a block of the projection can say anything. `unknown` is a statement about the person; `not_modelled` is a statement about the platform, and confusing the two makes the card lie by omission.
      * @enum {string}
@@ -3800,6 +3889,10 @@ export interface components {
     }
   }
   parameters: {
+    SupportOperationSource: components['schemas']['SupportOperationSourceKind']
+    SupportOperationState: components['schemas']['SupportOperationState']
+    /** @description The aggregate an event belongs to. Not every event is reachable from a person: a notification about an invitation belongs to the invitation. */
+    SupportAggregateId: components['schemas']['Uuid']
     /** @description The case this read belongs to. A structured reference rather than free prose, so the record can be followed back to a case months later. */
     SupportCaseReference: string
     SupportPersonId: components['schemas']['Uuid']
@@ -4619,6 +4712,67 @@ export interface operations {
       403: components['responses']['Forbidden']
       404: components['responses']['NotFound']
       422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listBackofficeSupportOperations: {
+    parameters: {
+      query?: {
+        source?: components['parameters']['SupportOperationSource']
+        state?: components['parameters']['SupportOperationState']
+        /** @description The aggregate an event belongs to. Not every event is reachable from a person: a notification about an invitation belongs to the invitation. */
+        aggregate_id?: components['parameters']['SupportAggregateId']
+        limit?: components['parameters']['Limit']
+        cursor?: components['parameters']['Cursor']
+      }
+      header: {
+        Origin: components['parameters']['Origin']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Operational events, newest first */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SupportOperationPage']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listBackofficeSupportDeliveryCircuits: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Circuits ordered by failures first */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SupportDeliveryCircuitList']
+        }
+      }
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
       503: components['responses']['UpstreamUnavailable']
     }
   }

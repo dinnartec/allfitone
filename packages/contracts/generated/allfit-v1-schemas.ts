@@ -4486,6 +4486,149 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       'Whether a block of the projection can say anything. `unknown` is a statement about the person; `not_modelled` is a statement about the platform, and confusing the two makes the card lie by omission.',
     enum: ['available', 'unknown', 'not_modelled'],
   },
+  SupportDeliveryCircuit: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'event_type',
+      'state',
+      'window_started_at',
+      'success_count',
+      'failure_count',
+      'opened_until',
+    ],
+    properties: {
+      event_type: {
+        type: 'string',
+        maxLength: 120,
+      },
+      state: {
+        type: 'string',
+        maxLength: 32,
+      },
+      window_started_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      success_count: {
+        type: 'integer',
+        minimum: 0,
+      },
+      failure_count: {
+        type: 'integer',
+        minimum: 0,
+      },
+      opened_until: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+    },
+  },
+  SupportDeliveryCircuitList: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['items'],
+    properties: {
+      items: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/SupportDeliveryCircuit',
+        },
+      },
+    },
+  },
+  SupportOperation: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      "Identifiers, states, timestamps, error codes and retries. No payload, no stored response, no principal fingerprint and no request hash: this read exists to diagnose without opening anyone's data.",
+    required: [
+      'source',
+      'reference_id',
+      'subject_kind',
+      'subject_id',
+      'label',
+      'state',
+      'occurred_at',
+      'attempt_count',
+      'last_error_code',
+      'resolved_at',
+    ],
+    properties: {
+      source: {
+        $ref: '#/components/schemas/SupportOperationSourceKind',
+      },
+      reference_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      subject_kind: {
+        type: ['string', 'null'],
+        maxLength: 64,
+      },
+      subject_id: {
+        type: ['string', 'null'],
+        format: 'uuid',
+      },
+      label: {
+        type: 'string',
+        maxLength: 120,
+      },
+      state: {
+        $ref: '#/components/schemas/SupportOperationState',
+      },
+      occurred_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      attempt_count: {
+        type: 'integer',
+        minimum: 0,
+      },
+      last_error_code: {
+        type: ['string', 'null'],
+        maxLength: 120,
+      },
+      resolved_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+    },
+  },
+  SupportOperationPage: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['data', 'page'],
+    properties: {
+      data: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/SupportOperation',
+        },
+      },
+      page: {
+        $ref: '#/components/schemas/Page',
+      },
+    },
+  },
+  SupportOperationSourceKind: {
+    type: 'string',
+    enum: ['notification', 'command'],
+  },
+  SupportOperationState: {
+    type: 'string',
+    description:
+      '`pending` is a notification not sent yet and `retrying` one that already failed, kept apart so a healthy queue does not read as a pile of failures. `stalled` is a command still processing long after it started.',
+    enum: [
+      'pending',
+      'retrying',
+      'delivered',
+      'dead_lettered',
+      'processing',
+      'stalled',
+      'succeeded',
+      'rejected_final',
+    ],
+  },
   SupportPeopleSearch: {
     type: 'object',
     additionalProperties: false,

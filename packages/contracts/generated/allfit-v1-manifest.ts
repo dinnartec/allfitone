@@ -112,6 +112,20 @@ export const allfitV1ContractManifest = {
     },
     {
       method: 'GET',
+      path: '/backoffice/v1/support/delivery-circuits',
+      operationId: 'listBackofficeSupportDeliveryCircuits',
+      allfitOperation: 'OP-SUP-005',
+      responses: ['200', '401', '403', '503'],
+    },
+    {
+      method: 'GET',
+      path: '/backoffice/v1/support/operations',
+      operationId: 'listBackofficeSupportOperations',
+      allfitOperation: 'OP-SUP-005',
+      responses: ['200', '400', '401', '403', '422', '503'],
+    },
+    {
+      method: 'GET',
       path: '/backoffice/v1/support/people',
       operationId: 'searchBackofficeSupportPeople',
       allfitOperation: 'OP-SUP-005',
