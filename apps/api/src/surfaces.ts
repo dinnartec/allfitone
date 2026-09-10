@@ -30,6 +30,7 @@ import {
 } from './domains/identity/index.js'
 import { studioOrganizationRoutes } from './domains/organizations/index.js'
 import { studioPlanningRoutes } from './domains/planning/index.js'
+import { backofficePrivacyRoutes } from './domains/privacy/index.js'
 import {
   backofficePlatformAccessRoutes,
   backofficeSupportMetadataRoutes,
@@ -58,6 +59,7 @@ export function mountSurfaces(app: Hono): void {
   app.route('/backoffice/v1', backofficeIdentityRoutes())
   app.route('/backoffice/v1', backofficePlatformAccessRoutes())
   app.route('/backoffice/v1', backofficeSupportMetadataRoutes())
+  app.route('/backoffice/v1', backofficePrivacyRoutes())
   app.route('/backoffice/v1', backofficeCatalogRoutes())
 
   // The global catalogue is one surface, not a copy per product: it has no
