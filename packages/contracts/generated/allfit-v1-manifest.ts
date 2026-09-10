@@ -105,6 +105,20 @@ export const allfitV1ContractManifest = {
     },
     {
       method: 'GET',
+      path: '/backoffice/v1/scope-definitions',
+      operationId: 'listBackofficeScopeDefinitions',
+      allfitOperation: 'OP-PRV-011',
+      responses: ['200', '401', '403', '503'],
+    },
+    {
+      method: 'POST',
+      path: '/backoffice/v1/scope-definitions',
+      operationId: 'publishBackofficeScopeDefinition',
+      allfitOperation: 'OP-PRV-011',
+      responses: ['201', '400', '401', '403', '409', '415', '422', '503'],
+    },
+    {
+      method: 'GET',
       path: '/backoffice/v1/session',
       operationId: 'getBackofficeSession',
       allfitOperation: 'OP-IDN-035',

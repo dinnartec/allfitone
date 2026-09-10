@@ -27,6 +27,10 @@ tags:
     description: Global published catalogue shared by every surface.
   - name: Backoffice Platform Access
     description: Base role and temporary platform duty administration for Allfit staff.
+  - name: Backoffice Privacy
+    description: >-
+      Published permission definitions: what each permission a person grants
+      actually covers, version by version.
   - name: Backoffice Support
     description: >-
       The minimised operational projection Allfit staff read to resolve a case.
@@ -1073,6 +1077,87 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/scope-definitions:
+    get:
+      tags: [Backoffice Privacy]
+      operationId: listBackofficeScopeDefinitions
+      x-allfit-operation: OP-PRV-011
+      x-allfit-cache: no-store
+      summary: Read the published permission definitions
+      description: >-
+        Every published version of every scope, newest first, with the resources
+        and fields it includes and excludes. A published version is immutable, so
+        the list is a history rather than a current state.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+      responses:
+        '200':
+          description: Published versions, newest of each scope first
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScopeDefinitionList'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+    post:
+      tags: [Backoffice Privacy]
+      operationId: publishBackofficeScopeDefinition
+      x-allfit-operation: OP-PRV-011
+      x-allfit-cache: no-store
+      summary: Publish the next version of a permission definition
+      description: >-
+        The version number is assigned by the server, never accepted from the
+        client. Publishing a wider version does not widen what anybody already
+        granted: a grant points at one specific version, and that version can
+        never change.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScopeDefinitionPublication'
+      responses:
+        '201':
+          description: The published version, or the converged one for a repeated command
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScopeDefinition'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
 
@@ -4779,6 +4864,83 @@ components:
             request_id: 01JEXAMPLE0000000000000000
 
   schemas:
+    ScopeResourceRule:
+      type: object
+      additionalProperties: false
+      description: >-
+        One resource and field the version speaks about. An exclusion is stated
+        rather than left out, because criterion 1 asks what a permission excludes
+        and an absence cannot answer that.
+      required: [resource, field, data_classification_code, max_action]
+      properties:
+        resource:
+          type: string
+          pattern: '^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$'
+        field:
+          type: string
+          description: A field name, or `*` for every field of the resource.
+          maxLength: 64
+        data_classification_code:
+          type: string
+          pattern: '^[a-z][a-z0-9_]{1,63}$'
+        max_action:
+          $ref: '#/components/schemas/AccessLevel'
+        is_excluded:
+          type: boolean
+          default: false
+        historical_readable:
+          type: boolean
+          default: false
+          description: >-
+            Whether the field may be read for periods before the grant existed.
+            Only valid on an included, read-only field.
+    ScopeDefinition:
+      type: object
+      additionalProperties: false
+      required: [id, scope_code, version_number, status, published_at, rules]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        scope_code:
+          $ref: '#/components/schemas/ScopeCode'
+        version_number:
+          type: integer
+          minimum: 1
+        status:
+          $ref: '#/components/schemas/PublicationStatus'
+        published_at:
+          type: [string, 'null']
+          format: date-time
+        rules:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/ScopeResourceRule'
+    ScopeDefinitionList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ScopeDefinition'
+    ScopeDefinitionPublication:
+      type: object
+      additionalProperties: false
+      description: >-
+        No version number: the server assigns the next one. At least one rule must
+        be included, because a version made only of exclusions grants nothing.
+      required: [scope_code, rules]
+      properties:
+        scope_code:
+          $ref: '#/components/schemas/ScopeCode'
+        rules:
+          type: array
+          minItems: 1
+          maxItems: 200
+          items:
+            $ref: '#/components/schemas/ScopeResourceRule'
     SupportOperationSourceKind:
       type: string
       enum: [notification, command]

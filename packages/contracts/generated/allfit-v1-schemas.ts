@@ -3628,6 +3628,105 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       'nutrition_media',
     ],
   },
+  ScopeDefinition: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['id', 'scope_code', 'version_number', 'status', 'published_at', 'rules'],
+    properties: {
+      id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      scope_code: {
+        $ref: '#/components/schemas/ScopeCode',
+      },
+      version_number: {
+        type: 'integer',
+        minimum: 1,
+      },
+      status: {
+        $ref: '#/components/schemas/PublicationStatus',
+      },
+      published_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      rules: {
+        type: 'array',
+        minItems: 1,
+        items: {
+          $ref: '#/components/schemas/ScopeResourceRule',
+        },
+      },
+    },
+  },
+  ScopeDefinitionList: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['items'],
+    properties: {
+      items: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/ScopeDefinition',
+        },
+      },
+    },
+  },
+  ScopeDefinitionPublication: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      'No version number: the server assigns the next one. At least one rule must be included, because a version made only of exclusions grants nothing.',
+    required: ['scope_code', 'rules'],
+    properties: {
+      scope_code: {
+        $ref: '#/components/schemas/ScopeCode',
+      },
+      rules: {
+        type: 'array',
+        minItems: 1,
+        maxItems: 200,
+        items: {
+          $ref: '#/components/schemas/ScopeResourceRule',
+        },
+      },
+    },
+  },
+  ScopeResourceRule: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      'One resource and field the version speaks about. An exclusion is stated rather than left out, because criterion 1 asks what a permission excludes and an absence cannot answer that.',
+    required: ['resource', 'field', 'data_classification_code', 'max_action'],
+    properties: {
+      resource: {
+        type: 'string',
+        pattern: '^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*$',
+      },
+      field: {
+        type: 'string',
+        description: 'A field name, or `*` for every field of the resource.',
+        maxLength: 64,
+      },
+      data_classification_code: {
+        type: 'string',
+        pattern: '^[a-z][a-z0-9_]{1,63}$',
+      },
+      max_action: {
+        $ref: '#/components/schemas/AccessLevel',
+      },
+      is_excluded: {
+        type: 'boolean',
+        default: false,
+      },
+      historical_readable: {
+        type: 'boolean',
+        default: false,
+        description:
+          'Whether the field may be read for periods before the grant existed. Only valid on an included, read-only field.',
+      },
+    },
+  },
   SelfNutritionGoalVersionCreate: {
     type: 'object',
     additionalProperties: false,

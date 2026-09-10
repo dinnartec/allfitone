@@ -412,6 +412,30 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/backoffice/v1/scope-definitions': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Read the published permission definitions
+     * @description Every published version of every scope, newest first, with the resources and fields it includes and excludes. A published version is immutable, so the list is a history rather than a current state.
+     */
+    get: operations['listBackofficeScopeDefinitions']
+    put?: never
+    /**
+     * Publish the next version of a permission definition
+     * @description The version number is assigned by the server, never accepted from the client. Publishing a wider version does not widen what anybody already granted: a grant points at one specific version, and that version can never change.
+     */
+    post: operations['publishBackofficeScopeDefinition']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/space/v1/telemetry-config': {
     parameters: {
       query?: never
@@ -1658,6 +1682,38 @@ export interface paths {
 export type webhooks = Record<string, never>
 export interface components {
   schemas: {
+    /** @description One resource and field the version speaks about. An exclusion is stated rather than left out, because criterion 1 asks what a permission excludes and an absence cannot answer that. */
+    ScopeResourceRule: {
+      resource: string
+      /** @description A field name, or `*` for every field of the resource. */
+      field: string
+      data_classification_code: string
+      max_action: components['schemas']['AccessLevel']
+      /** @default false */
+      is_excluded: boolean
+      /**
+       * @description Whether the field may be read for periods before the grant existed. Only valid on an included, read-only field.
+       * @default false
+       */
+      historical_readable: boolean
+    }
+    ScopeDefinition: {
+      id: components['schemas']['Uuid']
+      scope_code: components['schemas']['ScopeCode']
+      version_number: number
+      status: components['schemas']['PublicationStatus']
+      /** Format: date-time */
+      published_at: string | null
+      rules: components['schemas']['ScopeResourceRule'][]
+    }
+    ScopeDefinitionList: {
+      items: components['schemas']['ScopeDefinition'][]
+    }
+    /** @description No version number: the server assigns the next one. At least one rule must be included, because a version made only of exclusions grants nothing. */
+    ScopeDefinitionPublication: {
+      scope_code: components['schemas']['ScopeCode']
+      rules: components['schemas']['ScopeResourceRule'][]
+    }
     /** @enum {string} */
     SupportOperationSourceKind: 'notification' | 'command'
     /**
@@ -4773,6 +4829,71 @@ export interface operations {
       }
       401: components['responses']['Unauthenticated']
       403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listBackofficeScopeDefinitions: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Published versions, newest of each scope first */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ScopeDefinitionList']
+        }
+      }
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  publishBackofficeScopeDefinition: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ScopeDefinitionPublication']
+      }
+    }
+    responses: {
+      /** @description The published version, or the converged one for a repeated command */
+      201: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ScopeDefinition']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
       503: components['responses']['UpstreamUnavailable']
     }
   }
