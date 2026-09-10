@@ -12,6 +12,9 @@ export type PlatformDutyCode = AllfitV1Schemas['PlatformDutyCode']
 export type PlatformRoleAssignmentPage = AllfitV1Schemas['PlatformRoleAssignmentPage']
 export type PlatformDutyAssignmentPage = AllfitV1Schemas['PlatformDutyAssignmentPage']
 
+export type CatalogDiscipline = AllfitV1Schemas['CatalogDiscipline']
+export type CatalogActivityType = AllfitV1Schemas['CatalogActivityType']
+export type ActivityTypeResultContract = AllfitV1Schemas['ActivityTypeResultContract']
 export type ResultContract = AllfitV1Schemas['ResultContract']
 export type ResultContractPublication = AllfitV1Schemas['ResultContractPublication']
 
@@ -157,6 +160,26 @@ export const backofficeApi = {
       body: '{}',
     }),
 
+  // The global catalogue is its own surface: it carries no tenant and no
+  // subject, so Backoffice reads the same mount Studio and Space read.
+  catalogDisciplines: (signal?: AbortSignal) =>
+    requestJson<{ items: CatalogDiscipline[] }>(
+      '/catalog/v1/disciplines',
+      signal ? { signal } : {},
+    ),
+
+  catalogActivityTypes: (signal?: AbortSignal) =>
+    requestJson<{ items: CatalogActivityType[] }>(
+      '/catalog/v1/activity-types',
+      signal ? { signal } : {},
+    ),
+
+  catalogActivityTypeResultContracts: (activityTypeId: string, signal?: AbortSignal) =>
+    requestJson<{ items: ActivityTypeResultContract[] }>(
+      `/catalog/v1/activity-types/${activityTypeId}/result-contracts`,
+      signal ? { signal } : {},
+    ),
+
   passwordReset: (email: string) =>
     requestVoid('/backoffice/v1/auth/password-resets', {
       method: 'POST',
@@ -260,8 +283,22 @@ function backofficeOperation(path: string): ClientOperation {
     '/backoffice/v1/auth/password-resets': 'backoffice.auth.password_reset',
   }
   const [route] = path.split('?')
-  const platform = platformOperation(route ?? path)
-  return platform ?? operations[route ?? path] ?? 'backoffice.session'
+  const resolved = route ?? path
+  return (
+    catalogOperation(resolved) ??
+    platformOperation(resolved) ??
+    operations[resolved] ??
+    'backoffice.session'
+  )
+}
+
+/** The catalogue surface is shared, so its operations carry no product prefix. */
+function catalogOperation(route: string): ClientOperation | undefined {
+  const segments = route.split('/').filter(Boolean)
+  if (segments[0] !== 'catalog' || segments[1] !== 'v1') return undefined
+  if (segments[2] === 'disciplines') return 'catalog.disciplines'
+  if (segments[2] !== 'activity-types') return undefined
+  return segments.length === 3 ? 'catalog.activity_types' : 'catalog.activity_type_result_contracts'
 }
 
 /** Assignment identifiers vary per row, so these routes are matched by shape. */
