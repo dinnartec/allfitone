@@ -388,6 +388,36 @@ export type Database = {
           result: Json
         }[]
       }
+      list_activity_type_result_contracts: {
+        Args: { p_activity_type_id: string }
+        Returns: {
+          activity_family: Database['catalog']['Enums']['activity_family']
+          contract_code: string
+          contract_schema_version: number
+          envelope: Json
+          is_default: boolean
+          minimums: Json
+          result_contract_id: string
+          valid_from: string
+          version_number: number
+        }[]
+      }
+      list_activity_types: {
+        Args: never
+        Returns: {
+          code: string
+          discipline_code: string
+          id: string
+          name: string
+        }[]
+      }
+      list_disciplines: {
+        Args: never
+        Returns: {
+          code: string
+          name: string
+        }[]
+      }
       list_professional_credential_types: {
         Args: never
         Returns: {
@@ -424,6 +454,7 @@ export type Database = {
           result: Json
         }[]
       }
+      require_catalog_reader: { Args: never; Returns: string }
       require_global_catalog_curator: {
         Args: { p_actor_person_id: string; p_actor_session_id: string }
         Returns: undefined
