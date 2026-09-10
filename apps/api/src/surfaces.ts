@@ -26,7 +26,10 @@ import {
 } from './domains/identity/index.js'
 import { studioOrganizationRoutes } from './domains/organizations/index.js'
 import { studioPlanningRoutes } from './domains/planning/index.js'
-import { backofficePlatformAccessRoutes } from './domains/support/index.js'
+import {
+  backofficePlatformAccessRoutes,
+  backofficeSupportMetadataRoutes,
+} from './domains/support/index.js'
 import { clientTelemetryConfigRoutes } from './platform/telemetry/client-config.js'
 
 export function mountSurfaces(app: Hono): void {
@@ -50,6 +53,7 @@ export function mountSurfaces(app: Hono): void {
   app.route('/space/v1', spaceOnboardingRoutes())
   app.route('/backoffice/v1', backofficeIdentityRoutes())
   app.route('/backoffice/v1', backofficePlatformAccessRoutes())
+  app.route('/backoffice/v1', backofficeSupportMetadataRoutes())
   app.route('/backoffice/v1', backofficeCatalogRoutes())
 
   // Mounted as each vertical slice lands:
