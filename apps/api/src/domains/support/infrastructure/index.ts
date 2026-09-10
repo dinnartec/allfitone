@@ -17,6 +17,8 @@ import type postgres from 'postgres'
 import { database } from '../../../platform/db/index.js'
 import { measureRequestPhase } from '../../../platform/observability/index.js'
 import type {
+  SupportMetadataDatabase,
+  SupportPersonMetadata,
   PlatformAccessDatabase,
   PlatformCommandResult,
   PlatformDutyAssignment,
@@ -188,4 +190,38 @@ function page<Row extends { result: T }, T, Cursor extends PlatformRoleCursor | 
 function required<T>(row: CommandRow<T> | undefined, operation: string): PlatformCommandResult<T> {
   if (!row) throw new Error(`PostgreSQL did not ${operation}`)
   return { resource: row.result, replayed: row.replayed }
+}
+
+/**
+ * Both reads run as the support actor with the request identifier in transaction
+ * scope, so the access record the database writes carries the same request the
+ * client saw.
+ */
+export function createSupportMetadataDatabase(): SupportMetadataDatabase {
+  const sql = database()
+
+  return {
+    search: (input) =>
+      inTransaction(sql, input.actorPersonId, input.requestId, async (transaction) => {
+        const rows = await transaction<{ result: SupportPersonMetadata }[]>`
+          select * from support.search_people(
+            ${input.actorPersonId}::uuid, ${input.actorSessionId}::uuid,
+            ${input.caseReference}, ${input.lookupKind}, ${input.lookupValue}
+          )
+        `
+        return rows[0]?.result
+      }),
+
+    read: (input) =>
+      inTransaction(sql, input.actorPersonId, input.requestId, async (transaction) => {
+        const [row] = await transaction<{ person_metadata: SupportPersonMetadata }[]>`
+          select support.person_metadata(
+            ${input.actorPersonId}::uuid, ${input.actorSessionId}::uuid,
+            ${input.caseReference}, ${input.personId}::uuid
+          )
+        `
+        if (!row) throw new Error('PostgreSQL did not project the operational state')
+        return row.person_metadata
+      }),
+  }
 }

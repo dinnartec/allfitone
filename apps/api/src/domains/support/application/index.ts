@@ -10,6 +10,11 @@
 
 import type { BackofficeActor } from '../../identity/index.js'
 import type {
+  SupportMetadataDatabase,
+  SupportPeopleSearch,
+  SupportPersonMetadata,
+  SupportLookupKind,
+  SupportReader,
   PlatformAccessDatabase,
   PlatformCommandContext,
   PlatformCommandResult,
@@ -82,5 +87,43 @@ export function createPlatformAccessService(
     revokeDuty: (actor, input) => database.revokeDuty({ ...from(actor), ...input }),
     listRoles: (actor, input) => database.listRoles({ ...from(actor), ...input }),
     listDuties: (actor, input) => database.listDuties({ ...from(actor), ...input }),
+  }
+}
+
+/**
+ * Support metadata reads.
+ *
+ * There is no authorization branch here: `diagnose_support_metadata` and AAL2
+ * are resolved inside the read's own transaction, against the tables. What this
+ * layer does own is the shape of "found nothing", which is a rule rather than a
+ * presentation choice — `HU-BO-006` criterion 3 forbids answering an
+ * unexplained empty list, so the outcome is decided once here instead of in each
+ * client's copy.
+ */
+export interface SupportMetadataService {
+  search(
+    reader: SupportReader,
+    input: {
+      requestId: string
+      caseReference: string
+      lookupKind: SupportLookupKind
+      lookupValue: string
+    },
+  ): Promise<SupportPeopleSearch>
+  read(
+    reader: SupportReader,
+    input: { requestId: string; caseReference: string; personId: string },
+  ): Promise<SupportPersonMetadata>
+}
+
+export function createSupportMetadataService(
+  database: SupportMetadataDatabase,
+): SupportMetadataService {
+  return {
+    search: async (reader, input) => {
+      const found = await database.search({ ...reader, ...input })
+      return found ? { outcome: 'found', items: [found] } : { outcome: 'not_found', items: [] }
+    },
+    read: (reader, input) => database.read({ ...reader, ...input }),
   }
 }

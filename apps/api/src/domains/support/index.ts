@@ -7,9 +7,12 @@
  */
 
 export { backofficePlatformAccessRoutes } from './handlers/backoffice.js'
-export { platformAccessService } from './dependencies.js'
-export type { PlatformAccessService } from './application/index.js'
+export { backofficeSupportMetadataRoutes } from './handlers/backoffice-metadata.js'
+export { platformAccessService, supportMetadataService } from './dependencies.js'
+export type { PlatformAccessService, SupportMetadataService } from './application/index.js'
 export type {
+  SupportPersonMetadata,
+  SupportPeopleSearch,
   PlatformDutyAssignment,
   PlatformDutyCode,
   PlatformDutyStatus,

@@ -331,6 +331,46 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/backoffice/v1/support/people': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Find a person by something they handed over in their own case
+     * @description Exact match on exactly one of an identifier, an email or a phone. There is no exploratory search by name, so no parameter offers one. The search is recorded whether or not it matched: a fruitless search is the one most worth being able to review later.
+     */
+    get: operations['searchBackofficeSupportPeople']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/support/people/{personId}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Open the minimised operational state of a person
+     * @description Identifiers, account and verification states, timestamps and counters. To resolve a training case use the break-glass operations; no screen widens the approved category silently. The read is recorded against the person before its content is returned.
+     */
+    get: operations['readBackofficeSupportPersonMetadata']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/space/v1/telemetry-config': {
     parameters: {
       query?: never
@@ -1577,6 +1617,45 @@ export interface paths {
 export type webhooks = Record<string, never>
 export interface components {
   schemas: {
+    /**
+     * @description Whether a block of the projection can say anything. `unknown` is a statement about the person; `not_modelled` is a statement about the platform, and confusing the two makes the card lie by omission.
+     * @enum {string}
+     */
+    SupportBlockAvailability: 'available' | 'unknown' | 'not_modelled'
+    /** @description The minimised operational state. No name, no full contact and no identity provider subject appear here, by construction rather than by filtering. */
+    SupportPersonMetadata: {
+      person_id: components['schemas']['Uuid']
+      account_status: string
+      /** Format: date-time */
+      created_at: string
+      /** Format: date-time */
+      activated_at: string | null
+      contact_email_masked: string | null
+      contact_phone_masked: string | null
+      /** Format: date-time */
+      email_verified_at: string | null
+      /** Format: date-time */
+      phone_verified_at: string | null
+      has_access_account: boolean
+      /** Format: date-time */
+      access_account_linked_at: string | null
+      active_session_count: number
+      /** Format: date-time */
+      last_seen_at: string | null
+      has_professional_profile: boolean
+      membership_count: number
+      active_membership_count: number
+      relationships_availability: components['schemas']['SupportBlockAvailability']
+      plan_availability: components['schemas']['SupportBlockAvailability']
+      premium_availability: components['schemas']['SupportBlockAvailability']
+      permissions_availability: components['schemas']['SupportBlockAvailability']
+    }
+    /** @description The outcome travels beside the items so a client cannot render an unexplained empty list. `HU-BO-006` criterion 3 is a contract obligation here, not a copy decision in one screen. */
+    SupportPeopleSearch: {
+      /** @enum {string} */
+      outcome: 'found' | 'not_found'
+      items: components['schemas']['SupportPersonMetadata'][]
+    }
     PlatformRoleAssignmentPage: {
       data: components['schemas']['PlatformRoleAssignment'][]
       page: components['schemas']['Page']
@@ -3721,6 +3800,15 @@ export interface components {
     }
   }
   parameters: {
+    /** @description The case this read belongs to. A structured reference rather than free prose, so the record can be followed back to a case months later. */
+    SupportCaseReference: string
+    SupportPersonId: components['schemas']['Uuid']
+    /** @description Exactly one lookup parameter is accepted per search. */
+    SupportLookupIdentifier: components['schemas']['Uuid']
+    /** @description Exact match only. Exactly one lookup parameter is accepted per search. */
+    SupportLookupEmail: string
+    /** @description Exact match only. Exactly one lookup parameter is accepted per search. */
+    SupportLookupPhone: string
     OnboardingAttemptId: components['schemas']['UuidV7']
     CredentialId: components['schemas']['UuidV7']
     Origin: string
@@ -4460,6 +4548,77 @@ export interface operations {
       401: components['responses']['Unauthenticated']
       403: components['responses']['Forbidden']
       404: components['responses']['NotFound']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  searchBackofficeSupportPeople: {
+    parameters: {
+      query: {
+        /** @description The case this read belongs to. A structured reference rather than free prose, so the record can be followed back to a case months later. */
+        case_reference: components['parameters']['SupportCaseReference']
+        /** @description Exactly one lookup parameter is accepted per search. */
+        identifier?: components['parameters']['SupportLookupIdentifier']
+        /** @description Exact match only. Exactly one lookup parameter is accepted per search. */
+        email?: components['parameters']['SupportLookupEmail']
+        /** @description Exact match only. Exactly one lookup parameter is accepted per search. */
+        phone?: components['parameters']['SupportLookupPhone']
+      }
+      header: {
+        Origin: components['parameters']['Origin']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The match, or an explicit not-found outcome. Never a bare empty list: the outcome says which of the two happened. */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SupportPeopleSearch']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  readBackofficeSupportPersonMetadata: {
+    parameters: {
+      query: {
+        /** @description The case this read belongs to. A structured reference rather than free prose, so the record can be followed back to a case months later. */
+        case_reference: components['parameters']['SupportCaseReference']
+      }
+      header: {
+        Origin: components['parameters']['Origin']
+      }
+      path: {
+        personId: components['parameters']['SupportPersonId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The minimised operational state */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SupportPersonMetadata']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      422: components['responses']['ValidationFailed']
       503: components['responses']['UpstreamUnavailable']
     }
   }

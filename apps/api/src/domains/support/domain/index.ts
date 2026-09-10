@@ -131,3 +131,47 @@ export type PlatformDutyClosure = PlatformCommandContext & {
   actorSessionId: string
   assignmentId: string
 }
+
+/**
+ * The minimised operational projection: `OP-SUP-005`.
+ *
+ * What makes it safe is what it cannot say. There is no name, no full contact
+ * and no provider subject in the shape, so no handler can leak one by forgetting
+ * to filter, and no exploratory search exists because the lookup kinds are a
+ * closed set rather than a free query.
+ */
+export type SupportPersonMetadata = AllfitV1Schemas['SupportPersonMetadata']
+export type SupportPeopleSearch = AllfitV1Schemas['SupportPeopleSearch']
+
+export type SupportLookupKind = 'identifier' | 'email' | 'phone'
+
+export const SUPPORT_LOOKUP_KINDS: readonly SupportLookupKind[] = ['identifier', 'email', 'phone']
+
+/**
+ * The case reference travels on every read. It is checked here to answer 400
+ * rather than a database error; the CHECK in PostgreSQL stays the authority.
+ */
+export const SUPPORT_CASE_REFERENCE = /^[A-Z][A-Z0-9_-]{2,63}$/
+
+export interface SupportReader {
+  actorPersonId: string
+  actorSessionId: string
+}
+
+export interface SupportMetadataDatabase {
+  search(
+    input: SupportReader & {
+      requestId: string
+      caseReference: string
+      lookupKind: SupportLookupKind
+      lookupValue: string
+    },
+  ): Promise<SupportPersonMetadata | undefined>
+  read(
+    input: SupportReader & {
+      requestId: string
+      caseReference: string
+      personId: string
+    },
+  ): Promise<SupportPersonMetadata>
+}
