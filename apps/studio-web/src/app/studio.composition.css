@@ -304,10 +304,14 @@ menu {
 }
 
 [data-team-invitation-summary],
+/* Two fixed columns left a hole whenever there was one pair to show, which on a
+   membership card is the common case: a person who has not left has no end
+   date. `auto-fit` gives the pair the row and still splits it when a second
+   arrives, and the `min()` keeps the track from outgrowing a narrow card. */
 [data-team-member-dates],
 [data-credential-details] {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(10rem, 100%), 1fr));
   gap: var(--afo-space-4);
   margin: 0;
 }

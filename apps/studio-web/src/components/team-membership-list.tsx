@@ -4,13 +4,7 @@ import { Alert, AlertDescription, AlertTitle } from '@allfitone/react/components
 import { Avatar, AvatarFallback } from '@allfitone/react/components/avatar'
 import { Badge } from '@allfitone/react/components/badge'
 import { Button, buttonVariants } from '@allfitone/react/components/button'
-import {
-  Card,
-  CardAction,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '@allfitone/react/components/card'
+import { Card, CardAction, CardContent, CardHeader } from '@allfitone/react/components/card'
 import {
   Empty,
   EmptyContent,
@@ -277,11 +271,18 @@ function MembershipCard({ item }: { item: OrganizationMembership }) {
   return (
     <Card data-team-member-card>
       <CardHeader>
+        {/* The same `strong` the table row uses. CardTitle is the Design
+            System's micro-caps label — 12px, extrabold, uppercase — which
+            turned a person's name into a caption and left the badges beside it
+            looking more important than the person. It carries the heading role
+            so a list of cards can be navigated by name. */}
         <div data-team-member-identity>
           <Avatar decorative>
             <AvatarFallback>{memberInitials(item.display_name)}</AvatarFallback>
           </Avatar>
-          <CardTitle>{item.display_name}</CardTitle>
+          <strong role="heading" aria-level={3}>
+            {item.display_name}
+          </strong>
         </div>
         <CardAction>
           <Badge variant={item.status === 'active' ? 'success' : 'outline'}>
