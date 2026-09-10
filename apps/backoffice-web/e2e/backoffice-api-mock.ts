@@ -15,7 +15,65 @@ export interface BackofficeFixture {
   catalogue?: CatalogueFixture
   support?: SupportFixture
   diagnosis?: DiagnosisFixture
+  scopes?: ScopeFixture
   requests: MockRequest[]
+}
+
+/**
+ * The published permission definitions. Publishing appends a version rather than
+ * replacing one, because that is what the real command does and the screen's whole
+ * point is that an older version survives.
+ */
+export interface ScopeFixture {
+  refusal?: { status: number; code: string }
+  definitions: ScopeDefinitionFixture[]
+}
+
+export interface ScopeDefinitionFixture {
+  id: string
+  scope_code: string
+  version_number: number
+  status: string
+  published_at: string | null
+  rules: Array<{
+    resource: string
+    field: string
+    data_classification_code: string
+    max_action: 'read' | 'contribute'
+    is_excluded: boolean
+    historical_readable: boolean
+  }>
+}
+
+export function scopeDefinition(
+  overrides: Partial<ScopeDefinitionFixture> = {},
+): ScopeDefinitionFixture {
+  return {
+    id: nextAssignmentId(),
+    scope_code: 'body_progress',
+    version_number: 1,
+    status: 'published',
+    published_at: new Date(Date.now() - 86_400_000).toISOString(),
+    rules: [
+      {
+        resource: 'execution.body_measurements',
+        field: 'weight_kg',
+        data_classification_code: 'body',
+        max_action: 'read',
+        is_excluded: false,
+        historical_readable: true,
+      },
+      {
+        resource: 'nutrition.intake_entries',
+        field: '*',
+        data_classification_code: 'nutrition',
+        max_action: 'read',
+        is_excluded: true,
+        historical_readable: false,
+      },
+    ],
+    ...overrides,
+  }
 }
 
 export interface DiagnosisFixture {
@@ -401,6 +459,10 @@ export async function mockBackofficeApi(
       await routeResultContracts(route, request, fixture)
       return
     }
+    if (request.path === '/backoffice/v1/scope-definitions') {
+      await routeScopes(route, request, fixture)
+      return
+    }
     if (
       request.path === '/backoffice/v1/support/operations' ||
       request.path === '/backoffice/v1/support/delivery-circuits'
@@ -672,6 +734,47 @@ function paginate<T>(rows: T[], pageSize: number | undefined, offset: number) {
       next_cursor: next < rows.length ? String(next) : null,
     },
   }
+}
+
+/**
+ * Publishing appends the next version and never touches an earlier one, so the
+ * E2E can assert what the story actually promises rather than what one screen
+ * happens to render.
+ */
+async function routeScopes(
+  route: Route,
+  request: MockRequest,
+  fixture: BackofficeFixture,
+): Promise<void> {
+  const scopes = fixture.scopes ?? { definitions: [] }
+  fixture.scopes = scopes
+  if (scopes.refusal) {
+    await fulfillProblem(route, scopes.refusal.status, scopes.refusal.code)
+    return
+  }
+  if (request.method === 'GET') {
+    await fulfill(route, 200, { items: scopes.definitions })
+    return
+  }
+
+  const body = request.body as
+    { scope_code?: string; rules?: ScopeDefinitionFixture['rules'] } | undefined
+  const code = body?.scope_code ?? 'body_progress'
+  const next =
+    Math.max(
+      0,
+      ...scopes.definitions
+        .filter((definition) => definition.scope_code === code)
+        .map((definition) => definition.version_number),
+    ) + 1
+  const created = scopeDefinition({
+    scope_code: code,
+    version_number: next,
+    published_at: new Date().toISOString(),
+    ...(body?.rules ? { rules: body.rules } : {}),
+  })
+  scopes.definitions.push(created)
+  await fulfill(route, 201, created)
 }
 
 /**
