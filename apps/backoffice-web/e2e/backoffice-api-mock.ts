@@ -12,7 +12,68 @@ export interface BackofficeFixture {
   sessionUnavailable?: boolean
   platformAccess?: PlatformAccessFixture
   resultContracts?: ResultContractFixture
+  support?: SupportFixture
   requests: MockRequest[]
+}
+
+/**
+ * The projection the support surface answers with. `refusal` covers the common
+ * real case: the duty is temporary, so an operator who could read yesterday is
+ * refused today, and the screen has to say that rather than showing an error.
+ */
+export interface SupportFixture {
+  refusal?: { status: number; code: string }
+  people: SupportPersonFixture[]
+}
+
+export interface SupportPersonFixture {
+  person_id: string
+  account_status: string
+  created_at: string
+  activated_at: string | null
+  contact_email_masked: string | null
+  contact_phone_masked: string | null
+  email_verified_at: string | null
+  phone_verified_at: string | null
+  has_access_account: boolean
+  access_account_linked_at: string | null
+  active_session_count: number
+  last_seen_at: string | null
+  has_professional_profile: boolean
+  membership_count: number
+  active_membership_count: number
+  relationships_availability: 'available' | 'unknown' | 'not_modelled'
+  plan_availability: 'available' | 'unknown' | 'not_modelled'
+  premium_availability: 'available' | 'unknown' | 'not_modelled'
+  permissions_availability: 'available' | 'unknown' | 'not_modelled'
+}
+
+export const SUPPORT_SUBJECT_ID = '019a5000-0000-7000-8000-000000000005'
+export const SUPPORT_SUBJECT_EMAIL = 'subject.epsilon@example.test'
+
+export function supportPerson(overrides: Partial<SupportPersonFixture> = {}): SupportPersonFixture {
+  return {
+    person_id: SUPPORT_SUBJECT_ID,
+    account_status: 'active',
+    created_at: '2026-01-04T10:00:00.000Z',
+    activated_at: '2026-01-05T10:00:00.000Z',
+    contact_email_masked: '••••••••on@example.test',
+    contact_phone_masked: '••••••4567',
+    email_verified_at: '2026-01-05T10:05:00.000Z',
+    phone_verified_at: null,
+    has_access_account: true,
+    access_account_linked_at: '2026-01-05T10:01:00.000Z',
+    active_session_count: 1,
+    last_seen_at: '2026-09-09T18:00:00.000Z',
+    has_professional_profile: false,
+    membership_count: 2,
+    active_membership_count: 1,
+    relationships_availability: 'not_modelled',
+    plan_availability: 'not_modelled',
+    premium_availability: 'not_modelled',
+    permissions_availability: 'not_modelled',
+    ...overrides,
+  }
 }
 
 export interface ResultContractFixture {
@@ -107,6 +168,7 @@ interface AttemptFixture {
 export interface MockRequest {
   method: string
   path: string
+  query: string
   headers: Record<string, string>
   body: unknown
 }
@@ -219,6 +281,10 @@ export async function mockBackofficeApi(
     }
     if (request.path.startsWith('/backoffice/v1/result-contracts')) {
       await routeResultContracts(route, request, fixture)
+      return
+    }
+    if (request.path.startsWith('/backoffice/v1/support/')) {
+      await routeSupport(route, request, fixture)
       return
     }
     await fulfill(route, 404, error('not-found'))
@@ -407,6 +473,59 @@ async function routeResultContracts(
   await fulfill(route, 201, created)
 }
 
+/**
+ * The real surface refuses without a traceable case reference, so the mock does
+ * too: a screen that forgot to send one would otherwise pass its own E2E.
+ */
+async function routeSupport(
+  route: Route,
+  request: MockRequest,
+  fixture: BackofficeFixture,
+): Promise<void> {
+  const support = fixture.support ?? { people: [] }
+  if (support.refusal) {
+    await fulfillProblem(route, support.refusal.status, support.refusal.code)
+    return
+  }
+
+  const parameters = new URLSearchParams(request.query)
+  const caseReference = parameters.get('case_reference') ?? ''
+  if (!/^[A-Z][A-Z0-9_-]{2,63}$/.test(caseReference)) {
+    await fulfillProblem(route, 400, 'invalid-request')
+    return
+  }
+
+  const segments = request.path.split('/').filter(Boolean)
+  if (segments.length === 5) {
+    const found = support.people.find((person) => person.person_id === segments[4])
+    if (!found) {
+      await fulfillProblem(route, 404, 'not-found')
+      return
+    }
+    await fulfill(route, 200, found)
+    return
+  }
+
+  const lookups = (['identifier', 'email', 'phone'] as const).filter((kind) => parameters.has(kind))
+  if (lookups.length !== 1) {
+    await fulfillProblem(route, 400, 'invalid-request')
+    return
+  }
+  const [kind] = lookups
+  const value = parameters.get(kind ?? 'email') ?? ''
+  const found = support.people.find((person) =>
+    kind === 'identifier'
+      ? person.person_id === value
+      : kind === 'email'
+        ? value === SUPPORT_SUBJECT_EMAIL
+        : value === '+573001234567',
+  )
+  await fulfill(route, 200, {
+    outcome: found ? 'found' : 'not_found',
+    items: found ? [found] : [],
+  })
+}
+
 function isClosedDuty(status: PlatformDutyFixture['status']): boolean {
   return status === 'expired' || status === 'revoked'
 }
@@ -518,9 +637,11 @@ export function enrollmentAttempt(): AttemptFixture {
 
 function toMockRequest(route: Route): MockRequest {
   const request = route.request()
+  const url = new URL(request.url())
   return {
     method: request.method(),
-    path: new URL(request.url()).pathname,
+    path: url.pathname,
+    query: url.search,
     headers: request.headers(),
     body: parseBody(request.postData()),
   }
