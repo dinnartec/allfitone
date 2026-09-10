@@ -3,7 +3,10 @@ import { describe, expect, test } from 'bun:test'
 import {
   ACTIVITY_FAMILIES,
   activityFamilyLabel,
+  catalogueReadMessage,
   contractStatusLabel,
+  effectiveContractLabel,
+  groupActivityTypes,
   emptyFixtures,
   fixtureIssue,
   fixtureIssueMessage,
@@ -104,5 +107,55 @@ describe('result contract publication rules', () => {
     expect(resultContractMessage('forbidden')).toContain('curaduría del catálogo')
     expect(resultContractMessage('not-found')).toContain('catálogo global')
     expect(resultContractMessage('anything-else')).toBe('No se pudo publicar el contrato.')
+  })
+})
+
+describe('the global catalogue as the operator reads it', () => {
+  const activityTypes = [
+    { id: 'a', discipline_code: 'strength', code: 'squat', name: 'Sentadilla' },
+    { id: 'b', discipline_code: 'endurance', code: 'run', name: 'Carrera' },
+    { id: 'c', discipline_code: 'strength', code: 'bench', name: 'Press banca' },
+  ]
+
+  test('groups the picker by discipline, in the name the operator reads', () => {
+    const groups = groupActivityTypes(activityTypes, [
+      { code: 'strength', name: 'Fuerza' },
+      { code: 'endurance', name: 'Resistencia' },
+    ])
+
+    expect(groups.map((group) => group.disciplineName)).toEqual(['Fuerza', 'Resistencia'])
+    expect(groups[0]?.activityTypes.map((activityType) => activityType.id)).toEqual(['a', 'c'])
+    expect(groups[1]?.activityTypes.map((activityType) => activityType.id)).toEqual(['b'])
+  })
+
+  test('keeps a type whose discipline has no label instead of hiding it', () => {
+    const groups = groupActivityTypes(activityTypes, [{ code: 'strength', name: 'Fuerza' }])
+
+    expect(groups.flatMap((group) => group.activityTypes)).toHaveLength(activityTypes.length)
+    expect(groups.map((group) => group.disciplineName).sort()).toEqual(['Fuerza', 'endurance'])
+  })
+
+  test('says which effective contract is the default one', () => {
+    const contract = {
+      result_contract_id: '019f0000-0000-7000-8000-000000000101',
+      contract_code: 'strength.detailed',
+      version_number: 2,
+      activity_family: 'strength' as const,
+      contract_schema_version: 1 as const,
+      envelope: {},
+      minimums: {},
+      is_default: true,
+      valid_from: '2026-09-09T12:00:00.000Z',
+    }
+
+    expect(effectiveContractLabel(contract)).toBe('strength.detailed v2 (por omisión)')
+    expect(effectiveContractLabel({ ...contract, is_default: false })).toBe('strength.detailed v2')
+  })
+
+  test('explains a catalogue that will not load without blaming the publication', () => {
+    expect(catalogueReadMessage('unauthenticated')).toContain('Vuelve a iniciar sesión')
+    expect(catalogueReadMessage('network-unavailable')).toContain('conexión')
+    expect(catalogueReadMessage('anything-else')).toContain('catálogo global')
+    expect(catalogueReadMessage('anything-else')).not.toContain('publicar')
   })
 })

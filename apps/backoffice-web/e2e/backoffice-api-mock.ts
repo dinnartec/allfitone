@@ -12,7 +12,46 @@ export interface BackofficeFixture {
   sessionUnavailable?: boolean
   platformAccess?: PlatformAccessFixture
   resultContracts?: ResultContractFixture
+  catalogue?: CatalogueFixture
   requests: MockRequest[]
+}
+
+/**
+ * `/catalog/v1` is a surface of its own, not a Backoffice route, so the mock
+ * answers it separately. The effective associations are derived from what the
+ * curation commands published: two sources would let the screen show a state the
+ * server never had.
+ */
+export interface CatalogueFixture {
+  /** Every catalogue read is refused, as it is once the session ends. */
+  refusal?: { status: number; code: string }
+  disciplines: Array<{ code: string; name: string }>
+  activityTypes: Array<{ id: string; discipline_code: string; code: string; name: string }>
+}
+
+export const CATALOGUE_ACTIVITY_TYPE_ID = '019a5000-0000-7000-8000-000000000301'
+
+export function publishedCatalogue(): CatalogueFixture {
+  return {
+    disciplines: [
+      { code: 'test_strength', name: 'Fuerza de prueba' },
+      { code: 'test_endurance', name: 'Resistencia de prueba' },
+    ],
+    activityTypes: [
+      {
+        id: CATALOGUE_ACTIVITY_TYPE_ID,
+        discipline_code: 'test_strength',
+        code: 'test_strength_session',
+        name: 'Sesión de fuerza de prueba',
+      },
+      {
+        id: '019a5000-0000-7000-8000-000000000302',
+        discipline_code: 'test_endurance',
+        code: 'test_endurance_session',
+        name: 'Sesión de resistencia de prueba',
+      },
+    ],
+  }
 }
 
 export interface ResultContractFixture {
@@ -117,6 +156,7 @@ export function createBackofficeFixture(
   return {
     passwordOutcome: 'challenge',
     totpOutcome: 'success',
+    catalogue: publishedCatalogue(),
     requests: [],
     ...overrides,
   }
@@ -131,6 +171,15 @@ export async function mockBackofficeApi(
       'allfit.analytics-v1',
       JSON.stringify({ decision: 'denied', notice_version: 'analytics-v1' }),
     )
+  })
+  await context.route('http://127.0.0.1:8080/catalog/v1/**', async (route) => {
+    const request = toMockRequest(route)
+    fixture.requests.push(request)
+    if (request.method === 'OPTIONS') {
+      await fulfill(route, 204)
+      return
+    }
+    await routeCatalogue(route, request, fixture)
   })
   await context.route('http://127.0.0.1:8080/backoffice/v1/**', async (route) => {
     const request = toMockRequest(route)
@@ -405,6 +454,61 @@ async function routeResultContracts(
   }
   contracts.published.push(created)
   await fulfill(route, 201, created)
+}
+
+async function routeCatalogue(
+  route: Route,
+  request: MockRequest,
+  fixture: BackofficeFixture,
+): Promise<void> {
+  const catalogue = fixture.catalogue ?? { disciplines: [], activityTypes: [] }
+  if (catalogue.refusal) {
+    await fulfillProblem(route, catalogue.refusal.status, catalogue.refusal.code)
+    return
+  }
+  const segments = request.path.split('/').filter(Boolean)
+  if (segments[2] === 'disciplines') {
+    await fulfill(route, 200, { items: catalogue.disciplines })
+    return
+  }
+  if (segments[2] !== 'activity-types') {
+    await fulfillProblem(route, 404, 'not-found')
+    return
+  }
+  if (segments.length === 3) {
+    await fulfill(route, 200, { items: catalogue.activityTypes })
+    return
+  }
+
+  const activityTypeId = segments[3]
+  if (!catalogue.activityTypes.some((activityType) => activityType.id === activityTypeId)) {
+    await fulfillProblem(route, 404, 'not-found')
+    return
+  }
+  await fulfill(route, 200, { items: effectiveAssociations(fixture, activityTypeId) })
+}
+
+/** Only associations still open, joined to the published version they carry. */
+function effectiveAssociations(fixture: BackofficeFixture, activityTypeId: string) {
+  return (fixture.resultContracts?.published ?? [])
+    .filter((contract) => contract.status === 'published')
+    .flatMap((contract) =>
+      contract.activity_type_bindings
+        .filter(
+          (binding) => binding.activity_type_id === activityTypeId && binding.valid_to === null,
+        )
+        .map((binding) => ({
+          result_contract_id: contract.id,
+          contract_code: contract.contract_code,
+          version_number: contract.version_number,
+          activity_family: contract.activity_family,
+          contract_schema_version: contract.contract_schema_version,
+          envelope: contract.envelope,
+          minimums: contract.minimums,
+          is_default: binding.is_default,
+          valid_from: binding.valid_from,
+        })),
+    )
 }
 
 function isClosedDuty(status: PlatformDutyFixture['status']): boolean {
