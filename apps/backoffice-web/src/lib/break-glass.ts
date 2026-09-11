@@ -219,8 +219,13 @@ export function canDecide(file: BreakGlassRequest): boolean {
   return file.viewer_can_decide
 }
 
-export function canExercise(file: BreakGlassRequest): boolean {
-  return file.viewer_can_exercise
+export function canExercise(file: BreakGlassRequest, now = Date.now()): boolean {
+  if (!file.viewer_can_exercise) return false
+  // The hint was true when the server answered it. A window that has lapsed since
+  // delivers nothing, so the screen stops offering the read on its own rather than
+  // waiting for the operator to discover it by clicking.
+  const left = remainingMinutes(file, now)
+  return left === null || left > 0
 }
 
 const OUTCOME_MESSAGES: Record<string, string> = {

@@ -149,6 +149,21 @@ describe('break-glass presentation rules', () => {
     expect(canExercise(file({ viewer_can_exercise: false }))).toBe(false)
   })
 
+  test('stops offering a read the moment the window runs out', () => {
+    const open = file({
+      status: 'approved',
+      viewer_can_exercise: true,
+      window_starts_at: '2026-09-10T18:00:00.000Z',
+      window_ends_at: '2026-09-10T18:15:00.000Z',
+    })
+
+    expect(canExercise(open, Date.parse('2026-09-10T18:14:59.000Z'))).toBe(true)
+    // The hint was true when the server answered it. A lapsed window delivers
+    // nothing, so the screen withdraws the read without waiting for a refetch.
+    expect(canExercise(open, Date.parse('2026-09-10T18:15:00.000Z'))).toBe(false)
+    expect(canExercise(open, Date.parse('2026-09-10T19:00:00.000Z'))).toBe(false)
+  })
+
   test('tells an open window apart from every terminal state', () => {
     expect(statusTone('approved')).toBe('success')
     expect(statusTone('requested')).toBe('warning')

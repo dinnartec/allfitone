@@ -90,6 +90,7 @@ export function BreakGlassWindows() {
   const [categories, setCategories] = useState<BreakGlassCategory[]>([])
   const [error, setError] = useState<string | null>(null)
   const [outcome, setOutcome] = useState<BreakGlassExerciseOutcome | null>(null)
+  const [now, setNow] = useState(() => Date.now())
 
   const load = useCallback(async (signal?: AbortSignal) => {
     try {
@@ -112,6 +113,19 @@ export function BreakGlassWindows() {
     void load(controller.signal)
     return () => controller.abort()
   }, [load])
+
+  // A window is minutes long, so the countdown has to move without an interaction:
+  // an operator watching the screen has to see it lapse rather than find out by
+  // clicking. When it reaches zero the read is no longer offered — that is what
+  // closing itself means here, since there is no extension to offer instead.
+  const hasOpenWindow = files.some(
+    (file) => file.status === 'approved' && file.window_ends_at !== null,
+  )
+  useEffect(() => {
+    if (!hasOpenWindow) return
+    const timer = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [hasOpenWindow])
 
   const consequence = tierConsequence(categories)
 
@@ -363,9 +377,13 @@ export function BreakGlassWindows() {
                 </Alert>
               ) : null}
 
-              {windowSentence(file) ? (
-                <Alert live="off" variant="success" data-break-glass-window>
-                  <AlertTitle>{windowSentence(file)}</AlertTitle>
+              {windowSentence(file, now) ? (
+                <Alert
+                  live="off"
+                  variant={canExercise(file, now) ? 'success' : 'warning'}
+                  data-break-glass-window
+                >
+                  <AlertTitle>{windowSentence(file, now)}</AlertTitle>
                   <AlertDescription>
                     Cierra el {formatInstant(file.window_ends_at)}. Para continuar después hay que
                     pedir otra ventana.
@@ -431,7 +449,7 @@ export function BreakGlassWindows() {
                 </FieldGroup>
               ) : null}
 
-              {canExercise(file) ? (
+              {canExercise(file, now) ? (
                 <FieldGroup>
                   {file.categories.map((category) => (
                     <Button

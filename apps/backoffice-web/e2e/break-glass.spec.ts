@@ -247,11 +247,15 @@ test('a denied attempt is shown as a recorded fact rather than an error', async 
   context,
   page,
 }) => {
-  // The window lapsed a minute ago. The screen still shows it as approved until the
-  // next read, which is exactly when an operator would try.
+  // The screen never offers a read it knows will be refused, so the only way to a
+  // denial is the race it cannot prevent: the duty is withdrawn between the answer
+  // that offered the read and the click that took it.
   const fixture = createBackofficeFixture({
     session: activeSession(),
-    breakGlass: { files: [openBreakGlassWindow(-1, { categories: ['nutrition_guidance'] })] },
+    breakGlass: {
+      nextExerciseDenial: 'duty_not_effective',
+      files: [openBreakGlassWindow(10, { categories: ['nutrition_guidance'] })],
+    },
   })
   await mockBackofficeApi(context, fixture)
 
@@ -260,9 +264,33 @@ test('a denied attempt is shown as a recorded fact rather than an error', async 
 
   const outcome = page.locator('[data-break-glass-outcome]')
   await expect(outcome.getByText('Intento denegado y registrado')).toBeVisible()
-  await expect(outcome.getByText(/La ventana no está abierta/)).toBeVisible()
+  await expect(outcome.getByText(/Tu deber ya no está vigente/)).toBeVisible()
+  await expect(outcome.getByText(/Quedó registrado el intento/)).toBeVisible()
   // Denied, and the counter of authorised exercises did not move.
   expect(fixture.breakGlass?.files[0]?.exercise_count).toBe(0)
+})
+
+test('a window that lapses on screen stops offering the read by itself', async ({
+  context,
+  page,
+}) => {
+  await mockBackofficeApi(
+    context,
+    createBackofficeFixture({
+      session: activeSession(),
+      // Three seconds, so the countdown runs out while the operator is looking at it.
+      breakGlass: { files: [openBreakGlassWindow(0.05, { categories: ['nutrition_guidance'] })] },
+    }),
+  )
+
+  await page.goto(PATH)
+  await expect(page.getByRole('button', { name: 'Leer guía nutricional' })).toBeVisible()
+
+  // No interaction and no reload: the window closes itself, because there is no
+  // extension to offer instead.
+  await expect(page.getByText(/La ventana ya venció/)).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Leer guía nutricional' })).toHaveCount(0)
+  await expect(page.getByText(/Ninguna lectura entrega contenido/)).toBeVisible()
 })
 
 test('closing a window is final and leaves nothing to read', async ({ context, page }) => {

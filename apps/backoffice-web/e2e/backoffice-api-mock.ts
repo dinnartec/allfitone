@@ -90,6 +90,12 @@ export function scopeDefinition(
 export interface BreakGlassFixture {
   refusal?: { status: number; code: string }
   nextCommandFailure?: { status: number; code: string } | undefined
+  /**
+   * The reason the next exercise is denied, consumed once. It stands for the real
+   * race the screen cannot prevent: the duty is withdrawn, or the window lapses,
+   * between the answer that offered the read and the click that took it.
+   */
+  nextExerciseDenial?: string | undefined
   files: BreakGlassFileFixture[]
 }
 
@@ -872,12 +878,27 @@ function paginate<T>(rows: T[], pageSize: number | undefined, offset: number) {
  */
 function breakGlassProjection(file: BreakGlassFileFixture) {
   const { viewer_has_decided, ...row } = file
+  // The status is effective, not stored: a window whose end has passed and a
+  // request nobody decided in time both read as expired, the way
+  // `support.effective_break_glass_status` computes them.
+  const status = breakGlassEffectiveStatus(file)
   return {
     ...row,
-    viewer_can_decide:
-      file.status === 'requested' && !file.viewer_is_requester && !viewer_has_decided,
-    viewer_can_exercise: file.status === 'approved' && file.viewer_is_requester,
+    status,
+    viewer_can_decide: status === 'requested' && !file.viewer_is_requester && !viewer_has_decided,
+    viewer_can_exercise: status === 'approved' && file.viewer_is_requester,
   }
+}
+
+function breakGlassEffectiveStatus(file: BreakGlassFileFixture): string {
+  const now = Date.now()
+  if (file.status === 'approved' && file.window_ends_at !== null) {
+    return Date.parse(file.window_ends_at) <= now ? 'expired' : 'approved'
+  }
+  if (file.status === 'requested') {
+    return Date.parse(file.request_expires_at) <= now ? 'expired' : 'requested'
+  }
+  return file.status
 }
 
 async function routeBreakGlass(
@@ -943,7 +964,7 @@ async function routeBreakGlass(
       await fulfillProblem(route, 403, 'forbidden')
       return
     }
-    if (file.status !== 'requested') {
+    if (breakGlassEffectiveStatus(file) !== 'requested') {
       await fulfillProblem(route, 409, 'conflict')
       return
     }
@@ -977,17 +998,17 @@ async function routeBreakGlass(
   if (action === 'reads') {
     const body = request.body as { category?: string; resource_type?: string } | undefined
     const category = body?.category ?? ''
-    const open =
-      file.status === 'approved' &&
-      file.window_ends_at !== null &&
-      Date.parse(file.window_ends_at) > Date.now()
-    const denial = !file.viewer_is_requester
-      ? 'not_the_requester'
-      : !open
-        ? 'window_not_open'
-        : !file.categories.includes(category)
-          ? 'category_out_of_scope'
-          : null
+    const forced = glass.nextExerciseDenial
+    glass.nextExerciseDenial = undefined
+    const denial =
+      forced ??
+      (!file.viewer_is_requester
+        ? 'not_the_requester'
+        : breakGlassEffectiveStatus(file) !== 'approved'
+          ? 'window_not_open'
+          : !file.categories.includes(category)
+            ? 'category_out_of_scope'
+            : null)
     // Only an authorised attempt raises the counter, matching the projection, which
     // counts events with result 'allowed'. A denial is recorded too, as an event.
     if (denial === null) file.exercise_count += 1
