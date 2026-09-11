@@ -1,0 +1,92 @@
+/**
+ * Choosing several exercises on one screen, and handing them to the editor.
+ *
+ * The picker used to be a `Sheet` inside the routine editor. A sheet is anchored to
+ * the bottom edge, which is where the keyboard appears, so searching left about three
+ * results visible; and each pick wrote the draft, so adding five exercises was five
+ * saves. The canvas drew a route in the first place.
+ *
+ * **What crosses between the two screens is a selection, never a draft.** That is the
+ * whole design. The editor's header rejected a route because it would mean "a second
+ * copy of that draft with a way to disagree with this one", and it was right: each
+ * screen builds its own `createSpaceContentFlow()`, so each holds its own etag map,
+ * and two writers would be two etags and a 409. The picker therefore never saves. It
+ * chooses, and the editor — still the only writer — appends the batch in one save.
+ *
+ * The handover is a one-shot mailbox rather than a route parameter. `useLocalSearchParams`
+ * only carries data forward, and there is no API in expo-router for returning a value;
+ * the app's one precedent for module state is `telemetry.ts`, and this follows it,
+ * minus the subscription, because nobody has to react to a deposit — the editor reads
+ * it when it is looked at again.
+ *
+ * **Taking empties it.** Otherwise coming back to the editor a second time, having
+ * picked nothing, would append the previous batch again.
+ */
+
+import type { Movement } from './content'
+
+export interface PickedMovement {
+  readonly id: string
+  readonly name: string
+}
+
+/**
+ * Adds one, or removes it if it was already chosen.
+ *
+ * Ordered by name rather than by when it was tapped, the same way `toggleFocus`
+ * canonicalises its zones: the list somebody confirms should read the way the list
+ * they picked from reads.
+ */
+export function togglePick(
+  picked: readonly PickedMovement[],
+  movement: PickedMovement,
+): readonly PickedMovement[] {
+  if (isPicked(picked, movement.id)) {
+    return picked.filter((one) => one.id !== movement.id)
+  }
+  return [...picked, movement].sort((left, right) => left.name.localeCompare(right.name, 'es'))
+}
+
+export function isPicked(picked: readonly PickedMovement[], id: string): boolean {
+  return picked.some((one) => one.id === id)
+}
+
+/** What the confirm says. Counting out loud is the only way the batch is visible. */
+export function pickLabel(count: number): string {
+  if (count <= 0) return 'Añadir'
+  if (count === 1) return 'Añadir 1 ejercicio'
+  return `Añadir ${count} ejercicios`
+}
+
+/** The catalogue minus what the routine already trains, which is not offered twice. */
+export function offerable(
+  movements: readonly Movement[],
+  already: readonly string[],
+): readonly Movement[] {
+  const inRoutine = new Set(already)
+  return movements.filter((movement) => !inRoutine.has(movement.id))
+}
+
+let offered: readonly PickedMovement[] = []
+let already: readonly string[] = []
+
+/** Deposited by the picker when somebody confirms. */
+export function offerExercisePick(movements: readonly PickedMovement[]): void {
+  offered = movements
+}
+
+/** Collected by the editor, and emptied: a second look must not append the batch again. */
+export function takeExercisePick(): readonly PickedMovement[] {
+  const taken = offered
+  offered = []
+  return taken
+}
+
+/** Left by the editor before it pushes, so the picker knows what not to offer. */
+export function declareAlreadyIn(ids: readonly string[]): void {
+  already = ids
+}
+
+export function alreadyIn(): readonly string[] {
+  return already
+}

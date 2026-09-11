@@ -1,6 +1,6 @@
 begin;
 
-select plan(71);
+select plan(73);
 
 insert into identity.people (id, given_name, family_name)
 values
@@ -60,6 +60,23 @@ select ok(cardinality(planning.session_content_errors(
   '{"title":"Cross tenant","activity_type_id":"019c0000-0000-7000-8000-000000000011","steps":[{"position":1,"activity_type_id":"019c0000-0000-7000-8000-000000000015","target":{"family":"strength","target_sets":1}}]}',
   '019d0000-0000-7000-8000-000000000101', 'test_strength', false)) > 0,
   'T-PLN-RLS-08 a per-step activity override cannot cross organization scope');
+
+-- A draft with no activity type cannot resolve the family a step must match, so every
+-- step is refused. Space sent null here and the routine editor broke the moment
+-- somebody picked an exercise; the rule is right, the client was wrong.
+select is(
+  planning.session_content_errors(
+    '{"title":"Sin tipo","activity_type_id":null,"steps":[{"position":1,"target":{"family":"strength","target_sets":4,"target_reps":8}}]}',
+    '019d0000-0000-7000-8000-000000000101', 'test_strength', false),
+  array['target-family'],
+  'T-PLN-UNIT-14 a step with no activity type to match is refused as target-family');
+
+select is(
+  planning.session_content_errors(
+    '{"title":"Sin tipo","activity_type_id":null,"steps":[]}',
+    '019d0000-0000-7000-8000-000000000101', 'test_strength', false),
+  array[]::text[],
+  'T-PLN-UNIT-15 and with no steps it is accepted, which is why only adding one broke');
 select ok(cardinality(planning.program_content_errors(
   jsonb_build_object('title', 'Bad notes', 'notes', 7, 'sessions', '[]'::jsonb),
   '019d0000-0000-7000-8000-000000000101', false)) > 0,

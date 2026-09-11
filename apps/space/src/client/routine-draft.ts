@@ -12,6 +12,7 @@
  */
 
 import type { SessionTemplateDraftContent } from './content'
+import type { PickedMovement } from './exercise-pick'
 
 /**
  * Every routine a person builds in Space is strength.
@@ -73,13 +74,18 @@ export function countSets(steps: readonly WorkingStep[]): number {
 /**
  * The draft as the contract wants it.
  *
- * `activity_type_id` is deliberately absent: the creation command already put the one
- * activity type of the discipline in the draft, and sending null here would erase it.
+ * **`activityTypeId` is required, and it is the one the creation command put in the
+ * draft.** The key itself is not optional — `session_content_errors` rejects any
+ * content that does not carry all three — so "leave it out" is not available, and
+ * passing null erases it. With no activity type the family a step must match cannot
+ * be resolved, so *every* step comes back `target-family` and the whole draft is
+ * refused: a routine could be named and never given an exercise. A default here is
+ * what let that ship, so there is none.
  */
 export function stepsToContent(
   title: string,
   steps: readonly WorkingStep[],
-  activityTypeId: string | null = null,
+  activityTypeId: string | null,
 ): SessionTemplateDraftContent {
   return {
     title: title.trim(),
@@ -95,6 +101,33 @@ export function stepsToContent(
       },
     })),
   }
+}
+
+/** What an exercise starts at until the routine editor can set them. */
+const DEFAULT_SETS = 4
+const DEFAULT_REPS = 8
+
+/**
+ * Appends a whole batch, which is what makes picking several one save and not several.
+ *
+ * The picker hands back names as well as ids because the list renders the name, and
+ * looking it up again would mean a second read of a catalogue the picker just had.
+ */
+export function withPicked(
+  steps: readonly WorkingStep[],
+  picked: readonly PickedMovement[],
+): readonly WorkingStep[] {
+  const chosen = picked.filter((movement) => !steps.some((step) => step.movementId === movement.id))
+  return [
+    ...steps,
+    ...chosen.map((movement) => ({
+      position: 0,
+      movementId: movement.id,
+      name: movement.name,
+      sets: DEFAULT_SETS,
+      reps: DEFAULT_REPS,
+    })),
+  ].map((step, index) => ({ ...step, position: index + 1 }))
 }
 
 /** Renumbering is the whole operation: a gap in `position` is refused by the database. */

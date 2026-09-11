@@ -15,33 +15,39 @@
  * would eventually save a stale one and answer `409` for no reason a person could act
  * on.
  *
- * `S-1` is a sheet and not the separate route the canvas draws. The search appends to
- * the draft being edited, and a second route would mean a second copy of that draft
- * with a way to disagree with this one.
+ * **`S-1` is the separate route the canvas draws, after all.** It was built as a sheet
+ * to avoid "a second copy of that draft with a way to disagree with this one", and the
+ * worry was right — each screen builds its own flow, so each holds its own etag map,
+ * and two writers would be two etags and a `409`. But a sheet is anchored to the
+ * bottom edge, which is where the keyboard appears: searching left about three results
+ * visible, and every pick wrote the draft, so five exercises were five saves.
+ *
+ * The route avoids the duplication by carrying a **selection** and never a draft.
+ * `exercise-pick` is the mailbox; this screen stays the only thing that writes, and it
+ * appends the whole batch in one save.
  */
 
 import { Button } from '@allfitone/react-native/button'
 import { Chip } from '@allfitone/react-native/chip'
 import { FoundationIcon } from '@allfitone/react-native/icons'
-import { IconButton } from '@allfitone/react-native/icon-button'
 import { InlineAlert } from '@allfitone/react-native/inline-alert'
 import { Screen } from '@allfitone/react-native/screen'
-import { Sheet } from '@allfitone/react-native/sheet'
 import { Text } from '@allfitone/react-native/text'
 import { TextField } from '@allfitone/react-native/text-field'
 import { useTheme } from '@allfitone/react-native/theme'
-import { useLocalSearchParams, useRouter } from 'expo-router'
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
 
 import { ApiError } from '../../src/client'
-import type { Movement } from '../../src/client/content'
 import { createSpaceContentFlow } from '../../src/client/content-transport'
+import { declareAlreadyIn, takeExercisePick } from '../../src/client/exercise-pick'
 import {
   DISCIPLINE,
   countSets,
   reasonsNotToPublish,
   stepsToContent,
+  withPicked,
   withoutStep,
   type WorkingStep,
 } from '../../src/client/routine-draft'
@@ -52,12 +58,8 @@ const SUGGESTIONS = ['Empuje', 'Tirón', 'Pierna', 'Full body']
 /** Long enough that a name is not a save per keystroke, short enough to feel saved. */
 const SAVE_DELAY_MS = 700
 
-const DEFAULT_SETS = 4
-const DEFAULT_REPS = 8
-
 const EXPIRED = 'Tu sesión venció. Vuelve a entrar para continuar.'
 const SAVE_FAILED = 'No pudimos guardar el borrador. Revisa tu conexión.'
-const SEARCH_FAILED = 'No pudimos buscar en el catálogo. Inténtalo otra vez.'
 
 export default function RoutineEditor() {
   const router = useRouter()
@@ -73,15 +75,15 @@ export default function RoutineEditor() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [failure, setFailure] = useState<string | undefined>(undefined)
-  const [searching, setSearching] = useState(false)
-  const [query, setQuery] = useState('')
-  const [results, setResults] = useState<readonly Movement[]>([])
   const [showIssues, setShowIssues] = useState(false)
 
   const pending = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   // Held outside state as well: a save scheduled before the creation resolved must
   // see the identity the creation produced, and state would still be the old one.
   const identity = useRef<string | undefined>(templateId)
+  // The activity type the creation put in the draft. Every save has to send it back:
+  // sending null erases it, and without it every step is refused as `target-family`.
+  const activityType = useRef<string | null>(null)
 
   /**
    * Saves, and says whether it did. It reports a failure through `failure` as well,
@@ -98,9 +100,13 @@ export default function RoutineEditor() {
         if (!identity.current) {
           const template = await flow.createTemplate(DISCIPLINE, trimmed)
           identity.current = template.id
+          activityType.current = template.draft.content.activity_type_id
           setTemplateId(template.id)
         }
-        await flow.saveTemplateDraft(identity.current, stepsToContent(trimmed, nextSteps))
+        await flow.saveTemplateDraft(
+          identity.current,
+          stepsToContent(trimmed, nextSteps, activityType.current),
+        )
         setSaved(true)
         setFailure(undefined)
         return true
@@ -131,23 +137,28 @@ export default function RoutineEditor() {
     [],
   )
 
+  // Read through a ref so the effect below does not depend on it: naming a routine is
+  // typing, and a dependency on the name would resubscribe on every keystroke.
+  const named = useRef(title)
   useEffect(() => {
-    if (!searching) return
-    let active = true
+    named.current = title
+  }, [title])
 
-    flow
-      .searchMovements(DISCIPLINE, query)
-      .then((found) => {
-        if (active) setResults(found)
+  // On focus rather than on mount: this screen stays on the stack while the picker is
+  // above it, so mounting happens once and would never see what was chosen. Taking
+  // empties the batch, which is what stops a second look from appending it again.
+  useFocusEffect(
+    useCallback(() => {
+      const picked = takeExercisePick()
+      if (picked.length === 0) return
+      setSteps((current) => {
+        const next = withPicked(current, picked)
+        // One save for the whole batch. The sheet wrote the draft once per exercise.
+        schedule(named.current, next)
+        return next
       })
-      .catch(() => {
-        if (active) setFailure(SEARCH_FAILED)
-      })
-
-    return () => {
-      active = false
-    }
-  }, [flow, query, searching])
+    }, [schedule]),
+  )
 
   const rename = (next: string) => {
     setTitle(next)
@@ -160,18 +171,6 @@ export default function RoutineEditor() {
     setSaved(false)
     schedule(title, next)
   }
-
-  const add = (movement: Movement) =>
-    change([
-      ...steps,
-      {
-        position: steps.length + 1,
-        movementId: movement.id,
-        name: movement.name,
-        sets: DEFAULT_SETS,
-        reps: DEFAULT_REPS,
-      },
-    ])
 
   const issues = reasonsNotToPublish(title, steps)
   const publishable = issues.length === 0 && templateId !== undefined
@@ -203,8 +202,6 @@ export default function RoutineEditor() {
     if (saved) return 'borrador guardado'
     return 'aún sin guardar'
   }
-
-  const alreadyIn = new Set(steps.map((step) => step.movementId))
 
   return (
     <Screen edges={['top', 'bottom']}>
@@ -353,8 +350,8 @@ export default function RoutineEditor() {
           variant={steps.length === 0 ? 'primary' : 'secondary'}
           icon={steps.length === 0 ? 'search' : 'add'}
           onPress={() => {
-            setQuery('')
-            setSearching(true)
+            declareAlreadyIn(steps.map((one) => one.movementId))
+            router.push('/routines/exercises')
           }}
         />
 
@@ -362,65 +359,6 @@ export default function RoutineEditor() {
           Se guarda como borrador según escribes. Necesita conexión.
         </Text>
       </ScrollView>
-
-      <Sheet visible={searching} onDismiss={() => setSearching(false)} title="Añadir ejercicio">
-        <View style={styles.searchBody}>
-          <Text role="body" size="xs" color="muted">
-            {title.trim() === '' ? 'a tu rutina nueva' : `a la rutina ${title.trim()}`}
-          </Text>
-          <TextField
-            label="Buscar ejercicio"
-            placeholder="Busca por nombre"
-            value={query}
-            onChangeText={setQuery}
-            autoCapitalize="none"
-          />
-          <Text role="eyebrow" size="2xs" color="muted">
-            {results.length === 1
-              ? '1 RESULTADO EN EL CATÁLOGO'
-              : `${results.length} RESULTADOS EN EL CATÁLOGO`}
-          </Text>
-          <ScrollView style={styles.searchList} showsVerticalScrollIndicator={false}>
-            {results.map((movement) => (
-              <View
-                key={movement.id}
-                style={[
-                  styles.result,
-                  {
-                    borderColor: theme.color.border.subtle,
-                    backgroundColor: theme.color.background.surface,
-                  },
-                ]}
-              >
-                <View style={styles.rowText}>
-                  <Text role="control" size="sm">
-                    {movement.name}
-                  </Text>
-                </View>
-                {alreadyIn.has(movement.id) ? (
-                  <Text role="label" size="2xs" color="muted">
-                    Ya está
-                  </Text>
-                ) : (
-                  <IconButton
-                    icon="add"
-                    accessibilityLabel={`Añadir ${movement.name}`}
-                    onPress={() => add(movement)}
-                  />
-                )}
-              </View>
-            ))}
-            {results.length === 0 ? (
-              <Text role="body" size="sm" color="muted">
-                No hay ejercicios con ese nombre en el catálogo.
-              </Text>
-            ) : null}
-          </ScrollView>
-          <Text role="body" size="sm" color="muted" style={styles.centered}>
-            Solo el catálogo global de Allfit.
-          </Text>
-        </View>
-      </Sheet>
     </Screen>
   )
 }
@@ -481,15 +419,4 @@ const styles = StyleSheet.create({
   issues: { borderWidth: 2, borderRadius: 18, padding: 16, gap: 12 },
   issuesHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   issueText: { gap: 2 },
-  searchBody: { gap: 12 },
-  searchList: { maxHeight: 300 },
-  result: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    borderWidth: 1,
-    borderRadius: 16,
-    padding: 12,
-    marginBottom: 10,
-  },
 })
