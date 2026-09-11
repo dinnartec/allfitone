@@ -14,11 +14,11 @@
  * Someone who cannot or will not aim at a small shape gets the same answer from a
  * 44 pt chip.
  *
- * Neither body draws its outline. The library ships one for the male figure and
- * none for the female, and shipping the sexes at different levels of finish is
- * worse than shipping both plain — so `border="none"` on both. The outline is
- * worth drawing later, with a designer's eye on it; a badly traced one reads worse
- * than its absence.
+ * Both bodies draw their outline. An earlier version turned it off on the grounds
+ * that the library ships one for the man and none for the woman; that was wrong —
+ * `SvgFemaleWrapper` ships both faces — and without it the silhouette was open and
+ * the muscles read as loose pieces. Why the figure is composed rather than
+ * configured, and what each part of the painting is for, is in `body-figure.tsx`.
  *
  * Nothing arrives selected, and continuing requires an answer — "whole body" is
  * how someone says "no emphasis" without leaving the question open. Criterion 3 of
@@ -39,16 +39,15 @@ import { Screen } from '@allfitone/react-native/screen'
 import { Text } from '@allfitone/react-native/text'
 import { useTheme } from '@allfitone/react-native/theme'
 import { useRouter } from 'expo-router'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native'
-import Body from 'react-native-body-highlighter'
 
+import { BodyFigure } from '../../src/components/body-figure'
 import { OnboardingHeader } from '../../src/components/onboarding-header'
 import { ApiError } from '../../src/client'
 import { createSpaceOnboardingFlow } from '../../src/client/onboarding-transport'
 import { guardStep, nextRouteAfter } from '../../src/client/onboarding-steps'
 import {
-  allZoneSlugs,
   areasFor,
   bodyGender,
   bodyScale,
@@ -64,6 +63,7 @@ import {
   WHOLE_BODY,
   zoneForSlug,
   type BodySide,
+  type BodySlug,
   type FocusSelection,
 } from '../../src/client/focus-form'
 
@@ -150,58 +150,50 @@ export default function OnboardingFocus() {
     }
   }
 
-  const choose = (choice: Parameters<typeof toggleFocus>[1]) => {
-    if (!pressable) return
-    setSelection((current) => toggleFocus(current, choice))
-  }
+  const choose = useCallback(
+    (choice: Parameters<typeof toggleFocus>[1]) => {
+      if (!pressable) return
+      setSelection((current) => toggleFocus(current, choice))
+    },
+    [pressable],
+  )
 
-  const face = (side: BodySide) => {
-    const lit = litSlugs(selection, side)
+  // Both faces are memoised, so their props have to keep their identity or the memo
+  // never hits and every tap redraws the face nobody touched.
+  const litFront = useMemo(() => litSlugs(selection, 'front'), [selection])
+  const litBack = useMemo(() => litSlugs(selection, 'back'), [selection])
+  const pressFront = useCallback(
+    (slug: BodySlug) => {
+      const zone = zoneForSlug(slug, 'front')
+      if (zone) choose(zone)
+    },
+    [choose],
+  )
+  const pressBack = useCallback(
+    (slug: BodySlug) => {
+      const zone = zoneForSlug(slug, 'back')
+      if (zone) choose(zone)
+    },
+    [choose],
+  )
 
-    return (
-      <View style={styles.face}>
-        <Body
-          side={side}
-          gender={gender}
-          scale={scale}
-          border="none"
-          // The inert parts carry their own colour through `data` rather than
-          // `disabledParts`, which hardcodes a bone white `#EBEBE4` with no prop to
-          // override it — on a dark canvas that reads as a mistake. A tap on them
-          // still does nothing: `zoneForSlug` owns that, not the library.
-          //
-          // `border.subtle` rather than a surface: it carries alpha, so it settles a
-          // fixed distance from whatever is behind it. A flat surface token cannot —
-          // `surfaceSubtle` is lighter than the canvas on the light theme, which made
-          // the face glow, and a step away from it on dark, which made it vanish.
-          data={[
-            // Every part states its colour. The assets hardcode `#3f3f3f` on almost
-            // all of them and that beats `defaultFill`, so a token passed there never
-            // arrives — which is why the muscles came out near black on the light
-            // theme however the default was set.
-            ...allZoneSlugs(side).map((slug) =>
-              lit.includes(slug)
-                ? { slug, intensity: 1 }
-                : { slug, color: theme.color.border.default },
-            ),
-            ...INERT_SLUGS.map((slug) => ({ slug, color: theme.color.border.subtle })),
-          ]}
-          colors={[theme.color.border.accent]}
-          defaultStroke={theme.color.background.canvas}
-          defaultStrokeWidth={1}
-          onBodyPartPress={(part) => {
-            const slug = part.slug
-            if (!slug) return
-            const zone = zoneForSlug(slug, side)
-            if (zone) choose(zone)
-          }}
-        />
-        <Text role="body" size="xs" color="muted" style={styles.faceName}>
-          {side === 'front' ? 'FRENTE' : 'ESPALDA'}
-        </Text>
-      </View>
-    )
-  }
+  const face = (side: BodySide) => (
+    <View style={styles.face}>
+      <BodyFigure
+        side={side}
+        gender={gender}
+        scale={scale}
+        lit={side === 'front' ? litFront : litBack}
+        // Inert through the figure rather than the library's `disabledParts`, which
+        // hardcodes a bone white with no prop to override it.
+        inert={INERT_SLUGS}
+        onPressSlug={side === 'front' ? pressFront : pressBack}
+      />
+      <Text role="body" size="xs" color="muted" style={styles.faceName}>
+        {side === 'front' ? 'FRENTE' : 'ESPALDA'}
+      </Text>
+    </View>
+  )
 
   return (
     <Screen edges={['top', 'bottom']}>
