@@ -207,7 +207,7 @@ export function TeamInvitationForm() {
         </SetupPanelDescription>
         <SetupPanelNote>
           <FoundationIcon name="time" decorative />
-          <p>La invitación estará disponible durante siete días.</p>
+          La invitación estará disponible durante siete días.
         </SetupPanelNote>
       </SetupPanelIntro>
 
