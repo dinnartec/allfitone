@@ -13,6 +13,8 @@ import {
 import { Alert, AlertDescription } from '@allfitone/react/components/alert'
 import { Badge } from '@allfitone/react/components/badge'
 import { Button, buttonVariants } from '@allfitone/react/components/button'
+import { Card, CardContent, CardHeader } from '@allfitone/react/components/card'
+import { Empty, EmptyDescription, EmptyTitle } from '@allfitone/react/components/empty'
 import { Spinner } from '@allfitone/react/components/spinner'
 import {
   Table,
@@ -33,6 +35,7 @@ import { useOrganizationContext } from './organization-context'
 import { useStudioSessionMutation } from './studio-query-provider'
 import { WorkspacePageHeader } from './workspace-page-header'
 import { createCommandIntentManager } from '@/lib/command-intent'
+import { useCompactViewport } from '@/lib/use-compact-viewport'
 import {
   StudioApiError,
   newCommand,
@@ -65,6 +68,7 @@ const INVITATION_ISSUANCE_ENABLED = process.env.NEXT_PUBLIC_STAFF_INVITATIONS_EN
 
 export function TeamInvitationList() {
   const { current } = useOrganizationContext()
+  const compact = useCompactViewport()
   const queryClient = useQueryClient()
   const [filter, setFilter] = useState<Filter>('all')
   const [revokeIntent, setRevokeIntent] = useState<InvitationItem>()
@@ -199,6 +203,7 @@ export function TeamInvitationList() {
       />
 
       <ToggleGroup
+        data-studio-filters
         value={[filter]}
         onValueChange={changeFilter}
         aria-label="Filtrar invitaciones por estado"
@@ -216,39 +221,65 @@ export function TeamInvitationList() {
         </p>
       ) : null}
 
-      <Table
-        aria-label="Invitaciones"
-        aria-busy={loading || loadingMore || undefined}
-        scrollAreaLabel="Tabla de invitaciones de la organización"
-      >
-        <TableCaption>
-          Las invitaciones muestran el destino propuesto y nunca datos fitness de una persona.
-        </TableCaption>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Correo</TableHead>
-            <TableHead>Rol</TableHead>
-            <TableHead>Creada</TableHead>
-            <TableHead>Vence</TableHead>
-            <TableHead>Estado</TableHead>
-            <TableHead>Acciones</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
+      {/* Six columns do not fit a phone. The directory answered that with a
+          card list and this one did not, so invitations were the section that
+          scrolled sideways on a phone while its sibling did not. Only one
+          presentation is rendered — see useCompactViewport. */}
+      {compact ? (
+        <div data-team-directory-cards aria-label="Invitaciones" aria-busy={loading || undefined}>
           {listState ? (
-            <TableState colSpan={6} {...listState} />
+            <Empty>
+              <EmptyTitle>{listState.title}</EmptyTitle>
+              <EmptyDescription>{listState.description}</EmptyDescription>
+            </Empty>
           ) : (
-            items.map((item) => (
-              <InvitationRow
-                key={item.id}
-                item={item}
-                revoking={revoking}
-                onRevoke={requestRevoke}
-              />
-            ))
+            <ul data-team-directory-card-list>
+              {items.map((item) => (
+                <li key={item.id}>
+                  <InvitationCard item={item} revoking={revoking} onRevoke={requestRevoke} />
+                </li>
+              ))}
+            </ul>
           )}
-        </TableBody>
-      </Table>
+          <p data-team-directory-note>
+            Las invitaciones muestran el destino propuesto y nunca datos fitness de una persona.
+          </p>
+        </div>
+      ) : (
+        <Table
+          aria-label="Invitaciones"
+          aria-busy={loading || loadingMore || undefined}
+          scrollAreaLabel="Tabla de invitaciones de la organización"
+        >
+          <TableCaption>
+            Las invitaciones muestran el destino propuesto y nunca datos fitness de una persona.
+          </TableCaption>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Correo</TableHead>
+              <TableHead>Rol</TableHead>
+              <TableHead>Creada</TableHead>
+              <TableHead>Vence</TableHead>
+              <TableHead>Estado</TableHead>
+              <TableHead>Acciones</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {listState ? (
+              <TableState colSpan={6} {...listState} />
+            ) : (
+              items.map((item) => (
+                <InvitationRow
+                  key={item.id}
+                  item={item}
+                  revoking={revoking}
+                  onRevoke={requestRevoke}
+                />
+              ))
+            )}
+          </TableBody>
+        </Table>
+      )}
 
       {staleCursor || (error && items.length > 0) ? (
         <Alert variant={staleCursor ? 'info' : 'danger'} live="polite">
@@ -319,6 +350,57 @@ export function TeamInvitationList() {
   )
 }
 
+/**
+ * The table row stacked, the way the directory card is: the address identifies
+ * the invitation, every other value keeps the name its column had, and the one
+ * action a pending invitation offers closes the card.
+ */
+function InvitationCard({
+  item,
+  revoking,
+  onRevoke,
+}: {
+  item: InvitationItem
+  revoking: string | undefined
+  onRevoke: (item: InvitationItem) => void
+}) {
+  const intent = item.intents[0]
+
+  return (
+    <Card data-team-member-card>
+      <CardHeader>
+        <strong role="heading" aria-level={3}>
+          {item.contact}
+        </strong>
+      </CardHeader>
+      <CardContent>
+        <dl data-team-member-facts>
+          <dt>Rol</dt>
+          <dd>{intent ? invitationRoleLabel(intent.proposed_role_code) : '—'}</dd>
+
+          <dt>Estado</dt>
+          <dd>
+            <InvitationStatusBadge status={item.status} />
+          </dd>
+
+          <dt>Creada</dt>
+          <dd>{formatDate(item.created_at)}</dd>
+
+          <dt>Vence</dt>
+          <dd>{formatDate(item.expires_at)}</dd>
+        </dl>
+        {item.status === 'pending' ? (
+          <div data-team-invitation-actions>
+            <Button variant="outline" disabled={Boolean(revoking)} onClick={() => onRevoke(item)}>
+              {revoking === item.id ? 'Revocando…' : 'Revocar'}
+            </Button>
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
+  )
+}
+
 function InvitationRow({
   item,
   revoking,
@@ -375,7 +457,11 @@ function InvitationStatusBadge({ status }: { status: TeamInvitationStatus }) {
   }
   return (
     <Badge
-      variant={status === 'pending' ? 'warning' : status === 'completed' ? 'success' : 'outline'}
+      // `outline` sets a transparent background over the base's transparent
+      // border and so draws nothing: revoked and expired read as loose text
+      // beside the two that are filled. Neither is an error, so both take the
+      // neutral surface rather than `destructive`.
+      variant={status === 'pending' ? 'warning' : status === 'completed' ? 'success' : 'secondary'}
     >
       {labels[status]}
     </Badge>

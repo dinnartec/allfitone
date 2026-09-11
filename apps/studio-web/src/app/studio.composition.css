@@ -266,6 +266,14 @@ menu {
   gap: var(--afo-space-4);
 }
 
+/* Five filters do not fit a phone, and ToggleGroup answers an overflow by
+   squeezing until the labels clip rather than by wrapping or scrolling. Letting
+   them wrap keeps every option readable and reachable; hiding them behind a
+   scroll edge would not. A stopgap: the component should answer this itself. */
+[data-studio-filters] {
+  flex-wrap: wrap;
+}
+
 [data-team-role-badges],
 [data-ready-confirmations],
 [data-team-section-navigation],

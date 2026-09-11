@@ -104,6 +104,42 @@ const withoutProfile = () =>
   })
 
 /** Holds one endpoint open so a pending stage can be audited before it resolves. */
+/**
+ * The mock answers only POST on the invitations collection, so a GET falls
+ * through to a 500 and the section renders its failure state. Auditing the two
+ * stories about *reading* invitations against a screen that never showed one is
+ * how this looked covered while covering nothing.
+ */
+const issuedInvitation = (id: string, status: string, expires_at: string) => ({
+  id,
+  status,
+  channel: 'email',
+  contact: `${id}@example.test`,
+  created_at: '2026-09-01T00:00:00.000Z',
+  expires_at,
+  intents: [{ id: `${id}-intent`, kind: 'membership', status, proposed_role_code: 'staff' }],
+})
+
+const withIssuedInvitations = () =>
+  createStudioApiFixture({
+    memberships: [activeMembership, secondActiveMembership, terminatedMembership],
+    intercept: (request) =>
+      request.method === 'GET' && /\/invitations(\?|$)/.test(request.path)
+        ? {
+            status: 200,
+            body: {
+              data: [
+                issuedInvitation('pendiente', 'pending', '2030-09-20T00:00:00.000Z'),
+                issuedInvitation('decidida', 'completed', '2026-09-18T00:00:00.000Z'),
+                issuedInvitation('revocada', 'revoked', '2026-09-15T00:00:00.000Z'),
+                issuedInvitation('vencida', 'expired', '2026-08-30T00:00:00.000Z'),
+              ],
+              page: { next_cursor: null },
+            },
+          }
+        : undefined,
+  })
+
 const stall = (path: string) => () =>
   createStudioApiFixture({
     intercept: async (request) => {
@@ -461,7 +497,15 @@ export const SCREENS: Screen[] = [
   {
     stories: 'HU-015 / HU-016 · issued invitations',
     path: `${workspace}/team/invitations`,
-    fixture: memberOfTwo,
+    fixture: withIssuedInvitations,
+  },
+  {
+    // Six columns do not fit a phone, so the register renders as cards below
+    // 720px — separate markup, like the directory's, not one behind a toggle.
+    stories: 'HU-015 / HU-016 · issued invitations as cards',
+    path: `${workspace}/team/invitations`,
+    fixture: withIssuedInvitations,
+    viewport: MOBILE,
   },
   {
     stories: 'HU-014 · invite a teammate',
