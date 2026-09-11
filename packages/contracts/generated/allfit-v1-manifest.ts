@@ -56,10 +56,24 @@ export const allfitV1ContractManifest = {
     },
     {
       method: 'GET',
+      path: '/catalog/v1/equipment',
+      operationId: 'listEquipment',
+      allfitOperation: 'OP-CAT-011',
+      responses: ['200', '401', '403', '503'],
+    },
+    {
+      method: 'GET',
       path: '/catalog/v1/movements',
       operationId: 'searchMovements',
       allfitOperation: 'OP-CAT-009',
       responses: ['200', '400', '401', '403', '503'],
+    },
+    {
+      method: 'GET',
+      path: '/catalog/v1/muscles',
+      operationId: 'listMuscles',
+      allfitOperation: 'OP-CAT-015',
+      responses: ['200', '401', '403', '503'],
     },
     {
       method: 'GET',
@@ -305,6 +319,13 @@ export const allfitV1ContractManifest = {
       operationId: 'createMyProgram',
       allfitOperation: 'OP-PLN-006',
       responses: ['201', '400', '401', '403', '404', '409', '422'],
+    },
+    {
+      method: 'GET',
+      path: '/space/v1/programs/{programId}/draft',
+      operationId: 'readMyProgramDraft',
+      allfitOperation: 'OP-PLN-026',
+      responses: ['200', '401', '403', '404'],
     },
     {
       method: 'PUT',

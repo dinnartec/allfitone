@@ -681,6 +681,19 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
     description:
       'The two metrics V1 records. The `body_` prefix is not decoration: `metric_code` also names execution results, where `weight` is the load on the bar rather than the weight of the person.',
   },
+  CatalogueTerm: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['code', 'name'],
+    properties: {
+      code: {
+        type: 'string',
+      },
+      name: {
+        type: 'string',
+      },
+    },
+  },
   CompletenessLevel: {
     type: 'string',
     enum: ['partial', 'summary', 'detailed', 'sensor_enriched'],
@@ -1227,7 +1240,7 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
   Movement: {
     type: 'object',
     additionalProperties: false,
-    required: ['id', 'discipline_code', 'name'],
+    required: ['id', 'discipline_code', 'name', 'muscles', 'equipment'],
     properties: {
       id: {
         type: 'string',
@@ -1238,6 +1251,45 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
       name: {
         type: 'string',
+      },
+      muscles: {
+        type: 'array',
+        description:
+          'The muscle codes this movement trains, the primary one first. Always present, empty when nothing has been curated: a row that offers an exercise is the row that has to explain it.',
+        items: {
+          type: 'string',
+        },
+      },
+      equipment: {
+        type: 'array',
+        description:
+          'The equipment codes this movement is compatible with, the required one first. Compatibility, never inventory or availability.',
+        items: {
+          type: 'string',
+        },
+      },
+    },
+  },
+  MuscleTerm: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['code', 'name', 'region', 'body_slug'],
+    properties: {
+      code: {
+        type: 'string',
+      },
+      name: {
+        type: 'string',
+      },
+      region: {
+        type: 'string',
+        enum: ['upper', 'lower', 'general'],
+        description: 'Groups the chips into blocks; nineteen in one row is a wall.',
+      },
+      body_slug: {
+        type: ['string', 'null'],
+        description:
+          "The part the body figure in Space's onboarding already draws, when there is one, so the filter and the figure speak one vocabulary. Null for what is not a drawable part.",
       },
     },
   },
@@ -3888,6 +3940,8 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
     required: [
       'assignment_id',
       'program_version_id',
+      'program_id',
+      'editable',
       'title',
       'weeks',
       'days_per_week',
@@ -3901,6 +3955,16 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
       program_version_id: {
         $ref: '#/components/schemas/UuidV7',
+      },
+      program_id: {
+        $ref: '#/components/schemas/UuidV7',
+        description:
+          'Which programme this is, as opposed to which version of it was taken. The draft and the version are addressed by programme, so without this a row cannot offer to open the thing it is showing.',
+      },
+      editable: {
+        type: 'boolean',
+        description:
+          'Whether this editor can open it. False for a programme taken from Allfit, which was forked and never given a draft, and false for one whose weeks are not all alike — a base week cannot say that, and republishing would flatten it silently.',
       },
       title: {
         type: 'string',

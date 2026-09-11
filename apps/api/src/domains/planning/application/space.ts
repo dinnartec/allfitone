@@ -17,6 +17,7 @@ import type { AllfitV1Schemas } from '@allfitone/contracts'
 import type {
   ProgramAssignment,
   ProgramDetail,
+  ProgramVersion,
   SpacePlanningDatabase,
   TodaySession,
 } from '../domain/space.js'
@@ -41,6 +42,10 @@ export interface SpacePlanningService {
   publishMyProgram: SpacePlanningDatabase['publishMyProgram']
   readWeekPlan: SpacePlanningDatabase['readWeekPlan']
   readMyPrograms: SpacePlanningDatabase['readMyPrograms']
+  readMyProgramDraft: SpacePlanningDatabase['readMyProgramDraft']
+  publishAndRestate(
+    input: Parameters<SpacePlanningDatabase['publishMyProgram']>[0] & { timezone: string },
+  ): Promise<ProgramVersion>
   readMyContent: SpacePlanningDatabase['readMyContent']
   reorderMyPrograms: SpacePlanningDatabase['reorderMyPrograms']
   readCatalogue(input: { personId: string; requestId: string }): Promise<ProgramCatalogue>
@@ -108,6 +113,49 @@ export function createSpacePlanningService(database: SpacePlanningDatabase): Spa
       }
     },
     readMyPrograms: (input) => database.readMyPrograms(input),
+    readMyProgramDraft: (input) => database.readMyProgramDraft(input),
+
+    /**
+     * Publishing an edit and moving the agenda onto it are one act, not two.
+     *
+     * Left apart, editing a programme you are following would change nothing you
+     * train until you took it again — and taking it again would leave a second
+     * assignment that nothing can remove, and restart the week from today.
+     *
+     * **Which of the two happens is the server's decision, not the client's.** The
+     * editor used to publish and then take the programme unconditionally, which was
+     * right while publishing did nothing to the agenda; once the restate arrived it
+     * meant an edit produced a duplicate assignment that started today with nothing
+     * trained, went to the front of the order, and left the two tabs reading zero
+     * while the sessions being trained counted on the other one. Only the restate
+     * knows whether an agenda was there to move, so only it can say.
+     */
+    async publishAndRestate(input) {
+      const version = await database.publishMyProgram(input)
+      // The same key for all three, deliberately. Idempotency is unique per operation
+      // code, so each receipt is its own — and reusing the key is what makes a
+      // retried publish restate, or take, exactly once.
+      const restated = await database.restateMyProgramAssignment({
+        personId: input.personId,
+        programVersionId: version.id,
+        idempotencyKey: input.idempotencyKey,
+        commandId: input.commandId,
+        requestHash: input.requestHash,
+      })
+      if (restated === null) {
+        // Publishing it is not having it: the catalogue reads global content and the
+        // selector reads assignments, so a programme just written would be invisible.
+        await database.selfAssignProgram({
+          personId: input.personId,
+          programVersionId: version.id,
+          timezone: input.timezone,
+          idempotencyKey: input.idempotencyKey,
+          commandId: input.commandId,
+          requestHash: input.requestHash,
+        })
+      }
+      return version
+    },
     readMyContent: (input) => database.readMyContent(input),
     reorderMyPrograms: (input) => database.reorderMyPrograms(input),
     createMySessionTemplate: (input) => database.createMySessionTemplate(input),

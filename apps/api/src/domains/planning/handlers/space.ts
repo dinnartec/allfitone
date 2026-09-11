@@ -225,6 +225,32 @@ export function spacePlanningRoutes(
     }
   })
 
+  routes.get('/programs/:programId/draft', async (c) => {
+    c.header('Cache-Control', 'no-store')
+    const token = await verified(c, verify)
+    if (!token) return fail(c, 'unauthenticated')
+
+    const programId = c.req.param('programId')
+    if (!UUID_V7.test(programId)) return fail(c, 'invalid-request')
+
+    try {
+      const personId = await actors().personFor(token.subject)
+      const draft = await planning().readMyProgramDraft({
+        personId,
+        programId,
+        requestId: c.req.header('x-request-id') ?? '',
+      })
+      // Somebody else's programme and one taken from Allfit answer the same. The
+      // second is not a permission problem — a fork has no draft to open — but
+      // separating them would let identifiers be walked to learn what exists.
+      if (!draft) return fail(c, 'not-found')
+      c.header('ETag', draft.etag)
+      return c.json(draft, 200)
+    } catch (cause) {
+      return failure(c, cause)
+    }
+  })
+
   routes.post('/programs/:programId/versions', async (c) => {
     c.header('Cache-Control', 'no-store')
     const token = await verified(c, verify)
@@ -233,14 +259,21 @@ export function spacePlanningRoutes(
     const programId = c.req.param('programId')
     const expectedEtag = c.req.header('if-match')
     const command = commandContext(c, undefined)
+    // Always sent, because only the server knows whether this publication has to
+    // start an assignment, and a start needs the zone today is asked in.
+    const timezone = (c.req.query('timezone') ?? '').trim()
     if (!UUID_V7.test(programId) || !expectedEtag || !command) return fail(c, 'invalid-request')
+    if (timezone === '' || timezone.length > MAX_TIMEZONE) return fail(c, 'invalid-request')
 
     try {
       const personId = await actors().personFor(token.subject)
-      const version = await planning().publishMyProgram({
+      // Publishing an edit moves the agenda onto it in the same act. Apart, editing
+      // a programme you follow would change nothing you train.
+      const version = await planning().publishAndRestate({
         personId,
         programId,
         expectedEtag,
+        timezone,
         ...command,
       })
       return c.json(version, 201)

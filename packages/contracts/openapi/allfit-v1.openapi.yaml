@@ -3583,6 +3583,36 @@ paths:
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/ValidationFailed'
+    get:
+      tags: [Space Planning]
+      operationId: readMyProgramDraft
+      x-allfit-operation: OP-PLN-026
+      x-allfit-cache: no-store
+      summary: Read my programme in the shape I edit it in
+      description: >-
+        The counterpart of the `PUT`, answering the same projection so the editor reads what it writes. Nothing else returns which routine version each day trains: the published read names the day and not the routine behind it, so a programme could be created and never reopened. A programme with no draft is one taken from Allfit rather than written here \u2014 forking copies the versions and never the draft \u2014 and answers 404, which is also what a programme belonging to somebody else answers.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ProgramId'
+      responses:
+        '200':
+          description: The draft, with the ETag the next save has to send
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProgramDraft'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   /space/v1/programs/{programId}/versions:
     post:
@@ -3593,6 +3623,15 @@ paths:
       summary: Publish a version of my programme
       description: >-
         Its sessions point at the person\u2019s own routines. Publishing a new version does not change anybody who already took the programme: they keep the plan they took.
+
+
+        **Publishing leaves the author following what they published, and only
+        once.** If they already follow this programme, the agenda they are on moves
+        onto the new version (`OP-PLN-027`): the week number does not restart and
+        what was trained keeps its credit. If they do not follow it yet \u2014 the
+        first publication of a programme just written \u2014 it is taken from today
+        (`OP-PLN-011`). The server decides which, because a client that guesses
+        creates a second assignment that nothing can remove.
       security:
         - bearerAuth: []
       parameters:
@@ -3600,6 +3639,15 @@ paths:
         - $ref: '#/components/parameters/PlanningDraftIfMatch'
         - $ref: '#/components/parameters/IdempotencyKey'
         - $ref: '#/components/parameters/CommandId'
+        - name: timezone
+          in: query
+          required: true
+          description: >-
+            The device's zone, for the assignment this may have to start. Only the
+            zone travels, never the date: taking a start date from a client would let
+            a plan be backdated into a history that never happened.
+          schema:
+            $ref: '#/components/schemas/IanaTimeZone'
       responses:
         '201':
           description: The published version
@@ -3731,6 +3779,31 @@ paths:
           schema:
             type: string
             maxLength: 120
+        - name: muscle
+          in: query
+          required: false
+          explode: true
+          description: >-
+            Repeatable. Several values of this filter are `or` — picking a second
+            muscle widens — while combining it with `equipment` is `and`, because
+            that is how a filter reads.
+          schema:
+            type: array
+            maxItems: 32
+            items:
+              type: string
+              maxLength: 64
+        - name: equipment
+          in: query
+          required: false
+          explode: true
+          description: Repeatable, with the same semantics as `muscle`.
+          schema:
+            type: array
+            maxItems: 32
+            items:
+              type: string
+              maxLength: 64
         - name: limit
           in: query
           required: false
@@ -3753,6 +3826,76 @@ paths:
                   $ref: '#/components/schemas/Movement'
         '400':
           $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /catalog/v1/equipment:
+    get:
+      tags: [Catalogue]
+      operationId: listEquipment
+      x-allfit-operation: OP-CAT-011
+      x-allfit-cache: no-store
+      summary: List the equipment vocabulary
+      description: >-
+        The chips the exercise picker filters by. Asked once when the screen opens and
+        not again as somebody types: a filter whose chips come and go cannot be used.
+
+
+        Equipment describes **compatibility**, never inventory, availability or
+        booking. `HU-SP-066` says so in as many words.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: The published global equipment
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CatalogueTerm'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /catalog/v1/muscles:
+    get:
+      tags: [Catalogue]
+      operationId: listMuscles
+      x-allfit-operation: OP-CAT-015
+      x-allfit-cache: no-store
+      summary: List the muscle vocabulary
+      description: >-
+        One global vocabulary, with no organization scope: two gyms cannot disagree
+        about what a quadriceps is.
+
+
+        A muscle here describes a **movement**, never a person. Body composition is
+        health data and lives in `identity`; nothing in this answer is personal.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: The published muscles
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MuscleTerm'
         '401':
           $ref: '#/components/responses/Unauthenticated'
         '403':
@@ -6083,7 +6226,7 @@ components:
     Movement:
       type: object
       additionalProperties: false
-      required: [id, discipline_code, name]
+      required: [id, discipline_code, name, muscles, equipment]
       properties:
         id:
           type: string
@@ -6092,6 +6235,49 @@ components:
           type: string
         name:
           type: string
+        muscles:
+          type: array
+          description: >-
+            The muscle codes this movement trains, the primary one first. Always
+            present, empty when nothing has been curated: a row that offers an
+            exercise is the row that has to explain it.
+          items:
+            type: string
+        equipment:
+          type: array
+          description: >-
+            The equipment codes this movement is compatible with, the required one
+            first. Compatibility, never inventory or availability.
+          items:
+            type: string
+    CatalogueTerm:
+      type: object
+      additionalProperties: false
+      required: [code, name]
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+    MuscleTerm:
+      type: object
+      additionalProperties: false
+      required: [code, name, region, body_slug]
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        region:
+          type: string
+          enum: [upper, lower, general]
+          description: Groups the chips into blocks; nineteen in one row is a wall.
+        body_slug:
+          type: [string, 'null']
+          description: >-
+            The part the body figure in Space's onboarding already draws, when there
+            is one, so the filter and the figure speak one vocabulary. Null for what
+            is not a drawable part.
     SpaceMyRoutine:
       type: object
       additionalProperties: false
@@ -6131,13 +6317,26 @@ components:
       type: object
       additionalProperties: false
       required:
-        [assignment_id, program_version_id, title, weeks, days_per_week, starts_on,
+        [assignment_id, program_version_id, program_id, editable, title, weeks, days_per_week, starts_on,
          sessions_done, sessions_planned]
       properties:
         assignment_id:
           $ref: '#/components/schemas/UuidV7'
         program_version_id:
           $ref: '#/components/schemas/UuidV7'
+        program_id:
+          $ref: '#/components/schemas/UuidV7'
+          description: >-
+            Which programme this is, as opposed to which version of it was taken. The
+            draft and the version are addressed by programme, so without this a row
+            cannot offer to open the thing it is showing.
+        editable:
+          type: boolean
+          description: >-
+            Whether this editor can open it. False for a programme taken from Allfit,
+            which was forked and never given a draft, and false for one whose weeks
+            are not all alike — a base week cannot say that, and republishing would
+            flatten it silently.
         title:
           type: string
         weeks:

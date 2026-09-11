@@ -127,6 +127,8 @@ const weekPlan: WeekPlan = {
 const myProgram: MyProgram = {
   assignment_id: ASSIGNMENT_ID,
   program_version_id: VERSION_ID,
+  program_id: PROGRAM_ID,
+  editable: true,
   title: 'Torso y pierna',
   weeks: 10,
   days_per_week: 4,
@@ -200,6 +202,8 @@ function harness(overrides?: {
     readWeekPlan: async () => weekPlan,
     readWeekProgress: async () => ({ sessions_planned: 1, sessions_completed: 0 }),
     readMyPrograms: async () => [myProgram],
+    readMyProgramDraft: async () => programDraft,
+    publishAndRestate: async () => ({}) as never,
     readMyContent: async () => [myRoutine],
     reorderMyPrograms: async () => [myProgram],
     readTodaySession: async () => null,
@@ -257,7 +261,7 @@ describe('the Space planning surface honours the contract', () => {
         operation.path.startsWith('/space/v1/week-plan') ||
         operation.path.startsWith('/space/v1/session-templates'),
     )
-    expect(declared).toHaveLength(12)
+    expect(declared).toHaveLength(13)
     expect(declared.map((operation) => operation.allfitOperation).sort()).toEqual([
       'OP-PLN-001',
       'OP-PLN-002',
@@ -273,6 +277,9 @@ describe('the Space planning surface honours the contract', () => {
       'OP-PLN-021',
       'OP-PLN-022',
       'OP-PLN-024',
+      // Reading a programme back in the shape it is edited in, which is the one
+      // thing no other operation answers.
+      'OP-PLN-026',
     ])
   })
 })
@@ -545,12 +552,41 @@ describe('the six that make content mine', () => {
   })
 
   test('T-PLN-API-098 refuses to publish a programme without its ETag', async () => {
+    const response = await harness().request(
+      `/space/v1/programs/${PROGRAM_ID}/versions?timezone=America%2FBogota`,
+      { method: 'POST', headers: commanded },
+    )
+
+    expect(response.status).toBe(400)
+  })
+
+  test('T-PLN-API-111 refuses to publish without a zone, which an assignment would need', async () => {
     const response = await harness().request(`/space/v1/programs/${PROGRAM_ID}/versions`, {
       method: 'POST',
-      headers: commanded,
+      headers: commandedEtag,
     })
 
     expect(response.status).toBe(400)
+  })
+
+  test('T-PLN-API-112 passes the zone on, so a first publication starts today where you are', async () => {
+    let seen: string | undefined
+    const app = harness({
+      service: {
+        publishAndRestate: async (input) => {
+          seen = input.timezone
+          return {} as never
+        },
+      },
+    })
+
+    const response = await app.request(
+      `/space/v1/programs/${PROGRAM_ID}/versions?timezone=America%2FBogota`,
+      { method: 'POST', headers: commandedEtag },
+    )
+
+    expect(response.status).toBe(201)
+    expect(seen).toBe('America/Bogota')
   })
 
   test('T-PLN-API-099 refuses an account that has not activated its Fitness ID', async () => {
@@ -680,5 +716,43 @@ describe('GET /space/v1/today', () => {
     )
 
     expect(response.status).toBe(403)
+  })
+})
+
+describe('GET /space/v1/programs/{programId}/draft', () => {
+  test('T-PLN-API-107 answers the draft with the etag the next save has to send', async () => {
+    const response = await harness().request(`/space/v1/programs/${PROGRAM_ID}/draft`, {
+      headers: authorized,
+    })
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('ETag')).toBe(programDraft.etag)
+    expect(await response.json()).toEqual(programDraft)
+  })
+
+  test('T-PLN-API-108 answers not-found for a programme with no draft', async () => {
+    // A programme taken from Allfit was forked and never given a draft. It is not a
+    // permission problem, and it answers the same as somebody else's programme:
+    // separating them would let identifiers be walked to learn what exists.
+    const none = harness({ service: { readMyProgramDraft: async () => null } })
+    const response = await none.request(`/space/v1/programs/${PROGRAM_ID}/draft`, {
+      headers: authorized,
+    })
+
+    expect(response.status).toBe(404)
+  })
+
+  test('T-PLN-API-109 refuses an identifier that is not a programme', async () => {
+    const response = await harness().request('/space/v1/programs/nope/draft', {
+      headers: authorized,
+    })
+
+    expect(response.status).toBe(400)
+  })
+
+  test('T-PLN-API-110 requires a bearer token', async () => {
+    const response = await harness().request(`/space/v1/programs/${PROGRAM_ID}/draft`)
+
+    expect(response.status).toBe(401)
   })
 })

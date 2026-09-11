@@ -13,7 +13,9 @@ import { ApiError, authorizedGet, authorizedPost, authorizedPut, refreshSession 
 import {
   createContentFlow,
   type ContentFlow,
+  type CatalogueTerm,
   type Movement,
+  type MuscleTerm,
   type MyRoutine,
   type Program,
   type ProgramDraft,
@@ -33,12 +35,24 @@ export function createSpaceContentFlow(): ContentFlow {
         Date.now(),
       ),
     transport: {
-      searchMovements: (discipline, query) =>
+      searchMovements: (discipline, query, muscles, equipment) =>
         authenticated((token) =>
           authorizedGet<readonly Movement[]>(
-            `/catalog/v1/movements?discipline=${encodeURIComponent(discipline)}&q=${encodeURIComponent(query)}`,
+            `/catalog/v1/movements?discipline=${encodeURIComponent(discipline)}&q=${encodeURIComponent(query)}` +
+              // Repeated rather than joined: `muscle=a&muscle=b` is what the contract
+              // declares, and a comma would arrive as one code nothing matches.
+              muscles.map((code) => `&muscle=${encodeURIComponent(code)}`).join('') +
+              equipment.map((code) => `&equipment=${encodeURIComponent(code)}`).join(''),
             token,
           ),
+        ),
+      readEquipment: () =>
+        authenticated((token) =>
+          authorizedGet<readonly CatalogueTerm[]>('/catalog/v1/equipment', token),
+        ),
+      readMuscles: () =>
+        authenticated((token) =>
+          authorizedGet<readonly MuscleTerm[]>('/catalog/v1/muscles', token),
         ),
       readMyRoutines: () =>
         authenticated((token) =>
@@ -73,6 +87,10 @@ export function createSpaceContentFlow(): ContentFlow {
             etag,
           ),
         ),
+      readProgramDraft: (programId) =>
+        authenticated((token) =>
+          authorizedGet<ProgramDraft>(`/space/v1/programs/${programId}/draft`, token),
+        ),
       createProgram: (command, title) =>
         authenticated((token) =>
           authorizedPost<Program>('/space/v1/programs', command, { title }, token),
@@ -87,10 +105,10 @@ export function createSpaceContentFlow(): ContentFlow {
             etag,
           ),
         ),
-      publishProgram: (command, programId, etag) =>
+      publishProgram: (command, programId, etag, timezone) =>
         authenticated((token) =>
           authorizedPost<ProgramVersion>(
-            `/space/v1/programs/${programId}/versions`,
+            `/space/v1/programs/${programId}/versions?timezone=${encodeURIComponent(timezone)}`,
             command,
             undefined,
             token,

@@ -19,6 +19,8 @@ import type { AllfitV1Schemas } from '@allfitone/contracts'
 import type { CommandHeaders } from '@allfitone/contracts/commands'
 
 export type Movement = AllfitV1Schemas['Movement']
+export type CatalogueTerm = AllfitV1Schemas['CatalogueTerm']
+export type MuscleTerm = AllfitV1Schemas['MuscleTerm']
 export type MyRoutine = AllfitV1Schemas['SpaceMyRoutine']
 export type SessionTemplate = AllfitV1Schemas['SessionTemplate']
 export type SessionTemplateDraft = AllfitV1Schemas['SessionTemplateDraft']
@@ -36,7 +38,14 @@ export interface BaseWeekDay {
 }
 
 export interface ContentTransport {
-  searchMovements(discipline: string, query: string): Promise<readonly Movement[]>
+  searchMovements(
+    discipline: string,
+    query: string,
+    muscles: readonly string[],
+    equipment: readonly string[],
+  ): Promise<readonly Movement[]>
+  readEquipment(): Promise<readonly CatalogueTerm[]>
+  readMuscles(): Promise<readonly MuscleTerm[]>
   readMyRoutines(): Promise<readonly MyRoutine[]>
   createTemplate(
     command: CommandHeaders,
@@ -54,6 +63,7 @@ export interface ContentTransport {
     templateId: string,
     etag: string,
   ): Promise<SessionTemplateVersion>
+  readProgramDraft(programId: string): Promise<ProgramDraft>
   createProgram(command: CommandHeaders, title: string): Promise<Program>
   saveProgramDraft(
     command: CommandHeaders,
@@ -61,7 +71,12 @@ export interface ContentTransport {
     etag: string,
     content: ProgramDraftContent,
   ): Promise<ProgramDraft>
-  publishProgram(command: CommandHeaders, programId: string, etag: string): Promise<ProgramVersion>
+  publishProgram(
+    command: CommandHeaders,
+    programId: string,
+    etag: string,
+    timezone: string,
+  ): Promise<ProgramVersion>
 }
 
 export interface ContentFlowDependencies {
@@ -70,7 +85,14 @@ export interface ContentFlowDependencies {
 }
 
 export interface ContentFlow {
-  searchMovements(discipline: string, query: string): Promise<readonly Movement[]>
+  searchMovements(
+    discipline: string,
+    query: string,
+    muscles: readonly string[],
+    equipment: readonly string[],
+  ): Promise<readonly Movement[]>
+  readEquipment(): Promise<readonly CatalogueTerm[]>
+  readMuscles(): Promise<readonly MuscleTerm[]>
   readMyRoutines(): Promise<readonly MyRoutine[]>
   createTemplate(disciplineCode: string, title: string): Promise<SessionTemplate>
   saveTemplateDraft(
@@ -78,9 +100,12 @@ export interface ContentFlow {
     content: SessionTemplateDraftContent,
   ): Promise<SessionTemplateDraft>
   publishTemplate(templateId: string): Promise<SessionTemplateVersion>
+  /** Opens a programme that already exists, and remembers the etag its next save needs. */
+  openProgram(programId: string): Promise<ProgramDraft>
   createProgram(title: string): Promise<Program>
   saveProgramDraft(programId: string, content: ProgramDraftContent): Promise<ProgramDraft>
-  publishProgram(programId: string): Promise<ProgramVersion>
+  /** Publishing leaves the author following it; the server takes or restates, never both. */
+  publishProgram(programId: string, timezone: string): Promise<ProgramVersion>
   /** What the flow will send as `If-Match`, for a screen that needs to say so. */
   etagFor(id: string): string | undefined
   remember(id: string, etag: string): void
@@ -115,13 +140,26 @@ export function createContentFlow(dependencies: ContentFlowDependencies): Conten
   }
 
   return {
-    searchMovements: (discipline, query) =>
-      dependencies.transport.searchMovements(discipline, query),
+    searchMovements: (discipline, query, muscles, equipment) =>
+      dependencies.transport.searchMovements(discipline, query, muscles, equipment),
+    readEquipment: () => dependencies.transport.readEquipment(),
+    readMuscles: () => dependencies.transport.readMuscles(),
     readMyRoutines: () => dependencies.transport.readMyRoutines(),
 
     etagFor: (id) => etags.get(id),
     remember: (id, etag) => {
       etags.set(id, etag)
+    },
+
+    /**
+     * The etag is remembered here rather than left to the screen, because forgetting
+     * it is not a visible mistake: the first save after opening would throw for a
+     * missing etag, long after the person typed the thing they are about to lose.
+     */
+    async openProgram(programId) {
+      const draft = await dependencies.transport.readProgramDraft(programId)
+      etags.set(programId, draft.etag)
+      return draft
     },
 
     async createTemplate(disciplineCode, title) {
@@ -174,12 +212,13 @@ export function createContentFlow(dependencies: ContentFlowDependencies): Conten
       return draft
     },
 
-    async publishProgram(programId) {
+    async publishProgram(programId, timezone) {
       const key = `publish-program:${programId}:${etagOf(programId)}`
       const version = await dependencies.transport.publishProgram(
         once(key),
         programId,
         etagOf(programId),
+        timezone,
       )
       creating.delete(key)
       return version
@@ -217,6 +256,37 @@ export function expandBaseWeek(
     }
   }
   return sessions
+}
+
+/** The seven days a base week always has, empty until something fills them. */
+const WEEKDAYS = [1, 2, 3, 4, 5, 6, 7] as const
+
+/**
+ * The inverse of `expandBaseWeek`, for opening a programme that already exists.
+ *
+ * Only week one is read: the rest are its repeats, and reading them would count a day
+ * twice. A programme whose weeks are not all alike cannot be said in a base week at
+ * all, and is refused before it reaches this — flattening it here would silently
+ * rewrite somebody's programme the moment they renamed it.
+ *
+ * Seven days always come back, empty ones included, because that is the shape the
+ * editor draws and an absent Tuesday is not the same as an empty one.
+ */
+export function collapseBaseWeek(sessions: ProgramDraftContent['sessions']): {
+  baseWeek: readonly BaseWeekDay[]
+  weeks: number
+} {
+  const firstWeek = new Map<number, string>()
+  for (const session of sessions) {
+    if (session.week === 1) firstWeek.set(session.day, session.template_version_id)
+  }
+
+  return {
+    baseWeek: WEEKDAYS.map((day) => ({ day, templateVersionId: firstWeek.get(day) ?? null })),
+    // A programme with nothing in it still repeats for as long as it says it does, and
+    // zero would put the stepper below its own minimum.
+    weeks: Math.max(1, ...sessions.map((session) => session.week)),
+  }
 }
 
 /** What `PR-1` shows under the week: how much of it there actually is. */

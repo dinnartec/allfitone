@@ -82,3 +82,58 @@ describe('readWeekProgress', () => {
     })
   })
 })
+
+describe('publishAndRestate', () => {
+  const command = {
+    personId: 'p',
+    programId: 'g',
+    expectedEtag: 'etag',
+    timezone: 'America/Bogota',
+    idempotencyKey: 'key',
+    commandId: 'command',
+    requestHash: Buffer.from('hash'),
+  }
+
+  /** Records what each command was called with; nothing else here is exercised. */
+  function publisher(restated: string | null) {
+    const calls: string[] = []
+    const taken: { timezone: string }[] = []
+    const database = {
+      publishMyProgram: async () => {
+        calls.push('publish')
+        return { id: VERSION_ID } as never
+      },
+      restateMyProgramAssignment: async () => {
+        calls.push('restate')
+        return restated
+      },
+      selfAssignProgram: async (input: { timezone: string }) => {
+        calls.push('take')
+        taken.push(input)
+        return {} as never
+      },
+    } as unknown as SpacePlanningDatabase
+    return { service: createSpacePlanningService(database), calls, taken }
+  }
+
+  test('takes the programme when nothing was following it, so publishing is not invisible', async () => {
+    const first = publisher(null)
+
+    await first.service.publishAndRestate(command)
+
+    expect(first.calls).toEqual(['publish', 'restate', 'take'])
+    expect(first.taken[0]?.timezone).toBe('America/Bogota')
+  })
+
+  test('leaves the agenda alone when the restate moved it, rather than assigning twice', async () => {
+    // The defect: the editor took the programme after every publication, so editing one
+    // already followed produced a second assignment starting today with nothing trained.
+    // It sorted in front, and both tabs read a progress that never moved while the
+    // sessions being trained counted on the other one.
+    const again = publisher(ASSIGNMENT_ID)
+
+    await again.service.publishAndRestate(command)
+
+    expect(again.calls).toEqual(['publish', 'restate'])
+  })
+})

@@ -232,6 +232,32 @@ export function createSpacePlanningDatabase(): SpacePlanningDatabase {
         return answered(row?.draft, 'replace the draft')
       }),
 
+    readMyProgramDraft: (input) =>
+      transact(sql, input.personId, input.requestId, async (transaction) => {
+        const [row] = await transaction<{ draft: ProgramDraft | null }[]>`
+          select planning.read_my_program_draft(
+            ${input.personId}::uuid, ${input.programId}::uuid
+          ) as draft
+        `
+        return row?.draft ?? null
+      }),
+
+    /**
+     * Answers nothing on purpose. The command is a consequence of publishing, not a
+     * request of its own, and a programme somebody wrote and never took has no agenda
+     * to restate — that is a no-op, not a failure.
+     */
+    restateMyProgramAssignment: (input) =>
+      command(sql, input.personId, async (transaction) => {
+        const [row] = await transaction<{ assignment: string | null }[]>`
+          select planning.restate_my_program_assignment(
+            ${input.personId}::uuid, ${input.programVersionId}::uuid,
+            ${input.idempotencyKey}::uuid, ${input.commandId}::uuid, ${input.requestHash}
+          ) as assignment
+        `
+        return row?.assignment ?? null
+      }),
+
     publishMyProgram: (input) =>
       command(sql, input.personId, async (transaction) => {
         const [row] = await transaction<{ version: ProgramVersion }[]>`

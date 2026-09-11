@@ -97,6 +97,20 @@ export interface SpacePlanningDatabase {
   publishMyProgram(
     input: OwnContentCommand & { personId: string; programId: string; expectedEtag: string },
   ): Promise<ProgramVersion>
+  /** Null when the programme is somebody else's, or was taken rather than written. */
+  readMyProgramDraft(input: {
+    personId: string
+    programId: string
+    requestId: string
+  }): Promise<ProgramDraft | null>
+  /** The assignment moved onto the version, or null when the programme is not followed. */
+  restateMyProgramAssignment(input: {
+    personId: string
+    programVersionId: string
+    idempotencyKey: string
+    commandId: string
+    requestHash: Buffer
+  }): Promise<string | null>
   selfAssignProgram(input: {
     personId: string
     programVersionId: string

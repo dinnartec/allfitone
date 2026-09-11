@@ -10,6 +10,7 @@
 import { describe, expect, test } from 'bun:test'
 
 import {
+  collapseBaseWeek,
   createContentFlow,
   expandBaseWeek,
   MissingEtagError,
@@ -22,7 +23,7 @@ const PROGRAM_ID = '019f9000-0000-7000-8000-000000000051'
 const VERSION_ID = '019f9000-0000-7000-8000-000000000061'
 
 function harness(overrides: Partial<ContentTransport> = {}) {
-  const sent: { command: string; etag?: string }[] = []
+  const sent: { command: string; etag?: string; timezone?: string }[] = []
   let issued = 0
   const command = () => ({
     idempotencyKey: `key-${(issued += 1)}`,
@@ -32,6 +33,8 @@ function harness(overrides: Partial<ContentTransport> = {}) {
 
   const transport: ContentTransport = {
     searchMovements: async () => [],
+    readEquipment: async () => [],
+    readMuscles: async () => [],
     readMyRoutines: async () => [],
     createTemplate: async (headers) => {
       sent.push({ command: headers.idempotencyKey })
@@ -45,6 +48,8 @@ function harness(overrides: Partial<ContentTransport> = {}) {
       sent.push({ command: headers.idempotencyKey, etag })
       return { id: VERSION_ID } as never
     },
+    readProgramDraft: async (programId) =>
+      ({ id: 'draft', program_id: programId, etag: 'opened-etag' }) as never,
     createProgram: async (headers) => {
       sent.push({ command: headers.idempotencyKey })
       return { id: PROGRAM_ID, draft: { etag: 'program-etag-1' } } as never
@@ -53,8 +58,8 @@ function harness(overrides: Partial<ContentTransport> = {}) {
       sent.push({ command: headers.idempotencyKey, etag })
       return draft('program-etag-2')
     },
-    publishProgram: async (headers, _id, etag) => {
-      sent.push({ command: headers.idempotencyKey, etag })
+    publishProgram: async (headers, _id, etag, timezone) => {
+      sent.push({ command: headers.idempotencyKey, etag, timezone })
       return { id: VERSION_ID } as never
     },
     ...overrides,
@@ -125,9 +130,18 @@ describe('the etag travels from one save to the next', () => {
     await flow.createProgram('Mi programa')
 
     await flow.saveProgramDraft(PROGRAM_ID, content)
-    await flow.publishProgram(PROGRAM_ID)
+    await flow.publishProgram(PROGRAM_ID, 'America/Bogota')
 
     expect(sent.at(-1)?.etag).toBe('program-etag-2')
+  })
+
+  test('T-SP-CONTENT-18 publishing carries the zone the assignment it may start needs', async () => {
+    const { flow, sent } = harness()
+    await flow.createProgram('Mi programa')
+
+    await flow.publishProgram(PROGRAM_ID, 'America/Bogota')
+
+    expect(sent.at(-1)?.timezone).toBe('America/Bogota')
   })
 })
 
@@ -171,5 +185,72 @@ describe('the base week becomes the sessions a version stores', () => {
 
   test('T-SP-CONTENT-11 the summary counts what is there, not the seven days', () => {
     expect(summarizeBaseWeek(week, 4)).toEqual({ daysPerWeek: 2, sessions: 8 })
+  })
+})
+
+describe('and the sessions become the base week again', () => {
+  const week = [
+    { day: 1, templateVersionId: 'a' },
+    { day: 2, templateVersionId: null },
+    { day: 3, templateVersionId: 'b' },
+    { day: 4, templateVersionId: null },
+    { day: 5, templateVersionId: null },
+    { day: 6, templateVersionId: null },
+    { day: 7, templateVersionId: null },
+  ]
+
+  test('T-SP-CONTENT-12 a round trip returns exactly what went in', () => {
+    // The guarantee the edit screen rests on. If this drifts, opening a programme to
+    // rename it silently rewrites which routine each day trains.
+    expect(collapseBaseWeek(expandBaseWeek(week, 6))).toEqual({ baseWeek: week, weeks: 6 })
+  })
+
+  test('T-SP-CONTENT-13 always seven days, so an empty one stays empty rather than absent', () => {
+    const { baseWeek } = collapseBaseWeek([
+      { position: 1, week: 1, day: 3, template_version_id: 'b' },
+    ])
+
+    expect(baseWeek).toHaveLength(7)
+    expect(baseWeek.map((one) => one.day)).toEqual([1, 2, 3, 4, 5, 6, 7])
+    expect(baseWeek[2]).toEqual({ day: 3, templateVersionId: 'b' })
+    expect(baseWeek[0]?.templateVersionId).toBeNull()
+  })
+
+  test('T-SP-CONTENT-14 the weeks are counted from the sessions, not assumed', () => {
+    expect(collapseBaseWeek(expandBaseWeek(week, 1)).weeks).toBe(1)
+    expect(collapseBaseWeek(expandBaseWeek(week, 52)).weeks).toBe(52)
+  })
+
+  test('T-SP-CONTENT-15 nothing at all is one empty week, not zero weeks', () => {
+    // A programme with no days still repeats for as long as it says; answering zero
+    // would put the stepper below its own minimum.
+    expect(collapseBaseWeek([])).toEqual({
+      baseWeek: week.map((day) => ({ day: day.day, templateVersionId: null })),
+      weeks: 1,
+    })
+  })
+
+  test('T-SP-CONTENT-16 only week one decides the base week', () => {
+    // Weeks two and beyond are repeats. Reading them would double-count a day, and a
+    // programme whose weeks differ is refused before it reaches here.
+    const sessions = [
+      { position: 1, week: 1, day: 1, template_version_id: 'a' },
+      { position: 2, week: 2, day: 1, template_version_id: 'a' },
+      { position: 3, week: 2, day: 5, template_version_id: 'c' },
+    ]
+
+    expect(collapseBaseWeek(sessions).baseWeek[4]?.templateVersionId).toBeNull()
+  })
+})
+
+describe('opening a programme that already exists', () => {
+  test('T-SP-CONTENT-17 remembers the etag, so the first save after opening is not refused', async () => {
+    // Forgetting it is not a visible mistake: the save throws for a missing etag long
+    // after somebody typed the thing they are about to lose.
+    const { flow } = harness()
+
+    await flow.openProgram(PROGRAM_ID)
+
+    expect(flow.etagFor(PROGRAM_ID)).toBe('opened-etag')
   })
 })

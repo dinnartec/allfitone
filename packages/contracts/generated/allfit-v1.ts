@@ -1451,7 +1451,11 @@ export interface paths {
       path?: never
       cookie?: never
     }
-    get?: never
+    /**
+     * Read my programme in the shape I edit it in
+     * @description The counterpart of the `PUT`, answering the same projection so the editor reads what it writes. Nothing else returns which routine version each day trains: the published read names the day and not the routine behind it, so a programme could be created and never reopened. A programme with no draft is one taken from Allfit rather than written here \u2014 forking copies the versions and never the draft \u2014 and answers 404, which is also what a programme belonging to somebody else answers.
+     */
+    get: operations['readMyProgramDraft']
     /**
      * Replace the content of my programme draft
      * @description The base week expanded into one entry per week, which is what the stored shape asks for. The screen edits one week; the draft holds them all.
@@ -1476,6 +1480,8 @@ export interface paths {
     /**
      * Publish a version of my programme
      * @description Its sessions point at the person\u2019s own routines. Publishing a new version does not change anybody who already took the programme: they keep the plan they took.
+     *
+     *     **Publishing leaves the author following what they published, and only once.** If they already follow this programme, the agenda they are on moves onto the new version (`OP-PLN-027`): the week number does not restart and what was trained keeps its credit. If they do not follow it yet \u2014 the first publication of a programme just written \u2014 it is taken from today (`OP-PLN-011`). The server decides which, because a client that guesses creates a second assignment that nothing can remove.
      */
     post: operations['publishMyProgram']
     delete?: never
@@ -1536,6 +1542,50 @@ export interface paths {
      * @description What `S-1` calls while somebody types. The library is curated content: it is read here and it is never written here. Only the published global subset is visible, which is what the operations matrix already says this operation answers.
      */
     get: operations['searchMovements']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/catalog/v1/equipment': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * List the equipment vocabulary
+     * @description The chips the exercise picker filters by. Asked once when the screen opens and not again as somebody types: a filter whose chips come and go cannot be used.
+     *
+     *     Equipment describes **compatibility**, never inventory, availability or booking. `HU-SP-066` says so in as many words.
+     */
+    get: operations['listEquipment']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/catalog/v1/muscles': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * List the muscle vocabulary
+     * @description One global vocabulary, with no organization scope: two gyms cannot disagree about what a quadriceps is.
+     *
+     *     A muscle here describes a **movement**, never a person. Body composition is health data and lives in `identity`; nothing in this answer is personal.
+     */
+    get: operations['listMuscles']
     put?: never
     post?: never
     delete?: never
@@ -2283,6 +2333,25 @@ export interface components {
       id: string
       discipline_code: string
       name: string
+      /** @description The muscle codes this movement trains, the primary one first. Always present, empty when nothing has been curated: a row that offers an exercise is the row that has to explain it. */
+      muscles: string[]
+      /** @description The equipment codes this movement is compatible with, the required one first. Compatibility, never inventory or availability. */
+      equipment: string[]
+    }
+    CatalogueTerm: {
+      code: string
+      name: string
+    }
+    MuscleTerm: {
+      code: string
+      name: string
+      /**
+       * @description Groups the chips into blocks; nineteen in one row is a wall.
+       * @enum {string}
+       */
+      region: 'upper' | 'lower' | 'general'
+      /** @description The part the body figure in Space's onboarding already draws, when there is one, so the filter and the figure speak one vocabulary. Null for what is not a drawable part. */
+      body_slug: string | null
     }
     SpaceMyRoutine: {
       /** Format: uuid */
@@ -2299,6 +2368,10 @@ export interface components {
     SpaceMyProgram: {
       assignment_id: components['schemas']['UuidV7']
       program_version_id: components['schemas']['UuidV7']
+      /** @description Which programme this is, as opposed to which version of it was taken. The draft and the version are addressed by programme, so without this a row cannot offer to open the thing it is showing. */
+      program_id: components['schemas']['UuidV7']
+      /** @description Whether this editor can open it. False for a programme taken from Allfit, which was forked and never given a draft, and false for one whose weeks are not all alike — a base week cannot say that, and republishing would flatten it silently. */
+      editable: boolean
       title: string
       weeks: number
       days_per_week: number
@@ -7076,6 +7149,33 @@ export interface operations {
       422: components['responses']['ValidationFailed']
     }
   }
+  readMyProgramDraft: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        programId: components['parameters']['ProgramId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The draft, with the ETag the next save has to send */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          ETag: components['headers']['ETag']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ProgramDraft']
+        }
+      }
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+    }
+  }
   replaceMyProgramDraft: {
     parameters: {
       query?: never
@@ -7120,7 +7220,10 @@ export interface operations {
   }
   publishMyProgram: {
     parameters: {
-      query?: never
+      query: {
+        /** @description The device's zone, for the assignment this may have to start. Only the zone travels, never the date: taking a start date from a client would let a plan be backdated into a history that never happened. */
+        timezone: components['schemas']['IanaTimeZone']
+      }
       header: {
         /** @description Strong content ETag returned with the current editable draft. */
         'If-Match': components['parameters']['PlanningDraftIfMatch']
@@ -7214,6 +7317,10 @@ export interface operations {
         discipline?: string
         /** @description Matched anywhere in the name, case-insensitively. Accents are not folded. */
         q?: string
+        /** @description Repeatable. Several values of this filter are `or` — picking a second muscle widens — while combining it with `equipment` is `and`, because that is how a filter reads. */
+        muscle?: string[]
+        /** @description Repeatable, with the same semantics as `muscle`. */
+        equipment?: string[]
         limit?: number
       }
       header?: never
@@ -7233,6 +7340,54 @@ export interface operations {
         }
       }
       400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listEquipment: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The published global equipment */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CatalogueTerm'][]
+        }
+      }
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listMuscles: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The published muscles */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['MuscleTerm'][]
+        }
+      }
       401: components['responses']['Unauthenticated']
       403: components['responses']['Forbidden']
       503: components['responses']['UpstreamUnavailable']
