@@ -37,11 +37,15 @@ const movements: Movement[] = [
     id: '019f4000-0000-7000-8000-000000000001',
     discipline_code: 'strength',
     name: 'Press de banca con barra',
+    muscles: ['chest', 'triceps'],
+    equipment: ['barbell', 'bench'],
   },
   {
     id: '019f4000-0000-7000-8000-000000000002',
     discipline_code: 'strength',
     name: 'Press inclinado con mancuernas',
+    muscles: ['chest', 'shoulders'],
+    equipment: ['dumbbell', 'bench'],
   },
 ]
 
@@ -59,6 +63,8 @@ function harness(overrides?: {
       asked.push(request)
       return movements
     },
+    equipment: async () => [{ code: 'barbell', name: 'Barra' }],
+    muscles: async () => [{ code: 'chest', name: 'Pecho', region: 'upper', body_slug: 'chest' }],
     ...overrides?.service,
   }
   const actors: SpaceActorResolver = {
@@ -135,7 +141,14 @@ describe('GET /catalog/v1/movements', () => {
 
     expect(response.status).toBe(200)
     expect(asking.asked).toEqual([
-      { personId: PERSON_ID, discipline: 'strength', query: 'press', limit: 7 },
+      {
+        personId: PERSON_ID,
+        discipline: 'strength',
+        query: 'press',
+        muscles: [],
+        equipment: [],
+        limit: 7,
+      },
     ])
   })
 
@@ -147,7 +160,14 @@ describe('GET /catalog/v1/movements', () => {
     const absent = harness()
     await absent.app.request('/catalog/v1/movements', { headers: authorized })
 
-    const noFilter = { personId: PERSON_ID, discipline: null, query: null, limit: 40 }
+    const noFilter = {
+      personId: PERSON_ID,
+      discipline: null,
+      query: null,
+      muscles: [],
+      equipment: [],
+      limit: 40,
+    }
     expect(blank.asked).toEqual([noFilter])
     expect(absent.asked).toEqual([noFilter])
   })
@@ -174,7 +194,14 @@ describe('GET /catalog/v1/movements', () => {
     expect(over.status).toBe(400)
     expect(at.status).toBe(200)
     expect(bounded.asked).toEqual([
-      { personId: PERSON_ID, discipline: null, query: null, limit: 100 },
+      {
+        personId: PERSON_ID,
+        discipline: null,
+        query: null,
+        muscles: [],
+        equipment: [],
+        limit: 100,
+      },
     ])
   })
 
@@ -190,8 +217,68 @@ describe('GET /catalog/v1/movements', () => {
     expect(over.status).toBe(400)
     expect(at.status).toBe(200)
     expect(bounded.asked).toEqual([
-      { personId: PERSON_ID, discipline: null, query: 'a'.repeat(120), limit: 40 },
+      {
+        personId: PERSON_ID,
+        discipline: null,
+        query: 'a'.repeat(120),
+        muscles: [],
+        equipment: [],
+        limit: 40,
+      },
     ])
+  })
+
+  test('T-CAT-API-13 several values of one filter travel together, as or', async () => {
+    const filtered = harness()
+    const response = await filtered.app.request(
+      '/catalog/v1/movements?muscle=chest&muscle=back&equipment=dumbbell',
+      { headers: authorized },
+    )
+
+    expect(response.status).toBe(200)
+    expect(filtered.asked[0]?.muscles).toEqual(['chest', 'back'])
+    expect(filtered.asked[0]?.equipment).toEqual(['dumbbell'])
+  })
+
+  test('T-CAT-API-14 refuses more filter values than the vocabulary could hold', async () => {
+    // Past this it is not a filter, it is a scan dressed as one.
+    const refused = harness()
+    const many = Array.from({ length: 33 }, (_, index) => `muscle=m${index}`).join('&')
+    const response = await refused.app.request(`/catalog/v1/movements?${many}`, {
+      headers: authorized,
+    })
+
+    expect(response.status).toBe(400)
+  })
+
+  test('T-CAT-API-15 refuses a filter code longer than the maximum', async () => {
+    const refused = harness()
+    const response = await refused.app.request(`/catalog/v1/movements?muscle=${'a'.repeat(65)}`, {
+      headers: authorized,
+    })
+
+    expect(response.status).toBe(400)
+  })
+
+  test('T-CAT-API-16 answers the two vocabularies the chips are drawn from', async () => {
+    const listing = harness()
+
+    const equipment = await listing.app.request('/catalog/v1/equipment', { headers: authorized })
+    const muscles = await listing.app.request('/catalog/v1/muscles', { headers: authorized })
+
+    expect(equipment.status).toBe(200)
+    expect(await equipment.json()).toEqual([{ code: 'barbell', name: 'Barra' }])
+    expect(muscles.status).toBe(200)
+    expect(await muscles.json()).toEqual([
+      { code: 'chest', name: 'Pecho', region: 'upper', body_slug: 'chest' },
+    ])
+  })
+
+  test('T-CAT-API-17 both vocabularies need a token, like everything else here', async () => {
+    const guarded = harness()
+
+    expect((await guarded.app.request('/catalog/v1/equipment')).status).toBe(401)
+    expect((await guarded.app.request('/catalog/v1/muscles')).status).toBe(401)
   })
 
   test('T-CAT-API-11 answers unavailable when the library fails unexpectedly', async () => {

@@ -3,8 +3,10 @@ import type postgres from 'postgres'
 import { database } from '../../../platform/db/index.js'
 import { measureStudioRequestPhase } from '../../../platform/observability/index.js'
 import type {
+  CatalogueTerm,
   Movement,
   MovementLibraryDatabase,
+  MuscleTerm,
   ProfessionalCatalogDatabase,
   ProfessionalCatalogItem,
 } from '../domain/index.js'
@@ -56,10 +58,30 @@ export function createMovementLibraryDatabase(): MovementLibraryDatabase {
             ${request.personId}::uuid,
             ${request.discipline}::text,
             ${request.query}::text,
-            ${request.limit}::integer
+            ${request.limit}::integer,
+            ${request.muscles}::text[],
+            ${request.equipment}::text[]
           ) as movements
         `
         return row?.movements ?? []
+      }),
+
+    readEquipment: (personId) =>
+      sql.begin(async (transaction) => {
+        await setPersonActor(transaction, personId)
+        const [row] = await transaction<{ terms: CatalogueTerm[] }[]>`
+          select catalog.read_equipment(${personId}::uuid) as terms
+        `
+        return row?.terms ?? []
+      }),
+
+    readMuscles: (personId) =>
+      sql.begin(async (transaction) => {
+        await setPersonActor(transaction, personId)
+        const [row] = await transaction<{ terms: MuscleTerm[] }[]>`
+          select catalog.read_muscles(${personId}::uuid) as terms
+        `
+        return row?.terms ?? []
       }),
   }
 }

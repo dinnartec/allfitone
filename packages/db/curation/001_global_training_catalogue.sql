@@ -151,6 +151,174 @@ select id, discipline, name, lower(name), 'global', 'published' from curated_mov
 on conflict do nothing;
 
 -- ---------------------------------------------------------------------------
+-- 2b · What each movement trains, and what it needs
+-- ---------------------------------------------------------------------------
+
+-- The two taxonomies the exercise picker filters by. Same rules as everything else
+-- here: the ordinal is the identity, so a rerun writes the same rows.
+--
+-- Fifteen of the nineteen muscles carry a `body_slug`, which is the part
+-- `react-native-body-highlighter` already draws in Space's onboarding. `dorsales` and
+-- `abductores` have no slug because the library has no part for them, and `cardio`
+-- and `cuerpo completo` have none because they are not muscles — they are the honest
+-- label for the seven movements that are not strength, which would carry none
+-- otherwise.
+
+create temporary table curated_muscle (
+  ordinal integer, code text, name text, region text, body_slug text
+) on commit drop;
+insert into curated_muscle (ordinal, code, name, region, body_slug) values
+  (1,  'chest',       'Pecho',            'upper',   'chest'),
+  (2,  'upper_back',  'Espalda superior', 'upper',   'upper-back'),
+  (3,  'lats',        'Dorsales',         'upper',   null),
+  (4,  'lower_back',  'Espalda baja',     'upper',   'lower-back'),
+  (5,  'trapezius',   'Trapecio',         'upper',   'trapezius'),
+  (6,  'shoulders',   'Hombros',          'upper',   'deltoids'),
+  (7,  'biceps',      'Bíceps',           'upper',   'biceps'),
+  (8,  'triceps',     'Tríceps',          'upper',   'triceps'),
+  (9,  'forearm',     'Antebrazo',        'upper',   'forearm'),
+  (10, 'neck',        'Cuello',           'upper',   'neck'),
+  (11, 'abs',         'Abdomen',          'upper',   'abs'),
+  (12, 'glutes',      'Glúteos',          'lower',   'gluteal'),
+  (13, 'quadriceps',  'Cuádriceps',       'lower',   'quadriceps'),
+  (14, 'hamstrings',  'Isquiotibiales',   'lower',   'hamstring'),
+  (15, 'adductors',   'Aductores',        'lower',   'adductors'),
+  (16, 'abductors',   'Abductores',       'lower',   null),
+  (17, 'calves',      'Pantorrillas',     'lower',   'calves'),
+  (18, 'cardio',      'Cardio',           'general', null),
+  (19, 'whole_body',  'Cuerpo completo',  'general', null);
+
+alter table curated_muscle add column id uuid;
+update curated_muscle set id = ('019f1100-0000-7000-8000-' || lpad(ordinal::text, 12, '0'))::uuid;
+
+insert into catalog.muscles (id, code, name, region, body_slug, status, display_order)
+select id, code, name, region, body_slug, 'published', ordinal from curated_muscle
+on conflict do nothing;
+
+create temporary table curated_equipment (ordinal integer, code text, name text) on commit drop;
+insert into curated_equipment (ordinal, code, name) values
+  (1, 'bodyweight',     'Peso corporal'),
+  (2, 'barbell',        'Barra'),
+  (3, 'dumbbell',       'Mancuernas'),
+  (4, 'kettlebell',     'Kettlebell'),
+  (5, 'machine',        'Máquina'),
+  (6, 'cable',          'Polea'),
+  (7, 'bench',          'Banco'),
+  (8, 'pull_up_bar',    'Barra fija'),
+  (9, 'cardio_machine', 'Máquina de cardio');
+
+alter table curated_equipment add column id uuid;
+update curated_equipment set id = ('019f1200-0000-7000-8000-' || lpad(ordinal::text, 12, '0'))::uuid;
+
+insert into catalog.equipment (id, code, name, content_scope, status, display_order)
+select id, code, name, 'global', 'published', ordinal from curated_equipment
+on conflict do nothing;
+
+-- The 38 movements against both taxonomies, by slug. The first muscle of each row is
+-- the primary one: a squat is quadriceps before it is anything else, and the filter
+-- orders by that even though it answers on any of them.
+create temporary table curated_movement_muscle (movement_slug text, muscle_codes text[]) on commit drop;
+insert into curated_movement_muscle (movement_slug, muscle_codes) values
+  ('back_squat',        array['quadriceps','glutes','lower_back','adductors']),
+  ('goblet_squat',      array['quadriceps','glutes','abs']),
+  ('leg_press',         array['quadriceps','glutes','hamstrings']),
+  ('lunge',             array['quadriceps','glutes','hamstrings','abductors']),
+  ('deadlift',          array['hamstrings','glutes','lower_back','trapezius','forearm']),
+  ('romanian_deadlift', array['hamstrings','glutes','lower_back']),
+  ('hip_thrust',        array['glutes','hamstrings']),
+  ('glute_bridge',      array['glutes','hamstrings']),
+  ('leg_extension',     array['quadriceps']),
+  ('leg_curl',          array['hamstrings']),
+  ('calf_raise',        array['calves']),
+  ('bench_press',       array['chest','triceps','shoulders']),
+  ('db_bench_press',    array['chest','triceps','shoulders']),
+  ('incline_db_press',  array['chest','shoulders','triceps']),
+  ('push_up',           array['chest','triceps','abs']),
+  ('db_fly',            array['chest','shoulders']),
+  ('dip',               array['triceps','chest','shoulders']),
+  ('pull_up',           array['lats','biceps','upper_back','forearm']),
+  ('lat_pulldown',      array['lats','biceps','upper_back']),
+  ('barbell_row',       array['upper_back','lats','biceps','lower_back']),
+  ('db_row',            array['upper_back','lats','biceps']),
+  ('cable_row',         array['upper_back','lats','biceps']),
+  ('overhead_press',    array['shoulders','triceps','abs']),
+  ('db_shoulder_press', array['shoulders','triceps']),
+  ('lateral_raise',     array['shoulders']),
+  ('barbell_curl',      array['biceps','forearm']),
+  ('triceps_pushdown',  array['triceps']),
+  ('plank',             array['abs','lower_back']),
+  ('side_plank',        array['abs']),
+  ('hanging_leg_raise', array['abs','forearm']),
+  ('ab_wheel',          array['abs','lats']),
+  ('steady_run',        array['cardio','quadriceps','calves']),
+  ('brisk_walk',        array['cardio','calves']),
+  ('stationary_bike',   array['cardio','quadriceps']),
+  ('run_intervals',     array['cardio','hamstrings','calves']),
+  ('full_body_circuit', array['cardio','whole_body']),
+  ('hip_mobility',      array['glutes','adductors','abductors']),
+  ('thoracic_mobility', array['upper_back','trapezius','neck']);
+
+insert into catalog.movement_muscles (movement_id, muscle_id, is_primary)
+select movement.id, muscle.id, worked.ordinality = 1
+from curated_movement_muscle as tagged
+join curated_movement as movement on movement.slug = tagged.movement_slug
+cross join lateral unnest(tagged.muscle_codes) with ordinality as worked(code, ordinality)
+join curated_muscle as muscle on muscle.code = worked.code
+on conflict do nothing;
+
+create temporary table curated_movement_equipment (movement_slug text, equipment_codes text[]) on commit drop;
+insert into curated_movement_equipment (movement_slug, equipment_codes) values
+  ('back_squat',        array['barbell']),
+  ('goblet_squat',      array['kettlebell','dumbbell']),
+  ('leg_press',         array['machine']),
+  ('lunge',             array['dumbbell']),
+  ('deadlift',          array['barbell']),
+  ('romanian_deadlift', array['barbell']),
+  ('hip_thrust',        array['barbell','bench']),
+  ('glute_bridge',      array['bodyweight']),
+  ('leg_extension',     array['machine']),
+  ('leg_curl',          array['machine']),
+  ('calf_raise',        array['bodyweight']),
+  ('bench_press',       array['barbell','bench']),
+  ('db_bench_press',    array['dumbbell','bench']),
+  ('incline_db_press',  array['dumbbell','bench']),
+  ('push_up',           array['bodyweight']),
+  ('db_fly',            array['dumbbell','bench']),
+  ('dip',               array['bodyweight']),
+  ('pull_up',           array['pull_up_bar','bodyweight']),
+  ('lat_pulldown',      array['cable']),
+  ('barbell_row',       array['barbell']),
+  ('db_row',            array['dumbbell','bench']),
+  ('cable_row',         array['cable']),
+  ('overhead_press',    array['barbell']),
+  ('db_shoulder_press', array['dumbbell']),
+  ('lateral_raise',     array['dumbbell']),
+  ('barbell_curl',      array['barbell']),
+  ('triceps_pushdown',  array['cable']),
+  ('plank',             array['bodyweight']),
+  ('side_plank',        array['bodyweight']),
+  ('hanging_leg_raise', array['pull_up_bar','bodyweight']),
+  ('ab_wheel',          array['bodyweight']),
+  ('steady_run',        array['bodyweight']),
+  ('brisk_walk',        array['bodyweight']),
+  ('stationary_bike',   array['cardio_machine']),
+  ('run_intervals',     array['bodyweight']),
+  ('full_body_circuit', array['bodyweight']),
+  ('hip_mobility',      array['bodyweight']),
+  ('thoracic_mobility', array['bodyweight']);
+
+-- The first is required and the rest optional: a pull-up needs a bar, and calling
+-- bodyweight "required" alongside it would say the same thing twice.
+insert into catalog.movement_equipment (movement_id, equipment_id, requirement)
+select movement.id, item.id,
+       case when needed.ordinality = 1 then 'required' else 'optional' end
+from curated_movement_equipment as tagged
+join curated_movement as movement on movement.slug = tagged.movement_slug
+cross join lateral unnest(tagged.equipment_codes) with ordinality as needed(code, ordinality)
+join curated_equipment as item on item.code = needed.code
+on conflict do nothing;
+
+-- ---------------------------------------------------------------------------
 -- 3 · Session templates
 -- ---------------------------------------------------------------------------
 

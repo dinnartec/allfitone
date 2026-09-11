@@ -1,8 +1,10 @@
 import type { AccountActor } from '../../identity/index.js'
 import type {
+  CatalogueTerm,
   Movement,
   MovementLibraryDatabase,
   MovementQuery,
+  MuscleTerm,
   ProfessionalCatalogDatabase,
 } from '../domain/index.js'
 
@@ -36,10 +38,16 @@ export function createStudioCatalogService(
 
 export interface MovementLibraryService {
   search(request: MovementQuery): Promise<Movement[]>
+  equipment(personId: string): Promise<CatalogueTerm[]>
+  muscles(personId: string): Promise<MuscleTerm[]>
 }
 
 export function createMovementLibraryService(
   database: MovementLibraryDatabase,
 ): MovementLibraryService {
-  return { search: (request) => database.readMovements(request) }
+  return {
+    search: (request) => database.readMovements(request),
+    equipment: (personId) => database.readEquipment(personId),
+    muscles: (personId) => database.readMuscles(personId),
+  }
 }

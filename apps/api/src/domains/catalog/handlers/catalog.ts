@@ -1,5 +1,5 @@
 /**
- * `/catalog/v1/movements` — `OP-CAT-009`.
+ * `/catalog/v1/movements`, `/equipment` and `/muscles` — `OP-CAT-009`, `011` and `015`.
  *
  * The exercise library, read while somebody types in `S-1`. The catalogue surface is
  * shared by design: it holds what is true for everybody, so it has no product in it.
@@ -29,6 +29,9 @@ const MAX_DISCIPLINE = 64
 const MAX_QUERY = 120
 const DEFAULT_LIMIT = 40
 const MAX_LIMIT = 100
+const MAX_CODE = 64
+/** More chips than the vocabulary has is not a filter, it is a scan. */
+const MAX_FILTER_VALUES = 32
 
 export type TokenVerifier = (token: string) => Promise<VerifiedToken>
 
@@ -57,9 +60,16 @@ export function catalogMovementRoutes(
     const limit = readLimit(c.req.query('limit'))
     if (limit === undefined) return fail(c, 'invalid-request')
 
+    const muscles = readCodes(c.req.queries('muscle'))
+    const equipment = readCodes(c.req.queries('equipment'))
+    if (muscles === undefined || equipment === undefined) return fail(c, 'invalid-request')
+
     try {
       const personId = await actors().personFor(token.subject)
-      return c.json(await library().search({ personId, discipline, query, limit }), 200)
+      return c.json(
+        await library().search({ personId, discipline, query, muscles, equipment, limit }),
+        200,
+      )
     } catch (cause) {
       if (cause instanceof SpaceActorError) return fail(c, cause.code)
       console.error('[catalog] movement search failed')
@@ -67,7 +77,47 @@ export function catalogMovementRoutes(
     }
   })
 
+  routes.get('/equipment', async (c) => {
+    c.header('Cache-Control', 'no-store')
+
+    const token = await verified(c, verify)
+    if (!token) return fail(c, 'unauthenticated')
+
+    try {
+      const personId = await actors().personFor(token.subject)
+      return c.json(await library().equipment(personId), 200)
+    } catch (cause) {
+      if (cause instanceof SpaceActorError) return fail(c, cause.code)
+      console.error('[catalog] equipment read failed')
+      return fail(c, 'upstream-unavailable')
+    }
+  })
+
+  routes.get('/muscles', async (c) => {
+    c.header('Cache-Control', 'no-store')
+
+    const token = await verified(c, verify)
+    if (!token) return fail(c, 'unauthenticated')
+
+    try {
+      const personId = await actors().personFor(token.subject)
+      return c.json(await library().muscles(personId), 200)
+    } catch (cause) {
+      if (cause instanceof SpaceActorError) return fail(c, cause.code)
+      console.error('[catalog] muscle read failed')
+      return fail(c, 'upstream-unavailable')
+    }
+  })
+
   return routes
+}
+
+/** Undefined is a refusal, not an empty filter: a malformed code is a bad request. */
+function readCodes(values: string[] | undefined): string[] | undefined {
+  const codes = (values ?? []).map((value) => value.trim()).filter((value) => value !== '')
+  if (codes.length > MAX_FILTER_VALUES) return undefined
+  if (codes.some((code) => code.length > MAX_CODE)) return undefined
+  return codes
 }
 
 async function verified(c: Context, verify: TokenVerifier): Promise<VerifiedToken | undefined> {
