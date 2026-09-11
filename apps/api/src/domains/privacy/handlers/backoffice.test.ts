@@ -8,7 +8,7 @@ import {
   type BackofficeAuthenticationService,
 } from '../../identity/index.js'
 import { mountSurfaces } from '../../../surfaces.js'
-import type { ScopeDefinitionService } from '../application/index.js'
+import type { AccessLogService, ScopeDefinitionService } from '../application/index.js'
 import { backofficePrivacyRoutes } from './backoffice.js'
 
 const ORIGIN = 'https://backoffice.example.test'
@@ -55,6 +55,24 @@ const publication = {
   ],
 }
 
+const page: AllfitV1Schemas['AccessEventPage'] = {
+  items: [
+    {
+      actor_person_id: '019a7000-0000-7000-8000-000000000004',
+      subject_person_id: '019a7000-0000-7000-8000-000000000006',
+      resource: 'support.person_operational_state',
+      resource_id: null,
+      purpose: 'customer_support_request',
+      result: 'allowed',
+      scope_code: null,
+      scope_version: null,
+      access_mode: 'organization_operational',
+      occurred_at: '2026-09-10T18:00:00.000Z',
+    },
+  ],
+  withheld_from_you: 1,
+}
+
 let captured: unknown[] = []
 
 function scopeService(overrides: Partial<ScopeDefinitionService> = {}): ScopeDefinitionService {
@@ -66,6 +84,16 @@ function scopeService(overrides: Partial<ScopeDefinitionService> = {}): ScopeDef
     list: (_curator, input) => {
       captured.push(input)
       return Promise.resolve([definition])
+    },
+    ...overrides,
+  }
+}
+
+function logService(overrides: Partial<AccessLogService> = {}): AccessLogService {
+  return {
+    read: (_auditor, input) => {
+      captured.push(input)
+      return Promise.resolve(page)
     },
     ...overrides,
   }
@@ -83,8 +111,9 @@ function sessionService(
 function routes(
   scopes: ScopeDefinitionService = scopeService(),
   sessions: BackofficeAuthenticationService = sessionService(),
+  log: AccessLogService = logService(),
 ): Hono {
-  return new Hono().route('/backoffice/v1', backofficePrivacyRoutes(scopes, sessions))
+  return new Hono().route('/backoffice/v1', backofficePrivacyRoutes(scopes, sessions, log))
 }
 
 function post(
@@ -117,6 +146,12 @@ function get(init: { cookie?: boolean } = {}): Request {
   return new Request('https://api.example.test/backoffice/v1/scope-definitions', { headers })
 }
 
+function auditGet(query = '', init: { cookie?: boolean } = {}): Request {
+  const headers = new Headers({ origin: ORIGIN })
+  if (init.cookie !== false) headers.set('cookie', `${BACKOFFICE_SESSION_COOKIE}=session-secret`)
+  return new Request(`https://api.example.test/backoffice/v1/access-events${query}`, { headers })
+}
+
 function colonPath(path: string): string {
   return path.replace(/\{([A-Za-z0-9_]+)\}/g, ':$1')
 }
@@ -129,9 +164,9 @@ beforeEach(() => {
 })
 
 describe('Backoffice privacy API contract', () => {
-  test('T-PRV-API-01 mounts every OP-PRV-011 operation with its contract method', () => {
+  test('T-PRV-API-01 mounts every operation this router serves, with its contract method', () => {
     const contract = allfitV1ContractManifest.operations
-      .filter((operation) => operation.allfitOperation === 'OP-PRV-011')
+      .filter((operation) => ['OP-PRV-011', 'OP-SUP-009'].includes(operation.allfitOperation ?? ''))
       .map((operation) => `${operation.method} ${colonPath(operation.path)}`)
       .sort()
     const mounted = backofficePrivacyRoutes()
@@ -139,7 +174,7 @@ describe('Backoffice privacy API contract', () => {
       .map((route) => `${route.method} /backoffice/v1${route.path}`)
       .sort()
 
-    expect(contract).toHaveLength(2)
+    expect(contract).toHaveLength(3)
     expect(mounted).toEqual(contract)
   })
 
@@ -301,6 +336,109 @@ describe('Backoffice privacy API contract', () => {
           Promise.reject(new BackofficeAuthenticationError('unauthenticated')),
       }),
     ).fetch(get())
+
+    expect([missing.status, ended.status]).toEqual([401, 401])
+    expect(captured).toEqual([])
+  })
+
+  // -------------------------------------------------------------------------
+  // OP-SUP-009 — the access log
+  // -------------------------------------------------------------------------
+
+  test('T-AUD-API-01 reads the log and keeps it out of any cache', async () => {
+    const response = await routes().fetch(auditGet())
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual(page)
+    expect(response.headers.get('cache-control')).toBe('no-store')
+  })
+
+  test('T-AUD-API-02 carries the withheld count even when the list is empty', async () => {
+    // The case the count exists for. An auditor who filtered down to a window
+    // they requested sees nothing, and without the number would read that as
+    // "nobody touched this person's data".
+    const response = await routes(
+      scopeService(),
+      sessionService(),
+      logService({
+        read: () => Promise.resolve({ items: [], withheld_from_you: 3 }),
+      }),
+    ).fetch(auditGet())
+
+    await expect(response.json()).resolves.toEqual({ items: [], withheld_from_you: 3 })
+  })
+
+  test('T-AUD-API-03 passes every filter to the query rather than trimming after', async () => {
+    const response = await routes().fetch(
+      auditGet(
+        '?actor_person_id=019a7000-0000-7000-8000-000000000004' +
+          '&subject_person_id=019a7000-0000-7000-8000-000000000006' +
+          '&from=2026-09-01T00:00:00.000Z&to=2026-09-10T00:00:00.000Z&limit=25',
+      ),
+    )
+
+    expect(response.status).toBe(200)
+    expect(captured[0]).toMatchObject({
+      filterActorPersonId: '019a7000-0000-7000-8000-000000000004',
+      filterSubjectPersonId: '019a7000-0000-7000-8000-000000000006',
+      from: '2026-09-01T00:00:00.000Z',
+      to: '2026-09-10T00:00:00.000Z',
+      limit: 25,
+    })
+  })
+
+  test('T-AUD-API-04 refuses a malformed filter instead of dropping it', async () => {
+    // Dropping one would widen the query: a mistyped identifier would return the
+    // whole log, and the auditor would have no way to tell.
+    const answers = await Promise.all(
+      [
+        '?actor_person_id=not-a-person',
+        '?subject_person_id=019a7000',
+        '?from=whenever',
+        '?to=2026-13-45T00:00:00.000Z',
+        '?limit=0',
+        '?limit=201',
+        '?limit=twenty',
+        '?everything=true',
+      ].map((query) => routes().fetch(auditGet(query))),
+    )
+
+    expect(answers.map((response) => response.status)).toEqual([
+      400, 400, 400, 400, 400, 400, 400, 400,
+    ])
+    expect(captured).toEqual([])
+  })
+
+  test('T-AUD-API-05 refuses an inverted range rather than answering empty', async () => {
+    const response = await routes().fetch(
+      auditGet('?from=2026-09-10T00:00:00.000Z&to=2026-09-01T00:00:00.000Z'),
+    )
+
+    expect(response.status).toBe(400)
+    expect(captured).toEqual([])
+  })
+
+  test('T-AUD-API-06 turns a missing audit duty into forbidden', async () => {
+    const response = await routes(
+      scopeService(),
+      sessionService(),
+      logService({
+        read: () => Promise.reject(Object.assign(new Error('denied'), { code: '42501' })),
+      }),
+    ).fetch(auditGet())
+
+    expect(response.status).toBe(403)
+  })
+
+  test('T-AUD-API-07 answers unauthenticated without a session and when it ended', async () => {
+    const missing = await routes().fetch(auditGet('', { cookie: false }))
+    const ended = await routes(
+      scopeService(),
+      sessionService({
+        resolveActor: async () =>
+          Promise.reject(new BackofficeAuthenticationError('unauthenticated')),
+      }),
+    ).fetch(auditGet())
 
     expect([missing.status, ended.status]).toEqual([401, 401])
     expect(captured).toEqual([])

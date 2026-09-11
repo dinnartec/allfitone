@@ -7,6 +7,13 @@ export const allfitV1ContractManifest = {
   operations: [
     {
       method: 'GET',
+      path: '/backoffice/v1/access-events',
+      operationId: 'listBackofficeAccessEvents',
+      allfitOperation: 'OP-SUP-009',
+      responses: ['200', '400', '401', '403', '422', '503'],
+    },
+    {
+      method: 'GET',
       path: '/backoffice/v1/auth/attempt',
       operationId: 'getBackofficeAuthenticationAttempt',
       allfitOperation: 'OP-IDN-033',

@@ -1,9 +1,20 @@
-import { createScopeDefinitionService, type ScopeDefinitionService } from './application/index.js'
-import { createScopeDefinitionDatabase } from './infrastructure/index.js'
+import {
+  createAccessLogService,
+  createScopeDefinitionService,
+  type AccessLogService,
+  type ScopeDefinitionService,
+} from './application/index.js'
+import { createAccessLogDatabase, createScopeDefinitionDatabase } from './infrastructure/index.js'
 
-let cached: ScopeDefinitionService | undefined
+let cachedScopes: ScopeDefinitionService | undefined
+let cachedLog: AccessLogService | undefined
 
 export function scopeDefinitionService(): ScopeDefinitionService {
-  cached ??= createScopeDefinitionService(createScopeDefinitionDatabase())
-  return cached
+  cachedScopes ??= createScopeDefinitionService(createScopeDefinitionDatabase())
+  return cachedScopes
+}
+
+export function accessLogService(): AccessLogService {
+  cachedLog ??= createAccessLogService(createAccessLogDatabase())
+  return cachedLog
 }

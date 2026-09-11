@@ -7,6 +7,11 @@
  */
 
 export { backofficePrivacyRoutes } from './handlers/backoffice.js'
-export { scopeDefinitionService } from './dependencies.js'
-export type { ScopeDefinitionService } from './application/index.js'
-export type { ScopeDefinition, ScopeDefinitionPublication } from './domain/index.js'
+export { accessLogService, scopeDefinitionService } from './dependencies.js'
+export type { AccessLogService, ScopeDefinitionService } from './application/index.js'
+export type {
+  AccessEvent,
+  AccessEventPage,
+  ScopeDefinition,
+  ScopeDefinitionPublication,
+} from './domain/index.js'

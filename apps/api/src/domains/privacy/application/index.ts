@@ -7,6 +7,9 @@
  */
 
 import type {
+  AccessEventFilters,
+  AccessEventPage,
+  AccessLogDatabase,
   PrivacyCurator,
   ScopeCommandContext,
   ScopeCommandResult,
@@ -21,6 +24,19 @@ export interface ScopeDefinitionService {
     input: ScopeCommandContext & { publication: ScopeDefinitionPublication },
   ): Promise<ScopeCommandResult>
   list(curator: PrivacyCurator, input: { requestId: string }): Promise<ScopeDefinition[]>
+}
+
+export interface AccessLogService {
+  read(
+    auditor: PrivacyCurator,
+    input: { requestId: string } & AccessEventFilters,
+  ): Promise<AccessEventPage>
+}
+
+export function createAccessLogService(database: AccessLogDatabase): AccessLogService {
+  return {
+    read: (auditor, input) => database.read({ ...auditor, ...input }),
+  }
 }
 
 export function createScopeDefinitionService(

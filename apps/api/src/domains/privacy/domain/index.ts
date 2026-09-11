@@ -19,6 +19,8 @@ export type ScopeDefinitionPublication = AllfitV1Schemas['ScopeDefinitionPublica
 export type ScopeResourceRule = AllfitV1Schemas['ScopeResourceRule']
 export type ScopeCode = AllfitV1Schemas['ScopeCode']
 export type AccessLevel = AllfitV1Schemas['AccessLevel']
+export type AccessEvent = AllfitV1Schemas['AccessEvent']
+export type AccessEventPage = AllfitV1Schemas['AccessEventPage']
 
 export const SCOPE_CODES: readonly ScopeCode[] = [
   'relationship_training',
@@ -58,6 +60,23 @@ export interface ScopeCommandContext {
 export interface ScopeCommandResult {
   resource: ScopeDefinition
   replayed: boolean
+}
+
+/**
+ * What an auditor may narrow the log by. Every filter is resolved in the
+ * database — a filter applied after the rows arrive would mean reading more of
+ * the log than the question needed.
+ */
+export interface AccessEventFilters {
+  filterActorPersonId?: string | undefined
+  filterSubjectPersonId?: string | undefined
+  from?: string | undefined
+  to?: string | undefined
+  limit?: number | undefined
+}
+
+export interface AccessLogDatabase {
+  read(input: PrivacyCurator & { requestId: string } & AccessEventFilters): Promise<AccessEventPage>
 }
 
 export interface ScopeDefinitionDatabase {

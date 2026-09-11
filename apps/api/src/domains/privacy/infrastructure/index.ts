@@ -11,12 +11,53 @@ import type postgres from 'postgres'
 import { database } from '../../../platform/db/index.js'
 import { measureRequestPhase } from '../../../platform/observability/index.js'
 import type {
+  AccessEvent,
+  AccessEventPage,
+  AccessLogDatabase,
   ScopeCommandResult,
   ScopeDefinition,
   ScopeDefinitionDatabase,
 } from '../domain/index.js'
 
 type CommandRow = { result: ScopeDefinition; replayed: boolean }
+
+/**
+ * The log and the count of what was withheld are read in **one** transaction. Two
+ * transactions would let a write land between them, and the number would then
+ * describe a list the auditor is not looking at — which is exactly the kind of
+ * quiet inconsistency an audit read cannot afford.
+ */
+export function createAccessLogDatabase(): AccessLogDatabase {
+  const sql = database()
+
+  return {
+    read: (input) =>
+      inTransaction(sql, input.actorPersonId, input.requestId, async (transaction) => {
+        const items = await transaction<AccessEvent[]>`
+          select * from privacy.list_access_events(
+            ${input.actorPersonId}::uuid, ${input.actorSessionId}::uuid,
+            ${input.filterActorPersonId ?? null}::uuid,
+            ${input.filterSubjectPersonId ?? null}::uuid,
+            ${input.from ?? null}::timestamptz, ${input.to ?? null}::timestamptz,
+            ${input.limit ?? null}::integer
+          )
+        `
+        const [withheld] = await transaction<{ count_withheld_access_events: number }[]>`
+          select * from privacy.count_withheld_access_events(
+            ${input.actorPersonId}::uuid, ${input.actorSessionId}::uuid,
+            ${input.filterActorPersonId ?? null}::uuid,
+            ${input.filterSubjectPersonId ?? null}::uuid,
+            ${input.from ?? null}::timestamptz, ${input.to ?? null}::timestamptz
+          )
+        `
+        if (!withheld) throw new Error('PostgreSQL did not count the withheld access events')
+        return {
+          items,
+          withheld_from_you: withheld.count_withheld_access_events,
+        } satisfies AccessEventPage
+      }),
+  }
+}
 
 export function createScopeDefinitionDatabase(): ScopeDefinitionDatabase {
   const sql = database()

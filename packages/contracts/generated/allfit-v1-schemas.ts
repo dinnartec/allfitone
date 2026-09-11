@@ -4,9 +4,89 @@
  */
 
 export const allfitV1ContractSchemas: Record<string, unknown> = {
+  AccessEvent: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      'The record of one access. It never carries what was read: the table it comes from has no content columns, and the closed query returns this exact shape.',
+    required: [
+      'actor_person_id',
+      'subject_person_id',
+      'resource',
+      'resource_id',
+      'purpose',
+      'result',
+      'scope_code',
+      'scope_version',
+      'access_mode',
+      'occurred_at',
+    ],
+    properties: {
+      actor_person_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      subject_person_id: {
+        type: ['string', 'null'],
+        format: 'uuid',
+      },
+      resource: {
+        type: 'string',
+        description: 'The kind of data that was read, such as `nutrition.intake_entries`.',
+      },
+      resource_id: {
+        type: ['string', 'null'],
+        format: 'uuid',
+      },
+      purpose: {
+        type: 'string',
+      },
+      result: {
+        type: 'string',
+        enum: ['allowed', 'denied'],
+      },
+      scope_code: {
+        type: ['string', 'null'],
+      },
+      scope_version: {
+        type: ['integer', 'null'],
+      },
+      access_mode: {
+        $ref: '#/components/schemas/AccessMode',
+      },
+      occurred_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+    },
+  },
+  AccessEventPage: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['items', 'withheld_from_you'],
+    properties: {
+      items: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/AccessEvent',
+        },
+      },
+      withheld_from_you: {
+        type: 'integer',
+        minimum: 0,
+        description:
+          'How many records matching these filters were removed because this auditor requested or approved the break-glass window they belong to. Reported separately from the list so that it survives an empty one.',
+      },
+    },
+  },
   AccessLevel: {
     type: 'string',
     enum: ['read', 'contribute'],
+  },
+  AccessMode: {
+    type: 'string',
+    description:
+      'How the access was authorised. `break_glass` is the exceptional path and is the only one subject to the per-case auditor disqualification.',
+    enum: ['live', 'frozen', 'break_glass', 'organization_operational'],
   },
   ActivityFamily: {
     type: 'string',

@@ -1,14 +1,22 @@
 /**
- * Backoffice privacy routes: `OP-PRV-011`.
+ * Backoffice privacy routes: `OP-PRV-011` and `OP-SUP-009`.
  *
- * `HU-BO-024`. The handler shapes and rejects; it decides nothing.
- * `curate_global_catalog` and AAL2 are resolved inside the command's own
+ * `HU-BO-024` and `HU-BO-030`. The handler shapes and rejects; it decides
+ * nothing. The duty each operation needs — `curate_global_catalog` to publish,
+ * `audit_platform_access` to read the log — and AAL2 are resolved inside the
  * transaction, against the tables.
  *
  * The version number is never accepted from the client — the request body has no
  * field for one — so two curators publishing at once produce two versions rather
  * than a race. And a version whose rules are all exclusions is refused before it
  * travels, because it would grant nothing while looking like a permission.
+ *
+ * The access log lives here rather than in `support` because the closed queries
+ * and the table are the privacy schema's, even though the operation is numbered
+ * `OP-SUP`. The per-case auditor disqualification is **not** re-derived in this
+ * layer: it is one predicate in the database, shared by the list and the count,
+ * so the number of withheld records can never describe a different set than the
+ * one that was removed.
  */
 
 import { createHash, randomUUID } from 'node:crypto'
@@ -24,12 +32,13 @@ import {
   type BackofficeAuthenticationService,
 } from '../../identity/index.js'
 import { problem, type ApiErrorCode } from '../../../platform/http/index.js'
-import type { ScopeDefinitionService } from '../application/index.js'
-import { scopeDefinitionService } from '../dependencies.js'
+import type { AccessLogService, ScopeDefinitionService } from '../application/index.js'
+import { accessLogService, scopeDefinitionService } from '../dependencies.js'
 import {
   ACCESS_LEVELS,
   DATA_CLASSIFICATIONS,
   SCOPE_CODES,
+  type AccessEventFilters,
   type AccessLevel,
   type ScopeCode,
   type ScopeDefinitionPublication,
@@ -45,10 +54,12 @@ const MAX_RULES = 200
 export function backofficePrivacyRoutes(
   injectedScopes?: ScopeDefinitionService,
   injectedSessions?: BackofficeAuthenticationService,
+  injectedLog?: AccessLogService,
 ): Hono {
   const origin = new URL(trustedBackofficeWebUrl()).origin
   const scopes = () => injectedScopes ?? scopeDefinitionService()
   const sessions = () => injectedSessions ?? backofficeAuthenticationService()
+  const log = () => injectedLog ?? accessLogService()
   const routes = new Hono()
 
   routes.use(
@@ -78,6 +89,23 @@ export function backofficePrivacyRoutes(
           { requestId: randomUUID() },
         ),
       })
+    } catch (error) {
+      return operationFailure(c, error)
+    }
+  })
+
+  routes.get('/access-events', async (c) => {
+    const filters = accessEventFilters(c)
+    if (!filters) return problem(c, 'invalid-request')
+    try {
+      const actor = await backofficeActor(c, sessions())
+      if (actor instanceof Response) return actor
+      return c.json(
+        await log().read(
+          { actorPersonId: actor.personId, actorSessionId: actor.sessionId },
+          { requestId: randomUUID(), ...filters },
+        ),
+      )
     } catch (error) {
       return operationFailure(c, error)
     }
@@ -198,6 +226,58 @@ function scopeResourceRule(value: unknown): ScopeResourceRule | undefined {
     is_excluded: isExcluded ?? false,
     historical_readable: historicalReadable ?? false,
   }
+}
+
+const UUID_ANY = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/**
+ * A malformed filter is answered 400 rather than dropped. Silently ignoring one
+ * would widen the query: an auditor who mistyped a person identifier would be
+ * shown the whole log instead of nothing, and would have no way to tell.
+ */
+function accessEventFilters(c: Context): AccessEventFilters | undefined {
+  const allowed = new Set(['actor_person_id', 'subject_person_id', 'from', 'to', 'limit'])
+  const query = c.req.query()
+  if (Object.keys(query).some((key) => !allowed.has(key))) return undefined
+
+  const filters: AccessEventFilters = {}
+
+  for (const [key, field] of [
+    ['actor_person_id', 'filterActorPersonId'],
+    ['subject_person_id', 'filterSubjectPersonId'],
+  ] as const) {
+    const value = query[key]
+    if (value !== undefined) {
+      if (!UUID_ANY.test(value)) return undefined
+      filters[field] = value
+    }
+  }
+
+  for (const [key, field] of [
+    ['from', 'from'],
+    ['to', 'to'],
+  ] as const) {
+    const value = query[key]
+    if (value !== undefined) {
+      const parsed = Date.parse(value)
+      if (Number.isNaN(parsed)) return undefined
+      filters[field] = new Date(parsed).toISOString()
+    }
+  }
+
+  // An inverted range is a mistake, not an empty result: answering 400 says so
+  // instead of letting the auditor read "no accesses" and believe it.
+  if (filters.from && filters.to && filters.from >= filters.to) return undefined
+
+  const limit = query['limit']
+  if (limit !== undefined) {
+    if (!/^[0-9]{1,3}$/.test(limit)) return undefined
+    const parsed = Number(limit)
+    if (parsed < 1 || parsed > 200) return undefined
+    filters.limit = parsed
+  }
+
+  return filters
 }
 
 async function backofficeActor(c: Context, sessions: BackofficeAuthenticationService) {

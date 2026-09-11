@@ -412,6 +412,27 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/backoffice/v1/access-events': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Read the access log as an independent auditor
+     * @description Who from the team looked at whose data, and when. It carries the record of the access and never what was read.
+     *     Separation of duties is **per case, not global**: an access that belongs to a break-glass window this auditor requested or approved is absent, and every other window stays auditable. `withheld_from_you` counts what was removed for that reason, so an empty list is never mistaken for "nobody touched this person's data" — the auditor is told to hand those cases to someone else.
+     */
+    get: operations['listBackofficeAccessEvents']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/backoffice/v1/scope-definitions': {
     parameters: {
       query?: never
@@ -1827,6 +1848,34 @@ export interface components {
     BreakGlassTier: 'standard' | 'restricted'
     /** @enum {string} */
     BreakGlassStatus: 'requested' | 'approved' | 'rejected' | 'closed' | 'expired'
+    /**
+     * @description How the access was authorised. `break_glass` is the exceptional path and is the only one subject to the per-case auditor disqualification.
+     * @enum {string}
+     */
+    AccessMode: 'live' | 'frozen' | 'break_glass' | 'organization_operational'
+    /** @description The record of one access. It never carries what was read: the table it comes from has no content columns, and the closed query returns this exact shape. */
+    AccessEvent: {
+      actor_person_id: components['schemas']['Uuid']
+      /** Format: uuid */
+      subject_person_id: string | null
+      /** @description The kind of data that was read, such as `nutrition.intake_entries`. */
+      resource: string
+      /** Format: uuid */
+      resource_id: string | null
+      purpose: string
+      /** @enum {string} */
+      result: 'allowed' | 'denied'
+      scope_code: string | null
+      scope_version: number | null
+      access_mode: components['schemas']['AccessMode']
+      /** Format: date-time */
+      occurred_at: string
+    }
+    AccessEventPage: {
+      items: components['schemas']['AccessEvent'][]
+      /** @description How many records matching these filters were removed because this auditor requested or approved the break-glass window they belong to. Reported separately from the list so that it survives an empty one. */
+      withheld_from_you: number
+    }
     BreakGlassApproval: {
       approver_person_id: components['schemas']['Uuid']
       /** @enum {string} */
@@ -4138,6 +4187,14 @@ export interface components {
     BreakGlassStatus: components['schemas']['BreakGlassStatus']
     SupportOperationSource: components['schemas']['SupportOperationSourceKind']
     SupportOperationState: components['schemas']['SupportOperationState']
+    /** @description The team member whose accesses are being reviewed. */
+    AccessEventActor: components['schemas']['Uuid']
+    /** @description The person whose data was accessed. */
+    AccessEventSubject: components['schemas']['Uuid']
+    /** @description Inclusive lower bound on when the access happened. */
+    AccessEventFrom: string
+    /** @description Exclusive upper bound on when the access happened. */
+    AccessEventTo: string
     /** @description The aggregate an event belongs to. Not every event is reachable from a person: a notification about an invitation belongs to the invitation. */
     SupportAggregateId: components['schemas']['Uuid']
     /** @description The case this read belongs to. A structured reference rather than free prose, so the record can be followed back to a case months later. */
@@ -5020,6 +5077,44 @@ export interface operations {
       }
       401: components['responses']['Unauthenticated']
       403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listBackofficeAccessEvents: {
+    parameters: {
+      query?: {
+        /** @description The team member whose accesses are being reviewed. */
+        actor_person_id?: components['parameters']['AccessEventActor']
+        /** @description The person whose data was accessed. */
+        subject_person_id?: components['parameters']['AccessEventSubject']
+        /** @description Inclusive lower bound on when the access happened. */
+        from?: components['parameters']['AccessEventFrom']
+        /** @description Exclusive upper bound on when the access happened. */
+        to?: components['parameters']['AccessEventTo']
+        limit?: components['parameters']['Limit']
+      }
+      header: {
+        Origin: components['parameters']['Origin']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Access records, newest first */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['AccessEventPage']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      422: components['responses']['ValidationFailed']
       503: components['responses']['UpstreamUnavailable']
     }
   }
