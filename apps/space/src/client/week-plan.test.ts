@@ -5,6 +5,7 @@ import {
   cardsFor,
   routineCaption,
   weekIsDone,
+  weekPlanFailure,
   weekProgress,
   type WeekPlan,
   type WeekRoutine,
@@ -96,5 +97,20 @@ describe('which routine the screen reaches for', () => {
     expect(actionLabel('suggested')).toBe('Empezar')
     expect(actionLabel('pending')).toBe('Empezar')
     expect(actionLabel('open')).toBe('Continuar')
+  })
+})
+
+describe('what a failed week read means', () => {
+  test('T-SP-WEEK-20 no programme is the catalogue, not a failure to report', () => {
+    expect(weekPlanFailure('not-found')).toBe('unassigned')
+  })
+
+  test('T-SP-WEEK-21 an expired session is its own answer, because signing in fixes it', () => {
+    expect(weekPlanFailure('unauthenticated')).toBe('expired')
+  })
+
+  test('T-SP-WEEK-22 anything else is a failure the person can retry', () => {
+    expect(weekPlanFailure('server-error')).toBe('failed')
+    expect(weekPlanFailure(undefined)).toBe('failed')
   })
 })

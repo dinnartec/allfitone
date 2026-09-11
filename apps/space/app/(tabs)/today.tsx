@@ -64,7 +64,6 @@ const START_FAILED = 'No pudimos empezar la sesión. Inténtalo otra vez.'
 /** What a destination that does not exist yet answers, instead of a blank screen. */
 const PENDING: Record<string, string> = {
   free: 'Entrenar libre llega con tu contenido personal.',
-  own: 'Crear tu propio programa llega con tu contenido personal.',
   routines: 'Tus rutinas llegan con tu contenido personal.',
   food: 'Comida llega con el registro de nutrición.',
   progress: 'Tu progreso llega con el historial.',
@@ -338,7 +337,7 @@ export default function Today() {
               <Alternative
                 icon="create"
                 label="Crear el mío"
-                onPress={() => setPending(PENDING.own)}
+                onPress={() => router.push('/programs/new')}
               />
             </View>
           </View>

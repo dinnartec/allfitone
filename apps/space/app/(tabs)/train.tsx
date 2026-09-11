@@ -13,9 +13,15 @@
  * would be telling somebody they cannot do what they are about to do anyway, and
  * the repeat is another attempt that leaves the first one's credit alone.
  *
- * **Somebody with no programme lands on the catalogue instead.** This screen has
- * nothing honest to show them, and an empty state with a button to somewhere else
- * is a worse version of just going there.
+ * **Somebody with no programme sees the catalogue here.** This screen has nothing
+ * honest to show them, and an empty state with a button to somewhere else is a worse
+ * version of just going there.
+ *
+ * It is drawn, not navigated to. Sending them to `/programs` meant `router.replace`
+ * from inside a tab, which replaces the tab navigator's own entry on the root stack:
+ * the dock disappeared and `router.back()` reported no navigator would handle it,
+ * because by then the stack held one screen. A tab must never navigate out of its
+ * own navigator.
  */
 
 import { Button } from '@allfitone/react-native/button'
@@ -37,10 +43,12 @@ import {
   actionLabel,
   cardsFor,
   routineCaption,
+  weekPlanFailure,
   weekProgress,
   type RoutineCard,
 } from '../../src/client/week-plan'
 import { deviceTimezone } from '../../src/client/timezone'
+import { ProgramCatalogue } from '../../src/components/program-catalogue'
 import { DOCK_HEIGHT } from '../../src/components/tab-bar'
 
 const EXPIRED = 'Tu sesión venció. Vuelve a entrar para continuar.'
@@ -59,6 +67,7 @@ export default function Train() {
   const timezone = useMemo(() => deviceTimezone(), [])
 
   const [plan, setPlan] = useState<WeekPlan | undefined>(undefined)
+  const [unassigned, setUnassigned] = useState(false)
   const [mine, setMine] = useState<readonly MyProgram[]>([])
   const [choosing, setChoosing] = useState(false)
   const [starting, setStarting] = useState<string | undefined>(undefined)
@@ -69,22 +78,17 @@ export default function Train() {
       .readWeekPlan(timezone)
       .then((week) => {
         setPlan(week)
+        setUnassigned(false)
         return programs.readMyPrograms()
       })
       .then(setMine)
       .catch((cause: unknown) => {
-        if (cause instanceof ApiError && cause.failure === 'unauthenticated') {
-          setFailure(EXPIRED)
-          return
-        }
-        // No programme is not an error state: it is the catalogue.
-        if (cause instanceof ApiError && cause.failure === 'not-found') {
-          router.replace('/programs')
-          return
-        }
-        setFailure(READ_FAILED)
+        const meaning = weekPlanFailure(cause instanceof ApiError ? cause.failure : undefined)
+        // No programme is not an error state: it is the catalogue, drawn here.
+        if (meaning === 'unassigned') setUnassigned(true)
+        else setFailure(meaning === 'expired' ? EXPIRED : READ_FAILED)
       })
-  }, [programs, timezone, router])
+  }, [programs, timezone])
 
   // On focus rather than on mount: the tab stays mounted, so mounting happens once
   // and would never see a session finished or a programme taken somewhere else. The
@@ -93,6 +97,10 @@ export default function Train() {
 
   const cards = cardsFor(plan)
   const progress = weekProgress(plan)
+
+  // Before any of the week's own state: with no programme there is no week, and the
+  // sections below would each draw their empty half of one.
+  if (unassigned) return <ProgramCatalogue embedded />
 
   const start = (card: RoutineCard) => {
     const open = card.routine.open_execution_id
@@ -256,6 +264,10 @@ export default function Train() {
               program={program}
               active={program.program_version_id === plan?.program_version_id}
               onPress={() => select(program.assignment_id)}
+              onEdit={() => {
+                setChoosing(false)
+                router.push(`/programs/edit/${program.program_id}`)
+              }}
             />
           ))}
           <Button
@@ -347,10 +359,12 @@ function MyProgramRow({
   program,
   active,
   onPress,
+  onEdit,
 }: {
   readonly program: MyProgram
   readonly active: boolean
   readonly onPress: () => void
+  readonly onEdit: () => void
 }) {
   const theme = useTheme()
 
@@ -379,6 +393,21 @@ function MyProgramRow({
       </View>
       {active ? (
         <FoundationIcon name="success" size="sm" color={theme.color.icon.accent} decorative />
+      ) : null}
+
+      {/* Only what this editor can open. A programme taken from Allfit was forked and
+          never given a draft, and one whose weeks differ cannot be said as a repeated
+          base week — offering to edit either would flatten it on the way back. */}
+      {program.editable ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Editar ${program.title}`}
+          onPress={onEdit}
+          hitSlop={12}
+          style={styles.edit}
+        >
+          <FoundationIcon name="edit" size="sm" color={theme.color.icon.secondary} decorative />
+        </Pressable>
       ) : null}
     </Pressable>
   )
@@ -460,5 +489,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     paddingHorizontal: 13,
   },
+  // Its own target inside the row's, which is why it carries a generous hitSlop.
+  edit: { padding: 4 },
   alternative: { gap: 3, minHeight: 70, borderRadius: 16, borderWidth: 1, padding: 14 },
 })

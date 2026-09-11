@@ -24,10 +24,15 @@
  * exists. Everything that used to be here to make three stack peers behave — a
  * cross-fade, a duration, a list of their names — went with them.
  *
- * **A session is a mode, not a page.** It presents from the bottom as a full-screen
- * modal, which is what an app uses for something you are inside and then leave — and
- * it costs the swipe-back gesture, which is the point: half a swipe should not drop
- * somebody out of the workout they are recording.
+ * **A session is a mode, not a page.** It rises from the bottom, which is what an app
+ * uses for something you are inside and then leave, and its back gesture is off: half
+ * a swipe should not drop somebody out of the workout they are recording.
+ *
+ * It is **not** `presentation: 'fullScreenModal'`, which was tried. A modal is
+ * presented in its own native view hierarchy and `SafeAreaView` reads no top inset
+ * there, so the header sat across the clock and the battery. `initialWindowMetrics`
+ * does not reach it either. A card with the same animation costs nothing and stays
+ * inside the safe area.
  *
  * No `animationDuration` anywhere but the splash. It only applies to
  * `slide_from_bottom`, `fade_from_bottom`, `fade` and `simple_push` on iOS, so the
@@ -80,8 +85,8 @@ export default function RootLayout() {
             <Stack.Screen
               name="session/[executionId]"
               options={{
-                presentation: 'fullScreenModal',
                 animation: reduceMotion ? 'fade' : 'slide_from_bottom',
+                gestureEnabled: false,
               }}
             />
           </Stack>

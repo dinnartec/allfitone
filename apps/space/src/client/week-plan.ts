@@ -83,3 +83,19 @@ export function actionLabel(state: RoutineState): string {
   if (state === 'done') return 'Repetir'
   return 'Empezar'
 }
+
+export type WeekPlanFailure = 'expired' | 'unassigned' | 'failed'
+
+/**
+ * What a failed week read means to the tab.
+ *
+ * `unassigned` is not an error: somebody who follows no programme gets the catalogue,
+ * **drawn in the tab**. It used to be answered by navigating there, and from inside a
+ * tab that meant replacing the tab navigator's own entry on the root stack — the dock
+ * disappeared and going back reported that no navigator would handle it.
+ */
+export function weekPlanFailure(failure: string | undefined): WeekPlanFailure {
+  if (failure === 'unauthenticated') return 'expired'
+  if (failure === 'not-found') return 'unassigned'
+  return 'failed'
+}
