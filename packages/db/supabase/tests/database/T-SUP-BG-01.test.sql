@@ -13,7 +13,7 @@
 
 begin;
 
-select plan(37);
+select plan(38);
 
 insert into identity.people (id, given_name, family_name, status)
 values
@@ -564,6 +564,31 @@ select is(
   )->>'reason_code'),
   'duty_not_effective',
   'and the operator cannot exercise it afterwards'
+);
+
+-- ---------------------------------------------------------------------------
+-- The evidence cannot name an audit row that does not exist
+-- ---------------------------------------------------------------------------
+
+-- The person's visible audit row and the operator's evidence are the same event
+-- seen from two sides. Without this key the evidence could point at nothing, and
+-- the person would never see the attempt recorded against them.
+select throws_ok(
+  $$ insert into support.break_glass_events (
+       request_id, requester_person_id, requester_duty_assignment_id, subject_person_id,
+       category, result, resource_type, operation_code, reason_code,
+       occurred_at, access_event_id, access_event_occurred_at
+     )
+     select
+       file.id, file.requester_person_id, file.requester_duty_assignment_id,
+       file.subject_person_id, 'relationship_training', 'allowed',
+       'execution.executed_sessions', 'OP-SUP-003', 'authorized_exercise',
+       file.requested_at, '019a8000-0000-7000-8000-0000000009ff', file.requested_at
+     from support.break_glass_requests as file
+     limit 1 $$,
+  '23503',
+  null,
+  'the evidence row cannot name an access event that does not exist'
 );
 
 -- ---------------------------------------------------------------------------
