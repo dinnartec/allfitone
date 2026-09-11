@@ -53,6 +53,20 @@
  * - **One node per muscle**, not per path: 33 instead of 157, and the press belongs to
  *   the muscle anyway, because a muscle is what a person taps.
  * - **Memoised**, so the untouched face does no work when the other one changes.
+ *
+ * **The halo is dark, and only on dark.** `FeGaussianBlur` over `SourceAlpha` blurs
+ * black, because an alpha channel carries no colour. On the dark canvas that is
+ * exactly what is wanted and it is why the figure reads well there: it is a contact
+ * shadow, seating the bright cyan group against the grey muscles around it. Tinting
+ * it cyan was tried and made the group bloom into its neighbours instead.
+ *
+ * On a near-white canvas the same shadow is just a shadow, and it darkened the whole
+ * figure whenever a group was chosen. Tinting does not save it either: measured
+ * against a canvas at 0.91 luminance, the black halo lands at 0.41 and an accent
+ * tint at 0.63 — still a third darker, because **nothing glows lighter than the
+ * paper**. So light has no halo, and does not need one: its chosen group already
+ * out-contrasts the resting muscle at every stop, 5.4 and 14.2 against 4.4, which is
+ * the separation the halo adds on dark. One less filter pass with it.
  */
 
 import { useTheme } from '@allfitone/react-native/theme'
@@ -120,6 +134,8 @@ export const BodyFigure = memo(function BodyFigure({
   const light = theme.name === 'light'
   const litTop = light ? theme.color.border.strong : theme.color.action.primary
   const litBottom = light ? theme.color.accent.onAccent : theme.color.border.strong
+  // Only where a glow can exist. On a near-white canvas every halo is a shadow.
+  const halo = light ? undefined : `url(#${ids.halo})`
 
   const muscle = useCallback(
     (group: FigureGroup, fill: string) => (
@@ -149,13 +165,17 @@ export const BodyFigure = memo(function BodyFigure({
           <Stop offset="0" stopColor={theme.color.border.default} stopOpacity="1" />
           <Stop offset="1" stopColor={theme.color.border.default} stopOpacity="0.66" />
         </LinearGradient>
-        <Filter id={ids.halo} x="-25%" y="-25%" width="150%" height="150%">
-          <FeGaussianBlur in="SourceAlpha" stdDeviation={HALO_BLUR} result="glow" />
-          <FeMerge>
-            <FeMergeNode in="glow" />
-            <FeMergeNode in="SourceGraphic" />
-          </FeMerge>
-        </Filter>
+        {/* `SourceAlpha` blurs black, and on dark that is the point: it seats the
+            bright group against the grey muscles around it. */}
+        {halo ? (
+          <Filter id={ids.halo} x="-25%" y="-25%" width="150%" height="150%">
+            <FeGaussianBlur in="SourceAlpha" stdDeviation={HALO_BLUR} result="glow" />
+            <FeMerge>
+              <FeMergeNode in="glow" />
+              <FeMergeNode in="SourceGraphic" />
+            </FeMerge>
+          </Filter>
+        ) : null}
       </Defs>
 
       {/* The seam is set once here and inherited: 33 nodes do not each need to say it. */}
@@ -173,7 +193,7 @@ export const BodyFigure = memo(function BodyFigure({
 
         {/* One blur for the whole chosen group. One per shape is what made a tap slow. */}
         {chosen.length > 0 ? (
-          <G filter={`url(#${ids.halo})`}>
+          <G {...(halo ? { filter: halo } : {})}>
             {chosen.map((group) => muscle(group, `url(#${ids.lit})`))}
           </G>
         ) : null}
