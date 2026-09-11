@@ -27,6 +27,10 @@ tags:
     description: Global published catalogue shared by every surface.
   - name: Backoffice Platform Access
     description: Base role and temporary platform duty administration for Allfit staff.
+  - name: Backoffice Break Glass
+    description: >-
+      The exceptional path: a narrow, approved, time-boxed window over one
+      person's data, where every attempt leaves evidence that person can see.
   - name: Backoffice Privacy
     description: >-
       Published permission definitions: what each permission a person grants
@@ -1158,6 +1162,246 @@ paths:
           $ref: '#/components/responses/UnsupportedMediaType'
         '422':
           $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/break-glass/requests:
+    get:
+      tags: [Backoffice Break Glass]
+      operationId: listBackofficeBreakGlassRequests
+      x-allfit-operation: OP-SUP-001
+      x-allfit-cache: no-store
+      summary: Read the break-glass tray
+      description: >-
+        Requests to decide, or your own. Reading the tray is never a permission:
+        every operation revalidates its duty, its quorum and its window in its own
+        transaction.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/BreakGlassMine'
+        - $ref: '#/components/parameters/BreakGlassStatus'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Requests, newest first
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BreakGlassRequestList'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+    post:
+      tags: [Backoffice Break Glass]
+      operationId: requestBackofficeBreakGlass
+      x-allfit-operation: OP-SUP-001
+      x-allfit-cache: no-store
+      summary: Ask for a break-glass window
+      description: >-
+        The body names the subject, the categories, one of five closed purposes
+        and a traceable case. It does **not** name the tier, the number of
+        approvals or the duration: the server derives all three from the
+        categories, so a caller cannot ask for the cheap ones. A forbidden
+        category is refused rather than priced higher.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BreakGlassRequestCreate'
+      responses:
+        '201':
+          description: The file, or the converged one for a repeated command
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BreakGlassRequest'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/break-glass/requests/{requestId}/decisions:
+    post:
+      tags: [Backoffice Break Glass]
+      operationId: decideBackofficeBreakGlass
+      x-allfit-operation: OP-SUP-002
+      x-allfit-cache: no-store
+      summary: Approve or reject a break-glass request
+      description: >-
+        A rejection is terminal. An approval that completes the quorum opens the
+        window in the same transaction; one that does not leaves the request
+        exactly where it was. The approver is never the requester or the subject,
+        and never counts twice.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/BreakGlassRequestId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BreakGlassDecision'
+      responses:
+        '200':
+          description: The file after the decision
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BreakGlassRequest'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/break-glass/requests/{requestId}/reads:
+    post:
+      tags: [Backoffice Break Glass]
+      operationId: exerciseBackofficeBreakGlass
+      x-allfit-operation: OP-SUP-003
+      x-allfit-cache: no-store
+      summary: Exercise an approved break-glass window
+      description: >-
+        Only the exact requester exercises. Every attempt, allowed or denied,
+        writes evidence before anything is returned — a denial is an answer with a
+        recorded reason, not an error, because the record of a refused attempt is
+        the point.
+
+        The content projection is not available in this version: `execution` and
+        `nutrition` do not exist yet, so an authorised exercise answers
+        `content_unavailable` rather than inventing data.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/BreakGlassRequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BreakGlassExercise'
+      responses:
+        '200':
+          description: >-
+            The outcome of the attempt. `denied` and `content_unavailable` are both
+            answers rather than failures; neither carries content.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BreakGlassExerciseOutcome'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/break-glass/requests/{requestId}/closure:
+    post:
+      tags: [Backoffice Break Glass]
+      operationId: closeBackofficeBreakGlass
+      x-allfit-operation: OP-SUP-004
+      x-allfit-cache: no-store
+      summary: Close your own break-glass window
+      description: >-
+        Only the requester closes their own. There is no reopening and no
+        extension: continuing means asking again. Closing a closed window
+        converges rather than failing.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/BreakGlassRequestId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      responses:
+        '200':
+          description: The closed file
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BreakGlassRequest'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
 
@@ -4250,6 +4494,25 @@ components:
       description: Opaque, host-only, HttpOnly AAL2 Backoffice session.
 
   parameters:
+    BreakGlassRequestId:
+      name: requestId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/UuidV7'
+    BreakGlassMine:
+      name: mine
+      in: query
+      required: false
+      description: Only your own requests. Absent means the whole tray.
+      schema:
+        type: boolean
+    BreakGlassStatus:
+      name: status
+      in: query
+      required: false
+      schema:
+        $ref: '#/components/schemas/BreakGlassStatus'
     SupportOperationSource:
       name: source
       in: query
@@ -4941,6 +5204,213 @@ components:
           maxItems: 200
           items:
             $ref: '#/components/schemas/ScopeResourceRule'
+    BreakGlassCategory:
+      type: string
+      description: >-
+        The approvable categories. Everything else — media, identity, contact,
+        secrets, payments, raw sensor data — is not a category with a higher bar:
+        it can never be approved.
+      enum:
+        - relationship_training
+        - prior_training_history
+        - nutrition_guidance
+        - body_progress
+        - health_context
+        - nutrition_intake
+    BreakGlassPurpose:
+      type: string
+      description: >-
+        Five closed purposes. There is deliberately no `other`: marketing,
+        commercial recovery, AI training and operational curiosity are not
+        purposes, and an open field would become all four.
+      enum:
+        - service_dispute
+        - legal_or_regulatory_obligation
+        - customer_support_request
+        - security_investigation
+        - authorized_quality_review
+    BreakGlassTier:
+      type: string
+      description: Derived from the categories by the server, never sent by a client.
+      enum: [standard, restricted]
+    BreakGlassStatus:
+      type: string
+      enum: [requested, approved, rejected, closed, expired]
+    BreakGlassApproval:
+      type: object
+      additionalProperties: false
+      required: [approver_person_id, decision, reason_code, decided_at]
+      properties:
+        approver_person_id:
+          $ref: '#/components/schemas/Uuid'
+        decision:
+          type: string
+          enum: [approved, rejected]
+        reason_code:
+          type: string
+          pattern: '^[A-Z][A-Z0-9_-]{2,63}$'
+        decided_at:
+          type: string
+          format: date-time
+    BreakGlassRequest:
+      type: object
+      additionalProperties: false
+      description: >-
+        The file. It carries metadata about purpose and subject, and never the
+        person's content.
+      required:
+        - id
+        - requester_person_id
+        - subject_person_id
+        - categories
+        - purpose
+        - case_reference
+        - sensitivity_tier
+        - required_approvals
+        - requested_duration_minutes
+        - requested_at
+        - request_expires_at
+        - status
+        - window_starts_at
+        - window_ends_at
+        - closed_at
+        - reviewed_at
+        - review_outcome
+        - approvals
+        - exercise_count
+      properties:
+        id:
+          $ref: '#/components/schemas/UuidV7'
+        requester_person_id:
+          $ref: '#/components/schemas/Uuid'
+        subject_person_id:
+          $ref: '#/components/schemas/Uuid'
+        categories:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/BreakGlassCategory'
+        purpose:
+          $ref: '#/components/schemas/BreakGlassPurpose'
+        case_reference:
+          type: string
+          pattern: '^[A-Z][A-Z0-9_-]{2,63}$'
+        sensitivity_tier:
+          $ref: '#/components/schemas/BreakGlassTier'
+        required_approvals:
+          type: integer
+          minimum: 1
+          maximum: 2
+        requested_duration_minutes:
+          type: integer
+          minimum: 1
+          maximum: 30
+        requested_at:
+          type: string
+          format: date-time
+        request_expires_at:
+          type: string
+          format: date-time
+        status:
+          $ref: '#/components/schemas/BreakGlassStatus'
+        window_starts_at:
+          type: [string, 'null']
+          format: date-time
+        window_ends_at:
+          type: [string, 'null']
+          format: date-time
+        closed_at:
+          type: [string, 'null']
+          format: date-time
+        reviewed_at:
+          type: [string, 'null']
+          format: date-time
+        review_outcome:
+          type: [string, 'null']
+          enum: [justified, unjustified, incident_opened, null]
+        approvals:
+          type: array
+          items:
+            $ref: '#/components/schemas/BreakGlassApproval'
+        exercise_count:
+          type: integer
+          minimum: 0
+    BreakGlassRequestList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/BreakGlassRequest'
+    BreakGlassRequestCreate:
+      type: object
+      additionalProperties: false
+      description: >-
+        No tier, no approval count and no duration: the server derives all three
+        from the categories.
+      required: [subject_person_id, categories, purpose, case_reference]
+      properties:
+        subject_person_id:
+          $ref: '#/components/schemas/Uuid'
+        categories:
+          type: array
+          minItems: 1
+          maxItems: 6
+          items:
+            $ref: '#/components/schemas/BreakGlassCategory'
+        purpose:
+          $ref: '#/components/schemas/BreakGlassPurpose'
+        case_reference:
+          type: string
+          pattern: '^[A-Z][A-Z0-9_-]{2,63}$'
+    BreakGlassDecision:
+      type: object
+      additionalProperties: false
+      required: [decision, reason_code]
+      properties:
+        decision:
+          type: string
+          enum: [approved, rejected]
+        reason_code:
+          type: string
+          pattern: '^[A-Z][A-Z0-9_-]{2,63}$'
+    BreakGlassExercise:
+      type: object
+      additionalProperties: false
+      required: [category, resource_type]
+      properties:
+        category:
+          $ref: '#/components/schemas/BreakGlassCategory'
+        resource_type:
+          type: string
+          pattern: '^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$'
+        resource_id:
+          type: [string, 'null']
+          format: uuid
+    BreakGlassExerciseOutcome:
+      type: object
+      additionalProperties: false
+      description: >-
+        Every attempt is recorded before this answers, so `break_glass_event_id`
+        is the evidence of this exact attempt. No outcome carries content in this
+        version.
+      required: [outcome, reason_code, break_glass_event_id, occurred_at]
+      properties:
+        outcome:
+          type: string
+          enum: [denied, content_unavailable]
+        reason_code:
+          type: string
+          pattern: '^[a-z][a-z0-9_]{1,63}$'
+        break_glass_event_id:
+          $ref: '#/components/schemas/Uuid'
+        occurred_at:
+          type: string
+          format: date-time
+        category:
+          $ref: '#/components/schemas/BreakGlassCategory'
     SupportOperationSourceKind:
       type: string
       enum: [notification, command]

@@ -436,6 +436,91 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/backoffice/v1/break-glass/requests': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Read the break-glass tray
+     * @description Requests to decide, or your own. Reading the tray is never a permission: every operation revalidates its duty, its quorum and its window in its own transaction.
+     */
+    get: operations['listBackofficeBreakGlassRequests']
+    put?: never
+    /**
+     * Ask for a break-glass window
+     * @description The body names the subject, the categories, one of five closed purposes and a traceable case. It does **not** name the tier, the number of approvals or the duration: the server derives all three from the categories, so a caller cannot ask for the cheap ones. A forbidden category is refused rather than priced higher.
+     */
+    post: operations['requestBackofficeBreakGlass']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/break-glass/requests/{requestId}/decisions': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Approve or reject a break-glass request
+     * @description A rejection is terminal. An approval that completes the quorum opens the window in the same transaction; one that does not leaves the request exactly where it was. The approver is never the requester or the subject, and never counts twice.
+     */
+    post: operations['decideBackofficeBreakGlass']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/break-glass/requests/{requestId}/reads': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Exercise an approved break-glass window
+     * @description Only the exact requester exercises. Every attempt, allowed or denied, writes evidence before anything is returned — a denial is an answer with a recorded reason, not an error, because the record of a refused attempt is the point.
+     *     The content projection is not available in this version: `execution` and `nutrition` do not exist yet, so an authorised exercise answers `content_unavailable` rather than inventing data.
+     */
+    post: operations['exerciseBackofficeBreakGlass']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/break-glass/requests/{requestId}/closure': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Close your own break-glass window
+     * @description Only the requester closes their own. There is no reopening and no extension: continuing means asking again. Closing a closed window converges rather than failing.
+     */
+    post: operations['closeBackofficeBreakGlass']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/space/v1/telemetry-config': {
     parameters: {
       query?: never
@@ -1713,6 +1798,102 @@ export interface components {
     ScopeDefinitionPublication: {
       scope_code: components['schemas']['ScopeCode']
       rules: components['schemas']['ScopeResourceRule'][]
+    }
+    /**
+     * @description The approvable categories. Everything else — media, identity, contact, secrets, payments, raw sensor data — is not a category with a higher bar: it can never be approved.
+     * @enum {string}
+     */
+    BreakGlassCategory:
+      | 'relationship_training'
+      | 'prior_training_history'
+      | 'nutrition_guidance'
+      | 'body_progress'
+      | 'health_context'
+      | 'nutrition_intake'
+    /**
+     * @description Five closed purposes. There is deliberately no `other`: marketing, commercial recovery, AI training and operational curiosity are not purposes, and an open field would become all four.
+     * @enum {string}
+     */
+    BreakGlassPurpose:
+      | 'service_dispute'
+      | 'legal_or_regulatory_obligation'
+      | 'customer_support_request'
+      | 'security_investigation'
+      | 'authorized_quality_review'
+    /**
+     * @description Derived from the categories by the server, never sent by a client.
+     * @enum {string}
+     */
+    BreakGlassTier: 'standard' | 'restricted'
+    /** @enum {string} */
+    BreakGlassStatus: 'requested' | 'approved' | 'rejected' | 'closed' | 'expired'
+    BreakGlassApproval: {
+      approver_person_id: components['schemas']['Uuid']
+      /** @enum {string} */
+      decision: 'approved' | 'rejected'
+      reason_code: string
+      /** Format: date-time */
+      decided_at: string
+    }
+    /** @description The file. It carries metadata about purpose and subject, and never the person's content. */
+    BreakGlassRequest: {
+      id: components['schemas']['UuidV7']
+      requester_person_id: components['schemas']['Uuid']
+      subject_person_id: components['schemas']['Uuid']
+      categories: components['schemas']['BreakGlassCategory'][]
+      purpose: components['schemas']['BreakGlassPurpose']
+      case_reference: string
+      sensitivity_tier: components['schemas']['BreakGlassTier']
+      required_approvals: number
+      requested_duration_minutes: number
+      /** Format: date-time */
+      requested_at: string
+      /** Format: date-time */
+      request_expires_at: string
+      status: components['schemas']['BreakGlassStatus']
+      /** Format: date-time */
+      window_starts_at: string | null
+      /** Format: date-time */
+      window_ends_at: string | null
+      /** Format: date-time */
+      closed_at: string | null
+      /** Format: date-time */
+      reviewed_at: string | null
+      /** @enum {string|null} */
+      review_outcome: 'justified' | 'unjustified' | 'incident_opened' | null
+      approvals: components['schemas']['BreakGlassApproval'][]
+      exercise_count: number
+    }
+    BreakGlassRequestList: {
+      items: components['schemas']['BreakGlassRequest'][]
+    }
+    /** @description No tier, no approval count and no duration: the server derives all three from the categories. */
+    BreakGlassRequestCreate: {
+      subject_person_id: components['schemas']['Uuid']
+      categories: components['schemas']['BreakGlassCategory'][]
+      purpose: components['schemas']['BreakGlassPurpose']
+      case_reference: string
+    }
+    BreakGlassDecision: {
+      /** @enum {string} */
+      decision: 'approved' | 'rejected'
+      reason_code: string
+    }
+    BreakGlassExercise: {
+      category: components['schemas']['BreakGlassCategory']
+      resource_type: string
+      /** Format: uuid */
+      resource_id?: string | null
+    }
+    /** @description Every attempt is recorded before this answers, so `break_glass_event_id` is the evidence of this exact attempt. No outcome carries content in this version. */
+    BreakGlassExerciseOutcome: {
+      /** @enum {string} */
+      outcome: 'denied' | 'content_unavailable'
+      reason_code: string
+      break_glass_event_id: components['schemas']['Uuid']
+      /** Format: date-time */
+      occurred_at: string
+      category?: components['schemas']['BreakGlassCategory']
     }
     /** @enum {string} */
     SupportOperationSourceKind: 'notification' | 'command'
@@ -3945,6 +4126,10 @@ export interface components {
     }
   }
   parameters: {
+    BreakGlassRequestId: components['schemas']['UuidV7']
+    /** @description Only your own requests. Absent means the whole tray. */
+    BreakGlassMine: boolean
+    BreakGlassStatus: components['schemas']['BreakGlassStatus']
     SupportOperationSource: components['schemas']['SupportOperationSourceKind']
     SupportOperationState: components['schemas']['SupportOperationState']
     /** @description The aggregate an event belongs to. Not every event is reachable from a person: a notification about an invitation belongs to the invitation. */
@@ -4894,6 +5079,192 @@ export interface operations {
       409: components['responses']['Conflict']
       415: components['responses']['UnsupportedMediaType']
       422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listBackofficeBreakGlassRequests: {
+    parameters: {
+      query?: {
+        /** @description Only your own requests. Absent means the whole tray. */
+        mine?: components['parameters']['BreakGlassMine']
+        status?: components['parameters']['BreakGlassStatus']
+        limit?: components['parameters']['Limit']
+      }
+      header: {
+        Origin: components['parameters']['Origin']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Requests, newest first */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['BreakGlassRequestList']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  requestBackofficeBreakGlass: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['BreakGlassRequestCreate']
+      }
+    }
+    responses: {
+      /** @description The file, or the converged one for a repeated command */
+      201: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['BreakGlassRequest']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  decideBackofficeBreakGlass: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        requestId: components['parameters']['BreakGlassRequestId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['BreakGlassDecision']
+      }
+    }
+    responses: {
+      /** @description The file after the decision */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['BreakGlassRequest']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  exerciseBackofficeBreakGlass: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+      }
+      path: {
+        requestId: components['parameters']['BreakGlassRequestId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['BreakGlassExercise']
+      }
+    }
+    responses: {
+      /** @description The outcome of the attempt. `denied` and `content_unavailable` are both answers rather than failures; neither carries content. */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['BreakGlassExerciseOutcome']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  closeBackofficeBreakGlass: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        requestId: components['parameters']['BreakGlassRequestId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The closed file */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['BreakGlassRequest']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
       503: components['responses']['UpstreamUnavailable']
     }
   }

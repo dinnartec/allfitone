@@ -762,6 +762,268 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  BreakGlassApproval: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['approver_person_id', 'decision', 'reason_code', 'decided_at'],
+    properties: {
+      approver_person_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      decision: {
+        type: 'string',
+        enum: ['approved', 'rejected'],
+      },
+      reason_code: {
+        type: 'string',
+        pattern: '^[A-Z][A-Z0-9_-]{2,63}$',
+      },
+      decided_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+    },
+  },
+  BreakGlassCategory: {
+    type: 'string',
+    description:
+      'The approvable categories. Everything else — media, identity, contact, secrets, payments, raw sensor data — is not a category with a higher bar: it can never be approved.',
+    enum: [
+      'relationship_training',
+      'prior_training_history',
+      'nutrition_guidance',
+      'body_progress',
+      'health_context',
+      'nutrition_intake',
+    ],
+  },
+  BreakGlassDecision: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['decision', 'reason_code'],
+    properties: {
+      decision: {
+        type: 'string',
+        enum: ['approved', 'rejected'],
+      },
+      reason_code: {
+        type: 'string',
+        pattern: '^[A-Z][A-Z0-9_-]{2,63}$',
+      },
+    },
+  },
+  BreakGlassExercise: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['category', 'resource_type'],
+    properties: {
+      category: {
+        $ref: '#/components/schemas/BreakGlassCategory',
+      },
+      resource_type: {
+        type: 'string',
+        pattern: '^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*$',
+      },
+      resource_id: {
+        type: ['string', 'null'],
+        format: 'uuid',
+      },
+    },
+  },
+  BreakGlassExerciseOutcome: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      'Every attempt is recorded before this answers, so `break_glass_event_id` is the evidence of this exact attempt. No outcome carries content in this version.',
+    required: ['outcome', 'reason_code', 'break_glass_event_id', 'occurred_at'],
+    properties: {
+      outcome: {
+        type: 'string',
+        enum: ['denied', 'content_unavailable'],
+      },
+      reason_code: {
+        type: 'string',
+        pattern: '^[a-z][a-z0-9_]{1,63}$',
+      },
+      break_glass_event_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      occurred_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      category: {
+        $ref: '#/components/schemas/BreakGlassCategory',
+      },
+    },
+  },
+  BreakGlassPurpose: {
+    type: 'string',
+    description:
+      'Five closed purposes. There is deliberately no `other`: marketing, commercial recovery, AI training and operational curiosity are not purposes, and an open field would become all four.',
+    enum: [
+      'service_dispute',
+      'legal_or_regulatory_obligation',
+      'customer_support_request',
+      'security_investigation',
+      'authorized_quality_review',
+    ],
+  },
+  BreakGlassRequest: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      "The file. It carries metadata about purpose and subject, and never the person's content.",
+    required: [
+      'id',
+      'requester_person_id',
+      'subject_person_id',
+      'categories',
+      'purpose',
+      'case_reference',
+      'sensitivity_tier',
+      'required_approvals',
+      'requested_duration_minutes',
+      'requested_at',
+      'request_expires_at',
+      'status',
+      'window_starts_at',
+      'window_ends_at',
+      'closed_at',
+      'reviewed_at',
+      'review_outcome',
+      'approvals',
+      'exercise_count',
+    ],
+    properties: {
+      id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      requester_person_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      subject_person_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      categories: {
+        type: 'array',
+        minItems: 1,
+        items: {
+          $ref: '#/components/schemas/BreakGlassCategory',
+        },
+      },
+      purpose: {
+        $ref: '#/components/schemas/BreakGlassPurpose',
+      },
+      case_reference: {
+        type: 'string',
+        pattern: '^[A-Z][A-Z0-9_-]{2,63}$',
+      },
+      sensitivity_tier: {
+        $ref: '#/components/schemas/BreakGlassTier',
+      },
+      required_approvals: {
+        type: 'integer',
+        minimum: 1,
+        maximum: 2,
+      },
+      requested_duration_minutes: {
+        type: 'integer',
+        minimum: 1,
+        maximum: 30,
+      },
+      requested_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      request_expires_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      status: {
+        $ref: '#/components/schemas/BreakGlassStatus',
+      },
+      window_starts_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      window_ends_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      closed_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      reviewed_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      review_outcome: {
+        type: ['string', 'null'],
+        enum: ['justified', 'unjustified', 'incident_opened', null],
+      },
+      approvals: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/BreakGlassApproval',
+        },
+      },
+      exercise_count: {
+        type: 'integer',
+        minimum: 0,
+      },
+    },
+  },
+  BreakGlassRequestCreate: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      'No tier, no approval count and no duration: the server derives all three from the categories.',
+    required: ['subject_person_id', 'categories', 'purpose', 'case_reference'],
+    properties: {
+      subject_person_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      categories: {
+        type: 'array',
+        minItems: 1,
+        maxItems: 6,
+        items: {
+          $ref: '#/components/schemas/BreakGlassCategory',
+        },
+      },
+      purpose: {
+        $ref: '#/components/schemas/BreakGlassPurpose',
+      },
+      case_reference: {
+        type: 'string',
+        pattern: '^[A-Z][A-Z0-9_-]{2,63}$',
+      },
+    },
+  },
+  BreakGlassRequestList: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['items'],
+    properties: {
+      items: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/BreakGlassRequest',
+        },
+      },
+    },
+  },
+  BreakGlassStatus: {
+    type: 'string',
+    enum: ['requested', 'approved', 'rejected', 'closed', 'expired'],
+  },
+  BreakGlassTier: {
+    type: 'string',
+    description: 'Derived from the categories by the server, never sent by a client.',
+    enum: ['standard', 'restricted'],
+  },
   CatalogActivityType: {
     type: 'object',
     additionalProperties: false,
