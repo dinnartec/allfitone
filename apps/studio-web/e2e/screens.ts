@@ -67,6 +67,17 @@ async function settledByHeading(page: Page): Promise<void> {
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
 }
 
+/**
+ * The overview renders whatever it was given, so an h1 is no evidence that the
+ * load it was meant to carry arrived. The invitations register was swept
+ * against its own failure state for exactly this reason: it had a heading.
+ */
+async function settledByLoadedOverview(page: Page): Promise<void> {
+  await settledByHeading(page)
+  await expect(page.getByRole('heading', { name: 'Requiere atención' })).toBeVisible()
+  await expect(page.locator('[data-overview-team-list] > li')).toHaveCount(5)
+}
+
 /** Arranges a screen and waits until it is really on the page. */
 export async function openScreen(page: Page, screen: Screen, viewport: Viewport): Promise<void> {
   await page.setViewportSize(screen.viewport ?? { width: viewport.width, height: viewport.height })
@@ -133,6 +144,59 @@ const withIssuedInvitations = () =>
                 issuedInvitation('decidida', 'completed', '2026-09-18T00:00:00.000Z'),
                 issuedInvitation('revocada', 'revoked', '2026-09-15T00:00:00.000Z'),
                 issuedInvitation('vencida', 'expired', '2026-08-30T00:00:00.000Z'),
+              ],
+              page: { next_cursor: null },
+            },
+          }
+        : undefined,
+  })
+
+const inDays = (days: number) => new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString()
+
+const overviewMember = (id: string, display_name: string, joined_at: string, roles: string[]) => ({
+  membership_id: id,
+  display_name,
+  status: 'active',
+  joined_at,
+  ended_at: null,
+  roles,
+})
+
+/**
+ * A workspace with something in it. The default fixture gives the overview one
+ * active member and a 500 on the invitations GET, so the three sweeps had only
+ * ever seen the emptiest version of the first screen a person lands on: no
+ * "Requiere atención" card at all, and a recent-team list of one row that
+ * cannot show what five rows do to a phone.
+ */
+const withOverviewLoad = () =>
+  createStudioApiFixture({
+    memberships: [activeMembership, secondActiveMembership, terminatedMembership],
+    organizationMemberships: [
+      overviewMember('ov-1', 'Alejandro Rangel Buitrago', '2026-09-07T00:00:00.000Z', [
+        'owner',
+        'admin',
+      ]),
+      overviewMember('ov-2', 'María Fernanda Quintero', '2026-09-05T00:00:00.000Z', ['admin']),
+      overviewMember('ov-3', 'Jo Li', '2026-08-30T00:00:00.000Z', ['coach']),
+      overviewMember('ov-4', 'Bartholomew Featherstonehaugh', '2026-08-21T00:00:00.000Z', [
+        'staff',
+        'coach',
+      ]),
+      overviewMember('ov-5', 'Camila Torres', '2026-07-14T00:00:00.000Z', ['staff']),
+    ],
+    intercept: (request) =>
+      request.method === 'GET' && /\/invitations(\?|$)/.test(request.path)
+        ? {
+            status: 200,
+            body: {
+              // Relative, not fixed: the attention card only appears for a
+              // pending invitation expiring within seven days of now, so a
+              // literal date would quietly stop rendering the card it exists
+              // to cover on the day it passed.
+              data: [
+                issuedInvitation('proxima', 'pending', inDays(2)),
+                issuedInvitation('siguiente', 'pending', inDays(4)),
               ],
               page: { next_cursor: null },
             },
@@ -419,6 +483,21 @@ export const SCREENS: Screen[] = [
 
   // --- `/organizations/[id]` · the workspace and the states that replace it ---
   { stories: 'HU-004 / HU-006 · workspace and memberships', path: workspace, fixture: memberOfTwo },
+  {
+    stories: 'HU-004 · workspace with a team and invitations to attend',
+    path: workspace,
+    fixture: withOverviewLoad,
+    settled: settledByLoadedOverview,
+  },
+  {
+    // The recent-team row stacks below 640px, and a single-member workspace
+    // cannot show whether five stacked rows still read as five people.
+    stories: 'HU-004 · workspace with a team and invitations on a phone',
+    path: workspace,
+    fixture: withOverviewLoad,
+    viewport: MOBILE,
+    settled: settledByLoadedOverview,
+  },
   {
     // A coach reads neither the directory nor the invitation register, so the
     // overview has nothing to count and orientation is the honest content.
