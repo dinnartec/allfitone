@@ -1,6 +1,6 @@
 'use client'
 
-import { Alert, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
+import { Alert, AlertAction, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
 import { Button } from '@allfitone/react/components/button'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -211,7 +211,9 @@ export function StudioEntry() {
             No pudimos abrir Studio
           </AlertTitle>
           <AlertDescription>{flow.message}</AlertDescription>
-          <Button onClick={() => void bootstrap()}>Reintentar</Button>
+          <AlertAction>
+            <Button onClick={() => void bootstrap()}>Reintentar</Button>
+          </AlertAction>
         </Alert>
       </div>
     </StudioFrame>

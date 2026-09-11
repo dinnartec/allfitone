@@ -1,7 +1,7 @@
 'use client'
 
 import { ProductWordmark } from '@allfitone/react/brand'
-import { Alert, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
+import { Alert, AlertAction, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
 import { Badge } from '@allfitone/react/components/badge'
 import { Button } from '@allfitone/react/components/button'
 import {
@@ -105,14 +105,18 @@ export function ProfessionalProfileScreen() {
         <Alert variant="danger" live="polite">
           <AlertTitle>No pudimos actualizar tu cuenta</AlertTitle>
           <AlertDescription>La información cargada permanece visible.</AlertDescription>
-          <Button onClick={() => void meQuery.refetch()}>Reintentar</Button>
+          <AlertAction>
+            <Button onClick={() => void meQuery.refetch()}>Reintentar</Button>
+          </AlertAction>
         </Alert>
       ) : null}
       {catalogError && catalogsReady ? (
         <Alert variant="danger" live="polite">
           <AlertTitle>No pudimos actualizar los catálogos profesionales</AlertTitle>
           <AlertDescription>Los datos cargados permanecen disponibles.</AlertDescription>
-          <Button onClick={retryCatalogs}>Reintentar</Button>
+          <AlertAction>
+            <Button onClick={retryCatalogs}>Reintentar</Button>
+          </AlertAction>
         </Alert>
       ) : null}
       {meQuery.isPending ? (
@@ -131,7 +135,9 @@ export function ProfessionalProfileScreen() {
                 ? 'El servicio no está disponible en este momento. Puedes reintentar.'
                 : 'Ocurrió un error al reunir la información de tu cuenta.'}
             </AlertDescription>
-            <Button onClick={() => void meQuery.refetch()}>Reintentar</Button>
+            <AlertAction>
+              <Button onClick={() => void meQuery.refetch()}>Reintentar</Button>
+            </AlertAction>
           </Alert>
         </div>
       ) : !meQuery.data.profile && !setupStarted ? (
@@ -358,12 +364,14 @@ function ProfessionalCatalogError({
             ? 'Los catálogos profesionales no están disponibles en este momento.'
             : 'Ocurrió un error al reunir los catálogos profesionales.'}
         </AlertDescription>
-        <Button onClick={onRetry}>Reintentar</Button>
-        {onBack ? (
-          <Button variant="ghost" onClick={onBack}>
-            Volver a mi cuenta
-          </Button>
-        ) : null}
+        <AlertAction>
+          <Button onClick={onRetry}>Reintentar</Button>
+          {onBack ? (
+            <Button variant="ghost" onClick={onBack}>
+              Volver a mi cuenta
+            </Button>
+          ) : null}
+        </AlertAction>
       </Alert>
     </div>
   )

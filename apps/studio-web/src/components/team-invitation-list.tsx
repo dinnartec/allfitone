@@ -10,7 +10,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@allfitone/react/components/alert-dialog'
-import { Alert, AlertDescription } from '@allfitone/react/components/alert'
+import { Alert, AlertAction, AlertDescription } from '@allfitone/react/components/alert'
 import { Badge } from '@allfitone/react/components/badge'
 import { Button, buttonVariants } from '@allfitone/react/components/button'
 import { Card, CardContent, CardHeader } from '@allfitone/react/components/card'
@@ -300,9 +300,11 @@ export function TeamInvitationList() {
               ? 'Las invitaciones cambiaron. Actualiza la lista para verla desde el inicio.'
               : 'No pudimos actualizar la lista. Las invitaciones cargadas siguen visibles.'}
           </AlertDescription>
-          <Button size="sm" variant="outline" onClick={() => void retryList()}>
-            {staleCursor ? 'Actualizar la lista' : 'Reintentar'}
-          </Button>
+          <AlertAction>
+            <Button size="sm" variant="outline" onClick={() => void retryList()}>
+              {staleCursor ? 'Actualizar la lista' : 'Reintentar'}
+            </Button>
+          </AlertAction>
         </Alert>
       ) : null}
 

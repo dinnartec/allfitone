@@ -1,6 +1,6 @@
 'use client'
 
-import { Alert, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
+import { Alert, AlertAction, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
 import { Avatar, AvatarFallback } from '@allfitone/react/components/avatar'
 import { Badge } from '@allfitone/react/components/badge'
 import { Button, buttonVariants } from '@allfitone/react/components/button'
@@ -105,12 +105,14 @@ export function TeamMembershipList() {
           <AlertDescription>
             Puedes consultar los roles y entender qué permite cada uno dentro de la organización.
           </AlertDescription>
-          <Link
-            href={`/organizations/${current.organization_id}/team/roles`}
-            className={buttonVariants({ variant: 'outline' })}
-          >
-            Ver roles y permisos
-          </Link>
+          <AlertAction>
+            <Link
+              href={`/organizations/${current.organization_id}/team/roles`}
+              className={buttonVariants({ variant: 'outline' })}
+            >
+              Ver roles y permisos
+            </Link>
+          </AlertAction>
         </Alert>
       </section>
     )
@@ -255,9 +257,11 @@ export function TeamMembershipList() {
               ? 'Actualiza la lista para verla desde el inicio.'
               : 'Los integrantes que ya cargaste permanecen visibles.'}
           </AlertDescription>
-          <Button size="sm" variant="outline" onClick={() => void retry()}>
-            {error === 'stale-cursor' ? 'Actualizar la lista' : 'Reintentar'}
-          </Button>
+          <AlertAction>
+            <Button size="sm" variant="outline" onClick={() => void retry()}>
+              {error === 'stale-cursor' ? 'Actualizar la lista' : 'Reintentar'}
+            </Button>
+          </AlertAction>
         </Alert>
       ) : null}
 

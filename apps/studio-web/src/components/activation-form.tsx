@@ -1,6 +1,6 @@
 'use client'
 
-import { Alert, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
+import { Alert, AlertAction, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
 import { Button } from '@allfitone/react/components/button'
 import { Checkbox } from '@allfitone/react/components/checkbox'
 import {
@@ -245,9 +245,16 @@ export function ActivationForm({
                 <AlertDescription>
                   Abre un nuevo intento para continuar sin volver a iniciar sesión.
                 </AlertDescription>
-                <Button type="button" variant="outline" onClick={retryAttempt} disabled={retrying}>
-                  {retrying ? 'Abriendo…' : 'Reintentar activación'}
-                </Button>
+                <AlertAction>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={retryAttempt}
+                    disabled={retrying}
+                  >
+                    {retrying ? 'Abriendo…' : 'Reintentar activación'}
+                  </Button>
+                </AlertAction>
               </Alert>
             ) : null}
 

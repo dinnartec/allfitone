@@ -1,7 +1,7 @@
 'use client'
 
 import { ProductWordmark } from '@allfitone/react/brand'
-import { Alert, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
+import { Alert, AlertAction, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
 import { Button } from '@allfitone/react/components/button'
 import { Card, CardContent } from '@allfitone/react/components/card'
 import { Spinner } from '@allfitone/react/components/spinner'
@@ -211,7 +211,9 @@ export function OrganizationContextBoundary({
             <AlertDescription>
               No tienes una membresía activa para esta organización.
             </AlertDescription>
-            <Button onClick={() => router.replace('/')}>Elegir otro espacio</Button>
+            <AlertAction>
+              <Button onClick={() => router.replace('/')}>Elegir otro espacio</Button>
+            </AlertAction>
           </Alert>
         </div>
       </OrganizationStateFrame>
@@ -294,7 +296,9 @@ function OrganizationVerificationError({ onRetry }: { onRetry: () => void }) {
           La conexión falló de forma temporal. El contenido permanecerá bloqueado hasta comprobar
           nuevamente tu membresía.
         </AlertDescription>
-        <Button onClick={onRetry}>Reintentar</Button>
+        <AlertAction>
+          <Button onClick={onRetry}>Reintentar</Button>
+        </AlertAction>
       </Alert>
     </div>
   )

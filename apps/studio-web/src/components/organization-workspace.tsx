@@ -1,6 +1,6 @@
 'use client'
 
-import { Alert, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
+import { Alert, AlertAction, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
 import { Avatar, AvatarFallback } from '@allfitone/react/components/avatar'
 import { Badge } from '@allfitone/react/components/badge'
 import { Button, buttonVariants } from '@allfitone/react/components/button'
@@ -107,9 +107,11 @@ export function OrganizationWorkspace() {
             <AlertDescription>
               La conexión falló de forma temporal. Los datos siguen intactos.
             </AlertDescription>
-            <Button size="sm" variant="outline" onClick={retry}>
-              Reintentar
-            </Button>
+            <AlertAction>
+              <Button size="sm" variant="outline" onClick={retry}>
+                Reintentar
+              </Button>
+            </AlertAction>
           </Alert>
         ) : (
           <StatStrip>

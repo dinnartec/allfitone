@@ -1,6 +1,6 @@
 'use client'
 
-import { Alert, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
+import { Alert, AlertAction, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
 import { Badge } from '@allfitone/react/components/badge'
 import { Button } from '@allfitone/react/components/button'
 import {
@@ -71,9 +71,11 @@ export function OrganizationRoleCatalog() {
         <Alert variant="danger" live="polite">
           <AlertTitle>No pudimos actualizar los roles</AlertTitle>
           <AlertDescription>El catálogo cargado permanece visible.</AlertDescription>
-          <Button variant="outline" onClick={() => void query.refetch()}>
-            Reintentar
-          </Button>
+          <AlertAction>
+            <Button variant="outline" onClick={() => void query.refetch()}>
+              Reintentar
+            </Button>
+          </AlertAction>
         </Alert>
       ) : null}
 
@@ -102,9 +104,11 @@ export function OrganizationRoleCatalog() {
             La conexión falló de forma temporal. El catálogo permanecerá oculto hasta comprobarlo de
             nuevo.
           </AlertDescription>
-          <Button variant="outline" onClick={() => void query.refetch()}>
-            Reintentar
-          </Button>
+          <AlertAction>
+            <Button variant="outline" onClick={() => void query.refetch()}>
+              Reintentar
+            </Button>
+          </AlertAction>
         </Alert>
       ) : null}
 
