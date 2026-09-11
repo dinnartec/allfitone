@@ -15,6 +15,7 @@ export type PlatformDutyAssignmentPage = AllfitV1Schemas['PlatformDutyAssignment
 export type CatalogDiscipline = AllfitV1Schemas['CatalogDiscipline']
 export type CatalogActivityType = AllfitV1Schemas['CatalogActivityType']
 export type ActivityTypeResultContract = AllfitV1Schemas['ActivityTypeResultContract']
+export type AccessEventPage = AllfitV1Schemas['AccessEventPage']
 export type BreakGlassRequest = AllfitV1Schemas['BreakGlassRequest']
 export type BreakGlassRequestCreate = AllfitV1Schemas['BreakGlassRequestCreate']
 export type BreakGlassExerciseOutcome = AllfitV1Schemas['BreakGlassExerciseOutcome']
@@ -232,6 +233,20 @@ export const backofficeApi = {
       signal ? { signal } : {},
     ),
 
+  accessEvents: (
+    filters: {
+      actor_person_id?: string | undefined
+      subject_person_id?: string | undefined
+      from?: string | undefined
+      to?: string | undefined
+    },
+    signal?: AbortSignal,
+  ) =>
+    requestJson<AccessEventPage>(
+      `/backoffice/v1/access-events${query(filters)}`,
+      signal ? { signal } : {},
+    ),
+
   scopeDefinitions: (signal?: AbortSignal) =>
     requestJson<{ items: ScopeDefinition[] }>(
       '/backoffice/v1/scope-definitions',
@@ -396,6 +411,7 @@ function backofficeOperation(path: string, method: string): ClientOperation {
   const resolved = route ?? path
   const breakGlass = breakGlassOperation(resolved)
   if (breakGlass) return breakGlass
+  if (resolved === '/backoffice/v1/access-events') return 'backoffice.access_log.read'
   if (resolved === '/backoffice/v1/scope-definitions') {
     return method === 'POST'
       ? 'backoffice.privacy.scope_definition_publish'

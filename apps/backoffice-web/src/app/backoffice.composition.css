@@ -109,6 +109,7 @@
 [data-support-diagnosis],
 [data-scope-definitions],
 [data-break-glass],
+[data-access-log],
 [data-support-person] {
   display: grid;
   gap: 24px;
@@ -126,6 +127,7 @@
 [data-support-diagnosis] code,
 [data-scope-definitions] code,
 [data-break-glass] code,
+[data-access-log] code,
 [data-support-person] code {
   font-family: var(--afo-font-family-mono, monospace);
   font-size: var(--afo-font-size-xs);
@@ -155,4 +157,16 @@
 [data-break-glass-categories] {
   display: grid;
   gap: 8px;
+}
+
+[data-access-log-filters] {
+  display: grid;
+  gap: 12px;
+}
+
+/* An exceptional access is the row an auditor came looking for, so it carries a
+   left edge instead of sitting flush with the ordinary ones. */
+[data-access-log-entry][data-exceptional='true'] {
+  border-inline-start: 3px solid var(--color-destructive, currentColor);
+  padding-inline-start: 12px;
 }
