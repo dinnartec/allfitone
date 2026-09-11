@@ -1,12 +1,15 @@
 import {
+  createBreakGlassService,
   createPlatformAccessService,
   createSupportDiagnosisService,
   createSupportMetadataService,
+  type BreakGlassService,
   type PlatformAccessService,
   type SupportDiagnosisService,
   type SupportMetadataService,
 } from './application/index.js'
 import {
+  createBreakGlassDatabase,
   createPlatformAccessDatabase,
   createSupportDiagnosisDatabase,
   createSupportMetadataDatabase,
@@ -31,4 +34,11 @@ let cachedDiagnosis: SupportDiagnosisService | undefined
 export function supportDiagnosisService(): SupportDiagnosisService {
   cachedDiagnosis ??= createSupportDiagnosisService(createSupportDiagnosisDatabase())
   return cachedDiagnosis
+}
+
+let cachedBreakGlass: BreakGlassService | undefined
+
+export function breakGlassService(): BreakGlassService {
+  cachedBreakGlass ??= createBreakGlassService(createBreakGlassDatabase())
+  return cachedBreakGlass
 }

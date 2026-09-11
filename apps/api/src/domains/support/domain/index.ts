@@ -224,3 +224,96 @@ export interface SupportDiagnosisDatabase {
     input: SupportReader & { requestId: string },
   ): Promise<SupportDeliveryCircuit[]>
 }
+
+/**
+ * Break-glass windows: `OP-SUP-001` through `OP-SUP-004`.
+ *
+ * The vocabularies are repeated here only so a malformed request is answered 422
+ * rather than becoming a database error. Everything that makes break-glass safe —
+ * the derived tier, the quorum, the independence of approvers, the immutability of
+ * the file, the evidence of every attempt — lives in PostgreSQL.
+ *
+ * Note what is absent from `BreakGlassRequestInput`: the tier, the approval count
+ * and the duration. A client cannot ask for the cheap ones because the shape has
+ * nowhere to say it.
+ */
+export type BreakGlassRequest = AllfitV1Schemas['BreakGlassRequest']
+export type BreakGlassRequestCreate = AllfitV1Schemas['BreakGlassRequestCreate']
+export type BreakGlassCategory = AllfitV1Schemas['BreakGlassCategory']
+export type BreakGlassPurpose = AllfitV1Schemas['BreakGlassPurpose']
+export type BreakGlassStatus = AllfitV1Schemas['BreakGlassStatus']
+export type BreakGlassExercise = AllfitV1Schemas['BreakGlassExercise']
+export type BreakGlassExerciseOutcome = AllfitV1Schemas['BreakGlassExerciseOutcome']
+
+export const BREAK_GLASS_CATEGORIES: readonly BreakGlassCategory[] = [
+  'relationship_training',
+  'prior_training_history',
+  'nutrition_guidance',
+  'body_progress',
+  'health_context',
+  'nutrition_intake',
+]
+
+export const BREAK_GLASS_PURPOSES: readonly BreakGlassPurpose[] = [
+  'service_dispute',
+  'legal_or_regulatory_obligation',
+  'customer_support_request',
+  'security_investigation',
+  'authorized_quality_review',
+]
+
+export const BREAK_GLASS_STATUSES: readonly BreakGlassStatus[] = [
+  'requested',
+  'approved',
+  'rejected',
+  'closed',
+  'expired',
+]
+
+export interface BreakGlassCommandResult {
+  resource: BreakGlassRequest
+  replayed: boolean
+}
+
+export interface BreakGlassDatabase {
+  request(
+    input: PlatformCommandContext & {
+      actorPersonId: string
+      actorSessionId: string
+      publication: BreakGlassRequestCreate
+    },
+  ): Promise<BreakGlassCommandResult>
+  decide(
+    input: PlatformCommandContext & {
+      actorPersonId: string
+      actorSessionId: string
+      breakGlassRequestId: string
+      decision: 'approved' | 'rejected'
+      reasonCode: string
+    },
+  ): Promise<BreakGlassCommandResult>
+  exercise(input: {
+    actorPersonId: string
+    actorSessionId: string
+    breakGlassRequestId: string
+    category: BreakGlassCategory
+    resourceType: string
+    resourceId?: string
+    requestTraceId: string
+  }): Promise<BreakGlassExerciseOutcome>
+  close(
+    input: PlatformCommandContext & {
+      actorPersonId: string
+      actorSessionId: string
+      breakGlassRequestId: string
+    },
+  ): Promise<BreakGlassCommandResult>
+  list(input: {
+    actorPersonId: string
+    actorSessionId: string
+    requestId: string
+    mine: boolean
+    status?: BreakGlassStatus
+    limit: number
+  }): Promise<BreakGlassRequest[]>
+}

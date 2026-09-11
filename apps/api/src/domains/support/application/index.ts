@@ -10,6 +10,13 @@
 
 import type { BackofficeActor } from '../../identity/index.js'
 import type {
+  BreakGlassCategory,
+  BreakGlassCommandResult,
+  BreakGlassDatabase,
+  BreakGlassExerciseOutcome,
+  BreakGlassRequest,
+  BreakGlassRequestCreate,
+  BreakGlassStatus,
   SupportDeliveryCircuit,
   SupportDiagnosisDatabase,
   SupportOperation,
@@ -163,5 +170,63 @@ export function createSupportDiagnosisService(
   return {
     listOperations: (reader, input) => database.listOperations({ ...reader, ...input }),
     listDeliveryCircuits: (reader, input) => database.listDeliveryCircuits({ ...reader, ...input }),
+  }
+}
+
+/**
+ * Break-glass use cases.
+ *
+ * No authorization branch here, as everywhere else in this module: the duty, the
+ * quorum, the window and the independence of approvers are all resolved inside
+ * each command's own transaction.
+ *
+ * One thing is worth noticing about `exercise`: it resolves rather than rejects
+ * when the attempt is denied. The evidence of a refused attempt is the point of
+ * the operation, and an exception would roll it back.
+ */
+export interface BreakGlassService {
+  request(
+    actor: BackofficeActor,
+    input: PlatformCommandContext & { publication: BreakGlassRequestCreate },
+  ): Promise<BreakGlassCommandResult>
+  decide(
+    actor: BackofficeActor,
+    input: PlatformCommandContext & {
+      breakGlassRequestId: string
+      decision: 'approved' | 'rejected'
+      reasonCode: string
+    },
+  ): Promise<BreakGlassCommandResult>
+  exercise(
+    actor: BackofficeActor,
+    input: {
+      breakGlassRequestId: string
+      category: BreakGlassCategory
+      resourceType: string
+      resourceId?: string
+      requestTraceId: string
+    },
+  ): Promise<BreakGlassExerciseOutcome>
+  close(
+    actor: BackofficeActor,
+    input: PlatformCommandContext & { breakGlassRequestId: string },
+  ): Promise<BreakGlassCommandResult>
+  list(
+    actor: BackofficeActor,
+    input: { requestId: string; mine: boolean; status?: BreakGlassStatus; limit: number },
+  ): Promise<BreakGlassRequest[]>
+}
+
+export function createBreakGlassService(database: BreakGlassDatabase): BreakGlassService {
+  const from = (actor: BackofficeActor) => ({
+    actorPersonId: actor.personId,
+    actorSessionId: actor.sessionId,
+  })
+  return {
+    request: (actor, input) => database.request({ ...from(actor), ...input }),
+    decide: (actor, input) => database.decide({ ...from(actor), ...input }),
+    exercise: (actor, input) => database.exercise({ ...from(actor), ...input }),
+    close: (actor, input) => database.close({ ...from(actor), ...input }),
+    list: (actor, input) => database.list({ ...from(actor), ...input }),
   }
 }

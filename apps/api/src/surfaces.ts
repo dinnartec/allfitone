@@ -32,6 +32,7 @@ import { studioOrganizationRoutes } from './domains/organizations/index.js'
 import { studioPlanningRoutes } from './domains/planning/index.js'
 import { backofficePrivacyRoutes } from './domains/privacy/index.js'
 import {
+  backofficeBreakGlassRoutes,
   backofficePlatformAccessRoutes,
   backofficeSupportMetadataRoutes,
 } from './domains/support/index.js'
@@ -59,6 +60,7 @@ export function mountSurfaces(app: Hono): void {
   app.route('/backoffice/v1', backofficeIdentityRoutes())
   app.route('/backoffice/v1', backofficePlatformAccessRoutes())
   app.route('/backoffice/v1', backofficeSupportMetadataRoutes())
+  app.route('/backoffice/v1', backofficeBreakGlassRoutes())
   app.route('/backoffice/v1', backofficePrivacyRoutes())
   app.route('/backoffice/v1', backofficeCatalogRoutes())
 
