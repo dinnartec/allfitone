@@ -15,6 +15,9 @@ export type PlatformDutyAssignmentPage = AllfitV1Schemas['PlatformDutyAssignment
 export type CatalogDiscipline = AllfitV1Schemas['CatalogDiscipline']
 export type CatalogActivityType = AllfitV1Schemas['CatalogActivityType']
 export type ActivityTypeResultContract = AllfitV1Schemas['ActivityTypeResultContract']
+export type BreakGlassRequest = AllfitV1Schemas['BreakGlassRequest']
+export type BreakGlassRequestCreate = AllfitV1Schemas['BreakGlassRequestCreate']
+export type BreakGlassExerciseOutcome = AllfitV1Schemas['BreakGlassExerciseOutcome']
 export type ScopeDefinition = AllfitV1Schemas['ScopeDefinition']
 export type ScopeDefinitionPublication = AllfitV1Schemas['ScopeDefinitionPublication']
 export type SupportOperation = AllfitV1Schemas['SupportOperation']
@@ -242,6 +245,51 @@ export const backofficeApi = {
       body: JSON.stringify(publication),
     }),
 
+  breakGlassRequests: (filters: { mine?: boolean; status?: string } = {}, signal?: AbortSignal) =>
+    requestJson<{ items: BreakGlassRequest[] }>(
+      `/backoffice/v1/break-glass/requests${query({
+        mine: filters.mine === undefined ? undefined : String(filters.mine),
+        status: filters.status,
+      })}`,
+      signal ? { signal } : {},
+    ),
+
+  requestBreakGlass: (publication: BreakGlassRequestCreate, command: BackofficeCommand) =>
+    requestJson<BreakGlassRequest>('/backoffice/v1/break-glass/requests', {
+      method: 'POST',
+      headers: commandHeaders(command),
+      body: JSON.stringify(publication),
+    }),
+
+  decideBreakGlass: (
+    requestId: string,
+    decision: { decision: 'approved' | 'rejected'; reason_code: string },
+    command: BackofficeCommand,
+  ) =>
+    requestJson<BreakGlassRequest>(`/backoffice/v1/break-glass/requests/${requestId}/decisions`, {
+      method: 'POST',
+      headers: commandHeaders(command),
+      body: JSON.stringify(decision),
+    }),
+
+  // No command identifiers: each attempt is a new event rather than a command to
+  // converge, so there is nothing to replay.
+  exerciseBreakGlass: (
+    requestId: string,
+    exercise: { category: string; resource_type: string; resource_id?: string },
+  ) =>
+    requestJson<BreakGlassExerciseOutcome>(
+      `/backoffice/v1/break-glass/requests/${requestId}/reads`,
+      { method: 'POST', body: JSON.stringify(exercise) },
+    ),
+
+  closeBreakGlass: (requestId: string, command: BackofficeCommand) =>
+    requestJson<BreakGlassRequest>(`/backoffice/v1/break-glass/requests/${requestId}/closure`, {
+      method: 'POST',
+      headers: commandHeaders(command),
+      body: '{}',
+    }),
+
   passwordReset: (email: string) =>
     requestVoid('/backoffice/v1/auth/password-resets', {
       method: 'POST',
@@ -346,6 +394,8 @@ function backofficeOperation(path: string, method: string): ClientOperation {
   }
   const [route] = path.split('?')
   const resolved = route ?? path
+  const breakGlass = breakGlassOperation(resolved)
+  if (breakGlass) return breakGlass
   if (resolved === '/backoffice/v1/scope-definitions') {
     return method === 'POST'
       ? 'backoffice.privacy.scope_definition_publish'
@@ -358,6 +408,19 @@ function backofficeOperation(path: string, method: string): ClientOperation {
     operations[resolved] ??
     'backoffice.session'
   )
+}
+
+/** The file identifier varies per row, so these routes are matched by shape. */
+function breakGlassOperation(route: string): ClientOperation | undefined {
+  const segments = route.split('/').filter(Boolean)
+  if (segments[0] !== 'backoffice' || segments[1] !== 'v1' || segments[2] !== 'break-glass') {
+    return undefined
+  }
+  if (segments.length === 4) return 'backoffice.break_glass.list'
+  if (segments[5] === 'decisions') return 'backoffice.break_glass.decide'
+  if (segments[5] === 'reads') return 'backoffice.break_glass.exercise'
+  if (segments[5] === 'closure') return 'backoffice.break_glass.close'
+  return undefined
 }
 
 /** The person identifier varies per row, so the card is matched by shape. */

@@ -108,6 +108,7 @@
 [data-support-search],
 [data-support-diagnosis],
 [data-scope-definitions],
+[data-break-glass],
 [data-support-person] {
   display: grid;
   gap: 24px;
@@ -124,6 +125,7 @@
 [data-support-search] code,
 [data-support-diagnosis] code,
 [data-scope-definitions] code,
+[data-break-glass] code,
 [data-support-person] code {
   font-family: var(--afo-font-family-mono, monospace);
   font-size: var(--afo-font-size-xs);
@@ -141,4 +143,16 @@
   display: grid;
   gap: 12px;
   padding-block-end: 24px;
+}
+
+[data-break-glass-form] {
+  display: grid;
+  gap: 12px;
+}
+
+/* The categories read as one list of consequences rather than a row of controls:
+   choosing more of them is what makes the window stricter. */
+[data-break-glass-categories] {
+  display: grid;
+  gap: 8px;
 }
