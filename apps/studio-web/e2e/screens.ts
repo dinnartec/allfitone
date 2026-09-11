@@ -204,6 +204,27 @@ const withOverviewLoad = () =>
         : undefined,
   })
 
+/**
+ * The verification failure as an overlay rather than a page. The workspace had
+ * already loaded, so the alert covers blurred content that must stay out of
+ * reach — different markup from `organization · the access check failed`, which
+ * replaces the page and was the only one of the two being swept.
+ *
+ * The first membership check succeeds and every later one fails, which is what
+ * a revalidation against an unreachable API looks like.
+ */
+const withFailingRevalidation = () => {
+  let checks = 0
+  return createStudioApiFixture({
+    memberships: [activeMembership],
+    intercept: (request) => {
+      if (request.method !== 'GET' || request.path !== '/studio/v1/me/memberships') return undefined
+      checks += 1
+      return checks > 1 ? { status: 503, body: error('upstream-unavailable') } : undefined
+    },
+  })
+}
+
 const stall = (path: string) => () =>
   createStudioApiFixture({
     intercept: async (request) => {
@@ -523,6 +544,19 @@ export const SCREENS: Screen[] = [
     stories: 'organization · the access check failed',
     path: workspace,
     fixture: failing('/studio/v1/me/memberships', 500, 'upstream-error'),
+  },
+  {
+    stories: 'organization · the access check failed over a loaded workspace',
+    path: workspace,
+    fixture: withFailingRevalidation,
+    settled: async (page) => {
+      await settledByHeading(page)
+      // The context revalidates on pageshow, but ignores one within a second
+      // of the last verification.
+      await page.waitForTimeout(1100)
+      await page.evaluate(() => window.dispatchEvent(new Event('pageshow')))
+      await expect(page.getByText('No pudimos comprobar tu acceso')).toBeVisible()
+    },
   },
 
   // --- `/account` · one route, five views -------------------------------------
