@@ -211,7 +211,17 @@ export function TeamMembershipList() {
           aria-label="Integrantes"
           aria-busy={loading || loadingMore || undefined}
           scrollAreaLabel="Tabla de integrantes de la organización"
+          data-studio-register="memberships"
         >
+          {/* Same reason as the invitation register: filtering must not move
+              the columns under the reader. */}
+          <colgroup>
+            <col />
+            <col />
+            <col />
+            <col />
+            <col />
+          </colgroup>
           <TableCaption>
             Esta vista presenta membresías organizacionales y no expone información de clientes ni
             datos fitness.

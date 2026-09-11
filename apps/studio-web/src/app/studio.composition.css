@@ -245,6 +245,58 @@ menu {
   gap: var(--afo-space-3);
 }
 
+/* --------------------------------------------------------------- registers */
+
+/* A table lays itself out from its own content, so a filtered register redrew
+   its grid on every filter: Acciones is wide when something is pending and
+   narrow when nothing is, Estado's labels differ in length, and the columns
+   jumped under the reader on each switch. Fixing the layout hands the decision
+   to the shares each register declares in its colgroup, which do not depend on
+   which rows are showing. `min-width` keeps it from collapsing on a phone —
+   below that the container scrolls, as it already did. */
+[data-studio-register] {
+  min-width: 44rem;
+  table-layout: fixed;
+}
+
+/* The shares live here rather than on the columns because inline visual styles
+   are forbidden in this app, and the lint rule is right: a width written in
+   the markup is a width nobody finds when the table changes. */
+[data-studio-register='memberships'] col:nth-child(1) {
+  width: 30%;
+}
+
+[data-studio-register='memberships'] col:nth-child(2) {
+  width: 14%;
+}
+
+[data-studio-register='memberships'] col:nth-child(3) {
+  width: 22%;
+}
+
+[data-studio-register='memberships'] col:nth-child(4),
+[data-studio-register='memberships'] col:nth-child(5) {
+  width: 17%;
+}
+
+[data-studio-register='invitations'] col:nth-child(1) {
+  width: 30%;
+}
+
+[data-studio-register='invitations'] col:nth-child(2),
+[data-studio-register='invitations'] col:nth-child(5) {
+  width: 15%;
+}
+
+[data-studio-register='invitations'] col:nth-child(3),
+[data-studio-register='invitations'] col:nth-child(4) {
+  width: 14%;
+}
+
+[data-studio-register='invitations'] col:nth-child(6) {
+  width: 12%;
+}
+
 /* ------------------------------------------------------------------- grids */
 
 [data-studio-choice-grid] {
@@ -272,6 +324,30 @@ menu {
    scroll edge would not. A stopgap: the component should answer this itself. */
 [data-studio-filters] {
   flex-wrap: wrap;
+}
+
+/* Wrapping leaves the last row short, and the group is full width because its
+   unwrapped content would be wider than that. Letting the options grow spends
+   the leftover on them instead of leaving a hole at the end of the row.
+
+   `1 0 auto`, never `flex: 1`: that shorthand sets the basis to zero, so every
+   option measures nothing, all five fit one line, none of them wraps and the
+   labels clip instead. The basis has to stay on the content for the wrap to
+   happen at all, and shrink has to stay off so a label is never squeezed. */
+/* Wrapping leaves the last row short, and the group is full width because its
+   unwrapped content would be wider than that, so the leftover landed on the
+   right. The options take it instead, so a row is always full.
+
+   `1 0 auto`, never `flex: 1`: that shorthand sets the basis to zero, so every
+   option measures nothing, all five fit one line, none of them wraps and the
+   labels clip. The basis has to stay on the content for a wrap to happen at
+   all, and shrink has to stay off so a label is never squeezed.
+
+   The cost is that each row splits its own leftover, so options differ in width
+   between rows — and a row holding one option gives it everything, which at
+   320px makes "Vencidas" 278px beside others of 117. */
+[data-studio-filters] > * {
+  flex: 1 0 auto;
 }
 
 [data-team-role-badges],
@@ -337,6 +413,12 @@ menu {
 /* The card is the table row stacked, so every value keeps the name its column
    had. The label track sizes to its widest word, which lines the values up
    down the card instead of leaving each one to start wherever its label ends. */
+/* CardContent pads sideways and nothing else, so the action sat against the
+   last fact. The gap belongs to Studio's own element, not to the component. */
+[data-team-member-card] [data-team-invitation-actions] {
+  margin-block-start: var(--afo-space-4);
+}
+
 [data-team-member-facts] {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -627,7 +709,8 @@ menu {
      a primary action ended up as a content-width pill floating at the left of
      an empty row. Stretching what is in it finishes the intent that rule
      started. Two actions still share the row rather than one taking it. */
-  [data-page-header-actions] > * {
+  [data-page-header-actions] > *,
+  [data-team-invitation-actions] > * {
     flex: 1;
   }
 

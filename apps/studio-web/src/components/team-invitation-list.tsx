@@ -250,7 +250,19 @@ export function TeamInvitationList() {
           aria-label="Invitaciones"
           aria-busy={loading || loadingMore || undefined}
           scrollAreaLabel="Tabla de invitaciones de la organización"
+          data-studio-register="invitations"
         >
+          {/* A register must not redraw its own grid when it is filtered. With
+              the layout fixed, these shares settle the columns once instead of
+              letting whichever rows are showing settle them again. */}
+          <colgroup>
+            <col />
+            <col />
+            <col />
+            <col />
+            <col />
+            <col />
+          </colgroup>
           <TableCaption>
             Las invitaciones muestran el destino propuesto y nunca datos fitness de una persona.
           </TableCaption>
