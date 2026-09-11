@@ -163,7 +163,10 @@ export function OrganizationWorkspace() {
             <ul data-overview-attention-list>
               {invitations.attention.map((invitation) => (
                 <li key={invitation.id}>
-                  <span data-overview-attention-contact>{invitation.contact}</span>
+                  {/* The subject of the row, the way the member's name is in
+                      the team list below. Stacked on a phone the two lines had
+                      the same weight, so neither read as the one being named. */}
+                  <strong data-overview-attention-contact>{invitation.contact}</strong>
                   <span data-overview-attention-expiry>
                     Vence el {formatDate(invitation.expires_at)}
                   </span>

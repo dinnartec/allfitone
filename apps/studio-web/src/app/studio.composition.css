@@ -718,20 +718,43 @@ menu {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  /* Stacked, an item's own lines have to sit closer together than the gap to
+     the next item. At one rhythm for both, two invitations of two lines each
+     read as four invitations of one. Inner 4px, outer 20px. */
+  [data-overview-attention-list],
+  [data-overview-team-list] {
+    gap: var(--afo-space-5);
+  }
+
   [data-overview-attention-list] > li {
     align-items: flex-start;
     flex-direction: column;
+    gap: var(--afo-space-1);
   }
 
-  /* The avatar belongs beside the name, not stranded on a line of its own. */
+  /* The avatar belongs beside the name, not stranded on a line of its own.
+     `start`, not `center`: the avatar now labels a block of three lines, and
+     centring floats it to the middle of that block, away from the name. */
   [data-overview-team-list] > li {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr);
-    align-items: center;
+    align-items: start;
+    gap: var(--afo-space-2) var(--afo-space-3);
   }
 
+  /* Column two, not the whole row. Spanning both columns put the roles under
+     the avatar, on a left edge nothing else in the row shares, so the badge
+     that says who a person is read as belonging to no one. */
   [data-overview-team-list] > li > [data-overview-team-roles] {
-    grid-column: 1 / -1;
+    grid-column: 2;
+  }
+
+  /* Name over date, not name beside date. Side by side at 320px a two-word
+     name broke mid-word and took its row to 137px next to neighbours of 79. */
+  [data-overview-team-identity] {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--afo-space-1);
   }
 }
 
