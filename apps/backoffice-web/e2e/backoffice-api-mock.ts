@@ -3,8 +3,8 @@ import type { BrowserContext, Route } from '@playwright/test'
 const BACKOFFICE_ORIGIN = 'http://127.0.0.1:3102'
 
 export interface BackofficeFixture {
-  session?: SessionFixture
-  attempt?: AttemptFixture
+  session?: SessionFixture | undefined
+  attempt?: AttemptFixture | undefined
   passwordOutcome?: 'challenge' | 'enrollment' | 'unauthenticated' | 'disabled' | 'rate-limited'
   totpOutcome?: 'success' | 'invalid' | 'network-lost-after-success' | 'rate-limited'
   invalidTotpCount?: number
@@ -16,6 +16,7 @@ export interface BackofficeFixture {
   support?: SupportFixture
   diagnosis?: DiagnosisFixture
   scopes?: ScopeFixture
+  breakGlass?: BreakGlassFixture
   requests: MockRequest[]
 }
 
@@ -73,6 +74,121 @@ export function scopeDefinition(
       },
     ],
     ...overrides,
+  }
+}
+
+/**
+ * Break-glass files.
+ *
+ * This mock reproduces the *command's* rules, not the screen's expectations. A
+ * decision appends an approval and the window opens only once the quorum is
+ * complete; the requester may never decide on their own file; a rejection is
+ * final; and a denied attempt still answers 200 with its reason. A mock more
+ * permissive than the real command would let the screen pass while production
+ * refused — which is the whole failure this file exists to prevent.
+ */
+export interface BreakGlassFixture {
+  refusal?: { status: number; code: string }
+  nextCommandFailure?: { status: number; code: string } | undefined
+  files: BreakGlassFileFixture[]
+}
+
+export interface BreakGlassFileFixture {
+  id: string
+  requester_person_id: string
+  subject_person_id: string
+  categories: string[]
+  purpose: string
+  case_reference: string
+  sensitivity_tier: 'standard' | 'restricted'
+  required_approvals: number
+  requested_duration_minutes: number
+  requested_at: string
+  request_expires_at: string
+  status: string
+  window_starts_at: string | null
+  window_ends_at: string | null
+  closed_at: string | null
+  reviewed_at: string | null
+  review_outcome: string | null
+  approvals: Array<{
+    approver_person_id: string
+    decision: 'approved' | 'rejected'
+    reason_code: string
+    decided_at: string
+  }>
+  exercise_count: number
+  /**
+   * Whether the viewer opened this file. The other two viewer fields are derived
+   * from it on every answer, never set by a test, so a spec cannot grant itself a
+   * button the server would withhold.
+   */
+  viewer_is_requester: boolean
+  viewer_has_decided: boolean
+}
+
+export const BREAK_GLASS_PEER_ID = '019a4000-0000-7000-8000-000000000001'
+
+const BREAK_GLASS_RESTRICTED = ['body_progress', 'health_context', 'nutrition_intake']
+
+function breakGlassTier(categories: string[]): 'standard' | 'restricted' {
+  return categories.some((category) => BREAK_GLASS_RESTRICTED.includes(category))
+    ? 'restricted'
+    : 'standard'
+}
+
+export function breakGlassFile(
+  overrides: Partial<BreakGlassFileFixture> = {},
+): BreakGlassFileFixture {
+  const categories = overrides.categories ?? ['nutrition_guidance']
+  const tier = breakGlassTier(categories)
+  const now = Date.now()
+  return {
+    id: nextAssignmentId(),
+    requester_person_id: ACTOR_PERSON_ID,
+    subject_person_id: SUBJECT_PERSON_ID,
+    categories,
+    purpose: 'customer_support_request',
+    case_reference: 'CASE-2026-001',
+    sensitivity_tier: tier,
+    required_approvals: tier === 'restricted' ? 2 : 1,
+    requested_duration_minutes: tier === 'restricted' ? 15 : 30,
+    requested_at: new Date(now - 120_000).toISOString(),
+    request_expires_at: new Date(now + 1_680_000).toISOString(),
+    status: 'requested',
+    window_starts_at: null,
+    window_ends_at: null,
+    closed_at: null,
+    reviewed_at: null,
+    review_outcome: null,
+    approvals: [],
+    exercise_count: 0,
+    viewer_is_requester: true,
+    viewer_has_decided: false,
+    ...overrides,
+  }
+}
+
+/** An open window with `minutes` left, so the countdown has something to say. */
+export function openBreakGlassWindow(
+  minutes: number,
+  overrides: Partial<BreakGlassFileFixture> = {},
+): BreakGlassFileFixture {
+  const now = Date.now()
+  const file = breakGlassFile(overrides)
+  return {
+    ...file,
+    status: 'approved',
+    reviewed_at: new Date(now - 60_000).toISOString(),
+    review_outcome: 'approved',
+    window_starts_at: new Date(now - 60_000).toISOString(),
+    window_ends_at: new Date(now + minutes * 60_000).toISOString(),
+    approvals: Array.from({ length: file.required_approvals }, (_unused, index) => ({
+      approver_person_id: `019a4000-0000-7000-8000-00000000000${index + 1}`,
+      decision: 'approved' as const,
+      reason_code: 'REASON-APPROVED',
+      decided_at: new Date(now - 60_000).toISOString(),
+    })),
   }
 }
 
@@ -238,7 +354,7 @@ export function publishedCatalogue(): CatalogueFixture {
 
 export interface ResultContractFixture {
   /** The next command is refused with this code, once. */
-  nextCommandFailure?: { status: number; code: string }
+  nextCommandFailure?: { status: number; code: string } | undefined
   /** Versions already published for a contract code, so the next one increments. */
   versions: Record<string, number>
   published: ResultContractRow[]
@@ -276,7 +392,7 @@ export interface PlatformAccessFixture {
   roles: PlatformRoleFixture[]
   duties: PlatformDutyFixture[]
   /** The next command is refused with this code, once. */
-  nextCommandFailure?: { status: number; code: string }
+  nextCommandFailure?: { status: number; code: string } | undefined
   /**
    * Rows per page. Absent means one page, as most tests want. The real
    * inventory pages on a cursor, and a screen that ignores it shows a truncated
@@ -459,6 +575,10 @@ export async function mockBackofficeApi(
       await routeResultContracts(route, request, fixture)
       return
     }
+    if (request.path.startsWith('/backoffice/v1/break-glass/')) {
+      await routeBreakGlass(route, request, fixture)
+      return
+    }
     if (request.path === '/backoffice/v1/scope-definitions') {
       await routeScopes(route, request, fixture)
       return
@@ -494,7 +614,7 @@ async function routePlatformAccess(
     return
   }
   if (request.method === 'GET') {
-    const rows =
+    const rows: Array<PlatformRoleFixture | PlatformDutyFixture> =
       request.path === '/backoffice/v1/platform/role-assignments' ? access.roles : access.duties
     await fulfill(route, 200, paginate(rows, access.pageSize, cursorOf(request)))
     return
@@ -685,6 +805,10 @@ async function routeCatalogue(
   }
 
   const activityTypeId = segments[3]
+  if (activityTypeId === undefined) {
+    await fulfillProblem(route, 404, 'not-found')
+    return
+  }
   if (!catalogue.activityTypes.some((activityType) => activityType.id === activityTypeId)) {
     await fulfillProblem(route, 404, 'not-found')
     return
@@ -741,6 +865,156 @@ function paginate<T>(rows: T[], pageSize: number | undefined, offset: number) {
  * E2E can assert what the story actually promises rather than what one screen
  * happens to render.
  */
+/**
+ * The two derived viewer fields. Deriving them here rather than letting a test set
+ * them is what keeps the mock honest: the rule is the one the database trigger
+ * enforces — an approver is never the requester and never decides twice.
+ */
+function breakGlassProjection(file: BreakGlassFileFixture) {
+  const { viewer_has_decided, ...row } = file
+  return {
+    ...row,
+    viewer_can_decide:
+      file.status === 'requested' && !file.viewer_is_requester && !viewer_has_decided,
+    viewer_can_exercise: file.status === 'approved' && file.viewer_is_requester,
+  }
+}
+
+async function routeBreakGlass(
+  route: Route,
+  request: MockRequest,
+  fixture: BackofficeFixture,
+): Promise<void> {
+  const glass = fixture.breakGlass ?? { files: [] }
+  fixture.breakGlass = glass
+  if (glass.refusal) {
+    await fulfillProblem(route, glass.refusal.status, glass.refusal.code)
+    return
+  }
+  const segments = request.path.split('/').filter(Boolean)
+
+  if (request.method === 'GET') {
+    const status = new URLSearchParams(request.query).get('status')
+    const rows = status ? glass.files.filter((file) => file.status === status) : glass.files
+    await fulfill(route, 200, { items: rows.map((file) => breakGlassProjection(file)) })
+    return
+  }
+
+  const failure = glass.nextCommandFailure
+  if (failure) {
+    glass.nextCommandFailure = undefined
+    await fulfillProblem(route, failure.status, failure.code)
+    return
+  }
+
+  if (segments.length === 4) {
+    const body = request.body as
+      | {
+          subject_person_id?: string
+          categories?: string[]
+          purpose?: string
+          case_reference?: string
+        }
+      | undefined
+    // Tier, quorum and duration are derived from the categories here exactly as the
+    // server derives them, so a body that tried to set them would be ignored.
+    const created = breakGlassFile({
+      ...(body?.subject_person_id ? { subject_person_id: body.subject_person_id } : {}),
+      ...(body?.categories ? { categories: body.categories } : {}),
+      ...(body?.purpose ? { purpose: body.purpose } : {}),
+      ...(body?.case_reference ? { case_reference: body.case_reference } : {}),
+      viewer_is_requester: true,
+    })
+    glass.files.push(created)
+    await fulfill(route, 201, breakGlassProjection(created))
+    return
+  }
+
+  const file = glass.files.find((row) => row.id === segments[4])
+  if (!file) {
+    await fulfillProblem(route, 404, 'not-found')
+    return
+  }
+  const action = segments[5]
+  const now = new Date().toISOString()
+
+  if (action === 'decisions') {
+    if (file.viewer_is_requester || file.viewer_has_decided) {
+      await fulfillProblem(route, 403, 'forbidden')
+      return
+    }
+    if (file.status !== 'requested') {
+      await fulfillProblem(route, 409, 'conflict')
+      return
+    }
+    const body = request.body as
+      { decision?: 'approved' | 'rejected'; reason_code?: string } | undefined
+    const decision = body?.decision === 'rejected' ? 'rejected' : 'approved'
+    file.approvals.push({
+      approver_person_id: ACTOR_PERSON_ID,
+      decision,
+      reason_code: body?.reason_code ?? 'REASON-UNSTATED',
+      decided_at: now,
+    })
+    file.viewer_has_decided = true
+    file.reviewed_at = now
+    file.review_outcome = decision
+    const approved = file.approvals.filter((approval) => approval.decision === 'approved').length
+    if (decision === 'rejected') {
+      // One rejection is final. No later approval reopens the file.
+      file.status = 'rejected'
+    } else if (approved >= file.required_approvals) {
+      file.status = 'approved'
+      file.window_starts_at = now
+      file.window_ends_at = new Date(
+        Date.now() + file.requested_duration_minutes * 60_000,
+      ).toISOString()
+    }
+    await fulfill(route, 200, breakGlassProjection(file))
+    return
+  }
+
+  if (action === 'reads') {
+    const body = request.body as { category?: string; resource_type?: string } | undefined
+    const category = body?.category ?? ''
+    const open =
+      file.status === 'approved' &&
+      file.window_ends_at !== null &&
+      Date.parse(file.window_ends_at) > Date.now()
+    const denial = !file.viewer_is_requester
+      ? 'not_the_requester'
+      : !open
+        ? 'window_not_open'
+        : !file.categories.includes(category)
+          ? 'category_out_of_scope'
+          : null
+    // Only an authorised attempt raises the counter, matching the projection, which
+    // counts events with result 'allowed'. A denial is recorded too, as an event.
+    if (denial === null) file.exercise_count += 1
+    await fulfill(route, 200, {
+      outcome: denial === null ? 'content_unavailable' : 'denied',
+      reason_code: denial ?? 'execution_and_nutrition_absent',
+      break_glass_event_id: nextAssignmentId(),
+      occurred_at: now,
+      ...(category ? { category } : {}),
+    })
+    return
+  }
+
+  if (action === 'closure') {
+    if (!file.viewer_is_requester) {
+      await fulfillProblem(route, 403, 'forbidden')
+      return
+    }
+    file.status = 'closed'
+    file.closed_at = now
+    await fulfill(route, 200, breakGlassProjection(file))
+    return
+  }
+
+  await fulfillProblem(route, 404, 'not-found')
+}
+
 async function routeScopes(
   route: Route,
   request: MockRequest,
