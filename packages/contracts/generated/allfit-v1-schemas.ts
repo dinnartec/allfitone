@@ -894,6 +894,9 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       'review_outcome',
       'approvals',
       'exercise_count',
+      'viewer_is_requester',
+      'viewer_can_decide',
+      'viewer_can_exercise',
     ],
     properties: {
       id: {
@@ -972,6 +975,20 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       exercise_count: {
         type: 'integer',
         minimum: 0,
+      },
+      viewer_is_requester: {
+        type: 'boolean',
+        description:
+          'Whether the caller opened this file. The Backoffice session carries no domain identifier, so the server answers this rather than the client re-deriving it from one.',
+      },
+      viewer_can_decide: {
+        type: 'boolean',
+        description:
+          'A hint for the screen, never authority: it saves offering a button that would always be refused. Every command revalidates on its own.',
+      },
+      viewer_can_exercise: {
+        type: 'boolean',
+        description: 'A hint for the screen, on the same terms as `viewer_can_decide`.',
       },
     },
   },

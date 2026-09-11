@@ -39,6 +39,9 @@ const file: AllfitV1Schemas['BreakGlassRequest'] = {
   review_outcome: null,
   approvals: [],
   exercise_count: 0,
+  viewer_is_requester: true,
+  viewer_can_decide: false,
+  viewer_can_exercise: false,
 }
 
 const creation = {
@@ -405,5 +408,23 @@ describe('Backoffice break-glass API contract', () => {
 
     expect([missing.status, ended.status]).toEqual([401, 401])
     expect(captured).toEqual([])
+  })
+
+  test('T-BG-API-20 carries the viewer capabilities the screen cannot derive', async () => {
+    // The Backoffice session carries no domain person identifier, so a client has no
+    // way to work out whether this operator may decide or exercise. Dropping these
+    // three would leave the screen showing a file with no action on it at all.
+    const tray = await routes().fetch(get('/break-glass/requests'))
+    const opened = await routes().fetch(post('/break-glass/requests'))
+
+    const listed = (await tray.json()) as { items: Record<string, unknown>[] }
+    const created = (await opened.json()) as Record<string, unknown>
+    for (const row of [listed.items[0], created]) {
+      expect(row).toMatchObject({
+        viewer_is_requester: true,
+        viewer_can_decide: false,
+        viewer_can_exercise: false,
+      })
+    }
   })
 })

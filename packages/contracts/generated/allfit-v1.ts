@@ -1863,6 +1863,12 @@ export interface components {
       review_outcome: 'justified' | 'unjustified' | 'incident_opened' | null
       approvals: components['schemas']['BreakGlassApproval'][]
       exercise_count: number
+      /** @description Whether the caller opened this file. The Backoffice session carries no domain identifier, so the server answers this rather than the client re-deriving it from one. */
+      viewer_is_requester: boolean
+      /** @description A hint for the screen, never authority: it saves offering a button that would always be refused. Every command revalidates on its own. */
+      viewer_can_decide: boolean
+      /** @description A hint for the screen, on the same terms as `viewer_can_decide`. */
+      viewer_can_exercise: boolean
     }
     BreakGlassRequestList: {
       items: components['schemas']['BreakGlassRequest'][]
