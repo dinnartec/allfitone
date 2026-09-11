@@ -16,6 +16,7 @@ export interface BackofficeFixture {
   support?: SupportFixture
   diagnosis?: DiagnosisFixture
   scopes?: ScopeFixture
+  accessLog?: AccessLogFixture
   breakGlass?: BreakGlassFixture
   requests: MockRequest[]
 }
@@ -195,6 +196,55 @@ export function openBreakGlassWindow(
       reason_code: 'REASON-APPROVED',
       decided_at: new Date(now - 60_000).toISOString(),
     })),
+  }
+}
+
+/**
+ * The access log.
+ *
+ * The mock applies the filters and the per-case disqualification the way the two
+ * closed queries do, and counts what it removed. A mock that returned a canned
+ * page would let the screen pass while hiding the one failure that matters: an
+ * incomplete answer that looks complete.
+ */
+export interface AccessLogFixture {
+  refusal?: { status: number; code: string }
+  events: AccessLogEventFixture[]
+}
+
+export interface AccessLogEventFixture {
+  actor_person_id: string
+  subject_person_id: string | null
+  resource: string
+  resource_id: string | null
+  purpose: string
+  result: string
+  scope_code: string | null
+  scope_version: number | null
+  access_mode: string
+  occurred_at: string
+  /**
+   * Whether this record belongs to a break-glass window the viewing auditor
+   * requested or approved. The server derives it from the evidence rows; here it
+   * is declared, because the E2E has no break-glass case to derive it from.
+   */
+  withheld_from_viewer?: boolean
+}
+
+export function accessEvent(overrides: Partial<AccessLogEventFixture> = {}): AccessLogEventFixture {
+  return {
+    actor_person_id: SUBJECT_PERSON_ID,
+    subject_person_id: SUPPORT_SUBJECT_ID,
+    resource: 'support.person_operational_state',
+    resource_id: null,
+    purpose: 'customer_support_request',
+    result: 'allowed',
+    scope_code: null,
+    scope_version: null,
+    access_mode: 'organization_operational',
+    occurred_at: new Date(Date.now() - 3_600_000).toISOString(),
+    withheld_from_viewer: false,
+    ...overrides,
   }
 }
 
@@ -579,6 +629,10 @@ export async function mockBackofficeApi(
     }
     if (request.path.startsWith('/backoffice/v1/result-contracts')) {
       await routeResultContracts(route, request, fixture)
+      return
+    }
+    if (request.path === '/backoffice/v1/access-events') {
+      await routeAccessLog(route, request, fixture)
       return
     }
     if (request.path.startsWith('/backoffice/v1/break-glass/')) {
@@ -1034,6 +1088,42 @@ async function routeBreakGlass(
   }
 
   await fulfillProblem(route, 404, 'not-found')
+}
+
+async function routeAccessLog(
+  route: Route,
+  request: MockRequest,
+  fixture: BackofficeFixture,
+): Promise<void> {
+  const log = fixture.accessLog ?? { events: [] }
+  fixture.accessLog = log
+  if (log.refusal) {
+    await fulfillProblem(route, log.refusal.status, log.refusal.code)
+    return
+  }
+
+  const parameters = new URLSearchParams(request.query)
+  const actor = parameters.get('actor_person_id')
+  const subject = parameters.get('subject_person_id')
+  const from = parameters.get('from')
+  const to = parameters.get('to')
+
+  const matching = log.events.filter(
+    (event) =>
+      (actor === null || event.actor_person_id === actor) &&
+      (subject === null || event.subject_person_id === subject) &&
+      (from === null || Date.parse(event.occurred_at) >= Date.parse(from)) &&
+      (to === null || Date.parse(event.occurred_at) < Date.parse(to)),
+  )
+
+  // The count describes the same filtered set as the list, which is the whole
+  // reason the real queries share one predicate.
+  await fulfill(route, 200, {
+    items: matching
+      .filter((event) => event.withheld_from_viewer !== true)
+      .map(({ withheld_from_viewer: _withheld, ...row }) => row),
+    withheld_from_you: matching.filter((event) => event.withheld_from_viewer === true).length,
+  })
 }
 
 async function routeScopes(
