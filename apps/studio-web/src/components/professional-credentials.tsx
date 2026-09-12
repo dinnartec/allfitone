@@ -333,7 +333,9 @@ function CredentialCard({
       <CardHeader>
         <div>
           <CardDescription>{credential.credential_type_name}</CardDescription>
-          <CardTitle>{credential.name}</CardTitle>
+          <CardTitle role="heading" aria-level={3}>
+            {credential.name}
+          </CardTitle>
         </div>
         <CardAction>
           <Badge variant={credentialStateVariant(credential)}>

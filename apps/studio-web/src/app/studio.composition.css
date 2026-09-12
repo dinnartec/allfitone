@@ -120,6 +120,7 @@ menu {
 [data-profile-setup-actions],
 [data-team-invitation-actions],
 [data-credential-actions],
+[data-account-actions],
 [data-profile-form-actions] {
   display: flex;
   flex-wrap: wrap;
@@ -310,12 +311,20 @@ menu {
 }
 
 [data-studio-field-grid],
-[data-profile-field-grid],
+[data-profile-field-grid] {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--afo-space-4);
+}
+
+/* Cards, not fields. These two sat in the rule above and so were spaced like a
+   pair of form inputs — a 16px gutter, where every other card grid in Studio
+   uses 20px. Two card grids on sibling screens do not get different gutters. */
 [data-membership-context-grid],
 [data-credential-grid] {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--afo-space-4);
+  gap: var(--afo-space-5);
 }
 
 /* Five filters do not fit a phone, and ToggleGroup answers an overflow by
@@ -355,6 +364,7 @@ menu {
 [data-team-section-navigation],
 [data-overview-team-roles],
 [data-overview-orientation-roles],
+[data-membership-roles],
 [data-role-disclosure] {
   display: flex;
   flex-wrap: wrap;
@@ -449,6 +459,16 @@ menu {
   max-width: 100%;
 }
 
+/* Two or more stats take the canvas, so the strip's right edge lines up with
+   the cards below it instead of stopping 576px short of them. The cap above
+   still applies to a lone stat — a staff member who reads the directory but not
+   the invitation register sees one count, and one number centred in 1024px is
+   what the cap was put there to prevent. */
+[data-overview-signals]:has([data-slot='stat-strip-item']:nth-child(2)),
+[data-profile-signals]:has([data-slot='stat-strip-item']:nth-child(2)) {
+  min-width: 100%;
+}
+
 [data-overview-signals-placeholder] {
   height: 4.5rem;
   width: min(100%, 24rem);
@@ -488,6 +508,19 @@ menu {
 [data-overview-team-placeholder] {
   display: grid;
   gap: var(--afo-space-3);
+}
+
+/* CardContent pads sideways only, so the badge row and the sentence under it
+   sat flush. */
+[data-membership-card-body] {
+  display: grid;
+  gap: var(--afo-space-3);
+}
+
+/* The trigger and the panel are siblings with nothing between them: the first
+   history card's top edge sat 1px under the button's bottom edge. */
+[data-membership-history] [data-slot='collapsible-content'] {
+  margin-block-start: var(--afo-space-4);
 }
 
 
@@ -559,6 +592,20 @@ menu {
   align-items: start;
 }
 
+[data-profile-brand] {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Below 360px the two labelled controls need 270 of the 288 the row has, so
+   there is no honest room for the mark. Hidden rather than squeezed: the brand
+   reads whole or not at all. */
+@media (max-width: 359px) {
+  [data-profile-brand] {
+    display: none;
+  }
+}
+
 [data-trajectory-panel] {
   position: sticky;
   top: var(--afo-space-5);
@@ -567,6 +614,25 @@ menu {
 [data-trajectory-body] {
   display: grid;
   gap: var(--afo-space-4);
+}
+
+/* A gap already owns the space between these children, but a paragraph brings
+   the browser's own 14px block margin with it and adds it on top — and at the
+   end of a card, on top of the card's padding too, which put the trajectory
+   panel's last line 34px off the bottom edge instead of 20px.
+
+   Listed rather than reset app-wide. Sweeping all 43 screens found paragraphs
+   inside a gap in exactly six containers, five of them Studio's own and one the
+   Design System's (`EmptyDescription` renders the paragraph itself, so it is
+   not reachable from here). `p { margin: 0 }` would reach far more than the
+   measured problem; the reset noted at the top of this file is still the right
+   eventual fix. */
+[data-studio-loading-body] > p,
+[data-ready-later-item] > p,
+[data-trajectory-body] > p,
+[data-membership-card-body] > p,
+[data-slot='setup-panel-actions'] > p {
+  margin-block: 0;
 }
 
 [data-profile-combobox-option] {
@@ -701,6 +767,8 @@ menu {
      strands the button against the wordmark. */
   [data-page-header-actions],
   [data-profile-setup-actions],
+  [data-profile-form-actions],
+  [data-account-actions],
   [data-team-invitation-actions] {
     width: 100%;
   }
@@ -710,8 +778,18 @@ menu {
      an empty row. Stretching what is in it finishes the intent that rule
      started. Two actions still share the row rather than one taking it. */
   [data-page-header-actions] > *,
-  [data-team-invitation-actions] > * {
+  [data-team-invitation-actions] > *,
+  [data-credential-actions] > *,
+  [data-profile-setup-actions] > *,
+  [data-account-actions] > *,
+  [data-profile-form-actions] > * {
     flex: 1;
+  }
+
+  /* The same rule, reached differently: this trigger is not in an action row,
+     it is a direct child of the collapsible, so it takes the width itself. */
+  [data-membership-history] > [data-slot='collapsible-trigger'] {
+    width: 100%;
   }
 
   [data-credential-evidence] {

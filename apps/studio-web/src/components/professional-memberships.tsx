@@ -25,7 +25,7 @@ import { WorkspaceEyebrow, WorkspaceTitle } from '@allfitone/react/components/wo
 import { FoundationIcon } from '@allfitone/react/icons'
 
 import { organizationTypeLabel } from './membership-selector'
-import { membershipRoleSummary } from '@/lib/membership-roles'
+import { membershipRoleLabels, membershipRoleSummary } from '@/lib/membership-roles'
 import type { Membership } from '@/lib/studio-api'
 
 export function ProfessionalMemberships({ memberships }: { memberships: Membership[] }) {
@@ -75,12 +75,22 @@ export function ProfessionalMemberships({ memberships }: { memberships: Membersh
                 <CardDescription data-profile-kicker>
                   {organizationTypeLabel(membership.type_code)}
                 </CardDescription>
-                <CardTitle>{membership.display_name}</CardTitle>
-                <CardAction>
-                  <Badge variant="outline">{membershipRoleSummary(membership.roles)}</Badge>
-                </CardAction>
+                <CardTitle role="heading" aria-level={3}>
+                  {membership.display_name}
+                </CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent data-membership-card-body>
+                {/* One badge per role, in the body rather than the header
+                    action. Joined into a single badge that cannot wrap,
+                    "Propietario · Administrador" ran 7px past the viewport at
+                    320px: the header sizes its action column to its content. */}
+                <div data-membership-roles>
+                  {membershipRoleLabels(membership.roles).map((label) => (
+                    <Badge key={label} variant="secondary">
+                      {label}
+                    </Badge>
+                  ))}
+                </div>
                 <p>Vinculación activa desde {formatDate(membership.joined_at)}.</p>
               </CardContent>
             </Card>
@@ -100,7 +110,9 @@ export function ProfessionalMemberships({ memberships }: { memberships: Membersh
                     <CardDescription data-profile-kicker>
                       {organizationTypeLabel(membership.type_code)}
                     </CardDescription>
-                    <CardTitle>{membership.display_name}</CardTitle>
+                    <CardTitle role="heading" aria-level={3}>
+                      {membership.display_name}
+                    </CardTitle>
                     <CardAction>
                       <Badge variant="outline">Finalizada</Badge>
                     </CardAction>

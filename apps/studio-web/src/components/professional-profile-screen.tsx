@@ -1,6 +1,6 @@
 'use client'
 
-import { ProductWordmark } from '@allfitone/react/brand'
+import { BrandLogoCarrier, ProductWordmark } from '@allfitone/react/brand'
 import { Alert, AlertAction, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
 import { Badge } from '@allfitone/react/components/badge'
 import { Button } from '@allfitone/react/components/button'
@@ -34,6 +34,7 @@ import { ProfessionalCredentials } from './professional-credentials'
 import { ProfessionalMemberships } from './professional-memberships'
 import { ProfessionalPresentation } from './professional-presentation'
 import { StudioApiError, type ProfessionalCatalogItem, type StudioMe } from '@/lib/studio-api'
+import { useCompactViewport } from '@/lib/use-compact-viewport'
 import {
   professionalCredentialTypesQueryOptions,
   professionalSpecialtiesQueryOptions,
@@ -181,7 +182,6 @@ function AccountOverview({
   me: StudioMe
   onStartProfessionalSetup: () => void
 }) {
-  const activeSpaces = me.memberships.filter((membership) => membership.status === 'active').length
   return (
     <>
       <header data-profile-heading>
@@ -196,48 +196,32 @@ function AccountOverview({
         <Badge variant="success">Cuenta activa</Badge>
       </header>
 
-      <section data-account-map aria-label="Opciones de mi cuenta">
-        <Card data-account-track>
-          <CardHeader>
-            <CardDescription>Siempre disponible</CardDescription>
-            <CardTitle role="heading" aria-level={2}>
-              Mis espacios
-            </CardTitle>
-            <CardAction>
-              <Badge variant="outline">
-                {activeSpaces} {activeSpaces === 1 ? 'activo' : 'activos'}
-              </Badge>
-            </CardAction>
-          </CardHeader>
-          <CardContent data-account-body>
-            <p>Consulta las organizaciones donde participas y tu historial de vinculaciones.</p>
-          </CardContent>
-          <CardFooter>
-            <Badge variant="success">Activo</Badge>
-          </CardFooter>
-        </Card>
-
-        <Card data-account-track>
-          <CardHeader>
-            <CardDescription>Solo si prestas servicios</CardDescription>
-            <CardTitle role="heading" aria-level={2}>
-              Perfil profesional
-            </CardTitle>
-            <CardAction>
-              <Badge variant="outline">Opcional</Badge>
-            </CardAction>
-          </CardHeader>
-          <CardContent data-account-body>
-            <p>
-              Presenta tu experiencia y, si quieres, declara credenciales. Administrar un espacio no
-              requiere completar esta información.
-            </p>
-          </CardContent>
-          <CardFooter>
+      {/* There used to be a "Mis espacios" card here, signposting the section
+          two hundred pixels below it on the same screen. It repeated that
+          section's own heading, so the page offered the same h2 twice and a
+          heading list read as two destinations for one. */}
+      <Card data-account-track>
+        <CardHeader>
+          <CardDescription>Solo si prestas servicios</CardDescription>
+          <CardTitle role="heading" aria-level={2}>
+            Perfil profesional
+          </CardTitle>
+          <CardAction>
+            <Badge variant="outline">Opcional</Badge>
+          </CardAction>
+        </CardHeader>
+        <CardContent data-account-body>
+          <p>
+            Presenta tu experiencia y, si quieres, declara credenciales. Administrar un espacio no
+            requiere completar esta información.
+          </p>
+        </CardContent>
+        <CardFooter>
+          <div data-account-actions>
             <Button onClick={onStartProfessionalSetup}>Configurar perfil profesional</Button>
-          </CardFooter>
-        </Card>
-      </section>
+          </div>
+        </CardFooter>
+      </Card>
 
       <ProfessionalMemberships memberships={me.memberships} />
     </>
@@ -277,7 +261,11 @@ function ProfessionalArea({
               roles, permisos ni membresías.
             </p>
           </div>
-          <Badge variant="outline">Sin publicar</Badge>
+          {/* No badge here. "Sin publicar" named a state the product does not
+              have — `ProfessionalProfile` carries no published, draft or
+              visibility field — and implied that saving would make the profile
+              public, which nothing does. Its counterpart on the created screen
+              says "Perfil creado", so it was not even the same vocabulary. */}
         </header>
         <div data-profile-setup-actions>
           <Button variant="ghost" onClick={onCancelSetup}>
@@ -378,17 +366,29 @@ function ProfessionalCatalogError({
 }
 
 function AccountShell({ children, onSpaces }: { children: React.ReactNode; onSpaces: () => void }) {
+  const compact = useCompactViewport()
   return (
     <WorkspaceShell>
       <WorkspaceMain data-profile-canvas>
         <WorkspaceHeader data-profile-header>
-          <ProductWordmark
-            product="studio"
-            surface="light"
-            title="Allfit Studio"
-            width={138}
-            height={28}
-          />
+          {/* `WorkspaceActions` is `shrink-0`, so the brand absorbs every bit of
+              squeeze: the 138px wordmark rendered at 14px on a 320px phone. The
+              compact mark fits beside both labelled controls from 360px up
+              (27+125+137+gaps = 309 of 328), and below that the CSS hides it —
+              the brand is shown whole or not at all, never crushed. */}
+          <span data-profile-brand>
+            {compact ? (
+              <BrandLogoCarrier title="Allfit Studio" height={28} />
+            ) : (
+              <ProductWordmark
+                product="studio"
+                surface="light"
+                title="Allfit Studio"
+                width={138}
+                height={28}
+              />
+            )}
+          </span>
           <WorkspaceActions>
             <Button variant="ghost" size="sm" onClick={onSpaces}>
               Mis espacios
