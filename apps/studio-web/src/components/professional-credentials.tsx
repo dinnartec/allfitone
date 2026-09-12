@@ -748,12 +748,11 @@ function normalizedCredential(value: ProfessionalCredentialWrite): ProfessionalC
 }
 
 function credentialValidity(credential: ProfessionalCredential): string {
-  if (!credential.issued_on && !credential.expires_on) return 'Sin fechas declaradas'
-  if (credential.issued_on && credential.expires_on) {
-    return `${credential.issued_on} – ${credential.expires_on}`
-  }
-  if (credential.issued_on) return `Emitida el ${credential.issued_on}`
-  return `Vigente hasta ${credential.expires_on}`
+  const { issued_on: issued, expires_on: expires } = credential
+  if (issued && expires) return `${formatCalendarDate(issued)} – ${formatCalendarDate(expires)}`
+  if (issued) return `Emitida el ${formatCalendarDate(issued)}`
+  if (expires) return `Vigente hasta ${formatCalendarDate(expires)}`
+  return 'Sin fechas declaradas'
 }
 
 function verificationValidity(credential: ProfessionalCredential): string {
@@ -768,6 +767,20 @@ function verificationValidity(credential: ProfessionalCredential): string {
 
 function formatDateTime(value: string): string {
   return new Intl.DateTimeFormat('es-CO', { dateStyle: 'medium' }).format(new Date(value))
+}
+
+/**
+ * `issued_on` and `expires_on` are `format: date` in the contract — a calendar
+ * date someone typed, with no time and no zone. Read as an instant they land on
+ * UTC midnight, which in Bogotá is the previous evening, so a credential issued
+ * on 2024-01-01 would read "31/12/2023". Pinning the formatter to UTC keeps the
+ * date that was declared. `formatDateTime` above is right as it stands: the
+ * verification window is a real instant and belongs in the reader's own zone.
+ */
+function formatCalendarDate(value: string): string {
+  return new Intl.DateTimeFormat('es-CO', { dateStyle: 'medium', timeZone: 'UTC' }).format(
+    new Date(`${value}T00:00:00Z`),
+  )
 }
 
 async function refreshAfterConflict(refresh: () => Promise<StudioMe | undefined>): Promise<void> {
