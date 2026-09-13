@@ -16,6 +16,11 @@ export type CatalogDiscipline = AllfitV1Schemas['CatalogDiscipline']
 export type CatalogActivityType = AllfitV1Schemas['CatalogActivityType']
 export type ActivityTypeResultContract = AllfitV1Schemas['ActivityTypeResultContract']
 export type AccessEventPage = AllfitV1Schemas['AccessEventPage']
+export type CredentialVerificationRequest = AllfitV1Schemas['CredentialVerificationRequest']
+export type CredentialVerificationOutcome = AllfitV1Schemas['CredentialVerificationOutcome']
+export type CredentialVerificationDecisionCreate =
+  AllfitV1Schemas['CredentialVerificationDecisionCreate']
+export type CredentialRenewalDue = AllfitV1Schemas['CredentialRenewalDue']
 export type BreakGlassRequest = AllfitV1Schemas['BreakGlassRequest']
 export type BreakGlassRequestCreate = AllfitV1Schemas['BreakGlassRequestCreate']
 export type BreakGlassExerciseOutcome = AllfitV1Schemas['BreakGlassExerciseOutcome']
@@ -233,6 +238,35 @@ export const backofficeApi = {
       signal ? { signal } : {},
     ),
 
+  verificationRequests: (signal?: AbortSignal) =>
+    requestJson<{ items: CredentialVerificationRequest[] }>(
+      '/backoffice/v1/verification-requests',
+      signal ? { signal } : {},
+    ),
+
+  decideVerification: (
+    decision: CredentialVerificationDecisionCreate,
+    command: BackofficeCommand,
+  ) =>
+    requestJson<CredentialVerificationOutcome>('/backoffice/v1/verifications', {
+      method: 'POST',
+      headers: commandHeaders(command),
+      body: JSON.stringify(decision),
+    }),
+
+  verificationRenewals: (signal?: AbortSignal) =>
+    requestJson<{ items: CredentialRenewalDue[] }>(
+      '/backoffice/v1/verification-renewals',
+      signal ? { signal } : {},
+    ),
+
+  openVerificationRenewal: (credentialId: string, command: BackofficeCommand) =>
+    requestJson<CredentialVerificationOutcome>('/backoffice/v1/verification-renewals', {
+      method: 'POST',
+      headers: commandHeaders(command),
+      body: JSON.stringify({ credential_id: credentialId }),
+    }),
+
   accessEvents: (
     filters: {
       actor_person_id?: string | undefined
@@ -411,6 +445,9 @@ function backofficeOperation(path: string, method: string): ClientOperation {
   const resolved = route ?? path
   const breakGlass = breakGlassOperation(resolved)
   if (breakGlass) return breakGlass
+  if (resolved === '/backoffice/v1/verification-requests') return 'backoffice.verification.list'
+  if (resolved === '/backoffice/v1/verifications') return 'backoffice.verification.decide'
+  if (resolved === '/backoffice/v1/verification-renewals') return 'backoffice.verification.renewals'
   if (resolved === '/backoffice/v1/access-events') return 'backoffice.access_log.read'
   if (resolved === '/backoffice/v1/scope-definitions') {
     return method === 'POST'

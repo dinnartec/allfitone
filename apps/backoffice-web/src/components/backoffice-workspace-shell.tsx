@@ -54,6 +54,7 @@ interface WorkspaceRoute {
 const ROUTES: readonly WorkspaceRoute[] = [
   { href: '/people', title: 'Personas', icon: 'people' },
   { href: '/access-log', title: 'Registro de accesos', icon: 'operation' },
+  { href: '/verifications', title: 'Verificación de títulos', icon: 'people' },
   { href: '/break-glass', title: 'Acceso excepcional', icon: 'permissions' },
   { href: '/diagnosis', title: 'Diagnóstico técnico', icon: 'operation' },
   { href: '/team', title: 'Equipo de Allfit', icon: 'permissions' },

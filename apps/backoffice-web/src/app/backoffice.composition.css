@@ -110,6 +110,7 @@
 [data-scope-definitions],
 [data-break-glass],
 [data-access-log],
+[data-credential-verification],
 [data-support-person] {
   display: grid;
   gap: 24px;
@@ -128,6 +129,7 @@
 [data-scope-definitions] code,
 [data-break-glass] code,
 [data-access-log] code,
+[data-credential-verification] code,
 [data-support-person] code {
   font-family: var(--afo-font-family-mono, monospace);
   font-size: var(--afo-font-size-xs);
@@ -169,4 +171,28 @@
 [data-access-log-entry][data-exceptional='true'] {
   border-inline-start: 3px solid var(--color-destructive, currentColor);
   padding-inline-start: 12px;
+}
+
+[data-verification-form] {
+  display: grid;
+  gap: 12px;
+}
+
+/* The three outcomes sit side by side with equal weight: "not verifiable" is an
+   answer, not the lesser option. */
+[data-verification-choice] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* The same treatment as the analytics notice link: an external destination is a
+   link, with a touch target of its own. */
+[data-verification-registry-link] {
+  display: inline-flex;
+  min-height: 44px;
+  width: fit-content;
+  align-items: center;
+  font-weight: var(--afo-font-weight-semibold);
+  text-decoration: underline;
 }
