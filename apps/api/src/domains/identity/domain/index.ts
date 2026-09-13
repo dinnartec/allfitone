@@ -10,6 +10,20 @@ export type {
   StoredBackofficeAttempt,
   StoredBackofficeSession,
 } from './backoffice.js'
+export { VERIFICATION_METHODS, VERIFICATION_RESULTS } from './credential-verification.js'
+export type {
+  CredentialRenewalDue,
+  CredentialVerificationDatabase,
+  CredentialVerificationDecisionCreate,
+  CredentialVerificationMethod,
+  CredentialVerificationOutcome,
+  CredentialVerificationRequest,
+  CredentialVerificationResult,
+  CredentialVerifier,
+  VerificationCommandContext,
+  VerificationCommandResult,
+  VerificationPage,
+} from './credential-verification.js'
 
 export type RegistrationStatus = 'complete' | 'registration_incomplete'
 
