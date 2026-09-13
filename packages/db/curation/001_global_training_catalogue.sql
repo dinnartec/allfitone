@@ -157,12 +157,21 @@ on conflict do nothing;
 -- The two taxonomies the exercise picker filters by. Same rules as everything else
 -- here: the ordinal is the identity, so a rerun writes the same rows.
 --
--- Fifteen of the nineteen muscles carry a `body_slug`, which is the part
--- `react-native-body-highlighter` already draws in Space's onboarding. `dorsales` and
--- `abductores` have no slug because the library has no part for them, and `cardio`
--- and `cuerpo completo` have none because they are not muscles — they are the honest
--- label for the seven movements that are not strength, which would carry none
--- otherwise.
+-- `body_slug` is the part of the figure that **stands for** a muscle, not the part
+-- that is exactly it. The figure has no lat of its own, so Dorsales takes the upper
+-- back and shares it with the muscle that owns it. A part can therefore light two
+-- chips at once, which is honest: the drawing cannot tell them apart, and pretending
+-- otherwise by lighting nothing made choosing Dorsales look broken.
+--
+-- **There is no Abductores.** The figure has no part for it either, and unlike the
+-- lat it has no shape that is even approximately right — the glute was tried and read
+-- as a different muscle. It labelled two movements, both of which already carry the
+-- glute or the adductor, so the vocabulary loses nothing by not having it. Ordinal 16
+-- stays vacant: the number is the identity and is never reused.
+--
+-- Only `cardio` and `cuerpo completo` have no slug, because they are not muscles at
+-- all — they are the honest label for the seven movements that are not strength,
+-- which would carry none otherwise.
 
 create temporary table curated_muscle (
   ordinal integer, code text, name text, region text, body_slug text
@@ -170,7 +179,7 @@ create temporary table curated_muscle (
 insert into curated_muscle (ordinal, code, name, region, body_slug) values
   (1,  'chest',       'Pecho',            'upper',   'chest'),
   (2,  'upper_back',  'Espalda superior', 'upper',   'upper-back'),
-  (3,  'lats',        'Dorsales',         'upper',   null),
+  (3,  'lats',        'Dorsales',         'upper',   'upper-back'),
   (4,  'lower_back',  'Espalda baja',     'upper',   'lower-back'),
   (5,  'trapezius',   'Trapecio',         'upper',   'trapezius'),
   (6,  'shoulders',   'Hombros',          'upper',   'deltoids'),
@@ -183,7 +192,6 @@ insert into curated_muscle (ordinal, code, name, region, body_slug) values
   (13, 'quadriceps',  'Cuádriceps',       'lower',   'quadriceps'),
   (14, 'hamstrings',  'Isquiotibiales',   'lower',   'hamstring'),
   (15, 'adductors',   'Aductores',        'lower',   'adductors'),
-  (16, 'abductors',   'Abductores',       'lower',   null),
   (17, 'calves',      'Pantorrillas',     'lower',   'calves'),
   (18, 'cardio',      'Cardio',           'general', null),
   (19, 'whole_body',  'Cuerpo completo',  'general', null);
@@ -222,7 +230,7 @@ insert into curated_movement_muscle (movement_slug, muscle_codes) values
   ('back_squat',        array['quadriceps','glutes','lower_back','adductors']),
   ('goblet_squat',      array['quadriceps','glutes','abs']),
   ('leg_press',         array['quadriceps','glutes','hamstrings']),
-  ('lunge',             array['quadriceps','glutes','hamstrings','abductors']),
+  ('lunge',             array['quadriceps','glutes','hamstrings']),
   ('deadlift',          array['hamstrings','glutes','lower_back','trapezius','forearm']),
   ('romanian_deadlift', array['hamstrings','glutes','lower_back']),
   ('hip_thrust',        array['glutes','hamstrings']),
@@ -255,7 +263,7 @@ insert into curated_movement_muscle (movement_slug, muscle_codes) values
   ('stationary_bike',   array['cardio','quadriceps']),
   ('run_intervals',     array['cardio','hamstrings','calves']),
   ('full_body_circuit', array['cardio','whole_body']),
-  ('hip_mobility',      array['glutes','adductors','abductors']),
+  ('hip_mobility',      array['glutes','adductors']),
   ('thoracic_mobility', array['upper_back','trapezius','neck']);
 
 insert into catalog.movement_muscles (movement_id, muscle_id, is_primary)

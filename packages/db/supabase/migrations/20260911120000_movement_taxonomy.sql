@@ -18,7 +18,7 @@
 --
 -- **`body_slug` is the bridge to the body figure.** Space already draws a human body
 -- in its onboarding so somebody can say what they want to work, and its parts are the
--- slugs of `react-native-body-highlighter`. Fifteen of the nineteen muscles here are
+-- slugs of `react-native-body-highlighter`. Sixteen of the eighteen muscles here are
 -- those exact slugs, so the filter and the figure speak one vocabulary and a later
 -- screen can light one from the other. It is nullable because not everything that is
 -- filtered is a drawable part: `cardio` and `whole_body` label the seven movements
@@ -280,7 +280,7 @@ alter function catalog.read_equipment(uuid) owner to allfit_owner;
 revoke all on function catalog.read_equipment(uuid) from public;
 grant execute on function catalog.read_equipment(uuid) to allfit_api;
 
--- `OP-CAT-015`. `region` travels because nineteen chips in one row is a wall; the
+-- `OP-CAT-015`. `region` travels because eighteen chips in one row is a wall; the
 -- screen groups them, and grouping is not the screen's decision to invent.
 create function catalog.read_muscles(p_person_id uuid)
 returns jsonb
