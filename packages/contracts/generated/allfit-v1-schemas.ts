@@ -86,7 +86,7 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
     type: 'string',
     description:
       'How the access was authorised. `break_glass` is the exceptional path and is the only one subject to the per-case auditor disqualification.',
-    enum: ['live', 'frozen', 'break_glass', 'organization_operational'],
+    enum: ['live', 'frozen', 'break_glass', 'organization_operational', 'support_metadata'],
   },
   ActivityFamily: {
     type: 'string',

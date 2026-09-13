@@ -2019,7 +2019,7 @@ export interface components {
      * @description How the access was authorised. `break_glass` is the exceptional path and is the only one subject to the per-case auditor disqualification.
      * @enum {string}
      */
-    AccessMode: 'live' | 'frozen' | 'break_glass' | 'organization_operational'
+    AccessMode: 'live' | 'frozen' | 'break_glass' | 'organization_operational' | 'support_metadata'
     /** @description The record of one access. It never carries what was read: the table it comes from has no content columns, and the closed query returns this exact shape. */
     AccessEvent: {
       actor_person_id: components['schemas']['Uuid']
