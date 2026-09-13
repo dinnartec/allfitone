@@ -24,7 +24,7 @@
 
 begin;
 
-select plan(32);
+select plan(33);
 
 insert into identity.people (id, given_name, family_name, status)
 values
@@ -261,6 +261,19 @@ select is(
      and event.purpose = 'professional_credential_verification'),
   2,
   'reading the queue is recorded against the holder, once per credential shown'
+);
+
+-- A verifier reads under a platform duty, not under any permission the holder
+-- granted. Recorded as `live`, the access log would tell an auditor the opposite.
+select is(
+  (select count(*)::integer
+   from privacy.access_events as event
+   where event.actor_person_id = '019aa000-0000-7000-8000-000000000003'
+     and event.subject_person_id = '019aa000-0000-7000-8000-000000000005'
+     and event.purpose = 'professional_credential_verification'
+     and event.access_mode = 'support_metadata'),
+  2,
+  'a verifier''s read is recorded as a staff read, never as the holder''s own grant'
 );
 
 select ok(
