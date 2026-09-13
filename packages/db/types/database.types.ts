@@ -2275,6 +2275,8 @@ export type Database = {
       }
       organizations: {
         Row: {
+          cancelled_at: string | null
+          claimed_at: string | null
           created_at: string
           display_name: string
           id: string
@@ -2287,6 +2289,8 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          cancelled_at?: string | null
+          claimed_at?: string | null
           created_at?: string
           display_name: string
           id?: string
@@ -2299,6 +2303,8 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          cancelled_at?: string | null
+          claimed_at?: string | null
           created_at?: string
           display_name?: string
           id?: string
@@ -2403,6 +2409,30 @@ export type Database = {
           result: Json
         }[]
       }
+      list_backoffice_organizations: {
+        Args: {
+          p_actor_person_id: string
+          p_actor_session_id: string
+          p_after_id: string
+          p_after_name: string
+          p_limit: number
+          p_query: string
+          p_status: string
+        }
+        Returns: {
+          active_member_count: number
+          cancelled_at: string
+          claimed_at: string
+          created_at: string
+          display_name: string
+          organization_id: string
+          people_served: number
+          site_count: number
+          status: string
+          type_code: string
+          type_name: string
+        }[]
+      }
       list_my_memberships: {
         Args: { p_person_id: string }
         Returns: {
@@ -2457,6 +2487,10 @@ export type Database = {
         Returns: Json
       }
       read_organization: { Args: { p_organization_id: string }; Returns: Json }
+      require_organization_directory_reader: {
+        Args: { p_actor_person_id: string; p_actor_session_id: string }
+        Returns: undefined
+      }
       site_projection: { Args: { p_site_id: string }; Returns: Json }
       transfer_ownership: {
         Args: {
@@ -2522,7 +2556,7 @@ export type Database = {
     }
     Enums: {
       membership_status: 'active' | 'terminated'
-      organization_status: 'active' | 'closed'
+      organization_status: 'unclaimed' | 'active' | 'closed' | 'cancelled'
     }
     CompositeTypes: {
       [_ in never]: never
@@ -3376,7 +3410,7 @@ export const Constants = {
   organizations: {
     Enums: {
       membership_status: ['active', 'terminated'],
-      organization_status: ['active', 'closed'],
+      organization_status: ['unclaimed', 'active', 'closed', 'cancelled'],
     },
   },
   planning: {
