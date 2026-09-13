@@ -35,6 +35,10 @@ tags:
     description: >-
       Published permission definitions: what each permission a person grants
       actually covers, version by version.
+  - name: Backoffice Verification
+    description: >-
+      Verifying professional credentials against their official registry or issuer,
+      under a platform duty of its own.
   - name: Backoffice Support
     description: >-
       The minimised operational projection Allfit staff read to resolve a case.
@@ -1081,6 +1085,191 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/verification-requests:
+    get:
+      tags: [Backoffice Verification]
+      operationId: listBackofficeVerificationRequests
+      x-allfit-operation: OP-IDN-011
+      x-allfit-cache: no-store
+      summary: Read the queue of credentials waiting to be verified
+      description: >-
+        Every pending request for one exact credential version: who asked, what
+        they claim, and which registry or issuer to consult. Declaring or revising
+        a credential puts it here and retiring it takes it out, so nobody has to
+        remember to ask.
+
+        Reading this reaches the holder's data, so each row is recorded against
+        the holder before it is returned. `viewer_can_decide` is false when the
+        caller is the holder or shares an active organization with them. It is a
+        hint for the screen, never authority: the decision revalidates on its own.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Pending requests, oldest first
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CredentialVerificationRequestList'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/verifications:
+    post:
+      tags: [Backoffice Verification]
+      operationId: createBackofficeVerification
+      x-allfit-operation: OP-IDN-011
+      x-allfit-cache: no-store
+      summary: Record the verification of one credential version
+      description: >-
+        `verified`, `rejected` or `unverifiable`, checked against the official
+        registry or the issuer. There is no default result. The policy, the
+        validity and the evidence fingerprint are derived by the server and cannot
+        be proposed: the validity never exceeds twelve months, the source's own
+        expiry or the credential's, and a source that reports the credential lapsed
+        cannot produce `verified`.
+
+        The response carries the outcome, never the registry reference or the
+        fingerprint. Verifying one credential marks nothing else as verified.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CredentialVerificationDecisionCreate'
+      responses:
+        '201':
+          description: The resolved request and the verification that resolved it
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CredentialVerificationOutcome'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/verification-renewals:
+    get:
+      tags: [Backoffice Verification]
+      operationId: listBackofficeVerificationRenewals
+      x-allfit-operation: OP-IDN-011
+      x-allfit-cache: no-store
+      summary: Read the verifications that are due for renewal
+      description: >-
+        Verified credentials whose validity ends within thirty days or has already
+        ended, with no review in progress. Nothing runs at the moment a
+        verification lapses, so this list is computed and opening a renewal is an
+        explicit step. Each row is recorded against the holder before it is
+        returned.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Due renewals, soonest first
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CredentialRenewalDueList'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+    post:
+      tags: [Backoffice Verification]
+      operationId: openBackofficeVerificationRenewal
+      x-allfit-operation: OP-IDN-011
+      x-allfit-cache: no-store
+      summary: Open the renewal of a lapsed verification
+      description: >-
+        A new request linked to the one it renews. It never extends the earlier
+        verification, which stays exactly as it was.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CredentialRenewalCreate'
+      responses:
+        '201':
+          description: The renewal request, pending
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CredentialVerificationOutcome'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
 
@@ -5313,6 +5502,240 @@ components:
     BreakGlassStatus:
       type: string
       enum: [requested, approved, rejected, closed, expired]
+    CredentialVerificationMethod:
+      type: string
+      description: >-
+        How a credential was checked. Documents, civil identity, health and a
+        complete profile are never verifiable in V1, so no method exists for them.
+      enum: [official_registry_lookup, issuer_confirmation]
+    CredentialVerificationResult:
+      type: string
+      description: >-
+        What a verifier may record. There is no default, and `unverifiable` is the
+        answer whenever the evidence does not reach.
+      enum: [verified, rejected, unverifiable]
+    CredentialVerificationRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - request_id
+        - kind
+        - requested_at
+        - credential_id
+        - credential_type_code
+        - credential_type_name
+        - issuer
+        - credential_name
+        - credential_identifier
+        - issued_on
+        - expires_on
+        - verification_url
+        - holder_person_id
+        - holder_given_name
+        - holder_family_name
+        - suggested_method
+        - previous_result
+        - previous_valid_to
+        - viewer_can_decide
+      properties:
+        request_id:
+          $ref: '#/components/schemas/Uuid'
+        kind:
+          type: string
+          enum: [initial, renewal]
+        requested_at:
+          type: string
+          format: date-time
+        credential_id:
+          $ref: '#/components/schemas/Uuid'
+        credential_type_code:
+          type: string
+        credential_type_name:
+          type: string
+        issuer:
+          type: string
+        credential_name:
+          type: string
+        credential_identifier:
+          type: [string, 'null']
+        issued_on:
+          type: [string, 'null']
+          format: date
+        expires_on:
+          type: [string, 'null']
+          format: date
+        verification_url:
+          type: [string, 'null']
+          format: uri
+        holder_person_id:
+          $ref: '#/components/schemas/Uuid'
+        holder_given_name:
+          type: string
+        holder_family_name:
+          type: string
+        suggested_method:
+          $ref: '#/components/schemas/CredentialVerificationMethod'
+        previous_result:
+          type: [string, 'null']
+          description: The latest result recorded for this exact version, so a renewal shows what it renews.
+        previous_valid_to:
+          type: [string, 'null']
+          format: date-time
+        viewer_can_decide:
+          type: boolean
+          description: >-
+            A hint for the screen, never authority. False when the caller is the
+            holder or shares an active organization with them.
+    CredentialVerificationRequestList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CredentialVerificationRequest'
+    CredentialVerificationDecisionCreate:
+      type: object
+      additionalProperties: false
+      description: >-
+        No policy, no validity and no evidence fingerprint: the server derives all
+        three, so a client cannot decide how long its own verification lasts.
+      required:
+        - request_id
+        - result
+        - method
+        - source_authority
+        - source_jurisdiction
+        - source_reference
+        - source_status
+        - source_checked_at
+      properties:
+        request_id:
+          $ref: '#/components/schemas/Uuid'
+        result:
+          $ref: '#/components/schemas/CredentialVerificationResult'
+        method:
+          $ref: '#/components/schemas/CredentialVerificationMethod'
+        source_authority:
+          type: string
+          minLength: 1
+          maxLength: 200
+        source_jurisdiction:
+          type: string
+          minLength: 1
+          maxLength: 200
+        source_reference:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: Kept as evidence and never returned by any read.
+        source_status:
+          type: string
+          minLength: 1
+          maxLength: 200
+        source_checked_at:
+          type: string
+          format: date-time
+        source_valid_to:
+          type: [string, 'null']
+          format: date-time
+    CredentialVerificationRecord:
+      type: object
+      additionalProperties: false
+      required: [id, result, method, decided_at, valid_from, valid_to]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        result:
+          type: string
+          enum: [verified, rejected, unverifiable, revoked]
+        method:
+          $ref: '#/components/schemas/CredentialVerificationMethod'
+        decided_at:
+          type: string
+          format: date-time
+        valid_from:
+          type: [string, 'null']
+          format: date-time
+        valid_to:
+          type: [string, 'null']
+          format: date-time
+    CredentialVerificationOutcome:
+      type: object
+      additionalProperties: false
+      description: The outcome, never the evidence — no registry reference and no fingerprint.
+      required: [request_id, kind, status, credential_id, created_at, resolved_at, verification]
+      properties:
+        request_id:
+          $ref: '#/components/schemas/Uuid'
+        kind:
+          type: string
+          enum: [initial, renewal]
+        status:
+          type: string
+          enum: [pending, resolved, cancelled]
+        credential_id:
+          $ref: '#/components/schemas/Uuid'
+        created_at:
+          type: string
+          format: date-time
+        resolved_at:
+          type: [string, 'null']
+          format: date-time
+        verification:
+          anyOf:
+            - $ref: '#/components/schemas/CredentialVerificationRecord'
+            - type: 'null'
+    CredentialRenewalDue:
+      type: object
+      additionalProperties: false
+      required:
+        - credential_id
+        - credential_type_code
+        - credential_type_name
+        - credential_name
+        - issuer
+        - holder_person_id
+        - holder_given_name
+        - holder_family_name
+        - last_valid_to
+      properties:
+        credential_id:
+          $ref: '#/components/schemas/Uuid'
+        credential_type_code:
+          type: string
+        credential_type_name:
+          type: string
+        credential_name:
+          type: string
+        issuer:
+          type: string
+        holder_person_id:
+          $ref: '#/components/schemas/Uuid'
+        holder_given_name:
+          type: string
+        holder_family_name:
+          type: string
+        last_valid_to:
+          type: string
+          format: date-time
+    CredentialRenewalDueList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CredentialRenewalDue'
+    CredentialRenewalCreate:
+      type: object
+      additionalProperties: false
+      required: [credential_id]
+      properties:
+        credential_id:
+          $ref: '#/components/schemas/Uuid'
     AccessMode:
       type: string
       description: >-

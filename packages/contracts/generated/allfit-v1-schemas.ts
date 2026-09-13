@@ -1235,6 +1235,326 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  CredentialRenewalCreate: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['credential_id'],
+    properties: {
+      credential_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+    },
+  },
+  CredentialRenewalDue: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'credential_id',
+      'credential_type_code',
+      'credential_type_name',
+      'credential_name',
+      'issuer',
+      'holder_person_id',
+      'holder_given_name',
+      'holder_family_name',
+      'last_valid_to',
+    ],
+    properties: {
+      credential_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      credential_type_code: {
+        type: 'string',
+      },
+      credential_type_name: {
+        type: 'string',
+      },
+      credential_name: {
+        type: 'string',
+      },
+      issuer: {
+        type: 'string',
+      },
+      holder_person_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      holder_given_name: {
+        type: 'string',
+      },
+      holder_family_name: {
+        type: 'string',
+      },
+      last_valid_to: {
+        type: 'string',
+        format: 'date-time',
+      },
+    },
+  },
+  CredentialRenewalDueList: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['items'],
+    properties: {
+      items: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/CredentialRenewalDue',
+        },
+      },
+    },
+  },
+  CredentialVerificationDecisionCreate: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      'No policy, no validity and no evidence fingerprint: the server derives all three, so a client cannot decide how long its own verification lasts.',
+    required: [
+      'request_id',
+      'result',
+      'method',
+      'source_authority',
+      'source_jurisdiction',
+      'source_reference',
+      'source_status',
+      'source_checked_at',
+    ],
+    properties: {
+      request_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      result: {
+        $ref: '#/components/schemas/CredentialVerificationResult',
+      },
+      method: {
+        $ref: '#/components/schemas/CredentialVerificationMethod',
+      },
+      source_authority: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 200,
+      },
+      source_jurisdiction: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 200,
+      },
+      source_reference: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 200,
+        description: 'Kept as evidence and never returned by any read.',
+      },
+      source_status: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 200,
+      },
+      source_checked_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      source_valid_to: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+    },
+  },
+  CredentialVerificationMethod: {
+    type: 'string',
+    description:
+      'How a credential was checked. Documents, civil identity, health and a complete profile are never verifiable in V1, so no method exists for them.',
+    enum: ['official_registry_lookup', 'issuer_confirmation'],
+  },
+  CredentialVerificationOutcome: {
+    type: 'object',
+    additionalProperties: false,
+    description: 'The outcome, never the evidence — no registry reference and no fingerprint.',
+    required: [
+      'request_id',
+      'kind',
+      'status',
+      'credential_id',
+      'created_at',
+      'resolved_at',
+      'verification',
+    ],
+    properties: {
+      request_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      kind: {
+        type: 'string',
+        enum: ['initial', 'renewal'],
+      },
+      status: {
+        type: 'string',
+        enum: ['pending', 'resolved', 'cancelled'],
+      },
+      credential_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      created_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      resolved_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      verification: {
+        anyOf: [
+          {
+            $ref: '#/components/schemas/CredentialVerificationRecord',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+    },
+  },
+  CredentialVerificationRecord: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['id', 'result', 'method', 'decided_at', 'valid_from', 'valid_to'],
+    properties: {
+      id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      result: {
+        type: 'string',
+        enum: ['verified', 'rejected', 'unverifiable', 'revoked'],
+      },
+      method: {
+        $ref: '#/components/schemas/CredentialVerificationMethod',
+      },
+      decided_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      valid_from: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      valid_to: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+    },
+  },
+  CredentialVerificationRequest: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'request_id',
+      'kind',
+      'requested_at',
+      'credential_id',
+      'credential_type_code',
+      'credential_type_name',
+      'issuer',
+      'credential_name',
+      'credential_identifier',
+      'issued_on',
+      'expires_on',
+      'verification_url',
+      'holder_person_id',
+      'holder_given_name',
+      'holder_family_name',
+      'suggested_method',
+      'previous_result',
+      'previous_valid_to',
+      'viewer_can_decide',
+    ],
+    properties: {
+      request_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      kind: {
+        type: 'string',
+        enum: ['initial', 'renewal'],
+      },
+      requested_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      credential_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      credential_type_code: {
+        type: 'string',
+      },
+      credential_type_name: {
+        type: 'string',
+      },
+      issuer: {
+        type: 'string',
+      },
+      credential_name: {
+        type: 'string',
+      },
+      credential_identifier: {
+        type: ['string', 'null'],
+      },
+      issued_on: {
+        type: ['string', 'null'],
+        format: 'date',
+      },
+      expires_on: {
+        type: ['string', 'null'],
+        format: 'date',
+      },
+      verification_url: {
+        type: ['string', 'null'],
+        format: 'uri',
+      },
+      holder_person_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      holder_given_name: {
+        type: 'string',
+      },
+      holder_family_name: {
+        type: 'string',
+      },
+      suggested_method: {
+        $ref: '#/components/schemas/CredentialVerificationMethod',
+      },
+      previous_result: {
+        type: ['string', 'null'],
+        description:
+          'The latest result recorded for this exact version, so a renewal shows what it renews.',
+      },
+      previous_valid_to: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      viewer_can_decide: {
+        type: 'boolean',
+        description:
+          'A hint for the screen, never authority. False when the caller is the holder or shares an active organization with them.',
+      },
+    },
+  },
+  CredentialVerificationRequestList: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['items'],
+    properties: {
+      items: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/CredentialVerificationRequest',
+        },
+      },
+    },
+  },
+  CredentialVerificationResult: {
+    type: 'string',
+    description:
+      'What a verifier may record. There is no default, and `unverifiable` is the answer whenever the evidence does not reach.',
+    enum: ['verified', 'rejected', 'unverifiable'],
+  },
   EnduranceTarget: {
     type: 'object',
     additionalProperties: false,

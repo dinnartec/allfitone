@@ -412,6 +412,72 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/backoffice/v1/verification-requests': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Read the queue of credentials waiting to be verified
+     * @description Every pending request for one exact credential version: who asked, what they claim, and which registry or issuer to consult. Declaring or revising a credential puts it here and retiring it takes it out, so nobody has to remember to ask.
+     *     Reading this reaches the holder's data, so each row is recorded against the holder before it is returned. `viewer_can_decide` is false when the caller is the holder or shares an active organization with them. It is a hint for the screen, never authority: the decision revalidates on its own.
+     */
+    get: operations['listBackofficeVerificationRequests']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/verifications': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Record the verification of one credential version
+     * @description `verified`, `rejected` or `unverifiable`, checked against the official registry or the issuer. There is no default result. The policy, the validity and the evidence fingerprint are derived by the server and cannot be proposed: the validity never exceeds twelve months, the source's own expiry or the credential's, and a source that reports the credential lapsed cannot produce `verified`.
+     *     The response carries the outcome, never the registry reference or the fingerprint. Verifying one credential marks nothing else as verified.
+     */
+    post: operations['createBackofficeVerification']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/verification-renewals': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Read the verifications that are due for renewal
+     * @description Verified credentials whose validity ends within thirty days or has already ended, with no review in progress. Nothing runs at the moment a verification lapses, so this list is computed and opening a renewal is an explicit step. Each row is recorded against the holder before it is returned.
+     */
+    get: operations['listBackofficeVerificationRenewals']
+    put?: never
+    /**
+     * Open the renewal of a lapsed verification
+     * @description A new request linked to the one it renews. It never extends the earlier verification, which stays exactly as it was.
+     */
+    post: operations['openBackofficeVerificationRenewal']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/backoffice/v1/access-events': {
     parameters: {
       query?: never
@@ -1848,6 +1914,107 @@ export interface components {
     BreakGlassTier: 'standard' | 'restricted'
     /** @enum {string} */
     BreakGlassStatus: 'requested' | 'approved' | 'rejected' | 'closed' | 'expired'
+    /**
+     * @description How a credential was checked. Documents, civil identity, health and a complete profile are never verifiable in V1, so no method exists for them.
+     * @enum {string}
+     */
+    CredentialVerificationMethod: 'official_registry_lookup' | 'issuer_confirmation'
+    /**
+     * @description What a verifier may record. There is no default, and `unverifiable` is the answer whenever the evidence does not reach.
+     * @enum {string}
+     */
+    CredentialVerificationResult: 'verified' | 'rejected' | 'unverifiable'
+    CredentialVerificationRequest: {
+      request_id: components['schemas']['Uuid']
+      /** @enum {string} */
+      kind: 'initial' | 'renewal'
+      /** Format: date-time */
+      requested_at: string
+      credential_id: components['schemas']['Uuid']
+      credential_type_code: string
+      credential_type_name: string
+      issuer: string
+      credential_name: string
+      credential_identifier: string | null
+      /** Format: date */
+      issued_on: string | null
+      /** Format: date */
+      expires_on: string | null
+      /** Format: uri */
+      verification_url: string | null
+      holder_person_id: components['schemas']['Uuid']
+      holder_given_name: string
+      holder_family_name: string
+      suggested_method: components['schemas']['CredentialVerificationMethod']
+      /** @description The latest result recorded for this exact version, so a renewal shows what it renews. */
+      previous_result: string | null
+      /** Format: date-time */
+      previous_valid_to: string | null
+      /** @description A hint for the screen, never authority. False when the caller is the holder or shares an active organization with them. */
+      viewer_can_decide: boolean
+    }
+    CredentialVerificationRequestList: {
+      items: components['schemas']['CredentialVerificationRequest'][]
+    }
+    /** @description No policy, no validity and no evidence fingerprint: the server derives all three, so a client cannot decide how long its own verification lasts. */
+    CredentialVerificationDecisionCreate: {
+      request_id: components['schemas']['Uuid']
+      result: components['schemas']['CredentialVerificationResult']
+      method: components['schemas']['CredentialVerificationMethod']
+      source_authority: string
+      source_jurisdiction: string
+      /** @description Kept as evidence and never returned by any read. */
+      source_reference: string
+      source_status: string
+      /** Format: date-time */
+      source_checked_at: string
+      /** Format: date-time */
+      source_valid_to?: string | null
+    }
+    CredentialVerificationRecord: {
+      id: components['schemas']['Uuid']
+      /** @enum {string} */
+      result: 'verified' | 'rejected' | 'unverifiable' | 'revoked'
+      method: components['schemas']['CredentialVerificationMethod']
+      /** Format: date-time */
+      decided_at: string
+      /** Format: date-time */
+      valid_from: string | null
+      /** Format: date-time */
+      valid_to: string | null
+    }
+    /** @description The outcome, never the evidence — no registry reference and no fingerprint. */
+    CredentialVerificationOutcome: {
+      request_id: components['schemas']['Uuid']
+      /** @enum {string} */
+      kind: 'initial' | 'renewal'
+      /** @enum {string} */
+      status: 'pending' | 'resolved' | 'cancelled'
+      credential_id: components['schemas']['Uuid']
+      /** Format: date-time */
+      created_at: string
+      /** Format: date-time */
+      resolved_at: string | null
+      verification: components['schemas']['CredentialVerificationRecord'] | null
+    }
+    CredentialRenewalDue: {
+      credential_id: components['schemas']['Uuid']
+      credential_type_code: string
+      credential_type_name: string
+      credential_name: string
+      issuer: string
+      holder_person_id: components['schemas']['Uuid']
+      holder_given_name: string
+      holder_family_name: string
+      /** Format: date-time */
+      last_valid_to: string
+    }
+    CredentialRenewalDueList: {
+      items: components['schemas']['CredentialRenewalDue'][]
+    }
+    CredentialRenewalCreate: {
+      credential_id: components['schemas']['Uuid']
+    }
     /**
      * @description How the access was authorised. `break_glass` is the exceptional path and is the only one subject to the per-case auditor disqualification.
      * @enum {string}
@@ -5077,6 +5244,144 @@ export interface operations {
       }
       401: components['responses']['Unauthenticated']
       403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listBackofficeVerificationRequests: {
+    parameters: {
+      query?: {
+        limit?: components['parameters']['Limit']
+      }
+      header: {
+        Origin: components['parameters']['Origin']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Pending requests, oldest first */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CredentialVerificationRequestList']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  createBackofficeVerification: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CredentialVerificationDecisionCreate']
+      }
+    }
+    responses: {
+      /** @description The resolved request and the verification that resolved it */
+      201: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CredentialVerificationOutcome']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listBackofficeVerificationRenewals: {
+    parameters: {
+      query?: {
+        limit?: components['parameters']['Limit']
+      }
+      header: {
+        Origin: components['parameters']['Origin']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Due renewals, soonest first */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CredentialRenewalDueList']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  openBackofficeVerificationRenewal: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CredentialRenewalCreate']
+      }
+    }
+    responses: {
+      /** @description The renewal request, pending */
+      201: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CredentialVerificationOutcome']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
       503: components['responses']['UpstreamUnavailable']
     }
   }
