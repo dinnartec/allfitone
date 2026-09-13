@@ -109,6 +109,15 @@ describe('access log presentation rules', () => {
     expect(modeLabel('break_glass')).toBe('Acceso excepcional')
   })
 
+  test("sets a read by Allfit staff apart from the person's own permissions", () => {
+    // A verifier or a support operator reads under a duty, not a grant. Shown as a
+    // live permission, the log would tell an auditor the person consented.
+    expect(modeLabel('support_metadata')).toBe('Lectura del equipo de Allfit')
+    expect(modeTone('support_metadata')).toBe('warning')
+    expect(modeBasis('support_metadata')).toContain('No hubo permiso de la persona')
+    expect(modeBasis('support_metadata')).not.toContain('permiso vigente')
+  })
+
   test('explains the basis for the read rather than naming the mode', () => {
     expect(modeBasis('break_glass')).toContain('ventana excepcional aprobada por otra persona')
     expect(modeBasis('frozen')).toContain('histórico que quedó congelado')

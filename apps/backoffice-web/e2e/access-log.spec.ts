@@ -222,3 +222,32 @@ test('a withdrawn audit duty is explained as expiry by design', async ({ context
   await expect(page.getByText('No se pudo consultar el registro')).toBeVisible()
   await expect(page.getByText(/Los deberes vencen por diseño/)).toBeVisible()
 })
+
+test("a read by Allfit staff is never presented as the person's permission", async ({
+  context,
+  page,
+}) => {
+  await mockBackofficeApi(
+    context,
+    createBackofficeFixture({
+      session: activeSession(),
+      accessLog: {
+        events: [
+          accessEvent({
+            access_mode: 'support_metadata',
+            resource: 'identity.professional_credentials',
+            purpose: 'professional_credential_verification',
+          }),
+        ],
+      },
+    }),
+  )
+
+  await page.goto(PATH)
+  await page.getByLabel('Persona afectada').fill(SUPPORT_SUBJECT_ID)
+  await page.getByRole('button', { name: 'Consultar' }).click()
+
+  await expect(page.getByText('Lectura del equipo de Allfit')).toBeVisible()
+  await expect(page.getByText(/No hubo permiso de la persona/)).toBeVisible()
+  await expect(page.getByText(/tenía un permiso vigente/)).toHaveCount(0)
+})

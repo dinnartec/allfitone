@@ -31,6 +31,7 @@ const MODE_LABELS: Record<AccessMode, string> = {
   frozen: 'Permiso congelado',
   break_glass: 'Acceso excepcional',
   organization_operational: 'Operación del gimnasio',
+  support_metadata: 'Lectura del equipo de Allfit',
 }
 
 export function modeLabel(mode: AccessMode): string {
@@ -49,6 +50,8 @@ const MODE_BASIS: Record<AccessMode, string> = {
     'No había permiso. Se abrió una ventana excepcional aprobada por otra persona, para un caso concreto.',
   organization_operational:
     'Fue una operación del gimnasio sobre datos que administra, no una lectura de datos de salud.',
+  support_metadata:
+    'No hubo permiso de la persona: la hizo alguien del equipo de Allfit ejerciendo un deber de plataforma.',
 }
 
 export function modeBasis(mode: AccessMode): string {
@@ -58,13 +61,13 @@ export function modeBasis(mode: AccessMode): string {
 export type ModeTone = 'destructive' | 'warning' | 'secondary'
 
 /**
- * Break-glass is the only mode that reads as exceptional. `frozen` is a warning
- * because a read of revoked data is worth a second look, and the two ordinary
- * modes are neutral — colouring every row would make none of them stand out.
+ * Break-glass is the only exceptional mode. A read by Allfit's own team is a warning
+ * because it is the question this log exists to answer, and so is `frozen`, because
+ * a read of revoked data deserves a second look. The rest stay neutral.
  */
 export function modeTone(mode: AccessMode): ModeTone {
   if (mode === 'break_glass') return 'destructive'
-  if (mode === 'frozen') return 'warning'
+  if (mode === 'frozen' || mode === 'support_metadata') return 'warning'
   return 'secondary'
 }
 
