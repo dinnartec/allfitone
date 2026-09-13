@@ -3,8 +3,7 @@
  *
  * A whole screen and not a sheet. A sheet is anchored to the bottom edge, which is
  * exactly where the keyboard appears, so searching left about three results visible;
- * and picking wrote the draft on every tap, so five exercises were five saves. This
- * is what the canvas drew before the implementation chose a sheet.
+ * and picking wrote the draft on every tap, so five exercises were five saves.
  *
  * **It never saves.** The routine editor stays the only writer of the draft; this
  * screen chooses and hands the selection over through `exercise-pick`. That is what
@@ -18,44 +17,50 @@
  * search answers 40 by default, so an empty query is the whole library rather than an
  * empty state waiting to be typed at. Searching narrows something already useful.
  *
- * **Two chip rows, and they do not mean the same thing.** Several chips of one row
- * are `or` — a second muscle widens — while combining muscle with equipment is `and`.
- * The database enforces it; `exercise-filter` is where the screen's half is tested.
+ * **The filters left the screen they filter.** They were two rows of chips above the
+ * list — eighteen muscles in three blocks, then nine equipment — and between them they
+ * took half the usable height, which is the problem this screen was built to solve.
+ * Now there are two buttons that say what they are set to and open their own screen.
+ * What is on comes back as pills, each removable by itself, because "clear all" is a
+ * blunt instrument when only one of three is wrong.
  *
- * The two vocabularies are asked once and never again. A chip row that reshuffled as
- * somebody typed could not be used: you would reach for a chip that had moved.
+ * Filtering happens in memory over the catalogue held here; `exercise-catalogue`
+ * carries that decision and what it costs.
  */
 
-import { Checkbox } from '@allfitone/react-native/checkbox'
-import { Chip } from '@allfitone/react-native/chip'
+import { DisclosureButton } from '@allfitone/react-native/disclosure-button'
+import { FoundationIcon } from '@allfitone/react-native/icons'
 import { InlineAlert } from '@allfitone/react-native/inline-alert'
 import { Screen } from '@allfitone/react-native/screen'
+import { SelectableRow } from '@allfitone/react-native/selectable-row'
 import { Text } from '@allfitone/react-native/text'
 import { TextField } from '@allfitone/react-native/text-field'
 import { useTheme } from '@allfitone/react-native/theme'
-import { useRouter } from 'expo-router'
-import { useEffect, useMemo, useState } from 'react'
-import { ScrollView, StyleSheet, View } from 'react-native'
+import { useFocusEffect, useRouter } from 'expo-router'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
 
 import { ApiError } from '../../src/client'
 import type { CatalogueTerm, Movement, MuscleTerm } from '../../src/client/content'
 import { createSpaceContentFlow } from '../../src/client/content-transport'
 import {
-  NOTHING_FILTERED,
   anyFilter,
-  chosenNames,
-  filterSummary,
-  isFiltered,
-  muscleBlocks,
+  applyFilter,
+  facetSummary,
+  listSummary,
+  movementCaption,
+  pillsFor,
   toggleFilter,
   type ExerciseFilter,
-} from '../../src/client/exercise-filter'
+} from '../../src/client/exercise-catalogue'
 import {
   alreadyIn,
+  exerciseFilter,
   isPicked,
   offerExercisePick,
   offerable,
   pickLabel,
+  rememberExerciseFilter,
   togglePick,
   type PickedMovement,
 } from '../../src/client/exercise-pick'
@@ -74,43 +79,28 @@ export default function ExercisePicker() {
   const already = useMemo(() => alreadyIn(), [])
 
   const [query, setQuery] = useState('')
-  const [filter, setFilter] = useState<ExerciseFilter>(NOTHING_FILTERED)
+  const [filter, setFilter] = useState<ExerciseFilter>(() => exerciseFilter())
   const [movements, setMovements] = useState<readonly Movement[] | undefined>(undefined)
   const [muscles, setMuscles] = useState<readonly MuscleTerm[]>([])
   const [equipment, setEquipment] = useState<readonly CatalogueTerm[]>([])
   const [picked, setPicked] = useState<readonly PickedMovement[]>([])
   const [failure, setFailure] = useState<string | undefined>(undefined)
 
-  // Once, on mount. A chip row that changed with the search could not be used: you
-  // would reach for a chip that had moved.
+  // The whole library, once. Filtering it here is what makes the counts instant and
+  // what lets a filter screen say how many are left before it is applied.
   useEffect(() => {
     let active = true
 
-    Promise.all([flow.readMuscles(), flow.readEquipment()])
-      .then(([worked, needed]) => {
-        if (!active) return
-        setMuscles(worked)
-        setEquipment(needed)
-      })
-      .catch(() => {
-        // The chips are an improvement on the search, not a precondition for it, so a
-        // vocabulary that does not arrive leaves the list usable instead of empty.
-        if (active) setMuscles([])
-      })
-
-    return () => {
-      active = false
-    }
-  }, [flow])
-
-  useEffect(() => {
-    let active = true
-
-    flow
-      .searchMovements(DISCIPLINE, query, filter.muscles, filter.equipment)
-      .then((found) => {
+    Promise.all([
+      flow.searchMovements(DISCIPLINE, '', [], []),
+      flow.readMuscles(),
+      flow.readEquipment(),
+    ])
+      .then(([found, worked, needed]) => {
         if (!active) return
         setMovements(found)
+        setMuscles(worked)
+        setEquipment(needed)
         setFailure(undefined)
       })
       .catch((cause: unknown) => {
@@ -125,9 +115,23 @@ export default function ExercisePicker() {
     return () => {
       active = false
     }
-  }, [flow, query, filter])
+  }, [flow])
 
-  const shown = offerable(movements ?? [], already)
+  // The filter screens sit above this one, so what they chose arrives on the way back.
+  useFocusEffect(
+    useCallback(() => {
+      setFilter(exerciseFilter())
+    }, []),
+  )
+
+  const change = useCallback((next: ExerciseFilter) => {
+    setFilter(next)
+    rememberExerciseFilter(next)
+  }, [])
+
+  const shown = offerable(applyFilter(movements ?? [], filter, query), already)
+  const pills = pillsFor(filter, muscles, equipment)
+  const filtering = anyFilter(filter) || query.trim() !== ''
 
   const confirm = () => {
     offerExercisePick(picked)
@@ -146,10 +150,11 @@ export default function ExercisePicker() {
       >
         <ScreenHeader
           title="Añadir ejercicio"
-          subtitle={picked.length === 0 ? 'toca los que quieras' : pickLabel(picked.length)}
+          subtitle={picked.length === 0 ? 'toca los que quieras' : `${picked.length} elegidos`}
           onClose={() => router.back()}
           onConfirm={picked.length === 0 ? undefined : confirm}
           confirmLabel={pickLabel(picked.length)}
+          confirmText
         />
 
         {failure ? <InlineAlert message={failure} /> : null}
@@ -162,111 +167,102 @@ export default function ExercisePicker() {
           autoCapitalize="none"
         />
 
-        {muscles.length > 0 ? (
-          <View style={styles.filters}>
-            {muscleBlocks(muscles).map((block) => (
-              <View key={block.region} style={styles.facet}>
-                <Text role="eyebrow" size="2xs" color="muted">
-                  {block.title}
+        <View style={styles.filters}>
+          <DisclosureButton
+            label="Equipamiento"
+            value={facetSummary(filter, 'equipment')}
+            icon="settings"
+            active={filter.equipment.length > 0}
+            grow
+            onPress={() => router.push('/routines/exercises/equipment')}
+          />
+          <DisclosureButton
+            label="Musculatura"
+            value={facetSummary(filter, 'muscle')}
+            icon="target"
+            active={filter.muscles.length > 0}
+            grow
+            onPress={() => router.push('/routines/exercises/muscles')}
+          />
+        </View>
+
+        {pills.length > 0 ? (
+          <View style={styles.pills}>
+            {pills.map((pill) => (
+              <Pressable
+                key={`${pill.facet}-${pill.code}`}
+                accessibilityRole="button"
+                accessibilityLabel={`Quitar ${pill.name}`}
+                onPress={() =>
+                  change(
+                    toggleFilter(
+                      filter,
+                      pill.facet,
+                      pill.code,
+                      pill.facet === 'muscle' ? muscles : equipment,
+                    ),
+                  )
+                }
+                style={[
+                  styles.pill,
+                  {
+                    backgroundColor: theme.color.accent.tonal,
+                    borderColor: theme.color.accent.tonalBorder,
+                  },
+                ]}
+              >
+                <Text role="display" size="xs" uppercase color="accent">
+                  {pill.name}
                 </Text>
-                <View style={styles.chips}>
-                  {block.muscles.map((muscle) => (
-                    <Chip
-                      key={muscle.code}
-                      label={muscle.name}
-                      selected={isFiltered(filter, 'muscle', muscle.code)}
-                      onPress={() =>
-                        setFilter((current) =>
-                          toggleFilter(current, 'muscle', muscle.code, muscles),
-                        )
-                      }
-                    />
-                  ))}
-                </View>
-              </View>
+                <FoundationIcon
+                  name="close"
+                  customSize={12}
+                  color={theme.color.text.accent}
+                  decorative
+                />
+              </Pressable>
             ))}
-
-            {equipment.length > 0 ? (
-              <View style={styles.facet}>
-                <Text role="eyebrow" size="2xs" color="muted">
-                  CON QUÉ
-                </Text>
-                <View style={styles.chips}>
-                  {equipment.map((item) => (
-                    <Chip
-                      key={item.code}
-                      label={item.name}
-                      selected={isFiltered(filter, 'equipment', item.code)}
-                      onPress={() =>
-                        setFilter((current) =>
-                          toggleFilter(current, 'equipment', item.code, equipment),
-                        )
-                      }
-                    />
-                  ))}
-                </View>
-              </View>
-            ) : null}
-
-            {anyFilter(filter) ? (
+            {/* Only past one: beside a single pill it would say the same thing twice. */}
+            {pills.length > 1 ? (
               <Text
                 role="control"
                 size="xs"
-                color="accent"
+                color="secondary"
                 accessibilityRole="button"
-                onPress={() => setFilter(NOTHING_FILTERED)}
+                style={styles.clear}
+                onPress={() => change({ muscles: [], equipment: [] })}
               >
-                Quitar filtros
+                Quitar todos
               </Text>
             ) : null}
           </View>
         ) : null}
 
         <Text role="eyebrow" size="2xs" color="muted">
-          {filterSummary(filter, shown.length)}
+          {listSummary(shown.length, filtering).toUpperCase()}
         </Text>
-
-        {anyFilter(filter) ? (
-          <Text role="body" size="xs" color="muted">
-            {chosenNames(filter, muscles, equipment).join(' · ')}
-          </Text>
-        ) : null}
 
         <View style={styles.list}>
           {shown.map((movement) => (
-            <View
+            <SelectableRow
               key={movement.id}
-              style={[
-                styles.row,
-                {
-                  backgroundColor: theme.color.background.surface,
-                  borderColor: isPicked(picked, movement.id)
-                    ? theme.color.border.accent
-                    : theme.color.border.subtle,
-                  borderWidth: isPicked(picked, movement.id) ? 1.5 : 1,
-                },
-              ]}
-            >
-              <Checkbox
-                label={movement.name}
-                checked={isPicked(picked, movement.id)}
-                onChange={() =>
-                  setPicked((current) =>
-                    togglePick(current, { id: movement.id, name: movement.name }),
-                  )
-                }
-              />
-            </View>
+              name={movement.name}
+              caption={movementCaption(movement, muscles, equipment)}
+              selected={isPicked(picked, movement.id)}
+              onPress={() =>
+                setPicked((current) =>
+                  togglePick(current, { id: movement.id, name: movement.name }),
+                )
+              }
+            />
           ))}
         </View>
 
         {movements !== undefined && shown.length === 0 ? (
           <Text role="body" size="sm" color="muted">
-            {anyFilter(filter)
+            {filtering
               ? 'Nada con esos filtros. Quita alguno para ver más.'
-              : query.trim() === ''
-                ? 'Tu rutina ya tiene todos los ejercicios del catálogo.'
-                : 'No hay ejercicios con ese nombre en el catálogo.'}
+              : 'Tu rutina ya tiene todos los ejercicios del catálogo.'}
           </Text>
         ) : null}
 
@@ -276,7 +272,7 @@ export default function ExercisePicker() {
           </Text>
         ) : null}
 
-        <Text role="body" size="xs" color="muted">
+        <Text role="body" size="xs" color="muted" style={styles.foot}>
           Solo el catálogo global de Allfit.
         </Text>
       </ScrollView>
@@ -285,10 +281,20 @@ export default function ExercisePicker() {
 }
 
 const styles = StyleSheet.create({
-  content: { gap: 18, paddingBottom: 48 },
-  filters: { gap: 14 },
-  facet: { gap: 8 },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  content: { gap: 14, paddingBottom: 48 },
+  filters: { flexDirection: 'row', gap: 10 },
+  pills: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },
+  pill: {
+    minHeight: 32,
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingLeft: 12,
+    paddingRight: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+  },
+  clear: { minHeight: 32, paddingHorizontal: 4, textDecorationLine: 'underline' },
   list: { gap: 8 },
-  row: { borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12 },
+  foot: { textAlign: 'center' },
 })

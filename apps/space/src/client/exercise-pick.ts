@@ -24,6 +24,7 @@
  */
 
 import type { Movement } from './content'
+import { NOTHING_FILTERED, type ExerciseFilter } from './exercise-catalogue'
 
 export interface PickedMovement {
   readonly id: string
@@ -69,6 +70,7 @@ export function offerable(
 
 let offered: readonly PickedMovement[] = []
 let already: readonly string[] = []
+let filter: ExerciseFilter = NOTHING_FILTERED
 
 /** Deposited by the picker when somebody confirms. */
 export function offerExercisePick(movements: readonly PickedMovement[]): void {
@@ -89,4 +91,25 @@ export function declareAlreadyIn(ids: readonly string[]): void {
 
 export function alreadyIn(): readonly string[] {
   return already
+}
+
+/**
+ * The filter, which now outlives the screen that shows it.
+ *
+ * Choosing muscles and choosing equipment are two screens above the list, so the
+ * filter cannot live in any of the three: whichever held it would lose it on the way
+ * to the others. Unlike the picked batch this is **not** emptied on read — it is the
+ * state of the search, and it stays until somebody clears it.
+ */
+export function rememberExerciseFilter(next: ExerciseFilter): void {
+  filter = next
+}
+
+export function exerciseFilter(): ExerciseFilter {
+  return filter
+}
+
+/** Starting a new routine starts a new search; the last one's filter is not it. */
+export function forgetExerciseFilter(): void {
+  filter = NOTHING_FILTERED
 }

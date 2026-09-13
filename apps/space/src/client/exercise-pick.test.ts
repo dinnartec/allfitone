@@ -3,6 +3,9 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import {
   alreadyIn,
   declareAlreadyIn,
+  exerciseFilter,
+  forgetExerciseFilter,
+  rememberExerciseFilter,
   isPicked,
   offerExercisePick,
   offerable,
@@ -75,6 +78,7 @@ describe('the selection crosses, the draft does not', () => {
   beforeEach(() => {
     takeExercisePick()
     declareAlreadyIn([])
+    forgetExerciseFilter()
   })
 
   test('T-SP-PICK-06 what the picker offers is what the editor collects', () => {
@@ -100,5 +104,21 @@ describe('the selection crosses, the draft does not', () => {
     declareAlreadyIn(['m-1', 'm-2'])
 
     expect(alreadyIn()).toEqual(['m-1', 'm-2'])
+  })
+
+  test('T-SP-PICK-10 the filter survives the trip to a filter screen and back', () => {
+    // Three screens share it, so none of them can hold it: whichever did would lose
+    // it on the way to the others.
+    rememberExerciseFilter({ muscles: ['chest'], equipment: [] })
+
+    expect(exerciseFilter().muscles).toEqual(['chest'])
+    expect(exerciseFilter().muscles).toEqual(['chest'])
+  })
+
+  test('T-SP-PICK-11 and is forgotten on purpose, not on read like the batch', () => {
+    rememberExerciseFilter({ muscles: ['chest'], equipment: ['barbell'] })
+    forgetExerciseFilter()
+
+    expect(exerciseFilter()).toEqual({ muscles: [], equipment: [] })
   })
 })

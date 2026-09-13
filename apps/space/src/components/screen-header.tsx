@@ -7,6 +7,10 @@
  *
  * The confirm is a circle and not a word: it is the same act on every one of these
  * screens, and a circle at the top right is where both platforms put it.
+ *
+ * `confirmText` is the exception, for the screens where the act is not the same
+ * every time. Adding three exercises is not the same as adding one, and a circle
+ * cannot say which — so those screens draw the count instead of a tick.
  */
 
 import { IconButton } from '@allfitone/react-native/icon-button'
@@ -23,6 +27,7 @@ export function ScreenHeader({
   onClose,
   onConfirm,
   confirmLabel,
+  confirmText,
   editable,
   onEdit,
 }: {
@@ -31,6 +36,8 @@ export function ScreenHeader({
   readonly onClose: () => void
   readonly onConfirm?: (() => void) | undefined
   readonly confirmLabel: string
+  /** Draws the label instead of the tick, for a confirm that changes with the set. */
+  readonly confirmText?: boolean | undefined
   readonly editable?: boolean | undefined
   readonly onEdit?: (() => void) | undefined
 }) {
@@ -66,7 +73,7 @@ export function ScreenHeader({
         disabled={!ready}
         onPress={onConfirm}
         style={({ pressed }) => [
-          styles.confirm,
+          confirmText ? styles.confirmWide : styles.confirm,
           {
             backgroundColor: ready ? theme.color.action.primary : theme.color.background.surface,
             borderColor: ready ? theme.color.border.accent : theme.color.border.subtle,
@@ -74,12 +81,26 @@ export function ScreenHeader({
           },
         ]}
       >
-        <FoundationIcon
-          name="check"
-          size="sm"
-          color={ready ? theme.color.action.onPrimary : theme.color.icon.secondary}
-          decorative
-        />
+        {confirmText ? (
+          <Text
+            role="display"
+            size="sm"
+            uppercase
+            numberOfLines={1}
+            style={{
+              color: ready ? theme.color.action.onPrimary : theme.color.text.muted,
+            }}
+          >
+            {confirmLabel}
+          </Text>
+        ) : (
+          <FoundationIcon
+            name="check"
+            size="sm"
+            color={ready ? theme.color.action.onPrimary : theme.color.icon.secondary}
+            decorative
+          />
+        )}
       </Pressable>
     </View>
   )
@@ -90,6 +111,15 @@ const styles = StyleSheet.create({
   heading: { flex: 1, gap: 2 },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   title: { flexShrink: 1 },
+  confirmWide: {
+    minHeight: CONFIRM,
+    minWidth: CONFIRM,
+    paddingHorizontal: 16,
+    borderRadius: CONFIRM / 2,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   confirm: {
     width: CONFIRM,
     height: CONFIRM,
