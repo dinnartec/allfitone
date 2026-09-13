@@ -713,6 +713,64 @@ export type Database = {
           },
         ]
       }
+      credential_verification_requests: {
+        Row: {
+          cancelled_at: string | null
+          created_at: string
+          id: string
+          kind: string
+          professional_credential_id: string
+          requested_by_person_id: string
+          resolved_at: string | null
+          status: string
+          supersedes_request_id: string | null
+        }
+        Insert: {
+          cancelled_at?: string | null
+          created_at?: string
+          id?: string
+          kind?: string
+          professional_credential_id: string
+          requested_by_person_id: string
+          resolved_at?: string | null
+          status?: string
+          supersedes_request_id?: string | null
+        }
+        Update: {
+          cancelled_at?: string | null
+          created_at?: string
+          id?: string
+          kind?: string
+          professional_credential_id?: string
+          requested_by_person_id?: string
+          resolved_at?: string | null
+          status?: string
+          supersedes_request_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_credential_verification_requests_credential'
+            columns: ['professional_credential_id']
+            isOneToOne: false
+            referencedRelation: 'professional_credentials'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'fk_credential_verification_requests_requester'
+            columns: ['requested_by_person_id']
+            isOneToOne: false
+            referencedRelation: 'people'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'fk_credential_verification_requests_supersedes'
+            columns: ['supersedes_request_id']
+            isOneToOne: false
+            referencedRelation: 'credential_verification_requests'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       eligibility_evidence: {
         Row: {
           evaluated_at: string
@@ -1071,6 +1129,7 @@ export type Database = {
           method: string
           policy_code: string
           professional_credential_id: string
+          request_id: string | null
           result: string
           revoked_at: string | null
           source_authority: string
@@ -1091,6 +1150,7 @@ export type Database = {
           method: string
           policy_code: string
           professional_credential_id: string
+          request_id?: string | null
           result: string
           revoked_at?: string | null
           source_authority: string
@@ -1111,6 +1171,7 @@ export type Database = {
           method?: string
           policy_code?: string
           professional_credential_id?: string
+          request_id?: string | null
           result?: string
           revoked_at?: string | null
           source_authority?: string
@@ -1131,6 +1192,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: 'professional_credentials'
             referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'fk_professional_credential_verifications_request'
+            columns: ['request_id', 'professional_credential_id']
+            isOneToOne: false
+            referencedRelation: 'credential_verification_requests'
+            referencedColumns: ['id', 'professional_credential_id']
           },
           {
             foreignKeyName: 'fk_professional_credential_verifications_supersedes'
@@ -1361,6 +1429,40 @@ export type Database = {
           username: string
         }[]
       }
+      credential_verification_conflict: {
+        Args: { p_credential_id: string; p_verifier_person_id: string }
+        Returns: string
+      }
+      credential_verification_decision_projection: {
+        Args: { p_request_id: string }
+        Returns: Json
+      }
+      credential_verification_method_for: {
+        Args: { p_credential_type_code: string }
+        Returns: string
+      }
+      decide_credential_verification: {
+        Args: {
+          p_actor_person_id: string
+          p_actor_session_id: string
+          p_command_id: string
+          p_idempotency_key: string
+          p_method: string
+          p_request_hash: string
+          p_request_id: string
+          p_result: string
+          p_source_authority: string
+          p_source_checked_at: string
+          p_source_jurisdiction: string
+          p_source_reference: string
+          p_source_status: string
+          p_source_valid_to: string
+        }
+        Returns: {
+          replayed: boolean
+          result: Json
+        }[]
+      }
       decide_staff_invitation: {
         Args: {
           p_command_id: string
@@ -1433,6 +1535,52 @@ export type Database = {
           replayed: boolean
           reused: boolean
           status: string
+        }[]
+      }
+      list_credential_verification_requests: {
+        Args: {
+          p_actor_person_id: string
+          p_actor_session_id: string
+          p_limit: number
+        }
+        Returns: {
+          credential_id: string
+          credential_identifier: string
+          credential_name: string
+          credential_type_code: string
+          credential_type_name: string
+          expires_on: string
+          holder_family_name: string
+          holder_given_name: string
+          holder_person_id: string
+          issued_on: string
+          issuer: string
+          kind: string
+          previous_result: string
+          previous_valid_to: string
+          request_id: string
+          requested_at: string
+          suggested_method: string
+          verification_url: string
+          viewer_can_decide: boolean
+        }[]
+      }
+      list_due_credential_renewals: {
+        Args: {
+          p_actor_person_id: string
+          p_actor_session_id: string
+          p_limit: number
+        }
+        Returns: {
+          credential_id: string
+          credential_name: string
+          credential_type_code: string
+          credential_type_name: string
+          holder_family_name: string
+          holder_given_name: string
+          holder_person_id: string
+          issuer: string
+          last_valid_to: string
         }[]
       }
       list_staff_invitations: {
@@ -1523,6 +1671,20 @@ export type Database = {
         Returns: {
           outcome: string
           provider_session_id: string
+        }[]
+      }
+      open_credential_verification_renewal: {
+        Args: {
+          p_actor_person_id: string
+          p_actor_session_id: string
+          p_command_id: string
+          p_credential_id: string
+          p_idempotency_key: string
+          p_request_hash: string
+        }
+        Returns: {
+          replayed: boolean
+          result: Json
         }[]
       }
       prepare_backoffice_auth_cleanup: {
@@ -1624,6 +1786,10 @@ export type Database = {
           p_subject_person_id: string
         }
         Returns: string
+      }
+      require_credential_verifier: {
+        Args: { p_actor_person_id: string; p_actor_session_id: string }
+        Returns: undefined
       }
       require_professional_actor: {
         Args: { p_person_id: string }
