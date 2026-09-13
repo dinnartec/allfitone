@@ -17,6 +17,7 @@ export interface BackofficeFixture {
   diagnosis?: DiagnosisFixture
   scopes?: ScopeFixture
   accessLog?: AccessLogFixture
+  verification?: VerificationFixture
   breakGlass?: BreakGlassFixture
   requests: MockRequest[]
 }
@@ -244,6 +245,101 @@ export function accessEvent(overrides: Partial<AccessLogEventFixture> = {}): Acc
     access_mode: 'organization_operational',
     occurred_at: new Date(Date.now() - 3_600_000).toISOString(),
     withheld_from_viewer: false,
+    ...overrides,
+  }
+}
+
+/**
+ * Credential verification.
+ *
+ * The mock keeps the command's rules rather than the screen's expectations: a
+ * decision needs a result, a conflicted viewer is refused, a decided request
+ * answers 409, and a lapsed source cannot produce verified. The validity is
+ * derived here the way the server derives it, so a screen that tried to send one
+ * would not change what comes back.
+ */
+export interface VerificationFixture {
+  refusal?: { status: number; code: string }
+  /** Consumed once: somebody else decides the request between load and submit. */
+  nextDecisionDecidedElsewhere?: boolean | undefined
+  requests: VerificationRequestFixture[]
+  renewals: RenewalDueFixture[]
+}
+
+export interface VerificationRequestFixture {
+  request_id: string
+  kind: 'initial' | 'renewal'
+  requested_at: string
+  credential_id: string
+  credential_type_code: string
+  credential_type_name: string
+  issuer: string
+  credential_name: string
+  credential_identifier: string | null
+  issued_on: string | null
+  expires_on: string | null
+  verification_url: string | null
+  holder_person_id: string
+  holder_given_name: string
+  holder_family_name: string
+  suggested_method: 'official_registry_lookup' | 'issuer_confirmation'
+  previous_result: string | null
+  previous_valid_to: string | null
+  viewer_can_decide: boolean
+  status: 'pending' | 'resolved' | 'cancelled'
+}
+
+export interface RenewalDueFixture {
+  credential_id: string
+  credential_type_code: string
+  credential_type_name: string
+  credential_name: string
+  issuer: string
+  holder_person_id: string
+  holder_given_name: string
+  holder_family_name: string
+  last_valid_to: string
+}
+
+export function verificationRequest(
+  overrides: Partial<VerificationRequestFixture> = {},
+): VerificationRequestFixture {
+  return {
+    request_id: nextAssignmentId(),
+    kind: 'initial',
+    requested_at: new Date(Date.now() - 86_400_000).toISOString(),
+    credential_id: nextAssignmentId(),
+    credential_type_code: 'professional_license',
+    credential_type_name: 'Licencia o matrícula profesional',
+    issuer: 'Colegio Colombiano de Fisioterapeutas',
+    credential_name: 'Tarjeta profesional',
+    credential_identifier: 'TP-12345',
+    issued_on: '2019-06-01',
+    expires_on: null,
+    verification_url: 'https://registro.example.test/TP-12345',
+    holder_person_id: SUBJECT_PERSON_ID,
+    holder_given_name: 'Valentina',
+    holder_family_name: 'Ríos',
+    suggested_method: 'official_registry_lookup',
+    previous_result: null,
+    previous_valid_to: null,
+    viewer_can_decide: true,
+    status: 'pending',
+    ...overrides,
+  }
+}
+
+export function renewalDue(overrides: Partial<RenewalDueFixture> = {}): RenewalDueFixture {
+  return {
+    credential_id: nextAssignmentId(),
+    credential_type_code: 'academic_degree',
+    credential_type_name: 'Título académico',
+    credential_name: 'Fisioterapia',
+    issuer: 'Universidad Nacional',
+    holder_person_id: SUBJECT_PERSON_ID,
+    holder_given_name: 'Valentina',
+    holder_family_name: 'Ríos',
+    last_valid_to: new Date(Date.now() - 10 * 86_400_000).toISOString(),
     ...overrides,
   }
 }
@@ -629,6 +725,14 @@ export async function mockBackofficeApi(
     }
     if (request.path.startsWith('/backoffice/v1/result-contracts')) {
       await routeResultContracts(route, request, fixture)
+      return
+    }
+    if (
+      request.path === '/backoffice/v1/verification-requests' ||
+      request.path === '/backoffice/v1/verifications' ||
+      request.path === '/backoffice/v1/verification-renewals'
+    ) {
+      await routeVerification(route, request, fixture)
       return
     }
     if (request.path === '/backoffice/v1/access-events') {
@@ -1124,6 +1228,133 @@ async function routeAccessLog(
       .map(({ withheld_from_viewer: _withheld, ...row }) => row),
     withheld_from_you: matching.filter((event) => event.withheld_from_viewer === true).length,
   })
+}
+
+async function routeVerification(
+  route: Route,
+  request: MockRequest,
+  fixture: BackofficeFixture,
+): Promise<void> {
+  const verification = fixture.verification ?? { requests: [], renewals: [] }
+  fixture.verification = verification
+  if (verification.refusal) {
+    await fulfillProblem(route, verification.refusal.status, verification.refusal.code)
+    return
+  }
+  const now = Date.now()
+
+  if (request.method === 'GET' && request.path === '/backoffice/v1/verification-requests') {
+    await fulfill(route, 200, {
+      items: verification.requests
+        .filter((row) => row.status === 'pending')
+        .map(({ status: _status, ...row }) => row),
+    })
+    return
+  }
+
+  if (request.method === 'GET' && request.path === '/backoffice/v1/verification-renewals') {
+    await fulfill(route, 200, { items: verification.renewals })
+    return
+  }
+
+  if (request.method === 'POST' && request.path === '/backoffice/v1/verifications') {
+    const body = request.body as
+      | { request_id?: string; result?: string; method?: string; source_valid_to?: string | null }
+      | undefined
+    const target = verification.requests.find((row) => row.request_id === body?.request_id)
+    if (!target) {
+      await fulfillProblem(route, 404, 'not-found')
+      return
+    }
+    if (verification.nextDecisionDecidedElsewhere) {
+      verification.nextDecisionDecidedElsewhere = undefined
+      target.status = 'resolved'
+      await fulfillProblem(route, 409, 'conflict')
+      return
+    }
+    if (target.status !== 'pending') {
+      await fulfillProblem(route, 409, 'conflict')
+      return
+    }
+    if (!target.viewer_can_decide) {
+      await fulfillProblem(route, 403, 'forbidden')
+      return
+    }
+    const result = body?.result
+    if (result !== 'verified' && result !== 'rejected' && result !== 'unverifiable') {
+      await fulfillProblem(route, 422, 'validation-failed')
+      return
+    }
+    const sourceValidTo = body?.source_valid_to ? Date.parse(body.source_valid_to) : null
+    if (result === 'verified' && sourceValidTo !== null && sourceValidTo <= now) {
+      await fulfillProblem(route, 422, 'validation-failed')
+      return
+    }
+
+    target.status = 'resolved'
+    const decidedAt = new Date(now).toISOString()
+    const validTo =
+      result === 'verified'
+        ? new Date(
+            Math.min(now + 365 * 86_400_000, sourceValidTo ?? Number.POSITIVE_INFINITY),
+          ).toISOString()
+        : null
+    await fulfill(route, 201, {
+      request_id: target.request_id,
+      kind: target.kind,
+      status: 'resolved',
+      credential_id: target.credential_id,
+      created_at: target.requested_at,
+      resolved_at: decidedAt,
+      verification: {
+        id: nextAssignmentId(),
+        result,
+        method: body?.method ?? target.suggested_method,
+        decided_at: decidedAt,
+        valid_from: result === 'verified' ? decidedAt : null,
+        valid_to: validTo,
+      },
+    })
+    return
+  }
+
+  if (request.method === 'POST' && request.path === '/backoffice/v1/verification-renewals') {
+    const body = request.body as { credential_id?: string } | undefined
+    const index = verification.renewals.findIndex(
+      (row) => row.credential_id === body?.credential_id,
+    )
+    const due = index === -1 ? undefined : verification.renewals.splice(index, 1)[0]
+    if (!due) {
+      await fulfillProblem(route, 409, 'conflict')
+      return
+    }
+    const opened = verificationRequest({
+      kind: 'renewal',
+      credential_id: due.credential_id,
+      credential_type_code: due.credential_type_code,
+      credential_type_name: due.credential_type_name,
+      credential_name: due.credential_name,
+      issuer: due.issuer,
+      holder_person_id: due.holder_person_id,
+      holder_given_name: due.holder_given_name,
+      holder_family_name: due.holder_family_name,
+      previous_result: 'verified',
+      previous_valid_to: due.last_valid_to,
+    })
+    verification.requests.push(opened)
+    await fulfill(route, 201, {
+      request_id: opened.request_id,
+      kind: 'renewal',
+      status: 'pending',
+      credential_id: opened.credential_id,
+      created_at: opened.requested_at,
+      resolved_at: null,
+      verification: null,
+    })
+    return
+  }
+
+  await fulfillProblem(route, 404, 'not-found')
 }
 
 async function routeScopes(
