@@ -111,10 +111,22 @@
 [data-break-glass],
 [data-access-log],
 [data-credential-verification],
+[data-organization-directory],
 [data-support-person] {
   display: grid;
   gap: 24px;
   align-content: start;
+}
+
+[data-organization-directory-filters] {
+  display: grid;
+  gap: 12px;
+}
+
+/* An unclaimed organization exists but does not operate, so its row carries an
+   edge instead of sitting flush with the gyms that do. */
+[data-organization-row][data-status='unclaimed'] {
+  box-shadow: inset 3px 0 0 var(--color-warning, currentColor);
 }
 
 [data-support-search-form] {

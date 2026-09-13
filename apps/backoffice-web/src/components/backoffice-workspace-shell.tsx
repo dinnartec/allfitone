@@ -53,6 +53,7 @@ interface WorkspaceRoute {
 
 const ROUTES: readonly WorkspaceRoute[] = [
   { href: '/people', title: 'Personas', icon: 'people' },
+  { href: '/organizations', title: 'Gimnasios', icon: 'operation' },
   { href: '/access-log', title: 'Registro de accesos', icon: 'operation' },
   { href: '/verifications', title: 'Verificación de títulos', icon: 'people' },
   { href: '/break-glass', title: 'Acceso excepcional', icon: 'permissions' },

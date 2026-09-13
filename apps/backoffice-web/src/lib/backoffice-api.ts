@@ -16,6 +16,8 @@ export type CatalogDiscipline = AllfitV1Schemas['CatalogDiscipline']
 export type CatalogActivityType = AllfitV1Schemas['CatalogActivityType']
 export type ActivityTypeResultContract = AllfitV1Schemas['ActivityTypeResultContract']
 export type AccessEventPage = AllfitV1Schemas['AccessEventPage']
+export type BackofficeOrganizationSummary = AllfitV1Schemas['BackofficeOrganizationSummary']
+export type BackofficeOrganizationPage = AllfitV1Schemas['BackofficeOrganizationPage']
 export type CredentialVerificationRequest = AllfitV1Schemas['CredentialVerificationRequest']
 export type CredentialVerificationOutcome = AllfitV1Schemas['CredentialVerificationOutcome']
 export type CredentialVerificationDecisionCreate =
@@ -281,6 +283,19 @@ export const backofficeApi = {
       signal ? { signal } : {},
     ),
 
+  organizations: (
+    filters: {
+      q?: string | undefined
+      status?: string | undefined
+      cursor?: string | undefined
+    } = {},
+    signal?: AbortSignal,
+  ) =>
+    requestJson<BackofficeOrganizationPage>(
+      `/backoffice/v1/organizations${query(filters)}`,
+      signal ? { signal } : {},
+    ),
+
   scopeDefinitions: (signal?: AbortSignal) =>
     requestJson<{ items: ScopeDefinition[] }>(
       '/backoffice/v1/scope-definitions',
@@ -449,6 +464,7 @@ function backofficeOperation(path: string, method: string): ClientOperation {
   if (resolved === '/backoffice/v1/verifications') return 'backoffice.verification.decide'
   if (resolved === '/backoffice/v1/verification-renewals') return 'backoffice.verification.renewals'
   if (resolved === '/backoffice/v1/access-events') return 'backoffice.access_log.read'
+  if (resolved === '/backoffice/v1/organizations') return 'backoffice.organization.directory'
   if (resolved === '/backoffice/v1/scope-definitions') {
     return method === 'POST'
       ? 'backoffice.privacy.scope_definition_publish'
