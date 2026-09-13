@@ -15,7 +15,10 @@
  * silence and the figure comes out decapitated, which is the failure this module
  * exists to make impossible: all three keys, always.
  *
- * **`hair` is dropped.** Its two locks read as spikes on the head.
+ * **`hair` is dropped on the front only.** There it is two locks over the forehead and
+ * reads as spikes. On the back it *is* the back of the skull, and dropping it leaves
+ * the head open — a dark hollow with the ears sticking out of it, which is what it
+ * looked like until the figure got big enough to see.
  *
  * The zone vocabulary is **not** redefined here. `focus-form.ts` owns which muscles a
  * zone lights, which ones are inert, and what a selection means; this only says which
@@ -26,8 +29,10 @@ import type { BodyPart, Slug } from 'react-native-body-highlighter'
 
 import type { BodySide, BodySlug } from './focus-form'
 
-/** Two locks over the skull that read as spikes. Never drawn. */
-export const HIDDEN_SLUGS: readonly Slug[] = ['hair']
+/** What is not drawn, which is not the same on both faces. */
+export function hiddenFor(side: BodySide): readonly Slug[] {
+  return side === 'front' ? ['hair'] : []
+}
 
 export type PaintRole = 'lit' | 'resting' | 'inert'
 
@@ -53,14 +58,16 @@ export interface FigureGroup {
  */
 export function figureGroups(input: {
   readonly parts: readonly BodyPart[]
+  readonly side: BodySide
   readonly lit: readonly string[]
   readonly inert: readonly string[]
 }): readonly FigureGroup[] {
   const groups: FigureGroup[] = []
+  const hidden = hiddenFor(input.side)
 
   for (const part of input.parts) {
     const slug = part.slug
-    if (!slug || HIDDEN_SLUGS.includes(slug)) continue
+    if (!slug || hidden.includes(slug)) continue
 
     // All three keys. `head` has only `common`, and walking the pair would drop it.
     const paths = (['common', 'left', 'right'] as const).flatMap(

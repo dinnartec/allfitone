@@ -123,7 +123,7 @@ export const BodyFigure = memo(function BodyFigure({
   const ids = figureIds(side)
 
   const groups = useMemo(
-    () => figureGroups({ parts: assetFor(gender, side), lit, inert }),
+    () => figureGroups({ parts: assetFor(gender, side), side, lit, inert }),
     [gender, side, lit, inert],
   )
   const chosen = groups.filter((group) => group.role === 'lit')
