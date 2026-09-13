@@ -412,6 +412,27 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/backoffice/v1/organizations': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Read the organization directory
+     * @description Name, type, lifecycle state, active members and sites of every organization, searchable by display name. An `unclaimed` organization exists but does not operate: Allfit created it and its owner has not accepted yet.
+     *     The legal name is neither searched nor returned, because for an independent professional it is a person's name; the responsible party never leaves the database. `people_served` is null until service relationships exist — never zero, which would say the organization serves nobody.
+     */
+    get: operations['listBackofficeOrganizations']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/backoffice/v1/verification-requests': {
     parameters: {
       query?: never
@@ -1914,6 +1935,33 @@ export interface components {
     BreakGlassTier: 'standard' | 'restricted'
     /** @enum {string} */
     BreakGlassStatus: 'requested' | 'approved' | 'rejected' | 'closed' | 'expired'
+    /**
+     * @description `unclaimed` exists but does not operate: Allfit created it and its owner has not accepted yet. `cancelled` was never claimed. `closed` operated and ended.
+     * @enum {string}
+     */
+    OrganizationLifecycleStatus: 'unclaimed' | 'active' | 'closed' | 'cancelled'
+    /** @description An organization as the directory shows it. Nothing here identifies a person: no legal name and no responsible party. */
+    BackofficeOrganizationSummary: {
+      organization_id: components['schemas']['Uuid']
+      display_name: string
+      type_code: string
+      type_name: string
+      status: components['schemas']['OrganizationLifecycleStatus']
+      /** Format: date-time */
+      created_at: string
+      /** Format: date-time */
+      claimed_at: string | null
+      /** Format: date-time */
+      cancelled_at: string | null
+      active_member_count: number
+      site_count: number
+      /** @description Null until service relationships exist. Not zero, because zero would say the organization serves nobody. */
+      people_served: number | null
+    }
+    BackofficeOrganizationPage: {
+      data: components['schemas']['BackofficeOrganizationSummary'][]
+      page: components['schemas']['Page']
+    }
     /**
      * @description How a credential was checked. Documents, civil identity, health and a complete profile are never verifiable in V1, so no method exists for them.
      * @enum {string}
@@ -4354,6 +4402,9 @@ export interface components {
     BreakGlassStatus: components['schemas']['BreakGlassStatus']
     SupportOperationSource: components['schemas']['SupportOperationSourceKind']
     SupportOperationState: components['schemas']['SupportOperationState']
+    /** @description Part of an organization's display name, matched literally. At least two characters, so a search is a question rather than a way to page everything. */
+    OrganizationSearch: string
+    OrganizationLifecycleFilter: components['schemas']['OrganizationLifecycleStatus']
     /** @description The team member whose accesses are being reviewed. */
     AccessEventActor: components['schemas']['Uuid']
     /** @description The person whose data was accessed. */
@@ -5242,6 +5293,39 @@ export interface operations {
           'application/json': components['schemas']['SupportDeliveryCircuitList']
         }
       }
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listBackofficeOrganizations: {
+    parameters: {
+      query?: {
+        /** @description Part of an organization's display name, matched literally. At least two characters, so a search is a question rather than a way to page everything. */
+        q?: components['parameters']['OrganizationSearch']
+        status?: components['parameters']['OrganizationLifecycleFilter']
+        limit?: components['parameters']['Limit']
+        cursor?: components['parameters']['Cursor']
+      }
+      header: {
+        Origin: components['parameters']['Origin']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Organizations in name order */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['BackofficeOrganizationPage']
+        }
+      }
+      400: components['responses']['BadRequest']
       401: components['responses']['Unauthenticated']
       403: components['responses']['Forbidden']
       503: components['responses']['UpstreamUnavailable']

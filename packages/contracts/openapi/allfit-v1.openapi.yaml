@@ -39,6 +39,10 @@ tags:
     description: >-
       Verifying professional credentials against their official registry or issuer,
       under a platform duty of its own.
+  - name: Backoffice Organizations
+    description: >-
+      The organization directory Allfit's team uses to reach a gym, and later its
+      lifecycle. Organizations only: nothing here searches or returns a person.
   - name: Backoffice Support
     description: >-
       The minimised operational projection Allfit staff read to resolve a case.
@@ -1081,6 +1085,49 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SupportDeliveryCircuitList'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/organizations:
+    get:
+      tags: [Backoffice Organizations]
+      operationId: listBackofficeOrganizations
+      x-allfit-operation: NEW-SUP-ORG-SEARCH
+      x-allfit-cache: no-store
+      summary: Read the organization directory
+      description: >-
+        Name, type, lifecycle state, active members and sites of every organization,
+        searchable by display name. An `unclaimed` organization exists but does not
+        operate: Allfit created it and its owner has not accepted yet.
+
+        The legal name is neither searched nor returned, because for an independent
+        professional it is a person's name; the responsible party never leaves the
+        database. `people_served` is null until service relationships exist —
+        never zero, which would say the organization serves nobody.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/OrganizationSearch'
+        - $ref: '#/components/parameters/OrganizationLifecycleFilter'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Organizations in name order
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackofficeOrganizationPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthenticated'
         '403':
@@ -4761,6 +4808,23 @@ components:
       required: false
       schema:
         $ref: '#/components/schemas/SupportOperationState'
+    OrganizationSearch:
+      name: q
+      in: query
+      required: false
+      description: >-
+        Part of an organization's display name, matched literally. At least two
+        characters, so a search is a question rather than a way to page everything.
+      schema:
+        type: string
+        minLength: 2
+        maxLength: 120
+    OrganizationLifecycleFilter:
+      name: status
+      in: query
+      required: false
+      schema:
+        $ref: '#/components/schemas/OrganizationLifecycleStatus'
     AccessEventActor:
       name: actor_person_id
       in: query
@@ -5502,6 +5566,74 @@ components:
     BreakGlassStatus:
       type: string
       enum: [requested, approved, rejected, closed, expired]
+    OrganizationLifecycleStatus:
+      type: string
+      description: >-
+        `unclaimed` exists but does not operate: Allfit created it and its owner has
+        not accepted yet. `cancelled` was never claimed. `closed` operated and
+        ended.
+      enum: [unclaimed, active, closed, cancelled]
+    BackofficeOrganizationSummary:
+      type: object
+      additionalProperties: false
+      description: >-
+        An organization as the directory shows it. Nothing here identifies a person:
+        no legal name and no responsible party.
+      required:
+        - organization_id
+        - display_name
+        - type_code
+        - type_name
+        - status
+        - created_at
+        - claimed_at
+        - cancelled_at
+        - active_member_count
+        - site_count
+        - people_served
+      properties:
+        organization_id:
+          $ref: '#/components/schemas/Uuid'
+        display_name:
+          type: string
+        type_code:
+          type: string
+        type_name:
+          type: string
+        status:
+          $ref: '#/components/schemas/OrganizationLifecycleStatus'
+        created_at:
+          type: string
+          format: date-time
+        claimed_at:
+          type: [string, 'null']
+          format: date-time
+        cancelled_at:
+          type: [string, 'null']
+          format: date-time
+        active_member_count:
+          type: integer
+          minimum: 0
+        site_count:
+          type: integer
+          minimum: 0
+        people_served:
+          type: [integer, 'null']
+          minimum: 0
+          description: >-
+            Null until service relationships exist. Not zero, because zero would say
+            the organization serves nobody.
+    BackofficeOrganizationPage:
+      type: object
+      additionalProperties: false
+      required: [data, page]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/BackofficeOrganizationSummary'
+        page:
+          $ref: '#/components/schemas/Page'
     CredentialVerificationMethod:
       type: string
       description: >-

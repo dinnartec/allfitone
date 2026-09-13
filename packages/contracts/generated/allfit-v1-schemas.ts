@@ -764,6 +764,84 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
     },
     description: 'Enrollment secrets are present only for a first-factor attempt.',
   },
+  BackofficeOrganizationPage: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['data', 'page'],
+    properties: {
+      data: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/BackofficeOrganizationSummary',
+        },
+      },
+      page: {
+        $ref: '#/components/schemas/Page',
+      },
+    },
+  },
+  BackofficeOrganizationSummary: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      'An organization as the directory shows it. Nothing here identifies a person: no legal name and no responsible party.',
+    required: [
+      'organization_id',
+      'display_name',
+      'type_code',
+      'type_name',
+      'status',
+      'created_at',
+      'claimed_at',
+      'cancelled_at',
+      'active_member_count',
+      'site_count',
+      'people_served',
+    ],
+    properties: {
+      organization_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      display_name: {
+        type: 'string',
+      },
+      type_code: {
+        type: 'string',
+      },
+      type_name: {
+        type: 'string',
+      },
+      status: {
+        $ref: '#/components/schemas/OrganizationLifecycleStatus',
+      },
+      created_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      claimed_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      cancelled_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      active_member_count: {
+        type: 'integer',
+        minimum: 0,
+      },
+      site_count: {
+        type: 'integer',
+        minimum: 0,
+      },
+      people_served: {
+        type: ['integer', 'null'],
+        minimum: 0,
+        description:
+          'Null until service relationships exist. Not zero, because zero would say the organization serves nobody.',
+      },
+    },
+  },
   BackofficePasswordRequest: {
     type: 'object',
     additionalProperties: false,
@@ -2858,6 +2936,12 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         },
       },
     },
+  },
+  OrganizationLifecycleStatus: {
+    type: 'string',
+    description:
+      '`unclaimed` exists but does not operate: Allfit created it and its owner has not accepted yet. `cancelled` was never claimed. `closed` operated and ended.',
+    enum: ['unclaimed', 'active', 'closed', 'cancelled'],
   },
   OrganizationMembershipListItem: {
     type: 'object',

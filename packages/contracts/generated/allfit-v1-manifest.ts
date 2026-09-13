@@ -84,6 +84,13 @@ export const allfitV1ContractManifest = {
     },
     {
       method: 'GET',
+      path: '/backoffice/v1/organizations',
+      operationId: 'listBackofficeOrganizations',
+      allfitOperation: 'NEW-SUP-ORG-SEARCH',
+      responses: ['200', '400', '401', '403', '503'],
+    },
+    {
+      method: 'GET',
       path: '/backoffice/v1/platform/duty-assignments',
       operationId: 'listBackofficePlatformDuties',
       allfitOperation: 'OP-SUP-011',
