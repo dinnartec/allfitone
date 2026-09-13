@@ -17,6 +17,7 @@ export interface BackofficeFixture {
   diagnosis?: DiagnosisFixture
   scopes?: ScopeFixture
   accessLog?: AccessLogFixture
+  organizationDirectory?: OrganizationDirectoryFixture
   verification?: VerificationFixture
   breakGlass?: BreakGlassFixture
   requests: MockRequest[]
@@ -245,6 +246,65 @@ export function accessEvent(overrides: Partial<AccessLogEventFixture> = {}): Acc
     access_mode: 'organization_operational',
     occurred_at: new Date(Date.now() - 3_600_000).toISOString(),
     withheld_from_viewer: false,
+    ...overrides,
+  }
+}
+
+/**
+ * The organization directory.
+ *
+ * The mock keeps the closed read's rules rather than the screen's expectations: a
+ * search shorter than two characters or an unknown state is refused, the search
+ * matches the display name only and literally, and pages follow the name order
+ * through an opaque cursor. Each organization carries a legal name so a test can
+ * prove it is neither searched nor returned.
+ */
+export interface OrganizationDirectoryFixture {
+  refusal?: { status: number; code: string }
+  pageSize?: number
+  organizations: DirectoryOrganizationFixture[]
+}
+
+export type DirectoryOrganizationStatus = 'unclaimed' | 'active' | 'closed' | 'cancelled'
+
+export interface DirectoryOrganizationFixture {
+  organization_id: string
+  display_name: string
+  legal_name: string
+  type_code: string
+  type_name: string
+  status: DirectoryOrganizationStatus
+  created_at: string
+  claimed_at: string | null
+  cancelled_at: string | null
+  active_member_count: number
+  site_count: number
+  people_served: number | null
+}
+
+const DIRECTORY_STATUSES: readonly string[] = ['unclaimed', 'active', 'closed', 'cancelled']
+let directorySequence = 0
+
+/** The lifecycle dates follow the state, the way the table's check constraint requires. */
+export function directoryOrganization(
+  overrides: Partial<DirectoryOrganizationFixture> = {},
+): DirectoryOrganizationFixture {
+  directorySequence += 1
+  const status = overrides.status ?? 'active'
+  const createdAt = new Date(Date.now() - 30 * 86_400_000).toISOString()
+  return {
+    organization_id: `019a6000-0000-7000-8000-${String(directorySequence).padStart(12, '0')}`,
+    display_name: `Gimnasio ${directorySequence}`,
+    legal_name: `Razón social ${directorySequence} S.A.S.`,
+    type_code: 'gym',
+    type_name: 'Gimnasio',
+    status,
+    created_at: createdAt,
+    claimed_at: status === 'active' || status === 'closed' ? createdAt : null,
+    cancelled_at: status === 'cancelled' ? new Date(Date.now() - 86_400_000).toISOString() : null,
+    active_member_count: status === 'active' ? 1 : 0,
+    site_count: 1,
+    people_served: null,
     ...overrides,
   }
 }
@@ -739,6 +799,10 @@ export async function mockBackofficeApi(
       await routeAccessLog(route, request, fixture)
       return
     }
+    if (request.path === '/backoffice/v1/organizations') {
+      await routeOrganizationDirectory(route, request, fixture)
+      return
+    }
     if (request.path.startsWith('/backoffice/v1/break-glass/')) {
       await routeBreakGlass(route, request, fixture)
       return
@@ -1227,6 +1291,87 @@ async function routeAccessLog(
       .filter((event) => event.withheld_from_viewer !== true)
       .map(({ withheld_from_viewer: _withheld, ...row }) => row),
     withheld_from_you: matching.filter((event) => event.withheld_from_viewer === true).length,
+  })
+}
+
+async function routeOrganizationDirectory(
+  route: Route,
+  request: MockRequest,
+  fixture: BackofficeFixture,
+): Promise<void> {
+  const directory = fixture.organizationDirectory ?? { organizations: [] }
+  fixture.organizationDirectory = directory
+  if (directory.refusal) {
+    await fulfillProblem(route, directory.refusal.status, directory.refusal.code)
+    return
+  }
+  if (request.method !== 'GET') {
+    await fulfillProblem(route, 404, 'not-found')
+    return
+  }
+
+  const parameters = new URLSearchParams(request.query)
+  const search = parameters.get('q')?.trim() ?? null
+  const status = parameters.get('status')
+  const cursor = parameters.get('cursor')
+  if (search !== null && (search.length < 2 || search.length > 120)) {
+    await fulfillProblem(route, 400, 'invalid-request')
+    return
+  }
+  if (status !== null && !DIRECTORY_STATUSES.includes(status)) {
+    await fulfillProblem(route, 400, 'invalid-request')
+    return
+  }
+  let after: { name: string; id: string } | undefined
+  if (cursor !== null) {
+    try {
+      after = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')) as {
+        name: string
+        id: string
+      }
+    } catch {
+      await fulfillProblem(route, 400, 'invalid-request')
+      return
+    }
+  }
+
+  const sortKey = (row: DirectoryOrganizationFixture) => row.display_name.toLowerCase()
+  const ordered = directory.organizations
+    .filter(
+      (row) =>
+        (search === null || sortKey(row).includes(search.toLowerCase())) &&
+        (status === null || row.status === status),
+    )
+    .sort((left, right) =>
+      sortKey(left) === sortKey(right)
+        ? left.organization_id.localeCompare(right.organization_id)
+        : sortKey(left) < sortKey(right)
+          ? -1
+          : 1,
+    )
+    .filter(
+      (row) =>
+        after === undefined ||
+        sortKey(row) > after.name.toLowerCase() ||
+        (sortKey(row) === after.name.toLowerCase() && row.organization_id > after.id),
+    )
+
+  const size = directory.pageSize ?? 25
+  const visible = ordered.slice(0, size)
+  const last = visible.at(-1)
+  const hasMore = ordered.length > size
+  await fulfill(route, 200, {
+    data: visible.map(({ legal_name: _legalName, ...row }) => row),
+    page: {
+      has_more: hasMore,
+      next_cursor:
+        hasMore && last
+          ? Buffer.from(
+              JSON.stringify({ name: last.display_name, id: last.organization_id }),
+              'utf8',
+            ).toString('base64url')
+          : null,
+    },
   })
 }
 
