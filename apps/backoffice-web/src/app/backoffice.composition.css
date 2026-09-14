@@ -133,6 +133,34 @@
   justify-items: start;
 }
 
+[data-attention-body] p {
+  margin: 0;
+}
+
+/* Each failure reads top to bottom: what, how often, last error. A table scrolled
+   the count out of view inside a card this narrow. */
+[data-attention-list] {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  width: 100%;
+}
+
+[data-attention-list] li {
+  display: grid;
+  gap: 2px;
+  padding-inline-start: 12px;
+  box-shadow: inset 2px 0 0 var(--color-warning, currentColor);
+  overflow-wrap: anywhere;
+}
+
+[data-attention-list] code {
+  font-family: var(--afo-font-family-mono, monospace);
+  font-size: var(--afo-font-size-xs);
+}
+
 [data-organization-directory-filters],
 [data-handover-form] {
   display: grid;
@@ -164,11 +192,14 @@
 /* The same treatment as the registry link: a destination is a link, with a touch
    target of its own. */
 [data-handover-link],
-[data-organization-create-link] {
+[data-organization-create-link],
+[data-attention-link] {
   display: inline-flex;
   min-height: 44px;
   width: fit-content;
   align-items: center;
+  /* The browser's default link blue is unreadable on the dark workspace. */
+  color: var(--afo-color-text-accent, currentColor);
   font-weight: var(--afo-font-weight-semibold);
   text-decoration: underline;
 }

@@ -89,7 +89,9 @@ test('support follows a notice to the gyms nobody claimed, already filtered', as
 
   const failures = page.locator('[data-attention-notice="failures"]')
   await expect(failures.locator('[data-attention-failure]')).toHaveCount(1)
-  await expect(failures.getByRole('cell', { name: '5 fallas en 2 avisos' })).toBeVisible()
+  await expect(
+    failures.locator('[data-attention-failure]').getByText('5 fallas en 2 avisos'),
+  ).toBeVisible()
   await expect(failures.locator('[data-attention-circuits]')).toContainText(
     'identity.invitation_issued.v1',
   )

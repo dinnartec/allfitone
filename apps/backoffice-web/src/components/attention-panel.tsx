@@ -9,6 +9,10 @@
  * A notice the operator's duties do not resolve arrives `withheld` and is drawn
  * as withheld — never as a zero, which would tell the operator to relax about
  * something nobody counted for them. Payments are not modelled yet and say so.
+ *
+ * Repeated failures are a list rather than a table: inside a notice card a table
+ * scrolled its count and last error out of view, and those are what an operator
+ * reads first.
  */
 
 import { Alert, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
@@ -21,14 +25,6 @@ import {
   CardTitle,
 } from '@allfitone/react/components/card'
 import { Spinner } from '@allfitone/react/components/spinner'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@allfitone/react/components/table'
 import Link from 'next/link'
 import { useEffect, useState, type ReactNode } from 'react'
 
@@ -102,7 +98,7 @@ export function AttentionPanel() {
           </CardTitle>
           <CardDescription>
             Contadores, nunca expedientes. Cada aviso lleva a la pantalla donde se resuelve, y esa
-            pantalla vuelve a comprobar tu deber. Leído el {formatInstant(panel.generated_at)}.
+            pantalla vuelve a comprobar tu deber. Leído: {formatInstant(panel.generated_at)}
           </CardDescription>
         </CardHeader>
       </Card>
@@ -129,7 +125,7 @@ export function AttentionPanel() {
         >
           {verifications.oldest_requested_at ? (
             <p data-attention-detail>
-              La más antigua espera desde el {formatInstant(verifications.oldest_requested_at)}.
+              La más antigua espera desde: {formatInstant(verifications.oldest_requested_at)}
             </p>
           ) : null}
         </Notice>
@@ -151,7 +147,7 @@ export function AttentionPanel() {
         >
           {unclaimed.oldest_created_at ? (
             <p data-attention-detail>
-              El más antiguo se creó el {formatInstant(unclaimed.oldest_created_at)}.
+              El más antiguo se creó: {formatInstant(unclaimed.oldest_created_at)}
             </p>
           ) : null}
         </Notice>
@@ -169,44 +165,37 @@ export function AttentionPanel() {
           }
         >
           {failures.open_circuits && failures.open_circuits.length > 0 ? (
-            <ul data-attention-circuits>
+            <ul data-attention-list data-attention-circuits>
               {failures.open_circuits.map((circuit) => (
                 <li key={circuit.event_type}>
-                  <code>{circuit.event_type}</code>{' '}
-                  {circuit.state === 'open' ? 'interrumpido' : 'probando de nuevo'} ·{' '}
-                  {circuit.failure_count} fallas
-                  {circuit.opened_until ? ` · reabre ${formatInstant(circuit.opened_until)}` : ''}
+                  <code>{circuit.event_type}</code>
+                  <span>
+                    Canal {circuit.state === 'open' ? 'interrumpido' : 'probando de nuevo'} ·{' '}
+                    {circuit.failure_count} fallas
+                  </span>
+                  {circuit.opened_until ? (
+                    <span>Reabre: {formatInstant(circuit.opened_until)}</span>
+                  ) : null}
                 </li>
               ))}
             </ul>
           ) : null}
           {failures.groups && failures.groups.length > 0 ? (
-            <Table scrollAreaLabel="Errores que se repiten">
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Tipo</TableHead>
-                  <TableHead>Qué</TableHead>
-                  <TableHead>Cuánto</TableHead>
-                  <TableHead>Último error</TableHead>
-                  <TableHead>Última vez</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {failures.groups.map((group) => (
-                  <TableRow key={`${group.source}-${group.label}`} data-attention-failure>
-                    <TableCell>{sourceLabel(group.source)}</TableCell>
-                    <TableCell>
-                      <code>{group.label}</code>
-                    </TableCell>
-                    <TableCell>{groupLine(group)}</TableCell>
-                    <TableCell>
-                      {group.last_error_code ? <code>{group.last_error_code}</code> : '—'}
-                    </TableCell>
-                    <TableCell>{formatInstant(group.latest_occurred_at)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            <ul data-attention-list aria-label="Errores que se repiten">
+              {failures.groups.map((group) => (
+                <li key={`${group.source}-${group.label}`} data-attention-failure>
+                  <code>{group.label}</code>
+                  <span>
+                    {sourceLabel(group.source)} · {groupLine(group)}
+                  </span>
+                  <span>
+                    Último error:{' '}
+                    {group.last_error_code ? <code>{group.last_error_code}</code> : '—'} ·{' '}
+                    {formatInstant(group.latest_occurred_at)}
+                  </span>
+                </li>
+              ))}
+            </ul>
           ) : null}
         </Notice>
       </div>
