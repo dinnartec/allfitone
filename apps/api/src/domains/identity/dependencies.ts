@@ -43,6 +43,18 @@ import {
   createSessionTokenVaultFromEnv,
 } from './infrastructure/index.js'
 import { createCredentialVerificationDatabase } from './infrastructure/credential-verification.js'
+import {
+  createStudioOwnershipInvitationService,
+  type StudioOwnershipInvitationService,
+} from './application/ownership-invitations.js'
+import { createOwnershipInvitationDatabase } from './infrastructure/ownership-invitations.js'
+
+let cachedOwnership: StudioOwnershipInvitationService | undefined
+
+export function studioOwnershipInvitationService(): StudioOwnershipInvitationService {
+  cachedOwnership ??= createStudioOwnershipInvitationService(createOwnershipInvitationDatabase())
+  return cachedOwnership
+}
 
 let cached: StudioSessionService | undefined
 let cachedOnboarding: OnboardingService | undefined
