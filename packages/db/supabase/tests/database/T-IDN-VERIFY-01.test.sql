@@ -619,9 +619,11 @@ insert into identity.professional_credential_verifications (
    where request.professional_credential_id = (select id from degree)),
   '019aa000-0000-7000-8000-000000000003', 'professional_credential.issuer.v1',
   'issuer_confirmation', 'Universidad Nacional', 'CO', 'REG-2025-01', 'vigente',
-  clock_timestamp() - interval '13 months', decode(repeat('ee', 32), 'hex'), 'verified',
-  clock_timestamp() - interval '13 months', clock_timestamp() - interval '13 months',
-  clock_timestamp() - interval '1 month'
+  statement_timestamp() - interval '13 months', decode(repeat('ee', 32), 'hex'), 'verified',
+  statement_timestamp() - interval '13 months', statement_timestamp() - interval '13 months',
+  -- One clock for the whole row, with margin: separate clock readings put valid_to
+  -- microseconds past decided_at + 12 months and failed the validity check at random.
+  statement_timestamp() - interval '2 months'
 );
 
 select set_config('app.actor_kind', 'support', true),
