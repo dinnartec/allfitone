@@ -285,7 +285,11 @@ test('the directory leads to creating a gym and to an unclaimed gym’s handover
 
   await page.goto('/organizations')
   await expect(page.getByRole('link', { name: 'Crear un gimnasio para una venta' })).toBeVisible()
-  await expect(page.getByRole('link', { name: 'Gimnasio Operando' })).toHaveCount(0)
+  // An operating gym opens on its file, never on a handover it does not have.
+  await expect(page.getByRole('link', { name: 'Gimnasio Operando' })).toHaveAttribute(
+    'href',
+    /^\/organizations\/[0-9a-f-]{36}$/,
+  )
   await page.getByRole('link', { name: 'Gimnasio Nuevo' }).click()
 
   await expect(page).toHaveURL(`/organizations/${record.organization_id}/handover`)

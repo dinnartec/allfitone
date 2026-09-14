@@ -19,6 +19,7 @@ export interface BackofficeFixture {
   accessLog?: AccessLogFixture
   organizationDirectory?: OrganizationDirectoryFixture
   organizationHandover?: OrganizationHandoverFixture
+  organizationFiles?: OrganizationFileFixture
   verification?: VerificationFixture
   breakGlass?: BreakGlassFixture
   requests: MockRequest[]
@@ -306,6 +307,86 @@ export function directoryOrganization(
     active_member_count: status === 'active' ? 1 : 0,
     site_count: 1,
     people_served: null,
+    ...overrides,
+  }
+}
+
+/**
+ * Gym files.
+ *
+ * The mock returns the projection as the database closes it: identifiers and roles,
+ * never names, a natural person's address withheld, and what has no table yet as
+ * `not_modelled`. It refuses a query it cannot read rather than ignoring it.
+ */
+export interface OrganizationFileFixture {
+  refusal?: { status: number; code: string }
+  files: OrganizationFileRecordFixture[]
+}
+
+export interface OrganizationFileRecordFixture {
+  organization: {
+    organization_id: string
+    display_name: string
+    type_code: 'professional_practice' | 'gym' | 'studio'
+    type_name: string
+    status: 'unclaimed' | 'active' | 'closed' | 'cancelled'
+    party_kind: 'natural_person' | 'legal_entity'
+    legal_name: string | null
+    created_at: string
+    claimed_at: string | null
+    cancelled_at: string | null
+  }
+  owner: { person_id: string; membership_id: string; since: string } | null
+  team: Array<{
+    membership_id: string
+    person_id: string
+    roles: Array<'owner' | 'admin' | 'coach' | 'staff'>
+    joined_at: string
+  }>
+  team_counts: { active: number; terminated: number }
+  team_truncated: boolean
+  sites: Array<{
+    site_id: string
+    name: string
+    address: string | null
+    address_withheld: boolean
+    status: 'active' | 'inactive'
+  }>
+  people_served: number | null
+  plans_availability: 'not_modelled'
+  payment_method_availability: 'not_modelled'
+  premium_availability: 'not_modelled'
+}
+
+let fileSequence = 0
+
+export function organizationFileRecord(
+  overrides: Partial<OrganizationFileRecordFixture> = {},
+): OrganizationFileRecordFixture {
+  fileSequence += 1
+  const suffix = String(fileSequence).padStart(12, '0')
+  return {
+    organization: {
+      organization_id: `019a9200-0000-7000-8000-${suffix}`,
+      display_name: `Ficha Norte ${fileSequence}`,
+      type_code: 'gym',
+      type_name: 'Gimnasio',
+      status: 'active',
+      party_kind: 'legal_entity',
+      legal_name: 'Norte Fitness SAS',
+      created_at: '2026-06-01T12:00:00.000Z',
+      claimed_at: '2026-06-01T12:00:00.000Z',
+      cancelled_at: null,
+    },
+    owner: null,
+    team: [],
+    team_counts: { active: 0, terminated: 0 },
+    team_truncated: false,
+    sites: [],
+    people_served: null,
+    plans_availability: 'not_modelled',
+    payment_method_availability: 'not_modelled',
+    premium_availability: 'not_modelled',
     ...overrides,
   }
 }
@@ -868,6 +949,10 @@ export async function mockBackofficeApi(
     }
     if (request.path === '/backoffice/v1/access-events') {
       await routeAccessLog(route, request, fixture)
+      return
+    }
+    if (request.method === 'GET' && /^\/backoffice\/v1\/organizations\/[^/]+$/.test(request.path)) {
+      await routeOrganizationFile(route, request, fixture)
       return
     }
     if (request.path === '/backoffice/v1/organizations' && request.method === 'GET') {
@@ -1453,6 +1538,30 @@ async function routeOrganizationDirectory(
 function maskedContact(email: string): string {
   const [local = '', domain = ''] = email.split('@')
   return `${local.slice(0, 1)}***@${domain}`
+}
+
+async function routeOrganizationFile(
+  route: Route,
+  request: MockRequest,
+  fixture: BackofficeFixture,
+): Promise<void> {
+  const state = fixture.organizationFiles ?? { files: [] }
+  fixture.organizationFiles = state
+  if (state.refusal) {
+    await fulfillProblem(route, state.refusal.status, state.refusal.code)
+    return
+  }
+  if (request.query !== '') {
+    await fulfillProblem(route, 400, 'invalid-request')
+    return
+  }
+  const organizationId = request.path.split('/').filter(Boolean)[3]
+  const record = state.files.find((file) => file.organization.organization_id === organizationId)
+  if (!record) {
+    await fulfillProblem(route, 404, 'not-found')
+    return
+  }
+  await fulfill(route, 200, record)
 }
 
 async function routeOrganizationHandover(
