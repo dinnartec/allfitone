@@ -257,18 +257,18 @@ export function OrganizationDirectory() {
                       data-status={organization.status}
                     >
                       <TableCell>
-                        {/* Only a gym Allfit created has a handover to open. */}
-                        {organization.status === 'unclaimed' ||
-                        organization.status === 'cancelled' ? (
-                          <Link
-                            href={`/organizations/${organization.organization_id}/handover`}
-                            data-handover-link
-                          >
-                            {organization.display_name}
-                          </Link>
-                        ) : (
-                          organization.display_name
-                        )}
+                        {/* A gym nobody has claimed opens on its handover; any other on its file. */}
+                        <Link
+                          href={
+                            organization.status === 'unclaimed' ||
+                            organization.status === 'cancelled'
+                              ? `/organizations/${organization.organization_id}/handover`
+                              : `/organizations/${organization.organization_id}`
+                          }
+                          data-handover-link
+                        >
+                          {organization.display_name}
+                        </Link>
                       </TableCell>
                       <TableCell>{organization.type_name}</TableCell>
                       <TableCell>

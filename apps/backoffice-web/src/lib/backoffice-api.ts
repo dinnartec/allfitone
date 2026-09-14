@@ -19,6 +19,7 @@ export type AccessEventPage = AllfitV1Schemas['AccessEventPage']
 export type BackofficeOrganizationSummary = AllfitV1Schemas['BackofficeOrganizationSummary']
 export type BackofficeOrganizationPage = AllfitV1Schemas['BackofficeOrganizationPage']
 export type OrganizationHandover = AllfitV1Schemas['OrganizationHandover']
+export type BackofficeOrganizationFile = AllfitV1Schemas['BackofficeOrganizationFile']
 export type OrganizationHandoverCreate = AllfitV1Schemas['OrganizationHandoverCreate']
 export type CredentialVerificationRequest = AllfitV1Schemas['CredentialVerificationRequest']
 export type CredentialVerificationOutcome = AllfitV1Schemas['CredentialVerificationOutcome']
@@ -305,6 +306,12 @@ export const backofficeApi = {
       body: JSON.stringify(body),
     }),
 
+  organizationFile: (organizationId: string, signal?: AbortSignal) =>
+    requestJson<BackofficeOrganizationFile>(
+      `/backoffice/v1/organizations/${organizationId}`,
+      signal ? { signal } : {},
+    ),
+
   organizationHandover: (organizationId: string, signal?: AbortSignal) =>
     requestJson<OrganizationHandover>(
       `/backoffice/v1/organizations/${organizationId}/handover`,
@@ -519,6 +526,7 @@ function organizationOperation(route: string, method: string): ClientOperation |
       ? 'backoffice.organization.handover_create'
       : 'backoffice.organization.directory'
   }
+  if (segments.length === 4) return 'backoffice.organization.file'
   if (segments[4] === 'cancellation') return 'backoffice.organization.handover_cancel'
   if (segments[4] !== 'handover') return undefined
   return segments[5] === 'resends'
