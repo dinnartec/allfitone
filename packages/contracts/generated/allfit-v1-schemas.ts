@@ -764,6 +764,181 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
     },
     description: 'Enrollment secrets are present only for a first-factor attempt.',
   },
+  BackofficeOrganizationFile: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'organization',
+      'owner',
+      'team',
+      'team_counts',
+      'team_truncated',
+      'sites',
+      'people_served',
+      'plans_availability',
+      'payment_method_availability',
+      'premium_availability',
+    ],
+    properties: {
+      organization: {
+        type: 'object',
+        additionalProperties: false,
+        required: [
+          'organization_id',
+          'display_name',
+          'type_code',
+          'type_name',
+          'status',
+          'party_kind',
+          'legal_name',
+          'created_at',
+          'claimed_at',
+          'cancelled_at',
+        ],
+        properties: {
+          organization_id: {
+            $ref: '#/components/schemas/Uuid',
+          },
+          display_name: {
+            type: 'string',
+          },
+          type_code: {
+            $ref: '#/components/schemas/OrganizationTypeCode',
+          },
+          type_name: {
+            type: 'string',
+          },
+          status: {
+            $ref: '#/components/schemas/OrganizationLifecycleStatus',
+          },
+          party_kind: {
+            $ref: '#/components/schemas/OrganizationPartyKind',
+          },
+          legal_name: {
+            type: ['string', 'null'],
+            description: "A company's legal name. Always null for a natural person.",
+          },
+          created_at: {
+            type: 'string',
+            format: 'date-time',
+          },
+          claimed_at: {
+            type: ['string', 'null'],
+            format: 'date-time',
+          },
+          cancelled_at: {
+            type: ['string', 'null'],
+            format: 'date-time',
+          },
+        },
+      },
+      owner: {
+        type: ['object', 'null'],
+        additionalProperties: false,
+        required: ['person_id', 'membership_id', 'since'],
+        properties: {
+          person_id: {
+            $ref: '#/components/schemas/Uuid',
+          },
+          membership_id: {
+            $ref: '#/components/schemas/Uuid',
+          },
+          since: {
+            type: 'string',
+            format: 'date-time',
+          },
+        },
+      },
+      team: {
+        type: 'array',
+        maxItems: 200,
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['membership_id', 'person_id', 'roles', 'joined_at'],
+          properties: {
+            membership_id: {
+              $ref: '#/components/schemas/Uuid',
+            },
+            person_id: {
+              $ref: '#/components/schemas/Uuid',
+            },
+            roles: {
+              type: 'array',
+              items: {
+                type: 'string',
+                enum: ['owner', 'admin', 'coach', 'staff'],
+              },
+            },
+            joined_at: {
+              type: 'string',
+              format: 'date-time',
+            },
+          },
+        },
+      },
+      team_counts: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['active', 'terminated'],
+        properties: {
+          active: {
+            type: 'integer',
+            minimum: 0,
+          },
+          terminated: {
+            type: 'integer',
+            minimum: 0,
+          },
+        },
+      },
+      team_truncated: {
+        type: 'boolean',
+        description: 'True when the team has more active members than the file lists.',
+      },
+      sites: {
+        type: 'array',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['site_id', 'name', 'address', 'address_withheld', 'status'],
+          properties: {
+            site_id: {
+              $ref: '#/components/schemas/Uuid',
+            },
+            name: {
+              type: 'string',
+            },
+            address: {
+              type: ['string', 'null'],
+            },
+            address_withheld: {
+              type: 'boolean',
+              description: "A natural person's address is withheld, because it can be their home.",
+            },
+            status: {
+              type: 'string',
+              enum: ['active', 'inactive'],
+            },
+          },
+        },
+      },
+      people_served: {
+        type: ['integer', 'null'],
+        minimum: 0,
+        description: 'Null until service relationships exist. Never zero in their place.',
+      },
+      plans_availability: {
+        $ref: '#/components/schemas/ModelAvailability',
+      },
+      payment_method_availability: {
+        $ref: '#/components/schemas/ModelAvailability',
+      },
+      premium_availability: {
+        $ref: '#/components/schemas/ModelAvailability',
+      },
+    },
+  },
   BackofficeOrganizationPage: {
     type: 'object',
     additionalProperties: false,
@@ -2001,6 +2176,12 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         enum: ['left', 'right', 'bilateral', 'not_applicable'],
       },
     },
+  },
+  ModelAvailability: {
+    type: 'string',
+    description:
+      '`not_modelled` means the platform has no table for this yet. It is a fact about Allfit, never about the organization or the person.',
+    enum: ['not_modelled'],
   },
   NutrientCode: {
     type: 'string',

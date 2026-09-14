@@ -438,6 +438,27 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/backoffice/v1/organizations/{organizationId}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Read a gym's file
+     * @description `HU-BO-013`: its data, its owner, its sites and its team. Ordinary support reads identifiers, states, dates and counters, so the owner and the team are person identifiers with their roles, never names or contacts, and the responsible party of an independent professional is never named.
+     *     Every active member the file returns is recorded in the access log before the file is returned. A natural person's site address is withheld, because it can be their home. People served, plans, the payment method and Premium have no tables yet and say `not_modelled` instead of an answer.
+     */
+    get: operations['readBackofficeOrganizationFile']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/backoffice/v1/organizations/{organizationId}/handover': {
     parameters: {
       query?: never
@@ -2066,6 +2087,62 @@ export interface components {
     BackofficeOrganizationPage: {
       data: components['schemas']['BackofficeOrganizationSummary'][]
       page: components['schemas']['Page']
+    }
+    /**
+     * @description `not_modelled` means the platform has no table for this yet. It is a fact about Allfit, never about the organization or the person.
+     * @enum {string}
+     */
+    ModelAvailability: 'not_modelled'
+    BackofficeOrganizationFile: {
+      organization: {
+        organization_id: components['schemas']['Uuid']
+        display_name: string
+        type_code: components['schemas']['OrganizationTypeCode']
+        type_name: string
+        status: components['schemas']['OrganizationLifecycleStatus']
+        party_kind: components['schemas']['OrganizationPartyKind']
+        /** @description A company's legal name. Always null for a natural person. */
+        legal_name: string | null
+        /** Format: date-time */
+        created_at: string
+        /** Format: date-time */
+        claimed_at: string | null
+        /** Format: date-time */
+        cancelled_at: string | null
+      }
+      owner: {
+        person_id: components['schemas']['Uuid']
+        membership_id: components['schemas']['Uuid']
+        /** Format: date-time */
+        since: string
+      } | null
+      team: {
+        membership_id: components['schemas']['Uuid']
+        person_id: components['schemas']['Uuid']
+        roles: ('owner' | 'admin' | 'coach' | 'staff')[]
+        /** Format: date-time */
+        joined_at: string
+      }[]
+      team_counts: {
+        active: number
+        terminated: number
+      }
+      /** @description True when the team has more active members than the file lists. */
+      team_truncated: boolean
+      sites: {
+        site_id: components['schemas']['Uuid']
+        name: string
+        address: string | null
+        /** @description A natural person's address is withheld, because it can be their home. */
+        address_withheld: boolean
+        /** @enum {string} */
+        status: 'active' | 'inactive'
+      }[]
+      /** @description Null until service relationships exist. Never zero in their place. */
+      people_served: number | null
+      plans_availability: components['schemas']['ModelAvailability']
+      payment_method_availability: components['schemas']['ModelAvailability']
+      premium_availability: components['schemas']['ModelAvailability']
     }
     /**
      * @description Whether the organization answers as a company or as a natural person. A natural person's name is never written by Allfit.
@@ -5557,6 +5634,36 @@ export interface operations {
       409: components['responses']['Conflict']
       415: components['responses']['UnsupportedMediaType']
       422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  readBackofficeOrganizationFile: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+      }
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The file */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['BackofficeOrganizationFile']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
       503: components['responses']['UpstreamUnavailable']
     }
   }
