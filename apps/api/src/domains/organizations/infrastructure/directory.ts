@@ -6,14 +6,12 @@
  * the directory's own sort order, encoded so the client treats it as opaque.
  */
 
-import type postgres from 'postgres'
-
 import { database } from '../../../platform/db/index.js'
-import { measureRequestPhase } from '../../../platform/observability/index.js'
 import type {
   OrganizationDirectoryDatabase,
   OrganizationLifecycleStatus,
 } from '../domain/directory.js'
+import { inBackofficeTransaction } from './backoffice-transaction.js'
 
 type DirectoryRow = {
   organization_id: string
@@ -34,7 +32,7 @@ export function createOrganizationDirectoryDatabase(): OrganizationDirectoryData
 
   return {
     list: (input) =>
-      inTransaction(sql, input.actorPersonId, input.requestId, async (transaction) => {
+      inBackofficeTransaction(sql, input.actorPersonId, input.requestId, async (transaction) => {
         const rows = await transaction<DirectoryRow[]>`
           select * from organizations.list_backoffice_organizations(
             ${input.actorPersonId}::uuid, ${input.actorSessionId}::uuid,
@@ -72,23 +70,4 @@ export function createOrganizationDirectoryDatabase(): OrganizationDirectoryData
         }
       }),
   }
-}
-
-function inTransaction<T>(
-  sql: ReturnType<typeof database>,
-  actorPersonId: string,
-  requestId: string,
-  operation: (transaction: postgres.TransactionSql) => Promise<T>,
-): Promise<T> {
-  return measureRequestPhase('business-db', async () => {
-    const result = await sql.begin(async (transaction) => {
-      await transaction`
-        select set_config('app.actor_kind', 'support', true),
-               set_config('app.actor_person_id', ${actorPersonId}, true),
-               set_config('app.request_id', ${requestId}, true)
-      `
-      return { value: await operation(transaction) }
-    })
-    return result.value
-  })
 }
