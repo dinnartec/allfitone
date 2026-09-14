@@ -18,6 +18,7 @@ export interface BackofficeFixture {
   scopes?: ScopeFixture
   accessLog?: AccessLogFixture
   organizationDirectory?: OrganizationDirectoryFixture
+  organizationHandover?: OrganizationHandoverFixture
   verification?: VerificationFixture
   breakGlass?: BreakGlassFixture
   requests: MockRequest[]
@@ -305,6 +306,76 @@ export function directoryOrganization(
     active_member_count: status === 'active' ? 1 : 0,
     site_count: 1,
     people_served: null,
+    ...overrides,
+  }
+}
+
+/**
+ * Organization handovers.
+ *
+ * The mock keeps the commands' rules rather than the screen's expectations: a
+ * natural person is never named, only an organization nobody claimed is resent or
+ * cancelled, cancelling converges, a live invitation is resent as it is and a lapsed
+ * one is replaced, and a repeated command id returns the same gym instead of a
+ * second one.
+ */
+export interface OrganizationHandoverFixture {
+  refusal?: { status: number; code: string }
+  /** Consumed once: the owner accepts between the screen loading and the command. */
+  nextCommandClaimedElsewhere?: boolean | undefined
+  /** Consumed once: the creation reaches the server but its answer is lost. */
+  nextCreateNetworkFailure?: boolean | undefined
+  handovers: HandoverRecordFixture[]
+  createdByCommand?: Record<string, string>
+}
+
+export interface HandoverRecordFixture {
+  organization_id: string
+  display_name: string
+  type_code: 'professional_practice' | 'gym' | 'studio'
+  type_name: string
+  party_kind: 'natural_person' | 'legal_entity'
+  legal_name: string | null
+  status: 'unclaimed' | 'active' | 'closed' | 'cancelled'
+  created_at: string
+  claimed_at: string | null
+  cancelled_at: string | null
+  site: { site_id: string; name: string; address: string | null } | null
+  invitation: {
+    invitation_id: string
+    status: 'pending' | 'completed' | 'revoked' | 'expired'
+    intent_status: 'pending' | 'accepted' | 'rejected' | 'revoked' | 'expired'
+    contact_hint: string
+    expires_at: string
+  } | null
+}
+
+let handoverSequence = 0
+
+export function handoverRecord(
+  overrides: Partial<HandoverRecordFixture> = {},
+): HandoverRecordFixture {
+  handoverSequence += 1
+  const suffix = String(handoverSequence).padStart(12, '0')
+  return {
+    organization_id: `019a7000-0000-7000-8000-${suffix}`,
+    display_name: `Gimnasio entregado ${handoverSequence}`,
+    type_code: 'gym',
+    type_name: 'Gimnasio',
+    party_kind: 'legal_entity',
+    legal_name: 'Entregado SAS',
+    status: 'unclaimed',
+    created_at: new Date(Date.now() - 86_400_000).toISOString(),
+    claimed_at: null,
+    cancelled_at: null,
+    site: null,
+    invitation: {
+      invitation_id: `019a7100-0000-7000-8000-${suffix}`,
+      status: 'pending',
+      intent_status: 'pending',
+      contact_hint: 'o***@example.test',
+      expires_at: new Date(Date.now() + 6 * 86_400_000).toISOString(),
+    },
     ...overrides,
   }
 }
@@ -799,8 +870,12 @@ export async function mockBackofficeApi(
       await routeAccessLog(route, request, fixture)
       return
     }
-    if (request.path === '/backoffice/v1/organizations') {
+    if (request.path === '/backoffice/v1/organizations' && request.method === 'GET') {
       await routeOrganizationDirectory(route, request, fixture)
+      return
+    }
+    if (request.path.startsWith('/backoffice/v1/organizations')) {
+      await routeOrganizationHandover(route, request, fixture)
       return
     }
     if (request.path.startsWith('/backoffice/v1/break-glass/')) {
@@ -1373,6 +1448,162 @@ async function routeOrganizationDirectory(
           : null,
     },
   })
+}
+
+function maskedContact(email: string): string {
+  const [local = '', domain = ''] = email.split('@')
+  return `${local.slice(0, 1)}***@${domain}`
+}
+
+async function routeOrganizationHandover(
+  route: Route,
+  request: MockRequest,
+  fixture: BackofficeFixture,
+): Promise<void> {
+  const state = fixture.organizationHandover ?? { handovers: [] }
+  fixture.organizationHandover = state
+  if (state.refusal) {
+    await fulfillProblem(route, state.refusal.status, state.refusal.code)
+    return
+  }
+
+  const segments = request.path.split('/').filter(Boolean)
+  const commandId = request.headers['command-id'] ?? ''
+
+  if (request.method === 'POST' && segments.length === 3) {
+    const body = (request.body ?? {}) as Record<string, unknown>
+    const partyKind = body.party_kind
+    const legalName = typeof body.legal_name === 'string' ? body.legal_name.trim() : null
+    const email = typeof body.owner_email === 'string' ? body.owner_email.trim().toLowerCase() : ''
+    if (
+      typeof body.display_name !== 'string' ||
+      body.display_name.trim() === '' ||
+      (partyKind !== 'natural_person' && partyKind !== 'legal_entity') ||
+      (partyKind === 'legal_entity') !== Boolean(legalName) ||
+      !/^[^\s@]+@[^\s@]+$/.test(email)
+    ) {
+      await fulfillProblem(route, 422, 'validation-failed')
+      return
+    }
+    state.createdByCommand ??= {}
+    const existingId = state.createdByCommand[commandId]
+    const existing = state.handovers.find((row) => row.organization_id === existingId)
+    if (existing) {
+      await fulfill(route, 201, existing, { 'Idempotent-Replay': 'true' })
+      return
+    }
+    const site = body.site as { name?: string; address?: string | null } | null | undefined
+    const record = handoverRecord({
+      display_name: body.display_name.trim(),
+      type_code: body.type_code as HandoverRecordFixture['type_code'],
+      type_name:
+        body.type_code === 'studio'
+          ? 'Estudio'
+          : body.type_code === 'gym'
+            ? 'Gimnasio'
+            : 'Práctica profesional',
+      party_kind: partyKind,
+      legal_name: partyKind === 'legal_entity' ? legalName : null,
+      created_at: new Date().toISOString(),
+      site: site?.name
+        ? {
+            site_id: '019a7200-0000-7000-8000-000000000001',
+            name: site.name,
+            address: site.address ?? null,
+          }
+        : null,
+    })
+    record.invitation = {
+      invitation_id: commandId,
+      status: 'pending',
+      intent_status: 'pending',
+      contact_hint: maskedContact(email),
+      expires_at: new Date(Date.now() + 7 * 86_400_000).toISOString(),
+    }
+    state.handovers.push(record)
+    state.createdByCommand[commandId] = record.organization_id
+    if (state.nextCreateNetworkFailure) {
+      state.nextCreateNetworkFailure = undefined
+      await route.abort('failed')
+      return
+    }
+    await fulfill(route, 201, record)
+    return
+  }
+
+  const record = state.handovers.find((row) => row.organization_id === segments[3])
+  if (!record) {
+    await fulfillProblem(route, 404, 'not-found')
+    return
+  }
+
+  if (request.method === 'GET' && segments[4] === 'handover' && segments.length === 5) {
+    await fulfill(route, 200, record)
+    return
+  }
+
+  const isResend =
+    request.method === 'POST' && segments[4] === 'handover' && segments[5] === 'resends'
+  const isCancel = request.method === 'POST' && segments[4] === 'cancellation'
+  if (!isResend && !isCancel) {
+    await fulfillProblem(route, 404, 'not-found')
+    return
+  }
+  if (
+    request.body !== undefined &&
+    request.body !== null &&
+    JSON.stringify(request.body) !== '{}'
+  ) {
+    await fulfillProblem(route, 422, 'validation-failed')
+    return
+  }
+  if (state.nextCommandClaimedElsewhere) {
+    state.nextCommandClaimedElsewhere = undefined
+    record.status = 'active'
+    record.claimed_at = new Date().toISOString()
+    if (record.invitation) {
+      record.invitation.status = 'completed'
+      record.invitation.intent_status = 'accepted'
+    }
+  }
+
+  if (isCancel && record.status === 'cancelled') {
+    await fulfill(route, 200, record)
+    return
+  }
+  if (record.status !== 'unclaimed') {
+    await fulfillProblem(route, 409, 'conflict')
+    return
+  }
+
+  if (isCancel) {
+    record.status = 'cancelled'
+    record.cancelled_at = new Date().toISOString()
+    if (record.invitation?.status === 'pending') {
+      record.invitation.status = 'revoked'
+      record.invitation.intent_status = 'revoked'
+    }
+    await fulfill(route, 200, record)
+    return
+  }
+
+  const invitation = record.invitation
+  if (
+    invitation &&
+    invitation.status === 'pending' &&
+    Date.parse(invitation.expires_at) > Date.now()
+  ) {
+    invitation.expires_at = new Date(Date.now() + 7 * 86_400_000).toISOString()
+  } else {
+    record.invitation = {
+      invitation_id: commandId,
+      status: 'pending',
+      intent_status: 'pending',
+      contact_hint: invitation?.contact_hint ?? 'o***@example.test',
+      expires_at: new Date(Date.now() + 7 * 86_400_000).toISOString(),
+    }
+  }
+  await fulfill(route, 200, record)
 }
 
 async function routeVerification(
