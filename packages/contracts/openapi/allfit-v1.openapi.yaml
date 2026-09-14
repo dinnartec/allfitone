@@ -1092,6 +1092,43 @@ paths:
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
 
+  /backoffice/v1/support/attention:
+    get:
+      tags: [Backoffice Support]
+      operationId: readBackofficeSupportAttention
+      x-allfit-operation: NEW-SUP-ATTENTION
+      x-allfit-cache: no-store
+      summary: Read what needs attention
+      description: >-
+        Counters of what is pending or stuck: credentials waiting for a verifier,
+        gyms nobody claimed and system errors that repeat. Each notice is shown only
+        to an operator whose duties resolve it; any other notice is `withheld`,
+        never zero. An operator whose duties resolve no notice is refused.
+
+        Nothing here names a person or an organization, so reading it records no
+        access. A counter opens nothing: every destination checks its own duty
+        again.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+      responses:
+        '200':
+          description: The notices this operator's duties resolve
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportAttentionPanel'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
   /backoffice/v1/organizations:
     get:
       tags: [Backoffice Organizations]
@@ -6798,6 +6835,150 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/SupportDeliveryCircuit'
+    AttentionBillingNotice:
+      type: object
+      additionalProperties: false
+      description: >-
+        Failed charges and suspended subscriptions. Payments have no tables yet, so
+        this says so instead of printing a zero.
+      required: [availability]
+      properties:
+        availability:
+          type: string
+          enum: [not_modelled]
+    AttentionVerificationNotice:
+      type: object
+      additionalProperties: false
+      description: >-
+        `withheld` when the operator does not hold `verify_professional_credentials`;
+        every count is then null, never zero.
+      required: [availability, pending_count, oldest_requested_at, renewals_due_count]
+      properties:
+        availability:
+          type: string
+          enum: [available, withheld]
+        pending_count:
+          type: [integer, 'null']
+          minimum: 0
+        oldest_requested_at:
+          type: [string, 'null']
+          format: date-time
+        renewals_due_count:
+          type: [integer, 'null']
+          minimum: 0
+    AttentionUnclaimedOrganizationNotice:
+      type: object
+      additionalProperties: false
+      description: >-
+        Organizations Allfit created that nobody claimed. `needs_follow_up_count` counts
+        the ones whose latest ownership invitation lapsed, was declined or never existed.
+        `withheld` without a duty that reads the organization directory.
+      required: [availability, count, oldest_created_at, needs_follow_up_count]
+      properties:
+        availability:
+          type: string
+          enum: [available, withheld]
+        count:
+          type: [integer, 'null']
+          minimum: 0
+        oldest_created_at:
+          type: [string, 'null']
+          format: date-time
+        needs_follow_up_count:
+          type: [integer, 'null']
+          minimum: 0
+    AttentionFailureGroup:
+      type: object
+      additionalProperties: false
+      description: >-
+        One notification type or command operation that failed at least twice.
+        `failures` counts failed delivery attempts or stranded commands; `affected`
+        counts the notifications or commands involved.
+      required: [source, label, affected, failures, latest_occurred_at, last_error_code]
+      properties:
+        source:
+          $ref: '#/components/schemas/SupportOperationSourceKind'
+        label:
+          type: string
+          maxLength: 120
+        affected:
+          type: integer
+          minimum: 1
+        failures:
+          type: integer
+          minimum: 2
+        latest_occurred_at:
+          type: string
+          format: date-time
+        last_error_code:
+          type: [string, 'null']
+          maxLength: 120
+    AttentionOpenCircuit:
+      type: object
+      additionalProperties: false
+      required: [event_type, state, failure_count, opened_until]
+      properties:
+        event_type:
+          type: string
+          maxLength: 120
+        state:
+          type: string
+          enum: [open, half_open]
+        failure_count:
+          type: integer
+          minimum: 0
+        opened_until:
+          type: [string, 'null']
+          format: date-time
+    AttentionFailureNotice:
+      type: object
+      additionalProperties: false
+      description: >-
+        System errors that repeat inside the window, and delivery channels that
+        tripped. `withheld` without `diagnose_support_metadata`; the lists are then null.
+      required: [availability, window_hours, groups, groups_truncated, open_circuits]
+      properties:
+        availability:
+          type: string
+          enum: [available, withheld]
+        window_hours:
+          type: integer
+          enum: [24]
+        groups:
+          type: [array, 'null']
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/AttentionFailureGroup'
+        groups_truncated:
+          type: [boolean, 'null']
+        open_circuits:
+          type: [array, 'null']
+          items:
+            $ref: '#/components/schemas/AttentionOpenCircuit'
+    SupportAttentionPanel:
+      type: object
+      additionalProperties: false
+      description: >-
+        Counters only. No person, organization or aggregate identifier travels here,
+        so a counter cannot be used to open anything.
+      required:
+        - generated_at
+        - billing
+        - credential_verifications
+        - unclaimed_organizations
+        - repeated_failures
+      properties:
+        generated_at:
+          type: string
+          format: date-time
+        billing:
+          $ref: '#/components/schemas/AttentionBillingNotice'
+        credential_verifications:
+          $ref: '#/components/schemas/AttentionVerificationNotice'
+        unclaimed_organizations:
+          $ref: '#/components/schemas/AttentionUnclaimedOrganizationNotice'
+        repeated_failures:
+          $ref: '#/components/schemas/AttentionFailureNotice'
     SupportBlockAvailability:
       type: string
       description: >-

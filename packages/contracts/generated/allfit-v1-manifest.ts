@@ -210,6 +210,13 @@ export const allfitV1ContractManifest = {
     },
     {
       method: 'GET',
+      path: '/backoffice/v1/support/attention',
+      operationId: 'readBackofficeSupportAttention',
+      allfitOperation: 'NEW-SUP-ATTENTION',
+      responses: ['200', '401', '403', '503'],
+    },
+    {
+      method: 'GET',
       path: '/backoffice/v1/support/delivery-circuits',
       operationId: 'listBackofficeSupportDeliveryCircuits',
       allfitOperation: 'OP-SUP-005',

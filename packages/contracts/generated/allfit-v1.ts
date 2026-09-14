@@ -412,6 +412,27 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/backoffice/v1/support/attention': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Read what needs attention
+     * @description Counters of what is pending or stuck: credentials waiting for a verifier, gyms nobody claimed and system errors that repeat. Each notice is shown only to an operator whose duties resolve it; any other notice is `withheld`, never zero. An operator whose duties resolve no notice is refused.
+     *     Nothing here names a person or an organization, so reading it records no access. A counter opens nothing: every destination checks its own duty again.
+     */
+    get: operations['readBackofficeSupportAttention']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/backoffice/v1/organizations': {
     parameters: {
       query?: never
@@ -2441,6 +2462,66 @@ export interface components {
     }
     SupportDeliveryCircuitList: {
       items: components['schemas']['SupportDeliveryCircuit'][]
+    }
+    /** @description Failed charges and suspended subscriptions. Payments have no tables yet, so this says so instead of printing a zero. */
+    AttentionBillingNotice: {
+      /** @enum {string} */
+      availability: 'not_modelled'
+    }
+    /** @description `withheld` when the operator does not hold `verify_professional_credentials`; every count is then null, never zero. */
+    AttentionVerificationNotice: {
+      /** @enum {string} */
+      availability: 'available' | 'withheld'
+      pending_count: number | null
+      /** Format: date-time */
+      oldest_requested_at: string | null
+      renewals_due_count: number | null
+    }
+    /** @description Organizations Allfit created that nobody claimed. `needs_follow_up_count` counts the ones whose latest ownership invitation lapsed, was declined or never existed. `withheld` without a duty that reads the organization directory. */
+    AttentionUnclaimedOrganizationNotice: {
+      /** @enum {string} */
+      availability: 'available' | 'withheld'
+      count: number | null
+      /** Format: date-time */
+      oldest_created_at: string | null
+      needs_follow_up_count: number | null
+    }
+    /** @description One notification type or command operation that failed at least twice. `failures` counts failed delivery attempts or stranded commands; `affected` counts the notifications or commands involved. */
+    AttentionFailureGroup: {
+      source: components['schemas']['SupportOperationSourceKind']
+      label: string
+      affected: number
+      failures: number
+      /** Format: date-time */
+      latest_occurred_at: string
+      last_error_code: string | null
+    }
+    AttentionOpenCircuit: {
+      event_type: string
+      /** @enum {string} */
+      state: 'open' | 'half_open'
+      failure_count: number
+      /** Format: date-time */
+      opened_until: string | null
+    }
+    /** @description System errors that repeat inside the window, and delivery channels that tripped. `withheld` without `diagnose_support_metadata`; the lists are then null. */
+    AttentionFailureNotice: {
+      /** @enum {string} */
+      availability: 'available' | 'withheld'
+      /** @enum {integer} */
+      window_hours: 24
+      groups: components['schemas']['AttentionFailureGroup'][] | null
+      groups_truncated: boolean | null
+      open_circuits: components['schemas']['AttentionOpenCircuit'][] | null
+    }
+    /** @description Counters only. No person, organization or aggregate identifier travels here, so a counter cannot be used to open anything. */
+    SupportAttentionPanel: {
+      /** Format: date-time */
+      generated_at: string
+      billing: components['schemas']['AttentionBillingNotice']
+      credential_verifications: components['schemas']['AttentionVerificationNotice']
+      unclaimed_organizations: components['schemas']['AttentionUnclaimedOrganizationNotice']
+      repeated_failures: components['schemas']['AttentionFailureNotice']
     }
     /**
      * @description Whether a block of the projection can say anything. `unknown` is a statement about the person; `not_modelled` is a statement about the platform, and confusing the two makes the card lie by omission.
@@ -5558,6 +5639,32 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['SupportDeliveryCircuitList']
+        }
+      }
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  readBackofficeSupportAttention: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The notices this operator's duties resolve */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SupportAttentionPanel']
         }
       }
       401: components['responses']['Unauthenticated']

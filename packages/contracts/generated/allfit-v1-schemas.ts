@@ -476,6 +476,157 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  AttentionBillingNotice: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      'Failed charges and suspended subscriptions. Payments have no tables yet, so this says so instead of printing a zero.',
+    required: ['availability'],
+    properties: {
+      availability: {
+        type: 'string',
+        enum: ['not_modelled'],
+      },
+    },
+  },
+  AttentionFailureGroup: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      'One notification type or command operation that failed at least twice. `failures` counts failed delivery attempts or stranded commands; `affected` counts the notifications or commands involved.',
+    required: ['source', 'label', 'affected', 'failures', 'latest_occurred_at', 'last_error_code'],
+    properties: {
+      source: {
+        $ref: '#/components/schemas/SupportOperationSourceKind',
+      },
+      label: {
+        type: 'string',
+        maxLength: 120,
+      },
+      affected: {
+        type: 'integer',
+        minimum: 1,
+      },
+      failures: {
+        type: 'integer',
+        minimum: 2,
+      },
+      latest_occurred_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      last_error_code: {
+        type: ['string', 'null'],
+        maxLength: 120,
+      },
+    },
+  },
+  AttentionFailureNotice: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      'System errors that repeat inside the window, and delivery channels that tripped. `withheld` without `diagnose_support_metadata`; the lists are then null.',
+    required: ['availability', 'window_hours', 'groups', 'groups_truncated', 'open_circuits'],
+    properties: {
+      availability: {
+        type: 'string',
+        enum: ['available', 'withheld'],
+      },
+      window_hours: {
+        type: 'integer',
+        enum: [24],
+      },
+      groups: {
+        type: ['array', 'null'],
+        maxItems: 20,
+        items: {
+          $ref: '#/components/schemas/AttentionFailureGroup',
+        },
+      },
+      groups_truncated: {
+        type: ['boolean', 'null'],
+      },
+      open_circuits: {
+        type: ['array', 'null'],
+        items: {
+          $ref: '#/components/schemas/AttentionOpenCircuit',
+        },
+      },
+    },
+  },
+  AttentionOpenCircuit: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['event_type', 'state', 'failure_count', 'opened_until'],
+    properties: {
+      event_type: {
+        type: 'string',
+        maxLength: 120,
+      },
+      state: {
+        type: 'string',
+        enum: ['open', 'half_open'],
+      },
+      failure_count: {
+        type: 'integer',
+        minimum: 0,
+      },
+      opened_until: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+    },
+  },
+  AttentionUnclaimedOrganizationNotice: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      'Organizations Allfit created that nobody claimed. `needs_follow_up_count` counts the ones whose latest ownership invitation lapsed, was declined or never existed. `withheld` without a duty that reads the organization directory.',
+    required: ['availability', 'count', 'oldest_created_at', 'needs_follow_up_count'],
+    properties: {
+      availability: {
+        type: 'string',
+        enum: ['available', 'withheld'],
+      },
+      count: {
+        type: ['integer', 'null'],
+        minimum: 0,
+      },
+      oldest_created_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      needs_follow_up_count: {
+        type: ['integer', 'null'],
+        minimum: 0,
+      },
+    },
+  },
+  AttentionVerificationNotice: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      '`withheld` when the operator does not hold `verify_professional_credentials`; every count is then null, never zero.',
+    required: ['availability', 'pending_count', 'oldest_requested_at', 'renewals_due_count'],
+    properties: {
+      availability: {
+        type: 'string',
+        enum: ['available', 'withheld'],
+      },
+      pending_count: {
+        type: ['integer', 'null'],
+        minimum: 0,
+      },
+      oldest_requested_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      renewals_due_count: {
+        type: ['integer', 'null'],
+        minimum: 0,
+      },
+    },
+  },
   AuthenticatedMediaLink: {
     type: 'object',
     additionalProperties: false,
@@ -5778,6 +5929,37 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
       analytics: {
         $ref: '#/components/schemas/AnalyticsIdentity',
+      },
+    },
+  },
+  SupportAttentionPanel: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      'Counters only. No person, organization or aggregate identifier travels here, so a counter cannot be used to open anything.',
+    required: [
+      'generated_at',
+      'billing',
+      'credential_verifications',
+      'unclaimed_organizations',
+      'repeated_failures',
+    ],
+    properties: {
+      generated_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      billing: {
+        $ref: '#/components/schemas/AttentionBillingNotice',
+      },
+      credential_verifications: {
+        $ref: '#/components/schemas/AttentionVerificationNotice',
+      },
+      unclaimed_organizations: {
+        $ref: '#/components/schemas/AttentionUnclaimedOrganizationNotice',
+      },
+      repeated_failures: {
+        $ref: '#/components/schemas/AttentionFailureNotice',
       },
     },
   },
