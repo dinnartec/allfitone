@@ -118,9 +118,44 @@
   align-content: start;
 }
 
-[data-organization-directory-filters] {
+[data-organization-directory-filters],
+[data-handover-form] {
   display: grid;
   gap: 12px;
+}
+
+[data-organization-handover],
+[data-organization-handover-form] {
+  display: grid;
+  gap: 24px;
+  align-content: start;
+}
+
+[data-organization-handover] code {
+  font-family: var(--afo-font-family-mono, monospace);
+  font-size: var(--afo-font-size-xs);
+  white-space: nowrap;
+}
+
+/* Both kinds of responsible party sit side by side with equal weight: a natural
+   person is not the lesser option, only the one whose name Allfit never writes. */
+[data-handover-choice],
+[data-handover-actions] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* The same treatment as the registry link: a destination is a link, with a touch
+   target of its own. */
+[data-handover-link],
+[data-organization-create-link] {
+  display: inline-flex;
+  min-height: 44px;
+  width: fit-content;
+  align-items: center;
+  font-weight: var(--afo-font-weight-semibold);
+  text-decoration: underline;
 }
 
 /* An unclaimed organization exists but does not operate, so its row carries an

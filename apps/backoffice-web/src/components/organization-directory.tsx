@@ -46,6 +46,7 @@ import {
   TableHeader,
   TableRow,
 } from '@allfitone/react/components/table'
+import Link from 'next/link'
 import { useEffect, useState, type FormEvent } from 'react'
 
 import {
@@ -203,6 +204,10 @@ export function OrganizationDirectory() {
         </CardContent>
       </Card>
 
+      <Link href="/organizations/new" data-organization-create-link>
+        Crear un gimnasio para una venta
+      </Link>
+
       {state === 'loading' ? <Spinner /> : null}
 
       {state === 'failed' ? (
@@ -251,7 +256,20 @@ export function OrganizationDirectory() {
                       data-organization-row
                       data-status={organization.status}
                     >
-                      <TableCell>{organization.display_name}</TableCell>
+                      <TableCell>
+                        {/* Only a gym Allfit created has a handover to open. */}
+                        {organization.status === 'unclaimed' ||
+                        organization.status === 'cancelled' ? (
+                          <Link
+                            href={`/organizations/${organization.organization_id}/handover`}
+                            data-handover-link
+                          >
+                            {organization.display_name}
+                          </Link>
+                        ) : (
+                          organization.display_name
+                        )}
+                      </TableCell>
                       <TableCell>{organization.type_name}</TableCell>
                       <TableCell>
                         <Badge

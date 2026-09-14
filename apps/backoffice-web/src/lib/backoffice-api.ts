@@ -18,6 +18,8 @@ export type ActivityTypeResultContract = AllfitV1Schemas['ActivityTypeResultCont
 export type AccessEventPage = AllfitV1Schemas['AccessEventPage']
 export type BackofficeOrganizationSummary = AllfitV1Schemas['BackofficeOrganizationSummary']
 export type BackofficeOrganizationPage = AllfitV1Schemas['BackofficeOrganizationPage']
+export type OrganizationHandover = AllfitV1Schemas['OrganizationHandover']
+export type OrganizationHandoverCreate = AllfitV1Schemas['OrganizationHandoverCreate']
 export type CredentialVerificationRequest = AllfitV1Schemas['CredentialVerificationRequest']
 export type CredentialVerificationOutcome = AllfitV1Schemas['CredentialVerificationOutcome']
 export type CredentialVerificationDecisionCreate =
@@ -296,6 +298,32 @@ export const backofficeApi = {
       signal ? { signal } : {},
     ),
 
+  createOrganizationHandover: (body: OrganizationHandoverCreate, command: BackofficeCommand) =>
+    requestJson<OrganizationHandover>('/backoffice/v1/organizations', {
+      method: 'POST',
+      headers: commandHeaders(command),
+      body: JSON.stringify(body),
+    }),
+
+  organizationHandover: (organizationId: string, signal?: AbortSignal) =>
+    requestJson<OrganizationHandover>(
+      `/backoffice/v1/organizations/${organizationId}/handover`,
+      signal ? { signal } : {},
+    ),
+
+  // No body: the resend always goes to the address the handover was created with.
+  resendOrganizationHandover: (organizationId: string, command: BackofficeCommand) =>
+    requestJson<OrganizationHandover>(
+      `/backoffice/v1/organizations/${organizationId}/handover/resends`,
+      { method: 'POST', headers: commandHeaders(command) },
+    ),
+
+  cancelOrganizationHandover: (organizationId: string, command: BackofficeCommand) =>
+    requestJson<OrganizationHandover>(
+      `/backoffice/v1/organizations/${organizationId}/cancellation`,
+      { method: 'POST', headers: commandHeaders(command) },
+    ),
+
   scopeDefinitions: (signal?: AbortSignal) =>
     requestJson<{ items: ScopeDefinition[] }>(
       '/backoffice/v1/scope-definitions',
@@ -464,7 +492,8 @@ function backofficeOperation(path: string, method: string): ClientOperation {
   if (resolved === '/backoffice/v1/verifications') return 'backoffice.verification.decide'
   if (resolved === '/backoffice/v1/verification-renewals') return 'backoffice.verification.renewals'
   if (resolved === '/backoffice/v1/access-events') return 'backoffice.access_log.read'
-  if (resolved === '/backoffice/v1/organizations') return 'backoffice.organization.directory'
+  const organization = organizationOperation(resolved, method)
+  if (organization) return organization
   if (resolved === '/backoffice/v1/scope-definitions') {
     return method === 'POST'
       ? 'backoffice.privacy.scope_definition_publish'
@@ -477,6 +506,24 @@ function backofficeOperation(path: string, method: string): ClientOperation {
     operations[resolved] ??
     'backoffice.session'
   )
+}
+
+/** The organization identifier varies per row, so the handover routes are matched by shape. */
+function organizationOperation(route: string, method: string): ClientOperation | undefined {
+  const segments = route.split('/').filter(Boolean)
+  if (segments[0] !== 'backoffice' || segments[1] !== 'v1' || segments[2] !== 'organizations') {
+    return undefined
+  }
+  if (segments.length === 3) {
+    return method === 'POST'
+      ? 'backoffice.organization.handover_create'
+      : 'backoffice.organization.directory'
+  }
+  if (segments[4] === 'cancellation') return 'backoffice.organization.handover_cancel'
+  if (segments[4] !== 'handover') return undefined
+  return segments[5] === 'resends'
+    ? 'backoffice.organization.handover_resend'
+    : 'backoffice.organization.handover_read'
 }
 
 /** The file identifier varies per row, so these routes are matched by shape. */
