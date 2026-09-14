@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { Suspense } from 'react'
 
 import { OrganizationDirectory } from '@/components/organization-directory'
 
@@ -7,5 +8,9 @@ export const metadata: Metadata = {
 }
 
 export default function OrganizationsPage() {
-  return <OrganizationDirectory />
+  return (
+    <Suspense>
+      <OrganizationDirectory />
+    </Suspense>
+  )
 }

@@ -52,6 +52,7 @@ interface WorkspaceRoute {
 }
 
 const ROUTES: readonly WorkspaceRoute[] = [
+  { href: '/panel', title: 'Inicio', icon: 'operation' },
   { href: '/people', title: 'Personas', icon: 'people' },
   { href: '/organizations', title: 'Gimnasios', icon: 'operation' },
   { href: '/access-log', title: 'Registro de accesos', icon: 'operation' },
@@ -121,7 +122,7 @@ function BackofficeSidebar({ pathname, operatorName }: { pathname: string; opera
     <Sidebar collapsible="icon" data-afo-theme="dark" data-backoffice-sidebar>
       <SidebarHeader>
         <Link
-          href="/team"
+          href="/panel"
           aria-label="Ir al inicio de Allfit Backoffice"
           data-backoffice-brand
           onClick={closeMobileNavigation}

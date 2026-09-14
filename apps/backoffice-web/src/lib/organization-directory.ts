@@ -83,6 +83,12 @@ export interface DirectoryFilters {
 
 export const EMPTY_DIRECTORY_FILTERS: DirectoryFilters = { query: '', status: 'any' }
 
+/** A notice links here with a state; anything outside the closed set opens unfiltered. */
+export function directoryFiltersFromStatus(status: string | null): DirectoryFilters {
+  const known = ORGANIZATION_STATUSES.find((candidate) => candidate === status)
+  return known ? { query: '', status: known } : EMPTY_DIRECTORY_FILTERS
+}
+
 export type DirectoryFilterIssue = 'short-query' | 'long-query'
 
 const MAX_QUERY = 120

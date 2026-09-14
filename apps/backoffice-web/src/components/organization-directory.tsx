@@ -47,6 +47,7 @@ import {
   TableRow,
 } from '@allfitone/react/components/table'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { useEffect, useState, type FormEvent } from 'react'
 
 import {
@@ -56,12 +57,12 @@ import {
   type BackofficeOrganizationSummary,
 } from '@/lib/backoffice-api'
 import {
-  EMPTY_DIRECTORY_FILTERS,
   ORGANIZATION_STATUSES,
   PEOPLE_SERVED_NOTE,
   directoryAnswer,
   directoryFilterIssue,
   directoryFilterIssueMessage,
+  directoryFiltersFromStatus,
   directoryMessage,
   hasUnknownPeopleServed,
   peopleServedLabel,
@@ -79,14 +80,16 @@ type LoadState = 'loading' | 'ready' | 'failed'
 const ANY = 'any'
 
 export function OrganizationDirectory() {
+  // The attention panel links here already filtered, so the first read honours it.
+  const initial = directoryFiltersFromStatus(useSearchParams().get('status'))
   const [state, setState] = useState<LoadState>('loading')
   const [failure, setFailure] = useState<string | null>(null)
   const [organizations, setOrganizations] = useState<BackofficeOrganizationSummary[]>([])
   const [cursor, setCursor] = useState<string | null>(null)
   const [appending, setAppending] = useState(false)
   const [appendFailure, setAppendFailure] = useState<string | null>(null)
-  const [draft, setDraft] = useState<DirectoryFilters>(EMPTY_DIRECTORY_FILTERS)
-  const [applied, setApplied] = useState<DirectoryFilters>(EMPTY_DIRECTORY_FILTERS)
+  const [draft, setDraft] = useState<DirectoryFilters>(initial)
+  const [applied, setApplied] = useState<DirectoryFilters>(initial)
   const [issue, setIssue] = useState<string | null>(null)
 
   useEffect(() => {

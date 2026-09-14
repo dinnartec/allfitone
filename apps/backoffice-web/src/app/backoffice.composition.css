@@ -112,10 +112,25 @@
 [data-access-log],
 [data-credential-verification],
 [data-organization-directory],
+[data-attention-panel],
 [data-support-person] {
   display: grid;
   gap: 24px;
   align-content: start;
+}
+
+/* Four notices side by side when there is room, one column on a phone. */
+[data-attention-notices] {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  align-items: start;
+}
+
+[data-attention-body] {
+  display: grid;
+  gap: 12px;
+  justify-items: start;
 }
 
 [data-organization-directory-filters],

@@ -1009,7 +1009,7 @@ function AuthenticatedPanel({
         {/* The rendered element is an anchor, so the native button contract is
             declared false: with it left true Base UI warns that it lost native
             button semantics, and `type` means nothing on a link. */}
-        <Button render={<Link href="/team" />} nativeButton={false}>
+        <Button render={<Link href="/panel" />} nativeButton={false}>
           Entrar al Backoffice
         </Button>
         <Button type="button" variant="outline" onClick={onLogout}>

@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test'
 import {
   EMPTY_DIRECTORY_FILTERS,
   ORGANIZATION_STATUSES,
+  directoryFiltersFromStatus,
   directoryAnswer,
   directoryFilterIssue,
   directoryFilterIssueMessage,
@@ -83,5 +84,11 @@ describe('organization directory presentation', () => {
   test('a withdrawn duty is explained as expiry by design', () => {
     expect(directoryMessage('forbidden')).toContain('vencen por diseño')
     expect(directoryMessage('something-new')).toBe('No se pudo leer el directorio.')
+  })
+
+  test('a link can open the directory already filtered, but only by a known state', () => {
+    expect(directoryFiltersFromStatus('unclaimed')).toEqual({ query: '', status: 'unclaimed' })
+    expect(directoryFiltersFromStatus('suspended')).toEqual(EMPTY_DIRECTORY_FILTERS)
+    expect(directoryFiltersFromStatus(null)).toEqual(EMPTY_DIRECTORY_FILTERS)
   })
 })
