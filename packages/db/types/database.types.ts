@@ -860,7 +860,9 @@ export type Database = {
           created_at: string
           expires_at: string
           id: string
-          issued_by_membership_id: string
+          issued_by_duty_assignment_id: string | null
+          issued_by_membership_id: string | null
+          issued_by_person_id: string | null
           organization_id: string
           proposal_hash: string
           responsible_party: Json
@@ -876,7 +878,9 @@ export type Database = {
           created_at?: string
           expires_at: string
           id: string
-          issued_by_membership_id: string
+          issued_by_duty_assignment_id?: string | null
+          issued_by_membership_id?: string | null
+          issued_by_person_id?: string | null
           organization_id: string
           proposal_hash: string
           responsible_party: Json
@@ -892,7 +896,9 @@ export type Database = {
           created_at?: string
           expires_at?: string
           id?: string
-          issued_by_membership_id?: string
+          issued_by_duty_assignment_id?: string | null
+          issued_by_membership_id?: string | null
+          issued_by_person_id?: string | null
           organization_id?: string
           proposal_hash?: string
           responsible_party?: Json
@@ -902,7 +908,15 @@ export type Database = {
           token_key_version?: number
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: 'fk_invitations_platform_issuer'
+            columns: ['issued_by_person_id']
+            isOneToOne: false
+            referencedRelation: 'people'
+            referencedColumns: ['id']
+          },
+        ]
       }
       mfa_factor_recovery_events: {
         Row: {
@@ -1463,6 +1477,26 @@ export type Database = {
           result: Json
         }[]
       }
+      decide_ownership_invitation: {
+        Args: {
+          p_command_id: string
+          p_decision: string
+          p_idempotency_key: string
+          p_intent_id: string
+          p_person_id: string
+          p_request_hash: string
+          p_token_hash: string
+        }
+        Returns: {
+          intent_status: string
+          invitation_id: string
+          invitation_intent_id: string
+          invitation_status: string
+          membership_id: string
+          organization_id: string
+          replayed: boolean
+        }[]
+      }
       decide_staff_invitation: {
         Args: {
           p_command_id: string
@@ -1695,6 +1729,17 @@ export type Database = {
           provider_session_id: string
         }[]
       }
+      prepare_ownership_invitation_delivery: {
+        Args: { p_event_id: string }
+        Returns: {
+          contact: string
+          delivery_state: string
+          expires_at: string
+          invitation_id: string
+          organization_name: string
+          token_key_version: number
+        }[]
+      }
       prepare_staff_invitation_delivery: {
         Args: { p_event_id: string }
         Returns: {
@@ -1818,6 +1863,20 @@ export type Database = {
         Returns: {
           account_id: string
           person_id: string
+        }[]
+      }
+      resolve_ownership_invitation: {
+        Args: { p_token_hash: string }
+        Returns: {
+          expires_at: string
+          invitation_id: string
+          invitation_intent_id: string
+          legal_name: string
+          organization_display_name: string
+          organization_id: string
+          organization_type_name: string
+          party_kind: string
+          site_name: string
         }[]
       }
       resolve_staff_invitation: {
@@ -1959,7 +2018,8 @@ export type Database = {
       backoffice_authentication_attempt_status:
         'pending_enrollment' | 'pending_challenge' | 'completed' | 'failed' | 'expired'
       eligibility_result: 'pass' | 'fail' | 'review_required' | 'unknown'
-      invitation_intent_kind: 'membership' | 'service_relationship' | 'program_assignment'
+      invitation_intent_kind:
+        'membership' | 'service_relationship' | 'program_assignment' | 'ownership'
       invitation_intent_status: 'pending' | 'accepted' | 'rejected' | 'revoked' | 'expired'
       invitation_status: 'pending' | 'completed' | 'revoked' | 'expired'
       mfa_factor_status: 'pending' | 'active' | 'revoked' | 'superseded'
@@ -2067,7 +2127,9 @@ export type Database = {
       }
       organization_events: {
         Row: {
+          actor_duty_assignment_id: string | null
           actor_membership_id: string | null
+          actor_person_id: string | null
           after_snapshot: Json | null
           before_snapshot: Json | null
           event_type: string
@@ -2077,7 +2139,9 @@ export type Database = {
           snapshot_schema_version: number
         }
         Insert: {
+          actor_duty_assignment_id?: string | null
           actor_membership_id?: string | null
+          actor_person_id?: string | null
           after_snapshot?: Json | null
           before_snapshot?: Json | null
           event_type: string
@@ -2087,7 +2151,9 @@ export type Database = {
           snapshot_schema_version?: number
         }
         Update: {
+          actor_duty_assignment_id?: string | null
           actor_membership_id?: string | null
+          actor_person_id?: string | null
           after_snapshot?: Json | null
           before_snapshot?: Json | null
           event_type?: string
@@ -2361,6 +2427,20 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      cancel_unclaimed_organization: {
+        Args: {
+          p_actor_person_id: string
+          p_actor_session_id: string
+          p_command_id: string
+          p_idempotency_key: string
+          p_organization_id: string
+          p_request_hash: string
+        }
+        Returns: {
+          replayed: boolean
+          result: Json
+        }[]
+      }
       create_organization: {
         Args: {
           p_command_id: string
@@ -2394,6 +2474,28 @@ export type Database = {
           result: Json
         }[]
       }
+      create_unclaimed_organization: {
+        Args: {
+          p_actor_person_id: string
+          p_actor_session_id: string
+          p_command_id: string
+          p_display_name: string
+          p_idempotency_key: string
+          p_legal_name: string
+          p_owner_email: string
+          p_party_kind: string
+          p_request_hash: string
+          p_site_address: string
+          p_site_name: string
+          p_token_hash: string
+          p_token_key_version: number
+          p_type_code: string
+        }
+        Returns: {
+          replayed: boolean
+          result: Json
+        }[]
+      }
       grant_membership_role: {
         Args: {
           p_command_id: string
@@ -2408,6 +2510,10 @@ export type Database = {
           replayed: boolean
           result: Json
         }[]
+      }
+      handover_projection: {
+        Args: { p_organization_id: string }
+        Returns: Json
       }
       list_backoffice_organizations: {
         Args: {
@@ -2487,9 +2593,37 @@ export type Database = {
         Returns: Json
       }
       read_organization: { Args: { p_organization_id: string }; Returns: Json }
+      read_organization_handover: {
+        Args: {
+          p_actor_person_id: string
+          p_actor_session_id: string
+          p_organization_id: string
+        }
+        Returns: Json
+      }
       require_organization_directory_reader: {
         Args: { p_actor_person_id: string; p_actor_session_id: string }
         Returns: undefined
+      }
+      require_organization_lifecycle_duty: {
+        Args: { p_actor_person_id: string; p_actor_session_id: string }
+        Returns: string
+      }
+      resend_ownership_invitation: {
+        Args: {
+          p_actor_person_id: string
+          p_actor_session_id: string
+          p_command_id: string
+          p_idempotency_key: string
+          p_organization_id: string
+          p_request_hash: string
+          p_token_hash: string
+          p_token_key_version: number
+        }
+        Returns: {
+          replayed: boolean
+          result: Json
+        }[]
       }
       site_projection: { Args: { p_site_id: string }; Returns: Json }
       transfer_ownership: {
@@ -3398,7 +3532,12 @@ export const Constants = {
         'expired',
       ],
       eligibility_result: ['pass', 'fail', 'review_required', 'unknown'],
-      invitation_intent_kind: ['membership', 'service_relationship', 'program_assignment'],
+      invitation_intent_kind: [
+        'membership',
+        'service_relationship',
+        'program_assignment',
+        'ownership',
+      ],
       invitation_intent_status: ['pending', 'accepted', 'rejected', 'revoked', 'expired'],
       invitation_status: ['pending', 'completed', 'revoked', 'expired'],
       mfa_factor_status: ['pending', 'active', 'revoked', 'superseded'],
