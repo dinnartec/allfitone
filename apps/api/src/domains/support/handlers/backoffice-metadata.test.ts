@@ -8,7 +8,11 @@ import {
   type BackofficeAuthenticationService,
 } from '../../identity/index.js'
 import { mountSurfaces } from '../../../surfaces.js'
-import type { SupportDiagnosisService, SupportMetadataService } from '../application/index.js'
+import type {
+  SupportAttentionService,
+  SupportDiagnosisService,
+  SupportMetadataService,
+} from '../application/index.js'
 import { backofficeSupportMetadataRoutes } from './backoffice-metadata.js'
 
 const ORIGIN = 'https://backoffice.example.test'
@@ -110,14 +114,62 @@ function diagnosisService(
   }
 }
 
+const panel: AllfitV1Schemas['SupportAttentionPanel'] = {
+  generated_at: '2026-09-13T18:00:00.000Z',
+  billing: { availability: 'not_modelled' },
+  credential_verifications: {
+    availability: 'withheld',
+    pending_count: null,
+    oldest_requested_at: null,
+    renewals_due_count: null,
+  },
+  unclaimed_organizations: {
+    availability: 'available',
+    count: 3,
+    oldest_created_at: '2026-09-01T12:00:00.000Z',
+    needs_follow_up_count: 1,
+  },
+  repeated_failures: {
+    availability: 'available',
+    window_hours: 24,
+    groups: [
+      {
+        source: 'notification',
+        label: 'identity.invitation_issued.v1',
+        affected: 2,
+        failures: 5,
+        latest_occurred_at: '2026-09-13T17:50:00.000Z',
+        last_error_code: 'smtp_timeout',
+      },
+    ],
+    groups_truncated: false,
+    open_circuits: [],
+  },
+}
+
+let attentionCalls: CapturedCall[] = []
+
+function attentionService(
+  overrides: Partial<SupportAttentionService> = {},
+): SupportAttentionService {
+  return {
+    read: (reader, input) => {
+      attentionCalls.push({ operation: 'read', reader, input })
+      return Promise.resolve(panel)
+    },
+    ...overrides,
+  }
+}
+
 function routes(
   service: SupportMetadataService = metadataService(),
   sessions: BackofficeAuthenticationService = sessionService(),
   diagnosis: SupportDiagnosisService = diagnosisService(),
+  attention: SupportAttentionService = attentionService(),
 ): Hono {
   return new Hono().route(
     '/backoffice/v1',
-    backofficeSupportMetadataRoutes(service, sessions, diagnosis),
+    backofficeSupportMetadataRoutes(service, sessions, diagnosis, attention),
   )
 }
 
@@ -134,15 +186,18 @@ function colonPath(path: string): string {
 beforeEach(() => {
   captured = []
   diagnosisCalls = []
+  attentionCalls = []
   process.env.BACKOFFICE_WEB_URL = ORIGIN
   process.env.STUDIO_WEB_URL = 'https://studio.example.test'
   process.env.API_PUBLIC_URL = 'https://api.example.test'
 })
 
 describe('Backoffice support metadata API contract', () => {
-  test('T-SUP-API-21 mounts every OP-SUP-005 operation with its contract method', () => {
+  test('T-SUP-API-21 mounts every OP-SUP-005 and NEW-SUP-ATTENTION operation with its contract method', () => {
     const contract = allfitV1ContractManifest.operations
-      .filter((operation) => operation.allfitOperation === 'OP-SUP-005')
+      .filter((operation) =>
+        ['OP-SUP-005', 'NEW-SUP-ATTENTION'].includes(operation.allfitOperation),
+      )
       .map((operation) => `${operation.method} ${colonPath(operation.path)}`)
       .sort()
     const mounted = backofficeSupportMetadataRoutes()
@@ -150,7 +205,7 @@ describe('Backoffice support metadata API contract', () => {
       .map((route) => `${route.method} /backoffice/v1${route.path}`)
       .sort()
 
-    expect(contract).toHaveLength(4)
+    expect(contract).toHaveLength(5)
     expect(mounted).toEqual(contract)
   })
 
@@ -165,6 +220,7 @@ describe('Backoffice support metadata API contract', () => {
     expect(mounted).toContain('GET /backoffice/v1/support/people/:personId')
     expect(mounted).toContain('GET /backoffice/v1/support/operations')
     expect(mounted).toContain('GET /backoffice/v1/support/delivery-circuits')
+    expect(mounted).toContain('GET /backoffice/v1/support/attention')
   })
 
   test('T-SUP-API-23 finds a person by an exact contact and carries the case through', async () => {
@@ -402,5 +458,52 @@ describe('Backoffice support metadata API contract', () => {
     // Only the two authenticated reads reached the service; the cookieless one
     // never did.
     expect(diagnosisCalls).toHaveLength(2)
+  })
+
+  test('T-SUP-API-39 reads the attention panel as the operator, withheld notices included', async () => {
+    const response = await routes().fetch(request('/support/attention'))
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('cache-control')).toBe('no-store')
+    await expect(response.json()).resolves.toEqual(panel)
+    expect(attentionCalls).toHaveLength(1)
+    expect(attentionCalls[0]?.reader).toEqual({
+      actorPersonId: ACTOR_PERSON_ID,
+      actorSessionId: ACTOR_SESSION_ID,
+    })
+  })
+
+  test('T-SUP-API-40 answers forbidden when no duty resolves a notice, and 503 when the read breaks', async () => {
+    const forbidden = await routes(
+      metadataService(),
+      sessionService(),
+      diagnosisService(),
+      attentionService({
+        read: () => Promise.reject(Object.assign(new Error('refused'), { code: '42501' })),
+      }),
+    ).fetch(request('/support/attention'))
+    const broken = await routes(
+      metadataService(),
+      sessionService(),
+      diagnosisService(),
+      attentionService({ read: () => Promise.reject(new Error('database unavailable')) }),
+    ).fetch(request('/support/attention'))
+
+    expect([forbidden.status, broken.status]).toEqual([403, 503])
+    expect(forbidden.headers.get('content-type')).toContain('application/problem+json')
+  })
+
+  test('T-SUP-API-41 never reads the panel without a session that still resolves', async () => {
+    const missing = await routes().fetch(request('/support/attention', { cookie: false }))
+    const ended = await routes(
+      metadataService(),
+      sessionService({
+        resolveActor: async () =>
+          Promise.reject(new BackofficeAuthenticationError('unauthenticated')),
+      }),
+    ).fetch(request('/support/attention'))
+
+    expect([missing.status, ended.status]).toEqual([401, 401])
+    expect(attentionCalls).toEqual([])
   })
 })

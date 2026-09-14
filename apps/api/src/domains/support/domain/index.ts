@@ -226,6 +226,18 @@ export interface SupportDiagnosisDatabase {
 }
 
 /**
+ * What needs attention: `HU-BO-005`.
+ *
+ * Counters only, each gated by the duty of the screen it leads to. Which notices an
+ * operator sees, and what counts as repeated, is decided in PostgreSQL.
+ */
+export type SupportAttentionPanel = AllfitV1Schemas['SupportAttentionPanel']
+
+export interface SupportAttentionDatabase {
+  read(input: SupportReader & { requestId: string }): Promise<SupportAttentionPanel>
+}
+
+/**
  * Break-glass windows: `OP-SUP-001` through `OP-SUP-004`.
  *
  * The vocabularies are repeated here only so a malformed request is answered 422

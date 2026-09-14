@@ -12,18 +12,21 @@ export { backofficeBreakGlassRoutes } from './handlers/backoffice-break-glass.js
 export {
   breakGlassService,
   platformAccessService,
+  supportAttentionService,
   supportDiagnosisService,
   supportMetadataService,
 } from './dependencies.js'
 export type {
   BreakGlassService,
   PlatformAccessService,
+  SupportAttentionService,
   SupportDiagnosisService,
   SupportMetadataService,
 } from './application/index.js'
 export type {
   BreakGlassRequest,
   BreakGlassExerciseOutcome,
+  SupportAttentionPanel,
   SupportDeliveryCircuit,
   SupportOperation,
   SupportPersonMetadata,

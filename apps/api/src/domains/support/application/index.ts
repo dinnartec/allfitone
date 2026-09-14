@@ -17,6 +17,8 @@ import type {
   BreakGlassRequest,
   BreakGlassRequestCreate,
   BreakGlassStatus,
+  SupportAttentionDatabase,
+  SupportAttentionPanel,
   SupportDeliveryCircuit,
   SupportDiagnosisDatabase,
   SupportOperation,
@@ -170,6 +172,23 @@ export function createSupportDiagnosisService(
   return {
     listOperations: (reader, input) => database.listOperations({ ...reader, ...input }),
     listDeliveryCircuits: (reader, input) => database.listDeliveryCircuits({ ...reader, ...input }),
+  }
+}
+
+/**
+ * The attention panel carries the reader through. Which notices this operator
+ * sees is resolved from their duties inside the read's own transaction, so this
+ * layer cannot show a counter the database withheld.
+ */
+export interface SupportAttentionService {
+  read(reader: SupportReader, input: { requestId: string }): Promise<SupportAttentionPanel>
+}
+
+export function createSupportAttentionService(
+  database: SupportAttentionDatabase,
+): SupportAttentionService {
+  return {
+    read: (reader, input) => database.read({ ...reader, ...input }),
   }
 }
 

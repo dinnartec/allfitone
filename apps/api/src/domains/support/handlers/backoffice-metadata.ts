@@ -1,5 +1,5 @@
 /**
- * Backoffice support metadata routes: `OP-SUP-005`.
+ * Backoffice support metadata routes: `OP-SUP-005` and `NEW-SUP-ATTENTION`.
  *
  * `HU-BO-006` finds a person, `HU-BO-007` opens their operational state, and
  * both read the same minimised projection. The handler shapes and rejects; it
@@ -12,6 +12,10 @@
  * become an exploration; and the case reference is required on both routes,
  * because a read nobody can trace back to a case is the thing `PR-22` exists to
  * prevent.
+ *
+ * The attention panel (`HU-BO-005`) lives here because it is a support read with
+ * no subject, like the diagnosis feed. Which of its notices an operator sees is
+ * decided by their duties in PostgreSQL, never by this handler.
  */
 
 import { randomUUID } from 'node:crypto'
@@ -27,8 +31,16 @@ import {
   type BackofficeAuthenticationService,
 } from '../../identity/index.js'
 import { problem, type ApiErrorCode } from '../../../platform/http/index.js'
-import type { SupportDiagnosisService, SupportMetadataService } from '../application/index.js'
-import { supportDiagnosisService, supportMetadataService } from '../dependencies.js'
+import type {
+  SupportAttentionService,
+  SupportDiagnosisService,
+  SupportMetadataService,
+} from '../application/index.js'
+import {
+  supportAttentionService,
+  supportDiagnosisService,
+  supportMetadataService,
+} from '../dependencies.js'
 import {
   SUPPORT_CASE_REFERENCE,
   SUPPORT_OPERATION_SOURCES,
@@ -48,10 +60,12 @@ export function backofficeSupportMetadataRoutes(
   injectedMetadata?: SupportMetadataService,
   injectedSessions?: BackofficeAuthenticationService,
   injectedDiagnosis?: SupportDiagnosisService,
+  injectedAttention?: SupportAttentionService,
 ): Hono {
   const origin = new URL(trustedBackofficeWebUrl()).origin
   const metadata = () => injectedMetadata ?? supportMetadataService()
   const diagnosis = () => injectedDiagnosis ?? supportDiagnosisService()
+  const attention = () => injectedAttention ?? supportAttentionService()
   const sessions = () => injectedSessions ?? backofficeAuthenticationService()
   const routes = new Hono()
 
@@ -150,6 +164,22 @@ export function backofficeSupportMetadataRoutes(
           { requestId: randomUUID() },
         ),
       })
+    } catch (error) {
+      return operationFailure(c, error)
+    }
+  })
+
+  // Counters with no subject, so no case reference either.
+  routes.get('/support/attention', async (c) => {
+    try {
+      const actor = await backofficeActor(c, sessions())
+      if (actor instanceof Response) return actor
+      return c.json(
+        await attention().read(
+          { actorPersonId: actor.personId, actorSessionId: actor.sessionId },
+          { requestId: randomUUID() },
+        ),
+      )
     } catch (error) {
       return operationFailure(c, error)
     }
