@@ -426,7 +426,72 @@ export interface paths {
      */
     get: operations['listBackofficeOrganizations']
     put?: never
+    /**
+     * Create an organization and hand it to its owner
+     * @description Creates the organization `unclaimed`, its site when one is given, and one ownership invitation to the owner's email in a single transaction. Nothing operates until the owner accepts, and Allfit does not run it in between.
+     *     A company is named here. A natural person is named from their own identity when they accept, so the body has nowhere to write a person's name and a legal name sent for one is refused.
+     */
+    post: operations['createBackofficeOrganizationHandover']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/organizations/{organizationId}/handover': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Read where a handover stands
+     * @description The organization, its site and its latest ownership invitation. The address the invitation went to is a hint, enough to recognise it and not to read it back. An organization its owner created was never handed over: 404.
+     */
+    get: operations['readBackofficeOrganizationHandover']
+    put?: never
     post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/organizations/{organizationId}/handover/resends': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Send the ownership invitation again
+     * @description A live invitation is sent again as it is, so the first email keeps working. A spent or lapsed one is replaced by a new invitation to the same address. It is never sent to a different one, and an organization with an owner has nothing to resend: 409. The command carries no body.
+     */
+    post: operations['resendBackofficeOrganizationHandover']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/organizations/{organizationId}/cancellation': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Cancel an organization nobody claimed
+     * @description `HU-BO-015`. Only an organization that was never claimed is cancelled, and its pending invitation is withdrawn with it. One with an owner is closed by that owner, never from here: 409. Cancelling a cancelled organization converges. The command carries no body.
+     */
+    post: operations['cancelBackofficeOrganizationHandover']
     delete?: never
     options?: never
     head?: never
@@ -1348,6 +1413,46 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/studio/v1/ownership-invitations/resolve': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Resolve a pending ownership invitation
+     * @description Resolves a token Allfit sent to hand over an organization, without exposing the address it went to. Invalid, expired, spent, revoked and cancelled invitations are indistinguishable, and a team token never resolves here.
+     */
+    post: operations['resolveStudioOwnershipInvitation']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/studio/v1/ownership-invitations/decisions': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Accept or reject an organization handed over by Allfit
+     * @description Accepting makes the person the owner and the organization starts operating, in one transaction. Only the invited email decides, and whoever from Allfit handed the organization over cannot claim it. A natural person's organization takes its responsible name from their own identity here.
+     */
+    post: operations['decideStudioOwnershipInvitation']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/studio/v1/organizations/{organizationId}/invitations': {
     parameters: {
       query?: never
@@ -1961,6 +2066,53 @@ export interface components {
     BackofficeOrganizationPage: {
       data: components['schemas']['BackofficeOrganizationSummary'][]
       page: components['schemas']['Page']
+    }
+    /**
+     * @description Whether the organization answers as a company or as a natural person. A natural person's name is never written by Allfit.
+     * @enum {string}
+     */
+    OrganizationPartyKind: 'natural_person' | 'legal_entity'
+    OrganizationHandoverCreate: {
+      display_name: string
+      type_code: components['schemas']['OrganizationTypeCode']
+      party_kind: components['schemas']['OrganizationPartyKind']
+      /** @description Required for a company and refused for a natural person. */
+      legal_name?: string | null
+      site?: {
+        name: string
+        address?: string | null
+      } | null
+      /** Format: email */
+      owner_email: string
+    }
+    OrganizationHandover: {
+      organization_id: components['schemas']['Uuid']
+      display_name: string
+      type_code: components['schemas']['OrganizationTypeCode']
+      type_name: string
+      party_kind: components['schemas']['OrganizationPartyKind']
+      legal_name: string | null
+      status: components['schemas']['OrganizationLifecycleStatus']
+      /** Format: date-time */
+      created_at: string
+      /** Format: date-time */
+      claimed_at: string | null
+      /** Format: date-time */
+      cancelled_at: string | null
+      site: {
+        site_id: components['schemas']['Uuid']
+        name: string
+        address: string | null
+      } | null
+      /** @description The latest ownership invitation. The address is a hint, never the address. */
+      invitation: {
+        invitation_id: components['schemas']['Uuid']
+        status: components['schemas']['TeamInvitationStatus']
+        intent_status: components['schemas']['TeamInvitationIntentStatus']
+        contact_hint: string
+        /** Format: date-time */
+        expires_at: string
+      } | null
     }
     /**
      * @description How a credential was checked. Documents, civil identity, health and a complete profile are never verifiable in V1, so no method exists for them.
@@ -2785,6 +2937,44 @@ export interface components {
         /** @enum {string} */
         proposed_role_code: 'admin' | 'coach' | 'staff'
         membership_id: components['schemas']['UuidV7'] | null
+      }
+      replayed: boolean
+    }
+    OwnershipInvitationPresentation: {
+      id: components['schemas']['Uuid']
+      organization: {
+        id: components['schemas']['Uuid']
+        display_name: string
+        type_name: string
+        party_kind: components['schemas']['OrganizationPartyKind']
+        legal_name: string | null
+        site_name: string | null
+      }
+      /** Format: date-time */
+      expires_at: string
+      intent: {
+        id: components['schemas']['Uuid']
+        /** @constant */
+        status: 'pending'
+      }
+    }
+    OwnershipInvitationDecisionCreate: {
+      token: string
+      intent_id: components['schemas']['Uuid']
+      /** @enum {string} */
+      decision: 'accepted' | 'rejected'
+    }
+    OwnershipInvitationDecisionResult: {
+      invitation_id: components['schemas']['Uuid']
+      /** @constant */
+      invitation_status: 'completed'
+      organization_id: components['schemas']['Uuid']
+      intent: {
+        id: components['schemas']['Uuid']
+        /** @enum {string} */
+        status: 'accepted' | 'rejected'
+        /** Format: uuid */
+        membership_id: string | null
       }
       replayed: boolean
     }
@@ -5331,6 +5521,151 @@ export interface operations {
       503: components['responses']['UpstreamUnavailable']
     }
   }
+  createBackofficeOrganizationHandover: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['OrganizationHandoverCreate']
+      }
+    }
+    responses: {
+      /** @description The handover, or the same one for a repeated command */
+      201: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['OrganizationHandover']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  readBackofficeOrganizationHandover: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+      }
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The handover */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['OrganizationHandover']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  resendBackofficeOrganizationHandover: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The handover with the invitation that was sent */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['OrganizationHandover']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  cancelBackofficeOrganizationHandover: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The cancelled handover */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['OrganizationHandover']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
   listBackofficeVerificationRequests: {
     parameters: {
       query?: {
@@ -7047,6 +7382,72 @@ export interface operations {
       409: components['responses']['Conflict']
       422: components['responses']['ValidationFailed']
       429: components['responses']['RateLimited']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  resolveStudioOwnershipInvitation: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['TeamInvitationToken']
+      }
+    }
+    responses: {
+      /** @description Pending ownership invitation presentation */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['OwnershipInvitationPresentation']
+        }
+      }
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  decideStudioOwnershipInvitation: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['OwnershipInvitationDecisionCreate']
+      }
+    }
+    responses: {
+      /** @description Decision and any ownership committed atomically */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['OwnershipInvitationDecisionResult']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      422: components['responses']['ValidationFailed']
       503: components['responses']['UpstreamUnavailable']
     }
   }

@@ -1135,6 +1135,192 @@ paths:
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
 
+    post:
+      tags: [Backoffice Organizations]
+      operationId: createBackofficeOrganizationHandover
+      x-allfit-operation: OP-ORG-018
+      x-allfit-cache: no-store
+      summary: Create an organization and hand it to its owner
+      description: >-
+        Creates the organization `unclaimed`, its site when one is given, and one
+        ownership invitation to the owner's email in a single transaction. Nothing
+        operates until the owner accepts, and Allfit does not run it in between.
+
+        A company is named here. A natural person is named from their own identity
+        when they accept, so the body has nowhere to write a person's name and a legal
+        name sent for one is refused.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrganizationHandoverCreate'
+      responses:
+        '201':
+          description: The handover, or the same one for a repeated command
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationHandover'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/organizations/{organizationId}/handover:
+    get:
+      tags: [Backoffice Organizations]
+      operationId: readBackofficeOrganizationHandover
+      x-allfit-operation: OP-ORG-018
+      x-allfit-cache: no-store
+      summary: Read where a handover stands
+      description: >-
+        The organization, its site and its latest ownership invitation. The address
+        the invitation went to is a hint, enough to recognise it and not to read it
+        back. An organization its owner created was never handed over: 404.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/OrganizationId'
+      responses:
+        '200':
+          description: The handover
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationHandover'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/organizations/{organizationId}/handover/resends:
+    post:
+      tags: [Backoffice Organizations]
+      operationId: resendBackofficeOrganizationHandover
+      x-allfit-operation: OP-ORG-021
+      x-allfit-cache: no-store
+      summary: Send the ownership invitation again
+      description: >-
+        A live invitation is sent again as it is, so the first email keeps working. A
+        spent or lapsed one is replaced by a new invitation to the same address. It is
+        never sent to a different one, and an organization with an owner has nothing
+        to resend: 409. The command carries no body.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      responses:
+        '200':
+          description: The handover with the invitation that was sent
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationHandover'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/organizations/{organizationId}/cancellation:
+    post:
+      tags: [Backoffice Organizations]
+      operationId: cancelBackofficeOrganizationHandover
+      x-allfit-operation: OP-ORG-022
+      x-allfit-cache: no-store
+      summary: Cancel an organization nobody claimed
+      description: >-
+        `HU-BO-015`. Only an organization that was never claimed is cancelled, and its
+        pending invitation is withdrawn with it. One with an owner is closed by that
+        owner, never from here: 409. Cancelling a cancelled organization converges. The
+        command carries no body.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      responses:
+        '200':
+          description: The cancelled handover
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationHandover'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
   /backoffice/v1/verification-requests:
     get:
       tags: [Backoffice Verification]
@@ -3275,6 +3461,91 @@ paths:
           $ref: '#/components/responses/ValidationFailed'
         '429':
           $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /studio/v1/ownership-invitations/resolve:
+    post:
+      tags: [Studio Identity]
+      operationId: resolveStudioOwnershipInvitation
+      x-allfit-operation: OP-IDN-016
+      x-allfit-cache: no-store
+      summary: Resolve a pending ownership invitation
+      security: []
+      description: >-
+        Resolves a token Allfit sent to hand over an organization, without exposing
+        the address it went to. Invalid, expired, spent, revoked and cancelled
+        invitations are indistinguishable, and a team token never resolves here.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeamInvitationToken'
+      responses:
+        '200':
+          description: Pending ownership invitation presentation
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OwnershipInvitationPresentation'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /studio/v1/ownership-invitations/decisions:
+    post:
+      tags: [Studio Identity]
+      operationId: decideStudioOwnershipInvitation
+      x-allfit-operation: OP-IDN-009
+      x-allfit-cache: no-store
+      summary: Accept or reject an organization handed over by Allfit
+      description: >-
+        Accepting makes the person the owner and the organization starts operating, in
+        one transaction. Only the invited email decides, and whoever from Allfit handed
+        the organization over cannot claim it. A natural person's organization takes its
+        responsible name from their own identity here.
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OwnershipInvitationDecisionCreate'
+      responses:
+        '200':
+          description: Decision and any ownership committed atomically
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OwnershipInvitationDecisionResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
 
@@ -5634,6 +5905,116 @@ components:
             $ref: '#/components/schemas/BackofficeOrganizationSummary'
         page:
           $ref: '#/components/schemas/Page'
+    OrganizationPartyKind:
+      type: string
+      description: >-
+        Whether the organization answers as a company or as a natural person. A
+        natural person's name is never written by Allfit.
+      enum: [natural_person, legal_entity]
+    OrganizationHandoverCreate:
+      type: object
+      additionalProperties: false
+      required: [display_name, type_code, party_kind, owner_email]
+      properties:
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        type_code:
+          $ref: '#/components/schemas/OrganizationTypeCode'
+        party_kind:
+          $ref: '#/components/schemas/OrganizationPartyKind'
+        legal_name:
+          type: [string, 'null']
+          minLength: 1
+          maxLength: 160
+          description: Required for a company and refused for a natural person.
+        site:
+          type: [object, 'null']
+          additionalProperties: false
+          required: [name]
+          properties:
+            name:
+              type: string
+              minLength: 1
+              maxLength: 120
+            address:
+              type: [string, 'null']
+              minLength: 1
+              maxLength: 240
+        owner_email:
+          type: string
+          format: email
+          minLength: 3
+          maxLength: 254
+    OrganizationHandover:
+      type: object
+      additionalProperties: false
+      required:
+        - organization_id
+        - display_name
+        - type_code
+        - type_name
+        - party_kind
+        - legal_name
+        - status
+        - created_at
+        - claimed_at
+        - cancelled_at
+        - site
+        - invitation
+      properties:
+        organization_id:
+          $ref: '#/components/schemas/Uuid'
+        display_name:
+          type: string
+        type_code:
+          $ref: '#/components/schemas/OrganizationTypeCode'
+        type_name:
+          type: string
+        party_kind:
+          $ref: '#/components/schemas/OrganizationPartyKind'
+        legal_name:
+          type: [string, 'null']
+        status:
+          $ref: '#/components/schemas/OrganizationLifecycleStatus'
+        created_at:
+          type: string
+          format: date-time
+        claimed_at:
+          type: [string, 'null']
+          format: date-time
+        cancelled_at:
+          type: [string, 'null']
+          format: date-time
+        site:
+          type: [object, 'null']
+          additionalProperties: false
+          required: [site_id, name, address]
+          properties:
+            site_id:
+              $ref: '#/components/schemas/Uuid'
+            name:
+              type: string
+            address:
+              type: [string, 'null']
+        invitation:
+          type: [object, 'null']
+          additionalProperties: false
+          required: [invitation_id, status, intent_status, contact_hint, expires_at]
+          description: The latest ownership invitation. The address is a hint, never the address.
+          properties:
+            invitation_id:
+              $ref: '#/components/schemas/Uuid'
+            status:
+              $ref: '#/components/schemas/TeamInvitationStatus'
+            intent_status:
+              $ref: '#/components/schemas/TeamInvitationIntentStatus'
+            contact_hint:
+              type: string
+            expires_at:
+              type: string
+              format: date-time
     CredentialVerificationMethod:
       type: string
       description: >-
@@ -7539,6 +7920,86 @@ components:
               oneOf:
                 - $ref: '#/components/schemas/UuidV7'
                 - type: 'null'
+        replayed:
+          type: boolean
+    OwnershipInvitationPresentation:
+      type: object
+      additionalProperties: false
+      required: [id, organization, expires_at, intent]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        organization:
+          type: object
+          additionalProperties: false
+          required: [id, display_name, type_name, party_kind, legal_name, site_name]
+          properties:
+            id:
+              $ref: '#/components/schemas/Uuid'
+            display_name:
+              type: string
+              minLength: 1
+            type_name:
+              type: string
+            party_kind:
+              $ref: '#/components/schemas/OrganizationPartyKind'
+            legal_name:
+              type: [string, 'null']
+            site_name:
+              type: [string, 'null']
+        expires_at:
+          type: string
+          format: date-time
+        intent:
+          type: object
+          additionalProperties: false
+          required: [id, status]
+          properties:
+            id:
+              $ref: '#/components/schemas/Uuid'
+            status:
+              type: string
+              const: pending
+    OwnershipInvitationDecisionCreate:
+      type: object
+      additionalProperties: false
+      required: [token, intent_id, decision]
+      properties:
+        token:
+          type: string
+          minLength: 43
+          maxLength: 43
+          pattern: '^[A-Za-z0-9_-]{43}$'
+        intent_id:
+          $ref: '#/components/schemas/Uuid'
+        decision:
+          type: string
+          enum: [accepted, rejected]
+    OwnershipInvitationDecisionResult:
+      type: object
+      additionalProperties: false
+      required: [invitation_id, invitation_status, organization_id, intent, replayed]
+      properties:
+        invitation_id:
+          $ref: '#/components/schemas/Uuid'
+        invitation_status:
+          type: string
+          const: completed
+        organization_id:
+          $ref: '#/components/schemas/Uuid'
+        intent:
+          type: object
+          additionalProperties: false
+          required: [id, status, membership_id]
+          properties:
+            id:
+              $ref: '#/components/schemas/Uuid'
+            status:
+              type: string
+              enum: [accepted, rejected]
+            membership_id:
+              type: [string, 'null']
+              format: uuid
         replayed:
           type: boolean
     TeamInvitationCreate:

@@ -2937,6 +2937,146 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  OrganizationHandover: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'organization_id',
+      'display_name',
+      'type_code',
+      'type_name',
+      'party_kind',
+      'legal_name',
+      'status',
+      'created_at',
+      'claimed_at',
+      'cancelled_at',
+      'site',
+      'invitation',
+    ],
+    properties: {
+      organization_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      display_name: {
+        type: 'string',
+      },
+      type_code: {
+        $ref: '#/components/schemas/OrganizationTypeCode',
+      },
+      type_name: {
+        type: 'string',
+      },
+      party_kind: {
+        $ref: '#/components/schemas/OrganizationPartyKind',
+      },
+      legal_name: {
+        type: ['string', 'null'],
+      },
+      status: {
+        $ref: '#/components/schemas/OrganizationLifecycleStatus',
+      },
+      created_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      claimed_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      cancelled_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      site: {
+        type: ['object', 'null'],
+        additionalProperties: false,
+        required: ['site_id', 'name', 'address'],
+        properties: {
+          site_id: {
+            $ref: '#/components/schemas/Uuid',
+          },
+          name: {
+            type: 'string',
+          },
+          address: {
+            type: ['string', 'null'],
+          },
+        },
+      },
+      invitation: {
+        type: ['object', 'null'],
+        additionalProperties: false,
+        required: ['invitation_id', 'status', 'intent_status', 'contact_hint', 'expires_at'],
+        description: 'The latest ownership invitation. The address is a hint, never the address.',
+        properties: {
+          invitation_id: {
+            $ref: '#/components/schemas/Uuid',
+          },
+          status: {
+            $ref: '#/components/schemas/TeamInvitationStatus',
+          },
+          intent_status: {
+            $ref: '#/components/schemas/TeamInvitationIntentStatus',
+          },
+          contact_hint: {
+            type: 'string',
+          },
+          expires_at: {
+            type: 'string',
+            format: 'date-time',
+          },
+        },
+      },
+    },
+  },
+  OrganizationHandoverCreate: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['display_name', 'type_code', 'party_kind', 'owner_email'],
+    properties: {
+      display_name: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 120,
+      },
+      type_code: {
+        $ref: '#/components/schemas/OrganizationTypeCode',
+      },
+      party_kind: {
+        $ref: '#/components/schemas/OrganizationPartyKind',
+      },
+      legal_name: {
+        type: ['string', 'null'],
+        minLength: 1,
+        maxLength: 160,
+        description: 'Required for a company and refused for a natural person.',
+      },
+      site: {
+        type: ['object', 'null'],
+        additionalProperties: false,
+        required: ['name'],
+        properties: {
+          name: {
+            type: 'string',
+            minLength: 1,
+            maxLength: 120,
+          },
+          address: {
+            type: ['string', 'null'],
+            minLength: 1,
+            maxLength: 240,
+          },
+        },
+      },
+      owner_email: {
+        type: 'string',
+        format: 'email',
+        minLength: 3,
+        maxLength: 254,
+      },
+    },
+  },
   OrganizationLifecycleStatus: {
     type: 'string',
     description:
@@ -3035,6 +3175,12 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         $ref: '#/components/schemas/Uuid',
       },
     },
+  },
+  OrganizationPartyKind: {
+    type: 'string',
+    description:
+      "Whether the organization answers as a company or as a natural person. A natural person's name is never written by Allfit.",
+    enum: ['natural_person', 'legal_entity'],
   },
   OrganizationRole: {
     type: 'object',
@@ -3220,6 +3366,118 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
       type_code: {
         $ref: '#/components/schemas/OrganizationTypeCode',
+      },
+    },
+  },
+  OwnershipInvitationDecisionCreate: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['token', 'intent_id', 'decision'],
+    properties: {
+      token: {
+        type: 'string',
+        minLength: 43,
+        maxLength: 43,
+        pattern: '^[A-Za-z0-9_-]{43}$',
+      },
+      intent_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      decision: {
+        type: 'string',
+        enum: ['accepted', 'rejected'],
+      },
+    },
+  },
+  OwnershipInvitationDecisionResult: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['invitation_id', 'invitation_status', 'organization_id', 'intent', 'replayed'],
+    properties: {
+      invitation_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      invitation_status: {
+        type: 'string',
+        const: 'completed',
+      },
+      organization_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      intent: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['id', 'status', 'membership_id'],
+        properties: {
+          id: {
+            $ref: '#/components/schemas/Uuid',
+          },
+          status: {
+            type: 'string',
+            enum: ['accepted', 'rejected'],
+          },
+          membership_id: {
+            type: ['string', 'null'],
+            format: 'uuid',
+          },
+        },
+      },
+      replayed: {
+        type: 'boolean',
+      },
+    },
+  },
+  OwnershipInvitationPresentation: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['id', 'organization', 'expires_at', 'intent'],
+    properties: {
+      id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      organization: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['id', 'display_name', 'type_name', 'party_kind', 'legal_name', 'site_name'],
+        properties: {
+          id: {
+            $ref: '#/components/schemas/Uuid',
+          },
+          display_name: {
+            type: 'string',
+            minLength: 1,
+          },
+          type_name: {
+            type: 'string',
+          },
+          party_kind: {
+            $ref: '#/components/schemas/OrganizationPartyKind',
+          },
+          legal_name: {
+            type: ['string', 'null'],
+          },
+          site_name: {
+            type: ['string', 'null'],
+          },
+        },
+      },
+      expires_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      intent: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['id', 'status'],
+        properties: {
+          id: {
+            $ref: '#/components/schemas/Uuid',
+          },
+          status: {
+            type: 'string',
+            const: 'pending',
+          },
+        },
       },
     },
   },
