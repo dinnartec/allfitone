@@ -17,7 +17,8 @@
 -- `(occurred_at, id)`. A composite foreign key has to name the referenced columns
 -- in the order the unique declares them.
 
+set lock_timeout = '5s';
+set statement_timeout = '60s';
+
 alter table support.break_glass_events
-  add constraint fk_break_glass_events_access_event
-  foreign key (access_event_occurred_at, access_event_id)
-  references privacy.access_events (occurred_at, id) on delete restrict;
+  add constraint fk_break_glass_events_access_event foreign key (access_event_occurred_at, access_event_id) references privacy.access_events (occurred_at, id) on delete restrict;

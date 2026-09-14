@@ -60,10 +60,8 @@ alter table identity.invitations
   alter column issued_by_membership_id drop not null,
   add column issued_by_person_id uuid,
   add column issued_by_duty_assignment_id uuid,
-  add constraint fk_invitations_platform_issuer foreign key (issued_by_person_id)
-    references identity.people(id) on delete restrict,
-  add constraint fk_invitations_platform_issuer_duty foreign key (issued_by_duty_assignment_id)
-    references support.platform_duty_assignments(id) on delete restrict,
+  add constraint fk_invitations_platform_issuer foreign key (issued_by_person_id) references identity.people(id) on delete restrict,
+  add constraint fk_invitations_platform_issuer_duty foreign key (issued_by_duty_assignment_id) references support.platform_duty_assignments(id) on delete restrict,
   add constraint ck_invitations_issuer check (
     (issued_by_membership_id is not null
       and issued_by_person_id is null
@@ -81,10 +79,8 @@ alter table identity.invitation_intents
 alter table organizations.organization_events
   add column actor_person_id uuid,
   add column actor_duty_assignment_id uuid,
-  add constraint fk_organization_events_actor_person foreign key (actor_person_id)
-    references identity.people(id) on delete restrict,
-  add constraint fk_organization_events_actor_duty foreign key (actor_duty_assignment_id)
-    references support.platform_duty_assignments(id) on delete restrict,
+  add constraint fk_organization_events_actor_person foreign key (actor_person_id) references identity.people(id) on delete restrict,
+  add constraint fk_organization_events_actor_duty foreign key (actor_duty_assignment_id) references support.platform_duty_assignments(id) on delete restrict,
   add constraint ck_organization_events_platform_actor check (
     (actor_person_id is null) = (actor_duty_assignment_id is null)
     and not (actor_membership_id is not null and actor_person_id is not null)

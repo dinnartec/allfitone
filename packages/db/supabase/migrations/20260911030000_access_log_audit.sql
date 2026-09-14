@@ -30,6 +30,9 @@
 -- at all, and `T-PRV-AUD-01` asserts the declared result type so that a content
 -- column added later fails the test instead of leaking.
 
+set lock_timeout = '5s';
+set statement_timeout = '60s';
+
 -- ---------------------------------------------------------------------------
 -- Criterion 4 — append-only, including for the owner
 -- ---------------------------------------------------------------------------

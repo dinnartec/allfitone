@@ -85,10 +85,7 @@ create index idx_credential_verification_requests_queue
 
 alter table identity.professional_credential_verifications
   add column request_id uuid,
-  add constraint fk_professional_credential_verifications_request
-    foreign key (request_id, professional_credential_id)
-    references identity.credential_verification_requests (id, professional_credential_id)
-    on delete restrict;
+  add constraint fk_professional_credential_verifications_request foreign key (request_id, professional_credential_id) references identity.credential_verification_requests (id, professional_credential_id) on delete restrict;
 
 -- A request is resolved by exactly one decision. Verifications recorded before the
 -- queue existed keep a null request.
