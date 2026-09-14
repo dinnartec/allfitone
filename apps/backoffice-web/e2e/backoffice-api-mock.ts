@@ -20,6 +20,7 @@ export interface BackofficeFixture {
   organizationDirectory?: OrganizationDirectoryFixture
   organizationHandover?: OrganizationHandoverFixture
   organizationFiles?: OrganizationFileFixture
+  attention?: AttentionFixture
   verification?: VerificationFixture
   breakGlass?: BreakGlassFixture
   requests: MockRequest[]
@@ -556,6 +557,99 @@ export function renewalDue(overrides: Partial<RenewalDueFixture> = {}): RenewalD
   }
 }
 
+/**
+ * The attention panel. Which notices are withheld is the database's decision, so
+ * the fixture states the answer rather than simulating duties.
+ */
+export interface AttentionFixture {
+  refusal?: { status: number; code: string }
+  panel?: AttentionPanelFixture
+}
+
+type NoticeAvailability = 'available' | 'withheld'
+
+export interface AttentionPanelFixture {
+  generated_at: string
+  billing: { availability: 'not_modelled' }
+  credential_verifications: {
+    availability: NoticeAvailability
+    pending_count: number | null
+    oldest_requested_at: string | null
+    renewals_due_count: number | null
+  }
+  unclaimed_organizations: {
+    availability: NoticeAvailability
+    count: number | null
+    oldest_created_at: string | null
+    needs_follow_up_count: number | null
+  }
+  repeated_failures: {
+    availability: NoticeAvailability
+    window_hours: 24
+    groups: Array<{
+      source: 'notification' | 'command'
+      label: string
+      affected: number
+      failures: number
+      latest_occurred_at: string
+      last_error_code: string | null
+    }> | null
+    groups_truncated: boolean | null
+    open_circuits: Array<{
+      event_type: string
+      state: 'open' | 'half_open'
+      failure_count: number
+      opened_until: string | null
+    }> | null
+  }
+}
+
+/** Support's view: gyms and failures available, verifications withheld. */
+export function attentionPanelRecord(
+  overrides: Partial<AttentionPanelFixture> = {},
+): AttentionPanelFixture {
+  return {
+    generated_at: new Date().toISOString(),
+    billing: { availability: 'not_modelled' },
+    credential_verifications: {
+      availability: 'withheld',
+      pending_count: null,
+      oldest_requested_at: null,
+      renewals_due_count: null,
+    },
+    unclaimed_organizations: {
+      availability: 'available',
+      count: 2,
+      oldest_created_at: new Date(Date.now() - 10 * 86_400_000).toISOString(),
+      needs_follow_up_count: 1,
+    },
+    repeated_failures: {
+      availability: 'available',
+      window_hours: 24,
+      groups: [
+        {
+          source: 'notification',
+          label: 'identity.invitation_issued.v1',
+          affected: 2,
+          failures: 5,
+          latest_occurred_at: new Date(Date.now() - 600_000).toISOString(),
+          last_error_code: 'smtp_timeout',
+        },
+      ],
+      groups_truncated: false,
+      open_circuits: [
+        {
+          event_type: 'identity.invitation_issued.v1',
+          state: 'open',
+          failure_count: 12,
+          opened_until: new Date(Date.now() + 3_600_000).toISOString(),
+        },
+      ],
+    },
+    ...overrides,
+  }
+}
+
 export interface DiagnosisFixture {
   refusal?: { status: number; code: string }
   circuits: DiagnosisCircuitFixture[]
@@ -971,6 +1065,10 @@ export async function mockBackofficeApi(
       await routeScopes(route, request, fixture)
       return
     }
+    if (request.path === '/backoffice/v1/support/attention') {
+      await routeAttention(route, fixture)
+      return
+    }
     if (
       request.path === '/backoffice/v1/support/operations' ||
       request.path === '/backoffice/v1/support/delivery-circuits'
@@ -984,6 +1082,16 @@ export async function mockBackofficeApi(
     }
     await fulfill(route, 404, error('not-found'))
   })
+}
+
+/** Counters with no subject: like the API, the mock takes no case reference. */
+async function routeAttention(route: Route, fixture: BackofficeFixture): Promise<void> {
+  const attention = fixture.attention ?? {}
+  if (attention.refusal) {
+    await fulfillProblem(route, attention.refusal.status, attention.refusal.code)
+    return
+  }
+  await fulfill(route, 200, attention.panel ?? attentionPanelRecord())
 }
 
 /**
