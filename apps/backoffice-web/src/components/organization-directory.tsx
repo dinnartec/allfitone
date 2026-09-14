@@ -176,7 +176,16 @@ export function OrganizationDirectory() {
               </Field>
               <Field orientation="responsive">
                 <FieldLabel htmlFor="org-status">Estado</FieldLabel>
+                {/* Without the labels the trigger shows the raw state until the popup
+                    has opened once, which is exactly what a filtered link lands on. */}
                 <Select
+                  items={[
+                    { value: ANY, label: 'Todos' },
+                    ...ORGANIZATION_STATUSES.map((option) => ({
+                      value: option,
+                      label: statusLabel(option),
+                    })),
+                  ]}
                   value={draft.status}
                   onValueChange={(next) =>
                     setDraft((current) => ({

@@ -107,6 +107,10 @@ test('support follows a notice to the gyms nobody claimed, already filtered', as
   await unclaimed.getByRole('link', { name: 'Ver los gimnasios sin reclamar' }).click()
 
   await expect(page).toHaveURL('/organizations?status=unclaimed')
+  // The filter names the state in words; the raw value leaked when it came from the link.
+  const status = page.getByRole('combobox', { name: 'Estado' })
+  await expect(status).toContainText('Sin reclamar')
+  await expect(status).not.toContainText('unclaimed')
   await expect(page.locator('[data-organization-row]')).toHaveCount(1)
   await expect(page.getByRole('link', { name: 'Norte Sin Dueño' })).toBeVisible()
   const reads = fixture.requests.filter(
