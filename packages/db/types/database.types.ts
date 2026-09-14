@@ -2592,6 +2592,14 @@ export type Database = {
         Args: { p_organization_id: string }
         Returns: Json
       }
+      read_backoffice_organization: {
+        Args: {
+          p_actor_person_id: string
+          p_actor_session_id: string
+          p_organization_id: string
+        }
+        Returns: Json
+      }
       read_organization: { Args: { p_organization_id: string }; Returns: Json }
       read_organization_handover: {
         Args: {
