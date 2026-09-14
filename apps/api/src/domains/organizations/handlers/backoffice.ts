@@ -1,8 +1,8 @@
 /**
- * Backoffice organization routes: `NEW-SUP-ORG-SEARCH`, `OP-ORG-018`, `OP-ORG-021`
- * and `OP-ORG-022`.
+ * Backoffice organization routes: `NEW-SUP-ORG-SEARCH`, `NEW-SUP-ORG-DETAIL`,
+ * `OP-ORG-018`, `OP-ORG-021` and `OP-ORG-022`.
  *
- * `HU-BO-012`, `HU-BO-014`, `HU-BO-015`. The handler shapes and rejects; it decides
+ * `HU-BO-012` to `HU-BO-015`. The handler shapes and rejects; it decides
  * nothing. The support or lifecycle duty, AAL2, the lifecycle states and who may claim
  * are resolved inside each call's own transaction.
  *
@@ -29,8 +29,13 @@ import {
 } from '../../identity/index.js'
 import { problem, type ApiErrorCode } from '../../../platform/http/index.js'
 import type { OrganizationDirectoryService } from '../application/directory.js'
+import type { OrganizationFileService } from '../application/file.js'
 import type { OrganizationHandoverService } from '../application/handover.js'
-import { organizationDirectoryService, organizationHandoverService } from '../dependencies.js'
+import {
+  organizationDirectoryService,
+  organizationFileService,
+  organizationHandoverService,
+} from '../dependencies.js'
 import {
   ORGANIZATION_LIFECYCLE_STATUSES,
   type OrganizationDirectoryCursor,
@@ -50,10 +55,12 @@ export function backofficeOrganizationRoutes(
   injectedDirectory?: OrganizationDirectoryService,
   injectedSessions?: BackofficeAuthenticationService,
   injectedHandover?: OrganizationHandoverService,
+  injectedFile?: OrganizationFileService,
 ): Hono {
   const origin = new URL(trustedBackofficeWebUrl()).origin
   const directory = () => injectedDirectory ?? organizationDirectoryService()
   const handover = () => injectedHandover ?? organizationHandoverService()
+  const file = () => injectedFile ?? organizationFileService()
   const sessions = () => injectedSessions ?? backofficeAuthenticationService()
   const routes = new Hono()
 
@@ -109,6 +116,27 @@ export function backofficeOrganizationRoutes(
       )
       if (result.replayed) c.header('Idempotent-Replay', 'true')
       return c.json(result.resource, 201)
+    } catch (error) {
+      return operationFailure(c, error)
+    }
+  })
+
+  // The file records every member it reveals inside its own read; nothing here
+  // filters or reshapes it.
+  routes.get('/organizations/:organizationId', async (c) => {
+    const organizationId = c.req.param('organizationId')
+    if (!UUID.test(organizationId) || Object.keys(c.req.query()).length > 0) {
+      return problem(c, 'invalid-request')
+    }
+    try {
+      const actor = await backofficeActor(c, sessions())
+      if (actor instanceof Response) return actor
+      return c.json(
+        await file().read(
+          { actorPersonId: actor.personId, actorSessionId: actor.sessionId },
+          { requestId: randomUUID(), organizationId },
+        ),
+      )
     } catch (error) {
       return operationFailure(c, error)
     }

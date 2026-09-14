@@ -9,6 +9,7 @@ import {
 } from '../../identity/index.js'
 import { mountSurfaces } from '../../../surfaces.js'
 import type { OrganizationDirectoryService } from '../application/directory.js'
+import type { OrganizationFileService } from '../application/file.js'
 import type { OrganizationHandoverService } from '../application/handover.js'
 import { backofficeOrganizationRoutes } from './backoffice.js'
 
@@ -56,6 +57,52 @@ const handoverResource: AllfitV1Schemas['OrganizationHandover'] = {
 
 let captured: unknown[] = []
 let handoverCalls: Array<{ operation: string; input: unknown }> = []
+let fileCalls: unknown[] = []
+
+const fileResource: AllfitV1Schemas['BackofficeOrganizationFile'] = {
+  organization: {
+    organization_id: ORGANIZATION_ID,
+    display_name: 'Dirtest Norte',
+    type_code: 'gym',
+    type_name: 'Gimnasio',
+    status: 'active',
+    party_kind: 'legal_entity',
+    legal_name: 'Norte Fitness SAS',
+    created_at: '2026-08-04T15:00:00.000Z',
+    claimed_at: '2026-08-04T15:00:00.000Z',
+    cancelled_at: null,
+  },
+  owner: {
+    person_id: ACTOR_PERSON_ID,
+    membership_id: '019ab000-0000-7000-8000-000000000311',
+    since: '2026-08-04T15:00:00.000Z',
+  },
+  team: [
+    {
+      membership_id: '019ab000-0000-7000-8000-000000000311',
+      person_id: ACTOR_PERSON_ID,
+      roles: ['owner'],
+      joined_at: '2026-08-04T15:00:00.000Z',
+    },
+  ],
+  team_counts: { active: 1, terminated: 0 },
+  team_truncated: false,
+  sites: [],
+  people_served: null,
+  plans_availability: 'not_modelled',
+  payment_method_availability: 'not_modelled',
+  premium_availability: 'not_modelled',
+}
+
+function fileService(overrides: Partial<OrganizationFileService> = {}): OrganizationFileService {
+  return {
+    read: (_reader, input) => {
+      fileCalls.push(input)
+      return Promise.resolve(fileResource)
+    },
+    ...overrides,
+  }
+}
 
 function directoryService(
   overrides: Partial<OrganizationDirectoryService> = {},
@@ -114,10 +161,11 @@ function routes(
   directory: OrganizationDirectoryService = directoryService(),
   sessions: BackofficeAuthenticationService = sessionService(),
   handover: OrganizationHandoverService = handoverService(),
+  file: OrganizationFileService = fileService(),
 ): Hono {
   return new Hono().route(
     '/backoffice/v1',
-    backofficeOrganizationRoutes(directory, sessions, handover),
+    backofficeOrganizationRoutes(directory, sessions, handover, file),
   )
 }
 
@@ -170,6 +218,7 @@ function colonPath(path: string): string {
 beforeEach(() => {
   captured = []
   handoverCalls = []
+  fileCalls = []
   process.env.BACKOFFICE_WEB_URL = ORIGIN
   process.env.STUDIO_WEB_URL = 'https://studio.example.test'
   process.env.API_PUBLIC_URL = 'https://api.example.test'
@@ -186,7 +235,7 @@ describe('Backoffice organization API contract', () => {
       .map((route) => `${route.method} /backoffice/v1${route.path}`)
       .sort()
 
-    expect(contract).toHaveLength(5)
+    expect(contract).toHaveLength(6)
     expect(mounted).toEqual(contract)
   })
 
@@ -201,6 +250,7 @@ describe('Backoffice organization API contract', () => {
       expect.arrayContaining([
         'GET /backoffice/v1/organizations',
         'POST /backoffice/v1/organizations',
+        'GET /backoffice/v1/organizations/:organizationId',
         'GET /backoffice/v1/organizations/:organizationId/handover',
         'POST /backoffice/v1/organizations/:organizationId/handover/resends',
         'POST /backoffice/v1/organizations/:organizationId/cancellation',
@@ -400,5 +450,43 @@ describe('Backoffice organization API contract', () => {
 
     expect(answers.map((response) => response.status)).toEqual([409, 404, 403, 422, 409])
     expect(answers[4]?.headers.get('retry-after')).toBe('1')
+  })
+
+  test('T-ORG-API-15 returns the file the database built, out of any cache', async () => {
+    const headers = { origin: ORIGIN, cookie: `${BACKOFFICE_SESSION_COOKIE}=session-secret` }
+    const read = await routes().fetch(
+      new Request(`https://api.example.test/backoffice/v1/organizations/${ORGANIZATION_ID}`, {
+        headers,
+      }),
+    )
+    const answers = await Promise.all(
+      [
+        'https://api.example.test/backoffice/v1/organizations/not-an-id',
+        `https://api.example.test/backoffice/v1/organizations/${ORGANIZATION_ID}?include=names`,
+      ].map((url) => routes().fetch(new Request(url, { headers }))),
+    )
+
+    expect(read.status).toBe(200)
+    expect(read.headers.get('cache-control')).toBe('no-store')
+    await expect(read.json()).resolves.toEqual(fileResource)
+    expect(fileCalls[0]).toMatchObject({ organizationId: ORGANIZATION_ID })
+    expect(answers.map((response) => response.status)).toEqual([400, 400])
+    expect(fileCalls).toHaveLength(1)
+  })
+
+  test('T-ORG-API-16 turns a missing duty and an unknown gym into their responses', async () => {
+    const failing = (code: string) =>
+      fileService({ read: () => Promise.reject(Object.assign(new Error('refused'), { code })) })
+    const answers = await Promise.all(
+      ['42501', 'P0002'].map((code) =>
+        routes(directoryService(), sessionService(), handoverService(), failing(code)).fetch(
+          new Request(`https://api.example.test/backoffice/v1/organizations/${ORGANIZATION_ID}`, {
+            headers: { origin: ORIGIN, cookie: `${BACKOFFICE_SESSION_COOKIE}=session-secret` },
+          }),
+        ),
+      ),
+    )
+
+    expect(answers.map((response) => response.status)).toEqual([403, 404])
   })
 })
