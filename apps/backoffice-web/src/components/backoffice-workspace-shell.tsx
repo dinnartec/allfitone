@@ -52,9 +52,16 @@ interface WorkspaceRoute {
 }
 
 const ROUTES: readonly WorkspaceRoute[] = [
+  { href: '/panel', title: 'Inicio', icon: 'operation' },
   { href: '/people', title: 'Personas', icon: 'people' },
+  { href: '/organizations', title: 'Gimnasios', icon: 'operation' },
+  { href: '/access-log', title: 'Registro de accesos', icon: 'operation' },
+  { href: '/verifications', title: 'Verificación de títulos', icon: 'people' },
+  { href: '/break-glass', title: 'Acceso excepcional', icon: 'permissions' },
+  { href: '/diagnosis', title: 'Diagnóstico técnico', icon: 'operation' },
   { href: '/team', title: 'Equipo de Allfit', icon: 'permissions' },
   { href: '/catalogue/result-contracts', title: 'Catálogo global', icon: 'operation' },
+  { href: '/permissions', title: 'Definiciones de permiso', icon: 'permissions' },
 ]
 
 export function resolveBackofficeRoute(pathname: string): WorkspaceRoute {
@@ -115,7 +122,7 @@ function BackofficeSidebar({ pathname, operatorName }: { pathname: string; opera
     <Sidebar collapsible="icon" data-afo-theme="dark" data-backoffice-sidebar>
       <SidebarHeader>
         <Link
-          href="/team"
+          href="/panel"
           aria-label="Ir al inicio de Allfit Backoffice"
           data-backoffice-brand
           onClick={closeMobileNavigation}

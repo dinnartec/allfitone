@@ -3,8 +3,8 @@ import type { BrowserContext, Route } from '@playwright/test'
 const BACKOFFICE_ORIGIN = 'http://127.0.0.1:3102'
 
 export interface BackofficeFixture {
-  session?: SessionFixture
-  attempt?: AttemptFixture
+  session?: SessionFixture | undefined
+  attempt?: AttemptFixture | undefined
   passwordOutcome?: 'challenge' | 'enrollment' | 'unauthenticated' | 'disabled' | 'rate-limited'
   totpOutcome?: 'success' | 'invalid' | 'network-lost-after-success' | 'rate-limited'
   invalidTotpCount?: number
@@ -14,7 +14,702 @@ export interface BackofficeFixture {
   resultContracts?: ResultContractFixture
   catalogue?: CatalogueFixture
   support?: SupportFixture
+  diagnosis?: DiagnosisFixture
+  scopes?: ScopeFixture
+  accessLog?: AccessLogFixture
+  organizationDirectory?: OrganizationDirectoryFixture
+  organizationHandover?: OrganizationHandoverFixture
+  organizationFiles?: OrganizationFileFixture
+  attention?: AttentionFixture
+  verification?: VerificationFixture
+  breakGlass?: BreakGlassFixture
   requests: MockRequest[]
+}
+
+/**
+ * The published permission definitions. Publishing appends a version rather than
+ * replacing one, because that is what the real command does and the screen's whole
+ * point is that an older version survives.
+ */
+export interface ScopeFixture {
+  refusal?: { status: number; code: string }
+  definitions: ScopeDefinitionFixture[]
+}
+
+export interface ScopeDefinitionFixture {
+  id: string
+  scope_code: string
+  version_number: number
+  status: string
+  published_at: string | null
+  rules: Array<{
+    resource: string
+    field: string
+    data_classification_code: string
+    max_action: 'read' | 'contribute'
+    is_excluded: boolean
+    historical_readable: boolean
+  }>
+}
+
+export function scopeDefinition(
+  overrides: Partial<ScopeDefinitionFixture> = {},
+): ScopeDefinitionFixture {
+  return {
+    id: nextAssignmentId(),
+    scope_code: 'body_progress',
+    version_number: 1,
+    status: 'published',
+    published_at: new Date(Date.now() - 86_400_000).toISOString(),
+    rules: [
+      {
+        resource: 'execution.body_measurements',
+        field: 'weight_kg',
+        data_classification_code: 'body',
+        max_action: 'read',
+        is_excluded: false,
+        historical_readable: true,
+      },
+      {
+        resource: 'nutrition.intake_entries',
+        field: '*',
+        data_classification_code: 'nutrition',
+        max_action: 'read',
+        is_excluded: true,
+        historical_readable: false,
+      },
+    ],
+    ...overrides,
+  }
+}
+
+/**
+ * Break-glass files.
+ *
+ * This mock reproduces the *command's* rules, not the screen's expectations. A
+ * decision appends an approval and the window opens only once the quorum is
+ * complete; the requester may never decide on their own file; a rejection is
+ * final; and a denied attempt still answers 200 with its reason. A mock more
+ * permissive than the real command would let the screen pass while production
+ * refused — which is the whole failure this file exists to prevent.
+ */
+export interface BreakGlassFixture {
+  refusal?: { status: number; code: string }
+  nextCommandFailure?: { status: number; code: string } | undefined
+  /**
+   * The reason the next exercise is denied, consumed once. It stands for the real
+   * race the screen cannot prevent: the duty is withdrawn, or the window lapses,
+   * between the answer that offered the read and the click that took it.
+   */
+  nextExerciseDenial?: string | undefined
+  files: BreakGlassFileFixture[]
+}
+
+export interface BreakGlassFileFixture {
+  id: string
+  requester_person_id: string
+  subject_person_id: string
+  categories: string[]
+  purpose: string
+  case_reference: string
+  sensitivity_tier: 'standard' | 'restricted'
+  required_approvals: number
+  requested_duration_minutes: number
+  requested_at: string
+  request_expires_at: string
+  status: string
+  window_starts_at: string | null
+  window_ends_at: string | null
+  closed_at: string | null
+  reviewed_at: string | null
+  review_outcome: string | null
+  approvals: Array<{
+    approver_person_id: string
+    decision: 'approved' | 'rejected'
+    reason_code: string
+    decided_at: string
+  }>
+  exercise_count: number
+  /**
+   * Whether the viewer opened this file. The other two viewer fields are derived
+   * from it on every answer, never set by a test, so a spec cannot grant itself a
+   * button the server would withhold.
+   */
+  viewer_is_requester: boolean
+  viewer_has_decided: boolean
+}
+
+export const BREAK_GLASS_PEER_ID = '019a4000-0000-7000-8000-000000000001'
+
+const BREAK_GLASS_RESTRICTED = ['body_progress', 'health_context', 'nutrition_intake']
+
+function breakGlassTier(categories: string[]): 'standard' | 'restricted' {
+  return categories.some((category) => BREAK_GLASS_RESTRICTED.includes(category))
+    ? 'restricted'
+    : 'standard'
+}
+
+export function breakGlassFile(
+  overrides: Partial<BreakGlassFileFixture> = {},
+): BreakGlassFileFixture {
+  const categories = overrides.categories ?? ['nutrition_guidance']
+  const tier = breakGlassTier(categories)
+  const now = Date.now()
+  return {
+    id: nextAssignmentId(),
+    requester_person_id: ACTOR_PERSON_ID,
+    subject_person_id: SUBJECT_PERSON_ID,
+    categories,
+    purpose: 'customer_support_request',
+    case_reference: 'CASE-2026-001',
+    sensitivity_tier: tier,
+    required_approvals: tier === 'restricted' ? 2 : 1,
+    requested_duration_minutes: tier === 'restricted' ? 15 : 30,
+    requested_at: new Date(now - 120_000).toISOString(),
+    request_expires_at: new Date(now + 1_680_000).toISOString(),
+    status: 'requested',
+    window_starts_at: null,
+    window_ends_at: null,
+    closed_at: null,
+    reviewed_at: null,
+    review_outcome: null,
+    approvals: [],
+    exercise_count: 0,
+    viewer_is_requester: true,
+    viewer_has_decided: false,
+    ...overrides,
+  }
+}
+
+/** An open window with `minutes` left, so the countdown has something to say. */
+export function openBreakGlassWindow(
+  minutes: number,
+  overrides: Partial<BreakGlassFileFixture> = {},
+): BreakGlassFileFixture {
+  const now = Date.now()
+  const file = breakGlassFile(overrides)
+  return {
+    ...file,
+    status: 'approved',
+    reviewed_at: new Date(now - 60_000).toISOString(),
+    review_outcome: 'approved',
+    window_starts_at: new Date(now - 60_000).toISOString(),
+    window_ends_at: new Date(now + minutes * 60_000).toISOString(),
+    approvals: Array.from({ length: file.required_approvals }, (_unused, index) => ({
+      approver_person_id: `019a4000-0000-7000-8000-00000000000${index + 1}`,
+      decision: 'approved' as const,
+      reason_code: 'REASON-APPROVED',
+      decided_at: new Date(now - 60_000).toISOString(),
+    })),
+  }
+}
+
+/**
+ * The access log.
+ *
+ * The mock applies the filters and the per-case disqualification the way the two
+ * closed queries do, and counts what it removed. A mock that returned a canned
+ * page would let the screen pass while hiding the one failure that matters: an
+ * incomplete answer that looks complete.
+ */
+export interface AccessLogFixture {
+  refusal?: { status: number; code: string }
+  events: AccessLogEventFixture[]
+}
+
+export interface AccessLogEventFixture {
+  actor_person_id: string
+  subject_person_id: string | null
+  resource: string
+  resource_id: string | null
+  purpose: string
+  result: string
+  scope_code: string | null
+  scope_version: number | null
+  access_mode: string
+  occurred_at: string
+  /**
+   * Whether this record belongs to a break-glass window the viewing auditor
+   * requested or approved. The server derives it from the evidence rows; here it
+   * is declared, because the E2E has no break-glass case to derive it from.
+   */
+  withheld_from_viewer?: boolean
+}
+
+export function accessEvent(overrides: Partial<AccessLogEventFixture> = {}): AccessLogEventFixture {
+  return {
+    actor_person_id: SUBJECT_PERSON_ID,
+    subject_person_id: SUPPORT_SUBJECT_ID,
+    resource: 'support.person_operational_state',
+    resource_id: null,
+    purpose: 'customer_support_request',
+    result: 'allowed',
+    scope_code: null,
+    scope_version: null,
+    access_mode: 'organization_operational',
+    occurred_at: new Date(Date.now() - 3_600_000).toISOString(),
+    withheld_from_viewer: false,
+    ...overrides,
+  }
+}
+
+/**
+ * The organization directory.
+ *
+ * The mock keeps the closed read's rules rather than the screen's expectations: a
+ * search shorter than two characters or an unknown state is refused, the search
+ * matches the display name only and literally, and pages follow the name order
+ * through an opaque cursor. Each organization carries a legal name so a test can
+ * prove it is neither searched nor returned.
+ */
+export interface OrganizationDirectoryFixture {
+  refusal?: { status: number; code: string }
+  pageSize?: number
+  organizations: DirectoryOrganizationFixture[]
+}
+
+export type DirectoryOrganizationStatus = 'unclaimed' | 'active' | 'closed' | 'cancelled'
+
+export interface DirectoryOrganizationFixture {
+  organization_id: string
+  display_name: string
+  legal_name: string
+  type_code: string
+  type_name: string
+  status: DirectoryOrganizationStatus
+  created_at: string
+  claimed_at: string | null
+  cancelled_at: string | null
+  active_member_count: number
+  site_count: number
+  people_served: number | null
+}
+
+const DIRECTORY_STATUSES: readonly string[] = ['unclaimed', 'active', 'closed', 'cancelled']
+let directorySequence = 0
+
+/** The lifecycle dates follow the state, the way the table's check constraint requires. */
+export function directoryOrganization(
+  overrides: Partial<DirectoryOrganizationFixture> = {},
+): DirectoryOrganizationFixture {
+  directorySequence += 1
+  const status = overrides.status ?? 'active'
+  const createdAt = new Date(Date.now() - 30 * 86_400_000).toISOString()
+  return {
+    organization_id: `019a6000-0000-7000-8000-${String(directorySequence).padStart(12, '0')}`,
+    display_name: `Gimnasio ${directorySequence}`,
+    legal_name: `Razón social ${directorySequence} S.A.S.`,
+    type_code: 'gym',
+    type_name: 'Gimnasio',
+    status,
+    created_at: createdAt,
+    claimed_at: status === 'active' || status === 'closed' ? createdAt : null,
+    cancelled_at: status === 'cancelled' ? new Date(Date.now() - 86_400_000).toISOString() : null,
+    active_member_count: status === 'active' ? 1 : 0,
+    site_count: 1,
+    people_served: null,
+    ...overrides,
+  }
+}
+
+/**
+ * Gym files.
+ *
+ * The mock returns the projection as the database closes it: identifiers and roles,
+ * never names, a natural person's address withheld, and what has no table yet as
+ * `not_modelled`. It refuses a query it cannot read rather than ignoring it.
+ */
+export interface OrganizationFileFixture {
+  refusal?: { status: number; code: string }
+  files: OrganizationFileRecordFixture[]
+}
+
+export interface OrganizationFileRecordFixture {
+  organization: {
+    organization_id: string
+    display_name: string
+    type_code: 'professional_practice' | 'gym' | 'studio'
+    type_name: string
+    status: 'unclaimed' | 'active' | 'closed' | 'cancelled'
+    party_kind: 'natural_person' | 'legal_entity'
+    legal_name: string | null
+    created_at: string
+    claimed_at: string | null
+    cancelled_at: string | null
+  }
+  owner: { person_id: string; membership_id: string; since: string } | null
+  team: Array<{
+    membership_id: string
+    person_id: string
+    roles: Array<'owner' | 'admin' | 'coach' | 'staff'>
+    joined_at: string
+  }>
+  team_counts: { active: number; terminated: number }
+  team_truncated: boolean
+  sites: Array<{
+    site_id: string
+    name: string
+    address: string | null
+    address_withheld: boolean
+    status: 'active' | 'inactive'
+  }>
+  people_served: number | null
+  plans_availability: 'not_modelled'
+  payment_method_availability: 'not_modelled'
+  premium_availability: 'not_modelled'
+}
+
+let fileSequence = 0
+
+export function organizationFileRecord(
+  overrides: Partial<OrganizationFileRecordFixture> = {},
+): OrganizationFileRecordFixture {
+  fileSequence += 1
+  const suffix = String(fileSequence).padStart(12, '0')
+  return {
+    organization: {
+      organization_id: `019a9200-0000-7000-8000-${suffix}`,
+      display_name: `Ficha Norte ${fileSequence}`,
+      type_code: 'gym',
+      type_name: 'Gimnasio',
+      status: 'active',
+      party_kind: 'legal_entity',
+      legal_name: 'Norte Fitness SAS',
+      created_at: '2026-06-01T12:00:00.000Z',
+      claimed_at: '2026-06-01T12:00:00.000Z',
+      cancelled_at: null,
+    },
+    owner: null,
+    team: [],
+    team_counts: { active: 0, terminated: 0 },
+    team_truncated: false,
+    sites: [],
+    people_served: null,
+    plans_availability: 'not_modelled',
+    payment_method_availability: 'not_modelled',
+    premium_availability: 'not_modelled',
+    ...overrides,
+  }
+}
+
+/**
+ * Organization handovers.
+ *
+ * The mock keeps the commands' rules rather than the screen's expectations: a
+ * natural person is never named, only an organization nobody claimed is resent or
+ * cancelled, cancelling converges, a live invitation is resent as it is and a lapsed
+ * one is replaced, and a repeated command id returns the same gym instead of a
+ * second one.
+ */
+export interface OrganizationHandoverFixture {
+  refusal?: { status: number; code: string }
+  /** Consumed once: the owner accepts between the screen loading and the command. */
+  nextCommandClaimedElsewhere?: boolean | undefined
+  /** Consumed once: the creation reaches the server but its answer is lost. */
+  nextCreateNetworkFailure?: boolean | undefined
+  handovers: HandoverRecordFixture[]
+  createdByCommand?: Record<string, string>
+}
+
+export interface HandoverRecordFixture {
+  organization_id: string
+  display_name: string
+  type_code: 'professional_practice' | 'gym' | 'studio'
+  type_name: string
+  party_kind: 'natural_person' | 'legal_entity'
+  legal_name: string | null
+  status: 'unclaimed' | 'active' | 'closed' | 'cancelled'
+  created_at: string
+  claimed_at: string | null
+  cancelled_at: string | null
+  site: { site_id: string; name: string; address: string | null } | null
+  invitation: {
+    invitation_id: string
+    status: 'pending' | 'completed' | 'revoked' | 'expired'
+    intent_status: 'pending' | 'accepted' | 'rejected' | 'revoked' | 'expired'
+    contact_hint: string
+    expires_at: string
+  } | null
+}
+
+let handoverSequence = 0
+
+export function handoverRecord(
+  overrides: Partial<HandoverRecordFixture> = {},
+): HandoverRecordFixture {
+  handoverSequence += 1
+  const suffix = String(handoverSequence).padStart(12, '0')
+  return {
+    organization_id: `019a7000-0000-7000-8000-${suffix}`,
+    display_name: `Gimnasio entregado ${handoverSequence}`,
+    type_code: 'gym',
+    type_name: 'Gimnasio',
+    party_kind: 'legal_entity',
+    legal_name: 'Entregado SAS',
+    status: 'unclaimed',
+    created_at: new Date(Date.now() - 86_400_000).toISOString(),
+    claimed_at: null,
+    cancelled_at: null,
+    site: null,
+    invitation: {
+      invitation_id: `019a7100-0000-7000-8000-${suffix}`,
+      status: 'pending',
+      intent_status: 'pending',
+      contact_hint: 'o***@example.test',
+      expires_at: new Date(Date.now() + 6 * 86_400_000).toISOString(),
+    },
+    ...overrides,
+  }
+}
+
+/**
+ * Credential verification.
+ *
+ * The mock keeps the command's rules rather than the screen's expectations: a
+ * decision needs a result, a conflicted viewer is refused, a decided request
+ * answers 409, and a lapsed source cannot produce verified. The validity is
+ * derived here the way the server derives it, so a screen that tried to send one
+ * would not change what comes back.
+ */
+export interface VerificationFixture {
+  refusal?: { status: number; code: string }
+  /** Consumed once: somebody else decides the request between load and submit. */
+  nextDecisionDecidedElsewhere?: boolean | undefined
+  requests: VerificationRequestFixture[]
+  renewals: RenewalDueFixture[]
+}
+
+export interface VerificationRequestFixture {
+  request_id: string
+  kind: 'initial' | 'renewal'
+  requested_at: string
+  credential_id: string
+  credential_type_code: string
+  credential_type_name: string
+  issuer: string
+  credential_name: string
+  credential_identifier: string | null
+  issued_on: string | null
+  expires_on: string | null
+  verification_url: string | null
+  holder_person_id: string
+  holder_given_name: string
+  holder_family_name: string
+  suggested_method: 'official_registry_lookup' | 'issuer_confirmation'
+  previous_result: string | null
+  previous_valid_to: string | null
+  viewer_can_decide: boolean
+  status: 'pending' | 'resolved' | 'cancelled'
+}
+
+export interface RenewalDueFixture {
+  credential_id: string
+  credential_type_code: string
+  credential_type_name: string
+  credential_name: string
+  issuer: string
+  holder_person_id: string
+  holder_given_name: string
+  holder_family_name: string
+  last_valid_to: string
+}
+
+export function verificationRequest(
+  overrides: Partial<VerificationRequestFixture> = {},
+): VerificationRequestFixture {
+  return {
+    request_id: nextAssignmentId(),
+    kind: 'initial',
+    requested_at: new Date(Date.now() - 86_400_000).toISOString(),
+    credential_id: nextAssignmentId(),
+    credential_type_code: 'professional_license',
+    credential_type_name: 'Licencia o matrícula profesional',
+    issuer: 'Colegio Colombiano de Fisioterapeutas',
+    credential_name: 'Tarjeta profesional',
+    credential_identifier: 'TP-12345',
+    issued_on: '2019-06-01',
+    expires_on: null,
+    verification_url: 'https://registro.example.test/TP-12345',
+    holder_person_id: SUBJECT_PERSON_ID,
+    holder_given_name: 'Valentina',
+    holder_family_name: 'Ríos',
+    suggested_method: 'official_registry_lookup',
+    previous_result: null,
+    previous_valid_to: null,
+    viewer_can_decide: true,
+    status: 'pending',
+    ...overrides,
+  }
+}
+
+export function renewalDue(overrides: Partial<RenewalDueFixture> = {}): RenewalDueFixture {
+  return {
+    credential_id: nextAssignmentId(),
+    credential_type_code: 'academic_degree',
+    credential_type_name: 'Título académico',
+    credential_name: 'Fisioterapia',
+    issuer: 'Universidad Nacional',
+    holder_person_id: SUBJECT_PERSON_ID,
+    holder_given_name: 'Valentina',
+    holder_family_name: 'Ríos',
+    last_valid_to: new Date(Date.now() - 10 * 86_400_000).toISOString(),
+    ...overrides,
+  }
+}
+
+/**
+ * The attention panel. Which notices are withheld is the database's decision, so
+ * the fixture states the answer rather than simulating duties.
+ */
+export interface AttentionFixture {
+  refusal?: { status: number; code: string }
+  panel?: AttentionPanelFixture
+}
+
+type NoticeAvailability = 'available' | 'withheld'
+
+export interface AttentionPanelFixture {
+  generated_at: string
+  billing: { availability: 'not_modelled' }
+  credential_verifications: {
+    availability: NoticeAvailability
+    pending_count: number | null
+    oldest_requested_at: string | null
+    renewals_due_count: number | null
+  }
+  unclaimed_organizations: {
+    availability: NoticeAvailability
+    count: number | null
+    oldest_created_at: string | null
+    needs_follow_up_count: number | null
+  }
+  repeated_failures: {
+    availability: NoticeAvailability
+    window_hours: 24
+    groups: Array<{
+      source: 'notification' | 'command'
+      label: string
+      affected: number
+      failures: number
+      latest_occurred_at: string
+      last_error_code: string | null
+    }> | null
+    groups_truncated: boolean | null
+    open_circuits: Array<{
+      event_type: string
+      state: 'open' | 'half_open'
+      failure_count: number
+      opened_until: string | null
+    }> | null
+  }
+}
+
+/** Support's view: gyms and failures available, verifications withheld. */
+export function attentionPanelRecord(
+  overrides: Partial<AttentionPanelFixture> = {},
+): AttentionPanelFixture {
+  return {
+    generated_at: new Date().toISOString(),
+    billing: { availability: 'not_modelled' },
+    credential_verifications: {
+      availability: 'withheld',
+      pending_count: null,
+      oldest_requested_at: null,
+      renewals_due_count: null,
+    },
+    unclaimed_organizations: {
+      availability: 'available',
+      count: 2,
+      oldest_created_at: new Date(Date.now() - 10 * 86_400_000).toISOString(),
+      needs_follow_up_count: 1,
+    },
+    repeated_failures: {
+      availability: 'available',
+      window_hours: 24,
+      groups: [
+        {
+          source: 'notification',
+          label: 'identity.invitation_issued.v1',
+          affected: 2,
+          failures: 5,
+          latest_occurred_at: new Date(Date.now() - 600_000).toISOString(),
+          last_error_code: 'smtp_timeout',
+        },
+      ],
+      groups_truncated: false,
+      open_circuits: [
+        {
+          event_type: 'identity.invitation_issued.v1',
+          state: 'open',
+          failure_count: 12,
+          opened_until: new Date(Date.now() + 3_600_000).toISOString(),
+        },
+      ],
+    },
+    ...overrides,
+  }
+}
+
+export interface DiagnosisFixture {
+  refusal?: { status: number; code: string }
+  circuits: DiagnosisCircuitFixture[]
+  operations: DiagnosisOperationFixture[]
+  /** Rows per page, so the feed's cursor can be exercised. */
+  pageSize?: number
+}
+
+export interface DiagnosisCircuitFixture {
+  event_type: string
+  state: string
+  window_started_at: string
+  success_count: number
+  failure_count: number
+  opened_until: string | null
+}
+
+export interface DiagnosisOperationFixture {
+  source: 'notification' | 'command'
+  reference_id: string
+  subject_kind: string | null
+  subject_id: string | null
+  label: string
+  state: string
+  occurred_at: string
+  attempt_count: number
+  last_error_code: string | null
+  resolved_at: string | null
+}
+
+export function diagnosisOperation(
+  overrides: Partial<DiagnosisOperationFixture> = {},
+): DiagnosisOperationFixture {
+  return {
+    source: 'notification',
+    reference_id: nextAssignmentId(),
+    subject_kind: 'invitation',
+    subject_id: nextAssignmentId(),
+    label: 'identity.invitation_issued.v1',
+    state: 'retrying',
+    occurred_at: new Date(Date.now() - 600_000).toISOString(),
+    attempt_count: 3,
+    last_error_code: 'smtp_timeout',
+    resolved_at: null,
+    ...overrides,
+  }
+}
+
+export function diagnosisCircuit(
+  overrides: Partial<DiagnosisCircuitFixture> = {},
+): DiagnosisCircuitFixture {
+  return {
+    event_type: 'identity.invitation_issued.v1',
+    state: 'closed',
+    window_started_at: new Date(Date.now() - 3_600_000).toISOString(),
+    success_count: 40,
+    failure_count: 0,
+    opened_until: null,
+    ...overrides,
+  }
 }
 
 /**
@@ -117,7 +812,7 @@ export function publishedCatalogue(): CatalogueFixture {
 
 export interface ResultContractFixture {
   /** The next command is refused with this code, once. */
-  nextCommandFailure?: { status: number; code: string }
+  nextCommandFailure?: { status: number; code: string } | undefined
   /** Versions already published for a contract code, so the next one increments. */
   versions: Record<string, number>
   published: ResultContractRow[]
@@ -155,7 +850,7 @@ export interface PlatformAccessFixture {
   roles: PlatformRoleFixture[]
   duties: PlatformDutyFixture[]
   /** The next command is refused with this code, once. */
-  nextCommandFailure?: { status: number; code: string }
+  nextCommandFailure?: { status: number; code: string } | undefined
   /**
    * Rows per page. Absent means one page, as most tests want. The real
    * inventory pages on a cursor, and a screen that ignores it shows a truncated
@@ -338,12 +1033,65 @@ export async function mockBackofficeApi(
       await routeResultContracts(route, request, fixture)
       return
     }
+    if (
+      request.path === '/backoffice/v1/verification-requests' ||
+      request.path === '/backoffice/v1/verifications' ||
+      request.path === '/backoffice/v1/verification-renewals'
+    ) {
+      await routeVerification(route, request, fixture)
+      return
+    }
+    if (request.path === '/backoffice/v1/access-events') {
+      await routeAccessLog(route, request, fixture)
+      return
+    }
+    if (request.method === 'GET' && /^\/backoffice\/v1\/organizations\/[^/]+$/.test(request.path)) {
+      await routeOrganizationFile(route, request, fixture)
+      return
+    }
+    if (request.path === '/backoffice/v1/organizations' && request.method === 'GET') {
+      await routeOrganizationDirectory(route, request, fixture)
+      return
+    }
+    if (request.path.startsWith('/backoffice/v1/organizations')) {
+      await routeOrganizationHandover(route, request, fixture)
+      return
+    }
+    if (request.path.startsWith('/backoffice/v1/break-glass/')) {
+      await routeBreakGlass(route, request, fixture)
+      return
+    }
+    if (request.path === '/backoffice/v1/scope-definitions') {
+      await routeScopes(route, request, fixture)
+      return
+    }
+    if (request.path === '/backoffice/v1/support/attention') {
+      await routeAttention(route, fixture)
+      return
+    }
+    if (
+      request.path === '/backoffice/v1/support/operations' ||
+      request.path === '/backoffice/v1/support/delivery-circuits'
+    ) {
+      await routeDiagnosis(route, request, fixture)
+      return
+    }
     if (request.path.startsWith('/backoffice/v1/support/')) {
       await routeSupport(route, request, fixture)
       return
     }
     await fulfill(route, 404, error('not-found'))
   })
+}
+
+/** Counters with no subject: like the API, the mock takes no case reference. */
+async function routeAttention(route: Route, fixture: BackofficeFixture): Promise<void> {
+  const attention = fixture.attention ?? {}
+  if (attention.refusal) {
+    await fulfillProblem(route, attention.refusal.status, attention.refusal.code)
+    return
+  }
+  await fulfill(route, 200, attention.panel ?? attentionPanelRecord())
 }
 
 /**
@@ -362,7 +1110,7 @@ async function routePlatformAccess(
     return
   }
   if (request.method === 'GET') {
-    const rows =
+    const rows: Array<PlatformRoleFixture | PlatformDutyFixture> =
       request.path === '/backoffice/v1/platform/role-assignments' ? access.roles : access.duties
     await fulfill(route, 200, paginate(rows, access.pageSize, cursorOf(request)))
     return
@@ -553,6 +1301,10 @@ async function routeCatalogue(
   }
 
   const activityTypeId = segments[3]
+  if (activityTypeId === undefined) {
+    await fulfillProblem(route, 404, 'not-found')
+    return
+  }
   if (!catalogue.activityTypes.some((activityType) => activityType.id === activityTypeId)) {
     await fulfillProblem(route, 404, 'not-found')
     return
@@ -602,6 +1354,677 @@ function paginate<T>(rows: T[], pageSize: number | undefined, offset: number) {
       next_cursor: next < rows.length ? String(next) : null,
     },
   }
+}
+
+/**
+ * Publishing appends the next version and never touches an earlier one, so the
+ * E2E can assert what the story actually promises rather than what one screen
+ * happens to render.
+ */
+/**
+ * The two derived viewer fields. Deriving them here rather than letting a test set
+ * them is what keeps the mock honest: the rule is the one the database trigger
+ * enforces — an approver is never the requester and never decides twice.
+ */
+function breakGlassProjection(file: BreakGlassFileFixture) {
+  const { viewer_has_decided, ...row } = file
+  // The status is effective, not stored: a window whose end has passed and a
+  // request nobody decided in time both read as expired, the way
+  // `support.effective_break_glass_status` computes them.
+  const status = breakGlassEffectiveStatus(file)
+  return {
+    ...row,
+    status,
+    viewer_can_decide: status === 'requested' && !file.viewer_is_requester && !viewer_has_decided,
+    viewer_can_exercise: status === 'approved' && file.viewer_is_requester,
+  }
+}
+
+function breakGlassEffectiveStatus(file: BreakGlassFileFixture): string {
+  const now = Date.now()
+  if (file.status === 'approved' && file.window_ends_at !== null) {
+    return Date.parse(file.window_ends_at) <= now ? 'expired' : 'approved'
+  }
+  if (file.status === 'requested') {
+    return Date.parse(file.request_expires_at) <= now ? 'expired' : 'requested'
+  }
+  return file.status
+}
+
+async function routeBreakGlass(
+  route: Route,
+  request: MockRequest,
+  fixture: BackofficeFixture,
+): Promise<void> {
+  const glass = fixture.breakGlass ?? { files: [] }
+  fixture.breakGlass = glass
+  if (glass.refusal) {
+    await fulfillProblem(route, glass.refusal.status, glass.refusal.code)
+    return
+  }
+  const segments = request.path.split('/').filter(Boolean)
+
+  if (request.method === 'GET') {
+    const status = new URLSearchParams(request.query).get('status')
+    const rows = status ? glass.files.filter((file) => file.status === status) : glass.files
+    await fulfill(route, 200, { items: rows.map((file) => breakGlassProjection(file)) })
+    return
+  }
+
+  const failure = glass.nextCommandFailure
+  if (failure) {
+    glass.nextCommandFailure = undefined
+    await fulfillProblem(route, failure.status, failure.code)
+    return
+  }
+
+  if (segments.length === 4) {
+    const body = request.body as
+      | {
+          subject_person_id?: string
+          categories?: string[]
+          purpose?: string
+          case_reference?: string
+        }
+      | undefined
+    // Tier, quorum and duration are derived from the categories here exactly as the
+    // server derives them, so a body that tried to set them would be ignored.
+    const created = breakGlassFile({
+      ...(body?.subject_person_id ? { subject_person_id: body.subject_person_id } : {}),
+      ...(body?.categories ? { categories: body.categories } : {}),
+      ...(body?.purpose ? { purpose: body.purpose } : {}),
+      ...(body?.case_reference ? { case_reference: body.case_reference } : {}),
+      viewer_is_requester: true,
+    })
+    glass.files.push(created)
+    await fulfill(route, 201, breakGlassProjection(created))
+    return
+  }
+
+  const file = glass.files.find((row) => row.id === segments[4])
+  if (!file) {
+    await fulfillProblem(route, 404, 'not-found')
+    return
+  }
+  const action = segments[5]
+  const now = new Date().toISOString()
+
+  if (action === 'decisions') {
+    if (file.viewer_is_requester || file.viewer_has_decided) {
+      await fulfillProblem(route, 403, 'forbidden')
+      return
+    }
+    if (breakGlassEffectiveStatus(file) !== 'requested') {
+      await fulfillProblem(route, 409, 'conflict')
+      return
+    }
+    const body = request.body as
+      { decision?: 'approved' | 'rejected'; reason_code?: string } | undefined
+    const decision = body?.decision === 'rejected' ? 'rejected' : 'approved'
+    file.approvals.push({
+      approver_person_id: ACTOR_PERSON_ID,
+      decision,
+      reason_code: body?.reason_code ?? 'REASON-UNSTATED',
+      decided_at: now,
+    })
+    file.viewer_has_decided = true
+    file.reviewed_at = now
+    file.review_outcome = decision
+    const approved = file.approvals.filter((approval) => approval.decision === 'approved').length
+    if (decision === 'rejected') {
+      // One rejection is final. No later approval reopens the file.
+      file.status = 'rejected'
+    } else if (approved >= file.required_approvals) {
+      file.status = 'approved'
+      file.window_starts_at = now
+      file.window_ends_at = new Date(
+        Date.now() + file.requested_duration_minutes * 60_000,
+      ).toISOString()
+    }
+    await fulfill(route, 200, breakGlassProjection(file))
+    return
+  }
+
+  if (action === 'reads') {
+    const body = request.body as { category?: string; resource_type?: string } | undefined
+    const category = body?.category ?? ''
+    const forced = glass.nextExerciseDenial
+    glass.nextExerciseDenial = undefined
+    const denial =
+      forced ??
+      (!file.viewer_is_requester
+        ? 'not_the_requester'
+        : breakGlassEffectiveStatus(file) !== 'approved'
+          ? 'window_not_open'
+          : !file.categories.includes(category)
+            ? 'category_out_of_scope'
+            : null)
+    // Only an authorised attempt raises the counter, matching the projection, which
+    // counts events with result 'allowed'. A denial is recorded too, as an event.
+    if (denial === null) file.exercise_count += 1
+    await fulfill(route, 200, {
+      outcome: denial === null ? 'content_unavailable' : 'denied',
+      reason_code: denial ?? 'execution_and_nutrition_absent',
+      break_glass_event_id: nextAssignmentId(),
+      occurred_at: now,
+      ...(category ? { category } : {}),
+    })
+    return
+  }
+
+  if (action === 'closure') {
+    if (!file.viewer_is_requester) {
+      await fulfillProblem(route, 403, 'forbidden')
+      return
+    }
+    file.status = 'closed'
+    file.closed_at = now
+    await fulfill(route, 200, breakGlassProjection(file))
+    return
+  }
+
+  await fulfillProblem(route, 404, 'not-found')
+}
+
+async function routeAccessLog(
+  route: Route,
+  request: MockRequest,
+  fixture: BackofficeFixture,
+): Promise<void> {
+  const log = fixture.accessLog ?? { events: [] }
+  fixture.accessLog = log
+  if (log.refusal) {
+    await fulfillProblem(route, log.refusal.status, log.refusal.code)
+    return
+  }
+
+  const parameters = new URLSearchParams(request.query)
+  const actor = parameters.get('actor_person_id')
+  const subject = parameters.get('subject_person_id')
+  const from = parameters.get('from')
+  const to = parameters.get('to')
+
+  const matching = log.events.filter(
+    (event) =>
+      (actor === null || event.actor_person_id === actor) &&
+      (subject === null || event.subject_person_id === subject) &&
+      (from === null || Date.parse(event.occurred_at) >= Date.parse(from)) &&
+      (to === null || Date.parse(event.occurred_at) < Date.parse(to)),
+  )
+
+  // The count describes the same filtered set as the list, which is the whole
+  // reason the real queries share one predicate.
+  await fulfill(route, 200, {
+    items: matching
+      .filter((event) => event.withheld_from_viewer !== true)
+      .map(({ withheld_from_viewer: _withheld, ...row }) => row),
+    withheld_from_you: matching.filter((event) => event.withheld_from_viewer === true).length,
+  })
+}
+
+async function routeOrganizationDirectory(
+  route: Route,
+  request: MockRequest,
+  fixture: BackofficeFixture,
+): Promise<void> {
+  const directory = fixture.organizationDirectory ?? { organizations: [] }
+  fixture.organizationDirectory = directory
+  if (directory.refusal) {
+    await fulfillProblem(route, directory.refusal.status, directory.refusal.code)
+    return
+  }
+  if (request.method !== 'GET') {
+    await fulfillProblem(route, 404, 'not-found')
+    return
+  }
+
+  const parameters = new URLSearchParams(request.query)
+  const search = parameters.get('q')?.trim() ?? null
+  const status = parameters.get('status')
+  const cursor = parameters.get('cursor')
+  if (search !== null && (search.length < 2 || search.length > 120)) {
+    await fulfillProblem(route, 400, 'invalid-request')
+    return
+  }
+  if (status !== null && !DIRECTORY_STATUSES.includes(status)) {
+    await fulfillProblem(route, 400, 'invalid-request')
+    return
+  }
+  let after: { name: string; id: string } | undefined
+  if (cursor !== null) {
+    try {
+      after = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')) as {
+        name: string
+        id: string
+      }
+    } catch {
+      await fulfillProblem(route, 400, 'invalid-request')
+      return
+    }
+  }
+
+  const sortKey = (row: DirectoryOrganizationFixture) => row.display_name.toLowerCase()
+  const ordered = directory.organizations
+    .filter(
+      (row) =>
+        (search === null || sortKey(row).includes(search.toLowerCase())) &&
+        (status === null || row.status === status),
+    )
+    .sort((left, right) =>
+      sortKey(left) === sortKey(right)
+        ? left.organization_id.localeCompare(right.organization_id)
+        : sortKey(left) < sortKey(right)
+          ? -1
+          : 1,
+    )
+    .filter(
+      (row) =>
+        after === undefined ||
+        sortKey(row) > after.name.toLowerCase() ||
+        (sortKey(row) === after.name.toLowerCase() && row.organization_id > after.id),
+    )
+
+  const size = directory.pageSize ?? 25
+  const visible = ordered.slice(0, size)
+  const last = visible.at(-1)
+  const hasMore = ordered.length > size
+  await fulfill(route, 200, {
+    data: visible.map(({ legal_name: _legalName, ...row }) => row),
+    page: {
+      has_more: hasMore,
+      next_cursor:
+        hasMore && last
+          ? Buffer.from(
+              JSON.stringify({ name: last.display_name, id: last.organization_id }),
+              'utf8',
+            ).toString('base64url')
+          : null,
+    },
+  })
+}
+
+function maskedContact(email: string): string {
+  const [local = '', domain = ''] = email.split('@')
+  return `${local.slice(0, 1)}***@${domain}`
+}
+
+async function routeOrganizationFile(
+  route: Route,
+  request: MockRequest,
+  fixture: BackofficeFixture,
+): Promise<void> {
+  const state = fixture.organizationFiles ?? { files: [] }
+  fixture.organizationFiles = state
+  if (state.refusal) {
+    await fulfillProblem(route, state.refusal.status, state.refusal.code)
+    return
+  }
+  if (request.query !== '') {
+    await fulfillProblem(route, 400, 'invalid-request')
+    return
+  }
+  const organizationId = request.path.split('/').filter(Boolean)[3]
+  const record = state.files.find((file) => file.organization.organization_id === organizationId)
+  if (!record) {
+    await fulfillProblem(route, 404, 'not-found')
+    return
+  }
+  await fulfill(route, 200, record)
+}
+
+async function routeOrganizationHandover(
+  route: Route,
+  request: MockRequest,
+  fixture: BackofficeFixture,
+): Promise<void> {
+  const state = fixture.organizationHandover ?? { handovers: [] }
+  fixture.organizationHandover = state
+  if (state.refusal) {
+    await fulfillProblem(route, state.refusal.status, state.refusal.code)
+    return
+  }
+
+  const segments = request.path.split('/').filter(Boolean)
+  const commandId = request.headers['command-id'] ?? ''
+
+  if (request.method === 'POST' && segments.length === 3) {
+    const body = (request.body ?? {}) as Record<string, unknown>
+    const partyKind = body.party_kind
+    const legalName = typeof body.legal_name === 'string' ? body.legal_name.trim() : null
+    const email = typeof body.owner_email === 'string' ? body.owner_email.trim().toLowerCase() : ''
+    if (
+      typeof body.display_name !== 'string' ||
+      body.display_name.trim() === '' ||
+      (partyKind !== 'natural_person' && partyKind !== 'legal_entity') ||
+      (partyKind === 'legal_entity') !== Boolean(legalName) ||
+      !/^[^\s@]+@[^\s@]+$/.test(email)
+    ) {
+      await fulfillProblem(route, 422, 'validation-failed')
+      return
+    }
+    state.createdByCommand ??= {}
+    const existingId = state.createdByCommand[commandId]
+    const existing = state.handovers.find((row) => row.organization_id === existingId)
+    if (existing) {
+      await fulfill(route, 201, existing, { 'Idempotent-Replay': 'true' })
+      return
+    }
+    const site = body.site as { name?: string; address?: string | null } | null | undefined
+    const record = handoverRecord({
+      display_name: body.display_name.trim(),
+      type_code: body.type_code as HandoverRecordFixture['type_code'],
+      type_name:
+        body.type_code === 'studio'
+          ? 'Estudio'
+          : body.type_code === 'gym'
+            ? 'Gimnasio'
+            : 'Práctica profesional',
+      party_kind: partyKind,
+      legal_name: partyKind === 'legal_entity' ? legalName : null,
+      created_at: new Date().toISOString(),
+      site: site?.name
+        ? {
+            site_id: '019a7200-0000-7000-8000-000000000001',
+            name: site.name,
+            address: site.address ?? null,
+          }
+        : null,
+    })
+    record.invitation = {
+      invitation_id: commandId,
+      status: 'pending',
+      intent_status: 'pending',
+      contact_hint: maskedContact(email),
+      expires_at: new Date(Date.now() + 7 * 86_400_000).toISOString(),
+    }
+    state.handovers.push(record)
+    state.createdByCommand[commandId] = record.organization_id
+    if (state.nextCreateNetworkFailure) {
+      state.nextCreateNetworkFailure = undefined
+      await route.abort('failed')
+      return
+    }
+    await fulfill(route, 201, record)
+    return
+  }
+
+  const record = state.handovers.find((row) => row.organization_id === segments[3])
+  if (!record) {
+    await fulfillProblem(route, 404, 'not-found')
+    return
+  }
+
+  if (request.method === 'GET' && segments[4] === 'handover' && segments.length === 5) {
+    await fulfill(route, 200, record)
+    return
+  }
+
+  const isResend =
+    request.method === 'POST' && segments[4] === 'handover' && segments[5] === 'resends'
+  const isCancel = request.method === 'POST' && segments[4] === 'cancellation'
+  if (!isResend && !isCancel) {
+    await fulfillProblem(route, 404, 'not-found')
+    return
+  }
+  if (
+    request.body !== undefined &&
+    request.body !== null &&
+    JSON.stringify(request.body) !== '{}'
+  ) {
+    await fulfillProblem(route, 422, 'validation-failed')
+    return
+  }
+  if (state.nextCommandClaimedElsewhere) {
+    state.nextCommandClaimedElsewhere = undefined
+    record.status = 'active'
+    record.claimed_at = new Date().toISOString()
+    if (record.invitation) {
+      record.invitation.status = 'completed'
+      record.invitation.intent_status = 'accepted'
+    }
+  }
+
+  if (isCancel && record.status === 'cancelled') {
+    await fulfill(route, 200, record)
+    return
+  }
+  if (record.status !== 'unclaimed') {
+    await fulfillProblem(route, 409, 'conflict')
+    return
+  }
+
+  if (isCancel) {
+    record.status = 'cancelled'
+    record.cancelled_at = new Date().toISOString()
+    if (record.invitation?.status === 'pending') {
+      record.invitation.status = 'revoked'
+      record.invitation.intent_status = 'revoked'
+    }
+    await fulfill(route, 200, record)
+    return
+  }
+
+  const invitation = record.invitation
+  if (
+    invitation &&
+    invitation.status === 'pending' &&
+    Date.parse(invitation.expires_at) > Date.now()
+  ) {
+    invitation.expires_at = new Date(Date.now() + 7 * 86_400_000).toISOString()
+  } else {
+    record.invitation = {
+      invitation_id: commandId,
+      status: 'pending',
+      intent_status: 'pending',
+      contact_hint: invitation?.contact_hint ?? 'o***@example.test',
+      expires_at: new Date(Date.now() + 7 * 86_400_000).toISOString(),
+    }
+  }
+  await fulfill(route, 200, record)
+}
+
+async function routeVerification(
+  route: Route,
+  request: MockRequest,
+  fixture: BackofficeFixture,
+): Promise<void> {
+  const verification = fixture.verification ?? { requests: [], renewals: [] }
+  fixture.verification = verification
+  if (verification.refusal) {
+    await fulfillProblem(route, verification.refusal.status, verification.refusal.code)
+    return
+  }
+  const now = Date.now()
+
+  if (request.method === 'GET' && request.path === '/backoffice/v1/verification-requests') {
+    await fulfill(route, 200, {
+      items: verification.requests
+        .filter((row) => row.status === 'pending')
+        .map(({ status: _status, ...row }) => row),
+    })
+    return
+  }
+
+  if (request.method === 'GET' && request.path === '/backoffice/v1/verification-renewals') {
+    await fulfill(route, 200, { items: verification.renewals })
+    return
+  }
+
+  if (request.method === 'POST' && request.path === '/backoffice/v1/verifications') {
+    const body = request.body as
+      | { request_id?: string; result?: string; method?: string; source_valid_to?: string | null }
+      | undefined
+    const target = verification.requests.find((row) => row.request_id === body?.request_id)
+    if (!target) {
+      await fulfillProblem(route, 404, 'not-found')
+      return
+    }
+    if (verification.nextDecisionDecidedElsewhere) {
+      verification.nextDecisionDecidedElsewhere = undefined
+      target.status = 'resolved'
+      await fulfillProblem(route, 409, 'conflict')
+      return
+    }
+    if (target.status !== 'pending') {
+      await fulfillProblem(route, 409, 'conflict')
+      return
+    }
+    if (!target.viewer_can_decide) {
+      await fulfillProblem(route, 403, 'forbidden')
+      return
+    }
+    const result = body?.result
+    if (result !== 'verified' && result !== 'rejected' && result !== 'unverifiable') {
+      await fulfillProblem(route, 422, 'validation-failed')
+      return
+    }
+    const sourceValidTo = body?.source_valid_to ? Date.parse(body.source_valid_to) : null
+    if (result === 'verified' && sourceValidTo !== null && sourceValidTo <= now) {
+      await fulfillProblem(route, 422, 'validation-failed')
+      return
+    }
+
+    target.status = 'resolved'
+    const decidedAt = new Date(now).toISOString()
+    const validTo =
+      result === 'verified'
+        ? new Date(
+            Math.min(now + 365 * 86_400_000, sourceValidTo ?? Number.POSITIVE_INFINITY),
+          ).toISOString()
+        : null
+    await fulfill(route, 201, {
+      request_id: target.request_id,
+      kind: target.kind,
+      status: 'resolved',
+      credential_id: target.credential_id,
+      created_at: target.requested_at,
+      resolved_at: decidedAt,
+      verification: {
+        id: nextAssignmentId(),
+        result,
+        method: body?.method ?? target.suggested_method,
+        decided_at: decidedAt,
+        valid_from: result === 'verified' ? decidedAt : null,
+        valid_to: validTo,
+      },
+    })
+    return
+  }
+
+  if (request.method === 'POST' && request.path === '/backoffice/v1/verification-renewals') {
+    const body = request.body as { credential_id?: string } | undefined
+    const index = verification.renewals.findIndex(
+      (row) => row.credential_id === body?.credential_id,
+    )
+    const due = index === -1 ? undefined : verification.renewals.splice(index, 1)[0]
+    if (!due) {
+      await fulfillProblem(route, 409, 'conflict')
+      return
+    }
+    const opened = verificationRequest({
+      kind: 'renewal',
+      credential_id: due.credential_id,
+      credential_type_code: due.credential_type_code,
+      credential_type_name: due.credential_type_name,
+      credential_name: due.credential_name,
+      issuer: due.issuer,
+      holder_person_id: due.holder_person_id,
+      holder_given_name: due.holder_given_name,
+      holder_family_name: due.holder_family_name,
+      previous_result: 'verified',
+      previous_valid_to: due.last_valid_to,
+    })
+    verification.requests.push(opened)
+    await fulfill(route, 201, {
+      request_id: opened.request_id,
+      kind: 'renewal',
+      status: 'pending',
+      credential_id: opened.credential_id,
+      created_at: opened.requested_at,
+      resolved_at: null,
+      verification: null,
+    })
+    return
+  }
+
+  await fulfillProblem(route, 404, 'not-found')
+}
+
+async function routeScopes(
+  route: Route,
+  request: MockRequest,
+  fixture: BackofficeFixture,
+): Promise<void> {
+  const scopes = fixture.scopes ?? { definitions: [] }
+  fixture.scopes = scopes
+  if (scopes.refusal) {
+    await fulfillProblem(route, scopes.refusal.status, scopes.refusal.code)
+    return
+  }
+  if (request.method === 'GET') {
+    await fulfill(route, 200, { items: scopes.definitions })
+    return
+  }
+
+  const body = request.body as
+    { scope_code?: string; rules?: ScopeDefinitionFixture['rules'] } | undefined
+  const code = body?.scope_code ?? 'body_progress'
+  const next =
+    Math.max(
+      0,
+      ...scopes.definitions
+        .filter((definition) => definition.scope_code === code)
+        .map((definition) => definition.version_number),
+    ) + 1
+  const created = scopeDefinition({
+    scope_code: code,
+    version_number: next,
+    published_at: new Date().toISOString(),
+    ...(body?.rules ? { rules: body.rules } : {}),
+  })
+  scopes.definitions.push(created)
+  await fulfill(route, 201, created)
+}
+
+/**
+ * The diagnosis feed has no subject, so unlike every other support read it takes
+ * no case reference. The mock reflects that rather than demanding one, or the
+ * E2E would enforce a rule the API does not have.
+ */
+async function routeDiagnosis(
+  route: Route,
+  request: MockRequest,
+  fixture: BackofficeFixture,
+): Promise<void> {
+  const diagnosis = fixture.diagnosis ?? { circuits: [], operations: [] }
+  if (diagnosis.refusal) {
+    await fulfillProblem(route, diagnosis.refusal.status, diagnosis.refusal.code)
+    return
+  }
+  if (request.path.endsWith('/delivery-circuits')) {
+    await fulfill(route, 200, { items: diagnosis.circuits })
+    return
+  }
+
+  const parameters = new URLSearchParams(request.query)
+  const source = parameters.get('source')
+  const state = parameters.get('state')
+  const matching = diagnosis.operations.filter(
+    (operation) =>
+      (source === null || operation.source === source) &&
+      (state === null || operation.state === state),
+  )
+  const offset = Number(parameters.get('cursor') ?? 0)
+  const size = diagnosis.pageSize ?? matching.length
+  const page = matching.slice(offset, offset + size)
+  const next = offset + size
+  await fulfill(route, 200, {
+    data: page,
+    page: {
+      has_more: next < matching.length,
+      next_cursor: next < matching.length ? String(next) : null,
+    },
+  })
 }
 
 /**

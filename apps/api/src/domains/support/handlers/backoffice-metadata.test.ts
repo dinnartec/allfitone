@@ -8,7 +8,11 @@ import {
   type BackofficeAuthenticationService,
 } from '../../identity/index.js'
 import { mountSurfaces } from '../../../surfaces.js'
-import type { SupportMetadataService } from '../application/index.js'
+import type {
+  SupportAttentionService,
+  SupportDiagnosisService,
+  SupportMetadataService,
+} from '../application/index.js'
 import { backofficeSupportMetadataRoutes } from './backoffice-metadata.js'
 
 const ORIGIN = 'https://backoffice.example.test'
@@ -70,11 +74,103 @@ function sessionService(
   } as BackofficeAuthenticationService
 }
 
+const operation: AllfitV1Schemas['SupportOperation'] = {
+  source: 'notification',
+  reference_id: '019a6000-0000-7000-8000-000000000301',
+  subject_kind: 'invitation',
+  subject_id: '019a6000-0000-7000-8000-000000000401',
+  label: 'identity.invitation_issued.v1',
+  state: 'retrying',
+  occurred_at: '2026-09-10T18:00:00.000Z',
+  attempt_count: 3,
+  last_error_code: 'smtp_timeout',
+  resolved_at: null,
+}
+
+let diagnosisCalls: unknown[] = []
+
+function diagnosisService(
+  overrides: Partial<SupportDiagnosisService> = {},
+): SupportDiagnosisService {
+  return {
+    listOperations: (_reader, input) => {
+      diagnosisCalls.push(input)
+      return Promise.resolve({ items: [operation], hasMore: true, nextCursor: 'next-page' })
+    },
+    listDeliveryCircuits: (_reader, input) => {
+      diagnosisCalls.push(input)
+      return Promise.resolve([
+        {
+          event_type: 'identity.invitation_issued.v1',
+          state: 'open',
+          window_started_at: '2026-09-10T17:00:00.000Z',
+          success_count: 0,
+          failure_count: 12,
+          opened_until: '2026-09-10T19:00:00.000Z',
+        },
+      ])
+    },
+    ...overrides,
+  }
+}
+
+const panel: AllfitV1Schemas['SupportAttentionPanel'] = {
+  generated_at: '2026-09-13T18:00:00.000Z',
+  billing: { availability: 'not_modelled' },
+  credential_verifications: {
+    availability: 'withheld',
+    pending_count: null,
+    oldest_requested_at: null,
+    renewals_due_count: null,
+  },
+  unclaimed_organizations: {
+    availability: 'available',
+    count: 3,
+    oldest_created_at: '2026-09-01T12:00:00.000Z',
+    needs_follow_up_count: 1,
+  },
+  repeated_failures: {
+    availability: 'available',
+    window_hours: 24,
+    groups: [
+      {
+        source: 'notification',
+        label: 'identity.invitation_issued.v1',
+        affected: 2,
+        failures: 5,
+        latest_occurred_at: '2026-09-13T17:50:00.000Z',
+        last_error_code: 'smtp_timeout',
+      },
+    ],
+    groups_truncated: false,
+    open_circuits: [],
+  },
+}
+
+let attentionCalls: CapturedCall[] = []
+
+function attentionService(
+  overrides: Partial<SupportAttentionService> = {},
+): SupportAttentionService {
+  return {
+    read: (reader, input) => {
+      attentionCalls.push({ operation: 'read', reader, input })
+      return Promise.resolve(panel)
+    },
+    ...overrides,
+  }
+}
+
 function routes(
   service: SupportMetadataService = metadataService(),
   sessions: BackofficeAuthenticationService = sessionService(),
+  diagnosis: SupportDiagnosisService = diagnosisService(),
+  attention: SupportAttentionService = attentionService(),
 ): Hono {
-  return new Hono().route('/backoffice/v1', backofficeSupportMetadataRoutes(service, sessions))
+  return new Hono().route(
+    '/backoffice/v1',
+    backofficeSupportMetadataRoutes(service, sessions, diagnosis, attention),
+  )
 }
 
 function request(path: string, init: { origin?: string; cookie?: boolean } = {}): Request {
@@ -89,15 +185,19 @@ function colonPath(path: string): string {
 
 beforeEach(() => {
   captured = []
+  diagnosisCalls = []
+  attentionCalls = []
   process.env.BACKOFFICE_WEB_URL = ORIGIN
   process.env.STUDIO_WEB_URL = 'https://studio.example.test'
   process.env.API_PUBLIC_URL = 'https://api.example.test'
 })
 
 describe('Backoffice support metadata API contract', () => {
-  test('T-SUP-API-21 mounts every OP-SUP-005 operation with its contract method', () => {
+  test('T-SUP-API-21 mounts every OP-SUP-005 and NEW-SUP-ATTENTION operation with its contract method', () => {
     const contract = allfitV1ContractManifest.operations
-      .filter((operation) => operation.allfitOperation === 'OP-SUP-005')
+      .filter((operation) =>
+        ['OP-SUP-005', 'NEW-SUP-ATTENTION'].includes(operation.allfitOperation),
+      )
       .map((operation) => `${operation.method} ${colonPath(operation.path)}`)
       .sort()
     const mounted = backofficeSupportMetadataRoutes()
@@ -105,7 +205,7 @@ describe('Backoffice support metadata API contract', () => {
       .map((route) => `${route.method} /backoffice/v1${route.path}`)
       .sort()
 
-    expect(contract).toHaveLength(2)
+    expect(contract).toHaveLength(5)
     expect(mounted).toEqual(contract)
   })
 
@@ -118,6 +218,9 @@ describe('Backoffice support metadata API contract', () => {
 
     expect(mounted).toContain('GET /backoffice/v1/support/people')
     expect(mounted).toContain('GET /backoffice/v1/support/people/:personId')
+    expect(mounted).toContain('GET /backoffice/v1/support/operations')
+    expect(mounted).toContain('GET /backoffice/v1/support/delivery-circuits')
+    expect(mounted).toContain('GET /backoffice/v1/support/attention')
   })
 
   test('T-SUP-API-23 finds a person by an exact contact and carries the case through', async () => {
@@ -260,5 +363,147 @@ describe('Backoffice support metadata API contract', () => {
       }),
     )
     expect(denied.headers.get('access-control-allow-origin')).not.toBe('https://attacker.test')
+  })
+
+  test('T-SUP-API-33 reads the operational feed with its filters and its own cursor', async () => {
+    const response = await routes().fetch(
+      request('/support/operations?source=notification&state=retrying&limit=10'),
+    )
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({
+      data: [operation],
+      page: { has_more: true, next_cursor: 'next-page' },
+    })
+    expect(diagnosisCalls[0]).toMatchObject({
+      source: 'notification',
+      state: 'retrying',
+      limit: 10,
+    })
+  })
+
+  test('T-SUP-API-34 refuses a filter outside its closed vocabulary', async () => {
+    const answers = await Promise.all(
+      ['source=payments', 'state=exploded', 'aggregate_id=not-a-uuid'].map((filter) =>
+        routes().fetch(request(`/support/operations?${filter}`)),
+      ),
+    )
+
+    expect(answers.map((response) => response.status)).toEqual([400, 400, 400])
+    expect(diagnosisCalls).toEqual([])
+  })
+
+  test('T-SUP-API-35 refuses a page size outside the contract bounds', async () => {
+    const answers = await Promise.all(
+      ['limit=0', 'limit=101', 'limit=abc'].map((bound) =>
+        routes().fetch(request(`/support/operations?${bound}`)),
+      ),
+    )
+
+    expect(answers.map((response) => response.status)).toEqual([400, 400, 400])
+    expect(diagnosisCalls).toEqual([])
+  })
+
+  test('T-SUP-API-36 round-trips its own cursor and rejects a forged one', async () => {
+    const cursor = Buffer.from(
+      JSON.stringify({
+        occurredAt: '2026-09-10T18:00:00.000Z',
+        id: '019a6000-0000-7000-8000-000000000301',
+      }),
+    ).toString('base64url')
+
+    const accepted = await routes().fetch(request(`/support/operations?cursor=${cursor}`))
+    expect(accepted.status).toBe(200)
+    expect(diagnosisCalls[0]).toMatchObject({
+      cursor: {
+        occurredAt: '2026-09-10T18:00:00.000Z',
+        id: '019a6000-0000-7000-8000-000000000301',
+      },
+    })
+
+    const forged = await Promise.all(
+      ['cursor=not-base64', `cursor=${Buffer.from('{"id":"nope"}').toString('base64url')}`].map(
+        (bad) => routes().fetch(request(`/support/operations?${bad}`)),
+      ),
+    )
+    expect(forged.map((response) => response.status)).toEqual([400, 400])
+  })
+
+  test('T-SUP-API-37 reads delivery health without asking for a case reference', async () => {
+    const response = await routes().fetch(request('/support/delivery-circuits'))
+
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as { items: { failure_count: number }[] }
+    expect(body.items[0]?.failure_count).toBe(12)
+    // A feed with no subject has nothing to trace back to a case, so requiring
+    // one would be ceremony rather than a control.
+    expect(diagnosisCalls).toHaveLength(1)
+  })
+
+  test('T-SUP-API-38 keeps the diagnosis routes behind the session and the origin', async () => {
+    const unauthenticated = await routes().fetch(request('/support/operations', { cookie: false }))
+    expect(unauthenticated.status).toBe(401)
+
+    const allowed = await routes().fetch(request('/support/delivery-circuits'))
+    expect(allowed.headers.get('cache-control')).toBe('no-store')
+
+    // CORS on a GET is enforced by the browser, not by the server: the request
+    // still runs, and what protects the answer is that a foreign origin gets no
+    // grant to read it, plus the session cookie it cannot forge.
+    const denied = await routes().fetch(
+      request('/support/operations', { origin: 'https://attacker.test' }),
+    )
+    expect(denied.headers.get('access-control-allow-origin')).not.toBe('https://attacker.test')
+
+    // Only the two authenticated reads reached the service; the cookieless one
+    // never did.
+    expect(diagnosisCalls).toHaveLength(2)
+  })
+
+  test('T-SUP-API-39 reads the attention panel as the operator, withheld notices included', async () => {
+    const response = await routes().fetch(request('/support/attention'))
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('cache-control')).toBe('no-store')
+    await expect(response.json()).resolves.toEqual(panel)
+    expect(attentionCalls).toHaveLength(1)
+    expect(attentionCalls[0]?.reader).toEqual({
+      actorPersonId: ACTOR_PERSON_ID,
+      actorSessionId: ACTOR_SESSION_ID,
+    })
+  })
+
+  test('T-SUP-API-40 answers forbidden when no duty resolves a notice, and 503 when the read breaks', async () => {
+    const forbidden = await routes(
+      metadataService(),
+      sessionService(),
+      diagnosisService(),
+      attentionService({
+        read: () => Promise.reject(Object.assign(new Error('refused'), { code: '42501' })),
+      }),
+    ).fetch(request('/support/attention'))
+    const broken = await routes(
+      metadataService(),
+      sessionService(),
+      diagnosisService(),
+      attentionService({ read: () => Promise.reject(new Error('database unavailable')) }),
+    ).fetch(request('/support/attention'))
+
+    expect([forbidden.status, broken.status]).toEqual([403, 503])
+    expect(forbidden.headers.get('content-type')).toContain('application/problem+json')
+  })
+
+  test('T-SUP-API-41 never reads the panel without a session that still resolves', async () => {
+    const missing = await routes().fetch(request('/support/attention', { cookie: false }))
+    const ended = await routes(
+      metadataService(),
+      sessionService({
+        resolveActor: async () =>
+          Promise.reject(new BackofficeAuthenticationError('unauthenticated')),
+      }),
+    ).fetch(request('/support/attention'))
+
+    expect([missing.status, ended.status]).toEqual([401, 401])
+    expect(attentionCalls).toEqual([])
   })
 })

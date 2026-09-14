@@ -10,6 +10,21 @@
 
 import type { BackofficeActor } from '../../identity/index.js'
 import type {
+  BreakGlassCategory,
+  BreakGlassCommandResult,
+  BreakGlassDatabase,
+  BreakGlassExerciseOutcome,
+  BreakGlassRequest,
+  BreakGlassRequestCreate,
+  BreakGlassStatus,
+  SupportAttentionDatabase,
+  SupportAttentionPanel,
+  SupportDeliveryCircuit,
+  SupportDiagnosisDatabase,
+  SupportOperation,
+  SupportOperationCursor,
+  SupportOperationSourceKind,
+  SupportOperationState,
   SupportMetadataDatabase,
   SupportPeopleSearch,
   SupportPersonMetadata,
@@ -125,5 +140,112 @@ export function createSupportMetadataService(
       return found ? { outcome: 'found', items: [found] } : { outcome: 'not_found', items: [] }
     },
     read: (reader, input) => database.read({ ...reader, ...input }),
+  }
+}
+
+/**
+ * Technical diagnosis carries the reader through and nothing else. Every rule
+ * that matters — the duty, the derived states, and above all what the projection
+ * refuses to return — lives in the database.
+ */
+export interface SupportDiagnosisService {
+  listOperations(
+    reader: SupportReader,
+    input: {
+      requestId: string
+      limit: number
+      source?: SupportOperationSourceKind
+      state?: SupportOperationState
+      aggregateId?: string
+      cursor?: SupportOperationCursor
+    },
+  ): Promise<PlatformPage<SupportOperation>>
+  listDeliveryCircuits(
+    reader: SupportReader,
+    input: { requestId: string },
+  ): Promise<SupportDeliveryCircuit[]>
+}
+
+export function createSupportDiagnosisService(
+  database: SupportDiagnosisDatabase,
+): SupportDiagnosisService {
+  return {
+    listOperations: (reader, input) => database.listOperations({ ...reader, ...input }),
+    listDeliveryCircuits: (reader, input) => database.listDeliveryCircuits({ ...reader, ...input }),
+  }
+}
+
+/**
+ * The attention panel carries the reader through. Which notices this operator
+ * sees is resolved from their duties inside the read's own transaction, so this
+ * layer cannot show a counter the database withheld.
+ */
+export interface SupportAttentionService {
+  read(reader: SupportReader, input: { requestId: string }): Promise<SupportAttentionPanel>
+}
+
+export function createSupportAttentionService(
+  database: SupportAttentionDatabase,
+): SupportAttentionService {
+  return {
+    read: (reader, input) => database.read({ ...reader, ...input }),
+  }
+}
+
+/**
+ * Break-glass use cases.
+ *
+ * No authorization branch here, as everywhere else in this module: the duty, the
+ * quorum, the window and the independence of approvers are all resolved inside
+ * each command's own transaction.
+ *
+ * One thing is worth noticing about `exercise`: it resolves rather than rejects
+ * when the attempt is denied. The evidence of a refused attempt is the point of
+ * the operation, and an exception would roll it back.
+ */
+export interface BreakGlassService {
+  request(
+    actor: BackofficeActor,
+    input: PlatformCommandContext & { publication: BreakGlassRequestCreate },
+  ): Promise<BreakGlassCommandResult>
+  decide(
+    actor: BackofficeActor,
+    input: PlatformCommandContext & {
+      breakGlassRequestId: string
+      decision: 'approved' | 'rejected'
+      reasonCode: string
+    },
+  ): Promise<BreakGlassCommandResult>
+  exercise(
+    actor: BackofficeActor,
+    input: {
+      breakGlassRequestId: string
+      category: BreakGlassCategory
+      resourceType: string
+      resourceId?: string
+      requestTraceId: string
+    },
+  ): Promise<BreakGlassExerciseOutcome>
+  close(
+    actor: BackofficeActor,
+    input: PlatformCommandContext & { breakGlassRequestId: string },
+  ): Promise<BreakGlassCommandResult>
+  list(
+    actor: BackofficeActor,
+    input: { requestId: string; mine: boolean; status?: BreakGlassStatus; limit: number },
+  ): Promise<BreakGlassRequest[]>
+}
+
+export function createBreakGlassService(database: BreakGlassDatabase): BreakGlassService {
+  const from = (actor: BackofficeActor) => ({
+    actorPersonId: actor.personId,
+    actorSessionId: actor.sessionId,
+  })
+  return {
+    request: (actor, input) => database.request({ ...from(actor), ...input }),
+    decide: (actor, input) => database.decide({ ...from(actor), ...input }),
+    exercise: (actor, input) => database.exercise({ ...from(actor), ...input }),
+    close: (actor, input) => database.close({ ...from(actor), ...input }),
+    list: (actor, input) => database.list({ ...from(actor), ...input }),
   }
 }

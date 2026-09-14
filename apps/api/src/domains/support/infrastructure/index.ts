@@ -17,15 +17,21 @@ import type postgres from 'postgres'
 import { database } from '../../../platform/db/index.js'
 import { measureRequestPhase } from '../../../platform/observability/index.js'
 import type {
+  BreakGlassDatabase,
+  BreakGlassExerciseOutcome,
+  BreakGlassRequest,
+  SupportAttentionDatabase,
+  SupportAttentionPanel,
+  SupportDeliveryCircuit,
+  SupportDiagnosisDatabase,
+  SupportOperation,
   SupportMetadataDatabase,
   SupportPersonMetadata,
   PlatformAccessDatabase,
   PlatformCommandResult,
   PlatformDutyAssignment,
-  PlatformDutyCursor,
   PlatformPage,
   PlatformRoleAssignment,
-  PlatformRoleCursor,
 } from '../domain/index.js'
 
 type CommandRow<T> = { result: T; replayed: boolean }
@@ -121,11 +127,16 @@ export function createPlatformAccessDatabase(): PlatformAccessDatabase {
             ${input.cursor?.id ?? null}::uuid
           )
         `
-        return page(rows, input.limit, (row) => ({
-          rank: row.cursor_rank,
-          grantedAt: row.cursor_granted_at.toISOString(),
-          id: row.cursor_id,
-        }))
+        return page(
+          rows,
+          input.limit,
+          (row) => row.result,
+          (row) => ({
+            rank: row.cursor_rank,
+            grantedAt: row.cursor_granted_at.toISOString(),
+            id: row.cursor_id,
+          }),
+        )
       }),
 
     listDuties: (input) =>
@@ -141,12 +152,17 @@ export function createPlatformAccessDatabase(): PlatformAccessDatabase {
             ${input.cursor?.id ?? null}::uuid
           )
         `
-        return page(rows, input.limit, (row) => ({
-          rank: row.cursor_rank,
-          validTo: row.cursor_valid_to.toISOString(),
-          createdAt: row.cursor_created_at.toISOString(),
-          id: row.cursor_id,
-        }))
+        return page(
+          rows,
+          input.limit,
+          (row) => row.result,
+          (row) => ({
+            rank: row.cursor_rank,
+            validTo: row.cursor_valid_to.toISOString(),
+            createdAt: row.cursor_created_at.toISOString(),
+            id: row.cursor_id,
+          }),
+        )
       }),
   }
 }
@@ -170,16 +186,17 @@ function inTransaction<T>(
   })
 }
 
-function page<Row extends { result: T }, T, Cursor extends PlatformRoleCursor | PlatformDutyCursor>(
+function page<Row, T, Cursor extends object>(
   rows: Row[],
   limit: number,
+  project: (row: Row) => T,
   cursorOf: (row: Row) => Cursor,
 ): PlatformPage<T> {
   const hasMore = rows.length > limit
   const visible = rows.slice(0, limit)
   const last = visible.at(-1)
   return {
-    items: visible.map((row) => row.result),
+    items: visible.map(project),
     hasMore,
     ...(hasMore && last
       ? { nextCursor: Buffer.from(JSON.stringify(cursorOf(last))).toString('base64url') }
@@ -222,6 +239,141 @@ export function createSupportMetadataDatabase(): SupportMetadataDatabase {
         `
         if (!row) throw new Error('PostgreSQL did not project the operational state')
         return row.person_metadata
+      }),
+  }
+}
+
+export function createSupportDiagnosisDatabase(): SupportDiagnosisDatabase {
+  const sql = database()
+
+  return {
+    listOperations: (input) =>
+      inTransaction(sql, input.actorPersonId, input.requestId, async (transaction) => {
+        // One extra row answers "is there another page" without a second count.
+        const rows = await transaction<SupportOperation[]>`
+          select * from support.list_operational_events(
+            ${input.actorPersonId}::uuid, ${input.actorSessionId}::uuid,
+            ${input.source ?? null}::text, ${input.state ?? null}::text,
+            ${input.aggregateId ?? null}::uuid, ${input.limit + 1}::integer,
+            ${input.cursor?.occurredAt ?? null}::timestamptz,
+            ${input.cursor?.id ?? null}::uuid
+          )
+        `
+        return page(
+          rows,
+          input.limit,
+          (row) => row,
+          (row) => ({
+            occurredAt: new Date(row.occurred_at).toISOString(),
+            id: row.reference_id,
+          }),
+        )
+      }),
+
+    listDeliveryCircuits: (input) =>
+      inTransaction(
+        sql,
+        input.actorPersonId,
+        input.requestId,
+        (transaction) =>
+          transaction<SupportDeliveryCircuit[]>`
+          select * from support.list_delivery_circuits(
+            ${input.actorPersonId}::uuid, ${input.actorSessionId}::uuid
+          )
+        `,
+      ),
+  }
+}
+
+export function createSupportAttentionDatabase(): SupportAttentionDatabase {
+  const sql = database()
+
+  return {
+    read: (input) =>
+      inTransaction(sql, input.actorPersonId, input.requestId, async (transaction) => {
+        const [row] = await transaction<{ read_attention_panel: SupportAttentionPanel }[]>`
+          select support.read_attention_panel(
+            ${input.actorPersonId}::uuid, ${input.actorSessionId}::uuid
+          )
+        `
+        if (!row) throw new Error('PostgreSQL did not read the attention panel')
+        return row.read_attention_panel
+      }),
+  }
+}
+
+type BreakGlassRow = { result: BreakGlassRequest; replayed: boolean }
+
+export function createBreakGlassDatabase(): BreakGlassDatabase {
+  const sql = database()
+
+  return {
+    request: (input) =>
+      inTransaction(sql, input.actorPersonId, input.requestId, async (transaction) => {
+        const [row] = await transaction<BreakGlassRow[]>`
+          select * from support.request_break_glass(
+            ${input.actorPersonId}::uuid, ${input.actorSessionId}::uuid,
+            ${input.publication.subject_person_id}::uuid,
+            ${input.publication.categories}::text[],
+            ${input.publication.purpose}, ${input.publication.case_reference},
+            ${input.idempotencyKey}::uuid, ${input.commandId}::uuid, ${input.requestHash}
+          )
+        `
+        if (!row) throw new Error('PostgreSQL did not open the break-glass file')
+        return { resource: row.result, replayed: row.replayed }
+      }),
+
+    decide: (input) =>
+      inTransaction(sql, input.actorPersonId, input.requestId, async (transaction) => {
+        const [row] = await transaction<BreakGlassRow[]>`
+          select * from support.decide_break_glass(
+            ${input.actorPersonId}::uuid, ${input.actorSessionId}::uuid,
+            ${input.breakGlassRequestId}::uuid,
+            ${input.decision}, ${input.reasonCode},
+            ${input.idempotencyKey}::uuid, ${input.commandId}::uuid, ${input.requestHash}
+          )
+        `
+        if (!row) throw new Error('PostgreSQL did not record the break-glass decision')
+        return { resource: row.result, replayed: row.replayed }
+      }),
+
+    // Resolves on a denial: the evidence of the attempt is already written, and
+    // throwing here would discard the outcome the caller has to be told.
+    exercise: (input) =>
+      inTransaction(sql, input.actorPersonId, input.requestTraceId, async (transaction) => {
+        const [row] = await transaction<{ exercise_break_glass: BreakGlassExerciseOutcome }[]>`
+          select support.exercise_break_glass(
+            ${input.actorPersonId}::uuid, ${input.actorSessionId}::uuid,
+            ${input.breakGlassRequestId}::uuid, ${input.category},
+            ${input.resourceType}, ${input.resourceId ?? null}::uuid
+          )
+        `
+        if (!row) throw new Error('PostgreSQL did not record the break-glass attempt')
+        return row.exercise_break_glass
+      }),
+
+    close: (input) =>
+      inTransaction(sql, input.actorPersonId, input.requestId, async (transaction) => {
+        const [row] = await transaction<BreakGlassRow[]>`
+          select * from support.close_break_glass(
+            ${input.actorPersonId}::uuid, ${input.actorSessionId}::uuid,
+            ${input.breakGlassRequestId}::uuid,
+            ${input.idempotencyKey}::uuid, ${input.commandId}::uuid, ${input.requestHash}
+          )
+        `
+        if (!row) throw new Error('PostgreSQL did not close the break-glass window')
+        return { resource: row.result, replayed: row.replayed }
+      }),
+
+    list: (input) =>
+      inTransaction(sql, input.actorPersonId, input.requestId, async (transaction) => {
+        const rows = await transaction<{ result: BreakGlassRequest }[]>`
+          select * from support.list_break_glass_requests(
+            ${input.actorPersonId}::uuid, ${input.actorSessionId}::uuid,
+            ${input.mine}, ${input.status ?? null}::text, ${input.limit}::integer
+          )
+        `
+        return rows.map((row) => row.result)
       }),
   }
 }

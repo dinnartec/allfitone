@@ -149,7 +149,7 @@ export function createInvitationBatchProcessor(dependencies: {
   }
 }
 
-function trustedPublicBaseUrl(value: string, environment: NodeJS.ProcessEnv): URL {
+export function trustedPublicBaseUrl(value: string, environment: NodeJS.ProcessEnv): URL {
   const url = new URL(value)
   const loopback =
     url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '[::1]'
@@ -168,7 +168,7 @@ function trustedPublicBaseUrl(value: string, environment: NodeJS.ProcessEnv): UR
   return url
 }
 
-async function mapWithConcurrency<T, R>(
+export async function mapWithConcurrency<T, R>(
   items: readonly T[],
   concurrency: number,
   mapper: (item: T) => Promise<R>,

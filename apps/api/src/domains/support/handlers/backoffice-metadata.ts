@@ -1,5 +1,5 @@
 /**
- * Backoffice support metadata routes: `OP-SUP-005`.
+ * Backoffice support metadata routes: `OP-SUP-005` and `NEW-SUP-ATTENTION`.
  *
  * `HU-BO-006` finds a person, `HU-BO-007` opens their operational state, and
  * both read the same minimised projection. The handler shapes and rejects; it
@@ -12,6 +12,10 @@
  * become an exploration; and the case reference is required on both routes,
  * because a read nobody can trace back to a case is the thing `PR-22` exists to
  * prevent.
+ *
+ * The attention panel (`HU-BO-005`) lives here because it is a support read with
+ * no subject, like the diagnosis feed. Which of its notices an operator sees is
+ * decided by their duties in PostgreSQL, never by this handler.
  */
 
 import { randomUUID } from 'node:crypto'
@@ -27,20 +31,41 @@ import {
   type BackofficeAuthenticationService,
 } from '../../identity/index.js'
 import { problem, type ApiErrorCode } from '../../../platform/http/index.js'
-import type { SupportMetadataService } from '../application/index.js'
-import { supportMetadataService } from '../dependencies.js'
-import { SUPPORT_CASE_REFERENCE, type SupportLookupKind } from '../domain/index.js'
+import type {
+  SupportAttentionService,
+  SupportDiagnosisService,
+  SupportMetadataService,
+} from '../application/index.js'
+import {
+  supportAttentionService,
+  supportDiagnosisService,
+  supportMetadataService,
+} from '../dependencies.js'
+import {
+  SUPPORT_CASE_REFERENCE,
+  SUPPORT_OPERATION_SOURCES,
+  SUPPORT_OPERATION_STATES,
+  type SupportLookupKind,
+  type SupportOperationCursor,
+  type SupportOperationSourceKind,
+  type SupportOperationState,
+} from '../domain/index.js'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const EMAIL = /^[^\s@]+@[^\s@.]+(?:\.[^\s@.]+)+$/
 const PHONE = /^\+[1-9][0-9]{6,14}$/
+const MAX_PAGE = 100
 
 export function backofficeSupportMetadataRoutes(
   injectedMetadata?: SupportMetadataService,
   injectedSessions?: BackofficeAuthenticationService,
+  injectedDiagnosis?: SupportDiagnosisService,
+  injectedAttention?: SupportAttentionService,
 ): Hono {
   const origin = new URL(trustedBackofficeWebUrl()).origin
   const metadata = () => injectedMetadata ?? supportMetadataService()
+  const diagnosis = () => injectedDiagnosis ?? supportDiagnosisService()
+  const attention = () => injectedAttention ?? supportAttentionService()
   const sessions = () => injectedSessions ?? backofficeAuthenticationService()
   const routes = new Hono()
 
@@ -107,7 +132,111 @@ export function backofficeSupportMetadataRoutes(
     }
   })
 
+  // No case reference on the two diagnosis routes, unlike every other support
+  // read: this feed has no subject, so there is nothing to trace back to a case.
+  routes.get('/support/operations', async (c) => {
+    const filters = operationFilters(c)
+    if (!filters) return problem(c, 'invalid-request')
+
+    try {
+      const actor = await backofficeActor(c, sessions())
+      if (actor instanceof Response) return actor
+      const found = await diagnosis().listOperations(
+        { actorPersonId: actor.personId, actorSessionId: actor.sessionId },
+        { requestId: randomUUID(), ...filters },
+      )
+      return c.json({
+        data: found.items,
+        page: { has_more: found.hasMore, next_cursor: found.nextCursor ?? null },
+      })
+    } catch (error) {
+      return operationFailure(c, error)
+    }
+  })
+
+  routes.get('/support/delivery-circuits', async (c) => {
+    try {
+      const actor = await backofficeActor(c, sessions())
+      if (actor instanceof Response) return actor
+      return c.json({
+        items: await diagnosis().listDeliveryCircuits(
+          { actorPersonId: actor.personId, actorSessionId: actor.sessionId },
+          { requestId: randomUUID() },
+        ),
+      })
+    } catch (error) {
+      return operationFailure(c, error)
+    }
+  })
+
+  // Counters with no subject, so no case reference either.
+  routes.get('/support/attention', async (c) => {
+    try {
+      const actor = await backofficeActor(c, sessions())
+      if (actor instanceof Response) return actor
+      return c.json(
+        await attention().read(
+          { actorPersonId: actor.personId, actorSessionId: actor.sessionId },
+          { requestId: randomUUID() },
+        ),
+      )
+    } catch (error) {
+      return operationFailure(c, error)
+    }
+  })
+
   return routes
+}
+
+/**
+ * Every filter comes from a closed vocabulary and the cursor is this handler's
+ * own, so a forged one is refused here rather than becoming a strange query.
+ */
+function operationFilters(c: Context) {
+  const limit = Number(c.req.query('limit') ?? 25)
+  if (!Number.isInteger(limit) || limit < 1 || limit > MAX_PAGE) return undefined
+
+  const source = c.req.query('source')
+  if (
+    source !== undefined &&
+    !SUPPORT_OPERATION_SOURCES.includes(source as SupportOperationSourceKind)
+  ) {
+    return undefined
+  }
+  const state = c.req.query('state')
+  if (state !== undefined && !SUPPORT_OPERATION_STATES.includes(state as SupportOperationState)) {
+    return undefined
+  }
+  const aggregateId = c.req.query('aggregate_id')
+  if (aggregateId !== undefined && !UUID.test(aggregateId)) return undefined
+
+  const encoded = c.req.query('cursor')
+  let cursor: SupportOperationCursor | undefined
+  if (encoded !== undefined) {
+    cursor = decodeCursor(encoded)
+    if (!cursor) return undefined
+  }
+
+  return {
+    limit,
+    ...(source === undefined ? {} : { source: source as SupportOperationSourceKind }),
+    ...(state === undefined ? {} : { state: state as SupportOperationState }),
+    ...(aggregateId === undefined ? {} : { aggregateId }),
+    ...(cursor === undefined ? {} : { cursor }),
+  }
+}
+
+function decodeCursor(encoded: string): SupportOperationCursor | undefined {
+  try {
+    const parsed: unknown = JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8'))
+    if (typeof parsed !== 'object' || parsed === null) return undefined
+    const { occurredAt, id } = parsed as Record<string, unknown>
+    if (typeof occurredAt !== 'string' || Number.isNaN(Date.parse(occurredAt))) return undefined
+    if (typeof id !== 'string' || !UUID.test(id)) return undefined
+    return { occurredAt, id }
+  } catch {
+    return undefined
+  }
 }
 
 /**

@@ -27,6 +27,22 @@ tags:
     description: Global published catalogue shared by every surface.
   - name: Backoffice Platform Access
     description: Base role and temporary platform duty administration for Allfit staff.
+  - name: Backoffice Break Glass
+    description: >-
+      The exceptional path: a narrow, approved, time-boxed window over one
+      person's data, where every attempt leaves evidence that person can see.
+  - name: Backoffice Privacy
+    description: >-
+      Published permission definitions: what each permission a person grants
+      actually covers, version by version.
+  - name: Backoffice Verification
+    description: >-
+      Verifying professional credentials against their official registry or issuer,
+      under a platform duty of its own.
+  - name: Backoffice Organizations
+    description: >-
+      The organization directory Allfit's team uses to reach a gym, and later its
+      lifecycle. Organizations only: nothing here searches or returns a person.
   - name: Backoffice Support
     description: >-
       The minimised operational projection Allfit staff read to resolve a case.
@@ -996,6 +1012,945 @@ paths:
           $ref: '#/components/responses/NotFound'
         '422':
           $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/support/operations:
+    get:
+      tags: [Backoffice Support]
+      operationId: listBackofficeSupportOperations
+      x-allfit-operation: OP-SUP-005
+      x-allfit-cache: no-store
+      summary: Read the technical state of operations that failed
+      description: >-
+        Notifications waiting in the outbox and commands that never finished, in
+        one feed. It carries identifiers, states, timestamps, error codes and
+        retries — never a payload, a stored response, a principal fingerprint or
+        a request hash, because the point of this read is diagnosing without
+        opening anyone's data.
+
+        There is no case reference here, unlike the other support reads: this
+        feed has no subject, so there is nothing to trace back to a case.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/SupportOperationSource'
+        - $ref: '#/components/parameters/SupportOperationState'
+        - $ref: '#/components/parameters/SupportAggregateId'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Operational events, newest first
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportOperationPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/support/delivery-circuits:
+    get:
+      tags: [Backoffice Support]
+      operationId: listBackofficeSupportDeliveryCircuits
+      x-allfit-operation: OP-SUP-005
+      x-allfit-cache: no-store
+      summary: Read whether a delivery channel is open or tripped
+      description: >-
+        Counters per event type. It answers "is the whole channel down" before
+        anyone chases one notification, and nothing in it belongs to a person.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+      responses:
+        '200':
+          description: Circuits ordered by failures first
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportDeliveryCircuitList'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/support/attention:
+    get:
+      tags: [Backoffice Support]
+      operationId: readBackofficeSupportAttention
+      x-allfit-operation: NEW-SUP-ATTENTION
+      x-allfit-cache: no-store
+      summary: Read what needs attention
+      description: >-
+        Counters of what is pending or stuck: credentials waiting for a verifier,
+        gyms nobody claimed and system errors that repeat. Each notice is shown only
+        to an operator whose duties resolve it; any other notice is `withheld`,
+        never zero. An operator whose duties resolve no notice is refused.
+
+        Nothing here names a person or an organization, so reading it records no
+        access. A counter opens nothing: every destination checks its own duty
+        again.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+      responses:
+        '200':
+          description: The notices this operator's duties resolve
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportAttentionPanel'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/organizations:
+    get:
+      tags: [Backoffice Organizations]
+      operationId: listBackofficeOrganizations
+      x-allfit-operation: NEW-SUP-ORG-SEARCH
+      x-allfit-cache: no-store
+      summary: Read the organization directory
+      description: >-
+        Name, type, lifecycle state, active members and sites of every organization,
+        searchable by display name. An `unclaimed` organization exists but does not
+        operate: Allfit created it and its owner has not accepted yet.
+
+        The legal name is neither searched nor returned, because for an independent
+        professional it is a person's name; the responsible party never leaves the
+        database. `people_served` is null until service relationships exist —
+        never zero, which would say the organization serves nobody.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/OrganizationSearch'
+        - $ref: '#/components/parameters/OrganizationLifecycleFilter'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Organizations in name order
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackofficeOrganizationPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+    post:
+      tags: [Backoffice Organizations]
+      operationId: createBackofficeOrganizationHandover
+      x-allfit-operation: OP-ORG-018
+      x-allfit-cache: no-store
+      summary: Create an organization and hand it to its owner
+      description: >-
+        Creates the organization `unclaimed`, its site when one is given, and one
+        ownership invitation to the owner's email in a single transaction. Nothing
+        operates until the owner accepts, and Allfit does not run it in between.
+
+        A company is named here. A natural person is named from their own identity
+        when they accept, so the body has nowhere to write a person's name and a legal
+        name sent for one is refused.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrganizationHandoverCreate'
+      responses:
+        '201':
+          description: The handover, or the same one for a repeated command
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationHandover'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/organizations/{organizationId}:
+    get:
+      tags: [Backoffice Organizations]
+      operationId: readBackofficeOrganizationFile
+      x-allfit-operation: NEW-SUP-ORG-DETAIL
+      x-allfit-cache: no-store
+      summary: Read a gym's file
+      description: >-
+        `HU-BO-013`: its data, its owner, its sites and its team. Ordinary support reads
+        identifiers, states, dates and counters, so the owner and the team are person
+        identifiers with their roles, never names or contacts, and the responsible
+        party of an independent professional is never named.
+
+        Every active member the file returns is recorded in the access log before the
+        file is returned. A natural person's site address is withheld, because it can
+        be their home. People served, plans, the payment method and Premium have no
+        tables yet and say `not_modelled` instead of an answer.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/OrganizationId'
+      responses:
+        '200':
+          description: The file
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackofficeOrganizationFile'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/organizations/{organizationId}/handover:
+    get:
+      tags: [Backoffice Organizations]
+      operationId: readBackofficeOrganizationHandover
+      x-allfit-operation: OP-ORG-018
+      x-allfit-cache: no-store
+      summary: Read where a handover stands
+      description: >-
+        The organization, its site and its latest ownership invitation. The address
+        the invitation went to is a hint, enough to recognise it and not to read it
+        back. An organization its owner created was never handed over: 404.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/OrganizationId'
+      responses:
+        '200':
+          description: The handover
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationHandover'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/organizations/{organizationId}/handover/resends:
+    post:
+      tags: [Backoffice Organizations]
+      operationId: resendBackofficeOrganizationHandover
+      x-allfit-operation: OP-ORG-021
+      x-allfit-cache: no-store
+      summary: Send the ownership invitation again
+      description: >-
+        A live invitation is sent again as it is, so the first email keeps working. A
+        spent or lapsed one is replaced by a new invitation to the same address. It is
+        never sent to a different one, and an organization with an owner has nothing
+        to resend: 409. The command carries no body.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      responses:
+        '200':
+          description: The handover with the invitation that was sent
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationHandover'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/organizations/{organizationId}/cancellation:
+    post:
+      tags: [Backoffice Organizations]
+      operationId: cancelBackofficeOrganizationHandover
+      x-allfit-operation: OP-ORG-022
+      x-allfit-cache: no-store
+      summary: Cancel an organization nobody claimed
+      description: >-
+        `HU-BO-015`. Only an organization that was never claimed is cancelled, and its
+        pending invitation is withdrawn with it. One with an owner is closed by that
+        owner, never from here: 409. Cancelling a cancelled organization converges. The
+        command carries no body.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      responses:
+        '200':
+          description: The cancelled handover
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationHandover'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/verification-requests:
+    get:
+      tags: [Backoffice Verification]
+      operationId: listBackofficeVerificationRequests
+      x-allfit-operation: OP-IDN-011
+      x-allfit-cache: no-store
+      summary: Read the queue of credentials waiting to be verified
+      description: >-
+        Every pending request for one exact credential version: who asked, what
+        they claim, and which registry or issuer to consult. Declaring or revising
+        a credential puts it here and retiring it takes it out, so nobody has to
+        remember to ask.
+
+        Reading this reaches the holder's data, so each row is recorded against
+        the holder before it is returned. `viewer_can_decide` is false when the
+        caller is the holder or shares an active organization with them. It is a
+        hint for the screen, never authority: the decision revalidates on its own.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Pending requests, oldest first
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CredentialVerificationRequestList'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/verifications:
+    post:
+      tags: [Backoffice Verification]
+      operationId: createBackofficeVerification
+      x-allfit-operation: OP-IDN-011
+      x-allfit-cache: no-store
+      summary: Record the verification of one credential version
+      description: >-
+        `verified`, `rejected` or `unverifiable`, checked against the official
+        registry or the issuer. There is no default result. The policy, the
+        validity and the evidence fingerprint are derived by the server and cannot
+        be proposed: the validity never exceeds twelve months, the source's own
+        expiry or the credential's, and a source that reports the credential lapsed
+        cannot produce `verified`.
+
+        The response carries the outcome, never the registry reference or the
+        fingerprint. Verifying one credential marks nothing else as verified.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CredentialVerificationDecisionCreate'
+      responses:
+        '201':
+          description: The resolved request and the verification that resolved it
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CredentialVerificationOutcome'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/verification-renewals:
+    get:
+      tags: [Backoffice Verification]
+      operationId: listBackofficeVerificationRenewals
+      x-allfit-operation: OP-IDN-011
+      x-allfit-cache: no-store
+      summary: Read the verifications that are due for renewal
+      description: >-
+        Verified credentials whose validity ends within thirty days or has already
+        ended, with no review in progress. Nothing runs at the moment a
+        verification lapses, so this list is computed and opening a renewal is an
+        explicit step. Each row is recorded against the holder before it is
+        returned.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Due renewals, soonest first
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CredentialRenewalDueList'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+    post:
+      tags: [Backoffice Verification]
+      operationId: openBackofficeVerificationRenewal
+      x-allfit-operation: OP-IDN-011
+      x-allfit-cache: no-store
+      summary: Open the renewal of a lapsed verification
+      description: >-
+        A new request linked to the one it renews. It never extends the earlier
+        verification, which stays exactly as it was.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CredentialRenewalCreate'
+      responses:
+        '201':
+          description: The renewal request, pending
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CredentialVerificationOutcome'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/access-events:
+    get:
+      tags: [Backoffice Privacy]
+      operationId: listBackofficeAccessEvents
+      x-allfit-operation: OP-SUP-009
+      x-allfit-cache: no-store
+      summary: Read the access log as an independent auditor
+      description: >-
+        Who from the team looked at whose data, and when. It carries the record
+        of the access and never what was read.
+
+        Separation of duties is **per case, not global**: an access that belongs
+        to a break-glass window this auditor requested or approved is absent, and
+        every other window stays auditable. `withheld_from_you` counts what was
+        removed for that reason, so an empty list is never mistaken for "nobody
+        touched this person's data" — the auditor is told to hand those cases to
+        someone else.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/AccessEventActor'
+        - $ref: '#/components/parameters/AccessEventSubject'
+        - $ref: '#/components/parameters/AccessEventFrom'
+        - $ref: '#/components/parameters/AccessEventTo'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Access records, newest first
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessEventPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/scope-definitions:
+    get:
+      tags: [Backoffice Privacy]
+      operationId: listBackofficeScopeDefinitions
+      x-allfit-operation: OP-PRV-011
+      x-allfit-cache: no-store
+      summary: Read the published permission definitions
+      description: >-
+        Every published version of every scope, newest first, with the resources
+        and fields it includes and excludes. A published version is immutable, so
+        the list is a history rather than a current state.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+      responses:
+        '200':
+          description: Published versions, newest of each scope first
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScopeDefinitionList'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+    post:
+      tags: [Backoffice Privacy]
+      operationId: publishBackofficeScopeDefinition
+      x-allfit-operation: OP-PRV-011
+      x-allfit-cache: no-store
+      summary: Publish the next version of a permission definition
+      description: >-
+        The version number is assigned by the server, never accepted from the
+        client. Publishing a wider version does not widen what anybody already
+        granted: a grant points at one specific version, and that version can
+        never change.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScopeDefinitionPublication'
+      responses:
+        '201':
+          description: The published version, or the converged one for a repeated command
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScopeDefinition'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/break-glass/requests:
+    get:
+      tags: [Backoffice Break Glass]
+      operationId: listBackofficeBreakGlassRequests
+      x-allfit-operation: OP-SUP-001
+      x-allfit-cache: no-store
+      summary: Read the break-glass tray
+      description: >-
+        Requests to decide, or your own. Reading the tray is never a permission:
+        every operation revalidates its duty, its quorum and its window in its own
+        transaction.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/BreakGlassMine'
+        - $ref: '#/components/parameters/BreakGlassStatus'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Requests, newest first
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BreakGlassRequestList'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+    post:
+      tags: [Backoffice Break Glass]
+      operationId: requestBackofficeBreakGlass
+      x-allfit-operation: OP-SUP-001
+      x-allfit-cache: no-store
+      summary: Ask for a break-glass window
+      description: >-
+        The body names the subject, the categories, one of five closed purposes
+        and a traceable case. It does **not** name the tier, the number of
+        approvals or the duration: the server derives all three from the
+        categories, so a caller cannot ask for the cheap ones. A forbidden
+        category is refused rather than priced higher.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BreakGlassRequestCreate'
+      responses:
+        '201':
+          description: The file, or the converged one for a repeated command
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BreakGlassRequest'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/break-glass/requests/{requestId}/decisions:
+    post:
+      tags: [Backoffice Break Glass]
+      operationId: decideBackofficeBreakGlass
+      x-allfit-operation: OP-SUP-002
+      x-allfit-cache: no-store
+      summary: Approve or reject a break-glass request
+      description: >-
+        A rejection is terminal. An approval that completes the quorum opens the
+        window in the same transaction; one that does not leaves the request
+        exactly where it was. The approver is never the requester or the subject,
+        and never counts twice.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/BreakGlassRequestId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BreakGlassDecision'
+      responses:
+        '200':
+          description: The file after the decision
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BreakGlassRequest'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/break-glass/requests/{requestId}/reads:
+    post:
+      tags: [Backoffice Break Glass]
+      operationId: exerciseBackofficeBreakGlass
+      x-allfit-operation: OP-SUP-003
+      x-allfit-cache: no-store
+      summary: Exercise an approved break-glass window
+      description: >-
+        Only the exact requester exercises. Every attempt, allowed or denied,
+        writes evidence before anything is returned — a denial is an answer with a
+        recorded reason, not an error, because the record of a refused attempt is
+        the point.
+
+        The content projection is not available in this version: `execution` and
+        `nutrition` do not exist yet, so an authorised exercise answers
+        `content_unavailable` rather than inventing data.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/BreakGlassRequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BreakGlassExercise'
+      responses:
+        '200':
+          description: >-
+            The outcome of the attempt. `denied` and `content_unavailable` are both
+            answers rather than failures; neither carries content.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BreakGlassExerciseOutcome'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/break-glass/requests/{requestId}/closure:
+    post:
+      tags: [Backoffice Break Glass]
+      operationId: closeBackofficeBreakGlass
+      x-allfit-operation: OP-SUP-004
+      x-allfit-cache: no-store
+      summary: Close your own break-glass window
+      description: >-
+        Only the requester closes their own. There is no reopening and no
+        extension: continuing means asking again. Closing a closed window
+        converges rather than failing.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/BreakGlassRequestId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      responses:
+        '200':
+          description: The closed file
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BreakGlassRequest'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
 
@@ -2589,6 +3544,91 @@ paths:
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
 
+  /studio/v1/ownership-invitations/resolve:
+    post:
+      tags: [Studio Identity]
+      operationId: resolveStudioOwnershipInvitation
+      x-allfit-operation: OP-IDN-016
+      x-allfit-cache: no-store
+      summary: Resolve a pending ownership invitation
+      security: []
+      description: >-
+        Resolves a token Allfit sent to hand over an organization, without exposing
+        the address it went to. Invalid, expired, spent, revoked and cancelled
+        invitations are indistinguishable, and a team token never resolves here.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeamInvitationToken'
+      responses:
+        '200':
+          description: Pending ownership invitation presentation
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OwnershipInvitationPresentation'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /studio/v1/ownership-invitations/decisions:
+    post:
+      tags: [Studio Identity]
+      operationId: decideStudioOwnershipInvitation
+      x-allfit-operation: OP-IDN-009
+      x-allfit-cache: no-store
+      summary: Accept or reject an organization handed over by Allfit
+      description: >-
+        Accepting makes the person the owner and the organization starts operating, in
+        one transaction. Only the invited email decides, and whoever from Allfit handed
+        the organization over cannot claim it. A natural person's organization takes its
+        responsible name from their own identity here.
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OwnershipInvitationDecisionCreate'
+      responses:
+        '200':
+          description: Decision and any ownership committed atomically
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OwnershipInvitationDecisionResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
   /studio/v1/organizations/{organizationId}/invitations:
     get:
       tags: [Studio Organizations]
@@ -4088,6 +5128,93 @@ components:
       description: Opaque, host-only, HttpOnly AAL2 Backoffice session.
 
   parameters:
+    BreakGlassRequestId:
+      name: requestId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/UuidV7'
+    BreakGlassMine:
+      name: mine
+      in: query
+      required: false
+      description: Only your own requests. Absent means the whole tray.
+      schema:
+        type: boolean
+    BreakGlassStatus:
+      name: status
+      in: query
+      required: false
+      schema:
+        $ref: '#/components/schemas/BreakGlassStatus'
+    SupportOperationSource:
+      name: source
+      in: query
+      required: false
+      schema:
+        $ref: '#/components/schemas/SupportOperationSourceKind'
+    SupportOperationState:
+      name: state
+      in: query
+      required: false
+      schema:
+        $ref: '#/components/schemas/SupportOperationState'
+    OrganizationSearch:
+      name: q
+      in: query
+      required: false
+      description: >-
+        Part of an organization's display name, matched literally. At least two
+        characters, so a search is a question rather than a way to page everything.
+      schema:
+        type: string
+        minLength: 2
+        maxLength: 120
+    OrganizationLifecycleFilter:
+      name: status
+      in: query
+      required: false
+      schema:
+        $ref: '#/components/schemas/OrganizationLifecycleStatus'
+    AccessEventActor:
+      name: actor_person_id
+      in: query
+      required: false
+      description: The team member whose accesses are being reviewed.
+      schema:
+        $ref: '#/components/schemas/Uuid'
+    AccessEventSubject:
+      name: subject_person_id
+      in: query
+      required: false
+      description: The person whose data was accessed.
+      schema:
+        $ref: '#/components/schemas/Uuid'
+    AccessEventFrom:
+      name: from
+      in: query
+      required: false
+      description: Inclusive lower bound on when the access happened.
+      schema:
+        type: string
+        format: date-time
+    AccessEventTo:
+      name: to
+      in: query
+      required: false
+      description: Exclusive upper bound on when the access happened.
+      schema:
+        type: string
+        format: date-time
+    SupportAggregateId:
+      name: aggregate_id
+      in: query
+      required: false
+      description: >-
+        The aggregate an event belongs to. Not every event is reachable from a
+        person: a notification about an invitation belongs to the invitation.
+      schema:
+        $ref: '#/components/schemas/Uuid'
     SupportCaseReference:
       name: case_reference
       in: query
@@ -4681,6 +5808,1177 @@ components:
             request_id: 01JEXAMPLE0000000000000000
 
   schemas:
+    ScopeResourceRule:
+      type: object
+      additionalProperties: false
+      description: >-
+        One resource and field the version speaks about. An exclusion is stated
+        rather than left out, because criterion 1 asks what a permission excludes
+        and an absence cannot answer that.
+      required: [resource, field, data_classification_code, max_action]
+      properties:
+        resource:
+          type: string
+          pattern: '^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$'
+        field:
+          type: string
+          description: A field name, or `*` for every field of the resource.
+          maxLength: 64
+        data_classification_code:
+          type: string
+          pattern: '^[a-z][a-z0-9_]{1,63}$'
+        max_action:
+          $ref: '#/components/schemas/AccessLevel'
+        is_excluded:
+          type: boolean
+          default: false
+        historical_readable:
+          type: boolean
+          default: false
+          description: >-
+            Whether the field may be read for periods before the grant existed.
+            Only valid on an included, read-only field.
+    ScopeDefinition:
+      type: object
+      additionalProperties: false
+      required: [id, scope_code, version_number, status, published_at, rules]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        scope_code:
+          $ref: '#/components/schemas/ScopeCode'
+        version_number:
+          type: integer
+          minimum: 1
+        status:
+          $ref: '#/components/schemas/PublicationStatus'
+        published_at:
+          type: [string, 'null']
+          format: date-time
+        rules:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/ScopeResourceRule'
+    ScopeDefinitionList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ScopeDefinition'
+    ScopeDefinitionPublication:
+      type: object
+      additionalProperties: false
+      description: >-
+        No version number: the server assigns the next one. At least one rule must
+        be included, because a version made only of exclusions grants nothing.
+      required: [scope_code, rules]
+      properties:
+        scope_code:
+          $ref: '#/components/schemas/ScopeCode'
+        rules:
+          type: array
+          minItems: 1
+          maxItems: 200
+          items:
+            $ref: '#/components/schemas/ScopeResourceRule'
+    BreakGlassCategory:
+      type: string
+      description: >-
+        The approvable categories. Everything else — media, identity, contact,
+        secrets, payments, raw sensor data — is not a category with a higher bar:
+        it can never be approved.
+      enum:
+        - relationship_training
+        - prior_training_history
+        - nutrition_guidance
+        - body_progress
+        - health_context
+        - nutrition_intake
+    BreakGlassPurpose:
+      type: string
+      description: >-
+        Five closed purposes. There is deliberately no `other`: marketing,
+        commercial recovery, AI training and operational curiosity are not
+        purposes, and an open field would become all four.
+      enum:
+        - service_dispute
+        - legal_or_regulatory_obligation
+        - customer_support_request
+        - security_investigation
+        - authorized_quality_review
+    BreakGlassTier:
+      type: string
+      description: Derived from the categories by the server, never sent by a client.
+      enum: [standard, restricted]
+    BreakGlassStatus:
+      type: string
+      enum: [requested, approved, rejected, closed, expired]
+    OrganizationLifecycleStatus:
+      type: string
+      description: >-
+        `unclaimed` exists but does not operate: Allfit created it and its owner has
+        not accepted yet. `cancelled` was never claimed. `closed` operated and
+        ended.
+      enum: [unclaimed, active, closed, cancelled]
+    BackofficeOrganizationSummary:
+      type: object
+      additionalProperties: false
+      description: >-
+        An organization as the directory shows it. Nothing here identifies a person:
+        no legal name and no responsible party.
+      required:
+        - organization_id
+        - display_name
+        - type_code
+        - type_name
+        - status
+        - created_at
+        - claimed_at
+        - cancelled_at
+        - active_member_count
+        - site_count
+        - people_served
+      properties:
+        organization_id:
+          $ref: '#/components/schemas/Uuid'
+        display_name:
+          type: string
+        type_code:
+          type: string
+        type_name:
+          type: string
+        status:
+          $ref: '#/components/schemas/OrganizationLifecycleStatus'
+        created_at:
+          type: string
+          format: date-time
+        claimed_at:
+          type: [string, 'null']
+          format: date-time
+        cancelled_at:
+          type: [string, 'null']
+          format: date-time
+        active_member_count:
+          type: integer
+          minimum: 0
+        site_count:
+          type: integer
+          minimum: 0
+        people_served:
+          type: [integer, 'null']
+          minimum: 0
+          description: >-
+            Null until service relationships exist. Not zero, because zero would say
+            the organization serves nobody.
+    BackofficeOrganizationPage:
+      type: object
+      additionalProperties: false
+      required: [data, page]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/BackofficeOrganizationSummary'
+        page:
+          $ref: '#/components/schemas/Page'
+    ModelAvailability:
+      type: string
+      description: >-
+        `not_modelled` means the platform has no table for this yet. It is a fact about
+        Allfit, never about the organization or the person.
+      enum: [not_modelled]
+    BackofficeOrganizationFile:
+      type: object
+      additionalProperties: false
+      required:
+        - organization
+        - owner
+        - team
+        - team_counts
+        - team_truncated
+        - sites
+        - people_served
+        - plans_availability
+        - payment_method_availability
+        - premium_availability
+      properties:
+        organization:
+          type: object
+          additionalProperties: false
+          required:
+            - organization_id
+            - display_name
+            - type_code
+            - type_name
+            - status
+            - party_kind
+            - legal_name
+            - created_at
+            - claimed_at
+            - cancelled_at
+          properties:
+            organization_id:
+              $ref: '#/components/schemas/Uuid'
+            display_name:
+              type: string
+            type_code:
+              $ref: '#/components/schemas/OrganizationTypeCode'
+            type_name:
+              type: string
+            status:
+              $ref: '#/components/schemas/OrganizationLifecycleStatus'
+            party_kind:
+              $ref: '#/components/schemas/OrganizationPartyKind'
+            legal_name:
+              type: [string, 'null']
+              description: A company's legal name. Always null for a natural person.
+            created_at:
+              type: string
+              format: date-time
+            claimed_at:
+              type: [string, 'null']
+              format: date-time
+            cancelled_at:
+              type: [string, 'null']
+              format: date-time
+        owner:
+          type: [object, 'null']
+          additionalProperties: false
+          required: [person_id, membership_id, since]
+          properties:
+            person_id:
+              $ref: '#/components/schemas/Uuid'
+            membership_id:
+              $ref: '#/components/schemas/Uuid'
+            since:
+              type: string
+              format: date-time
+        team:
+          type: array
+          maxItems: 200
+          items:
+            type: object
+            additionalProperties: false
+            required: [membership_id, person_id, roles, joined_at]
+            properties:
+              membership_id:
+                $ref: '#/components/schemas/Uuid'
+              person_id:
+                $ref: '#/components/schemas/Uuid'
+              roles:
+                type: array
+                items:
+                  type: string
+                  enum: [owner, admin, coach, staff]
+              joined_at:
+                type: string
+                format: date-time
+        team_counts:
+          type: object
+          additionalProperties: false
+          required: [active, terminated]
+          properties:
+            active:
+              type: integer
+              minimum: 0
+            terminated:
+              type: integer
+              minimum: 0
+        team_truncated:
+          type: boolean
+          description: True when the team has more active members than the file lists.
+        sites:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [site_id, name, address, address_withheld, status]
+            properties:
+              site_id:
+                $ref: '#/components/schemas/Uuid'
+              name:
+                type: string
+              address:
+                type: [string, 'null']
+              address_withheld:
+                type: boolean
+                description: A natural person's address is withheld, because it can be their home.
+              status:
+                type: string
+                enum: [active, inactive]
+        people_served:
+          type: [integer, 'null']
+          minimum: 0
+          description: Null until service relationships exist. Never zero in their place.
+        plans_availability:
+          $ref: '#/components/schemas/ModelAvailability'
+        payment_method_availability:
+          $ref: '#/components/schemas/ModelAvailability'
+        premium_availability:
+          $ref: '#/components/schemas/ModelAvailability'
+    OrganizationPartyKind:
+      type: string
+      description: >-
+        Whether the organization answers as a company or as a natural person. A
+        natural person's name is never written by Allfit.
+      enum: [natural_person, legal_entity]
+    OrganizationHandoverCreate:
+      type: object
+      additionalProperties: false
+      required: [display_name, type_code, party_kind, owner_email]
+      properties:
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        type_code:
+          $ref: '#/components/schemas/OrganizationTypeCode'
+        party_kind:
+          $ref: '#/components/schemas/OrganizationPartyKind'
+        legal_name:
+          type: [string, 'null']
+          minLength: 1
+          maxLength: 160
+          description: Required for a company and refused for a natural person.
+        site:
+          type: [object, 'null']
+          additionalProperties: false
+          required: [name]
+          properties:
+            name:
+              type: string
+              minLength: 1
+              maxLength: 120
+            address:
+              type: [string, 'null']
+              minLength: 1
+              maxLength: 240
+        owner_email:
+          type: string
+          format: email
+          minLength: 3
+          maxLength: 254
+    OrganizationHandover:
+      type: object
+      additionalProperties: false
+      required:
+        - organization_id
+        - display_name
+        - type_code
+        - type_name
+        - party_kind
+        - legal_name
+        - status
+        - created_at
+        - claimed_at
+        - cancelled_at
+        - site
+        - invitation
+      properties:
+        organization_id:
+          $ref: '#/components/schemas/Uuid'
+        display_name:
+          type: string
+        type_code:
+          $ref: '#/components/schemas/OrganizationTypeCode'
+        type_name:
+          type: string
+        party_kind:
+          $ref: '#/components/schemas/OrganizationPartyKind'
+        legal_name:
+          type: [string, 'null']
+        status:
+          $ref: '#/components/schemas/OrganizationLifecycleStatus'
+        created_at:
+          type: string
+          format: date-time
+        claimed_at:
+          type: [string, 'null']
+          format: date-time
+        cancelled_at:
+          type: [string, 'null']
+          format: date-time
+        site:
+          type: [object, 'null']
+          additionalProperties: false
+          required: [site_id, name, address]
+          properties:
+            site_id:
+              $ref: '#/components/schemas/Uuid'
+            name:
+              type: string
+            address:
+              type: [string, 'null']
+        invitation:
+          type: [object, 'null']
+          additionalProperties: false
+          required: [invitation_id, status, intent_status, contact_hint, expires_at]
+          description: The latest ownership invitation. The address is a hint, never the address.
+          properties:
+            invitation_id:
+              $ref: '#/components/schemas/Uuid'
+            status:
+              $ref: '#/components/schemas/TeamInvitationStatus'
+            intent_status:
+              $ref: '#/components/schemas/TeamInvitationIntentStatus'
+            contact_hint:
+              type: string
+            expires_at:
+              type: string
+              format: date-time
+    CredentialVerificationMethod:
+      type: string
+      description: >-
+        How a credential was checked. Documents, civil identity, health and a
+        complete profile are never verifiable in V1, so no method exists for them.
+      enum: [official_registry_lookup, issuer_confirmation]
+    CredentialVerificationResult:
+      type: string
+      description: >-
+        What a verifier may record. There is no default, and `unverifiable` is the
+        answer whenever the evidence does not reach.
+      enum: [verified, rejected, unverifiable]
+    CredentialVerificationRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - request_id
+        - kind
+        - requested_at
+        - credential_id
+        - credential_type_code
+        - credential_type_name
+        - issuer
+        - credential_name
+        - credential_identifier
+        - issued_on
+        - expires_on
+        - verification_url
+        - holder_person_id
+        - holder_given_name
+        - holder_family_name
+        - suggested_method
+        - previous_result
+        - previous_valid_to
+        - viewer_can_decide
+      properties:
+        request_id:
+          $ref: '#/components/schemas/Uuid'
+        kind:
+          type: string
+          enum: [initial, renewal]
+        requested_at:
+          type: string
+          format: date-time
+        credential_id:
+          $ref: '#/components/schemas/Uuid'
+        credential_type_code:
+          type: string
+        credential_type_name:
+          type: string
+        issuer:
+          type: string
+        credential_name:
+          type: string
+        credential_identifier:
+          type: [string, 'null']
+        issued_on:
+          type: [string, 'null']
+          format: date
+        expires_on:
+          type: [string, 'null']
+          format: date
+        verification_url:
+          type: [string, 'null']
+          format: uri
+        holder_person_id:
+          $ref: '#/components/schemas/Uuid'
+        holder_given_name:
+          type: string
+        holder_family_name:
+          type: string
+        suggested_method:
+          $ref: '#/components/schemas/CredentialVerificationMethod'
+        previous_result:
+          type: [string, 'null']
+          description: The latest result recorded for this exact version, so a renewal shows what it renews.
+        previous_valid_to:
+          type: [string, 'null']
+          format: date-time
+        viewer_can_decide:
+          type: boolean
+          description: >-
+            A hint for the screen, never authority. False when the caller is the
+            holder or shares an active organization with them.
+    CredentialVerificationRequestList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CredentialVerificationRequest'
+    CredentialVerificationDecisionCreate:
+      type: object
+      additionalProperties: false
+      description: >-
+        No policy, no validity and no evidence fingerprint: the server derives all
+        three, so a client cannot decide how long its own verification lasts.
+      required:
+        - request_id
+        - result
+        - method
+        - source_authority
+        - source_jurisdiction
+        - source_reference
+        - source_status
+        - source_checked_at
+      properties:
+        request_id:
+          $ref: '#/components/schemas/Uuid'
+        result:
+          $ref: '#/components/schemas/CredentialVerificationResult'
+        method:
+          $ref: '#/components/schemas/CredentialVerificationMethod'
+        source_authority:
+          type: string
+          minLength: 1
+          maxLength: 200
+        source_jurisdiction:
+          type: string
+          minLength: 1
+          maxLength: 200
+        source_reference:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: Kept as evidence and never returned by any read.
+        source_status:
+          type: string
+          minLength: 1
+          maxLength: 200
+        source_checked_at:
+          type: string
+          format: date-time
+        source_valid_to:
+          type: [string, 'null']
+          format: date-time
+    CredentialVerificationRecord:
+      type: object
+      additionalProperties: false
+      required: [id, result, method, decided_at, valid_from, valid_to]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        result:
+          type: string
+          enum: [verified, rejected, unverifiable, revoked]
+        method:
+          $ref: '#/components/schemas/CredentialVerificationMethod'
+        decided_at:
+          type: string
+          format: date-time
+        valid_from:
+          type: [string, 'null']
+          format: date-time
+        valid_to:
+          type: [string, 'null']
+          format: date-time
+    CredentialVerificationOutcome:
+      type: object
+      additionalProperties: false
+      description: The outcome, never the evidence — no registry reference and no fingerprint.
+      required: [request_id, kind, status, credential_id, created_at, resolved_at, verification]
+      properties:
+        request_id:
+          $ref: '#/components/schemas/Uuid'
+        kind:
+          type: string
+          enum: [initial, renewal]
+        status:
+          type: string
+          enum: [pending, resolved, cancelled]
+        credential_id:
+          $ref: '#/components/schemas/Uuid'
+        created_at:
+          type: string
+          format: date-time
+        resolved_at:
+          type: [string, 'null']
+          format: date-time
+        verification:
+          anyOf:
+            - $ref: '#/components/schemas/CredentialVerificationRecord'
+            - type: 'null'
+    CredentialRenewalDue:
+      type: object
+      additionalProperties: false
+      required:
+        - credential_id
+        - credential_type_code
+        - credential_type_name
+        - credential_name
+        - issuer
+        - holder_person_id
+        - holder_given_name
+        - holder_family_name
+        - last_valid_to
+      properties:
+        credential_id:
+          $ref: '#/components/schemas/Uuid'
+        credential_type_code:
+          type: string
+        credential_type_name:
+          type: string
+        credential_name:
+          type: string
+        issuer:
+          type: string
+        holder_person_id:
+          $ref: '#/components/schemas/Uuid'
+        holder_given_name:
+          type: string
+        holder_family_name:
+          type: string
+        last_valid_to:
+          type: string
+          format: date-time
+    CredentialRenewalDueList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CredentialRenewalDue'
+    CredentialRenewalCreate:
+      type: object
+      additionalProperties: false
+      required: [credential_id]
+      properties:
+        credential_id:
+          $ref: '#/components/schemas/Uuid'
+    AccessMode:
+      type: string
+      description: >-
+        How the access was authorised. `break_glass` is the exceptional path and
+        is the only one subject to the per-case auditor disqualification.
+      enum: [live, frozen, break_glass, organization_operational, support_metadata]
+    AccessEvent:
+      type: object
+      additionalProperties: false
+      description: >-
+        The record of one access. It never carries what was read: the table it
+        comes from has no content columns, and the closed query returns this exact
+        shape.
+      required:
+        - actor_person_id
+        - subject_person_id
+        - resource
+        - resource_id
+        - purpose
+        - result
+        - scope_code
+        - scope_version
+        - access_mode
+        - occurred_at
+      properties:
+        actor_person_id:
+          $ref: '#/components/schemas/Uuid'
+        subject_person_id:
+          type: [string, 'null']
+          format: uuid
+        resource:
+          type: string
+          description: The kind of data that was read, such as `nutrition.intake_entries`.
+        resource_id:
+          type: [string, 'null']
+          format: uuid
+        purpose:
+          type: string
+        result:
+          type: string
+          enum: [allowed, denied]
+        scope_code:
+          type: [string, 'null']
+        scope_version:
+          type: [integer, 'null']
+        access_mode:
+          $ref: '#/components/schemas/AccessMode'
+        occurred_at:
+          type: string
+          format: date-time
+    AccessEventPage:
+      type: object
+      additionalProperties: false
+      required: [items, withheld_from_you]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AccessEvent'
+        withheld_from_you:
+          type: integer
+          minimum: 0
+          description: >-
+            How many records matching these filters were removed because this
+            auditor requested or approved the break-glass window they belong to.
+            Reported separately from the list so that it survives an empty one.
+    BreakGlassApproval:
+      type: object
+      additionalProperties: false
+      required: [approver_person_id, decision, reason_code, decided_at]
+      properties:
+        approver_person_id:
+          $ref: '#/components/schemas/Uuid'
+        decision:
+          type: string
+          enum: [approved, rejected]
+        reason_code:
+          type: string
+          pattern: '^[A-Z][A-Z0-9_-]{2,63}$'
+        decided_at:
+          type: string
+          format: date-time
+    BreakGlassRequest:
+      type: object
+      additionalProperties: false
+      description: >-
+        The file. It carries metadata about purpose and subject, and never the
+        person's content.
+      required:
+        - id
+        - requester_person_id
+        - subject_person_id
+        - categories
+        - purpose
+        - case_reference
+        - sensitivity_tier
+        - required_approvals
+        - requested_duration_minutes
+        - requested_at
+        - request_expires_at
+        - status
+        - window_starts_at
+        - window_ends_at
+        - closed_at
+        - reviewed_at
+        - review_outcome
+        - approvals
+        - exercise_count
+        - viewer_is_requester
+        - viewer_can_decide
+        - viewer_can_exercise
+      properties:
+        id:
+          $ref: '#/components/schemas/UuidV7'
+        requester_person_id:
+          $ref: '#/components/schemas/Uuid'
+        subject_person_id:
+          $ref: '#/components/schemas/Uuid'
+        categories:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/BreakGlassCategory'
+        purpose:
+          $ref: '#/components/schemas/BreakGlassPurpose'
+        case_reference:
+          type: string
+          pattern: '^[A-Z][A-Z0-9_-]{2,63}$'
+        sensitivity_tier:
+          $ref: '#/components/schemas/BreakGlassTier'
+        required_approvals:
+          type: integer
+          minimum: 1
+          maximum: 2
+        requested_duration_minutes:
+          type: integer
+          minimum: 1
+          maximum: 30
+        requested_at:
+          type: string
+          format: date-time
+        request_expires_at:
+          type: string
+          format: date-time
+        status:
+          $ref: '#/components/schemas/BreakGlassStatus'
+        window_starts_at:
+          type: [string, 'null']
+          format: date-time
+        window_ends_at:
+          type: [string, 'null']
+          format: date-time
+        closed_at:
+          type: [string, 'null']
+          format: date-time
+        reviewed_at:
+          type: [string, 'null']
+          format: date-time
+        review_outcome:
+          type: [string, 'null']
+          enum: [justified, unjustified, incident_opened, null]
+        approvals:
+          type: array
+          items:
+            $ref: '#/components/schemas/BreakGlassApproval'
+        exercise_count:
+          type: integer
+          minimum: 0
+        viewer_is_requester:
+          type: boolean
+          description: >-
+            Whether the caller opened this file. The Backoffice session carries no
+            domain identifier, so the server answers this rather than the client
+            re-deriving it from one.
+        viewer_can_decide:
+          type: boolean
+          description: >-
+            A hint for the screen, never authority: it saves offering a button that
+            would always be refused. Every command revalidates on its own.
+        viewer_can_exercise:
+          type: boolean
+          description: A hint for the screen, on the same terms as `viewer_can_decide`.
+    BreakGlassRequestList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/BreakGlassRequest'
+    BreakGlassRequestCreate:
+      type: object
+      additionalProperties: false
+      description: >-
+        No tier, no approval count and no duration: the server derives all three
+        from the categories.
+      required: [subject_person_id, categories, purpose, case_reference]
+      properties:
+        subject_person_id:
+          $ref: '#/components/schemas/Uuid'
+        categories:
+          type: array
+          minItems: 1
+          maxItems: 6
+          items:
+            $ref: '#/components/schemas/BreakGlassCategory'
+        purpose:
+          $ref: '#/components/schemas/BreakGlassPurpose'
+        case_reference:
+          type: string
+          pattern: '^[A-Z][A-Z0-9_-]{2,63}$'
+    BreakGlassDecision:
+      type: object
+      additionalProperties: false
+      required: [decision, reason_code]
+      properties:
+        decision:
+          type: string
+          enum: [approved, rejected]
+        reason_code:
+          type: string
+          pattern: '^[A-Z][A-Z0-9_-]{2,63}$'
+    BreakGlassExercise:
+      type: object
+      additionalProperties: false
+      required: [category, resource_type]
+      properties:
+        category:
+          $ref: '#/components/schemas/BreakGlassCategory'
+        resource_type:
+          type: string
+          pattern: '^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$'
+        resource_id:
+          type: [string, 'null']
+          format: uuid
+    BreakGlassExerciseOutcome:
+      type: object
+      additionalProperties: false
+      description: >-
+        Every attempt is recorded before this answers, so `break_glass_event_id`
+        is the evidence of this exact attempt. No outcome carries content in this
+        version.
+      required: [outcome, reason_code, break_glass_event_id, occurred_at]
+      properties:
+        outcome:
+          type: string
+          enum: [denied, content_unavailable]
+        reason_code:
+          type: string
+          pattern: '^[a-z][a-z0-9_]{1,63}$'
+        break_glass_event_id:
+          $ref: '#/components/schemas/Uuid'
+        occurred_at:
+          type: string
+          format: date-time
+        category:
+          $ref: '#/components/schemas/BreakGlassCategory'
+    SupportOperationSourceKind:
+      type: string
+      enum: [notification, command]
+    SupportOperationState:
+      type: string
+      description: >-
+        `pending` is a notification not sent yet and `retrying` one that already
+        failed, kept apart so a healthy queue does not read as a pile of
+        failures. `stalled` is a command still processing long after it started.
+      enum:
+        - pending
+        - retrying
+        - delivered
+        - dead_lettered
+        - processing
+        - stalled
+        - succeeded
+        - rejected_final
+    SupportOperation:
+      type: object
+      additionalProperties: false
+      description: >-
+        Identifiers, states, timestamps, error codes and retries. No payload, no
+        stored response, no principal fingerprint and no request hash: this read
+        exists to diagnose without opening anyone's data.
+      required:
+        - source
+        - reference_id
+        - subject_kind
+        - subject_id
+        - label
+        - state
+        - occurred_at
+        - attempt_count
+        - last_error_code
+        - resolved_at
+      properties:
+        source:
+          $ref: '#/components/schemas/SupportOperationSourceKind'
+        reference_id:
+          $ref: '#/components/schemas/Uuid'
+        subject_kind:
+          type: [string, 'null']
+          maxLength: 64
+        subject_id:
+          type: [string, 'null']
+          format: uuid
+        label:
+          type: string
+          maxLength: 120
+        state:
+          $ref: '#/components/schemas/SupportOperationState'
+        occurred_at:
+          type: string
+          format: date-time
+        attempt_count:
+          type: integer
+          minimum: 0
+        last_error_code:
+          type: [string, 'null']
+          maxLength: 120
+        resolved_at:
+          type: [string, 'null']
+          format: date-time
+    SupportOperationPage:
+      type: object
+      additionalProperties: false
+      required: [data, page]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/SupportOperation'
+        page:
+          $ref: '#/components/schemas/Page'
+    SupportDeliveryCircuit:
+      type: object
+      additionalProperties: false
+      required:
+        - event_type
+        - state
+        - window_started_at
+        - success_count
+        - failure_count
+        - opened_until
+      properties:
+        event_type:
+          type: string
+          maxLength: 120
+        state:
+          type: string
+          maxLength: 32
+        window_started_at:
+          type: string
+          format: date-time
+        success_count:
+          type: integer
+          minimum: 0
+        failure_count:
+          type: integer
+          minimum: 0
+        opened_until:
+          type: [string, 'null']
+          format: date-time
+    SupportDeliveryCircuitList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SupportDeliveryCircuit'
+    AttentionBillingNotice:
+      type: object
+      additionalProperties: false
+      description: >-
+        Failed charges and suspended subscriptions. Payments have no tables yet, so
+        this says so instead of printing a zero.
+      required: [availability]
+      properties:
+        availability:
+          type: string
+          enum: [not_modelled]
+    AttentionVerificationNotice:
+      type: object
+      additionalProperties: false
+      description: >-
+        `withheld` when the operator does not hold `verify_professional_credentials`;
+        every count is then null, never zero.
+      required: [availability, pending_count, oldest_requested_at, renewals_due_count]
+      properties:
+        availability:
+          type: string
+          enum: [available, withheld]
+        pending_count:
+          type: [integer, 'null']
+          minimum: 0
+        oldest_requested_at:
+          type: [string, 'null']
+          format: date-time
+        renewals_due_count:
+          type: [integer, 'null']
+          minimum: 0
+    AttentionUnclaimedOrganizationNotice:
+      type: object
+      additionalProperties: false
+      description: >-
+        Organizations Allfit created that nobody claimed. `needs_follow_up_count` counts
+        the ones whose latest ownership invitation lapsed, was declined or never existed.
+        `withheld` without a duty that reads the organization directory.
+      required: [availability, count, oldest_created_at, needs_follow_up_count]
+      properties:
+        availability:
+          type: string
+          enum: [available, withheld]
+        count:
+          type: [integer, 'null']
+          minimum: 0
+        oldest_created_at:
+          type: [string, 'null']
+          format: date-time
+        needs_follow_up_count:
+          type: [integer, 'null']
+          minimum: 0
+    AttentionFailureGroup:
+      type: object
+      additionalProperties: false
+      description: >-
+        One notification type or command operation that failed at least twice.
+        `failures` counts failed delivery attempts or stranded commands; `affected`
+        counts the notifications or commands involved.
+      required: [source, label, affected, failures, latest_occurred_at, last_error_code]
+      properties:
+        source:
+          $ref: '#/components/schemas/SupportOperationSourceKind'
+        label:
+          type: string
+          maxLength: 120
+        affected:
+          type: integer
+          minimum: 1
+        failures:
+          type: integer
+          minimum: 2
+        latest_occurred_at:
+          type: string
+          format: date-time
+        last_error_code:
+          type: [string, 'null']
+          maxLength: 120
+    AttentionOpenCircuit:
+      type: object
+      additionalProperties: false
+      required: [event_type, state, failure_count, opened_until]
+      properties:
+        event_type:
+          type: string
+          maxLength: 120
+        state:
+          type: string
+          enum: [open, half_open]
+        failure_count:
+          type: integer
+          minimum: 0
+        opened_until:
+          type: [string, 'null']
+          format: date-time
+    AttentionFailureNotice:
+      type: object
+      additionalProperties: false
+      description: >-
+        System errors that repeat inside the window, and delivery channels that
+        tripped. `withheld` without `diagnose_support_metadata`; the lists are then null.
+      required: [availability, window_hours, groups, groups_truncated, open_circuits]
+      properties:
+        availability:
+          type: string
+          enum: [available, withheld]
+        window_hours:
+          type: integer
+          enum: [24]
+        groups:
+          type: [array, 'null']
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/AttentionFailureGroup'
+        groups_truncated:
+          type: [boolean, 'null']
+        open_circuits:
+          type: [array, 'null']
+          items:
+            $ref: '#/components/schemas/AttentionOpenCircuit'
+    SupportAttentionPanel:
+      type: object
+      additionalProperties: false
+      description: >-
+        Counters only. No person, organization or aggregate identifier travels here,
+        so a counter cannot be used to open anything.
+      required:
+        - generated_at
+        - billing
+        - credential_verifications
+        - unclaimed_organizations
+        - repeated_failures
+      properties:
+        generated_at:
+          type: string
+          format: date-time
+        billing:
+          $ref: '#/components/schemas/AttentionBillingNotice'
+        credential_verifications:
+          $ref: '#/components/schemas/AttentionVerificationNotice'
+        unclaimed_organizations:
+          $ref: '#/components/schemas/AttentionUnclaimedOrganizationNotice'
+        repeated_failures:
+          $ref: '#/components/schemas/AttentionFailureNotice'
     SupportBlockAvailability:
       type: string
       description: >-
@@ -5981,6 +8279,86 @@ components:
               oneOf:
                 - $ref: '#/components/schemas/UuidV7'
                 - type: 'null'
+        replayed:
+          type: boolean
+    OwnershipInvitationPresentation:
+      type: object
+      additionalProperties: false
+      required: [id, organization, expires_at, intent]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        organization:
+          type: object
+          additionalProperties: false
+          required: [id, display_name, type_name, party_kind, legal_name, site_name]
+          properties:
+            id:
+              $ref: '#/components/schemas/Uuid'
+            display_name:
+              type: string
+              minLength: 1
+            type_name:
+              type: string
+            party_kind:
+              $ref: '#/components/schemas/OrganizationPartyKind'
+            legal_name:
+              type: [string, 'null']
+            site_name:
+              type: [string, 'null']
+        expires_at:
+          type: string
+          format: date-time
+        intent:
+          type: object
+          additionalProperties: false
+          required: [id, status]
+          properties:
+            id:
+              $ref: '#/components/schemas/Uuid'
+            status:
+              type: string
+              const: pending
+    OwnershipInvitationDecisionCreate:
+      type: object
+      additionalProperties: false
+      required: [token, intent_id, decision]
+      properties:
+        token:
+          type: string
+          minLength: 43
+          maxLength: 43
+          pattern: '^[A-Za-z0-9_-]{43}$'
+        intent_id:
+          $ref: '#/components/schemas/Uuid'
+        decision:
+          type: string
+          enum: [accepted, rejected]
+    OwnershipInvitationDecisionResult:
+      type: object
+      additionalProperties: false
+      required: [invitation_id, invitation_status, organization_id, intent, replayed]
+      properties:
+        invitation_id:
+          $ref: '#/components/schemas/Uuid'
+        invitation_status:
+          type: string
+          const: completed
+        organization_id:
+          $ref: '#/components/schemas/Uuid'
+        intent:
+          type: object
+          additionalProperties: false
+          required: [id, status, membership_id]
+          properties:
+            id:
+              $ref: '#/components/schemas/Uuid'
+            status:
+              type: string
+              enum: [accepted, rejected]
+            membership_id:
+              type: [string, 'null']
+              format: uuid
         replayed:
           type: boolean
     TeamInvitationCreate:
