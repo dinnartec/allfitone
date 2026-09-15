@@ -79,8 +79,39 @@ curl http://localhost:8080/health
 Any other route returns 404 until surfaces are mounted in
 `apps/api/src/surfaces.ts`.
 
-Studio runs at `http://localhost:3000` and Backoffice at
-`http://localhost:3001`.
+Studio runs at `http://localhost:3000` and Backoffice at `http://localhost:3001`.
+The API follows `PORT` (8080 by default) and the worker `WORKER_PORT` (8090), which
+is why they are separate variables: both read the same `.env.local`, so a single
+`PORT` would put the second process on a port already taken.
+
+`bun run dev` also starts Space, whose Metro bundler wants 8081. To work on one
+product, start only what it needs:
+
+```bash
+bun run dev --filter=@allfitone/api --filter=@allfitone/backoffice-web
+```
+
+### Signing in to Backoffice locally
+
+Backoffice authorises against PostgreSQL, not against the token, so a fresh
+database has nobody who can sign in — and the `allfit_admin` grant is a
+two-person ceremony precisely so that no operator can appoint themselves.
+
+Create the user in the WorkOS **Backoffice** Application, copy its user id, and
+run the ceremony against the local database:
+
+```bash
+bun packages/db/scripts/bootstrap-local-operator.ts \
+  --subject user_01YOURID --given-name Jimmy --family-name Rozo
+```
+
+It grants `allfit_admin` and `manage_platform_access`, and refuses any database
+that is not on this machine. Sign in at `http://localhost:3001`, enrol TOTP, and
+grant yourself the remaining duties from **Equipo de Allfit** — the same screen
+the story ships, which is also the honest way to test it.
+
+Duties are temporary by design: every Backoffice screen refuses an operator whose
+duty expired, so "it worked yesterday" is the expected experience, not a bug.
 
 ## Commands
 
