@@ -21,6 +21,7 @@ export interface BackofficeFixture {
   organizationHandover?: OrganizationHandoverFixture
   organizationFiles?: OrganizationFileFixture
   teamInvitations?: TeamInvitationFixture
+  accountRecovery?: AccountRecoveryFixture
   attention?: AttentionFixture
   verification?: VerificationFixture
   breakGlass?: BreakGlassFixture
@@ -1130,6 +1131,14 @@ export async function mockBackofficeApi(
       await routeDiagnosis(route, request, fixture)
       return
     }
+    if (
+      /^\/backoffice\/v1\/people\/[^/]+\/account-recover(y|ies(\/[^/]+\/(resends|cancellation))?)$/.test(
+        request.path,
+      )
+    ) {
+      await routeAccountRecovery(route, request, fixture)
+      return
+    }
     if (request.path.startsWith('/backoffice/v1/support/')) {
       await routeSupport(route, request, fixture)
       return
@@ -1789,6 +1798,187 @@ async function routeTeamInvitations(
   target.last_resent_at = now.toISOString()
   state.lists[organizationId] = [reissued, ...items]
   await fulfill(route, 200, { ...reissued, outcome: 'reissued' })
+}
+
+/**
+ * The recovery state of a person's card (`HU-BO-010`). Commands move it the way the real
+ * ones do — a start opens a recovery that has not gone out, a resend keeps the same
+ * request and address, a cancellation closes it — and refuse what the server refuses.
+ * `lostCommands` drops that many command answers on the wire before applying them.
+ */
+export interface AccountRecoveryFixture {
+  refusal?: { status: number; code: string }
+  commandRefusal?: { status: number; code: string }
+  lostCommands?: number
+  states: Record<string, AccountRecoveryStateFixture>
+}
+
+export interface AccountRecoveryStateFixture {
+  person_id: string
+  availability: 'available' | 'unavailable'
+  unavailable_reason: 'person_not_active' | 'no_access_account' | 'no_verified_email' | null
+  contact_hint: string | null
+  can_start: boolean
+  requests: AccountRecoveryRequestFixture[]
+}
+
+export interface AccountRecoveryRequestFixture {
+  request_id: string
+  person_id: string
+  state: 'initiated' | 'awaiting_verification' | 'confirmed' | 'expired' | 'cancelled' | 'failed'
+  contact_hint: string
+  case_reference: string
+  created_at: string
+  delivered_at: string | null
+  expires_at: string
+  confirmed_at: string | null
+  cancelled_at: string | null
+  failed_at: string | null
+  failure_code: 'contact_changed' | 'delivery_failed' | null
+  send_count: number
+  resendable: boolean
+  cancellable: boolean
+}
+
+export function accountRecoveryState(
+  overrides: Partial<AccountRecoveryStateFixture> = {},
+): AccountRecoveryStateFixture {
+  return {
+    person_id: SUPPORT_SUBJECT_ID,
+    availability: 'available',
+    unavailable_reason: null,
+    contact_hint: '••••••••on@example.test',
+    can_start: true,
+    requests: [],
+    ...overrides,
+  }
+}
+
+export function accountRecoveryRequest(
+  overrides: Partial<AccountRecoveryRequestFixture> = {},
+): AccountRecoveryRequestFixture {
+  const now = Date.now()
+  return {
+    request_id: nextAssignmentId(),
+    person_id: SUPPORT_SUBJECT_ID,
+    state: 'awaiting_verification',
+    contact_hint: '••••••••on@example.test',
+    case_reference: 'CASE-2026-001',
+    created_at: new Date(now - 600_000).toISOString(),
+    delivered_at: new Date(now - 590_000).toISOString(),
+    expires_at: new Date(now + 900_000).toISOString(),
+    confirmed_at: null,
+    cancelled_at: null,
+    failed_at: null,
+    failure_code: null,
+    send_count: 1,
+    resendable: true,
+    cancellable: true,
+    ...overrides,
+  }
+}
+
+async function routeAccountRecovery(
+  route: Route,
+  request: MockRequest,
+  fixture: BackofficeFixture,
+): Promise<void> {
+  const state = fixture.accountRecovery ?? { states: {} }
+  fixture.accountRecovery = state
+  const segments = request.path.split('/').filter(Boolean)
+  const current = state.states[segments[3] ?? '']
+
+  if (request.method === 'GET') {
+    if (state.refusal) {
+      await fulfillProblem(route, state.refusal.status, state.refusal.code)
+      return
+    }
+    const caseReference = new URLSearchParams(request.query).get('case_reference') ?? ''
+    if (!/^[A-Z][A-Z0-9_-]{2,63}$/.test(caseReference)) {
+      await fulfillProblem(route, 400, 'invalid-request')
+      return
+    }
+    if (!current) {
+      await fulfillProblem(route, 404, 'not-found')
+      return
+    }
+    await fulfill(route, 200, current)
+    return
+  }
+
+  if (state.lostCommands && state.lostCommands > 0) {
+    state.lostCommands -= 1
+    await route.abort('failed')
+    return
+  }
+  if (state.commandRefusal) {
+    await fulfillProblem(route, state.commandRefusal.status, state.commandRefusal.code)
+    return
+  }
+  const body = (request.body ?? {}) as Record<string, unknown>
+  const caseReference = body.case_reference
+  if (
+    Object.keys(body).join() !== 'case_reference' ||
+    typeof caseReference !== 'string' ||
+    !/^[A-Z][A-Z0-9_-]{2,63}$/.test(caseReference)
+  ) {
+    await fulfillProblem(route, 422, 'validation-failed')
+    return
+  }
+  if (!current) {
+    await fulfillProblem(route, 404, 'not-found')
+    return
+  }
+
+  const now = new Date()
+  if (segments.length === 5) {
+    if (!current.can_start) {
+      await fulfillProblem(route, 409, 'conflict')
+      return
+    }
+    const started: AccountRecoveryRequestFixture = {
+      ...accountRecoveryRequest({ person_id: current.person_id }),
+      request_id: request.headers['command-id'] ?? nextAssignmentId(),
+      state: 'initiated',
+      contact_hint: current.contact_hint ?? '',
+      case_reference: caseReference,
+      created_at: now.toISOString(),
+      delivered_at: null,
+      expires_at: new Date(now.getTime() + 86_400_000).toISOString(),
+      resendable: false,
+    }
+    current.requests = [started, ...current.requests]
+    current.can_start = false
+    await fulfill(route, 200, started)
+    return
+  }
+
+  const target = current.requests.find((item) => item.request_id === segments[5])
+  if (!target) {
+    await fulfillProblem(route, 404, 'not-found')
+    return
+  }
+  if (segments[6] === 'resends') {
+    if (!target.resendable) {
+      await fulfillProblem(route, 409, 'conflict')
+      return
+    }
+    target.send_count += 1
+    await fulfill(route, 200, target)
+    return
+  }
+  if (!target.cancellable) {
+    await fulfillProblem(route, 409, 'conflict')
+    return
+  }
+  Object.assign(target, {
+    state: 'cancelled',
+    cancelled_at: now.toISOString(),
+    resendable: false,
+    cancellable: false,
+  })
+  current.can_start = current.availability === 'available'
+  await fulfill(route, 200, target)
 }
 
 async function routeOrganizationHandover(
