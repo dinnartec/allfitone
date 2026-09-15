@@ -371,6 +371,86 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/backoffice/v1/people/{personId}/account-recovery': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Read whether a person's access can be recovered, and how each recovery went
+     * @description `HU-BO-010`. Whether Allfit can send this person the official recovery flow, why not when it cannot, the hint of the verified email it would go to, and the ten newest recoveries. Recovery fails closed without an account and a verified email. No address, link or code travels. The read is recorded against the person before its content is returned. Requires `diagnose_support_metadata`.
+     */
+    get: operations['readBackofficeAccountRecovery']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/people/{personId}/account-recoveries': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Send a person the official recovery flow
+     * @description The identity provider emails the person a single-use recovery link at the email they already verified; only the person confirms it, by resetting their password. Without an account or a verified email, with a recovery already under way, or for the operator's own account the command answers 409 or 403 and writes nothing. Three recovery emails a day reach one person at most: 429. The body carries only the case the recovery answers.
+     */
+    post: operations['startBackofficeAccountRecovery']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/people/{personId}/account-recoveries/{requestId}/resends': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Send a live recovery again
+     * @description `HU-BO-011`. Only a recovery that went out and is still live is resent, to the email it started with. An expired, cancelled, confirmed or failed recovery, one that has not gone out yet, or one whose verified email changed answers 409: an expired recovery is never revived, a new one replaces it. The daily limit of the start applies: 429. The body carries only the case.
+     */
+    post: operations['resendBackofficeAccountRecovery']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/people/{personId}/account-recoveries/{requestId}/cancellation': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Cancel a suspicious recovery
+     * @description A live recovery stops: nothing more is sent for it and a later password reset does not confirm it. An email that already left cannot be recalled. A recovery that is no longer live answers 409. The body carries only the case.
+     */
+    post: operations['cancelBackofficeAccountRecovery']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/backoffice/v1/support/operations': {
     parameters: {
       query?: never
@@ -2631,6 +2711,57 @@ export interface components {
       premium_availability: components['schemas']['SupportBlockAvailability']
       permissions_availability: components['schemas']['SupportBlockAvailability']
     }
+    /** @description Only the case the command answers. The destination, the person and the flow come from the person's verified email and the recovery itself, so there is nothing a client could send to redirect one. */
+    AccountRecoveryCommand: {
+      case_reference: string
+    }
+    /** @description One recovery as support sees it: a hint of where it went and what happened, never the address, a link or a code. `state` reads `expired` as soon as the link lapses. `resendable` and `cancellable` are the database's answer. */
+    BackofficeAccountRecoveryRequest: {
+      request_id: components['schemas']['UuidV7']
+      person_id: components['schemas']['Uuid']
+      /**
+       * @description `initiated` has not gone out yet; `awaiting_verification` went out and waits for the person; `confirmed` means the person reset their password.
+       * @enum {string}
+       */
+      state:
+        'initiated' | 'awaiting_verification' | 'confirmed' | 'expired' | 'cancelled' | 'failed'
+      contact_hint: string
+      case_reference: string
+      /** Format: date-time */
+      created_at: string
+      /** Format: date-time */
+      delivered_at: string | null
+      /** Format: date-time */
+      expires_at: string
+      /** Format: date-time */
+      confirmed_at: string | null
+      /** Format: date-time */
+      cancelled_at: string | null
+      /** Format: date-time */
+      failed_at: string | null
+      /**
+       * @description `contact_changed` when the verified email changed before it went out; `delivery_failed` when the identity provider never accepted it.
+       * @enum {string|null}
+       */
+      failure_code: 'contact_changed' | 'delivery_failed' | null
+      /** @description How many times support asked for this recovery to be sent. */
+      send_count: number
+      resendable: boolean
+      cancellable: boolean
+    }
+    /** @description Whether the official recovery flow can reach this person. `unavailable_reason` says why it fails closed; no alternative is offered, because V1 has none. */
+    BackofficeAccountRecovery: {
+      person_id: components['schemas']['Uuid']
+      /** @enum {string} */
+      availability: 'available' | 'unavailable'
+      /** @enum {string|null} */
+      unavailable_reason: 'person_not_active' | 'no_access_account' | 'no_verified_email' | null
+      /** @description The verified email a recovery would go to, as a hint. */
+      contact_hint: string | null
+      /** @description Recovery is available, nothing is under way, and the operator is not the person. */
+      can_start: boolean
+      requests: components['schemas']['BackofficeAccountRecoveryRequest'][]
+    }
     /** @description The outcome travels beside the items so a client cannot render an unexplained empty list. `HU-BO-006` criterion 3 is a contract obligation here, not a copy decision in one screen. */
     SupportPeopleSearch: {
       /** @enum {string} */
@@ -4841,6 +4972,8 @@ export interface components {
     /** @description The case this read belongs to. A structured reference rather than free prose, so the record can be followed back to a case months later. */
     SupportCaseReference: string
     SupportPersonId: components['schemas']['Uuid']
+    /** @description The recovery, identified by the command that started it. */
+    AccountRecoveryRequestId: components['schemas']['UuidV7']
     /** @description Exactly one lookup parameter is accepted per search. */
     SupportLookupIdentifier: components['schemas']['Uuid']
     /** @description Exact match only. Exactly one lookup parameter is accepted per search. */
@@ -5656,6 +5789,171 @@ export interface operations {
       401: components['responses']['Unauthenticated']
       403: components['responses']['Forbidden']
       404: components['responses']['NotFound']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  readBackofficeAccountRecovery: {
+    parameters: {
+      query: {
+        /** @description The case this read belongs to. A structured reference rather than free prose, so the record can be followed back to a case months later. */
+        case_reference: components['parameters']['SupportCaseReference']
+      }
+      header: {
+        Origin: components['parameters']['Origin']
+      }
+      path: {
+        personId: components['parameters']['SupportPersonId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The person's recovery state */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['BackofficeAccountRecovery']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  startBackofficeAccountRecovery: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        personId: components['parameters']['SupportPersonId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AccountRecoveryCommand']
+      }
+    }
+    responses: {
+      /** @description The recovery that was started */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['BackofficeAccountRecoveryRequest']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
+      429: components['responses']['RateLimited']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  resendBackofficeAccountRecovery: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        personId: components['parameters']['SupportPersonId']
+        /** @description The recovery, identified by the command that started it. */
+        requestId: components['parameters']['AccountRecoveryRequestId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AccountRecoveryCommand']
+      }
+    }
+    responses: {
+      /** @description The recovery, sent again */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['BackofficeAccountRecoveryRequest']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
+      429: components['responses']['RateLimited']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  cancelBackofficeAccountRecovery: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        personId: components['parameters']['SupportPersonId']
+        /** @description The recovery, identified by the command that started it. */
+        requestId: components['parameters']['AccountRecoveryRequestId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AccountRecoveryCommand']
+      }
+    }
+    responses: {
+      /** @description The cancelled recovery */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['BackofficeAccountRecoveryRequest']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
       422: components['responses']['ValidationFailed']
       503: components['responses']['UpstreamUnavailable']
     }

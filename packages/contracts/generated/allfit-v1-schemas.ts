@@ -88,6 +88,19 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       'How the access was authorised. `break_glass` is the exceptional path and is the only one subject to the per-case auditor disqualification.',
     enum: ['live', 'frozen', 'break_glass', 'organization_operational', 'support_metadata'],
   },
+  AccountRecoveryCommand: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      "Only the case the command answers. The destination, the person and the flow come from the person's verified email and the recovery itself, so there is nothing a client could send to redirect one.",
+    required: ['case_reference'],
+    properties: {
+      case_reference: {
+        type: 'string',
+        pattern: '^[A-Z][A-Z0-9_-]{2,63}$',
+      },
+    },
+  },
   ActivityFamily: {
     type: 'string',
     enum: ['strength', 'endurance', 'interval', 'mobility'],
@@ -879,6 +892,136 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         type: ['number', 'null'],
         minimum: 0,
         maximum: 10,
+      },
+    },
+  },
+  BackofficeAccountRecovery: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      'Whether the official recovery flow can reach this person. `unavailable_reason` says why it fails closed; no alternative is offered, because V1 has none.',
+    required: [
+      'person_id',
+      'availability',
+      'unavailable_reason',
+      'contact_hint',
+      'can_start',
+      'requests',
+    ],
+    properties: {
+      person_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      availability: {
+        type: 'string',
+        enum: ['available', 'unavailable'],
+      },
+      unavailable_reason: {
+        type: ['string', 'null'],
+        enum: ['person_not_active', 'no_access_account', 'no_verified_email', null],
+      },
+      contact_hint: {
+        type: ['string', 'null'],
+        description: 'The verified email a recovery would go to, as a hint.',
+        maxLength: 260,
+      },
+      can_start: {
+        type: 'boolean',
+        description:
+          'Recovery is available, nothing is under way, and the operator is not the person.',
+      },
+      requests: {
+        type: 'array',
+        maxItems: 10,
+        items: {
+          $ref: '#/components/schemas/BackofficeAccountRecoveryRequest',
+        },
+      },
+    },
+  },
+  BackofficeAccountRecoveryRequest: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      "One recovery as support sees it: a hint of where it went and what happened, never the address, a link or a code. `state` reads `expired` as soon as the link lapses. `resendable` and `cancellable` are the database's answer.",
+    required: [
+      'request_id',
+      'person_id',
+      'state',
+      'contact_hint',
+      'case_reference',
+      'created_at',
+      'delivered_at',
+      'expires_at',
+      'confirmed_at',
+      'cancelled_at',
+      'failed_at',
+      'failure_code',
+      'send_count',
+      'resendable',
+      'cancellable',
+    ],
+    properties: {
+      request_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      person_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      state: {
+        type: 'string',
+        description:
+          '`initiated` has not gone out yet; `awaiting_verification` went out and waits for the person; `confirmed` means the person reset their password.',
+        enum: ['initiated', 'awaiting_verification', 'confirmed', 'expired', 'cancelled', 'failed'],
+      },
+      contact_hint: {
+        type: 'string',
+        maxLength: 260,
+      },
+      case_reference: {
+        type: 'string',
+        pattern: '^[A-Z][A-Z0-9_-]{2,63}$',
+      },
+      created_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      delivered_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      expires_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      confirmed_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      cancelled_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      failed_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      failure_code: {
+        type: ['string', 'null'],
+        description:
+          '`contact_changed` when the verified email changed before it went out; `delivery_failed` when the identity provider never accepted it.',
+        enum: ['contact_changed', 'delivery_failed', null],
+      },
+      send_count: {
+        type: 'integer',
+        description: 'How many times support asked for this recovery to be sent.',
+        minimum: 1,
+      },
+      resendable: {
+        type: 'boolean',
+      },
+      cancellable: {
+        type: 'boolean',
       },
     },
   },
