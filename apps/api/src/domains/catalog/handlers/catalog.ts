@@ -24,6 +24,10 @@ import {
 } from '../../identity/index.js'
 import { movementLibraryService } from '../dependencies.js'
 import type { MovementLibraryService } from '../application/index.js'
+import { MovementCursorError } from '../domain/index.js'
+
+/** Every identifier the catalogue hands out is a v7, so anything else is a typo. */
+const UUID_V7 = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 const MAX_DISCIPLINE = 64
 const MAX_QUERY = 120
@@ -32,6 +36,8 @@ const MAX_LIMIT = 100
 const MAX_CODE = 64
 /** More chips than the vocabulary has is not a filter, it is a scan. */
 const MAX_FILTER_VALUES = 32
+/** What the contract declares a cursor can be. Longer is not one of ours. */
+const MAX_CURSOR = 1024
 
 export type TokenVerifier = (token: string) => Promise<VerifiedToken>
 
@@ -64,15 +70,43 @@ export function catalogMovementRoutes(
     const equipment = readCodes(c.req.queries('equipment'))
     if (muscles === undefined || equipment === undefined) return fail(c, 'invalid-request')
 
+    const cursor = trimmed(c.req.query('cursor'))
+    if (cursor !== null && cursor.length > MAX_CURSOR) return fail(c, 'invalid-request')
+
     try {
       const personId = await actors().personFor(token.subject)
       return c.json(
-        await library().search({ personId, discipline, query, muscles, equipment, limit }),
+        await library().search({ personId, discipline, query, muscles, equipment, limit, cursor }),
         200,
       )
     } catch (cause) {
       if (cause instanceof SpaceActorError) return fail(c, cause.code)
+      // A cursor nobody can decode is a bad request, not an outage.
+      if (cause instanceof MovementCursorError) return fail(c, 'invalid-request')
       console.error('[catalog] movement search failed')
+      return fail(c, 'upstream-unavailable')
+    }
+  })
+
+  routes.get('/movements/:movementId', async (c) => {
+    c.header('Cache-Control', 'no-store')
+
+    const token = await verified(c, verify)
+    if (!token) return fail(c, 'unauthenticated')
+
+    const movementId = c.req.param('movementId')
+    if (!UUID_V7.test(movementId)) return fail(c, 'invalid-request')
+
+    try {
+      const personId = await actors().personFor(token.subject)
+      const movement = await library().read({ personId, movementId })
+      // Absent and forbidden answer the same, so identifiers cannot be walked to
+      // learn what exists.
+      if (!movement) return fail(c, 'not-found')
+      return c.json(movement, 200)
+    } catch (cause) {
+      if (cause instanceof SpaceActorError) return fail(c, cause.code)
+      console.error('[catalog] movement read failed')
       return fail(c, 'upstream-unavailable')
     }
   })

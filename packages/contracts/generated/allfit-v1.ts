@@ -1540,6 +1540,8 @@ export interface paths {
     /**
      * Search the exercise library
      * @description What `S-1` calls while somebody types. The library is curated content: it is read here and it is never written here. Only the published global subset is visible, which is what the operations matrix already says this operation answers.
+     *
+     *     Paged by cursor, which the operations matrix always declared. The cap alone was enough while the library was a few dozen movements and became a trap the moment it grew: a full page and no way to ask for the next one looks exactly like the whole catalogue. A client that wants it all — Space caches it for offline — walks the cursor once.
      */
     get: operations['searchMovements']
     put?: never
@@ -2359,6 +2361,15 @@ export interface components {
       muscles: string[]
       /** @description The equipment codes this movement is compatible with, the required one first. Compatibility, never inventory or availability. */
       equipment: string[]
+      /**
+       * Format: uri
+       * @description The animated demonstration, or null where none has been curated yet — the normal state of a catalogue that grows, not an error. Immutable and identical for everyone, so it is served straight from cache rather than through this API; the address is composed from configuration at read time and never stored, which is what keeps the origin replaceable.
+       */
+      demo_url: string | null
+    }
+    MovementPage: {
+      data: components['schemas']['Movement'][]
+      page: components['schemas']['Page']
     }
     MovementDetail: {
       /** Format: uuid */
@@ -2390,6 +2401,11 @@ export interface components {
         /** @description Said for the person reading — «more upper chest» — not the name of the relation, which is what `relation` is for. */
         note: string | null
       }[]
+      /**
+       * Format: uri
+       * @description The animated demonstration, or null where none has been curated yet — the normal state of a catalogue that grows, not an error. Immutable and identical for everyone, so it is served straight from cache rather than through this API; the address is composed from configuration at read time and never stored, which is what keeps the origin replaceable.
+       */
+      demo_url: string | null
     }
     CatalogueTerm: {
       code: string
@@ -7375,6 +7391,7 @@ export interface operations {
         /** @description Repeatable, with the same semantics as `muscle`. */
         equipment?: string[]
         limit?: number
+        cursor?: components['parameters']['Cursor']
       }
       header?: never
       path?: never
@@ -7389,7 +7406,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['Movement'][]
+          'application/json': components['schemas']['MovementPage']
         }
       }
       400: components['responses']['BadRequest']

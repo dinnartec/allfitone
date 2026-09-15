@@ -1240,7 +1240,7 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
   Movement: {
     type: 'object',
     additionalProperties: false,
-    required: ['id', 'discipline_code', 'name', 'muscles', 'equipment'],
+    required: ['id', 'discipline_code', 'name', 'muscles', 'equipment', 'demo_url'],
     properties: {
       id: {
         type: 'string',
@@ -1268,6 +1268,13 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
           type: 'string',
         },
       },
+      demo_url: {
+        type: ['string', 'null'],
+        format: 'uri',
+        description:
+          'The animated demonstration, or null where none has been curated yet — the normal state of a catalogue that grows, not an error. Immutable and identical for everyone, so it is served straight from cache rather than through this API; the address is composed from configuration at read time and never stored, which is what keeps the origin replaceable.',
+        maxLength: 2048,
+      },
     },
   },
   MovementDetail: {
@@ -1282,6 +1289,7 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       'equipment',
       'instructions',
       'variants',
+      'demo_url',
     ],
     properties: {
       id: {
@@ -1375,6 +1383,29 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
             },
           },
         },
+      },
+      demo_url: {
+        type: ['string', 'null'],
+        format: 'uri',
+        description:
+          'The animated demonstration, or null where none has been curated yet — the normal state of a catalogue that grows, not an error. Immutable and identical for everyone, so it is served straight from cache rather than through this API; the address is composed from configuration at read time and never stored, which is what keeps the origin replaceable.',
+        maxLength: 2048,
+      },
+    },
+  },
+  MovementPage: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['data', 'page'],
+    properties: {
+      data: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/Movement',
+        },
+      },
+      page: {
+        $ref: '#/components/schemas/Page',
       },
     },
   },

@@ -59,6 +59,7 @@ describe('choosing several exercises at once', () => {
         name: 'Sentadilla con barra',
         muscles: ['quadriceps'],
         equipment: ['barbell'],
+        demo_url: null,
       },
       {
         id: 'm-2',
@@ -66,6 +67,7 @@ describe('choosing several exercises at once', () => {
         name: 'Press de banca con barra',
         muscles: ['chest'],
         equipment: ['barbell', 'bench'],
+        demo_url: null,
       },
     ]
 

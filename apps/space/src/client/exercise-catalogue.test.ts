@@ -37,6 +37,7 @@ const EQUIPMENT: CatalogueTerm[] = [
 const move = (name: string, muscles: string[], equipment: string[]): Movement => ({
   id: name,
   discipline_code: 'strength',
+  demo_url: null,
   name,
   muscles,
   equipment,

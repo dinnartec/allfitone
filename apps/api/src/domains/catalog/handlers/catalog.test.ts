@@ -39,6 +39,7 @@ const movements: Movement[] = [
     name: 'Press de banca con barra',
     muscles: ['chest', 'triceps'],
     equipment: ['barbell', 'bench'],
+    demo_url: 'https://media.allfit.invalid/movements/bench-press.webp',
   },
   {
     id: '019f4000-0000-7000-8000-000000000002',
@@ -46,8 +47,30 @@ const movements: Movement[] = [
     name: 'Press inclinado con mancuernas',
     muscles: ['chest', 'shoulders'],
     equipment: ['dumbbell', 'bench'],
+    demo_url: null,
   },
 ]
+
+const MOVEMENT_ID = '019f4000-0000-7000-8000-000000000001'
+
+const detail = {
+  id: MOVEMENT_ID,
+  discipline_code: 'strength',
+  name: 'Press de banca con barra',
+  aliases: ['bench press'],
+  muscles: [{ code: 'chest', name: 'Pecho', primary: true }],
+  equipment: ['barbell', 'bench'],
+  instructions: [{ position: 1, text: 'Túmbate en el banco.' }],
+  variants: [
+    {
+      id: '019f4000-0000-7000-8000-000000000002',
+      name: 'Press con mancuernas',
+      relation: 'variant',
+      note: 'Más recorrido',
+    },
+  ],
+  demo_url: 'https://media.allfit.invalid/movements/bench-press.webp',
+}
 
 const authorized = { authorization: 'Bearer token' }
 
@@ -61,8 +84,9 @@ function harness(overrides?: {
   const service: MovementLibraryService = {
     search: async (request) => {
       asked.push(request)
-      return movements
+      return { data: movements, page: { next_cursor: null, has_more: false } }
     },
+    read: async () => detail,
     equipment: async () => [{ code: 'barbell', name: 'Barra' }],
     muscles: async () => [{ code: 'chest', name: 'Pecho', region: 'upper', body_slug: 'chest' }],
     ...overrides?.service,
@@ -89,13 +113,16 @@ const unregistered = {
 }
 
 describe('GET /catalog/v1/movements', () => {
-  test('T-CAT-API-01 answers the movements the library found, as the array itself', async () => {
+  test('T-CAT-API-01 answers the movements the library found, inside the page envelope', async () => {
+    // The envelope, not a bare array: a capped array with no way to ask for the next
+    // page is indistinguishable from the whole catalogue.
     const response = await harness().app.request('/catalog/v1/movements', { headers: authorized })
 
     expect(response.status).toBe(200)
-    const body: unknown = await response.json()
-    expect(Array.isArray(body)).toBe(true)
-    expect(body).toEqual(movements)
+    expect(await response.json()).toEqual({
+      data: movements,
+      page: { next_cursor: null, has_more: false },
+    })
   })
 
   test('T-CAT-API-02 forbids caching the answer', async () => {
@@ -148,6 +175,7 @@ describe('GET /catalog/v1/movements', () => {
         muscles: [],
         equipment: [],
         limit: 7,
+        cursor: null,
       },
     ])
   })
@@ -167,6 +195,7 @@ describe('GET /catalog/v1/movements', () => {
       muscles: [],
       equipment: [],
       limit: 40,
+      cursor: null,
     }
     expect(blank.asked).toEqual([noFilter])
     expect(absent.asked).toEqual([noFilter])
@@ -201,6 +230,7 @@ describe('GET /catalog/v1/movements', () => {
         muscles: [],
         equipment: [],
         limit: 100,
+        cursor: null,
       },
     ])
   })
@@ -224,6 +254,7 @@ describe('GET /catalog/v1/movements', () => {
         muscles: [],
         equipment: [],
         limit: 40,
+        cursor: null,
       },
     ])
   })
@@ -279,6 +310,36 @@ describe('GET /catalog/v1/movements', () => {
 
     expect((await guarded.app.request('/catalog/v1/equipment')).status).toBe(401)
     expect((await guarded.app.request('/catalog/v1/muscles')).status).toBe(401)
+  })
+
+  test('T-CAT-API-18 answers one movement whole, so the screen draws itself once', async () => {
+    const listing = harness()
+
+    const response = await listing.app.request(`/catalog/v1/movements/${MOVEMENT_ID}`, {
+      headers: authorized,
+    })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual(detail)
+  })
+
+  test('T-CAT-API-19 a movement nobody can see answers the same as one that is not there', async () => {
+    // Telling them apart would let identifiers be walked to learn what exists.
+    const missing = harness({ service: { read: async () => null } })
+
+    const response = await missing.app.request(`/catalog/v1/movements/${MOVEMENT_ID}`, {
+      headers: authorized,
+    })
+
+    expect(response.status).toBe(404)
+  })
+
+  test('T-CAT-API-20 refuses an identifier that is not one the catalogue hands out', async () => {
+    const refused = harness()
+
+    expect(
+      (await refused.app.request('/catalog/v1/movements/nope', { headers: authorized })).status,
+    ).toBe(400)
   })
 
   test('T-CAT-API-11 answers unavailable when the library fails unexpectedly', async () => {

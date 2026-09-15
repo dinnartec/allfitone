@@ -4,9 +4,14 @@
 -- respects the discipline, and answers an empty list rather than everything when
 -- nothing matches. The library itself is curated content, so the rows here are
 -- fixtures shaped like the curated ones.
+--
+-- The reader answers `{data, page}` rather than a bare array, which is why every
+-- assertion below reads `->'data'`. The envelope is not decoration: a capped array
+-- with no way to ask for the next page looks exactly like the whole catalogue, and
+-- that stopped being harmless when the library grew past one page.
 begin;
 
-select plan(15);
+select plan(21);
 
 insert into identity.people (id, given_name, family_name)
 values ('019eb000-0000-7000-8000-000000000001', 'Quien', 'Busca');
@@ -55,7 +60,7 @@ select set_config('app.actor_person_id', '019eb000-0000-7000-8000-000000000001',
 select is(
   (select count(*)::integer
    from jsonb_array_elements(catalog.read_movements(
-     '019eb000-0000-7000-8000-000000000001', null, null, 200)) as found
+     '019eb000-0000-7000-8000-000000000001', null, null, 200)->'data') as found
    -- By id, not by name: the curated catalogue has a 'Sentadilla con barra' of its
    -- own, and matching on the word would count both.
    where (found->>'id')::uuid in (
@@ -67,13 +72,13 @@ select is(
 
 select is(
   jsonb_array_length(catalog.read_movements(
-    '019eb000-0000-7000-8000-000000000001', 'test_strength', null, 40)),
+    '019eb000-0000-7000-8000-000000000001', 'test_strength', null, 40)->'data'),
   2,
   'T-CAT-SEARCH-02 and only the discipline the routine is written in');
 
 select is(
   (catalog.read_movements(
-    '019eb000-0000-7000-8000-000000000001', 'test_strength', 'senta', 40))->0->>'name',
+    '019eb000-0000-7000-8000-000000000001', 'test_strength', 'senta', 40)->'data')->0->>'name',
   'Sentadilla con barra',
   'T-CAT-SEARCH-03 matching on what was typed, anywhere in the name');
 
@@ -81,18 +86,18 @@ select is(
 -- Compared against itself rather than to a number, so a real catalogue alongside the
 -- fixtures cannot make a case-insensitivity test fail for being case-insensitive.
 select is(
-  catalog.read_movements('019eb000-0000-7000-8000-000000000001', null, 'BARRA', 200),
-  catalog.read_movements('019eb000-0000-7000-8000-000000000001', null, 'barra', 200),
+  catalog.read_movements('019eb000-0000-7000-8000-000000000001', null, 'BARRA', 200)->'data',
+  catalog.read_movements('019eb000-0000-7000-8000-000000000001', null, 'barra', 200)->'data',
   'T-CAT-SEARCH-04 case does not matter');
 
 select is(
-  catalog.read_movements('019eb000-0000-7000-8000-000000000001', null, 'zzz', 40),
+  catalog.read_movements('019eb000-0000-7000-8000-000000000001', null, 'zzz', 40)->'data',
   '[]'::jsonb,
   'T-CAT-SEARCH-05 and nothing matching answers nothing, not everything');
 
 -- A wildcard typed into the box is a character, not a query.
 select is(
-  catalog.read_movements('019eb000-0000-7000-8000-000000000001', null, '%', 40),
+  catalog.read_movements('019eb000-0000-7000-8000-000000000001', null, '%', 40)->'data',
   '[]'::jsonb,
   'T-CAT-SEARCH-06 a percent sign is text somebody typed');
 
@@ -104,7 +109,7 @@ select is(
   (select array_agg(found->>'id' order by found->>'id')
    from jsonb_array_elements(catalog.read_movements(
      '019eb000-0000-7000-8000-000000000001', null, null, 200,
-     array['test_chest'], null)) as found),
+     array['test_chest'], null)->'data') as found),
   array['019eb000-0000-7000-8000-0000000000f1'],
   'T-CAT-SEARCH-07 one muscle answers the movements that work it');
 
@@ -114,7 +119,7 @@ select is(
   (select count(*)::integer
    from jsonb_array_elements(catalog.read_movements(
      '019eb000-0000-7000-8000-000000000001', null, null, 200,
-     array['test_chest', 'test_back'], null)) as found),
+     array['test_chest', 'test_back'], null)->'data') as found),
   2,
   'T-CAT-SEARCH-08 two muscles are or, so choosing a second one widens');
 
@@ -124,7 +129,7 @@ select is(
   (select count(*)::integer
    from jsonb_array_elements(catalog.read_movements(
      '019eb000-0000-7000-8000-000000000001', null, null, 200,
-     array['test_chest'], array['test_dumbbell'])) as found),
+     array['test_chest'], array['test_dumbbell'])->'data') as found),
   0,
   'T-CAT-SEARCH-09 muscle and equipment are and, so they narrow each other');
 
@@ -132,7 +137,7 @@ select is(
   (select count(*)::integer
    from jsonb_array_elements(catalog.read_movements(
      '019eb000-0000-7000-8000-000000000001', null, null, 200,
-     null, array['test_barbell'])) as found),
+     null, array['test_barbell'])->'data') as found),
   1,
   'T-CAT-SEARCH-10 equipment filters on its own too');
 
@@ -140,7 +145,7 @@ select is(
   (select array_agg(found->>'id')
    from jsonb_array_elements(catalog.read_movements(
      '019eb000-0000-7000-8000-000000000001', null, null, 200,
-     array['test_chest', 'test_back'], null)) as found
+     array['test_chest', 'test_back'], null)->'data') as found
    where found->>'id' = '019eb000-0000-7000-8000-0000000000f3'),
   null::text[],
   'T-CAT-SEARCH-11 a movement with no label appears under no chip');
@@ -148,7 +153,7 @@ select is(
 select is(
   (select (found->'muscles')::jsonb
    from jsonb_array_elements(catalog.read_movements(
-     '019eb000-0000-7000-8000-000000000001', null, null, 200)) as found
+     '019eb000-0000-7000-8000-000000000001', null, null, 200)->'data') as found
    where found->>'id' = '019eb000-0000-7000-8000-0000000000f1'),
   '["test_chest"]'::jsonb,
   'T-CAT-SEARCH-12 every movement says what it trains, so the row can explain itself');
@@ -177,6 +182,55 @@ select throws_ok(
   '42501',
   null,
   'T-CAT-RLS-02 nor tag a movement with a muscle');
+
+-- The walk. Three fixtures of this test share a discipline, so a page of two must
+-- leave exactly one behind and say so.
+select is(
+  (catalog.read_movements('019eb000-0000-7000-8000-000000000001',
+    'test_strength', null, 1))->'page'->>'has_more',
+  'true',
+  'T-CAT-SEARCH-16 a page that does not hold everything says so');
+
+select isnt(
+  (catalog.read_movements('019eb000-0000-7000-8000-000000000001',
+    'test_strength', null, 1))->'page'->>'next_cursor',
+  null,
+  'T-CAT-SEARCH-17 and hands back the cursor to continue from');
+
+-- The one that matters: the second page must not repeat the first, and between them
+-- they must be the whole set. An offset cursor gets this wrong the moment a row is
+-- inserted mid-walk; a keyset cannot.
+select is(
+  (select array_agg(found->>'id' order by found->>'name')
+   from jsonb_array_elements(
+     (catalog.read_movements('019eb000-0000-7000-8000-000000000001',
+       'test_strength', null, 1,
+       null, null,
+       (catalog.read_movements('019eb000-0000-7000-8000-000000000001',
+         'test_strength', null, 1))->'page'->>'next_cursor'))->'data') as found),
+  array['019eb000-0000-7000-8000-0000000000f1'],
+  'T-CAT-SEARCH-18 the next page starts strictly after the last row of the previous one');
+
+select is(
+  (catalog.read_movements('019eb000-0000-7000-8000-000000000001',
+    'test_strength', null, 200))->'page'->>'has_more',
+  'false',
+  'T-CAT-SEARCH-19 a page that holds everything says there is no more');
+
+select is(
+  (catalog.read_movements('019eb000-0000-7000-8000-000000000001',
+    'test_strength', null, 200))->'page'->>'next_cursor',
+  null,
+  'T-CAT-SEARCH-20 and hands back no cursor, because there is nowhere to continue to');
+
+-- A wrong page looks exactly like a right one, so garbage must raise rather than
+-- answer something arbitrary.
+select throws_ok(
+  $$select catalog.read_movements('019eb000-0000-7000-8000-000000000001',
+      null, null, 40, null, null, 'not-a-cursor!!')$$,
+  '22023',
+  null,
+  'T-CAT-SEARCH-21 a malformed cursor raises instead of answering an arbitrary page');
 
 select finish();
 rollback;

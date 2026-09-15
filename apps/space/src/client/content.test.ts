@@ -35,6 +35,7 @@ function harness(overrides: Partial<ContentTransport> = {}) {
     searchMovements: async () => [],
     readEquipment: async () => [],
     readMuscles: async () => [],
+    readMovement: async () => ({}) as never,
     readMyRoutines: async () => [],
     createTemplate: async (headers) => {
       sent.push({ command: headers.idempotencyKey })

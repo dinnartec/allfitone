@@ -26,6 +26,10 @@
  *
  * Filtering happens in memory over the catalogue held here; `exercise-catalogue`
  * carries that decision and what it costs.
+ *
+ * Each row carries a second target that opens the movement's detail. Somebody who has
+ * never done a hip thrust has to be able to find out what it is before putting it in
+ * their routine, and the row alone cannot say.
  */
 
 import { DisclosureButton } from '@allfitone/react-native/disclosure-button'
@@ -254,6 +258,13 @@ export default function ExercisePicker() {
                   togglePick(current, { id: movement.id, name: movement.name }),
                 )
               }
+              // Choosing and reading about it are different intents, so they are
+              // different targets.
+              action={{
+                icon: 'info',
+                accessibilityLabel: `Ver el detalle de ${movement.name}`,
+                onPress: () => router.push(`/routines/exercises/${movement.id}`),
+              }}
             />
           ))}
         </View>

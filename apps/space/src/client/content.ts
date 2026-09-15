@@ -21,6 +21,8 @@ import type { CommandHeaders } from '@allfitone/contracts/commands'
 export type Movement = AllfitV1Schemas['Movement']
 export type CatalogueTerm = AllfitV1Schemas['CatalogueTerm']
 export type MuscleTerm = AllfitV1Schemas['MuscleTerm']
+export type MovementDetail = AllfitV1Schemas['MovementDetail']
+export type MovementPage = AllfitV1Schemas['MovementPage']
 export type MyRoutine = AllfitV1Schemas['SpaceMyRoutine']
 export type SessionTemplate = AllfitV1Schemas['SessionTemplate']
 export type SessionTemplateDraft = AllfitV1Schemas['SessionTemplateDraft']
@@ -46,6 +48,7 @@ export interface ContentTransport {
   ): Promise<readonly Movement[]>
   readEquipment(): Promise<readonly CatalogueTerm[]>
   readMuscles(): Promise<readonly MuscleTerm[]>
+  readMovement(movementId: string): Promise<MovementDetail>
   readMyRoutines(): Promise<readonly MyRoutine[]>
   createTemplate(
     command: CommandHeaders,
@@ -93,6 +96,7 @@ export interface ContentFlow {
   ): Promise<readonly Movement[]>
   readEquipment(): Promise<readonly CatalogueTerm[]>
   readMuscles(): Promise<readonly MuscleTerm[]>
+  readMovement(movementId: string): Promise<MovementDetail>
   readMyRoutines(): Promise<readonly MyRoutine[]>
   createTemplate(disciplineCode: string, title: string): Promise<SessionTemplate>
   saveTemplateDraft(
@@ -144,6 +148,7 @@ export function createContentFlow(dependencies: ContentFlowDependencies): Conten
       dependencies.transport.searchMovements(discipline, query, muscles, equipment),
     readEquipment: () => dependencies.transport.readEquipment(),
     readMuscles: () => dependencies.transport.readMuscles(),
+    readMovement: (movementId) => dependencies.transport.readMovement(movementId),
     readMyRoutines: () => dependencies.transport.readMyRoutines(),
 
     etagFor: (id) => etags.get(id),

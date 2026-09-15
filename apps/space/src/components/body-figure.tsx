@@ -89,7 +89,7 @@ import {
   Stop,
 } from 'react-native-svg'
 
-import { figureGroups, figureIds, type FigureGroup } from '../client/body-figure'
+import { figureGroups, figureIds, sideShowing, type FigureGroup } from '../client/body-figure'
 import type { BodySide, BodySlug } from '../client/focus-form'
 
 /**
@@ -108,6 +108,7 @@ export const BodyFigure = memo(function BodyFigure({
   gender,
   scale,
   lit,
+  secondary,
   inert,
   onPressSlug,
 }: {
@@ -115,6 +116,8 @@ export const BodyFigure = memo(function BodyFigure({
   readonly gender: 'male' | 'female'
   readonly scale: number
   readonly lit: readonly string[]
+  /** What the movement merely uses, next to what it trains. */
+  readonly secondary?: readonly string[] | undefined
   readonly inert: readonly string[]
   readonly onPressSlug: (slug: BodySlug) => void
 }) {
@@ -123,11 +126,17 @@ export const BodyFigure = memo(function BodyFigure({
   const ids = figureIds(side)
 
   const groups = useMemo(
-    () => figureGroups({ parts: assetFor(gender, side), side, lit, inert }),
-    [gender, side, lit, inert],
+    () => figureGroups({ parts: assetFor(gender, side), side, lit, secondary, inert }),
+    [gender, side, lit, secondary, inert],
   )
   const chosen = groups.filter((group) => group.role === 'lit')
   const rest = groups.filter((group) => group.role !== 'lit')
+
+  const fillFor = (role: FigureGroup['role']) => {
+    if (role === 'inert') return theme.color.border.subtle
+    if (role === 'secondary') return `url(#${ids.secondary})`
+    return `url(#${ids.resting})`
+  }
 
   // Dark lifts the chosen group above the resting one; light deepens it instead.
   // Both run lighter at the top: what changes is where the ramp sits, not its direction.
@@ -165,6 +174,12 @@ export const BodyFigure = memo(function BodyFigure({
           <Stop offset="0" stopColor={theme.color.border.default} stopOpacity="1" />
           <Stop offset="1" stopColor={theme.color.border.default} stopOpacity="0.66" />
         </LinearGradient>
+        {/* Between the two, and on the accent's hue rather than the grey's: what a
+            movement uses is related to what it trains, not to what it ignores. */}
+        <LinearGradient id={ids.secondary} x1="0" y1="0" x2="0" y2="1">
+          <Stop offset="0" stopColor={theme.color.border.strong} stopOpacity="1" />
+          <Stop offset="1" stopColor={theme.color.border.strong} stopOpacity="0.7" />
+        </LinearGradient>
         {/* `SourceAlpha` blurs black, and on dark that is the point: it seats the
             bright group against the grey muscles around it. */}
         {halo ? (
@@ -184,12 +199,7 @@ export const BodyFigure = memo(function BodyFigure({
         strokeWidth={SEAM_WIDTH}
         vectorEffect="non-scaling-stroke"
       >
-        {rest.map((group) =>
-          muscle(
-            group,
-            group.role === 'inert' ? theme.color.border.subtle : `url(#${ids.resting})`,
-          ),
-        )}
+        {rest.map((group) => muscle(group, fillFor(group.role)))}
 
         {/* One blur for the whole chosen group. One per shape is what made a tap slow. */}
         {chosen.length > 0 ? (
@@ -201,6 +211,11 @@ export const BodyFigure = memo(function BodyFigure({
     </Wrapper>
   )
 })
+
+/** The one face worth showing, when the figure is an inset beside an illustration. */
+export function faceShowing(gender: 'male' | 'female', lit: readonly string[]): BodySide {
+  return sideShowing({ front: assetFor(gender, 'front'), back: assetFor(gender, 'back'), lit })
+}
 
 function assetFor(gender: 'male' | 'female', side: BodySide) {
   if (gender === 'female') return side === 'front' ? bodyFemaleFront : bodyFemaleBack

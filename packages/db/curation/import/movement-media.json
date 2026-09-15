@@ -1,0 +1,515 @@
+{
+  "prefix": "catalog",
+  "media": [
+    {
+      "ordinal": 1,
+      "slug": "back_squat",
+      "movement_id": "019f1000-0000-7000-8000-000000000001",
+      "source": {
+        "exercise_id": "qXTaZnJ",
+        "name": "barbell full squat"
+      },
+      "object_key": "movements/019f1000-0000-7000-8000-000000000001/474b45e9215a429d317bba181fb485fd73083982df7e0a7ddde3ea8e828e4683.webp",
+      "content_type": "image/webp",
+      "width": 180,
+      "height": 180,
+      "byte_size": 75640,
+      "checksum": "474b45e9215a429d317bba181fb485fd73083982df7e0a7ddde3ea8e828e4683"
+    },
+    {
+      "ordinal": 2,
+      "slug": "goblet_squat",
+      "movement_id": "019f1000-0000-7000-8000-000000000002",
+      "source": {
+        "exercise_id": "yn8yg1r",
+        "name": "dumbbell goblet squat"
+      },
+      "object_key": "movements/019f1000-0000-7000-8000-000000000002/999e328bd697fba2ccb96085bc4534f98394a2b4a571a8f7818c70b852e23784.webp",
+      "content_type": "image/webp",
+      "width": 180,
+      "height": 180,
+      "byte_size": 59784,
+      "checksum": "999e328bd697fba2ccb96085bc4534f98394a2b4a571a8f7818c70b852e23784"
+    },
+    {
+      "ordinal": 3,
+      "slug": "leg_press",
+      "movement_id": "019f1000-0000-7000-8000-000000000003",
+      "source": {
+        "exercise_id": "10Z2DXU",
+        "name": "sled 45в° leg press"
+      },
+      "object_key": "movements/019f1000-0000-7000-8000-000000000003/f8227832a44fa01cce62683be7992de5f7cedfb72e37b42fb863be81f6d16ba5.webp",
+      "content_type": "image/webp",
+      "width": 180,
+      "height": 180,
+      "byte_size": 90856,
+      "checksum": "f8227832a44fa01cce62683be7992de5f7cedfb72e37b42fb863be81f6d16ba5"
+    },
+    {
+      "ordinal": 4,
+      "slug": "lunge",
+      "movement_id": "019f1000-0000-7000-8000-000000000004",
+      "source": {
+        "exercise_id": "RRWFUcw",
+        "name": "dumbbell lunge"
+      },
+      "object_key": "movements/019f1000-0000-7000-8000-000000000004/8722ff79d24b450dd7b7875eba0027319870c054ac697fccc3b05acb4af0fe31.webp",
+      "content_type": "image/webp",
+      "width": 180,
+      "height": 180,
+      "byte_size": 63922,
+      "checksum": "8722ff79d24b450dd7b7875eba0027319870c054ac697fccc3b05acb4af0fe31"
+    },
+    {
+      "ordinal": 5,
+      "slug": "deadlift",
+      "movement_id": "019f1000-0000-7000-8000-000000000005",
+      "source": {
+        "exercise_id": "ila4NZS",
+        "name": "barbell deadlift"
+      },
+      "object_key": "movements/019f1000-0000-7000-8000-000000000005/abffb19929bfdd0d8c1899090aabff49225392c828ec098be31ecd1fe1314796.webp",
+      "content_type": "image/webp",
+      "width": 180,
+      "height": 180,
+      "byte_size": 70652,
+      "checksum": "abffb19929bfdd0d8c1899090aabff49225392c828ec098be31ecd1fe1314796"
+    },
+    {
+      "ordinal": 6,
+      "slug": "romanian_deadlift",
+      "movement_id": "019f1000-0000-7000-8000-000000000006",
+      "source": {
+        "exercise_id": "wQ2c4XD",
+        "name": "barbell romanian deadlift"
+      },
+      "object_key": "movements/019f1000-0000-7000-8000-000000000006/538c3d3e6bc076de62c1b2cd4458b1693368a1ee330872e1056c3382daec5edd.webp",
+      "content_type": "image/webp",
+      "width": 180,
+      "height": 180,
+      "byte_size": 74172,
+      "checksum": "538c3d3e6bc076de62c1b2cd4458b1693368a1ee330872e1056c3382daec5edd"
+    },
+    {
+      "ordinal": 8,
+      "slug": "glute_bridge",
+      "movement_id": "019f1000-0000-7000-8000-000000000008",
+      "source": {
+        "exercise_id": "u0cNiij",
+        "name": "low glute bridge on floor"
+      },
+      "object_key": "movements/019f1000-0000-7000-8000-000000000008/bb2f31b5b9df20d9aaa8897c58e0d31451ba7bf89f6006dc788e9cd9cc6bf658.webp",
+      "content_type": "image/webp",
+      "width": 180,
+      "height": 180,
+      "byte_size": 66870,
+      "checksum": "bb2f31b5b9df20d9aaa8897c58e0d31451ba7bf89f6006dc788e9cd9cc6bf658"
+    },
+    {
+      "ordinal": 9,
+      "slug": "leg_extension",
+      "movement_id": "019f1000-0000-7000-8000-000000000009",
+      "source": {
+        "exercise_id": "my33uHU",
+        "name": "lever leg extension"
+      },
+      "object_key": "movements/019f1000-0000-7000-8000-000000000009/b89be3f4762fc695f92025c719be5f9596caf96d7f6fa0a812315b1d516652e4.webp",
+      "content_type": "image/webp",
+      "width": 180,
+      "height": 180,
+      "byte_size": 106286,
+      "checksum": "b89be3f4762fc695f92025c719be5f9596caf96d7f6fa0a812315b1d516652e4"
+    },
+    {
+      "ordinal": 10,
+      "slug": "leg_curl",
+      "movement_id": "019f1000-0000-7000-8000-000000000010",
+      "source": {
+        "exercise_id": "17lJ1kr",
+        "name": "lever lying leg curl"
+      },
+      "object_key": "movements/019f1000-0000-7000-8000-000000000010/a53c9a43ab8671d1b03f4cde9332fc289f817676adcc45bff033fa0d8559f448.webp",
+      "content_type": "image/webp",
+      "width": 180,
+      "height": 180,
+      "byte_size": 88278,
+      "checksum": "a53c9a43ab8671d1b03f4cde9332fc289f817676adcc45bff033fa0d8559f448"
+    },
+    {
+      "ordinal": 11,
+      "slug": "calf_raise",
+      "movement_id": "019f1000-0000-7000-8000-000000000011",
+      "source": {
+        "exercise_id": "bJYHBIN",
+        "name": "bodyweight standing calf raise"
+      },
+      "object_key": "movements/019f1000-0000-7000-8000-000000000011/97c2d242d6dbb2788fdcb304f5f9ecbae4eb463726e8369eb160360e83c70ec4.webp",
+      "content_type": "image/webp",
+      "width": 180,
+      "height": 180,
+      "byte_size": 51360,
+      "checksum": "97c2d242d6dbb2788fdcb304f5f9ecbae4eb463726e8369eb160360e83c70ec4"
+    },
+    {
+      "ordinal": 12,
+      "slug": "bench_press",
+      "movement_id": "019f1000-0000-7000-8000-000000000012",
+      "source": {
+        "exercise_id": "EIeI8Vf",
+        "name": "barbell bench press"
+      },
+      "object_key": "movements/019f1000-0000-7000-8000-000000000012/19796586eebb7d8681165e18d971b9d1133482c5c29b19bb68cdddeb744897d5.webp",
+      "content_type": "image/webp",
+      "width": 180,
+      "height": 180,
+      "byte_size": 96750,
+      "checksum": "19796586eebb7d8681165e18d971b9d1133482c5c29b19bb68cdddeb744897d5"
+    },
+    {
+      "ordinal": 13,
+      "slug": "db_bench_press",
+      "movement_id": "019f1000-0000-7000-8000-000000000013",
+      "source": {
+        "exercise_id": "SpYC0Kp",
+        "name": "dumbbell bench press"
+      },
+      "object_key": "movements/019f1000-0000-7000-8000-000000000013/fe837ea816a751c82f1811d7aafcb8033f549e55f3d098550e06df8c4c03aad1.webp",
+      "content_type": "image/webp",
+      "width": 180,
+      "height": 180,
+      "byte_size": 81352,
+      "checksum": "fe837ea816a751c82f1811d7aafcb8033f549e55f3d098550e06df8c4c03aad1"
+    },
+    {
+      "ordinal": 14,
+      "slug": "incline_db_press",
+      "movement_id": "019f1000-0000-7000-8000-000000000014",
+      "source": {
+        "exercise_id": "ns0SIbU",
+        "name": "dumbbell incline bench press"
+      },
+      "object_key": "movements/019f1000-0000-7000-8000-000000000014/7a6651031525893b95b31fedb5d721b09eae66cf0c63e5f868d0229d0f4a0237.webp",
+      "content_type": "image/webp",
+      "width": 180,
+      "height": 180,
+      "byte_size": 65772,
+      "checksum": "7a6651031525893b95b31fedb5d721b09eae66cf0c63e5f868d0229d0f4a0237"
+    },
+    {
+      "ordinal": 15,
+      "slug": "push_up",
+      "movement_id": "019f1000-0000-7000-8000-000000000015",
+      "source": {
+        "exercise_id": "I4hDWkc",
+        "name": "push-up"
+      },
+      "object_key": "movements/019f1000-0000-7000-8000-000000000015/cbb4feee8740695cb1650f969d2e82edc1d16f0c9d0b7249370615c8f923619c.webp",
+      "content_type": "image/webp",
+      "width": 180,
+      "height": 180,
+      "byte_size": 73274,
+      "checksum": "cbb4feee8740695cb1650f969d2e82edc1d16f0c9d0b7249370615c8f923619c"
+    },
+    {
+      "ordinal": 16,
+      "slug": "db_fly",
+      "movement_id": "019f1000-0000-7000-8000-000000000016",
+      "source": {
+        "exercise_id": "yz9nUhF",
+        "name": "dumbbell fly"
+      },
+      "object_key": "movements/019f1000-0000-7000-8000-000000000016/da997b3810eebcc963656ba44637be181d252c9ea326422699eb9bdf4fbd6145.webp",
+      "content_type": "image/webp",
+      "width": 180,
+      "height": 180,
+      "byte_size": 89132,
+      "checksum": "da997b3810eebcc963656ba44637be181d252c9ea326422699eb9bdf4fbd6145"
+    },
+    {
+      "ordinal": 17,
+      "slug": "dip",
+      "movement_id": "019f1000-0000-7000-8000-000000000017",
+      "source": {
+        "exercise_id": "9WTm7dq",
+        "name": "chest dip"
+      },
+      "object_key": "movements/019f1000-0000-7000-8000-000000000017/55be80d781f724b0e16a948594e2d8de6a3bf240c5cf75d0674ba23979a82578.webp",
+      "content_type": "image/webp",
+      "width": 180,
+      "height": 180,
+      "byte_size": 68362,
+      "checksum": "55be80d781f724b0e16a948594e2d8de6a3bf240c5cf75d0674ba23979a82578"
+    },
+    {
+      "ordinal": 18,
+      "slug": "pull_up",
+      "movement_id": "019f1000-0000-7000-8000-000000000018",
+      "source": {
+        "exercise_id": "lBDjFxJ",
+        "name": "pull-up"
+      },
+      "object_key": "movements/019f1000-0000-7000-8000-000000000018/898fe7aecd3ed576043c1f16a0472a54530447b97d87f11b7cc90d6246045aae.webp",
+      "content_type": "image/webp",
+      "width": 180,
+      "height": 180,
+      "byte_size": 51224,
+      "checksum": "898fe7aecd3ed576043c1f16a0472a54530447b97d87f11b7cc90d6246045aae"
+    },
+    {
+      "ordinal": 19,
+      "slug": "lat_pulldown",
+      "movement_id": "019f1000-0000-7000-8000-000000000019",
+      "source": {
+        "exercise_id": "RVwzP10",
+        "name": "cable pulldown"
+      },
+      "object_key": "movements/019f1000-0000-7000-8000-000000000019/d20b83236fcb629d904e106037e6d8ce906e382a50bb7d9232602f11e08976b2.webp",
+      "content_type": "image/webp",
+      "width": 180,
+      "height": 180,
+      "byte_size": 68684,
+      "checksum": "d20b83236fcb629d904e106037e6d8ce906e382a50bb7d9232602f11e08976b2"
+    },
+    {
+      "ordinal": 20,
+      "slug": "barbell_row",
+      "movement_id": "019f1000-0000-7000-8000-000000000020",
+      "source": {
+        "exercise_id": "eZyBC3j",
+        "name": "barbell bent over row"
+      },
+      "object_key": "movements/019f1000-0000-7000-8000-000000000020/078ad92ccdb91f03eaaaf8add4d155b3495dcede196602c2df873cb53ad497d4.webp",
+      "content_type": "image/webp",
+      "width": 180,
+      "height": 180,
+      "byte_size": 82188,
+      "checksum": "078ad92ccdb91f03eaaaf8add4d155b3495dcede196602c2df873cb53ad497d4"
+    },
+    {
+      "ordinal": 21,
+      "slug": "db_row",
+      "movement_id": "019f1000-0000-7000-8000-000000000021",
+      "source": {
+        "exercise_id": "BJ0Hz5L",
+        "name": "dumbbell bent over row"
+      },
+      "object_key": "movements/019f1000-0000-7000-8000-000000000021/f326faa55c28cdf51bfbd0f8ba730d331f34c5f24de61ffc6d4128765adba148.webp",
+      "content_type": "image/webp",
+      "width": 180,
+      "height": 180,
+      "byte_size": 85156,
+      "checksum": "f326faa55c28cdf51bfbd0f8ba730d331f34c5f24de61ffc6d4128765adba148"
+    },
+    {
+      "ordinal": 22,
+      "slug": "cable_row",
+      "movement_id": "019f1000-0000-7000-8000-000000000022",
+      "source": {
+        "exercise_id": "fUBheHs",
+        "name": "cable seated row"
+      },
+      "object_key": "movements/019f1000-0000-7000-8000-000000000022/e62c0e1cfc26d0b97cdf2c0a4ebf314c5083b963b81791b4f520858c921f5e5e.webp",
+      "content_type": "image/webp",
+      "width": 180,
+      "height": 180,
+      "byte_size": 79584,
+      "checksum": "e62c0e1cfc26d0b97cdf2c0a4ebf314c5083b963b81791b4f520858c921f5e5e"
+    },
+    {
+      "ordinal": 23,
+      "slug": "overhead_press",
+      "movement_id": "019f1000-0000-7000-8000-000000000023",
+      "source": {
+        "exercise_id": "Kyd9Rz5",
+        "name": "barbell standing wide military press"
+      },
+      "object_key": "movements/019f1000-0000-7000-8000-000000000023/3cd850794627bf7f54776ba4f009196d62500056a34b092bac9cb6d8cf13b3ba.webp",
+      "content_type": "image/webp",
+      "width": 180,
+      "height": 180,
+      "byte_size": 68404,
+      "checksum": "3cd850794627bf7f54776ba4f009196d62500056a34b092bac9cb6d8cf13b3ba"
+    },
+    {
+      "ordinal": 24,
+      "slug": "db_shoulder_press",
+      "movement_id": "019f1000-0000-7000-8000-000000000024",
+      "source": {
+        "exercise_id": "znQUdHY",
+        "name": "dumbbell seated shoulder press"
+      },
+      "object_key": "movements/019f1000-0000-7000-8000-000000000024/5fb2866f813761df5559d769b9c7d2b82136759451175f6dd3442dddd87a0f15.webp",
+      "content_type": "image/webp",
+      "width": 180,
+      "height": 180,
+      "byte_size": 70168,
+      "checksum": "5fb2866f813761df5559d769b9c7d2b82136759451175f6dd3442dddd87a0f15"
+    },
+    {
+      "ordinal": 25,
+      "slug": "lateral_raise",
+      "movement_id": "019f1000-0000-7000-8000-000000000025",
+      "source": {
+        "exercise_id": "DsgkuIt",
+        "name": "dumbbell lateral raise"
+      },
+      "object_key": "movements/019f1000-0000-7000-8000-000000000025/db9ddb42f0d1573762e3ad207ac751fcf1fba58a6e24f76f9663f1a4fe693edc.webp",
+      "content_type": "image/webp",
+      "width": 180,
+      "height": 180,
+      "byte_size": 68458,
+      "checksum": "db9ddb42f0d1573762e3ad207ac751fcf1fba58a6e24f76f9663f1a4fe693edc"
+    },
+    {
+      "ordinal": 26,
+      "slug": "barbell_curl",
+      "movement_id": "019f1000-0000-7000-8000-000000000026",
+      "source": {
+        "exercise_id": "25GPyDY",
+        "name": "barbell curl"
+      },
+      "object_key": "movements/019f1000-0000-7000-8000-000000000026/9efe12343808434e65b9414055f7ea5f55bf7b89e9ceb3e8f7c8cd42a087db32.webp",
+      "content_type": "image/webp",
+      "width": 180,
+      "height": 180,
+      "byte_size": 82006,
+      "checksum": "9efe12343808434e65b9414055f7ea5f55bf7b89e9ceb3e8f7c8cd42a087db32"
+    },
+    {
+      "ordinal": 27,
+      "slug": "triceps_pushdown",
+      "movement_id": "019f1000-0000-7000-8000-000000000027",
+      "source": {
+        "exercise_id": "3ZflifB",
+        "name": "cable pushdown"
+      },
+      "object_key": "movements/019f1000-0000-7000-8000-000000000027/e8c5f636b7b4ad23bda6c2d95573f899460f823db9266757dc41ba5a1cdc98b7.webp",
+      "content_type": "image/webp",
+      "width": 180,
+      "height": 180,
+      "byte_size": 72650,
+      "checksum": "e8c5f636b7b4ad23bda6c2d95573f899460f823db9266757dc41ba5a1cdc98b7"
+    },
+    {
+      "ordinal": 29,
+      "slug": "side_plank",
+      "movement_id": "019f1000-0000-7000-8000-000000000029",
+      "source": {
+        "exercise_id": "RKjH6Lt",
+        "name": "side bridge v. 2"
+      },
+      "object_key": "movements/019f1000-0000-7000-8000-000000000029/a75725270b4b3bef7e661d536efd752e85adda3c6a8bf881bcc4910762c0a912.webp",
+      "content_type": "image/webp",
+      "width": 180,
+      "height": 180,
+      "byte_size": 68890,
+      "checksum": "a75725270b4b3bef7e661d536efd752e85adda3c6a8bf881bcc4910762c0a912"
+    },
+    {
+      "ordinal": 30,
+      "slug": "hanging_leg_raise",
+      "movement_id": "019f1000-0000-7000-8000-000000000030",
+      "source": {
+        "exercise_id": "I3tsCnC",
+        "name": "hanging leg raise"
+      },
+      "object_key": "movements/019f1000-0000-7000-8000-000000000030/e40386bccb2f52b0a039b619cd0881cdcff5ac9d4f87922c4d813e351accf010.webp",
+      "content_type": "image/webp",
+      "width": 180,
+      "height": 180,
+      "byte_size": 50252,
+      "checksum": "e40386bccb2f52b0a039b619cd0881cdcff5ac9d4f87922c4d813e351accf010"
+    },
+    {
+      "ordinal": 31,
+      "slug": "ab_wheel",
+      "movement_id": "019f1000-0000-7000-8000-000000000031",
+      "source": {
+        "exercise_id": "NAgVB3t",
+        "name": "wheel rollerout"
+      },
+      "object_key": "movements/019f1000-0000-7000-8000-000000000031/51abe11ccd82ba4fa67a8251ea390a53bbd9f1af5b0518c78967ca34f075ac7b.webp",
+      "content_type": "image/webp",
+      "width": 180,
+      "height": 180,
+      "byte_size": 50328,
+      "checksum": "51abe11ccd82ba4fa67a8251ea390a53bbd9f1af5b0518c78967ca34f075ac7b"
+    },
+    {
+      "ordinal": 32,
+      "slug": "steady_run",
+      "movement_id": "019f1000-0000-7000-8000-000000000032",
+      "source": {
+        "exercise_id": "oLrKqDH",
+        "name": "run"
+      },
+      "object_key": "movements/019f1000-0000-7000-8000-000000000032/ba49ee62971090b77906f4a07d75b34bd067d2d02ee5ba58aa6499589174da40.webp",
+      "content_type": "image/webp",
+      "width": 180,
+      "height": 180,
+      "byte_size": 57420,
+      "checksum": "ba49ee62971090b77906f4a07d75b34bd067d2d02ee5ba58aa6499589174da40"
+    },
+    {
+      "ordinal": 33,
+      "slug": "brisk_walk",
+      "movement_id": "019f1000-0000-7000-8000-000000000033",
+      "source": {
+        "exercise_id": "rjiM4L3",
+        "name": "walking on incline treadmill"
+      },
+      "object_key": "movements/019f1000-0000-7000-8000-000000000033/0203b70bcb3c861cedd102ca3dcc1db1e32804c1a775ae6eeecb12aebdc074b3.webp",
+      "content_type": "image/webp",
+      "width": 180,
+      "height": 180,
+      "byte_size": 163304,
+      "checksum": "0203b70bcb3c861cedd102ca3dcc1db1e32804c1a775ae6eeecb12aebdc074b3"
+    },
+    {
+      "ordinal": 34,
+      "slug": "stationary_bike",
+      "movement_id": "019f1000-0000-7000-8000-000000000034",
+      "source": {
+        "exercise_id": "H1PESYI",
+        "name": "stationary bike run"
+      },
+      "object_key": "movements/019f1000-0000-7000-8000-000000000034/fcc1df34e66efe3c8aec16f2338fa78ff79b08c2d057ce561d77b8b99b470b94.webp",
+      "content_type": "image/webp",
+      "width": 180,
+      "height": 180,
+      "byte_size": 80676,
+      "checksum": "fcc1df34e66efe3c8aec16f2338fa78ff79b08c2d057ce561d77b8b99b470b94"
+    },
+    {
+      "ordinal": 35,
+      "slug": "run_intervals",
+      "movement_id": "019f1000-0000-7000-8000-000000000035",
+      "source": {
+        "exercise_id": "oLrKqDH",
+        "name": "run"
+      },
+      "object_key": "movements/019f1000-0000-7000-8000-000000000035/ba49ee62971090b77906f4a07d75b34bd067d2d02ee5ba58aa6499589174da40.webp",
+      "content_type": "image/webp",
+      "width": 180,
+      "height": 180,
+      "byte_size": 57420,
+      "checksum": "ba49ee62971090b77906f4a07d75b34bd067d2d02ee5ba58aa6499589174da40"
+    },
+    {
+      "ordinal": 38,
+      "slug": "thoracic_mobility",
+      "movement_id": "019f1000-0000-7000-8000-000000000038",
+      "source": {
+        "exercise_id": "GSDioYu",
+        "name": "upper back stretch"
+      },
+      "object_key": "movements/019f1000-0000-7000-8000-000000000038/bd3bab798f2639900c7f45821b6b1bcab3d33d8c0efe18fb520cd7f271197607.webp",
+      "content_type": "image/webp",
+      "width": 180,
+      "height": 180,
+      "byte_size": 57014,
+      "checksum": "bd3bab798f2639900c7f45821b6b1bcab3d33d8c0efe18fb520cd7f271197607"
+    }
+  ]
+}

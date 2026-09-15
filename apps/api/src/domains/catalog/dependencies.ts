@@ -19,6 +19,16 @@ export function studioCatalogService(): StudioCatalogService {
 let cachedMovements: MovementLibraryService | undefined
 
 export function movementLibraryService(): MovementLibraryService {
-  cachedMovements ??= createMovementLibraryService(createMovementLibraryDatabase())
+  if (cachedMovements) return cachedMovements
+
+  // Where the demonstrations are served from. Absent, the projection would hand out
+  // addresses that resolve to nothing, which is worse than refusing to start.
+  const mediaBaseUrl = process.env.CATALOG_MEDIA_BASE_URL
+  if (!mediaBaseUrl) throw new Error('CATALOG_MEDIA_BASE_URL is not set')
+
+  cachedMovements = createMovementLibraryService({
+    database: createMovementLibraryDatabase(),
+    mediaBaseUrl,
+  })
   return cachedMovements
 }

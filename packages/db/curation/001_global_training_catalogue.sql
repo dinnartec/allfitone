@@ -327,6 +327,360 @@ join curated_equipment as item on item.code = needed.code
 on conflict do nothing;
 
 -- ---------------------------------------------------------------------------
+-- 2c · What a movement is, for somebody who does not know it
+-- ---------------------------------------------------------------------------
+
+-- Aliases carry the English name on purpose: a lot of people search «bench
+-- press» in a Spanish app, and a search that fails on it looks like an empty
+-- catalogue rather than a missed synonym.
+create temporary table curated_alias (movement_slug text, names text[]) on commit drop;
+insert into curated_alias (movement_slug, names) values
+  ('back_squat',        array['sentadilla trasera','back squat','squat']),
+  ('goblet_squat',      array['sentadilla copa','goblet squat']),
+  ('leg_press',         array['leg press','prensa']),
+  ('lunge',             array['lunge','desplante','estocada']),
+  ('deadlift',          array['deadlift','peso muerto']),
+  ('romanian_deadlift', array['romanian deadlift','peso muerto piernas rígidas']),
+  ('hip_thrust',        array['empuje de cadera','barbell hip thrust']),
+  ('glute_bridge',      array['glute bridge','elevación de cadera en suelo']),
+  ('leg_extension',     array['leg extension','extensión de rodilla','cuádriceps en máquina']),
+  ('leg_curl',          array['leg curl','flexión de rodilla','femoral en máquina']),
+  ('calf_raise',        array['calf raise','elevación de talones','pantorrillas']),
+  ('bench_press',       array['press plano','bench press','press de pecho']),
+  ('db_bench_press',    array['dumbbell bench press','press plano con mancuernas']),
+  ('incline_db_press',  array['incline dumbbell press','press inclinado']),
+  ('push_up',           array['push up','lagartijas','fondos en suelo']),
+  ('db_fly',            array['dumbbell fly','aperturas','vuelos con mancuernas']),
+  ('dip',               array['dips','fondos']),
+  ('pull_up',           array['pull up','dominada']),
+  ('lat_pulldown',      array['lat pulldown','jalón dorsal','polea al pecho']),
+  ('barbell_row',       array['barbell row','remo inclinado','remo pendlay']),
+  ('db_row',            array['dumbbell row','remo a una mano','serrucho']),
+  ('cable_row',         array['cable row','remo sentado','remo en polea']),
+  ('overhead_press',    array['overhead press','press por encima de la cabeza','press de hombros con barra']),
+  ('db_shoulder_press', array['dumbbell shoulder press','press militar con mancuernas']),
+  ('lateral_raise',     array['lateral raise','vuelos laterales','elevaciones de hombro']),
+  ('barbell_curl',      array['barbell curl','curl con barra','bíceps con barra']),
+  ('triceps_pushdown',  array['triceps pushdown','jalón de tríceps','extensión en polea']),
+  ('plank',             array['plank','plancha','plancha abdominal']),
+  ('side_plank',        array['side plank','plancha de lado']),
+  ('hanging_leg_raise', array['hanging leg raise','elevación de rodillas colgado']),
+  ('ab_wheel',          array['ab wheel','rodillo abdominal','rueda']),
+  ('steady_run',        array['steady run','trote continuo','rodaje']),
+  ('brisk_walk',        array['brisk walk','caminata a paso vivo']),
+  ('stationary_bike',   array['stationary bike','bici estática','ciclismo indoor']),
+  ('run_intervals',     array['running intervals','intervalos','fartlek']),
+  ('full_body_circuit', array['full body circuit','circuito metabólico']),
+  ('hip_mobility',      array['hip mobility','movilidad de caderas']),
+  ('thoracic_mobility', array['thoracic mobility','movilidad dorsal','movilidad de espalda alta']);
+
+insert into catalog.movement_aliases (movement_id, locale, name)
+select movement.id, 'es', alias.name
+from curated_alias as tagged
+join curated_movement as movement on movement.slug = tagged.movement_slug
+cross join lateral unnest(tagged.names) as alias(name)
+on conflict do nothing;
+
+-- Five steps each, in the order they are done. **This is exercise instruction:**
+-- a badly written step is somebody loading their spine wrong, not a typo. It is
+-- reviewed line by line before it reaches anybody — that review is the control,
+-- which is why there is no «pending» state in the table.
+create temporary table curated_movement_step (movement_slug text, steps text[]) on commit drop;
+insert into curated_movement_step (movement_slug, steps) values
+  ('back_squat', array[
+    'Coloca la barra sobre los trapecios, nunca sobre el cuello, y agárrala algo más ancho que los hombros.',
+    'Sácala del rack con las dos piernas, da dos pasos atrás y separa los pies al ancho de los hombros con las puntas ligeramente hacia fuera.',
+    'Toma aire, aprieta el abdomen y baja empujando las caderas atrás y las rodillas hacia fuera.',
+    'Baja hasta que la cadera quede a la altura de la rodilla o hasta donde puedas sin que la espalda baja se redondee.',
+    'Sube empujando el suelo con todo el pie y suelta el aire al pasar el punto más difícil.']),
+  ('goblet_squat', array[
+    'Sujeta una mancuerna o kettlebell contra el pecho, con los codos apuntando al suelo.',
+    'Separa los pies al ancho de los hombros, con las puntas ligeramente hacia fuera.',
+    'Baja manteniendo el pecho alto y los codos por dentro de las rodillas.',
+    'Baja hasta donde llegues sin que los talones se levanten ni la espalda se redondee.',
+    'Sube empujando el suelo y mantén el peso pegado al pecho todo el recorrido.']),
+  ('leg_press', array[
+    'Siéntate con la espalda y la cadera pegadas al respaldo, sin dejar hueco en la zona lumbar.',
+    'Coloca los pies en la plataforma al ancho de los hombros, a media altura.',
+    'Suelta los seguros y baja controlando hasta que la rodilla forme unos 90 grados.',
+    'No dejes que la cadera se despegue del asiento: ahí es donde se redondea la espalda baja.',
+    'Empuja hasta casi extender, sin bloquear la rodilla de golpe.']),
+  ('lunge', array[
+    'De pie con una mancuerna en cada mano, brazos relajados al costado.',
+    'Da un paso al frente más largo que un paso normal, manteniendo el tronco vertical.',
+    'Baja la rodilla de atrás hacia el suelo hasta quedar a un par de dedos, sin golpearla.',
+    'La rodilla de delante se mantiene alineada con el pie, sin irse hacia dentro.',
+    'Empuja con el talón de delante para volver, y alterna la pierna.']),
+  ('deadlift', array[
+    'Coloca los pies bajo la barra, al ancho de la cadera, con la barra sobre la mitad del pie.',
+    'Flexiona cadera y rodilla para agarrar la barra algo más ancho que las piernas.',
+    'Baja el pecho, saca el aire del pecho y aprieta: la espalda queda recta, nunca redondeada.',
+    'Empuja el suelo con las piernas y mantén la barra rozando las tibias durante toda la subida.',
+    'Termina de pie con la cadera extendida, sin echar los hombros atrás, y baja por el mismo camino.']),
+  ('romanian_deadlift', array[
+    'De pie con la barra en las manos, brazos extendidos y rodillas ligeramente flexionadas.',
+    'Empuja la cadera hacia atrás manteniendo esa flexión de rodilla constante.',
+    'Baja la barra rozando los muslos hasta notar tensión en la parte de atrás de las piernas.',
+    'Para cuando la espalda baja quiera redondearse: ese es tu recorrido, no una altura fija.',
+    'Vuelve llevando la cadera hacia delante, sin arquear la espalda al final.']),
+  ('hip_thrust', array[
+    'Siéntate en el suelo con la espalda apoyada en un banco, justo bajo los omóplatos.',
+    'Coloca la barra sobre la cadera con una almohadilla y separa los pies al ancho de los hombros.',
+    'Mete un poco la barbilla y mantén las costillas abajo durante todo el movimiento.',
+    'Empuja con los talones hasta que el tronco quede paralelo al suelo, apretando el glúteo arriba.',
+    'Baja controlando sin dejar caer el peso, y no arquees la espalda para subir más.']),
+  ('glute_bridge', array[
+    'Túmbate boca arriba con las rodillas flexionadas y los pies apoyados cerca del glúteo.',
+    'Separa los pies al ancho de la cadera y deja los brazos al costado.',
+    'Aprieta el glúteo antes de empezar a subir.',
+    'Eleva la cadera hasta alinear rodilla, cadera y hombro, sin pasarte de ahí.',
+    'Baja despacio hasta rozar el suelo y encadena la siguiente.']),
+  ('leg_extension', array[
+    'Siéntate con la espalda apoyada y ajusta el respaldo para que la rodilla coincida con el eje de giro.',
+    'Coloca el rodillo sobre el empeine, no sobre la espinilla.',
+    'Sujétate de los agarres laterales y mantén la cadera pegada al asiento.',
+    'Extiende hasta casi estirar la rodilla, sin bloquear de golpe.',
+    'Baja controlando: la bajada es donde está la mitad del trabajo.']),
+  ('leg_curl', array[
+    'Colócate en la máquina con la rodilla alineada con el eje de giro.',
+    'Ajusta el rodillo justo encima del talón, no sobre el tendón.',
+    'Mantén la cadera pegada al apoyo durante todo el recorrido.',
+    'Flexiona llevando el talón hacia el glúteo tanto como puedas.',
+    'Vuelve despacio, sin dejar que el peso caiga ni que la cadera se levante.']),
+  ('calf_raise', array[
+    'De pie, con la punta del pie sobre un escalón o el suelo y el cuerpo erguido.',
+    'Apóyate en algo con una mano solo para el equilibrio, no para empujar.',
+    'Sube todo lo que puedas sobre la punta del pie y aguanta un instante arriba.',
+    'Baja despacio hasta sentir estiramiento en el gemelo.',
+    'Mantén la rodilla estirada, pero sin bloquearla con fuerza.']),
+  ('bench_press', array[
+    'Túmbate en el banco con los pies apoyados y los omóplatos juntos contra el respaldo.',
+    'Agarra la barra algo más ancho que los hombros, de forma que en mitad del recorrido el codo quede a 90 grados.',
+    'Saca la barra del rack y sostenla sobre la línea del pecho con los brazos extendidos.',
+    'Toma aire y baja despacio hasta que la barra toque el centro del pecho.',
+    'Tras una pausa breve, empuja soltando el aire hasta extender los brazos.']),
+  ('db_bench_press', array[
+    'Siéntate en el banco con una mancuerna sobre cada muslo y túmbate impulsándolas con las piernas.',
+    'Junta los omóplatos y apoya bien los pies en el suelo.',
+    'Parte con las mancuernas sobre el pecho y los brazos extendidos, sin chocarlas.',
+    'Baja hasta que los codos queden a la altura del tronco, con las muñecas firmes.',
+    'Empuja hacia arriba y ligeramente hacia dentro, sin bloquear el codo de golpe.']),
+  ('incline_db_press', array[
+    'Ajusta el banco entre 30 y 45 grados: más inclinación trabaja más el hombro que el pecho.',
+    'Túmbate con los omóplatos juntos y los pies apoyados.',
+    'Parte con las mancuernas a la altura del pecho alto, con los brazos extendidos.',
+    'Baja controlando hasta notar estiramiento, sin forzar el hombro por detrás del tronco.',
+    'Empuja hasta arriba manteniendo las muñecas alineadas con el antebrazo.']),
+  ('push_up', array[
+    'Apoya las manos algo más anchas que los hombros y estira el cuerpo en línea recta.',
+    'Aprieta el abdomen y el glúteo para que la cadera no se hunda ni se levante.',
+    'Baja con los codos a unos 45 grados del tronco, no abiertos del todo.',
+    'Baja hasta que el pecho quede a un puño del suelo.',
+    'Empuja hasta extender los brazos manteniendo la línea del cuerpo.']),
+  ('db_fly', array[
+    'Túmbate en el banco con una mancuerna en cada mano, brazos extendidos sobre el pecho.',
+    'Flexiona ligeramente el codo y mantén ese ángulo fijo: no es un press.',
+    'Abre los brazos en arco hasta que las manos queden a la altura del pecho.',
+    'Para cuando notes estiramiento; bajar más carga el hombro sin dar más pecho.',
+    'Cierra el arco juntando las manos por encima del pecho, sin chocar las mancuernas.']),
+  ('dip', array[
+    'Sujétate en las paralelas con los brazos extendidos y el cuerpo suspendido.',
+    'Inclina el tronco ligeramente hacia delante para cargar más el pecho, o mantenlo vertical para el tríceps.',
+    'Baja controlando hasta que el codo forme unos 90 grados.',
+    'No bajes más allá de eso: el hombro por debajo del codo es donde se lesiona.',
+    'Empuja hasta extender los brazos sin encoger los hombros hacia las orejas.']),
+  ('pull_up', array[
+    'Agárrate a la barra con las palmas hacia delante, algo más ancho que los hombros.',
+    'Cuelga con los brazos extendidos y los hombros activos, no descolgados del todo.',
+    'Empieza el tirón bajando los omóplatos antes de flexionar los codos.',
+    'Sube hasta que la barbilla pase la barra, sin dar impulso con las piernas.',
+    'Baja despacio hasta la posición de partida y encadena la siguiente.']),
+  ('lat_pulldown', array[
+    'Ajusta la almohadilla sobre los muslos para que la cadera no se levante.',
+    'Agarra la barra más ancho que los hombros, con las palmas hacia delante.',
+    'Inclina el tronco un poco hacia atrás y mantén esa posición fija.',
+    'Tira llevando los codos hacia abajo y atrás hasta que la barra llegue al pecho alto.',
+    'Vuelve despacio hasta extender los brazos, sin dejar que el peso tire de ti.']),
+  ('barbell_row', array[
+    'De pie con la barra, flexiona la cadera hasta que el tronco quede a unos 45 grados.',
+    'Rodillas ligeramente flexionadas y espalda recta, nunca redondeada.',
+    'Deja los brazos colgando y agarra la barra al ancho de los hombros.',
+    'Tira llevando la barra hacia el ombligo, con los codos pegados al cuerpo.',
+    'Baja controlando sin mover el tronco: si tienes que balancearte, pesa demasiado.']),
+  ('db_row', array[
+    'Apoya una rodilla y una mano en el banco, con la espalda plana y paralela al suelo.',
+    'Sujeta la mancuerna con el brazo libre extendido hacia el suelo.',
+    'Tira llevando el codo hacia atrás y arriba, pegado al costado.',
+    'Sube hasta que la mancuerna llegue a la altura de las costillas, sin girar el tronco.',
+    'Baja despacio hasta estirar del todo y repite antes de cambiar de lado.']),
+  ('cable_row', array[
+    'Siéntate con los pies apoyados y las rodillas ligeramente flexionadas.',
+    'Agarra el asa con los brazos extendidos y el tronco vertical.',
+    'Tira llevando los codos atrás, juntando los omóplatos al final.',
+    'Mantén el tronco quieto: el movimiento es de los brazos y la espalda, no de la cadera.',
+    'Vuelve despacio dejando que los omóplatos se separen, sin redondear la espalda.']),
+  ('overhead_press', array[
+    'De pie con la barra a la altura de las clavículas y las manos algo más anchas que los hombros.',
+    'Aprieta el abdomen y el glúteo para no arquear la espalda baja.',
+    'Mete un poco la barbilla para que la barra pase limpia por delante de la cara.',
+    'Empuja hacia arriba y, al pasar la cabeza, mete la cabeza bajo la barra.',
+    'Termina con la barra sobre la mitad del pie y baja controlando hasta las clavículas.']),
+  ('db_shoulder_press', array[
+    'Sentado o de pie, sube las mancuernas a la altura de los hombros con las palmas al frente.',
+    'Mantén las costillas abajo y el abdomen apretado.',
+    'Empuja hacia arriba sin que las mancuernas choquen al final.',
+    'No bloquees el codo de golpe ni encojas los hombros hacia las orejas.',
+    'Baja controlando hasta que los codos queden a la altura de los hombros.']),
+  ('lateral_raise', array[
+    'De pie con una mancuerna en cada mano, brazos al costado y codo ligeramente flexionado.',
+    'Mantén el tronco quieto: sin balancearse, el peso correcto es el que lo permite.',
+    'Sube los brazos hacia los lados, guiando con el codo y no con la mano.',
+    'Para a la altura del hombro; más arriba deja de trabajar el deltoides.',
+    'Baja despacio hasta el costado sin dejar caer el peso.']),
+  ('barbell_curl', array[
+    'De pie con la barra en las manos, palmas hacia arriba y manos al ancho de los hombros.',
+    'Mantén los codos pegados al costado durante todo el recorrido.',
+    'Sube flexionando solo el codo, sin balancear el tronco ni adelantar los hombros.',
+    'Sube hasta que la barra llegue a la altura del pecho.',
+    'Baja despacio hasta extender del todo el brazo.']),
+  ('triceps_pushdown', array[
+    'De pie frente a la polea alta, agarra la barra con las palmas hacia abajo.',
+    'Pega los codos al costado y flexiónalos a 90 grados: esa es la posición de partida.',
+    'Inclina el tronco muy ligeramente hacia delante y mantenlo quieto.',
+    'Extiende el codo hacia abajo hasta estirar el brazo del todo.',
+    'Vuelve controlando sin dejar que el codo se separe del costado.']),
+  ('plank', array[
+    'Apoya los antebrazos en el suelo, con los codos justo debajo de los hombros.',
+    'Estira las piernas y apoya las puntas de los pies, separados al ancho de la cadera.',
+    'Aprieta el abdomen y el glúteo hasta que el cuerpo quede en línea recta.',
+    'Mete un poco la barbilla y mira al suelo, sin levantar la cabeza.',
+    'Aguanta respirando con normalidad, y para cuando la cadera empiece a caer.']),
+  ('side_plank', array[
+    'Túmbate de lado con el codo justo debajo del hombro y las piernas estiradas.',
+    'Apila un pie sobre el otro, o adelanta el de arriba si necesitas más base.',
+    'Sube la cadera hasta alinear tobillo, cadera y hombro.',
+    'Mantén el pecho abierto: la cadera no rota hacia el suelo ni hacia el techo.',
+    'Aguanta respirando, baja controlando y cambia de lado.']),
+  ('hanging_leg_raise', array[
+    'Cuélgate de la barra con los brazos extendidos y los hombros activos.',
+    'Deja de balancearte antes de empezar: el impulso se lleva todo el trabajo.',
+    'Mete un poco la pelvis hacia dentro para no arquear la espalda baja.',
+    'Sube las piernas —rectas o con la rodilla flexionada— hasta al menos la altura de la cadera.',
+    'Baja despacio y controla el balanceo antes de la siguiente.']),
+  ('ab_wheel', array[
+    'Arrodíllate con la rueda en el suelo delante de ti y las manos en los agarres.',
+    'Aprieta el abdomen y el glúteo, y mete un poco la pelvis hacia dentro.',
+    'Rueda hacia delante manteniendo la espalda baja recta en todo momento.',
+    'Llega solo hasta donde puedas mantener esa posición: si la espalda se arquea, has ido demasiado lejos.',
+    'Vuelve tirando con el abdomen, no con los brazos.']),
+  ('steady_run', array[
+    'Empieza con cinco minutos suaves antes de coger el ritmo.',
+    'Mantén un ritmo en el que puedas hablar en frases cortas sin ahogarte.',
+    'Deja los hombros bajos y los brazos relajados, con el codo a unos 90 grados.',
+    'Apoya el pie bajo el cuerpo, no por delante, y da pasos cortos y frecuentes.',
+    'Termina bajando el ritmo poco a poco en vez de parar de golpe.']),
+  ('brisk_walk', array[
+    'Camina erguido, con la mirada al frente y los hombros relajados.',
+    'Sube el ritmo hasta que te cueste cantar pero puedas hablar.',
+    'Acompaña con los brazos, doblados y moviéndose desde el hombro.',
+    'Apoya del talón a la punta en cada paso.',
+    'Mantén ese ritmo el tiempo previsto y baja poco a poco al final.']),
+  ('stationary_bike', array[
+    'Ajusta el sillín a la altura de tu cadera de pie junto a la bici.',
+    'Con el pedal abajo, la rodilla debe quedar casi estirada, sin bloquearse.',
+    'Apoya la parte ancha del pie en el pedal, no el arco.',
+    'Pedalea redondo a una cadencia cómoda, sin balancear la cadera.',
+    'Ajusta la resistencia para sostener el esfuerzo previsto, no para agotarte al principio.']),
+  ('run_intervals', array[
+    'Calienta diez minutos a ritmo suave antes del primer intervalo.',
+    'Corre el tramo rápido a un ritmo que puedas sostener todo el intervalo, no a tope desde el principio.',
+    'Recupera trotando o caminando el tiempo indicado, sin quedarte parado.',
+    'Repite las series manteniendo el mismo ritmo en todas: si la última cae mucho, empezaste demasiado fuerte.',
+    'Termina con cinco minutos suaves.']),
+  ('full_body_circuit', array[
+    'Prepara todas las estaciones antes de empezar para no perder el ritmo entre ejercicios.',
+    'Haz cada ejercicio el tiempo o las repeticiones indicadas y pasa al siguiente.',
+    'Descansa poco entre ejercicios y algo más entre vueltas.',
+    'Prioriza la técnica sobre la velocidad: un circuito no es excusa para hacerlo mal.',
+    'Si no puedes mantener la forma, baja la carga antes de bajar las repeticiones.']),
+  ('hip_mobility', array[
+    'Empieza en cuadrupedia o de rodillas, según el ejercicio de la serie.',
+    'Mueve la cadera despacio, buscando el rango y no la fuerza.',
+    'Respira de forma continua: aguantar el aire tensa lo que intentas soltar.',
+    'Llega hasta donde sientas tensión, nunca hasta donde duela.',
+    'Haz las repeticiones de un lado y cambia al otro.']),
+  ('thoracic_mobility', array[
+    'Colócate en cuadrupedia o sentado, con la espalda baja quieta.',
+    'Mueve solo la espalda alta: si la lumbar se mueve, el ejercicio se pierde.',
+    'Gira o extiende despacio hasta el final del rango cómodo.',
+    'Aguanta un par de segundos en el punto final y vuelve.',
+    'Repite el número indicado y cambia de lado si el ejercicio lo pide.']);
+
+insert into catalog.movement_instructions (movement_id, locale, position, text)
+select movement.id, 'es', step.ordinality::integer, step.text
+from curated_movement_step as tagged
+join curated_movement as movement on movement.slug = tagged.movement_slug
+cross join lateral unnest(tagged.steps) with ordinality as step(text, ordinality)
+on conflict do nothing;
+
+-- Variants between the 38 we actually have. The prototype names «press inclinado
+-- con barra» and «press en máquina», which are not in this catalogue: a variant
+-- is curated against what exists, never against the example.
+--
+-- `note` is what the person reads, so it says what changes for them — not what
+-- the relation is called.
+create temporary table curated_variant (base_slug text, variant_slug text, relation text, note text) on commit drop;
+insert into curated_variant (base_slug, variant_slug, relation, note) values
+  ('bench_press',       'db_bench_press',    'variant',     'Más recorrido y más estabilidad que pedir'),
+  ('bench_press',       'incline_db_press',  'variant',     'Carga más el pecho de arriba'),
+  ('bench_press',       'push_up',           'regression',  'Lo mismo sin barra ni banco'),
+  ('db_bench_press',    'bench_press',       'progression', 'Permite mover más peso'),
+  ('incline_db_press',  'db_bench_press',    'variant',     'Reparte más parejo el pecho'),
+  ('push_up',           'db_bench_press',    'progression', 'Empieza a añadir carga'),
+  ('back_squat',        'goblet_squat',      'regression',  'Más fácil de mantener erguido'),
+  ('back_squat',        'leg_press',         'variant',     'Menos técnica y menos espalda'),
+  ('goblet_squat',      'back_squat',        'progression', 'Permite mover mucho más peso'),
+  ('leg_press',         'back_squat',        'progression', 'Añade el trabajo de tronco que la máquina quita'),
+  ('deadlift',          'romanian_deadlift', 'variant',     'Más femoral y menos cuádriceps'),
+  ('romanian_deadlift', 'leg_curl',          'variant',     'Aísla el femoral sin cargar la espalda'),
+  ('hip_thrust',        'glute_bridge',      'regression',  'Lo mismo sin banco ni barra'),
+  ('glute_bridge',      'hip_thrust',        'progression', 'Más recorrido y carga'),
+  ('pull_up',           'lat_pulldown',      'regression',  'Gradúa el peso hasta llegar a la dominada'),
+  ('lat_pulldown',      'pull_up',           'progression', 'El mismo patrón con tu propio peso'),
+  ('barbell_row',       'db_row',            'variant',     'Un lado cada vez, y menos espalda baja'),
+  ('barbell_row',       'cable_row',         'variant',     'Tensión constante y tronco apoyado'),
+  ('db_row',            'cable_row',         'variant',     'Los dos brazos a la vez'),
+  ('overhead_press',    'db_shoulder_press', 'variant',     'Cada brazo a su ritmo natural'),
+  ('db_shoulder_press', 'overhead_press',    'progression', 'Permite mover más peso'),
+  ('lateral_raise',     'db_shoulder_press', 'variant',     'Trabaja el hombro entero, no solo el lateral'),
+  ('barbell_curl',      'triceps_pushdown',  'variant',     'El otro lado del brazo'),
+  ('dip',               'triceps_pushdown',  'regression',  'Aísla el tríceps sin cargar el hombro'),
+  ('plank',             'side_plank',        'variant',     'Trabaja el costado'),
+  ('plank',             'ab_wheel',          'progression', 'La misma idea con mucho más recorrido'),
+  ('side_plank',        'plank',             'variant',     'Trabaja el frente'),
+  ('ab_wheel',          'plank',             'regression',  'Lo mismo sin recorrido'),
+  ('hanging_leg_raise', 'plank',             'regression',  'Sin colgarse y sin agarre'),
+  ('calf_raise',        'brisk_walk',        'variant',     'Trabaja el gemelo caminando'),
+  ('leg_extension',     'leg_press',         'variant',     'Suma glúteo y femoral al cuádriceps'),
+  ('leg_curl',          'romanian_deadlift', 'progression', 'El femoral con todo el cuerpo'),
+  ('lunge',             'goblet_squat',      'variant',     'Las dos piernas a la vez'),
+  ('steady_run',        'brisk_walk',        'regression',  'El mismo rato con menos impacto'),
+  ('steady_run',        'run_intervals',     'progression', 'Mismo tiempo, más intensidad'),
+  ('brisk_walk',        'steady_run',        'progression', 'Sube el ritmo cuando lo aguantes'),
+  ('run_intervals',     'steady_run',        'regression',  'Sin cambios de ritmo'),
+  ('stationary_bike',   'steady_run',        'variant',     'Al aire libre y con impacto'),
+  ('full_body_circuit', 'run_intervals',     'variant',     'El mismo esfuerzo solo corriendo'),
+  ('hip_mobility',      'thoracic_mobility', 'variant',     'La espalda alta en vez de la cadera'),
+  ('thoracic_mobility', 'hip_mobility',      'variant',     'La cadera en vez de la espalda alta');
+
+insert into catalog.movement_variants (base_movement_id, variant_movement_id, relation, note)
+select base.id, other.id, tagged.relation, tagged.note
+from curated_variant as tagged
+join curated_movement as base on base.slug = tagged.base_slug
+join curated_movement as other on other.slug = tagged.variant_slug
+on conflict do nothing;
+
+-- ---------------------------------------------------------------------------
 -- 3 · Session templates
 -- ---------------------------------------------------------------------------
 

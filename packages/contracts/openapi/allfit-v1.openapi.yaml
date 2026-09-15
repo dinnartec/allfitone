@@ -3761,6 +3761,13 @@ paths:
         read here and it is never written here. Only the published global subset is
         visible, which is what the operations matrix already says this operation
         answers.
+
+
+        Paged by cursor, which the operations matrix always declared. The cap alone
+        was enough while the library was a few dozen movements and became a trap the
+        moment it grew: a full page and no way to ask for the next one looks exactly
+        like the whole catalogue. A client that wants it all — Space caches it for
+        offline — walks the cursor once.
       security:
         - bearerAuth: []
       parameters:
@@ -3812,6 +3819,7 @@ paths:
             minimum: 1
             maximum: 100
             default: 40
+        - $ref: '#/components/parameters/Cursor'
       responses:
         '200':
           description: The movements that match
@@ -3821,15 +3829,57 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Movement'
+                $ref: '#/components/schemas/MovementPage'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthenticated'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /catalog/v1/movements/{movementId}:
+    get:
+      tags: [Catalogue]
+      operationId: readMovement
+      x-allfit-operation: OP-CAT-010
+      x-allfit-cache: no-store
+      summary: Read one movement, whole
+      description: >-
+        Everything the detail screen draws, in one call: other names it goes by, what
+        it works and what it merely uses, what it needs, how it is done, and what to do
+        instead. Five calls would mean a screen that draws itself five times.
+
+
+        **A movement nobody can see answers the same as one that does not exist.**
+        Telling them apart would let identifiers be walked to learn what exists.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: movementId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/Uuid'
+      responses:
+        '200':
+          description: The movement
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MovementDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
 
@@ -6226,7 +6276,7 @@ components:
     Movement:
       type: object
       additionalProperties: false
-      required: [id, discipline_code, name, muscles, equipment]
+      required: [id, discipline_code, name, muscles, equipment, demo_url]
       properties:
         id:
           type: string
@@ -6250,6 +6300,115 @@ components:
             first. Compatibility, never inventory or availability.
           items:
             type: string
+        demo_url:
+          type: [string, 'null']
+          format: uri
+          description: >-
+            The animated demonstration, or null where none has been curated yet — the
+            normal state of a catalogue that grows, not an error. Immutable and
+            identical for everyone, so it is served straight from cache rather than
+            through this API; the address is composed from configuration at read time
+            and never stored, which is what keeps the origin replaceable.
+          maxLength: 2048
+    MovementPage:
+      type: object
+      additionalProperties: false
+      required: [data, page]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Movement'
+        page:
+          $ref: '#/components/schemas/Page'
+    MovementDetail:
+      type: object
+      additionalProperties: false
+      required:
+        [id, discipline_code, name, aliases, muscles, equipment, instructions, variants,
+         demo_url]
+      properties:
+        id:
+          type: string
+          format: uuid
+        discipline_code:
+          type: string
+        name:
+          type: string
+        aliases:
+          type: array
+          description: >-
+            Other names the same movement goes by, including the English one, which is
+            how a lot of people search. Only the locale being read.
+          items:
+            type: string
+        muscles:
+          type: array
+          description: What it works, the primary ones first.
+          items:
+            type: object
+            additionalProperties: false
+            required: [code, name, primary]
+            properties:
+              code:
+                type: string
+              name:
+                type: string
+              primary:
+                type: boolean
+                description: >-
+                  What the movement trains, as opposed to what it merely uses. A squat
+                  is quadriceps and glutes before it is lower back.
+        equipment:
+          type: array
+          items:
+            type: string
+        instructions:
+          type: array
+          description: >-
+            How it is done, in the order it is done. Curated content reviewed before it
+            ships: a badly written step is an injury, not a typo.
+          items:
+            type: object
+            additionalProperties: false
+            required: [position, text]
+            properties:
+              position:
+                type: integer
+                minimum: 1
+              text:
+                type: string
+        variants:
+          type: array
+          description: What to do instead, and why it is worth doing instead.
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, name, relation, note]
+            properties:
+              id:
+                type: string
+                format: uuid
+              name:
+                type: string
+              relation:
+                type: string
+                enum: [variant, regression, progression]
+              note:
+                type: [string, 'null']
+                description: >-
+                  Said for the person reading — «more upper chest» — not the name of
+                  the relation, which is what `relation` is for.
+        demo_url:
+          type: [string, 'null']
+          format: uri
+          description: >-
+            The animated demonstration, or null where none has been curated yet — the
+            normal state of a catalogue that grows, not an error. Immutable and
+            identical for everyone, so it is served straight from cache rather than
+            through this API; the address is composed from configuration at read time
+            and never stored, which is what keeps the origin replaceable.
+          maxLength: 2048
     CatalogueTerm:
       type: object
       additionalProperties: false

@@ -34,7 +34,14 @@ export function hiddenFor(side: BodySide): readonly Slug[] {
   return side === 'front' ? ['hair'] : []
 }
 
-export type PaintRole = 'lit' | 'resting' | 'inert'
+/**
+ * `secondary` is what a movement merely uses, next to what it trains.
+ *
+ * The detail screen needs the distinction and the focus screen does not, so it is a
+ * role here rather than two figures: a bench press lights the chest and shades the
+ * triceps, and shading is not a dimmer setting on lighting.
+ */
+export type PaintRole = 'lit' | 'secondary' | 'resting' | 'inert'
 
 export interface FigureGroup {
   /** The app's own union, which mirrors the library's part for part. */
@@ -60,6 +67,7 @@ export function figureGroups(input: {
   readonly parts: readonly BodyPart[]
   readonly side: BodySide
   readonly lit: readonly string[]
+  readonly secondary?: readonly string[] | undefined
   readonly inert: readonly string[]
 }): readonly FigureGroup[] {
   const groups: FigureGroup[] = []
@@ -76,22 +84,66 @@ export function figureGroups(input: {
     const drawable = paths.filter((d) => typeof d === 'string' && d !== '')
     if (drawable.length === 0) continue
 
-    groups.push({ slug, role: roleFor(slug, input.lit, input.inert), paths: drawable })
+    groups.push({
+      slug,
+      role: roleFor(slug, input.lit, input.inert, input.secondary ?? []),
+      paths: drawable,
+    })
   }
 
   return groups
 }
 
-export function roleFor(slug: string, lit: readonly string[], inert: readonly string[]): PaintRole {
+export function roleFor(
+  slug: string,
+  lit: readonly string[],
+  inert: readonly string[],
+  secondary: readonly string[] = [],
+): PaintRole {
   if (inert.includes(slug)) return 'inert'
-  return lit.includes(slug) ? 'lit' : 'resting'
+  if (lit.includes(slug)) return 'lit'
+  // Primary wins: a part that is both is what the movement trains.
+  return secondary.includes(slug) ? 'secondary' : 'resting'
+}
+
+/**
+ * Which single face to show when there is only room for one.
+ *
+ * Beside an illustration the figure is an inset, and an inset of the front for a row
+ * says nothing at all. The front leads, because most of the catalogue is visible from
+ * it and a person reads a body front-first; the back wins only when the front draws
+ * none of what is lit.
+ */
+export function sideShowing(input: {
+  readonly front: readonly BodyPart[]
+  readonly back: readonly BodyPart[]
+  readonly lit: readonly string[]
+}): BodySide {
+  if (drawsAny(input.front, 'front', input.lit)) return 'front'
+  return drawsAny(input.back, 'back', input.lit) ? 'back' : 'front'
+}
+
+/** Whether a face draws any of these muscles, hidden parts not counting. */
+export function drawsAny(
+  parts: readonly BodyPart[],
+  side: BodySide,
+  slugs: readonly string[],
+): boolean {
+  const groups = figureGroups({ parts, side, lit: slugs, inert: [] })
+  return groups.some((group) => group.role === 'lit')
 }
 
 /** The gradient and filter ids a face uses, namespaced so front and back never collide. */
 export function figureIds(side: BodySide): {
   readonly lit: string
+  readonly secondary: string
   readonly resting: string
   readonly halo: string
 } {
-  return { lit: `lit-${side}`, resting: `resting-${side}`, halo: `halo-${side}` }
+  return {
+    lit: `lit-${side}`,
+    secondary: `secondary-${side}`,
+    resting: `resting-${side}`,
+    halo: `halo-${side}`,
+  }
 }
