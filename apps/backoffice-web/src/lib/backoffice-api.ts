@@ -39,6 +39,8 @@ export type SupportOperationPage = AllfitV1Schemas['SupportOperationPage']
 export type SupportDeliveryCircuit = AllfitV1Schemas['SupportDeliveryCircuit']
 export type SupportAttentionPanel = AllfitV1Schemas['SupportAttentionPanel']
 export type SupportPersonMetadata = AllfitV1Schemas['SupportPersonMetadata']
+export type BackofficeAccountRecovery = AllfitV1Schemas['BackofficeAccountRecovery']
+export type BackofficeAccountRecoveryRequest = AllfitV1Schemas['BackofficeAccountRecoveryRequest']
 export type SupportPeopleSearch = AllfitV1Schemas['SupportPeopleSearch']
 export type ResultContract = AllfitV1Schemas['ResultContract']
 export type ResultContractPublication = AllfitV1Schemas['ResultContractPublication']
@@ -223,6 +225,53 @@ export const backofficeApi = {
     requestJson<SupportPersonMetadata>(
       `/backoffice/v1/support/people/${personId}${query({ case_reference: caseReference })}`,
       signal ? { signal } : {},
+    ),
+
+  accountRecovery: (personId: string, caseReference: string, signal?: AbortSignal) =>
+    requestJson<BackofficeAccountRecovery>(
+      `/backoffice/v1/people/${personId}/account-recovery${query({ case_reference: caseReference })}`,
+      signal ? { signal } : {},
+    ),
+
+  // Only the case travels: the person, the address and the flow come from the server.
+  startAccountRecovery: (personId: string, caseReference: string, command: BackofficeCommand) =>
+    requestJson<BackofficeAccountRecoveryRequest>(
+      `/backoffice/v1/people/${personId}/account-recoveries`,
+      {
+        method: 'POST',
+        headers: commandHeaders(command),
+        body: JSON.stringify({ case_reference: caseReference }),
+      },
+    ),
+
+  resendAccountRecovery: (
+    personId: string,
+    recoveryId: string,
+    caseReference: string,
+    command: BackofficeCommand,
+  ) =>
+    requestJson<BackofficeAccountRecoveryRequest>(
+      `/backoffice/v1/people/${personId}/account-recoveries/${recoveryId}/resends`,
+      {
+        method: 'POST',
+        headers: commandHeaders(command),
+        body: JSON.stringify({ case_reference: caseReference }),
+      },
+    ),
+
+  cancelAccountRecovery: (
+    personId: string,
+    recoveryId: string,
+    caseReference: string,
+    command: BackofficeCommand,
+  ) =>
+    requestJson<BackofficeAccountRecoveryRequest>(
+      `/backoffice/v1/people/${personId}/account-recoveries/${recoveryId}/cancellation`,
+      {
+        method: 'POST',
+        headers: commandHeaders(command),
+        body: JSON.stringify({ case_reference: caseReference }),
+      },
     ),
 
   // No case reference here, unlike the other support reads: this feed has no
@@ -534,6 +583,7 @@ function backofficeOperation(path: string, method: string): ClientOperation {
       : 'backoffice.privacy.scope_definition_list'
   }
   return (
+    peopleOperation(resolved) ??
     supportOperation(resolved) ??
     catalogOperation(resolved) ??
     platformOperation(resolved) ??
@@ -592,6 +642,19 @@ function supportOperation(route: string): ClientOperation | undefined {
   return segments.length === 4
     ? 'backoffice.support.people_search'
     : 'backoffice.support.person_metadata'
+}
+
+/** The person and the recovery vary per row, so these routes are matched by shape. */
+function peopleOperation(route: string): ClientOperation | undefined {
+  const segments = route.split('/').filter(Boolean)
+  if (segments[0] !== 'backoffice' || segments[1] !== 'v1' || segments[2] !== 'people') {
+    return undefined
+  }
+  if (segments[4] === 'account-recovery') return 'backoffice.support.account_recovery'
+  if (segments[4] !== 'account-recoveries') return undefined
+  if (segments[6] === 'resends') return 'backoffice.support.account_recovery_resend'
+  if (segments[6] === 'cancellation') return 'backoffice.support.account_recovery_cancel'
+  return 'backoffice.support.account_recovery_start'
 }
 
 /** The catalogue surface is shared, so its operations carry no product prefix. */
