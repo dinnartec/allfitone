@@ -14,6 +14,7 @@ import type { Hono } from 'hono'
 
 import {
   backofficeCatalogRoutes,
+  backofficeGlobalCatalogueRoutes,
   catalogSurfaceRoutes,
   studioCatalogRoutes,
 } from './domains/catalog/index.js'
@@ -74,6 +75,7 @@ export function mountSurfaces(app: Hono): void {
   app.route('/backoffice/v1', backofficeBreakGlassRoutes())
   app.route('/backoffice/v1', backofficePrivacyRoutes())
   app.route('/backoffice/v1', backofficeCatalogRoutes())
+  app.route('/backoffice/v1', backofficeGlobalCatalogueRoutes())
   app.route('/backoffice/v1', backofficeOrganizationRoutes())
 
   // The global catalogue is one surface, not a copy per product: it has no
