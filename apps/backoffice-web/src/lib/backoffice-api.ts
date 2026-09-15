@@ -12,6 +12,11 @@ export type PlatformDutyCode = AllfitV1Schemas['PlatformDutyCode']
 export type PlatformRoleAssignmentPage = AllfitV1Schemas['PlatformRoleAssignmentPage']
 export type PlatformDutyAssignmentPage = AllfitV1Schemas['PlatformDutyAssignmentPage']
 
+export type BackofficeGlobalCatalogue = AllfitV1Schemas['BackofficeGlobalCatalogue']
+export type GlobalCatalogueEntry = AllfitV1Schemas['GlobalCatalogueEntry']
+export type CataloguePublication = AllfitV1Schemas['CataloguePublication']
+export type CatalogueActivityTypePublication = AllfitV1Schemas['CatalogueActivityTypePublication']
+export type CatalogueMovementPublication = AllfitV1Schemas['CatalogueMovementPublication']
 export type CatalogDiscipline = AllfitV1Schemas['CatalogDiscipline']
 export type CatalogActivityType = AllfitV1Schemas['CatalogActivityType']
 export type ActivityTypeResultContract = AllfitV1Schemas['ActivityTypeResultContract']
@@ -170,6 +175,47 @@ export const backofficeApi = {
   revokePlatformDuty: (assignmentId: string, command: BackofficeCommand) =>
     requestJson<PlatformDutyAssignment>(
       `/backoffice/v1/platform/duty-assignments/${assignmentId}/revocation`,
+      { method: 'POST', headers: commandHeaders(command), body: '{}' },
+    ),
+
+  // The curator's view: published and archived alike, unlike /catalog/v1.
+  globalCatalogue: (signal?: AbortSignal) =>
+    requestJson<BackofficeGlobalCatalogue>('/backoffice/v1/catalogue', signal ? { signal } : {}),
+
+  publishCatalogueDiscipline: (publication: CataloguePublication, command: BackofficeCommand) =>
+    requestJson<GlobalCatalogueEntry>('/backoffice/v1/catalogue/disciplines', {
+      method: 'POST',
+      headers: commandHeaders(command),
+      body: JSON.stringify(publication),
+    }),
+
+  publishCatalogueActivityType: (
+    publication: CatalogueActivityTypePublication,
+    command: BackofficeCommand,
+  ) =>
+    requestJson<GlobalCatalogueEntry>('/backoffice/v1/catalogue/activity-types', {
+      method: 'POST',
+      headers: commandHeaders(command),
+      body: JSON.stringify(publication),
+    }),
+
+  publishCatalogueMovement: (
+    publication: CatalogueMovementPublication,
+    command: BackofficeCommand,
+  ) =>
+    requestJson<GlobalCatalogueEntry>('/backoffice/v1/catalogue/movements', {
+      method: 'POST',
+      headers: commandHeaders(command),
+      body: JSON.stringify(publication),
+    }),
+
+  // No body: archiving takes only which entry, so nothing else can travel with it.
+  archiveCatalogueEntry: (
+    entry: { kind: 'discipline' | 'activity_type' | 'movement'; id: string; code: string | null },
+    command: BackofficeCommand,
+  ) =>
+    requestJson<GlobalCatalogueEntry>(
+      `/backoffice/v1/catalogue/${catalogueSegment(entry.kind)}/${entry.code ?? entry.id}/archival`,
       { method: 'POST', headers: commandHeaders(command), body: '{}' },
     ),
 
@@ -583,6 +629,7 @@ function backofficeOperation(path: string, method: string): ClientOperation {
       : 'backoffice.privacy.scope_definition_list'
   }
   return (
+    catalogueOperation(resolved) ??
     peopleOperation(resolved) ??
     supportOperation(resolved) ??
     catalogOperation(resolved) ??
@@ -642,6 +689,23 @@ function supportOperation(route: string): ClientOperation | undefined {
   return segments.length === 4
     ? 'backoffice.support.people_search'
     : 'backoffice.support.person_metadata'
+}
+
+function catalogueSegment(kind: 'discipline' | 'activity_type' | 'movement'): string {
+  if (kind === 'discipline') return 'disciplines'
+  return kind === 'activity_type' ? 'activity-types' : 'movements'
+}
+
+/** The entry identifier varies per row, so the curation routes are matched by shape. */
+function catalogueOperation(route: string): ClientOperation | undefined {
+  const segments = route.split('/').filter(Boolean)
+  if (segments[0] !== 'backoffice' || segments[1] !== 'v1' || segments[2] !== 'catalogue') {
+    return undefined
+  }
+  if (segments.length === 3) return 'backoffice.catalog.global_read'
+  return segments[5] === 'archival'
+    ? 'backoffice.catalog.global_archive'
+    : 'backoffice.catalog.global_publish'
 }
 
 /** The person and the recovery vary per row, so these routes are matched by shape. */

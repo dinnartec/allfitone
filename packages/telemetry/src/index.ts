@@ -43,6 +43,9 @@ export interface TelemetryCommonProperties {
 
 export const clientOperations = [
   'backoffice.auth.attempt',
+  'backoffice.catalog.global_archive',
+  'backoffice.catalog.global_publish',
+  'backoffice.catalog.global_read',
   'backoffice.catalog.result_contract_deprecate',
   'backoffice.catalog.result_contract_publish',
   'backoffice.platform.duty_grant',
