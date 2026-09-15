@@ -429,7 +429,7 @@ test('revalidates memberships after the in-memory entry snapshot expires', async
     clock.__studioTestNow = (clock.__studioTestNow ?? 0) + 31_000
   })
   await page.getByLabel('Cambiar de organización').click()
-  await page.getByRole('option', { name: `${secondActiveMembership.display_name} · Coach` }).click()
+  await page.getByRole('option', { name: secondActiveMembership.display_name }).click()
   await expect(page).toHaveURL(`/organizations/${secondActiveMembership.organization_id}`)
   await expect
     .poll(
@@ -478,7 +478,7 @@ test('replaces the organization context without retaining the previous workspace
   await page.goto(`/organizations/${activeMembership.organization_id}`)
 
   await page.getByLabel('Cambiar de organización').click()
-  await page.getByRole('option', { name: `${secondActiveMembership.display_name} · Coach` }).click()
+  await page.getByRole('option', { name: secondActiveMembership.display_name }).click()
 
   await expect(page).toHaveURL(`/organizations/${secondActiveMembership.organization_id}`)
   const organizationContext = page.locator('[data-sidebar-organization]')
@@ -637,7 +637,7 @@ test('switches by keyboard and browser history does not restore the previous org
   await page.getByLabel('Cambiar de organización').focus()
   await page.keyboard.press('Enter')
   const secondOption = page.getByRole('option', {
-    name: `${secondActiveMembership.display_name} · Coach`,
+    name: secondActiveMembership.display_name,
   })
   await secondOption.focus()
   await page.keyboard.press('Enter')

@@ -217,7 +217,7 @@ function AccountOverview({
           </p>
         </CardContent>
         <CardFooter>
-          <div data-account-actions>
+          <div data-card-footer-actions>
             <Button onClick={onStartProfessionalSetup}>Configurar perfil profesional</Button>
           </div>
         </CardFooter>

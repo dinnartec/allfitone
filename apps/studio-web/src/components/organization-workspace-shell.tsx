@@ -136,7 +136,12 @@ function OrganizationSidebar({ basePath, pathname }: { basePath: string; pathnam
                   <SelectContent align="start">
                     {memberships.map((membership) => (
                       <SelectItem key={membership.membership_id} value={membership.organization_id}>
-                        {membership.display_name} · {membershipRoleSummary(membership.roles)}
+                        {/* The name alone. `SelectContent` is pinned to the
+                            trigger's width, which is 166px in this rail, and
+                            appending the roles took the label to 259px — so the
+                            organization name was cut off to make room for a
+                            role the badges below already show. */}
+                        {membership.display_name}
                       </SelectItem>
                     ))}
                   </SelectContent>

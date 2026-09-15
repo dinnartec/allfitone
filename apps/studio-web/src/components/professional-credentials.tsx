@@ -180,17 +180,21 @@ export function ProfessionalCredentials({
   return (
     <section data-profile-section aria-labelledby="credentials-title">
       <div data-profile-section-heading>
-        <div>
-          <p data-profile-kicker>Opcional · Personal</p>
+        <div data-profile-section-heading-text>
+          {/* No kicker. "Opcional · Personal" said what the heading and the
+              sentence under it already say, on a route that is personal by
+              definition. */}
           <h2 id="credentials-title">Credenciales profesionales</h2>
-          <p>
+          <p data-page-header-description>
             No necesitas añadir credenciales para usar Studio. Declara solo las que quieras
             presentar; declarar no significa verificar.
           </p>
         </div>
-        <Button onClick={() => setIntent({ kind: 'declare' })} disabled={!profileExists}>
-          Añadir credencial
-        </Button>
+        <div data-page-header-actions>
+          <Button onClick={() => setIntent({ kind: 'declare' })} disabled={!profileExists}>
+            Añadir credencial
+          </Button>
+        </div>
       </div>
 
       {!profileExists ? (
@@ -287,7 +291,12 @@ export function ProfessionalCredentials({
           }
         }}
       >
-        <AlertDialogContent size="sm">
+        {/* `size="default"`, not `sm`. At `sm` the Design System keeps this
+            header centred and its footer a two-column grid at every width,
+            while the sibling `Dialog` in the same feature is left-aligned with
+            a right-aligned footer — so the confirm modal read as coming from
+            another product. */}
+        <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>¿Retirar esta credencial?</AlertDialogTitle>
             <AlertDialogDescription>
@@ -343,7 +352,7 @@ function CredentialCard({
           </Badge>
         </CardAction>
       </CardHeader>
-      <CardContent>
+      <CardContent data-credential-card-body>
         <dl data-credential-details>
           <div>
             <dt>Emisor</dt>

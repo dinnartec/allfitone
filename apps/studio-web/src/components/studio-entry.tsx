@@ -202,8 +202,11 @@ export function StudioEntry() {
       />
     )
   }
+  // No step. The bootstrap call is what decides which of the nine entry screens
+  // to show, so when it fails Studio knows nothing about this person — least of
+  // all that they are on step one of a setup they may have finished years ago.
   return (
-    <StudioFrame step="identity" showLogout={false}>
+    <StudioFrame showLogout={false}>
       <div data-studio-error-stage>
         <Alert variant="danger" live="assertive">
           {/* This stage replaces the page, so its title is the page heading. */}

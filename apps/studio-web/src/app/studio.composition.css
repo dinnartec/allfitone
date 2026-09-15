@@ -44,6 +44,26 @@ menu {
   padding: 0;
 }
 
+/* The same hole, one level down. `DialogTitle` and `AlertDialogTitle` render an
+   `h2`, their descriptions render a `p`, and `EmptyDescription` renders a `p` —
+   none of them resets the browser's own block margin. Their headers already
+   declare a `gap`, and margins do not collapse inside flex or grid, so the two
+   add up: a declared 10px gap between a dialog's title and its description
+   measured 41px (10 + 16.6 + 14), and the gap to the body measured 34 (20 + 14).
+   Nothing designed those numbers.
+
+   Sweeping all 43 screens found only these carrying a browser default; every
+   other slot with a margin has a round, deliberate value. Listed rather than
+   reset app-wide for the reason given above, and belonging upstream for the
+   same reason the list reset does: Space and Backoffice have it too. */
+[data-slot='dialog-title'],
+[data-slot='dialog-description'],
+[data-slot='alert-dialog-title'],
+[data-slot='alert-dialog-description'],
+[data-slot='empty-description'] {
+  margin-block: 0;
+}
+
 /* ---------------------------------------------------------------- canvases */
 
 [data-organization-content] > *,
@@ -109,10 +129,33 @@ menu {
   margin: 0;
 }
 
-[data-profile-section-heading],
+/* A title stack beside an action, the same shape as the page header above.
+   This used to be a one-column grid shared by two different compositions: text
+   only in the membership section, text plus a button in the credential one. In
+   the grid the button was a row of its own and stretched to the full 1024px
+   canvas, which is what made the credentials tab read as a different width from
+   its two siblings even though all three measure 208-1232. */
+[data-profile-section-heading] {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--afo-space-4);
+}
+
+[data-profile-section-heading-text],
 [data-ready-later-heading] {
   display: grid;
+  min-width: 0;
   gap: var(--afo-space-2);
+}
+
+/* The grid owns the spacing, but a bare `h2` still brings the browser's own
+   17px block margin and pushes the whole stack down. The membership section
+   renders its title through `WorkspaceTitle`, which has no margin, so the two
+   sections sat 31px and 14px below the same tab strip. */
+[data-profile-section-heading-text] > h2 {
+  margin-block: 0;
 }
 
 [data-studio-header-actions],
@@ -120,7 +163,7 @@ menu {
 [data-profile-setup-actions],
 [data-team-invitation-actions],
 [data-credential-actions],
-[data-account-actions],
+[data-card-footer-actions],
 [data-profile-form-actions] {
   display: flex;
   flex-wrap: wrap;
@@ -173,6 +216,23 @@ menu {
   min-width: 0;
 }
 
+/* The trigger sizes to its content, so a 39-character organization name made it
+   356px wide inside a 255px rail — 101px of control hanging outside, guillotined
+   mid-letter by the `overflow: hidden` above. Width is placement, which this
+   file may set on a component it put in its own column.
+
+   The ellipsis belongs with it: the value already carries `overflow: hidden`
+   and `white-space: nowrap` from the Design System but not `text-overflow`, so
+   two thirds of the standard trio were in place and the name simply stopped. */
+[data-sidebar-switcher] [data-slot='select-trigger'] {
+  width: 100%;
+  min-width: 0;
+}
+
+[data-sidebar-switcher] [data-slot='select-value'] {
+  text-overflow: ellipsis;
+}
+
 /* The rule is inset from both sides; full width overshoots the rail by its
    own inline margin. */
 [data-sidebar-rule] {
@@ -215,6 +275,26 @@ menu {
 [data-organization-state] {
   width: min(100%, 42rem);
   margin-inline: auto;
+}
+
+/* The only thing on the screen, so it sits in the middle of it. The setup shell
+   is `min-h-svh` but nothing inside it grows, so this stage sat under the header
+   with 605px of empty screen below it on a phone.
+
+   The subtraction is measured, not guessed: the header is 80px and `SetupMain`
+   pads the bottom by 40px, rising to 64px from 1024px up. `align-content`
+   rather than `place-items` so the alert still fills the 42rem measure above
+   instead of shrinking to its text. */
+[data-studio-error-stage] {
+  display: grid;
+  align-content: center;
+  min-height: calc(100svh - 7.5rem);
+}
+
+@media (min-width: 1024px) {
+  [data-studio-error-stage] {
+    min-height: calc(100svh - 9rem);
+  }
 }
 
 /* No width of its own: both places that show this card centre it in a grid, and
@@ -479,8 +559,7 @@ menu {
 [data-overview-attention-list],
 [data-overview-team-list],
 [data-team-directory-card-list],
-[data-role-capability-list],
-[data-credential-history] {
+[data-role-capability-list] {
   display: grid;
   gap: var(--afo-space-3);
   list-style: none;
@@ -517,10 +596,32 @@ menu {
   gap: var(--afo-space-3);
 }
 
-/* The trigger and the panel are siblings with nothing between them: the first
-   history card's top edge sat 1px under the button's bottom edge. */
-[data-membership-history] [data-slot='collapsible-content'] {
-  margin-block-start: var(--afo-space-4);
+/* CardContent pads sideways only, so the facts, the evidence link and the
+   actions stacked flush: each one's top edge sat exactly on the last one's
+   bottom edge. */
+[data-credential-card-body] {
+  display: grid;
+  gap: var(--afo-space-4);
+}
+
+/* Two disclosures doing the same job, laid out the same way.
+   `data-credential-history` used to sit in the list rule above, so it carried a
+   12px grid gap that added to the panel's own 20px margin: its first card
+   opened 33px below the trigger while the membership one opened 21px. One grid
+   with one gap owns the spacing on both, which also matches the 20px the
+   section leaves above the trigger. */
+[data-credential-history],
+[data-membership-history] {
+  display: grid;
+  min-width: 0;
+  gap: var(--afo-space-5);
+}
+
+/* Both roots are grids now, so without this the trigger stretches to the whole
+   canvas — 1024px of ghost button for a six-word label. */
+[data-credential-history] > [data-slot='collapsible-trigger'],
+[data-membership-history] > [data-slot='collapsible-trigger'] {
+  justify-self: start;
 }
 
 
@@ -757,7 +858,8 @@ menu {
   }
 
   [data-page-header],
-  [data-profile-heading] {
+  [data-profile-heading],
+  [data-profile-section-heading] {
     flex-direction: column;
     align-items: stretch;
   }
@@ -768,7 +870,7 @@ menu {
   [data-page-header-actions],
   [data-profile-setup-actions],
   [data-profile-form-actions],
-  [data-account-actions],
+  [data-card-footer-actions],
   [data-team-invitation-actions] {
     width: 100%;
   }
@@ -781,15 +883,18 @@ menu {
   [data-team-invitation-actions] > *,
   [data-credential-actions] > *,
   [data-profile-setup-actions] > *,
-  [data-account-actions] > *,
+  [data-card-footer-actions] > *,
   [data-profile-form-actions] > * {
     flex: 1;
   }
 
-  /* The same rule, reached differently: this trigger is not in an action row,
-     it is a direct child of the collapsible, so it takes the width itself. */
-  [data-membership-history] > [data-slot='collapsible-trigger'] {
+  /* The same rule, reached differently: these triggers are not in an action
+     row, they are direct children of the collapsible, so they take the width
+     themselves. */
+  [data-membership-history] > [data-slot='collapsible-trigger'],
+  [data-credential-history] > [data-slot='collapsible-trigger'] {
     width: 100%;
+    justify-self: stretch;
   }
 
   [data-credential-evidence] {

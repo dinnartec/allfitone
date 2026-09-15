@@ -331,7 +331,12 @@ export function TeamInvitationList() {
           }
         }}
       >
-        <AlertDialogContent size="sm">
+        {/* `size="default"`, not `sm`. At `sm` the Design System keeps this
+            header centred and its footer a two-column grid at every width,
+            while the sibling `Dialog` in the same feature is left-aligned with
+            a right-aligned footer — so the confirm modal read as coming from
+            another product. */}
+        <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>¿Revocar esta invitación?</AlertDialogTitle>
             <AlertDialogDescription>

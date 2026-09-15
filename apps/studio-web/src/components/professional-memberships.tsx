@@ -41,13 +41,15 @@ export function ProfessionalMemberships({ memberships }: { memberships: Membersh
   return (
     <section data-profile-section aria-labelledby="memberships-title">
       <header data-profile-section-heading>
-        <WorkspaceEyebrow data-profile-kicker>Actividad en Studio</WorkspaceEyebrow>
-        <WorkspaceTitle as="h2" id="memberships-title">
-          Mis espacios
-        </WorkspaceTitle>
-        <p data-page-header-description>
-          Consulta tus vinculaciones. Esta vista no cambia roles ni permisos.
-        </p>
+        <div data-profile-section-heading-text>
+          <WorkspaceEyebrow data-profile-kicker>Actividad en Studio</WorkspaceEyebrow>
+          <WorkspaceTitle as="h2" id="memberships-title">
+            Mis espacios
+          </WorkspaceTitle>
+          <p data-page-header-description>
+            Consulta tus vinculaciones. Esta vista no cambia roles ni permisos.
+          </p>
+        </div>
       </header>
       <div data-profile-signals>
         <StatStrip>
