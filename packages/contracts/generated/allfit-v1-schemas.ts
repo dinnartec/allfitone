@@ -1058,6 +1058,34 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
     },
     description: 'Enrollment secrets are present only for a first-factor attempt.',
   },
+  BackofficeGlobalCatalogue: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['disciplines', 'activity_types', 'movements', 'equipment_availability'],
+    properties: {
+      disciplines: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/GlobalCatalogueEntry',
+        },
+      },
+      activity_types: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/GlobalCatalogueEntry',
+        },
+      },
+      movements: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/GlobalCatalogueEntry',
+        },
+      },
+      equipment_availability: {
+        $ref: '#/components/schemas/SupportBlockAvailability',
+      },
+    },
+  },
   BackofficeOrganizationFile: {
     type: 'object',
     additionalProperties: false,
@@ -1838,6 +1866,62 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  CatalogueActivityTypePublication: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      'A global activity type under a published discipline. There is no owner field: what Allfit publishes is global by construction.',
+    required: ['discipline_code', 'code', 'name'],
+    properties: {
+      discipline_code: {
+        type: 'string',
+        pattern: '^[a-z][a-z0-9_]{1,63}$',
+      },
+      code: {
+        type: 'string',
+        pattern: '^[a-z][a-z0-9_]{1,63}$',
+      },
+      name: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 120,
+      },
+    },
+  },
+  CatalogueMovementPublication: {
+    type: 'object',
+    additionalProperties: false,
+    description: 'A global movement, identified by its normalised name.',
+    required: ['discipline_code', 'name'],
+    properties: {
+      discipline_code: {
+        type: 'string',
+        pattern: '^[a-z][a-z0-9_]{1,63}$',
+      },
+      name: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 120,
+      },
+    },
+  },
+  CataloguePublication: {
+    type: 'object',
+    additionalProperties: false,
+    description: 'A discipline. The code is chosen once and never means anything else.',
+    required: ['code', 'name'],
+    properties: {
+      code: {
+        type: 'string',
+        pattern: '^[a-z][a-z0-9_]{1,63}$',
+      },
+      name: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 120,
+      },
+    },
+  },
   CompletenessLevel: {
     type: 'string',
     enum: ['partial', 'summary', 'detailed', 'sensor_enriched'],
@@ -2443,6 +2527,56 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       version: {
         type: 'integer',
         minimum: 1,
+      },
+    },
+  },
+  GlobalCatalogueEntry: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      'One entry of the global catalogue as its curator sees it. `in_use_count` is what already references it — templates, sessions and result contracts included — so archiving is never a blind decision. A movement has no code: it is identified by its normalised name.',
+    required: [
+      'kind',
+      'id',
+      'code',
+      'discipline_code',
+      'name',
+      'status',
+      'created_at',
+      'in_use_count',
+    ],
+    properties: {
+      kind: {
+        type: 'string',
+        enum: ['discipline', 'activity_type', 'movement'],
+      },
+      id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      code: {
+        type: ['string', 'null'],
+        pattern: '^[a-z][a-z0-9_]{1,63}$',
+      },
+      discipline_code: {
+        type: 'string',
+        pattern: '^[a-z][a-z0-9_]{1,63}$',
+      },
+      name: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 120,
+      },
+      status: {
+        type: 'string',
+        enum: ['draft', 'published', 'deprecated', 'archived'],
+      },
+      created_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      in_use_count: {
+        type: 'integer',
+        minimum: 0,
       },
     },
   },

@@ -231,6 +231,146 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/backoffice/v1/catalogue': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Read the global catalogue as its curator sees it
+     * @description `HU-BO-022`. Every global discipline, activity type and movement, published and archived alike — unlike `/catalog/v1`, which answers only what is published. Each entry says how much already depends on it, so archiving is a decision taken with the consequence in view. A gym's private content never appears here. Equipment has no table in V1 and is declared absent rather than answered as an empty list. Requires `curate_global_catalog`.
+     */
+    get: operations['readBackofficeGlobalCatalogue']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/catalogue/disciplines': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Publish a discipline in the global catalogue
+     * @description Only Allfit publishes global content. A code that is already published answers 409, and an archived code is published again only under the name it had: the code is stable and never becomes another thing.
+     */
+    post: operations['publishCatalogueDiscipline']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/catalogue/disciplines/{code}/archival': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Withdraw a discipline from the catalogue without deleting it
+     * @description Archiving removes the discipline from every search while the sessions and templates that already use it keep resolving. A discipline whose global activity types or movements are still published answers 409: they are archived first, so nothing is retired that nobody asked to retire. The command carries no body.
+     */
+    post: operations['archiveCatalogueDiscipline']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/catalogue/activity-types': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Publish a global activity type
+     * @description The activity type belongs to a published discipline and carries no owner: there is no field for one, so a gym's private content cannot be pushed into the global catalogue. A published code answers 409.
+     */
+    post: operations['publishCatalogueActivityType']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/catalogue/activity-types/{code}/archival': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Withdraw a global activity type from the catalogue
+     * @description The activity type leaves every search; the result contracts bound to it and the sessions recorded under it keep resolving. A private activity type of a gym is not found here. The command carries no body.
+     */
+    post: operations['archiveCatalogueActivityType']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/catalogue/movements': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Publish a global movement
+     * @description A movement is identified by its name, normalised: the same name written with other spacing or capitalisation is the same movement and answers 409. It belongs to a published discipline and has no owner.
+     */
+    post: operations['publishCatalogueMovement']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/catalogue/movements/{movementId}/archival': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Withdraw a global movement from the catalogue
+     * @description The movement leaves every search; the planned steps that reference it keep resolving. A movement owned by a gym or by a person is not found here. The command carries no body.
+     */
+    post: operations['archiveCatalogueMovement']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/backoffice/v1/result-contracts': {
     parameters: {
       query?: never
@@ -2776,6 +2916,42 @@ export interface components {
       data: components['schemas']['PlatformDutyAssignment'][]
       page: components['schemas']['Page']
     }
+    /** @description One entry of the global catalogue as its curator sees it. `in_use_count` is what already references it — templates, sessions and result contracts included — so archiving is never a blind decision. A movement has no code: it is identified by its normalised name. */
+    GlobalCatalogueEntry: {
+      /** @enum {string} */
+      kind: 'discipline' | 'activity_type' | 'movement'
+      id: components['schemas']['Uuid']
+      code: string | null
+      discipline_code: string
+      name: string
+      /** @enum {string} */
+      status: 'draft' | 'published' | 'deprecated' | 'archived'
+      /** Format: date-time */
+      created_at: string
+      in_use_count: number
+    }
+    BackofficeGlobalCatalogue: {
+      disciplines: components['schemas']['GlobalCatalogueEntry'][]
+      activity_types: components['schemas']['GlobalCatalogueEntry'][]
+      movements: components['schemas']['GlobalCatalogueEntry'][]
+      equipment_availability: components['schemas']['SupportBlockAvailability']
+    }
+    /** @description A discipline. The code is chosen once and never means anything else. */
+    CataloguePublication: {
+      code: string
+      name: string
+    }
+    /** @description A global activity type under a published discipline. There is no owner field: what Allfit publishes is global by construction. */
+    CatalogueActivityTypePublication: {
+      discipline_code: string
+      code: string
+      name: string
+    }
+    /** @description A global movement, identified by its normalised name. */
+    CatalogueMovementPublication: {
+      discipline_code: string
+      name: string
+    }
     CatalogDiscipline: {
       code: string
       name: string
@@ -4972,6 +5148,8 @@ export interface components {
     /** @description The case this read belongs to. A structured reference rather than free prose, so the record can be followed back to a case months later. */
     SupportCaseReference: string
     SupportPersonId: components['schemas']['Uuid']
+    /** @description The stable code of a global catalogue entry. */
+    CatalogueCode: string
     /** @description The recovery, identified by the command that started it. */
     AccountRecoveryRequestId: components['schemas']['UuidV7']
     /** @description Exactly one lookup parameter is accepted per search. */
@@ -5516,6 +5694,269 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['PlatformDutyAssignment']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  readBackofficeGlobalCatalogue: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The global catalogue with its drafts and archived entries */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['BackofficeGlobalCatalogue']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  publishCatalogueDiscipline: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CataloguePublication']
+      }
+    }
+    responses: {
+      /** @description The published discipline */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['GlobalCatalogueEntry']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  archiveCatalogueDiscipline: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        /** @description The stable code of a global catalogue entry. */
+        code: components['parameters']['CatalogueCode']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The archived discipline */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['GlobalCatalogueEntry']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  publishCatalogueActivityType: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CatalogueActivityTypePublication']
+      }
+    }
+    responses: {
+      /** @description The published activity type */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['GlobalCatalogueEntry']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  archiveCatalogueActivityType: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        /** @description The stable code of a global catalogue entry. */
+        code: components['parameters']['CatalogueCode']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The archived activity type */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['GlobalCatalogueEntry']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  publishCatalogueMovement: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CatalogueMovementPublication']
+      }
+    }
+    responses: {
+      /** @description The published movement */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['GlobalCatalogueEntry']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  archiveCatalogueMovement: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        movementId: components['schemas']['Uuid']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The archived movement */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['GlobalCatalogueEntry']
         }
       }
       400: components['responses']['BadRequest']

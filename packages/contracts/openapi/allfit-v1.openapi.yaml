@@ -692,6 +692,345 @@ paths:
           $ref: '#/components/responses/ValidationFailed'
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
+  /backoffice/v1/catalogue:
+    get:
+      tags: [Backoffice Catalogue]
+      operationId: readBackofficeGlobalCatalogue
+      x-allfit-operation: NEW-CAT-GLOBAL-PUBLISH
+      x-allfit-cache: no-store
+      summary: Read the global catalogue as its curator sees it
+      description: >-
+        `HU-BO-022`. Every global discipline, activity type and movement, published and
+        archived alike — unlike `/catalog/v1`, which answers only what is published. Each
+        entry says how much already depends on it, so archiving is a decision taken with
+        the consequence in view. A gym's private content never appears here. Equipment has
+        no table in V1 and is declared absent rather than answered as an empty list.
+        Requires `curate_global_catalog`.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+      responses:
+        '200':
+          description: The global catalogue with its drafts and archived entries
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackofficeGlobalCatalogue'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/catalogue/disciplines:
+    post:
+      tags: [Backoffice Catalogue]
+      operationId: publishCatalogueDiscipline
+      x-allfit-operation: OP-CAT-004
+      x-allfit-cache: no-store
+      summary: Publish a discipline in the global catalogue
+      description: >-
+        Only Allfit publishes global content. A code that is already published answers
+        409, and an archived code is published again only under the name it had: the code
+        is stable and never becomes another thing.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CataloguePublication'
+      responses:
+        '200':
+          description: The published discipline
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GlobalCatalogueEntry'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/catalogue/disciplines/{code}/archival:
+    post:
+      tags: [Backoffice Catalogue]
+      operationId: archiveCatalogueDiscipline
+      x-allfit-operation: OP-CAT-005
+      x-allfit-cache: no-store
+      summary: Withdraw a discipline from the catalogue without deleting it
+      description: >-
+        Archiving removes the discipline from every search while the sessions and
+        templates that already use it keep resolving. A discipline whose global activity
+        types or movements are still published answers 409: they are archived first, so
+        nothing is retired that nobody asked to retire. The command carries no body.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/CatalogueCode'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      responses:
+        '200':
+          description: The archived discipline
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GlobalCatalogueEntry'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/catalogue/activity-types:
+    post:
+      tags: [Backoffice Catalogue]
+      operationId: publishCatalogueActivityType
+      x-allfit-operation: OP-CAT-004
+      x-allfit-cache: no-store
+      summary: Publish a global activity type
+      description: >-
+        The activity type belongs to a published discipline and carries no owner: there is
+        no field for one, so a gym's private content cannot be pushed into the global
+        catalogue. A published code answers 409.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CatalogueActivityTypePublication'
+      responses:
+        '200':
+          description: The published activity type
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GlobalCatalogueEntry'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/catalogue/activity-types/{code}/archival:
+    post:
+      tags: [Backoffice Catalogue]
+      operationId: archiveCatalogueActivityType
+      x-allfit-operation: OP-CAT-005
+      x-allfit-cache: no-store
+      summary: Withdraw a global activity type from the catalogue
+      description: >-
+        The activity type leaves every search; the result contracts bound to it and the
+        sessions recorded under it keep resolving. A private activity type of a gym is not
+        found here. The command carries no body.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/CatalogueCode'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      responses:
+        '200':
+          description: The archived activity type
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GlobalCatalogueEntry'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/catalogue/movements:
+    post:
+      tags: [Backoffice Catalogue]
+      operationId: publishCatalogueMovement
+      x-allfit-operation: OP-CAT-004
+      x-allfit-cache: no-store
+      summary: Publish a global movement
+      description: >-
+        A movement is identified by its name, normalised: the same name written with other
+        spacing or capitalisation is the same movement and answers 409. It belongs to a
+        published discipline and has no owner.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CatalogueMovementPublication'
+      responses:
+        '200':
+          description: The published movement
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GlobalCatalogueEntry'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/catalogue/movements/{movementId}/archival:
+    post:
+      tags: [Backoffice Catalogue]
+      operationId: archiveCatalogueMovement
+      x-allfit-operation: OP-CAT-005
+      x-allfit-cache: no-store
+      summary: Withdraw a global movement from the catalogue
+      description: >-
+        The movement leaves every search; the planned steps that reference it keep
+        resolving. A movement owned by a gym or by a person is not found here. The command
+        carries no body.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - name: movementId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/Uuid'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      responses:
+        '200':
+          description: The archived movement
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GlobalCatalogueEntry'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
   /backoffice/v1/result-contracts:
     post:
       tags: [Backoffice Catalogue]
@@ -5535,6 +5874,14 @@ components:
       required: true
       schema:
         $ref: '#/components/schemas/Uuid'
+    CatalogueCode:
+      name: code
+      in: path
+      required: true
+      description: The stable code of a global catalogue entry.
+      schema:
+        type: string
+        pattern: '^[a-z][a-z0-9_]{1,63}$'
     AccountRecoveryRequestId:
       name: requestId
       in: path
@@ -7612,6 +7959,103 @@ components:
             $ref: '#/components/schemas/PlatformDutyAssignment'
         page:
           $ref: '#/components/schemas/Page'
+    GlobalCatalogueEntry:
+      type: object
+      additionalProperties: false
+      description: >-
+        One entry of the global catalogue as its curator sees it. `in_use_count` is what
+        already references it — templates, sessions and result contracts included — so
+        archiving is never a blind decision. A movement has no code: it is identified by
+        its normalised name.
+      required: [kind, id, code, discipline_code, name, status, created_at, in_use_count]
+      properties:
+        kind:
+          type: string
+          enum: [discipline, activity_type, movement]
+        id:
+          $ref: '#/components/schemas/Uuid'
+        code:
+          type: [string, 'null']
+          pattern: '^[a-z][a-z0-9_]{1,63}$'
+        discipline_code:
+          type: string
+          pattern: '^[a-z][a-z0-9_]{1,63}$'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        status:
+          type: string
+          enum: [draft, published, deprecated, archived]
+        created_at:
+          type: string
+          format: date-time
+        in_use_count:
+          type: integer
+          minimum: 0
+    BackofficeGlobalCatalogue:
+      type: object
+      additionalProperties: false
+      required: [disciplines, activity_types, movements, equipment_availability]
+      properties:
+        disciplines:
+          type: array
+          items:
+            $ref: '#/components/schemas/GlobalCatalogueEntry'
+        activity_types:
+          type: array
+          items:
+            $ref: '#/components/schemas/GlobalCatalogueEntry'
+        movements:
+          type: array
+          items:
+            $ref: '#/components/schemas/GlobalCatalogueEntry'
+        equipment_availability:
+          $ref: '#/components/schemas/SupportBlockAvailability'
+    CataloguePublication:
+      type: object
+      additionalProperties: false
+      description: A discipline. The code is chosen once and never means anything else.
+      required: [code, name]
+      properties:
+        code:
+          type: string
+          pattern: '^[a-z][a-z0-9_]{1,63}$'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+    CatalogueActivityTypePublication:
+      type: object
+      additionalProperties: false
+      description: >-
+        A global activity type under a published discipline. There is no owner field: what
+        Allfit publishes is global by construction.
+      required: [discipline_code, code, name]
+      properties:
+        discipline_code:
+          type: string
+          pattern: '^[a-z][a-z0-9_]{1,63}$'
+        code:
+          type: string
+          pattern: '^[a-z][a-z0-9_]{1,63}$'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+    CatalogueMovementPublication:
+      type: object
+      additionalProperties: false
+      description: A global movement, identified by its normalised name.
+      required: [discipline_code, name]
+      properties:
+        discipline_code:
+          type: string
+          pattern: '^[a-z][a-z0-9_]{1,63}$'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
     CatalogDiscipline:
       type: object
       additionalProperties: false
