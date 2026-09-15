@@ -22,6 +22,7 @@ export interface BackofficeFixture {
   organizationFiles?: OrganizationFileFixture
   teamInvitations?: TeamInvitationFixture
   accountRecovery?: AccountRecoveryFixture
+  globalCatalogue?: GlobalCatalogueFixture
   attention?: AttentionFixture
   verification?: VerificationFixture
   breakGlass?: BreakGlassFixture
@@ -1139,6 +1140,10 @@ export async function mockBackofficeApi(
       await routeAccountRecovery(route, request, fixture)
       return
     }
+    if (/^\/backoffice\/v1\/catalogue(\/[^/]+(\/[^/]+\/archival)?)?$/.test(request.path)) {
+      await routeGlobalCatalogue(route, request, fixture)
+      return
+    }
     if (request.path.startsWith('/backoffice/v1/support/')) {
       await routeSupport(route, request, fixture)
       return
@@ -1709,6 +1714,163 @@ async function routeOrganizationDirectory(
 function maskedContact(email: string): string {
   const [local = '', domain = ''] = email.split('@')
   return `${local.slice(0, 1)}***@${domain}`
+}
+
+/**
+ * The global catalogue as its curator sees it (`HU-BO-022`). Publishing and archiving
+ * move it the way the real commands do — a published code is refused, an archived one is
+ * republished only under the same name, and a discipline with published content is not
+ * archived — so a screen that guessed would fail here.
+ */
+export interface GlobalCatalogueFixture {
+  refusal?: { status: number; code: string }
+  commandRefusal?: { status: number; code: string }
+  lostCommands?: number
+  disciplines: CatalogueEntryFixture[]
+  activityTypes: CatalogueEntryFixture[]
+  movements: CatalogueEntryFixture[]
+}
+
+export interface CatalogueEntryFixture {
+  kind: 'discipline' | 'activity_type' | 'movement'
+  id: string
+  code: string | null
+  discipline_code: string
+  name: string
+  status: 'draft' | 'published' | 'deprecated' | 'archived'
+  created_at: string
+  in_use_count: number
+}
+
+export function catalogueEntry(
+  overrides: Partial<CatalogueEntryFixture> = {},
+): CatalogueEntryFixture {
+  const kind = overrides.kind ?? 'discipline'
+  return {
+    kind,
+    id: nextAssignmentId(),
+    code: kind === 'movement' ? null : 'test_global_yoga',
+    discipline_code: 'test_global_yoga',
+    name: 'Yoga',
+    status: 'published',
+    created_at: '2026-09-16T12:00:00.000Z',
+    in_use_count: 0,
+    ...overrides,
+  }
+}
+
+export function globalCatalogueFixture(
+  overrides: Partial<GlobalCatalogueFixture> = {},
+): GlobalCatalogueFixture {
+  return { disciplines: [], activityTypes: [], movements: [], ...overrides }
+}
+
+async function routeGlobalCatalogue(
+  route: Route,
+  request: MockRequest,
+  fixture: BackofficeFixture,
+): Promise<void> {
+  const state = fixture.globalCatalogue ?? globalCatalogueFixture()
+  fixture.globalCatalogue = state
+  const segments = request.path.split('/').filter(Boolean)
+
+  if (request.method === 'GET') {
+    if (state.refusal) {
+      await fulfillProblem(route, state.refusal.status, state.refusal.code)
+      return
+    }
+    await fulfill(route, 200, {
+      disciplines: state.disciplines,
+      activity_types: state.activityTypes,
+      movements: state.movements,
+      equipment_availability: 'not_modelled',
+    })
+    return
+  }
+
+  if (state.lostCommands && state.lostCommands > 0) {
+    state.lostCommands -= 1
+    await route.abort('failed')
+    return
+  }
+  if (state.commandRefusal) {
+    await fulfillProblem(route, state.commandRefusal.status, state.commandRefusal.code)
+    return
+  }
+
+  const body = (request.body ?? {}) as Record<string, unknown>
+  const kind =
+    segments[3] === 'disciplines'
+      ? 'discipline'
+      : segments[3] === 'activity-types'
+        ? 'activity_type'
+        : 'movement'
+  const entries =
+    kind === 'discipline'
+      ? state.disciplines
+      : kind === 'activity_type'
+        ? state.activityTypes
+        : state.movements
+
+  if (segments.length === 4) {
+    const name = typeof body.name === 'string' ? body.name.trim() : ''
+    const code = typeof body.code === 'string' ? body.code : null
+    const disciplineCode =
+      typeof body.discipline_code === 'string' ? body.discipline_code : (code ?? '')
+    if (name === '' || (kind !== 'movement' && code === null)) {
+      await fulfillProblem(route, 422, 'validation-failed')
+      return
+    }
+    const existing = entries.find((entry) =>
+      kind === 'movement' ? entry.name.toLowerCase() === name.toLowerCase() : entry.code === code,
+    )
+    if (existing?.status === 'published') {
+      await fulfillProblem(route, 409, 'conflict')
+      return
+    }
+    if (existing) {
+      if (existing.name !== name) {
+        await fulfillProblem(route, 409, 'conflict')
+        return
+      }
+      existing.status = 'published'
+      await fulfill(route, 200, existing)
+      return
+    }
+    const published = catalogueEntry({
+      kind,
+      code,
+      discipline_code: disciplineCode,
+      name,
+      status: 'published',
+    })
+    entries.push(published)
+    await fulfill(route, 200, published)
+    return
+  }
+
+  const target = entries.find((entry) =>
+    kind === 'movement' ? entry.id === segments[4] : entry.code === segments[4],
+  )
+  if (!target) {
+    await fulfillProblem(route, 404, 'not-found')
+    return
+  }
+  if (target.status !== 'published') {
+    await fulfillProblem(route, 409, 'conflict')
+    return
+  }
+  if (
+    kind === 'discipline' &&
+    [...state.activityTypes, ...state.movements].some(
+      (entry) => entry.discipline_code === target.code && entry.status === 'published',
+    )
+  ) {
+    await fulfillProblem(route, 409, 'conflict')
+    return
+  }
+  target.status = 'archived'
+  await fulfill(route, 200, target)
 }
 
 async function routeOrganizationFile(
