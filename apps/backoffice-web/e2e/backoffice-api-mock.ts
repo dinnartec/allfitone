@@ -20,6 +20,7 @@ export interface BackofficeFixture {
   organizationDirectory?: OrganizationDirectoryFixture
   organizationHandover?: OrganizationHandoverFixture
   organizationFiles?: OrganizationFileFixture
+  teamInvitations?: TeamInvitationFixture
   attention?: AttentionFixture
   verification?: VerificationFixture
   breakGlass?: BreakGlassFixture
@@ -558,6 +559,51 @@ export function renewalDue(overrides: Partial<RenewalDueFixture> = {}): RenewalD
 }
 
 /**
+ * A gym's team invitations. The mock reproduces the command's rules: a live
+ * invitation is redelivered as itself, an expired resendable one is replaced by a new
+ * one Allfit signs while the old one stops being resendable, and anything else is a
+ * conflict.
+ */
+export interface TeamInvitationFixture {
+  refusal?: { status: number; code: string }
+  resendRefusal?: { status: number; code: string }
+  /** Resends dropped by the network before any answer, consumed one per attempt. */
+  lostResends?: number
+  lists: Record<string, TeamInvitationRecordFixture[]>
+}
+
+export interface TeamInvitationRecordFixture {
+  invitation_id: string
+  state: 'pending' | 'expired' | 'accepted' | 'rejected' | 'revoked'
+  proposed_role_code: 'admin' | 'coach' | 'staff'
+  contact_hint: string
+  created_at: string
+  expires_at: string
+  issued_by: 'member' | 'allfit'
+  reissues_invitation_id: string | null
+  resendable: boolean
+  last_resent_at: string | null
+}
+
+export function teamInvitationRecord(
+  overrides: Partial<TeamInvitationRecordFixture> = {},
+): TeamInvitationRecordFixture {
+  return {
+    invitation_id: nextAssignmentId(),
+    state: 'pending',
+    proposed_role_code: 'coach',
+    contact_hint: 'l***@example.test',
+    created_at: new Date(Date.now() - 86_400_000).toISOString(),
+    expires_at: new Date(Date.now() + 6 * 86_400_000).toISOString(),
+    issued_by: 'member',
+    reissues_invitation_id: null,
+    resendable: true,
+    last_resent_at: null,
+    ...overrides,
+  }
+}
+
+/**
  * The attention panel. Which notices are withheld is the database's decision, so
  * the fixture states the answer rather than simulating duties.
  */
@@ -1043,6 +1089,14 @@ export async function mockBackofficeApi(
     }
     if (request.path === '/backoffice/v1/access-events') {
       await routeAccessLog(route, request, fixture)
+      return
+    }
+    if (
+      /^\/backoffice\/v1\/organizations\/[^/]+\/team-invitations(\/[^/]+\/resends)?$/.test(
+        request.path,
+      )
+    ) {
+      await routeTeamInvitations(route, request, fixture)
       return
     }
     if (request.method === 'GET' && /^\/backoffice\/v1\/organizations\/[^/]+$/.test(request.path)) {
@@ -1670,6 +1724,71 @@ async function routeOrganizationFile(
     return
   }
   await fulfill(route, 200, record)
+}
+
+async function routeTeamInvitations(
+  route: Route,
+  request: MockRequest,
+  fixture: BackofficeFixture,
+): Promise<void> {
+  const state = fixture.teamInvitations ?? { lists: {} }
+  fixture.teamInvitations = state
+  const segments = request.path.split('/').filter(Boolean)
+  const organizationId = segments[3] ?? ''
+  const items = state.lists[organizationId] ?? []
+
+  if (request.method === 'GET') {
+    if (state.refusal) {
+      await fulfillProblem(route, state.refusal.status, state.refusal.code)
+      return
+    }
+    await fulfill(route, 200, { organization_id: organizationId, items, truncated: false })
+    return
+  }
+
+  if (state.lostResends && state.lostResends > 0) {
+    state.lostResends -= 1
+    await route.abort('failed')
+    return
+  }
+  if (state.resendRefusal) {
+    await fulfillProblem(route, state.resendRefusal.status, state.resendRefusal.code)
+    return
+  }
+  const target = items.find((item) => item.invitation_id === segments[5])
+  if (!target) {
+    await fulfillProblem(route, 404, 'not-found')
+    return
+  }
+  if (!target.resendable) {
+    await fulfillProblem(route, 409, 'conflict')
+    return
+  }
+
+  const now = new Date()
+  const renewedUntil = new Date(now.getTime() + 7 * 86_400_000).toISOString()
+  if (target.state === 'pending') {
+    target.expires_at = renewedUntil
+    target.last_resent_at = now.toISOString()
+    await fulfill(route, 200, { ...target, outcome: 'redelivered' })
+    return
+  }
+
+  const reissued: TeamInvitationRecordFixture = {
+    ...target,
+    invitation_id: nextAssignmentId(),
+    state: 'pending',
+    created_at: now.toISOString(),
+    expires_at: renewedUntil,
+    issued_by: 'allfit',
+    reissues_invitation_id: target.invitation_id,
+    resendable: true,
+    last_resent_at: null,
+  }
+  target.resendable = false
+  target.last_resent_at = now.toISOString()
+  state.lists[organizationId] = [reissued, ...items]
+  await fulfill(route, 200, { ...reissued, outcome: 'reissued' })
 }
 
 async function routeOrganizationHandover(
