@@ -226,8 +226,11 @@ beforeEach(() => {
 
 describe('Backoffice organization API contract', () => {
   test('T-ORG-API-01 mounts every Backoffice organization operation with its contract method', () => {
+    // A gym's team invitations live under this path but belong to identity, which mounts them.
+    const identityOwned = ['NEW-IDN-RESEND', 'OP-IDN-045']
     const contract = allfitV1ContractManifest.operations
       .filter((operation) => operation.path.startsWith('/backoffice/v1/organizations'))
+      .filter((operation) => !identityOwned.includes(operation.allfitOperation))
       .map((operation) => `${operation.method} ${colonPath(operation.path)}`)
       .sort()
     const mounted = backofficeOrganizationRoutes()

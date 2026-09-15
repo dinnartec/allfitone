@@ -48,12 +48,24 @@ import {
   type StudioOwnershipInvitationService,
 } from './application/ownership-invitations.js'
 import { createOwnershipInvitationDatabase } from './infrastructure/ownership-invitations.js'
+import {
+  createTeamInvitationResendService,
+  type TeamInvitationResendService,
+} from './application/team-invitation-resends.js'
+import { createTeamInvitationResendDatabase } from './infrastructure/team-invitation-resends.js'
 
 let cachedOwnership: StudioOwnershipInvitationService | undefined
 
 export function studioOwnershipInvitationService(): StudioOwnershipInvitationService {
   cachedOwnership ??= createStudioOwnershipInvitationService(createOwnershipInvitationDatabase())
   return cachedOwnership
+}
+
+let cachedResends: TeamInvitationResendService | undefined
+
+export function teamInvitationResendService(): TeamInvitationResendService {
+  cachedResends ??= createTeamInvitationResendService(createTeamInvitationResendDatabase())
+  return cachedResends
 }
 
 let cached: StudioSessionService | undefined

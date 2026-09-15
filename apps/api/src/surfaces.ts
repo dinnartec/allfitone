@@ -20,6 +20,7 @@ import {
 import {
   backofficeCredentialVerificationRoutes,
   backofficeIdentityRoutes,
+  backofficeTeamInvitationRoutes,
   spaceIdentityRoutes,
   spaceOnboardingRoutes,
   studioIdentityRoutes,
@@ -65,6 +66,7 @@ export function mountSurfaces(app: Hono): void {
   app.route('/space/v1', spaceOnboardingRoutes())
   app.route('/backoffice/v1', backofficeIdentityRoutes())
   app.route('/backoffice/v1', backofficeCredentialVerificationRoutes())
+  app.route('/backoffice/v1', backofficeTeamInvitationRoutes())
   app.route('/backoffice/v1', backofficePlatformAccessRoutes())
   app.route('/backoffice/v1', backofficeSupportMetadataRoutes())
   app.route('/backoffice/v1', backofficeBreakGlassRoutes())
