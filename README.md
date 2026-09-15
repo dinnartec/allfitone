@@ -113,6 +113,19 @@ the story ships, which is also the honest way to test it.
 Duties are temporary by design: every Backoffice screen refuses an operator whose
 duty expired, so "it worked yesterday" is the expected experience, not a bug.
 
+Backoffice reads what Studio and Space write, so a local database that never ran
+them shows empty screens. This fills that in, through the real commands wherever
+one exists, and refuses any database that is not local:
+
+```bash
+bun packages/db/scripts/seed-local-demo.ts
+```
+
+It leaves a gym with a live and a lapsed team invitation, three people — one
+without a verified email, so recovery fails closed as it should — and a
+credential waiting in the verification queue. Everything it writes is named
+`Demo`, and running it twice changes nothing.
+
 ## Commands
 
 Run from the repository root. Turbo runs each task across the workspaces and
