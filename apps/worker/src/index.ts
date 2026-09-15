@@ -1,5 +1,8 @@
 import { createResendEmailSender, constantTimeBearerMatches } from '@allfitone/notifications'
-import { createBackofficeAuthMaintenanceFromEnv } from '@allfitone/auth-provider'
+import {
+  createAccountRecoveryDeliveryFromEnv,
+  createBackofficeAuthMaintenanceFromEnv,
+} from '@allfitone/auth-provider'
 import { createPostgresQueue } from '@allfitone/queue'
 import type { TelemetryEventFor } from '@allfitone/telemetry'
 import { telemetryEnvironmentFromRuntime } from '@allfitone/telemetry/node'
@@ -22,17 +25,27 @@ import {
   createBackofficeAuthCleanupDatabase,
   type BackofficeAuthBatchResult,
 } from './backoffice-auth.js'
+import {
+  createAccountRecoveryBatchProcessor,
+  createAccountRecoveryDeliveryDatabase,
+  type AccountRecoveryBatchResult,
+} from './account-recovery.js'
 import { workerOperationalLogs, workerTelemetry } from './telemetry.js'
 
 export interface WorkerJobProcessors {
   invitationDelivery(): Promise<InvitationBatchResult>
   backofficeAuthCleanup(): Promise<BackofficeAuthBatchResult>
+  accountRecoveryDelivery(): Promise<AccountRecoveryBatchResult>
 }
 
 export interface WorkerBatchResult {
   invitations: InvitationBatchResult
   backofficeAuthentication: BackofficeAuthBatchResult
+  accountRecovery: AccountRecoveryBatchResult
 }
+
+type WorkerJob =
+  'account_recovery_delivery' | 'backoffice_auth_cleanup' | 'invitation_delivery' | 'outbox_batch'
 
 let cachedProcessors: WorkerJobProcessors | undefined
 
@@ -52,53 +65,36 @@ export function createWorkerApp(
     const logs = injectedLogs ?? workerOperationalLogs()
     const processors = injectedProcessors ?? processorsFromEnvironment()
     const batchStartedAt = performance.now()
-    let invitations: InvitationBatchResult
-    let backofficeAuthentication: BackofficeAuthBatchResult
     try {
-      const invitationStartedAt = performance.now()
-      try {
-        invitations = await processors.invitationDelivery()
-        captureJob(
-          telemetry,
-          logs,
-          'invitation_delivery',
-          outcomeForResult(invitations),
-          invitationStartedAt,
-          invitations.claimed,
-        )
-      } catch {
-        captureJob(telemetry, logs, 'invitation_delivery', 'failed', invitationStartedAt)
-        throw new Error('invitation_delivery_failed')
-      }
+      const invitations = await runJob(
+        telemetry,
+        logs,
+        'invitation_delivery',
+        processors.invitationDelivery,
+      )
+      const backofficeAuthentication = await runJob(
+        telemetry,
+        logs,
+        'backoffice_auth_cleanup',
+        processors.backofficeAuthCleanup,
+      )
+      const accountRecovery = await runJob(
+        telemetry,
+        logs,
+        'account_recovery_delivery',
+        processors.accountRecoveryDelivery,
+      )
 
-      const backofficeStartedAt = performance.now()
-      try {
-        backofficeAuthentication = await processors.backofficeAuthCleanup()
-        captureJob(
-          telemetry,
-          logs,
-          'backoffice_auth_cleanup',
-          outcomeForResult(backofficeAuthentication),
-          backofficeStartedAt,
-          backofficeAuthentication.claimed,
-        )
-      } catch {
-        captureJob(telemetry, logs, 'backoffice_auth_cleanup', 'failed', backofficeStartedAt)
-        throw new Error('backoffice_auth_cleanup_failed')
-      }
-
-      const result: WorkerBatchResult = { invitations, backofficeAuthentication }
-      const aggregateOutcome =
-        invitations.deadOrDelayed > 0 || backofficeAuthentication.deadOrDelayed > 0
-          ? 'retrying'
-          : 'completed'
+      const result: WorkerBatchResult = { invitations, backofficeAuthentication, accountRecovery }
+      const jobs = [invitations, backofficeAuthentication, accountRecovery]
+      const aggregateOutcome = jobs.some((job) => job.deadOrDelayed > 0) ? 'retrying' : 'completed'
       captureJob(
         telemetry,
         logs,
         'outbox_batch',
         aggregateOutcome,
         batchStartedAt,
-        invitations.claimed + backofficeAuthentication.claimed,
+        jobs.reduce((total, job) => total + job.claimed, 0),
       )
       console.info(
         JSON.stringify({
@@ -120,10 +116,29 @@ export function createWorkerApp(
   return app
 }
 
+/** Jobs run one after another: a failed job stops the batch and is reported as its own. */
+async function runJob<T extends { claimed: number; deadOrDelayed: number }>(
+  telemetry: ServerTelemetryAdapter,
+  logs: OperationalLogAdapter,
+  job: Exclude<WorkerJob, 'outbox_batch'>,
+  processor: () => Promise<T>,
+): Promise<T> {
+  const startedAt = performance.now()
+  let result: T
+  try {
+    result = await processor()
+  } catch {
+    captureJob(telemetry, logs, job, 'failed', startedAt)
+    throw new Error(`${job}_failed`)
+  }
+  captureJob(telemetry, logs, job, outcomeForResult(result), startedAt, result.claimed)
+  return result
+}
+
 function captureJob(
   telemetry: ServerTelemetryAdapter,
   logs: OperationalLogAdapter,
-  job: 'backoffice_auth_cleanup' | 'invitation_delivery' | 'outbox_batch',
+  job: WorkerJob,
   outcome: 'completed' | 'failed' | 'retrying',
   startedAt: number,
   itemCount?: number,
@@ -196,6 +211,20 @@ function processorsFromEnvironment(): WorkerJobProcessors {
     database: createBackofficeAuthCleanupDatabase(sql),
     provider: createBackofficeAuthMaintenanceFromEnv(),
   })
+  // Off until the environment has the Space key: requests stay "initiated" meanwhile.
+  const recoveryEnabled = process.env.ACCOUNT_RECOVERY_DELIVERY_ENABLED === 'true'
+  const accountRecovery = createAccountRecoveryBatchProcessor({
+    queue,
+    database: createAccountRecoveryDeliveryDatabase(sql),
+    provider: recoveryEnabled
+      ? createAccountRecoveryDeliveryFromEnv()
+      : {
+          sendRecovery: async () => {
+            throw new Error('Account recovery delivery is disabled')
+          },
+        },
+    deliveryEnabled: recoveryEnabled,
+  })
   cachedProcessors = {
     // One delivery job for both kinds: the same page, the same switch and the same
     // expiry, which the team batch already runs for every pending invitation.
@@ -211,6 +240,7 @@ function processorsFromEnvironment(): WorkerJobProcessors {
       }
     },
     backofficeAuthCleanup: backofficeAuthentication,
+    accountRecoveryDelivery: accountRecovery,
   }
   return cachedProcessors
 }

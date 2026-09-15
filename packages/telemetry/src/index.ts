@@ -254,7 +254,11 @@ export type TelemetryEvent =
   | TelemetryEventOf<
       'worker.job.completed.v1',
       {
-        job: 'backoffice_auth_cleanup' | 'invitation_delivery' | 'outbox_batch'
+        job:
+          | 'account_recovery_delivery'
+          | 'backoffice_auth_cleanup'
+          | 'invitation_delivery'
+          | 'outbox_batch'
         outcome: 'completed' | 'failed' | 'retrying'
         duration_ms: number
         item_count?: number
@@ -425,7 +429,12 @@ function validateSpecific(name: TelemetryEventName, properties: Record<string, u
     case 'worker.job.completed.v1':
       return (
         includes(
-          ['backoffice_auth_cleanup', 'invitation_delivery', 'outbox_batch'] as const,
+          [
+            'account_recovery_delivery',
+            'backoffice_auth_cleanup',
+            'invitation_delivery',
+            'outbox_batch',
+          ] as const,
           properties.job,
         ) &&
         includes(['completed', 'failed', 'retrying'] as const, properties.outcome) &&

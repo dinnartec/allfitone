@@ -6,6 +6,7 @@ import type { ServerTelemetryAdapter } from '@allfitone/telemetry/posthog-node'
 import type { OperationalLogAdapter } from '@allfitone/telemetry/posthog-otlp-logs'
 import type { InvitationBatchResult } from './invitations.js'
 import type { BackofficeAuthBatchResult } from './backoffice-auth.js'
+import type { AccountRecoveryBatchResult } from './account-recovery.js'
 
 type WorkerEvent = TelemetryEventFor<'worker.job.completed.v1'>
 
@@ -37,29 +38,22 @@ test('runs the batch after authenticating the Vercel cron', async () => {
   await expect(response.json()).resolves.toEqual({
     invitations: invitationResult(),
     backofficeAuthentication: backofficeResult(),
+    accountRecovery: recoveryResult(),
   })
-  expect(captured).toHaveLength(3)
-  expect(captured).toContainEqual(
-    expect.objectContaining({
-      event: 'worker.job.completed.v1',
-      properties: expect.objectContaining({
-        job: 'invitation_delivery',
-        outcome: 'completed',
-        item_count: 0,
+  expect(captured).toHaveLength(4)
+  for (const job of [
+    'invitation_delivery',
+    'backoffice_auth_cleanup',
+    'account_recovery_delivery',
+  ]) {
+    expect(captured).toContainEqual(
+      expect.objectContaining({
+        event: 'worker.job.completed.v1',
+        properties: expect.objectContaining({ job, outcome: 'completed', item_count: 0 }),
       }),
-    }),
-  )
-  expect(captured).toContainEqual(
-    expect.objectContaining({
-      event: 'worker.job.completed.v1',
-      properties: expect.objectContaining({
-        job: 'backoffice_auth_cleanup',
-        outcome: 'completed',
-        item_count: 0,
-      }),
-    }),
-  )
-  expect(captured[2]).toMatchObject({
+    )
+  }
+  expect(captured[3]).toMatchObject({
     event: 'worker.job.completed.v1',
     properties: { job: 'outbox_batch', outcome: 'completed', item_count: 0 },
   })
@@ -74,7 +68,7 @@ test('marks individual and aggregate jobs as retrying when work was delayed', as
     shutdown: async () => undefined,
   }
   const processors = successfulProcessors()
-  processors.invitationDelivery = async () => invitationResult({ claimed: 2, deadOrDelayed: 1 })
+  processors.accountRecoveryDelivery = async () => recoveryResult({ claimed: 2, deadOrDelayed: 1 })
 
   const response = await createWorkerApp(processors, telemetry, operationalLogs()).request(
     '/cron/outbox',
@@ -83,15 +77,18 @@ test('marks individual and aggregate jobs as retrying when work was delayed', as
 
   expect(response.status).toBe(200)
   expect(captured.map(({ properties }) => [properties?.job, properties?.outcome])).toEqual([
-    ['invitation_delivery', 'retrying'],
+    ['invitation_delivery', 'completed'],
     ['backoffice_auth_cleanup', 'completed'],
+    ['account_recovery_delivery', 'retrying'],
     ['outbox_batch', 'retrying'],
   ])
+  expect(captured[3]?.properties.item_count).toBe(2)
 })
 
 test('emits failed job and aggregate events without unreliable item counts', async () => {
   const captured: WorkerEvent[] = []
   const logged: unknown[] = []
+  let recoveryRuns = 0
   const telemetry: ServerTelemetryAdapter = {
     capture: (event) => {
       if (event.event === 'worker.job.completed.v1') captured.push(event)
@@ -100,6 +97,10 @@ test('emits failed job and aggregate events without unreliable item counts', asy
   }
   const processors = successfulProcessors()
   processors.backofficeAuthCleanup = async () => Promise.reject(new Error('provider unavailable'))
+  processors.accountRecoveryDelivery = async () => {
+    recoveryRuns += 1
+    return recoveryResult()
+  }
 
   const response = await createWorkerApp(processors, telemetry, operationalLogs(logged)).request(
     '/cron/outbox',
@@ -107,6 +108,7 @@ test('emits failed job and aggregate events without unreliable item counts', asy
   )
 
   expect(response.status).toBe(503)
+  expect(recoveryRuns).toBe(0)
   expect(captured.map(({ properties }) => [properties?.job, properties?.outcome])).toEqual([
     ['invitation_delivery', 'completed'],
     ['backoffice_auth_cleanup', 'failed'],
@@ -153,6 +155,7 @@ function successfulProcessors() {
   return {
     invitationDelivery: async () => invitationResult(),
     backofficeAuthCleanup: async () => backofficeResult(),
+    accountRecoveryDelivery: async () => recoveryResult(),
   }
 }
 
@@ -164,6 +167,12 @@ function backofficeResult(
   overrides: Partial<BackofficeAuthBatchResult> = {},
 ): BackofficeAuthBatchResult {
   return { expired: 0, claimed: 0, completed: 0, deadOrDelayed: 0, skipped: 0, ...overrides }
+}
+
+function recoveryResult(
+  overrides: Partial<AccountRecoveryBatchResult> = {},
+): AccountRecoveryBatchResult {
+  return { claimed: 0, delivered: 0, deadOrDelayed: 0, skipped: 0, ...overrides }
 }
 
 function operationalLogs(captured: unknown[] = []): OperationalLogAdapter {
