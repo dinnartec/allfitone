@@ -53,6 +53,18 @@ import {
   type TeamInvitationResendService,
 } from './application/team-invitation-resends.js'
 import { createTeamInvitationResendDatabase } from './infrastructure/team-invitation-resends.js'
+import {
+  createAccountRecoveryService,
+  type AccountRecoveryService,
+} from './application/account-recovery.js'
+import { createAccountRecoveryDatabase } from './infrastructure/account-recovery.js'
+
+let cachedRecoveries: AccountRecoveryService | undefined
+
+export function accountRecoveryService(): AccountRecoveryService {
+  cachedRecoveries ??= createAccountRecoveryService(createAccountRecoveryDatabase())
+  return cachedRecoveries
+}
 
 let cachedOwnership: StudioOwnershipInvitationService | undefined
 

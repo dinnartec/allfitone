@@ -18,6 +18,7 @@ import {
   studioCatalogRoutes,
 } from './domains/catalog/index.js'
 import {
+  backofficeAccountRecoveryRoutes,
   backofficeCredentialVerificationRoutes,
   backofficeIdentityRoutes,
   backofficeTeamInvitationRoutes,
@@ -67,6 +68,7 @@ export function mountSurfaces(app: Hono): void {
   app.route('/backoffice/v1', backofficeIdentityRoutes())
   app.route('/backoffice/v1', backofficeCredentialVerificationRoutes())
   app.route('/backoffice/v1', backofficeTeamInvitationRoutes())
+  app.route('/backoffice/v1', backofficeAccountRecoveryRoutes())
   app.route('/backoffice/v1', backofficePlatformAccessRoutes())
   app.route('/backoffice/v1', backofficeSupportMetadataRoutes())
   app.route('/backoffice/v1', backofficeBreakGlassRoutes())
