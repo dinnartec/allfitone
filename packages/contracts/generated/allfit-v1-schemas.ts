@@ -1246,6 +1246,111 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  BackofficeTeamInvitation: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      "A gym's team invitation as Allfit's support sees it. The contact is a hint, never the address, and no person is named. `resendable` is the database's answer: a live invitation, or an expired one that was not already reissued and has no equal invitation pending.",
+    required: [
+      'invitation_id',
+      'state',
+      'proposed_role_code',
+      'contact_hint',
+      'created_at',
+      'expires_at',
+      'issued_by',
+      'reissues_invitation_id',
+      'resendable',
+      'last_resent_at',
+    ],
+    properties: {
+      invitation_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      state: {
+        type: 'string',
+        enum: ['pending', 'expired', 'accepted', 'rejected', 'revoked'],
+      },
+      proposed_role_code: {
+        type: 'string',
+        description: 'A team invitation proposes one of the roles a gym can invite to.',
+        enum: ['admin', 'coach', 'staff'],
+      },
+      contact_hint: {
+        type: 'string',
+        maxLength: 260,
+      },
+      created_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      expires_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      issued_by: {
+        type: 'string',
+        description: '`member` when the gym sent it; `allfit` when Allfit reissued an expired one.',
+        enum: ['member', 'allfit'],
+      },
+      reissues_invitation_id: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/UuidV7',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      resendable: {
+        type: 'boolean',
+      },
+      last_resent_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+    },
+  },
+  BackofficeTeamInvitationList: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['organization_id', 'items', 'truncated'],
+    properties: {
+      organization_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      items: {
+        type: 'array',
+        maxItems: 50,
+        items: {
+          $ref: '#/components/schemas/BackofficeTeamInvitation',
+        },
+      },
+      truncated: {
+        type: 'boolean',
+      },
+    },
+  },
+  BackofficeTeamInvitationResend: {
+    description:
+      'The invitation that went out. `redelivered` is the same invitation sent again; `reissued` is a new identical one that replaces an expired invitation.',
+    allOf: [
+      {
+        $ref: '#/components/schemas/BackofficeTeamInvitation',
+      },
+      {
+        type: 'object',
+        required: ['outcome'],
+        properties: {
+          outcome: {
+            type: 'string',
+            enum: ['redelivered', 'reissued'],
+          },
+        },
+      },
+    ],
+  },
   BreakGlassApproval: {
     type: 'object',
     additionalProperties: false,

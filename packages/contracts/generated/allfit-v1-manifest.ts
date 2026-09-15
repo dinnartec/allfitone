@@ -126,6 +126,20 @@ export const allfitV1ContractManifest = {
     },
     {
       method: 'GET',
+      path: '/backoffice/v1/organizations/{organizationId}/team-invitations',
+      operationId: 'listBackofficeTeamInvitations',
+      allfitOperation: 'NEW-IDN-RESEND',
+      responses: ['200', '400', '401', '403', '404', '503'],
+    },
+    {
+      method: 'POST',
+      path: '/backoffice/v1/organizations/{organizationId}/team-invitations/{invitationId}/resends',
+      operationId: 'resendBackofficeTeamInvitation',
+      allfitOperation: 'OP-IDN-045',
+      responses: ['200', '400', '401', '403', '404', '409', '415', '422', '429', '503'],
+    },
+    {
+      method: 'GET',
       path: '/backoffice/v1/platform/duty-assignments',
       operationId: 'listBackofficePlatformDuties',
       allfitOperation: 'OP-SUP-011',

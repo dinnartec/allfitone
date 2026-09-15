@@ -520,6 +520,46 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/backoffice/v1/organizations/{organizationId}/team-invitations': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Read a gym's team invitations to resend one
+     * @description `HU-BO-011`. The 50 newest team invitations of an organization, each with its state and whether it can be resent. Contacts are hints and no person is named, so the read records no access. Requires `diagnose_support_metadata`.
+     */
+    get: operations['listBackofficeTeamInvitations']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/organizations/{organizationId}/team-invitations/{invitationId}/resends': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Send a team invitation again
+     * @description A live invitation is sent again as it is. An expired one is replaced by a new identical invitation that Allfit signs, and the expired one never works again. An accepted, declined or revoked invitation, one already reissued, or one with an equal invitation pending answers 409. Resending never changes the gym, the contact or the role, and the destination limit Studio enforces applies: 429. The command carries no body.
+     */
+    post: operations['resendBackofficeTeamInvitation']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/backoffice/v1/organizations/{organizationId}/cancellation': {
     parameters: {
       query?: never
@@ -2182,6 +2222,41 @@ export interface components {
       } | null
       /** Format: email */
       owner_email: string
+    }
+    /** @description A gym's team invitation as Allfit's support sees it. The contact is a hint, never the address, and no person is named. `resendable` is the database's answer: a live invitation, or an expired one that was not already reissued and has no equal invitation pending. */
+    BackofficeTeamInvitation: {
+      invitation_id: components['schemas']['UuidV7']
+      /** @enum {string} */
+      state: 'pending' | 'expired' | 'accepted' | 'rejected' | 'revoked'
+      /**
+       * @description A team invitation proposes one of the roles a gym can invite to.
+       * @enum {string}
+       */
+      proposed_role_code: 'admin' | 'coach' | 'staff'
+      contact_hint: string
+      /** Format: date-time */
+      created_at: string
+      /** Format: date-time */
+      expires_at: string
+      /**
+       * @description `member` when the gym sent it; `allfit` when Allfit reissued an expired one.
+       * @enum {string}
+       */
+      issued_by: 'member' | 'allfit'
+      reissues_invitation_id: components['schemas']['UuidV7'] | null
+      resendable: boolean
+      /** Format: date-time */
+      last_resent_at: string | null
+    }
+    BackofficeTeamInvitationList: {
+      organization_id: components['schemas']['Uuid']
+      items: components['schemas']['BackofficeTeamInvitation'][]
+      truncated: boolean
+    }
+    /** @description The invitation that went out. `redelivered` is the same invitation sent again; `reissued` is a new identical one that replaces an expired invitation. */
+    BackofficeTeamInvitationResend: components['schemas']['BackofficeTeamInvitation'] & {
+      /** @enum {string} */
+      outcome: 'redelivered' | 'reissued'
     }
     OrganizationHandover: {
       organization_id: components['schemas']['Uuid']
@@ -5839,6 +5914,76 @@ export interface operations {
       409: components['responses']['Conflict']
       415: components['responses']['UnsupportedMediaType']
       422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listBackofficeTeamInvitations: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+      }
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The organization's team invitations, newest first */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['BackofficeTeamInvitationList']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  resendBackofficeTeamInvitation: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+        invitationId: components['schemas']['UuidV7']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The invitation that went out, and whether it was redelivered or reissued */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['BackofficeTeamInvitationResend']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
+      429: components['responses']['RateLimited']
       503: components['responses']['UpstreamUnavailable']
     }
   }
