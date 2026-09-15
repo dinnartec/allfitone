@@ -809,6 +809,151 @@ export type Database = {
           },
         ]
       }
+      identity_action_events: {
+        Row: {
+          actor_duty_assignment_id: string | null
+          actor_kind: string
+          actor_person_id: string | null
+          case_reference: string | null
+          delivery_channel: string | null
+          event_type: string
+          id: string
+          occurred_at: string
+          request_id: string
+          result_code: string | null
+        }
+        Insert: {
+          actor_duty_assignment_id?: string | null
+          actor_kind: string
+          actor_person_id?: string | null
+          case_reference?: string | null
+          delivery_channel?: string | null
+          event_type: string
+          id?: string
+          occurred_at?: string
+          request_id: string
+          result_code?: string | null
+        }
+        Update: {
+          actor_duty_assignment_id?: string | null
+          actor_kind?: string
+          actor_person_id?: string | null
+          case_reference?: string | null
+          delivery_channel?: string | null
+          event_type?: string
+          id?: string
+          occurred_at?: string
+          request_id?: string
+          result_code?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_identity_action_events_actor'
+            columns: ['actor_person_id']
+            isOneToOne: false
+            referencedRelation: 'people'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'fk_identity_action_events_request'
+            columns: ['request_id']
+            isOneToOne: false
+            referencedRelation: 'identity_action_requests'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      identity_action_requests: {
+        Row: {
+          access_account_id: string
+          action_kind: Database['identity']['Enums']['identity_action_kind']
+          cancelled_at: string | null
+          case_reference: string | null
+          confirmed_at: string | null
+          contact_fingerprint: string
+          contact_hint: string
+          created_at: string
+          delivered_at: string | null
+          delivery_channel: string
+          expires_at: string
+          failed_at: string | null
+          failure_code: string | null
+          id: string
+          initiated_by_duty_assignment_id: string | null
+          initiated_by_kind: string
+          initiated_by_person_id: string
+          person_id: string
+          status: Database['identity']['Enums']['identity_action_status']
+          updated_at: string
+        }
+        Insert: {
+          access_account_id: string
+          action_kind: Database['identity']['Enums']['identity_action_kind']
+          cancelled_at?: string | null
+          case_reference?: string | null
+          confirmed_at?: string | null
+          contact_fingerprint: string
+          contact_hint: string
+          created_at?: string
+          delivered_at?: string | null
+          delivery_channel: string
+          expires_at: string
+          failed_at?: string | null
+          failure_code?: string | null
+          id: string
+          initiated_by_duty_assignment_id?: string | null
+          initiated_by_kind: string
+          initiated_by_person_id: string
+          person_id: string
+          status?: Database['identity']['Enums']['identity_action_status']
+          updated_at?: string
+        }
+        Update: {
+          access_account_id?: string
+          action_kind?: Database['identity']['Enums']['identity_action_kind']
+          cancelled_at?: string | null
+          case_reference?: string | null
+          confirmed_at?: string | null
+          contact_fingerprint?: string
+          contact_hint?: string
+          created_at?: string
+          delivered_at?: string | null
+          delivery_channel?: string
+          expires_at?: string
+          failed_at?: string | null
+          failure_code?: string | null
+          id?: string
+          initiated_by_duty_assignment_id?: string | null
+          initiated_by_kind?: string
+          initiated_by_person_id?: string
+          person_id?: string
+          status?: Database['identity']['Enums']['identity_action_status']
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_identity_action_requests_account'
+            columns: ['access_account_id']
+            isOneToOne: false
+            referencedRelation: 'access_accounts'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'fk_identity_action_requests_initiator'
+            columns: ['initiated_by_person_id']
+            isOneToOne: false
+            referencedRelation: 'people'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'fk_identity_action_requests_person'
+            columns: ['person_id']
+            isOneToOne: false
+            referencedRelation: 'people'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       invitation_intents: {
         Row: {
           created_at: string
@@ -1427,6 +1572,18 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      account_recovery_contact_fingerprint: {
+        Args: { p_email: string }
+        Returns: string
+      }
+      account_recovery_projection: {
+        Args: { p_request_id: string }
+        Returns: Json
+      }
+      account_recovery_unavailable_reason: {
+        Args: { p_person_id: string }
+        Returns: string
+      }
       activate_person: {
         Args: {
           p_account_id: string
@@ -1461,6 +1618,22 @@ export type Database = {
         }
         Returns: undefined
       }
+      cancel_account_recovery: {
+        Args: {
+          p_actor_person_id: string
+          p_actor_session_id: string
+          p_case_reference: string
+          p_command_id: string
+          p_idempotency_key: string
+          p_person_id: string
+          p_request_hash: string
+          p_request_id: string
+        }
+        Returns: {
+          replayed: boolean
+          result: Json
+        }[]
+      }
       complete_backoffice_authentication: {
         Args: {
           p_access_token_expires_at: string
@@ -1474,6 +1647,10 @@ export type Database = {
           replayed: boolean
           session_id: string
         }[]
+      }
+      consume_account_recovery_send: {
+        Args: { p_person_id: string }
+        Returns: undefined
       }
       consume_staff_invitation_rate_limit: {
         Args: {
@@ -1611,6 +1788,10 @@ export type Database = {
         Returns: number
       }
       expire_staff_invitations: { Args: { p_limit?: number }; Returns: number }
+      fail_account_recovery_delivery: {
+        Args: { p_event_id: string }
+        Returns: undefined
+      }
       get_my_professional_context: {
         Args: { p_person_id: string; p_request_id: string }
         Returns: Json
@@ -1798,6 +1979,14 @@ export type Database = {
           result: Json
         }[]
       }
+      prepare_account_recovery_delivery: {
+        Args: { p_event_id: string }
+        Returns: {
+          contact: string
+          delivery_state: string
+          request_id: string
+        }[]
+      }
       prepare_backoffice_auth_cleanup: {
         Args: { p_event_id: string }
         Returns: {
@@ -1867,6 +2056,15 @@ export type Database = {
           replayed: boolean
         }[]
       }
+      read_account_recovery: {
+        Args: {
+          p_actor_person_id: string
+          p_actor_session_id: string
+          p_case_reference: string
+          p_person_id: string
+        }
+        Returns: Json
+      }
       read_current_onboarding: {
         Args: { p_account_id: string }
         Returns: {
@@ -1878,6 +2076,14 @@ export type Database = {
           status: string
           username: string
         }[]
+      }
+      record_account_recovery_access: {
+        Args: { p_actor_person_id: string; p_person_id: string }
+        Returns: undefined
+      }
+      record_account_recovery_delivery: {
+        Args: { p_event_id: string; p_expires_at: string }
+        Returns: undefined
       }
       record_adult_eligibility: {
         Args: {
@@ -1909,6 +2115,10 @@ export type Database = {
         }
         Returns: string
       }
+      require_account_recovery_assistant: {
+        Args: { p_actor_person_id: string; p_actor_session_id: string }
+        Returns: string
+      }
       require_credential_verifier: {
         Args: { p_actor_person_id: string; p_actor_session_id: string }
         Returns: undefined
@@ -1920,6 +2130,22 @@ export type Database = {
       require_professional_actor: {
         Args: { p_person_id: string }
         Returns: undefined
+      }
+      resend_account_recovery: {
+        Args: {
+          p_actor_person_id: string
+          p_actor_session_id: string
+          p_case_reference: string
+          p_command_id: string
+          p_idempotency_key: string
+          p_person_id: string
+          p_request_hash: string
+          p_request_id: string
+        }
+        Returns: {
+          replayed: boolean
+          result: Json
+        }[]
       }
       resend_team_invitation: {
         Args: {
@@ -2051,6 +2277,21 @@ export type Database = {
         }
         Returns: boolean
       }
+      start_account_recovery: {
+        Args: {
+          p_actor_person_id: string
+          p_actor_session_id: string
+          p_case_reference: string
+          p_command_id: string
+          p_idempotency_key: string
+          p_person_id: string
+          p_request_hash: string
+        }
+        Returns: {
+          replayed: boolean
+          result: Json
+        }[]
+      }
       start_backoffice_authentication_attempt: {
         Args: {
           p_access_account_id: string
@@ -2116,6 +2357,9 @@ export type Database = {
       backoffice_authentication_attempt_status:
         'pending_enrollment' | 'pending_challenge' | 'completed' | 'failed' | 'expired'
       eligibility_result: 'pass' | 'fail' | 'review_required' | 'unknown'
+      identity_action_kind: 'account_recovery'
+      identity_action_status:
+        'initiated' | 'awaiting_verification' | 'confirmed' | 'expired' | 'cancelled' | 'failed'
       invitation_intent_kind:
         'membership' | 'service_relationship' | 'program_assignment' | 'ownership'
       invitation_intent_status: 'pending' | 'accepted' | 'rejected' | 'revoked' | 'expired'
@@ -3638,6 +3882,15 @@ export const Constants = {
         'expired',
       ],
       eligibility_result: ['pass', 'fail', 'review_required', 'unknown'],
+      identity_action_kind: ['account_recovery'],
+      identity_action_status: [
+        'initiated',
+        'awaiting_verification',
+        'confirmed',
+        'expired',
+        'cancelled',
+        'failed',
+      ],
       invitation_intent_kind: [
         'membership',
         'service_relationship',
