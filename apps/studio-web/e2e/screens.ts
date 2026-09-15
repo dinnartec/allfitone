@@ -297,6 +297,10 @@ interface InvitationOptions {
   resolve?: { status: number; body: unknown }
   decision?: { status: number; body: unknown }
   decisionOutcome?: 'accepted' | 'rejected'
+  /** No space yet, so accepting is a setup step and the screen shows the bar. */
+  newPerson?: boolean
+  /** No session: the invitation still resolves, but deciding needs a sign-in. */
+  signedOut?: boolean
 }
 
 function invitationFixture(options: InvitationOptions = {}): StudioApiFixture {
@@ -309,7 +313,8 @@ function invitationFixture(options: InvitationOptions = {}): StudioApiFixture {
 
   return createStudioApiFixture({
     session,
-    memberships: [activeMembership],
+    signedOut: Boolean(options.signedOut),
+    memberships: options.newPerson ? [] : [activeMembership],
     intercept: async (request) => {
       if (request.path === '/studio/v1/invitations/resolve') {
         if (options.stallResolve) await new Promise((resolve) => setTimeout(resolve, 15_000))
@@ -467,6 +472,27 @@ export const SCREENS: Screen[] = [
     fixture: () => invitationFixture(),
   },
   {
+    // What an invitee with no session sees — the "Entrar para decidir" view.
+    // Every other invitation screen here was swept signed in, so the first thing
+    // a person without an account meets had never been through any of the sweeps.
+    stories: 'HU-085 / HU-086 · decide on a team invitation before signing in',
+    path: invitationWithToken,
+    fixture: () => invitationFixture({ signedOut: true }),
+    // An h1 proves nothing here: the organization name is the heading whether or
+    // not a session exists. Only the signed-out view offers this action.
+    settled: async (page) => {
+      await settledByHeading(page)
+      await expect(page.getByRole('link', { name: 'Entrar para decidir' })).toBeVisible()
+    },
+  },
+  {
+    // The same screen for someone with no space yet: accepting is their second
+    // setup step, so it carries the progress bar the member's version does not.
+    stories: 'HU-085 / HU-086 · decide on a team invitation as a new person',
+    path: invitationWithToken,
+    fixture: () => invitationFixture({ newPerson: true }),
+  },
+  {
     stories: 'invitation · activate the identity first',
     path: invitationWithToken,
     fixture: () => invitationFixture({ registrationIncomplete: true }),
@@ -500,6 +526,17 @@ export const SCREENS: Screen[] = [
     stories: 'invitation · the invitation could not be opened',
     path: invitationWithToken,
     fixture: () => invitationFixture({ resolve: { status: 503, body: error('unavailable') } }),
+  },
+  {
+    // The same stage carries a different message after too many attempts, and
+    // only that one tells the person to wait rather than retry.
+    stories: 'invitation · too many attempts to open the invitation',
+    path: invitationWithToken,
+    fixture: () => invitationFixture({ resolve: { status: 429, body: error('rate-limited') } }),
+    settled: async (page) => {
+      await settledByHeading(page)
+      await expect(page.getByText(/Se hicieron demasiados intentos/)).toBeVisible()
+    },
   },
 
   // --- `/organizations/[id]` · the workspace and the states that replace it ---

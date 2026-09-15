@@ -1,7 +1,6 @@
 'use client'
 
-import { Alert, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
-import { Badge } from '@allfitone/react/components/badge'
+import { Alert, AlertAction, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
 import { Button, buttonVariants } from '@allfitone/react/components/button'
 import { Card, CardContent } from '@allfitone/react/components/card'
 import {
@@ -11,8 +10,10 @@ import {
   SetupPanelDescription,
   SetupPanelEyebrow,
   SetupPanelIntro,
+  SetupPanelNote,
   SetupPanelTitle,
 } from '@allfitone/react/components/setup-shell'
+import { FoundationIcon } from '@allfitone/react/icons'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 
@@ -36,7 +37,13 @@ import { invitationRoleLabel } from '@/lib/team-invitations'
 type Flow =
   | { kind: 'loading' }
   | { kind: 'invalid' }
-  | { kind: 'ready'; token: string; invitation: TeamInvitationPresentation; authenticated: boolean }
+  | {
+      kind: 'ready'
+      token: string
+      invitation: TeamInvitationPresentation
+      authenticated: boolean
+      onboarding: boolean
+    }
   | {
       kind: 'activation'
       token: string
@@ -46,7 +53,7 @@ type Flow =
     }
   | { kind: 'mismatch'; invitation: TeamInvitationPresentation }
   | { kind: 'rejected'; organizationName: string }
-  | { kind: 'error'; message: string }
+  | { kind: 'error'; title: string; message: string }
 
 export function TeamInvitationDecision() {
   const router = useRouter()
@@ -76,7 +83,7 @@ export function TeamInvitationDecision() {
         ),
       ])
       if (!sessionResult.authenticated) {
-        setFlow({ kind: 'ready', token, invitation, authenticated: false })
+        setFlow({ kind: 'ready', token, invitation, authenticated: false, onboarding: false })
         return
       }
       if (sessionResult.session.registration_status === 'registration_incomplete') {
@@ -94,7 +101,13 @@ export function TeamInvitationDecision() {
         })
         return
       }
-      setFlow({ kind: 'ready', token, invitation, authenticated: true })
+      setFlow({
+        kind: 'ready',
+        token,
+        invitation,
+        authenticated: true,
+        onboarding: await isOnboarding(),
+      })
     } catch (error) {
       if (error instanceof StudioApiError && error.status === 404) {
         clearPendingInvitationToken()
@@ -103,10 +116,14 @@ export function TeamInvitationDecision() {
       }
       setFlow({
         kind: 'error',
+        title: 'No pudimos abrir la invitación',
+        // Not a repeat of the title: a rejected link answers 404 and lands on
+        // the unavailable stage instead, so reaching here means the link is not
+        // what failed — which is the one thing worth telling this person.
         message:
           error instanceof StudioApiError && error.status === 429
             ? 'Se hicieron demasiados intentos. Espera un momento antes de volver a abrir la invitación.'
-            : 'No pudimos consultar la invitación en este momento.',
+            : 'No fue el enlace: el servicio no está disponible en este momento.',
       })
     }
   }, [])
@@ -149,7 +166,13 @@ export function TeamInvitationDecision() {
         clearPendingInvitationToken()
         setFlow({ kind: 'invalid' })
       } else {
-        setFlow({ kind: 'error', message: 'No pudimos guardar tu decisión. Inténtalo de nuevo.' })
+        setFlow({
+          kind: 'error',
+          title: 'No pudimos guardar tu decisión',
+          // The decision carries a command id that survives a retry, so
+          // repeating it cannot record the answer twice.
+          message: 'Vuelve a intentarlo. Si ya se había registrado, no se duplicará.',
+        })
       }
     } finally {
       setDeciding(undefined)
@@ -162,12 +185,13 @@ export function TeamInvitationDecision() {
       <ActivationForm
         attempt={flow.attempt}
         identity={flow.identity}
-        onComplete={() =>
+        onComplete={async () =>
           setFlow({
             kind: 'ready',
             token: flow.token,
             invitation: flow.invitation,
             authenticated: true,
+            onboarding: await isOnboarding(),
           })
         }
         onSessionExpired={() =>
@@ -176,6 +200,7 @@ export function TeamInvitationDecision() {
             token: flow.token,
             invitation: flow.invitation,
             authenticated: false,
+            onboarding: false,
           })
         }
         onRetryAttempt={async () => {
@@ -187,15 +212,20 @@ export function TeamInvitationDecision() {
   }
   if (flow.kind === 'invalid') {
     return (
+      // The only terminal stage that offered no way out. Every path here clears
+      // the stored token first or never had one, so returning to `/` cannot
+      // bounce back to `/invitations`, and `/` routes each person on its own.
       <InvitationMessage
         title="Esta invitación ya no está disponible"
-        description="Puede haber vencido, sido revocada o ya haberse decidido."
-      />
+        description="Puede haber vencido, sido revocada o ya haberse decidido. Si aún quieres unirte, pide a quien te invitó que te envíe una nueva."
+      >
+        <Button onClick={() => router.replace('/')}>Volver a Studio</Button>
+      </InvitationMessage>
     )
   }
   if (flow.kind === 'error') {
     return (
-      <InvitationMessage title="No pudimos abrir la invitación" description={flow.message}>
+      <InvitationMessage title={flow.title} description={flow.message}>
         <Button onClick={() => void bootstrap()}>Reintentar</Button>
       </InvitationMessage>
     )
@@ -222,14 +252,16 @@ export function TeamInvitationDecision() {
   }
 
   const intent = flow.invitation.intents[0]
-  // No step. Deciding on an invitation is not Studio setup: the link arrives by
-  // email and reaches people at any point in their life as a user, including
-  // someone who already belongs to three organizations. The bar also marked
-  // identity as the *current* step for a session whose registration is already
-  // complete. Where the identity step is real — an invitee who has not
-  // activated yet — `ActivationForm` renders it with its own frame.
+  // The same screen serves two people. For someone with no space yet, accepting
+  // is how they get their first one, so this is step two of their setup and the
+  // bar says so — it follows the identity step `ActivationForm` shows just
+  // before. For someone who already belongs to an organization it is not setup
+  // at all, and the bar would claim a position they are not in.
   return (
-    <StudioFrame showLogout={flow.authenticated}>
+    <StudioFrame
+      showLogout={flow.authenticated}
+      {...(flow.onboarding ? { step: 'space' as const } : {})}
+    >
       <SetupPanel>
         <SetupPanelIntro>
           <SetupPanelEyebrow>Invitación de equipo</SetupPanelEyebrow>
@@ -244,6 +276,16 @@ export function TeamInvitationDecision() {
             Revisa la propuesta antes de decidir: aceptarla crea solo una membresía de equipo en
             Studio.
           </SetupPanelDescription>
+          {/* An instruction, not an action or a status. As a warning badge in the
+              action row it read as a second button, and "el correo invitado"
+              invites an address rather than a person; the wording now matches
+              the "sent to another account" stage it so often follows. */}
+          {flow.authenticated ? null : (
+            <SetupPanelNote>
+              <FoundationIcon name="person" decorative />
+              Entra con el correo que recibió la invitación.
+            </SetupPanelNote>
+          )}
         </SetupPanelIntro>
         <SetupPanelContent>
           <Card>
@@ -286,7 +328,6 @@ export function TeamInvitationDecision() {
               >
                 Entrar para decidir
               </a>
-              <Badge variant="warning">Debes usar el correo invitado</Badge>
             </SetupPanelActions>
           )}
         </SetupPanelContent>
@@ -317,11 +358,32 @@ function InvitationMessage({
             {title}
           </AlertTitle>
           <AlertDescription>{description}</AlertDescription>
-          {children}
+          {/* In the slot, not loose. Passed through `children`, the action
+              auto-placed into the icon's column and sized it — the fault fixed
+              in fifteen other alerts, missed here because the button arrives
+              from the call site rather than being written inside `<Alert>`. */}
+          {children ? <AlertAction>{children}</AlertAction> : null}
         </Alert>
       </div>
     </StudioFrame>
   )
+}
+
+/**
+ * Whether this person holds no active space yet, which is what makes accepting
+ * an invitation a setup step for them.
+ *
+ * It never blocks the decision. The progress bar is orientation, not access: if
+ * the read fails, the screen still offers Accept and Reject and simply makes no
+ * claim about which step the person is on.
+ */
+async function isOnboarding(): Promise<boolean> {
+  try {
+    const { items } = await studioApi.memberships()
+    return !items.some((membership) => membership.status === 'active')
+  } catch {
+    return false
+  }
 }
 
 function formatDate(value: string): string {
