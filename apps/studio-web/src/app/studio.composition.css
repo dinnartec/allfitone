@@ -500,6 +500,26 @@ menu {
   margin-inline: 0;
 }
 
+/* Studio renders these lists itself, so nothing was styling them: every `dt`
+   and `dd` in the product came out at the same 14px, the same weight 400 and
+   the same colour, which leaves a definition list unreadable as one — the term
+   and its value were indistinguishable.
+
+   The label takes the treatment the Design System already gives a label above a
+   value in `StatStripItem`, through its own `--afo-typography-label-*` tokens,
+   rather than a weight invented here. */
+[data-team-invitation-summary] dt,
+[data-team-member-facts] dt,
+[data-credential-details] dt {
+  font-family: var(--afo-typography-label-font-family);
+  font-size: var(--afo-font-size-xs);
+  font-weight: var(--afo-typography-label-font-weight);
+  line-height: var(--afo-typography-label-line-height);
+  letter-spacing: var(--afo-typography-label-letter-spacing);
+  text-transform: uppercase;
+  color: var(--afo-color-text-muted);
+}
+
 /* The card is the table row stacked, so every value keeps the name its column
    had. The label track sizes to its widest word, which lines the values up
    down the card instead of leaving each one to start wherever its label ends. */

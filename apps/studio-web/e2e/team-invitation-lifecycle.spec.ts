@@ -70,10 +70,10 @@ test('removes the fragment before rendering and keeps the token only in the tab'
 
   await page.goto(`/invitations#token=${TOKEN}`)
 
+  // The heading is the organization's name on its own: a sentence wrapped
+  // around a variable-length name took this title to six lines.
   await expect(
-    page.getByRole('heading', {
-      name: `${activeMembership.display_name} quiere sumarte a su equipo.`,
-    }),
+    page.getByRole('heading', { level: 1, name: activeMembership.display_name }),
   ).toBeVisible()
   expect(new URL(page.url()).hash).toBe('')
   expect(await page.evaluate(() => Object.values(sessionStorage))).toContain(TOKEN)

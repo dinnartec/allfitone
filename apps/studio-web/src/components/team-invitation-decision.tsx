@@ -222,16 +222,26 @@ export function TeamInvitationDecision() {
   }
 
   const intent = flow.invitation.intents[0]
+  // No step. Deciding on an invitation is not Studio setup: the link arrives by
+  // email and reaches people at any point in their life as a user, including
+  // someone who already belongs to three organizations. The bar also marked
+  // identity as the *current* step for a session whose registration is already
+  // complete. Where the identity step is real — an invitee who has not
+  // activated yet — `ActivationForm` renders it with its own frame.
   return (
-    <StudioFrame step="identity" showLogout={flow.authenticated}>
+    <StudioFrame showLogout={flow.authenticated}>
       <SetupPanel>
         <SetupPanelIntro>
           <SetupPanelEyebrow>Invitación de equipo</SetupPanelEyebrow>
-          <SetupPanelTitle>
-            {flow.invitation.organization.display_name} quiere sumarte a su equipo.
-          </SetupPanelTitle>
+          {/* The organization is the headline, not a phrase wrapped around it.
+              Inside the sentence, a 39-character name took this title to six
+              lines and 346px; the verb belongs in the description. */}
+          <SetupPanelTitle>{flow.invitation.organization.display_name}</SetupPanelTitle>
+          {/* The eyebrow above already says this is a team invitation and the
+              title says who sent it, so an opening sentence repeating both only
+              spent a third "equipo" in five lines. */}
           <SetupPanelDescription>
-            Revisa la propuesta antes de decidir. Aceptarla crea solo una membresía de equipo en
+            Revisa la propuesta antes de decidir: aceptarla crea solo una membresía de equipo en
             Studio.
           </SetupPanelDescription>
         </SetupPanelIntro>
@@ -239,10 +249,6 @@ export function TeamInvitationDecision() {
           <Card>
             <CardContent>
               <dl data-team-invitation-summary>
-                <div>
-                  <dt>Organización</dt>
-                  <dd>{flow.invitation.organization.display_name}</dd>
-                </div>
                 <div>
                   <dt>Responsable</dt>
                   <dd>{flow.invitation.organization.responsible_party.name}</dd>
@@ -298,8 +304,11 @@ function InvitationMessage({
   description: string
   children?: ReactNode
 }) {
+  // No step either: this frame is shared by four terminal stages — invalid,
+  // mismatch, rejected and error — so it told someone who had just declined an
+  // invitation that they were on step one of three of a setup with no next step.
   return (
-    <StudioFrame step="identity" showLogout={false}>
+    <StudioFrame showLogout={false}>
       <div data-studio-error-stage>
         <Alert variant="warning" live="polite">
           {/* Shared by the invalid, mismatch, rejected and error stages. Each
@@ -316,7 +325,5 @@ function InvitationMessage({
 }
 
 function formatDate(value: string): string {
-  return new Intl.DateTimeFormat('es-CO', { dateStyle: 'long', timeStyle: 'short' }).format(
-    new Date(value),
-  )
+  return new Intl.DateTimeFormat('es-CO', { dateStyle: 'long' }).format(new Date(value))
 }
