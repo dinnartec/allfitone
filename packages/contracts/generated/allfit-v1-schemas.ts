@@ -1270,6 +1270,114 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  MovementDetail: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'id',
+      'discipline_code',
+      'name',
+      'aliases',
+      'muscles',
+      'equipment',
+      'instructions',
+      'variants',
+    ],
+    properties: {
+      id: {
+        type: 'string',
+        format: 'uuid',
+      },
+      discipline_code: {
+        type: 'string',
+      },
+      name: {
+        type: 'string',
+      },
+      aliases: {
+        type: 'array',
+        description:
+          'Other names the same movement goes by, including the English one, which is how a lot of people search. Only the locale being read.',
+        items: {
+          type: 'string',
+        },
+      },
+      muscles: {
+        type: 'array',
+        description: 'What it works, the primary ones first.',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['code', 'name', 'primary'],
+          properties: {
+            code: {
+              type: 'string',
+            },
+            name: {
+              type: 'string',
+            },
+            primary: {
+              type: 'boolean',
+              description:
+                'What the movement trains, as opposed to what it merely uses. A squat is quadriceps and glutes before it is lower back.',
+            },
+          },
+        },
+      },
+      equipment: {
+        type: 'array',
+        items: {
+          type: 'string',
+        },
+      },
+      instructions: {
+        type: 'array',
+        description:
+          'How it is done, in the order it is done. Curated content reviewed before it ships: a badly written step is an injury, not a typo.',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['position', 'text'],
+          properties: {
+            position: {
+              type: 'integer',
+              minimum: 1,
+            },
+            text: {
+              type: 'string',
+            },
+          },
+        },
+      },
+      variants: {
+        type: 'array',
+        description: 'What to do instead, and why it is worth doing instead.',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['id', 'name', 'relation', 'note'],
+          properties: {
+            id: {
+              type: 'string',
+              format: 'uuid',
+            },
+            name: {
+              type: 'string',
+            },
+            relation: {
+              type: 'string',
+              enum: ['variant', 'regression', 'progression'],
+            },
+            note: {
+              type: ['string', 'null'],
+              description:
+                'Said for the person reading — «more upper chest» — not the name of the relation, which is what `relation` is for.',
+            },
+          },
+        },
+      },
+    },
+  },
   MuscleTerm: {
     type: 'object',
     additionalProperties: false,

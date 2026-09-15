@@ -70,6 +70,13 @@ export const allfitV1ContractManifest = {
     },
     {
       method: 'GET',
+      path: '/catalog/v1/movements/{movementId}',
+      operationId: 'readMovement',
+      allfitOperation: 'OP-CAT-010',
+      responses: ['200', '400', '401', '403', '404', '503'],
+    },
+    {
+      method: 'GET',
       path: '/catalog/v1/muscles',
       operationId: 'listMuscles',
       allfitOperation: 'OP-CAT-015',

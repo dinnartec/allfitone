@@ -1550,6 +1550,28 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/catalog/v1/movements/{movementId}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Read one movement, whole
+     * @description Everything the detail screen draws, in one call: other names it goes by, what it works and what it merely uses, what it needs, how it is done, and what to do instead. Five calls would mean a screen that draws itself five times.
+     *
+     *     **A movement nobody can see answers the same as one that does not exist.** Telling them apart would let identifiers be walked to learn what exists.
+     */
+    get: operations['readMovement']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/catalog/v1/equipment': {
     parameters: {
       query?: never
@@ -2337,6 +2359,37 @@ export interface components {
       muscles: string[]
       /** @description The equipment codes this movement is compatible with, the required one first. Compatibility, never inventory or availability. */
       equipment: string[]
+    }
+    MovementDetail: {
+      /** Format: uuid */
+      id: string
+      discipline_code: string
+      name: string
+      /** @description Other names the same movement goes by, including the English one, which is how a lot of people search. Only the locale being read. */
+      aliases: string[]
+      /** @description What it works, the primary ones first. */
+      muscles: {
+        code: string
+        name: string
+        /** @description What the movement trains, as opposed to what it merely uses. A squat is quadriceps and glutes before it is lower back. */
+        primary: boolean
+      }[]
+      equipment: string[]
+      /** @description How it is done, in the order it is done. Curated content reviewed before it ships: a badly written step is an injury, not a typo. */
+      instructions: {
+        position: number
+        text: string
+      }[]
+      /** @description What to do instead, and why it is worth doing instead. */
+      variants: {
+        /** Format: uuid */
+        id: string
+        name: string
+        /** @enum {string} */
+        relation: 'variant' | 'regression' | 'progression'
+        /** @description Said for the person reading — «more upper chest» — not the name of the relation, which is what `relation` is for. */
+        note: string | null
+      }[]
     }
     CatalogueTerm: {
       code: string
@@ -7342,6 +7395,34 @@ export interface operations {
       400: components['responses']['BadRequest']
       401: components['responses']['Unauthenticated']
       403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  readMovement: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        movementId: components['schemas']['Uuid']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The movement */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['MovementDetail']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
       503: components['responses']['UpstreamUnavailable']
     }
   }

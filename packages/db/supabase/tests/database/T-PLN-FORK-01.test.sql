@@ -138,11 +138,14 @@ select is(
   (select content_hash from planning.program_versions where id = :'global_version'),
   'T-PLN-FORK-06 the copy hashes to what the original hashed to');
 
--- Weeks are calendar weeks, so the first one is the week that contains today.
+-- Weeks are calendar weeks in **the person's** zone, which is the one the assignment
+-- was taken in. Comparing against `current_date` compared against the server's, and
+-- those are different dates for five hours every night: this failed on a Sunday
+-- evening in Bogotá, when UTC had already rolled into Monday and Bogotá had not.
 select is(
   (select min(week_starts_on) from planning.planned_sessions
     where person_id = '019e6000-0000-7000-8000-000000000001'),
-  date_trunc('week', current_date::timestamp)::date,
+  date_trunc('week', (clock_timestamp() at time zone 'America/Bogota'))::date,
   'T-PLN-FORK-07 week one is the calendar week the person is standing in');
 
 select is(
