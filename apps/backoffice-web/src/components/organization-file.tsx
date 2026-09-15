@@ -62,6 +62,8 @@ import {
 } from '@/lib/organization-file'
 import { formatInstant } from '@/lib/platform-access'
 
+import { OrganizationTeamInvitations } from './organization-team-invitations'
+
 type LoadState = 'loading' | 'ready' | 'failed'
 
 export function OrganizationFile({ organizationId }: { organizationId: string }) {
@@ -221,6 +223,11 @@ export function OrganizationFile({ organizationId }: { organizationId: string })
           ) : null}
         </CardContent>
       </Card>
+
+      {/* A gym nobody claimed has no team yet, so it has no team invitations either. */}
+      {handsOverHere(file) ? null : (
+        <OrganizationTeamInvitations organizationId={organization.organization_id} />
+      )}
 
       <Card>
         <CardHeader>

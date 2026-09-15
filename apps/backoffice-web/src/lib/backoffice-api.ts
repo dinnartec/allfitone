@@ -21,6 +21,9 @@ export type BackofficeOrganizationPage = AllfitV1Schemas['BackofficeOrganization
 export type OrganizationHandover = AllfitV1Schemas['OrganizationHandover']
 export type BackofficeOrganizationFile = AllfitV1Schemas['BackofficeOrganizationFile']
 export type OrganizationHandoverCreate = AllfitV1Schemas['OrganizationHandoverCreate']
+export type BackofficeTeamInvitation = AllfitV1Schemas['BackofficeTeamInvitation']
+export type BackofficeTeamInvitationList = AllfitV1Schemas['BackofficeTeamInvitationList']
+export type BackofficeTeamInvitationResend = AllfitV1Schemas['BackofficeTeamInvitationResend']
 export type CredentialVerificationRequest = AllfitV1Schemas['CredentialVerificationRequest']
 export type CredentialVerificationOutcome = AllfitV1Schemas['CredentialVerificationOutcome']
 export type CredentialVerificationDecisionCreate =
@@ -325,6 +328,23 @@ export const backofficeApi = {
       signal ? { signal } : {},
     ),
 
+  organizationTeamInvitations: (organizationId: string, signal?: AbortSignal) =>
+    requestJson<BackofficeTeamInvitationList>(
+      `/backoffice/v1/organizations/${organizationId}/team-invitations`,
+      signal ? { signal } : {},
+    ),
+
+  // No body: the contact, the role and the gym all come from the invitation itself.
+  resendTeamInvitation: (
+    organizationId: string,
+    invitationId: string,
+    command: BackofficeCommand,
+  ) =>
+    requestJson<BackofficeTeamInvitationResend>(
+      `/backoffice/v1/organizations/${organizationId}/team-invitations/${invitationId}/resends`,
+      { method: 'POST', headers: commandHeaders(command), body: '{}' },
+    ),
+
   // No body: the resend always goes to the address the handover was created with.
   resendOrganizationHandover: (organizationId: string, command: BackofficeCommand) =>
     requestJson<OrganizationHandover>(
@@ -534,6 +554,11 @@ function organizationOperation(route: string, method: string): ClientOperation |
       : 'backoffice.organization.directory'
   }
   if (segments.length === 4) return 'backoffice.organization.file'
+  if (segments[4] === 'team-invitations') {
+    return segments[6] === 'resends'
+      ? 'backoffice.organization.team_invitation_resend'
+      : 'backoffice.organization.team_invitations'
+  }
   if (segments[4] === 'cancellation') return 'backoffice.organization.handover_cancel'
   if (segments[4] !== 'handover') return undefined
   return segments[5] === 'resends'

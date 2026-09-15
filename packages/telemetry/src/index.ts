@@ -72,6 +72,8 @@ export const clientOperations = [
   'backoffice.organization.handover_create',
   'backoffice.organization.handover_read',
   'backoffice.organization.handover_resend',
+  'backoffice.organization.team_invitation_resend',
+  'backoffice.organization.team_invitations',
   'backoffice.verification.decide',
   'backoffice.verification.list',
   'backoffice.verification.renewals',
