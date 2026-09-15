@@ -389,7 +389,16 @@ function defaultResponse(
         id: '01991600-4000-7000-8000-000000000001',
         status: 'open',
         eligibility_status: 'unknown',
-        expires_at: '2026-08-11T00:00:00.000Z',
+        // Relative, never a literal. This was a fixed 2026-08-11, so on that day
+        // every screen built on the default attempt silently switched to the
+        // expired state — "La activación venció", submit disabled — and the
+        // audit swept that instead of the form real people see for over a month.
+        // The specs that exercise activation had already overridden it locally.
+        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+        // Both required by `StudioOnboardingAttempt` in the contract, and both
+        // were missing from the default.
+        terms_version: 'platform_terms_v1',
+        privacy_notice_version: 'privacy_notice_v1',
       },
     }
   }
@@ -417,7 +426,9 @@ function defaultResponse(
         status: 'pending',
         channel: 'email',
         contact_hint: 'p***@example.test',
-        expires_at: '2026-08-18T12:00:00.000Z',
+        // Seven days from now, as the invitation form promises. A literal here
+        // showed a just-created invitation as having expired a month earlier.
+        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
         reused: false,
         intents: [
           {
