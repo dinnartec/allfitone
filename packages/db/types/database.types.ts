@@ -374,6 +374,48 @@ export type Database = {
         Args: { p_activity_type_id: string }
         Returns: Database['catalog']['Enums']['activity_family']
       }
+      archive_activity_type: {
+        Args: {
+          p_actor_person_id: string
+          p_actor_session_id: string
+          p_code: string
+          p_command_id: string
+          p_idempotency_key: string
+          p_request_hash: string
+        }
+        Returns: {
+          replayed: boolean
+          result: Json
+        }[]
+      }
+      archive_discipline: {
+        Args: {
+          p_actor_person_id: string
+          p_actor_session_id: string
+          p_code: string
+          p_command_id: string
+          p_idempotency_key: string
+          p_request_hash: string
+        }
+        Returns: {
+          replayed: boolean
+          result: Json
+        }[]
+      }
+      archive_global_movement: {
+        Args: {
+          p_actor_person_id: string
+          p_actor_session_id: string
+          p_command_id: string
+          p_idempotency_key: string
+          p_movement_id: string
+          p_request_hash: string
+        }
+        Returns: {
+          replayed: boolean
+          result: Json
+        }[]
+      }
       deprecate_result_contract: {
         Args: {
           p_actor_person_id: string
@@ -387,6 +429,10 @@ export type Database = {
           replayed: boolean
           result: Json
         }[]
+      }
+      global_catalog_entry_projection: {
+        Args: { p_id: string; p_kind: string }
+        Returns: Json
       }
       list_activity_type_result_contracts: {
         Args: { p_activity_type_id: string }
@@ -418,6 +464,10 @@ export type Database = {
           name: string
         }[]
       }
+      list_global_catalog: {
+        Args: { p_actor_person_id: string; p_actor_session_id: string }
+        Returns: Json
+      }
       list_professional_credential_types: {
         Args: never
         Returns: {
@@ -432,6 +482,53 @@ export type Database = {
           code: string
           description: string
           name: string
+        }[]
+      }
+      normalize_movement_name: { Args: { p_name: string }; Returns: string }
+      publish_activity_type: {
+        Args: {
+          p_actor_person_id: string
+          p_actor_session_id: string
+          p_code: string
+          p_command_id: string
+          p_discipline_code: string
+          p_idempotency_key: string
+          p_name: string
+          p_request_hash: string
+        }
+        Returns: {
+          replayed: boolean
+          result: Json
+        }[]
+      }
+      publish_discipline: {
+        Args: {
+          p_actor_person_id: string
+          p_actor_session_id: string
+          p_code: string
+          p_command_id: string
+          p_idempotency_key: string
+          p_name: string
+          p_request_hash: string
+        }
+        Returns: {
+          replayed: boolean
+          result: Json
+        }[]
+      }
+      publish_global_movement: {
+        Args: {
+          p_actor_person_id: string
+          p_actor_session_id: string
+          p_command_id: string
+          p_discipline_code: string
+          p_idempotency_key: string
+          p_name: string
+          p_request_hash: string
+        }
+        Returns: {
+          replayed: boolean
+          result: Json
         }[]
       }
       publish_result_contract: {
@@ -454,6 +551,7 @@ export type Database = {
           result: Json
         }[]
       }
+      published_discipline: { Args: { p_code: string }; Returns: string }
       require_catalog_reader: { Args: never; Returns: string }
       require_global_catalog_curator: {
         Args: { p_actor_person_id: string; p_actor_session_id: string }
