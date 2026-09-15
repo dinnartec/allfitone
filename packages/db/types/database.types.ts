@@ -853,6 +853,61 @@ export type Database = {
           },
         ]
       }
+      invitation_resends: {
+        Row: {
+          actor_duty_assignment_id: string
+          actor_person_id: string
+          created_at: string
+          delivered_invitation_id: string
+          id: string
+          invitation_id: string
+          kind: Database['identity']['Enums']['invitation_intent_kind']
+          outcome: string
+        }
+        Insert: {
+          actor_duty_assignment_id: string
+          actor_person_id: string
+          created_at?: string
+          delivered_invitation_id: string
+          id?: string
+          invitation_id: string
+          kind: Database['identity']['Enums']['invitation_intent_kind']
+          outcome: string
+        }
+        Update: {
+          actor_duty_assignment_id?: string
+          actor_person_id?: string
+          created_at?: string
+          delivered_invitation_id?: string
+          id?: string
+          invitation_id?: string
+          kind?: Database['identity']['Enums']['invitation_intent_kind']
+          outcome?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_invitation_resends_actor'
+            columns: ['actor_person_id']
+            isOneToOne: false
+            referencedRelation: 'people'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'fk_invitation_resends_delivered'
+            columns: ['delivered_invitation_id']
+            isOneToOne: false
+            referencedRelation: 'invitations'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'fk_invitation_resends_invitation'
+            columns: ['invitation_id']
+            isOneToOne: false
+            referencedRelation: 'invitations'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       invitations: {
         Row: {
           channel: string
@@ -865,6 +920,7 @@ export type Database = {
           issued_by_person_id: string | null
           organization_id: string
           proposal_hash: string
+          reissues_invitation_id: string | null
           responsible_party: Json
           responsible_party_schema_version: number
           status: Database['identity']['Enums']['invitation_status']
@@ -883,6 +939,7 @@ export type Database = {
           issued_by_person_id?: string | null
           organization_id: string
           proposal_hash: string
+          reissues_invitation_id?: string | null
           responsible_party: Json
           responsible_party_schema_version?: number
           status?: Database['identity']['Enums']['invitation_status']
@@ -901,6 +958,7 @@ export type Database = {
           issued_by_person_id?: string | null
           organization_id?: string
           proposal_hash?: string
+          reissues_invitation_id?: string | null
           responsible_party?: Json
           responsible_party_schema_version?: number
           status?: Database['identity']['Enums']['invitation_status']
@@ -914,6 +972,13 @@ export type Database = {
             columns: ['issued_by_person_id']
             isOneToOne: false
             referencedRelation: 'people'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'fk_invitations_reissues'
+            columns: ['reissues_invitation_id']
+            isOneToOne: false
+            referencedRelation: 'invitations'
             referencedColumns: ['id']
           },
         ]
@@ -1384,6 +1449,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      backoffice_team_invitation_projection: {
+        Args: { p_invitation_id: string }
+        Returns: Json
+      }
       bind_backoffice_totp_verification: {
         Args: {
           p_attempt_token_hash: string
@@ -1570,6 +1639,14 @@ export type Database = {
           reused: boolean
           status: string
         }[]
+      }
+      list_backoffice_team_invitations: {
+        Args: {
+          p_actor_person_id: string
+          p_actor_session_id: string
+          p_organization_id: string
+        }
+        Returns: Json
       }
       list_credential_verification_requests: {
         Args: {
@@ -1836,9 +1913,30 @@ export type Database = {
         Args: { p_actor_person_id: string; p_actor_session_id: string }
         Returns: undefined
       }
+      require_invitation_resender: {
+        Args: { p_actor_person_id: string; p_actor_session_id: string }
+        Returns: string
+      }
       require_professional_actor: {
         Args: { p_person_id: string }
         Returns: undefined
+      }
+      resend_team_invitation: {
+        Args: {
+          p_actor_person_id: string
+          p_actor_session_id: string
+          p_command_id: string
+          p_idempotency_key: string
+          p_invitation_id: string
+          p_organization_id: string
+          p_request_hash: string
+          p_token_hash: string
+          p_token_key_version: number
+        }
+        Returns: {
+          replayed: boolean
+          result: Json
+        }[]
       }
       resolve_actor_registration: {
         Args: { p_account_id: string }
