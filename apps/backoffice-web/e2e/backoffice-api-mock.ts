@@ -109,7 +109,20 @@ export interface BreakGlassFixture {
   nextExerciseDenial?: string | undefined
   /** What the subject has recorded. Only a body_progress read returns it. */
   bodyProgress?: BodyProgressRecordFixture[]
+  /** What the subject has declared. Only a health_context read returns it. */
+  healthContext?: HealthContextClaimFixture[]
   files: BreakGlassFileFixture[]
+}
+
+export interface HealthContextClaimFixture {
+  id: string
+  context_type: string
+  description: string
+  body_area: string | null
+  provenance: string
+  valid_from: string
+  valid_to: string | null
+  recorded_at: string
 }
 
 export interface BodyProgressRecordFixture {
@@ -1696,7 +1709,12 @@ async function routeBreakGlass(
   if (action === 'reads') {
     const body = request.body as { category?: string; resource_type?: string } | undefined
     const category = body?.category ?? ''
-    const readsMeasurements = category === 'body_progress'
+    // A category that returns content reads only its own table.
+    const readable: Record<string, string> = {
+      body_progress: 'identity.body_progress_records',
+      health_context: 'identity.health_context_claims',
+    }
+    const ownTable = readable[category]
     const forced = glass.nextExerciseDenial
     glass.nextExerciseDenial = undefined
     const denial =
@@ -1707,7 +1725,7 @@ async function routeBreakGlass(
           ? 'window_not_open'
           : !file.categories.includes(category)
             ? 'category_out_of_scope'
-            : readsMeasurements && body?.resource_type !== 'identity.body_progress_records'
+            : ownTable !== undefined && body?.resource_type !== ownTable
               ? 'resource_out_of_scope'
               : null)
     // Only an authorised attempt raises the counter, matching the projection, which
@@ -1720,12 +1738,19 @@ async function routeBreakGlass(
     }
     if (denial !== null) {
       await fulfill(route, 200, { outcome: 'denied', reason_code: denial, ...event })
-    } else if (readsMeasurements) {
+    } else if (category === 'body_progress') {
       await fulfill(route, 200, {
         outcome: 'allowed',
         reason_code: 'authorized_exercise',
         ...event,
         content: { body_progress: glass.bodyProgress ?? [] },
+      })
+    } else if (category === 'health_context') {
+      await fulfill(route, 200, {
+        outcome: 'allowed',
+        reason_code: 'authorized_exercise',
+        ...event,
+        content: { health_context: glass.healthContext ?? [] },
       })
     } else {
       await fulfill(route, 200, {

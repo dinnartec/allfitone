@@ -337,6 +337,135 @@ test('an authorised read of someone with no measurements says so', async ({ cont
   await expect(page.getByRole('table', { name: 'Mediciones de la persona' })).toHaveCount(0)
 })
 
+const SHOULDER = {
+  id: '019a8000-0000-7000-8000-000000000801',
+  context_type: 'limitation',
+  description: 'No puedo levantar los brazos por encima de la cabeza',
+  body_area: 'shoulder',
+  provenance: 'person_declared',
+  valid_from: '2026-09-01T10:00:00.000Z',
+  valid_to: null,
+  recorded_at: '2026-09-01T10:05:00.000Z',
+}
+
+test('an authorised read of health context shows what the person declared, and who said it', async ({
+  context,
+  page,
+}) => {
+  const fixture = createBackofficeFixture({
+    session: activeSession(),
+    breakGlass: {
+      files: [openBreakGlassWindow(10, { categories: ['health_context'] })],
+      healthContext: [
+        SHOULDER,
+        {
+          id: '019a8000-0000-7000-8000-000000000802',
+          context_type: 'recovery',
+          description: 'Recuperación de esguince',
+          body_area: null,
+          provenance: 'person_declared',
+          valid_from: '2026-08-20T10:00:00.000Z',
+          valid_to: '2026-10-01T10:00:00.000Z',
+          recorded_at: '2026-08-20T10:05:00.000Z',
+        },
+      ],
+    },
+  })
+  await mockBackofficeApi(context, fixture)
+  // A laptop screen: the claims fit without scrolling sideways.
+  await page.setViewportSize({ width: 1280, height: 900 })
+
+  await page.goto(PATH)
+  await page.getByRole('button', { name: 'Leer contexto de salud' }).click()
+
+  const outcome = page.locator('[data-break-glass-outcome]')
+  await expect(outcome.getByText('Lectura autorizada y registrada')).toBeVisible()
+
+  const claims = page.getByRole('table', { name: 'Contexto de salud de la persona' })
+  const shoulder = claims.getByRole('row', { name: /Limitación/ })
+  await expect(shoulder).toContainText('No puedo levantar los brazos por encima de la cabeza')
+  await expect(shoulder).toContainText('Hombro')
+  await expect(shoulder).toContainText('Sin fecha de fin')
+  await expect(shoulder).toContainText('Lo declaró la persona')
+  // The sentence wraps rather than pushing the dates and the origin out of sight.
+  await expect(shoulder.getByRole('cell').nth(1)).toHaveCSS('white-space', 'normal')
+  const region = page.getByRole('region', { name: 'Contexto de salud de la persona' })
+  expect(await region.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true)
+  await expect(claims.getByRole('row', { name: /Recuperación/ })).toContainText('Sin zona indicada')
+  await expect(page.getByRole('table', { name: 'Mediciones de la persona' })).toHaveCount(0)
+
+  const read = fixture.requests.filter((request) => request.path.endsWith('/reads'))
+  expect(read[0]?.body).toEqual({
+    category: 'health_context',
+    resource_type: 'identity.health_context_claims',
+  })
+
+  await page.getByRole('button', { name: 'Cerrar la ventana' }).click()
+  await expect(page.getByText(/Ninguna lectura entrega contenido desde ahora/)).toBeVisible()
+  await expect(claims).toHaveCount(0)
+  await expect(page.getByText('No puedo levantar los brazos por encima de la cabeza')).toHaveCount(
+    0,
+  )
+})
+
+test('an authorised read of someone who declared nothing says so', async ({ context, page }) => {
+  await mockBackofficeApi(
+    context,
+    createBackofficeFixture({
+      session: activeSession(),
+      breakGlass: {
+        files: [openBreakGlassWindow(10, { categories: ['health_context'] })],
+        healthContext: [],
+      },
+    }),
+  )
+
+  await page.goto(PATH)
+  await page.getByRole('button', { name: 'Leer contexto de salud' }).click()
+
+  const outcome = page.locator('[data-break-glass-outcome]')
+  await expect(
+    outcome.getByText(/La persona no ha declarado dolores, limitaciones ni recuperaciones/),
+  ).toBeVisible()
+  await expect(page.getByRole('table', { name: 'Contexto de salud de la persona' })).toHaveCount(0)
+})
+
+test('a second read replaces what the first one showed', async ({ context, page }) => {
+  await mockBackofficeApi(
+    context,
+    createBackofficeFixture({
+      session: activeSession(),
+      breakGlass: {
+        files: [openBreakGlassWindow(10, { categories: ['body_progress', 'health_context'] })],
+        healthContext: [SHOULDER],
+        bodyProgress: [
+          {
+            id: '019a8000-0000-7000-8000-000000000704',
+            metric_code: 'weight',
+            value: 72,
+            unit_code: 'kg',
+            original_value: null,
+            original_unit_code: null,
+            measured_on: '2026-09-03',
+            has_media: false,
+            recorded_at: '2026-09-03T11:00:00.000Z',
+          },
+        ],
+      },
+    }),
+  )
+
+  await page.goto(PATH)
+  await page.getByRole('button', { name: 'Leer contexto de salud' }).click()
+  const claims = page.getByRole('table', { name: 'Contexto de salud de la persona' })
+  await expect(claims).toBeVisible()
+
+  // Only what the latest read returned is on screen, never two categories at once.
+  await page.getByRole('button', { name: 'Leer progreso corporal' }).click()
+  await expect(page.getByRole('table', { name: 'Mediciones de la persona' })).toBeVisible()
+  await expect(claims).toHaveCount(0)
+})
+
 test('a read whose window lapses on screen stops showing what it returned', async ({
   context,
   page,
