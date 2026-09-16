@@ -149,6 +149,7 @@ const noOtherApps = (self) => ({
 const DOMAINS = [
   'catalog',
   'identity',
+  'nutrition',
   'organizations',
   'payments',
   'planning',
