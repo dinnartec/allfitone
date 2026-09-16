@@ -43,6 +43,8 @@ export type SupportOperation = AllfitV1Schemas['SupportOperation']
 export type SupportOperationPage = AllfitV1Schemas['SupportOperationPage']
 export type SupportDeliveryCircuit = AllfitV1Schemas['SupportDeliveryCircuit']
 export type SupportAttentionPanel = AllfitV1Schemas['SupportAttentionPanel']
+export type SupportBusinessPanel = AllfitV1Schemas['SupportBusinessPanel']
+export type SupportBusinessMetric = AllfitV1Schemas['SupportBusinessMetric']
 export type SupportPersonMetadata = AllfitV1Schemas['SupportPersonMetadata']
 export type BackofficeAccountRecovery = AllfitV1Schemas['BackofficeAccountRecovery']
 export type BackofficeAccountRecoveryRequest = AllfitV1Schemas['BackofficeAccountRecoveryRequest']
@@ -347,6 +349,9 @@ export const backofficeApi = {
       '/backoffice/v1/support/attention',
       signal ? { signal } : {},
     ),
+
+  supportBusiness: (signal?: AbortSignal) =>
+    requestJson<SupportBusinessPanel>('/backoffice/v1/support/business', signal ? { signal } : {}),
 
   verificationRequests: (signal?: AbortSignal) =>
     requestJson<{ items: CredentialVerificationRequest[] }>(

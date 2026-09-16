@@ -161,6 +161,64 @@
   font-size: var(--afo-font-size-xs);
 }
 
+[data-panel-home],
+[data-business-panel] {
+  display: grid;
+  gap: 24px;
+  align-content: start;
+}
+
+[data-business-panel] section {
+  display: grid;
+  gap: 12px;
+}
+
+[data-business-section-title] {
+  margin: 0;
+  font-size: var(--afo-font-size-lg);
+  font-weight: var(--afo-font-weight-semibold);
+}
+
+[data-business-section-description] {
+  margin: 0;
+  color: var(--afo-color-text-muted, currentColor);
+}
+
+[data-business-metrics] {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  align-items: start;
+}
+
+[data-business-body] {
+  display: grid;
+  gap: 8px;
+}
+
+[data-business-body] p {
+  margin: 0;
+}
+
+/* The number is the point of the card; the period under it is what makes it mean
+   something, so neither is allowed to read as body text. */
+[data-business-value] {
+  font-size: var(--afo-font-size-3xl, 2rem);
+  font-weight: var(--afo-font-weight-semibold);
+  line-height: 1.1;
+}
+
+[data-business-period] {
+  font-size: var(--afo-font-size-sm);
+  font-weight: var(--afo-font-weight-semibold);
+}
+
+[data-business-note],
+[data-business-hint] {
+  font-size: var(--afo-font-size-sm);
+  color: var(--afo-color-text-muted, currentColor);
+}
+
 [data-organization-directory-filters],
 [data-handover-form] {
   display: grid;
