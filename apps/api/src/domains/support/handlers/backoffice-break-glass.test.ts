@@ -475,4 +475,47 @@ describe('Backoffice break-glass API contract', () => {
       resourceId: SUBJECT_ID,
     })
   })
+
+  test('T-BG-API-22 returns the health claims an allowed read carries, as the database sent them', async () => {
+    const allowed: AllfitV1Schemas['BreakGlassExerciseOutcome'] = {
+      outcome: 'allowed',
+      reason_code: 'authorized_exercise',
+      break_glass_event_id: '019a8000-0000-7000-8000-000000000604',
+      occurred_at: '2026-09-10T18:08:00.000Z',
+      category: 'health_context',
+      content: {
+        health_context: [
+          {
+            id: '019a8000-0000-7000-8000-000000000801',
+            context_type: 'limitation',
+            description: 'No puedo levantar los brazos por encima de la cabeza',
+            body_area: 'shoulder',
+            provenance: 'person_declared',
+            valid_from: '2026-09-01T10:00:00.000Z',
+            valid_to: null,
+            recorded_at: '2026-09-01T10:05:00.000Z',
+          },
+        ],
+      },
+    }
+    const response = await routes(
+      windowService({
+        exercise: (_actor, input) => {
+          captured.push({ operation: 'exercise', input })
+          return Promise.resolve(allowed)
+        },
+      }),
+    ).fetch(
+      post(`/break-glass/requests/${REQUEST_ID}/reads`, {
+        body: { category: 'health_context', resource_type: 'identity.health_context_claims' },
+      }),
+    )
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual(allowed)
+    expect(captured[0]?.input).toMatchObject({
+      category: 'health_context',
+      resourceType: 'identity.health_context_claims',
+    })
+  })
 })
