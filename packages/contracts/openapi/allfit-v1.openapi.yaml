@@ -5324,6 +5324,160 @@ paths:
         '422':
           $ref: '#/components/responses/ValidationFailed'
 
+  /space/v1/body-progress:
+    get:
+      tags: [Space Identity]
+      operationId: listSpaceBodyProgress
+      x-allfit-operation: OP-IDN-015
+      x-allfit-cache: no-store
+      summary: Read my body measurements
+      description: >-
+        The person's own measurements, newest measurement first, each in the
+        canonical unit of its dimension and with what the person typed when that
+        was something else. Nobody else's measurement ever appears, and a photo
+        reference is never returned.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: before_measured_on
+          in: query
+          required: false
+          description: The `measured_on` of the last record already read.
+          schema:
+            type: string
+            format: date
+        - name: before_id
+          in: query
+          required: false
+          description: The `id` of the last record already read; sent with `before_measured_on`.
+          schema:
+            $ref: '#/components/schemas/UuidV7'
+      responses:
+        '200':
+          description: One page of my measurements
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BodyProgressPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+    post:
+      tags: [Space Identity]
+      operationId: recordSpaceBodyProgress
+      x-allfit-operation: OP-IDN-006
+      x-allfit-cache: no-store
+      summary: Record a body measurement
+      description: >-
+        The `Command-Id` is the measurement's identifier, so a device can create
+        it offline and send it later without duplicating it. The value is stored
+        in the canonical unit of its dimension (kilograms, metres, percent) and
+        what the person typed is kept beside it. A recorded measurement is never
+        rewritten. Photos are not accepted yet.
+
+        Only a token that resolves to an active person records anything (403).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BodyProgressRecordCreate'
+      responses:
+        '201':
+          description: The recorded measurement
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BodyProgressRecord'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /space/v1/body-progress/{recordId}:
+    delete:
+      tags: [Space Identity]
+      operationId: deleteSpaceBodyProgress
+      x-allfit-operation: OP-IDN-007
+      x-allfit-cache: no-store
+      summary: Delete one of my body measurements
+      description: >-
+        The measurement is deleted physically, now, and a disposition case records
+        that body data was deleted at the person's request and under which policy,
+        without keeping the value. Deleting data is not revoking a permission:
+        grants are untouched. Someone else's measurement and one that does not
+        exist both answer 404.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: recordId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/UuidV7'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      responses:
+        '200':
+          description: The measurement is gone and the case that recorded it
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BodyProgressDeletion'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
   /space/v1/agenda:
     get:
       tags: [Space Agenda]
@@ -7740,18 +7894,121 @@ components:
         resource_id:
           type: [string, 'null']
           format: uuid
+    BodyProgressMetricCode:
+      type: string
+      enum: [weight, muscle_mass, body_fat, waist, hip, chest, arm, thigh]
+    BodyProgressUnitCode:
+      type: string
+      description: Masses in `kg` or `lb`, lengths in `m`, `cm` or `in`, body fat in `percent`.
+      enum: [kg, lb, m, cm, in, percent]
+    BodyProgressRecordCreate:
+      type: object
+      additionalProperties: false
+      required: [metric_code, value, unit_code, measured_on]
+      properties:
+        metric_code:
+          $ref: '#/components/schemas/BodyProgressMetricCode'
+        value:
+          type: number
+          exclusiveMinimum: 0
+          maximum: 100000
+        unit_code:
+          $ref: '#/components/schemas/BodyProgressUnitCode'
+        measured_on:
+          type: string
+          format: date
+    BodyProgressRecord:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - metric_code
+        - value
+        - unit_code
+        - original_value
+        - original_unit_code
+        - measured_on
+        - has_media
+        - recorded_at
+      properties:
+        id:
+          $ref: '#/components/schemas/UuidV7'
+        metric_code:
+          $ref: '#/components/schemas/BodyProgressMetricCode'
+        value:
+          type: number
+          description: In the canonical unit of the measurement's dimension.
+        unit_code:
+          $ref: '#/components/schemas/BodyProgressUnitCode'
+        original_value:
+          type: [number, 'null']
+          description: What the person typed, when it was not the canonical unit.
+        original_unit_code:
+          oneOf:
+            - $ref: '#/components/schemas/BodyProgressUnitCode'
+            - type: 'null'
+        measured_on:
+          type: string
+          format: date
+        has_media:
+          type: boolean
+          description: Whether a photo exists. Where it is never travels.
+        recorded_at:
+          type: string
+          format: date-time
+    BodyProgressPage:
+      type: object
+      additionalProperties: false
+      required: [items, has_more]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/BodyProgressRecord'
+        has_more:
+          type: boolean
+    BodyProgressDeletion:
+      type: object
+      additionalProperties: false
+      required: [body_progress_record_id, disposition_case_id, status]
+      properties:
+        body_progress_record_id:
+          $ref: '#/components/schemas/UuidV7'
+        disposition_case_id:
+          $ref: '#/components/schemas/UuidV7'
+        status:
+          type: string
+          enum: [deleted]
+    BreakGlassContent:
+      type: object
+      additionalProperties: false
+      description: >-
+        What an allowed read returns, under the category that was read. Only
+        categories whose data the platform stores appear; the rest answer
+        `content_unavailable` instead.
+      properties:
+        body_progress:
+          type: array
+          maxItems: 500
+          items:
+            $ref: '#/components/schemas/BodyProgressRecord'
     BreakGlassExerciseOutcome:
       type: object
       additionalProperties: false
       description: >-
         Every attempt is recorded before this answers, so `break_glass_event_id`
-        is the evidence of this exact attempt. No outcome carries content in this
-        version.
+        is the evidence of this exact attempt. Only `allowed` carries content, and
+        only for a category whose data the platform stores; the others answer
+        `content_unavailable`. A category that returns content reads only its own
+        kind of data, so pointing it at another is `denied` with
+        `resource_out_of_scope`.
       required: [outcome, reason_code, break_glass_event_id, occurred_at]
       properties:
         outcome:
           type: string
-          enum: [denied, content_unavailable]
+          enum: [allowed, denied, content_unavailable]
+        content:
+          $ref: '#/components/schemas/BreakGlassContent'
         reason_code:
           type: string
           pattern: '^[a-z][a-z0-9_]{1,63}$'

@@ -475,6 +475,27 @@ export const allfitV1ContractManifest = {
       responses: ['200', '400', '401', '429', '503'],
     },
     {
+      method: 'GET',
+      path: '/space/v1/body-progress',
+      operationId: 'listSpaceBodyProgress',
+      allfitOperation: 'OP-IDN-015',
+      responses: ['200', '400', '401', '403', '503'],
+    },
+    {
+      method: 'POST',
+      path: '/space/v1/body-progress',
+      operationId: 'recordSpaceBodyProgress',
+      allfitOperation: 'OP-IDN-006',
+      responses: ['201', '400', '401', '403', '409', '415', '422', '503'],
+    },
+    {
+      method: 'DELETE',
+      path: '/space/v1/body-progress/{recordId}',
+      operationId: 'deleteSpaceBodyProgress',
+      allfitOperation: 'OP-IDN-007',
+      responses: ['200', '400', '401', '403', '404', '409', '503'],
+    },
+    {
       method: 'POST',
       path: '/space/v1/consents/{grantId}/revocation',
       operationId: 'revokeConsentGrant',

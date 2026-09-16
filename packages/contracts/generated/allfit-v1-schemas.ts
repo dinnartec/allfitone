@@ -1522,6 +1522,126 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     ],
   },
+  BodyProgressDeletion: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['body_progress_record_id', 'disposition_case_id', 'status'],
+    properties: {
+      body_progress_record_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      disposition_case_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      status: {
+        type: 'string',
+        enum: ['deleted'],
+      },
+    },
+  },
+  BodyProgressMetricCode: {
+    type: 'string',
+    enum: ['weight', 'muscle_mass', 'body_fat', 'waist', 'hip', 'chest', 'arm', 'thigh'],
+  },
+  BodyProgressPage: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['items', 'has_more'],
+    properties: {
+      items: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/BodyProgressRecord',
+        },
+      },
+      has_more: {
+        type: 'boolean',
+      },
+    },
+  },
+  BodyProgressRecord: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'id',
+      'metric_code',
+      'value',
+      'unit_code',
+      'original_value',
+      'original_unit_code',
+      'measured_on',
+      'has_media',
+      'recorded_at',
+    ],
+    properties: {
+      id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      metric_code: {
+        $ref: '#/components/schemas/BodyProgressMetricCode',
+      },
+      value: {
+        type: 'number',
+        description: "In the canonical unit of the measurement's dimension.",
+      },
+      unit_code: {
+        $ref: '#/components/schemas/BodyProgressUnitCode',
+      },
+      original_value: {
+        type: ['number', 'null'],
+        description: 'What the person typed, when it was not the canonical unit.',
+      },
+      original_unit_code: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/BodyProgressUnitCode',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      measured_on: {
+        type: 'string',
+        format: 'date',
+      },
+      has_media: {
+        type: 'boolean',
+        description: 'Whether a photo exists. Where it is never travels.',
+      },
+      recorded_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+    },
+  },
+  BodyProgressRecordCreate: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['metric_code', 'value', 'unit_code', 'measured_on'],
+    properties: {
+      metric_code: {
+        $ref: '#/components/schemas/BodyProgressMetricCode',
+      },
+      value: {
+        type: 'number',
+        exclusiveMinimum: 0,
+        maximum: 100000,
+      },
+      unit_code: {
+        $ref: '#/components/schemas/BodyProgressUnitCode',
+      },
+      measured_on: {
+        type: 'string',
+        format: 'date',
+      },
+    },
+  },
+  BodyProgressUnitCode: {
+    type: 'string',
+    description: 'Masses in `kg` or `lb`, lengths in `m`, `cm` or `in`, body fat in `percent`.',
+    enum: ['kg', 'lb', 'm', 'cm', 'in', 'percent'],
+  },
   BreakGlassApproval: {
     type: 'object',
     additionalProperties: false,
@@ -1556,6 +1676,21 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       'health_context',
       'nutrition_intake',
     ],
+  },
+  BreakGlassContent: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      'What an allowed read returns, under the category that was read. Only categories whose data the platform stores appear; the rest answer `content_unavailable` instead.',
+    properties: {
+      body_progress: {
+        type: 'array',
+        maxItems: 500,
+        items: {
+          $ref: '#/components/schemas/BodyProgressRecord',
+        },
+      },
+    },
   },
   BreakGlassDecision: {
     type: 'object',
@@ -1594,12 +1729,15 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
     type: 'object',
     additionalProperties: false,
     description:
-      'Every attempt is recorded before this answers, so `break_glass_event_id` is the evidence of this exact attempt. No outcome carries content in this version.',
+      'Every attempt is recorded before this answers, so `break_glass_event_id` is the evidence of this exact attempt. Only `allowed` carries content, and only for a category whose data the platform stores; the others answer `content_unavailable`. A category that returns content reads only its own kind of data, so pointing it at another is `denied` with `resource_out_of_scope`.',
     required: ['outcome', 'reason_code', 'break_glass_event_id', 'occurred_at'],
     properties: {
       outcome: {
         type: 'string',
-        enum: ['denied', 'content_unavailable'],
+        enum: ['allowed', 'denied', 'content_unavailable'],
+      },
+      content: {
+        $ref: '#/components/schemas/BreakGlassContent',
       },
       reason_code: {
         type: 'string',

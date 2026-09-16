@@ -2108,6 +2108,51 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/space/v1/body-progress': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Read my body measurements
+     * @description The person's own measurements, newest measurement first, each in the canonical unit of its dimension and with what the person typed when that was something else. Nobody else's measurement ever appears, and a photo reference is never returned.
+     */
+    get: operations['listSpaceBodyProgress']
+    put?: never
+    /**
+     * Record a body measurement
+     * @description The `Command-Id` is the measurement's identifier, so a device can create it offline and send it later without duplicating it. The value is stored in the canonical unit of its dimension (kilograms, metres, percent) and what the person typed is kept beside it. A recorded measurement is never rewritten. Photos are not accepted yet.
+     *     Only a token that resolves to an active person records anything (403).
+     */
+    post: operations['recordSpaceBodyProgress']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/body-progress/{recordId}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    post?: never
+    /**
+     * Delete one of my body measurements
+     * @description The measurement is deleted physically, now, and a disposition case records that body data was deleted at the person's request and under which policy, without keeping the value. Deleting data is not revoking a permission: grants are untouched. Someone else's measurement and one that does not exist both answer 404.
+     */
+    delete: operations['deleteSpaceBodyProgress']
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/space/v1/agenda': {
     parameters: {
       query?: never
@@ -2808,10 +2853,56 @@ export interface components {
       /** Format: uuid */
       resource_id?: string | null
     }
-    /** @description Every attempt is recorded before this answers, so `break_glass_event_id` is the evidence of this exact attempt. No outcome carries content in this version. */
+    /** @enum {string} */
+    BodyProgressMetricCode:
+      'weight' | 'muscle_mass' | 'body_fat' | 'waist' | 'hip' | 'chest' | 'arm' | 'thigh'
+    /**
+     * @description Masses in `kg` or `lb`, lengths in `m`, `cm` or `in`, body fat in `percent`.
+     * @enum {string}
+     */
+    BodyProgressUnitCode: 'kg' | 'lb' | 'm' | 'cm' | 'in' | 'percent'
+    BodyProgressRecordCreate: {
+      metric_code: components['schemas']['BodyProgressMetricCode']
+      value: number
+      unit_code: components['schemas']['BodyProgressUnitCode']
+      /** Format: date */
+      measured_on: string
+    }
+    BodyProgressRecord: {
+      id: components['schemas']['UuidV7']
+      metric_code: components['schemas']['BodyProgressMetricCode']
+      /** @description In the canonical unit of the measurement's dimension. */
+      value: number
+      unit_code: components['schemas']['BodyProgressUnitCode']
+      /** @description What the person typed, when it was not the canonical unit. */
+      original_value: number | null
+      original_unit_code: components['schemas']['BodyProgressUnitCode'] | null
+      /** Format: date */
+      measured_on: string
+      /** @description Whether a photo exists. Where it is never travels. */
+      has_media: boolean
+      /** Format: date-time */
+      recorded_at: string
+    }
+    BodyProgressPage: {
+      items: components['schemas']['BodyProgressRecord'][]
+      has_more: boolean
+    }
+    BodyProgressDeletion: {
+      body_progress_record_id: components['schemas']['UuidV7']
+      disposition_case_id: components['schemas']['UuidV7']
+      /** @enum {string} */
+      status: 'deleted'
+    }
+    /** @description What an allowed read returns, under the category that was read. Only categories whose data the platform stores appear; the rest answer `content_unavailable` instead. */
+    BreakGlassContent: {
+      body_progress?: components['schemas']['BodyProgressRecord'][]
+    }
+    /** @description Every attempt is recorded before this answers, so `break_glass_event_id` is the evidence of this exact attempt. Only `allowed` carries content, and only for a category whose data the platform stores; the others answer `content_unavailable`. A category that returns content reads only its own kind of data, so pointing it at another is `denied` with `resource_out_of_scope`. */
     BreakGlassExerciseOutcome: {
       /** @enum {string} */
-      outcome: 'denied' | 'content_unavailable'
+      outcome: 'allowed' | 'denied' | 'content_unavailable'
+      content?: components['schemas']['BreakGlassContent']
       reason_code: string
       break_glass_event_id: components['schemas']['Uuid']
       /** Format: date-time */
@@ -9659,6 +9750,110 @@ export interface operations {
       404: components['responses']['NotFound']
       409: components['responses']['Conflict']
       422: components['responses']['ValidationFailed']
+    }
+  }
+  listSpaceBodyProgress: {
+    parameters: {
+      query?: {
+        limit?: number
+        /** @description The `measured_on` of the last record already read. */
+        before_measured_on?: string
+        /** @description The `id` of the last record already read; sent with `before_measured_on`. */
+        before_id?: components['schemas']['UuidV7']
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description One page of my measurements */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['BodyProgressPage']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  recordSpaceBodyProgress: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['BodyProgressRecordCreate']
+      }
+    }
+    responses: {
+      /** @description The recorded measurement */
+      201: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['BodyProgressRecord']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  deleteSpaceBodyProgress: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        recordId: components['schemas']['UuidV7']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The measurement is gone and the case that recorded it */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['BodyProgressDeletion']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      503: components['responses']['UpstreamUnavailable']
     }
   }
   listMyAgenda: {
