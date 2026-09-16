@@ -100,17 +100,21 @@ Create the user in the WorkOS **Backoffice** Application, copy its user id, and
 run the ceremony against the local database:
 
 ```bash
-bun packages/db/scripts/bootstrap-local-operator.ts \
+bun --env-file=.env.local packages/db/scripts/bootstrap-local-operator.ts \
   --subject user_01YOURID --given-name Jimmy --family-name Rozo
 ```
 
-It grants `allfit_admin` and `manage_platform_access`, and refuses any database
-that is not on this machine. Sign in at `http://localhost:3001`, enrol TOTP, and
-grant yourself the remaining duties from **Equipo de Allfit** — the same screen
-the story ships, which is also the honest way to test it.
+It grants `allfit_admin` to you and to a local witness, then has the witness grant
+you every duty through the same command **Equipo de Allfit** calls. The witness is
+not a shortcut: a duty is never self-assigned, so on a database with one real
+operator somebody else has to sign the grant. Pass `--duties a,b` to grant fewer.
+It refuses any database that is not on this machine. Sign in at
+`http://localhost:3001` and enrol TOTP.
 
-Duties are temporary by design: every Backoffice screen refuses an operator whose
-duty expired, so "it worked yesterday" is the expected experience, not a bug.
+Duties are temporary by design — 30 days here — and every Backoffice screen
+refuses an operator whose duty expired, so "it worked yesterday" is the expected
+experience, not a bug. Run the script again: it leaves you as you are and grants
+only what is no longer in force.
 
 Backoffice reads what Studio and Space write, so a local database that never ran
 them shows empty screens. This fills that in, through the real commands wherever
