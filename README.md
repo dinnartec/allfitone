@@ -15,20 +15,21 @@ Normative product and architecture documentation lives in `allfitone-docs`.
 
 Be aware of the actual state before you start:
 
-|                          |                                                                                                                              |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
-| `apps/api`               | The four surfaces mounted — `/space/v1`, `/studio/v1`, `/backoffice/v1`, `/catalog/v1` — plus a readiness `GET /health`      |
-| `apps/worker`            | Cron-invoked outbox jobs: invitation delivery, Backoffice authentication cleanup and account recovery                        |
-| `apps/studio-web`        | Hosted login, profile, organizations and invitations                                                                         |
-| `apps/backoffice-web`    | Password and TOTP sign-in; the home panel, people, gyms, catalogue, permissions, team, access log, break glass and diagnosis |
-| `apps/space`             | Headless client of `/space/v1`: registration, sign-in and password recovery                                                  |
-| `packages/auth-provider` | Token verification, code exchange, TOTP, session revocation and recovery delivery                                            |
-| `packages/queue`         | Port and its PostgreSQL adapter over `system.outbox_events`                                                                  |
-| `packages/contracts`     | Canonical OpenAPI with 119 paths, and the DTOs generated from it                                                             |
-| `packages/db`            | 50 migrations and a pgTAP suite of 1034 assertions                                                                           |
+|                          |                                                                                                                                     |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/api`               | The four surfaces mounted — `/space/v1`, `/studio/v1`, `/backoffice/v1`, `/catalog/v1` — plus a readiness `GET /health`             |
+| `apps/worker`            | Cron-invoked outbox jobs: invitation delivery, Backoffice authentication cleanup and account recovery                               |
+| `apps/studio-web`        | Hosted login, profile, organizations and invitations                                                                                |
+| `apps/backoffice-web`    | Password and TOTP sign-in; the home panel, people, gyms, catalogue, plans, permissions, team, access log, break glass and diagnosis |
+| `apps/space`             | Headless client of `/space/v1`: registration, sign-in and password recovery                                                         |
+| `packages/auth-provider` | Token verification, code exchange, TOTP, session revocation and recovery delivery                                                   |
+| `packages/queue`         | Port and its PostgreSQL adapter over `system.outbox_events`                                                                         |
+| `packages/contracts`     | Canonical OpenAPI with 123 paths, and the DTOs generated from it                                                                    |
+| `packages/db`            | 51 migrations and a pgTAP suite of 1082 assertions                                                                                  |
 
-Payments, planning execution and nutrition have no domain yet, so the Backoffice
-screens that depend on them say so rather than showing an empty number.
+Payments holds only the catalogue of plans Allfit sells; nothing charges anybody yet.
+The Backoffice screens that need charges, planning execution or nutrition say so
+rather than showing an empty number.
 
 ## Prerequisites
 
