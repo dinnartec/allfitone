@@ -10,6 +10,7 @@ import {
 import { mountSurfaces } from '../../../surfaces.js'
 import type {
   SupportAttentionService,
+  SupportBusinessService,
   SupportDiagnosisService,
   SupportMetadataService,
 } from '../application/index.js'
@@ -161,15 +162,60 @@ function attentionService(
   }
 }
 
+const business: AllfitV1Schemas['SupportBusinessPanel'] = {
+  generated_at: '2026-09-17T18:00:00.000Z',
+  minimum_aggregate: 5,
+  metrics: [
+    {
+      key: 'registered_people',
+      availability: 'available',
+      value: 128,
+      reason: null,
+      period: { kind: 'total', from: null, to: '2026-09-17T18:00:00.000Z' },
+    },
+    {
+      key: 'studio_active_professionals_this_week',
+      availability: 'below_threshold',
+      value: null,
+      reason: null,
+      period: {
+        kind: 'week',
+        from: '2026-09-10T18:00:00.000Z',
+        to: '2026-09-17T18:00:00.000Z',
+      },
+    },
+    {
+      key: 'premium_people',
+      availability: 'not_modelled',
+      value: null,
+      reason: 'payments_not_modelled',
+      period: { kind: 'total', from: null, to: '2026-09-17T18:00:00.000Z' },
+    },
+  ],
+}
+
+let businessCalls: CapturedCall[] = []
+
+function businessService(overrides: Partial<SupportBusinessService> = {}): SupportBusinessService {
+  return {
+    read: (reader, input) => {
+      businessCalls.push({ operation: 'read', reader, input })
+      return Promise.resolve(business)
+    },
+    ...overrides,
+  }
+}
+
 function routes(
   service: SupportMetadataService = metadataService(),
   sessions: BackofficeAuthenticationService = sessionService(),
   diagnosis: SupportDiagnosisService = diagnosisService(),
   attention: SupportAttentionService = attentionService(),
+  businessPanel: SupportBusinessService = businessService(),
 ): Hono {
   return new Hono().route(
     '/backoffice/v1',
-    backofficeSupportMetadataRoutes(service, sessions, diagnosis, attention),
+    backofficeSupportMetadataRoutes(service, sessions, diagnosis, attention, businessPanel),
   )
 }
 
@@ -187,16 +233,17 @@ beforeEach(() => {
   captured = []
   diagnosisCalls = []
   attentionCalls = []
+  businessCalls = []
   process.env.BACKOFFICE_WEB_URL = ORIGIN
   process.env.STUDIO_WEB_URL = 'https://studio.example.test'
   process.env.API_PUBLIC_URL = 'https://api.example.test'
 })
 
 describe('Backoffice support metadata API contract', () => {
-  test('T-SUP-API-21 mounts every OP-SUP-005 and NEW-SUP-ATTENTION operation with its contract method', () => {
+  test('T-SUP-API-21 mounts every support metadata operation with its contract method', () => {
     const contract = allfitV1ContractManifest.operations
       .filter((operation) =>
-        ['OP-SUP-005', 'NEW-SUP-ATTENTION'].includes(operation.allfitOperation),
+        ['OP-SUP-005', 'NEW-SUP-ATTENTION', 'NEW-SUP-BUSINESS'].includes(operation.allfitOperation),
       )
       .map((operation) => `${operation.method} ${colonPath(operation.path)}`)
       .sort()
@@ -205,7 +252,7 @@ describe('Backoffice support metadata API contract', () => {
       .map((route) => `${route.method} /backoffice/v1${route.path}`)
       .sort()
 
-    expect(contract).toHaveLength(5)
+    expect(contract).toHaveLength(6)
     expect(mounted).toEqual(contract)
   })
 
@@ -221,6 +268,7 @@ describe('Backoffice support metadata API contract', () => {
     expect(mounted).toContain('GET /backoffice/v1/support/operations')
     expect(mounted).toContain('GET /backoffice/v1/support/delivery-circuits')
     expect(mounted).toContain('GET /backoffice/v1/support/attention')
+    expect(mounted).toContain('GET /backoffice/v1/support/business')
   })
 
   test('T-SUP-API-23 finds a person by an exact contact and carries the case through', async () => {
@@ -505,5 +553,54 @@ describe('Backoffice support metadata API contract', () => {
 
     expect([missing.status, ended.status]).toEqual([401, 401])
     expect(attentionCalls).toEqual([])
+  })
+
+  test('T-SUP-API-42 reads how the business is going, empty figures and all', async () => {
+    const response = await routes().fetch(request('/support/business'))
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('cache-control')).toBe('no-store')
+    await expect(response.json()).resolves.toEqual(business)
+    expect(businessCalls).toHaveLength(1)
+    expect(businessCalls[0]?.reader).toEqual({
+      actorPersonId: ACTOR_PERSON_ID,
+      actorSessionId: ACTOR_SESSION_ID,
+    })
+  })
+
+  test('T-SUP-API-43 answers forbidden without the metrics duty, and 503 when the read breaks', async () => {
+    const forbidden = await routes(
+      metadataService(),
+      sessionService(),
+      diagnosisService(),
+      attentionService(),
+      businessService({
+        read: () => Promise.reject(Object.assign(new Error('refused'), { code: '42501' })),
+      }),
+    ).fetch(request('/support/business'))
+    const broken = await routes(
+      metadataService(),
+      sessionService(),
+      diagnosisService(),
+      attentionService(),
+      businessService({ read: () => Promise.reject(new Error('database unavailable')) }),
+    ).fetch(request('/support/business'))
+
+    expect([forbidden.status, broken.status]).toEqual([403, 503])
+    expect(forbidden.headers.get('content-type')).toContain('application/problem+json')
+  })
+
+  test('T-SUP-API-44 never reads the figures without a session that still resolves', async () => {
+    const missing = await routes().fetch(request('/support/business', { cookie: false }))
+    const ended = await routes(
+      metadataService(),
+      sessionService({
+        resolveActor: async () =>
+          Promise.reject(new BackofficeAuthenticationError('unauthenticated')),
+      }),
+    ).fetch(request('/support/business'))
+
+    expect([missing.status, ended.status]).toEqual([401, 401])
+    expect(businessCalls).toEqual([])
   })
 })

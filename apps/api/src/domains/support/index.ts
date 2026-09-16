@@ -13,6 +13,7 @@ export {
   breakGlassService,
   platformAccessService,
   supportAttentionService,
+  supportBusinessService,
   supportDiagnosisService,
   supportMetadataService,
 } from './dependencies.js'
@@ -20,6 +21,7 @@ export type {
   BreakGlassService,
   PlatformAccessService,
   SupportAttentionService,
+  SupportBusinessService,
   SupportDiagnosisService,
   SupportMetadataService,
 } from './application/index.js'
@@ -27,6 +29,7 @@ export type {
   BreakGlassRequest,
   BreakGlassExerciseOutcome,
   SupportAttentionPanel,
+  SupportBusinessPanel,
   SupportDeliveryCircuit,
   SupportOperation,
   SupportPersonMetadata,

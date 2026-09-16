@@ -19,6 +19,8 @@ import type {
   BreakGlassStatus,
   SupportAttentionDatabase,
   SupportAttentionPanel,
+  SupportBusinessDatabase,
+  SupportBusinessPanel,
   SupportDeliveryCircuit,
   SupportDiagnosisDatabase,
   SupportOperation,
@@ -187,6 +189,22 @@ export interface SupportAttentionService {
 export function createSupportAttentionService(
   database: SupportAttentionDatabase,
 ): SupportAttentionService {
+  return {
+    read: (reader, input) => database.read({ ...reader, ...input }),
+  }
+}
+
+/**
+ * The business panel is one duty and one read. There is nothing to compose here:
+ * whether a figure can be given at all is a decision only the database can make.
+ */
+export interface SupportBusinessService {
+  read(reader: SupportReader, input: { requestId: string }): Promise<SupportBusinessPanel>
+}
+
+export function createSupportBusinessService(
+  database: SupportBusinessDatabase,
+): SupportBusinessService {
   return {
     read: (reader, input) => database.read({ ...reader, ...input }),
   }
