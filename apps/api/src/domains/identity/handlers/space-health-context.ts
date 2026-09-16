@@ -38,7 +38,7 @@ import {
   spaceTokenVerifier,
   verifiedSpaceToken,
   type TokenVerifier,
-} from './space-personal-data.js'
+} from '../../../platform/http/space-requests.js'
 
 const LIST_PARAMETERS = new Set(['limit', 'before_valid_from', 'before_id'])
 const OPERATION = 'space-health-context'

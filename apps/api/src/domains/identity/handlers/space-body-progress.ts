@@ -39,7 +39,7 @@ import {
   spaceTokenVerifier,
   verifiedSpaceToken,
   type TokenVerifier,
-} from './space-personal-data.js'
+} from '../../../platform/http/space-requests.js'
 
 const LIST_PARAMETERS = new Set(['limit', 'before_measured_on', 'before_id'])
 const OPERATION = 'space-body-progress'

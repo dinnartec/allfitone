@@ -1,8 +1,8 @@
 /**
  * What every Space route over a person's own sensitive data does the same way.
  *
- * Body progress and health context differ in what they carry, not in how a request is
- * trusted: a bearer token verified for Space, command identifiers of fixed versions, a
+ * Body progress, health context and meals differ in what they carry, not in how a request
+ * is trusted: a bearer token verified for Space, command identifiers of fixed versions, a
  * request hash over a canonical form, and one mapping from database verdicts to problems.
  * Keeping that in one place means a fix to the trust boundary cannot land in one of them
  * and miss the other.
@@ -12,8 +12,8 @@ import { createHash } from 'node:crypto'
 import type { VerifiedToken } from '@allfitone/auth-provider'
 import type { Context } from 'hono'
 
-import { authProvider } from '../../../platform/auth/index.js'
-import { problem, type ApiErrorCode } from '../../../platform/http/index.js'
+import { authProvider } from '../auth/index.js'
+import { problem, type ApiErrorCode } from './index.js'
 
 export const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 export const UUID_V7 = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -85,8 +85,12 @@ export function isInstant(value: string): boolean {
 }
 
 /** The page size, or undefined when the query names one outside 1..maximum. */
-export function pageSize(value: string | undefined, maximum: number): number | undefined {
-  const limit = value === undefined ? DEFAULT_PAGE_SIZE : Number(value)
+export function pageSize(
+  value: string | undefined,
+  maximum: number,
+  fallback = DEFAULT_PAGE_SIZE,
+): number | undefined {
+  const limit = value === undefined ? fallback : Number(value)
   return Number.isInteger(limit) && limit >= 1 && limit <= maximum ? limit : undefined
 }
 
@@ -141,5 +145,7 @@ function databaseErrorCode(error: unknown): ApiErrorCode | undefined {
   }
   if (sqlState === '23505' || sqlState === '55000' || sqlState === '23514') return 'conflict'
   if (sqlState === '40001') return 'idempotency-in-progress'
+  // Allfit-defined: the command ran, and what it created has been deleted since.
+  if (sqlState === 'AF410') return 'command-effect-disposed'
   return undefined
 }

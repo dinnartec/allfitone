@@ -45,6 +45,8 @@ export type ApiErrorCode =
   | 'validation-failed'
   /** A closed application or database limit rejected the attempt. */
   | 'rate-limited'
+  /** The command already ran, and what it created has been deleted since. */
+  | 'command-effect-disposed'
 
 const STATUS: Record<ApiErrorCode, ContentfulStatusCode> = {
   unauthenticated: 401,
@@ -64,6 +66,7 @@ const STATUS: Record<ApiErrorCode, ContentfulStatusCode> = {
   'not-found': 404,
   'validation-failed': 422,
   'rate-limited': 429,
+  'command-effect-disposed': 410,
 }
 
 const TITLE: Record<ApiErrorCode, string> = {
@@ -84,6 +87,7 @@ const TITLE: Record<ApiErrorCode, string> = {
   'not-found': 'Resource not found',
   'validation-failed': 'The request does not satisfy the contract',
   'rate-limited': 'Too many requests',
+  'command-effect-disposed': 'The command effect was disposed',
 }
 
 /**
