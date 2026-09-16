@@ -16,6 +16,7 @@ export { studioOwnershipInvitationRoutes } from './handlers/studio-ownership-inv
 export { spaceIdentityRoutes } from './handlers/space.js'
 export { spaceOnboardingRoutes } from './handlers/space-onboarding.js'
 export { spaceBodyProgressRoutes } from './handlers/space-body-progress.js'
+export { spaceHealthContextRoutes } from './handlers/space-health-context.js'
 export { workosWebhookRoutes } from './handlers/webhooks.js'
 export { backofficeIdentityRoutes, BACKOFFICE_SESSION_COOKIE } from './handlers/backoffice.js'
 export { backofficeCredentialVerificationRoutes } from './handlers/backoffice-credential-verification.js'

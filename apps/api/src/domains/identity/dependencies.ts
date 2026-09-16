@@ -62,6 +62,25 @@ import {
 import { createAccountRecoveryDatabase } from './infrastructure/account-recovery.js'
 import { createBodyProgressService, type BodyProgressService } from './application/body-progress.js'
 import { createBodyProgressDatabase } from './infrastructure/body-progress.js'
+import {
+  createHealthContextService,
+  type HealthContextService,
+} from './application/health-context.js'
+import { createHealthContextDatabase } from './infrastructure/health-context.js'
+
+let cachedHealthContext: HealthContextService | undefined
+
+export function spaceHealthContextService(): HealthContextService {
+  if (cachedHealthContext) return cachedHealthContext
+  const issuer = process.env.WORKOS_ISSUER
+  if (!issuer) throw new Error('WORKOS_ISSUER is not set')
+  cachedHealthContext = createHealthContextService({
+    database: createHealthContextDatabase(),
+    issuer,
+    requestId: () => randomUUID(),
+  })
+  return cachedHealthContext
+}
 
 let cachedBodyProgress: BodyProgressService | undefined
 
