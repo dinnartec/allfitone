@@ -486,7 +486,7 @@ export const allfitV1ContractManifest = {
       path: '/space/v1/body-progress',
       operationId: 'recordSpaceBodyProgress',
       allfitOperation: 'OP-IDN-006',
-      responses: ['201', '400', '401', '403', '409', '415', '422', '503'],
+      responses: ['201', '400', '401', '403', '409', '410', '415', '422', '503'],
     },
     {
       method: 'DELETE',
@@ -528,7 +528,7 @@ export const allfitV1ContractManifest = {
       path: '/space/v1/health-context',
       operationId: 'declareSpaceHealthContext',
       allfitOperation: 'OP-IDN-008',
-      responses: ['201', '400', '401', '403', '409', '415', '422', '503'],
+      responses: ['201', '400', '401', '403', '409', '410', '415', '422', '503'],
     },
     {
       method: 'DELETE',

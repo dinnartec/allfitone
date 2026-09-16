@@ -2124,7 +2124,7 @@ export interface paths {
     /**
      * Record a body measurement
      * @description The `Command-Id` is the measurement's identifier, so a device can create it offline and send it later without duplicating it. The value is stored in the canonical unit of its dimension (kilograms, metres, percent) and what the person typed is kept beside it. A recorded measurement is never rewritten. Photos are not accepted yet.
-     *     Only a token that resolves to an active person records anything (403).
+     *     Replaying the recording of a measurement that was deleted since answers 410. Only a token that resolves to an active person records anything (403).
      */
     post: operations['recordSpaceBodyProgress']
     delete?: never
@@ -2169,7 +2169,7 @@ export interface paths {
     /**
      * Declare a pain, limitation or recovery
      * @description Health context is the most protected category V1 keeps, and it is not a clinical record: three types, a short description in the person's own words and, optionally, one body area. There is no field for a diagnosis, a test result or a document. The `Command-Id` is the claim's identifier, so a device can declare offline and send it later without duplicating it. A declared claim is never rewritten.
-     *     Only a token that resolves to an active person declares anything (403).
+     *     Replaying the declaration of a claim that was deleted since answers 410. Only a token that resolves to an active person declares anything (403).
      */
     post: operations['declareSpaceHealthContext']
     delete?: never
@@ -9954,6 +9954,7 @@ export interface operations {
       401: components['responses']['Unauthenticated']
       403: components['responses']['Forbidden']
       409: components['responses']['Conflict']
+      410: components['responses']['CommandEffectDisposed']
       415: components['responses']['UnsupportedMediaType']
       422: components['responses']['ValidationFailed']
       503: components['responses']['UpstreamUnavailable']
@@ -10058,6 +10059,7 @@ export interface operations {
       401: components['responses']['Unauthenticated']
       403: components['responses']['Forbidden']
       409: components['responses']['Conflict']
+      410: components['responses']['CommandEffectDisposed']
       415: components['responses']['UnsupportedMediaType']
       422: components['responses']['ValidationFailed']
       503: components['responses']['UpstreamUnavailable']

@@ -257,6 +257,7 @@ describe('Space body progress API contract', () => {
       ['23505', 409],
       ['55000', 409],
       ['40001', 409],
+      ['AF410', 410],
     ]
     const answers = await Promise.all(
       verdicts.map(([sqlState]) =>

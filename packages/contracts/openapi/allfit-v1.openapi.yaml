@@ -5392,7 +5392,8 @@ paths:
         what the person typed is kept beside it. A recorded measurement is never
         rewritten. Photos are not accepted yet.
 
-        Only a token that resolves to an active person records anything (403).
+        Replaying the recording of a measurement that was deleted since answers
+        410. Only a token that resolves to an active person records anything (403).
       security:
         - bearerAuth: []
       parameters:
@@ -5424,6 +5425,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '409':
           $ref: '#/components/responses/Conflict'
+        '410':
+          $ref: '#/components/responses/CommandEffectDisposed'
         '415':
           $ref: '#/components/responses/UnsupportedMediaType'
         '422':
@@ -5545,6 +5548,7 @@ paths:
         so a device can declare offline and send it later without duplicating it.
         A declared claim is never rewritten.
 
+        Replaying the declaration of a claim that was deleted since answers 410.
         Only a token that resolves to an active person declares anything (403).
       security:
         - bearerAuth: []
@@ -5577,6 +5581,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '409':
           $ref: '#/components/responses/Conflict'
+        '410':
+          $ref: '#/components/responses/CommandEffectDisposed'
         '415':
           $ref: '#/components/responses/UnsupportedMediaType'
         '422':
