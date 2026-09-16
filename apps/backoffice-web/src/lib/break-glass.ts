@@ -33,6 +33,8 @@ type BodyProgressUnitCode = AllfitV1Schemas['BodyProgressUnitCode']
 type HealthContextType = AllfitV1Schemas['HealthContextType']
 type HealthContextBodyArea = AllfitV1Schemas['HealthContextBodyArea']
 type Provenance = AllfitV1Schemas['Provenance']
+type MealType = AllfitV1Schemas['MealType']
+type NutrientCode = AllfitV1Schemas['NutrientCode']
 
 /** Only what can be approved. The forbidden set is absent, not disabled. */
 export const BREAK_GLASS_CATEGORIES: readonly BreakGlassCategory[] = [
@@ -397,12 +399,96 @@ export function formatDay(value: string): string {
   return new Intl.DateTimeFormat('es-CO', { dateStyle: 'medium' }).format(parsed)
 }
 
+const MEAL_TYPE_LABELS: Record<MealType, string> = {
+  breakfast: 'Desayuno',
+  lunch: 'Almuerzo',
+  dinner: 'Cena',
+  snack: 'Merienda',
+  other: 'Otra comida',
+}
+
+// Totals are shown in this order, each after its amount.
+const NUTRIENT_TOTALS: readonly [NutrientCode, string][] = [
+  ['energy', 'kcal'],
+  ['protein', 'g de proteína'],
+  ['carbohydrates', 'g de carbohidratos'],
+  ['fat', 'g de grasa'],
+  ['fiber', 'g de fibra'],
+  ['water', 'ml de agua'],
+]
+
+export interface MealRow {
+  id: string
+  when: string
+  type: string
+  eaten: string
+  totals: string
+  note: string
+  photo: string
+}
+
+/** The meals an allowed read returned, most recent first as the server sent them. */
+export function mealRows(outcome: BreakGlassExerciseOutcome): MealRow[] {
+  if (outcome.outcome !== 'allowed') return []
+  return (outcome.content?.nutrition_intake ?? []).map((meal) => {
+    const zone = String(meal.timezone)
+    const sums = new Map<NutrientCode, number>()
+    for (const item of meal.items) {
+      for (const nutrient of item.nutrients) {
+        sums.set(nutrient.nutrient_code, (sums.get(nutrient.nutrient_code) ?? 0) + nutrient.value)
+      }
+    }
+    const totals = NUTRIENT_TOTALS.filter(([code]) => sums.has(code)).map(
+      ([code, label]) => `${amount(sums.get(code) ?? 0)} ${label}`,
+    )
+    return {
+      id: meal.id,
+      // The hour where it was eaten, and the zone that makes that hour true.
+      when: `${mealMoment(meal.occurred_at, zone)} · ${zone}`,
+      type: MEAL_TYPE_LABELS[meal.meal_type],
+      eaten: [...meal.items]
+        .sort((left, right) => left.position - right.position)
+        .map((item) =>
+          item.quantity === null || item.quantity_unit === null
+            ? item.name
+            : `${item.name}, ${amount(item.quantity)} ${item.quantity_unit}`,
+        )
+        .join(' · '),
+      totals: totals.length > 0 ? totals.join(' · ') : 'Sin valores registrados',
+      note: meal.note ?? 'Sin nota',
+      photo: meal.has_media ? 'Tiene foto; no se muestra aquí' : 'Sin foto',
+    }
+  })
+}
+
+function amount(value: number): string {
+  return new Intl.NumberFormat('es-CO', { maximumFractionDigits: 3 }).format(value)
+}
+
+function mealMoment(value: string, zone: string): string {
+  const parsed = Date.parse(value)
+  if (Number.isNaN(parsed)) return '—'
+  try {
+    return new Intl.DateTimeFormat('es-CO', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+      timeZone: zone,
+    }).format(parsed)
+  } catch {
+    // A zone this browser does not know still gets a date, in the operator's own zone.
+    return new Intl.DateTimeFormat('es-CO', { dateStyle: 'medium', timeStyle: 'short' }).format(
+      parsed,
+    )
+  }
+}
+
 /** An allowed read that returned nothing still has to say what it looked for. */
 export function emptyReadMessage(category: BreakGlassCategory | undefined): string {
   if (category === 'body_progress') return 'La persona no tiene mediciones registradas.'
   if (category === 'health_context') {
     return 'La persona no ha declarado dolores, limitaciones ni recuperaciones.'
   }
+  if (category === 'nutrition_intake') return 'La persona no ha registrado comidas.'
   return 'La lectura no devolvió registros.'
 }
 

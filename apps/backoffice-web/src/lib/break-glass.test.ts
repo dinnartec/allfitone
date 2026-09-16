@@ -10,6 +10,7 @@ import {
   emptyReadMessage,
   formatDay,
   healthContextRows,
+  mealRows,
   measurementRows,
   outcomeMessage,
   projectedTier,
@@ -338,6 +339,101 @@ describe('break-glass presentation rules', () => {
     expect(measurementRows(allowed)).toEqual([])
   })
 
+  test('shows a meal when and where it was eaten, what it had and what it added up to', () => {
+    const allowed: BreakGlassExerciseOutcome = {
+      outcome: 'allowed',
+      reason_code: 'authorized_exercise',
+      break_glass_event_id: '019a8000-0000-7000-8000-000000000605',
+      occurred_at: '2026-09-10T18:09:00.000Z',
+      category: 'nutrition_intake',
+      content: {
+        nutrition_intake: [
+          {
+            id: '019a8000-0000-7000-8000-000000000901',
+            occurred_at: '2026-09-15T23:30:00+00:00',
+            local_date: '2026-09-15',
+            timezone: 'America/Bogota',
+            meal_type: 'dinner',
+            note: 'Con poca sal',
+            revision_number: 0,
+            has_media: true,
+            items: [
+              // Out of order on purpose: the row lists items by position.
+              {
+                position: 2,
+                name: 'Arroz',
+                quantity: 150,
+                quantity_unit: 'g',
+                nutrients: [
+                  { nutrient_code: 'carbohydrates', value: 42, unit: 'g' },
+                  { nutrient_code: 'energy', value: 195, unit: 'kcal' },
+                ],
+              },
+              {
+                position: 1,
+                name: 'Pollo a la plancha',
+                quantity: 120,
+                quantity_unit: 'g',
+                nutrients: [
+                  { nutrient_code: 'energy', value: 198, unit: 'kcal' },
+                  { nutrient_code: 'protein', value: 37.5, unit: 'g' },
+                ],
+              },
+              { position: 3, name: 'Ensalada', quantity: null, quantity_unit: null, nutrients: [] },
+            ],
+          },
+          {
+            id: '019a8000-0000-7000-8000-000000000902',
+            occurred_at: '2026-09-15T12:00:00+00:00',
+            local_date: '2026-09-15',
+            timezone: 'Europe/Madrid',
+            meal_type: 'snack',
+            note: null,
+            revision_number: 0,
+            has_media: false,
+            items: [
+              { position: 1, name: 'Té', quantity: null, quantity_unit: null, nutrients: [] },
+            ],
+          },
+        ],
+      },
+    }
+
+    const [dinner, snack] = mealRows(allowed)
+    // The hour in the meal's own zone: 23:30 UTC is 18:30 in Bogotá, and 12:00 is 14:00 in Madrid.
+    expect(dinner?.when).toContain('6:30')
+    expect(dinner?.when).toContain('America/Bogota')
+    expect(snack?.when).toContain('2:00')
+    expect(snack?.when).toContain('Europe/Madrid')
+    expect(dinner).toMatchObject({
+      id: '019a8000-0000-7000-8000-000000000901',
+      type: 'Cena',
+      eaten: 'Pollo a la plancha, 120 g · Arroz, 150 g · Ensalada',
+      totals: '393 kcal · 37,5 g de proteína · 42 g de carbohidratos',
+      note: 'Con poca sal',
+      photo: 'Tiene foto; no se muestra aquí',
+    })
+    expect(snack).toMatchObject({
+      type: 'Merienda',
+      eaten: 'Té',
+      totals: 'Sin valores registrados',
+      note: 'Sin nota',
+      photo: 'Sin foto',
+    })
+    // A zone the browser does not know still shows a moment instead of breaking the screen.
+    const snackMeal = allowed.content?.nutrition_intake?.[1]
+    if (!snackMeal) throw new Error('the fixture has a second meal')
+    const [unknownZone] = mealRows({
+      ...allowed,
+      content: { nutrition_intake: [{ ...snackMeal, timezone: 'Mars/Olympus_Mons' }] },
+    })
+    expect(unknownZone?.when).toContain('2026')
+    expect(unknownZone?.when).toContain('Mars/Olympus_Mons')
+    expect(mealRows({ ...allowed, outcome: 'denied' })).toEqual([])
+    expect(measurementRows(allowed)).toEqual([])
+    expect(healthContextRows(allowed)).toEqual([])
+  })
+
   test('dates a claim by its day, which is all a declaration knows', () => {
     expect(formatDay('2026-09-01T10:00:00.000Z')).not.toMatch(/d:dd/)
     expect(formatDay('2026-09-01T10:00:00.000Z')).toContain('2026')
@@ -349,6 +445,7 @@ describe('break-glass presentation rules', () => {
     expect(emptyReadMessage('health_context')).toBe(
       'La persona no ha declarado dolores, limitaciones ni recuperaciones.',
     )
+    expect(emptyReadMessage('nutrition_intake')).toBe('La persona no ha registrado comidas.')
     expect(emptyReadMessage('nutrition_guidance')).toBe('La lectura no devolvió registros.')
     expect(emptyReadMessage(undefined)).toBe('La lectura no devolvió registros.')
   })

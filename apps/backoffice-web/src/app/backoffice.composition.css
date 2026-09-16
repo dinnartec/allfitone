@@ -325,6 +325,18 @@
   white-space: normal;
 }
 
+/* A meal reads as sentences: what was eaten, what it added up to, and the note. */
+[data-break-glass-meal] {
+  min-width: 10rem;
+  max-width: 12rem;
+  white-space: normal;
+}
+
+[data-break-glass-moment] {
+  max-width: 10rem;
+  white-space: normal;
+}
+
 [data-access-log-filters] {
   display: grid;
   gap: 12px;

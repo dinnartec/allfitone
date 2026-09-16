@@ -75,6 +75,7 @@ import {
   categoryLabel,
   emptyReadMessage,
   healthContextRows,
+  mealRows,
   measurementRows,
   outcomeMessage,
   purposeLabel,
@@ -152,6 +153,7 @@ export function BreakGlassWindows() {
   const shown = outcome && readStillOpen ? outcome.answer : null
   const rows = shown ? measurementRows(shown) : []
   const claims = shown ? healthContextRows(shown) : []
+  const eaten = shown ? mealRows(shown) : []
 
   async function run(operation: () => Promise<unknown>, success: string) {
     setBusy(true)
@@ -240,7 +242,10 @@ export function BreakGlassWindows() {
             {outcome.answer.outcome === 'allowed' && !readStillOpen
               ? ' La ventana cerró y lo que devolvió dejó de mostrarse.'
               : null}
-            {shown?.outcome === 'allowed' && rows.length === 0 && claims.length === 0
+            {shown?.outcome === 'allowed' &&
+            rows.length === 0 &&
+            claims.length === 0 &&
+            eaten.length === 0
               ? ` ${emptyReadMessage(shown.category)}`
               : null}
           </AlertDescription>
@@ -295,6 +300,34 @@ export function BreakGlassWindows() {
                 <TableCell>{claim.since}</TableCell>
                 <TableCell>{claim.until}</TableCell>
                 <TableCell data-break-glass-origin>{claim.provenance}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      ) : null}
+
+      {eaten.length > 0 ? (
+        <Table scrollAreaLabel="Comidas de la persona" data-break-glass-content>
+          <TableCaption>Comidas de la persona</TableCaption>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Cuándo</TableHead>
+              <TableHead>Tipo</TableHead>
+              <TableHead>Lo que comió</TableHead>
+              <TableHead>Valores</TableHead>
+              <TableHead>Nota</TableHead>
+              <TableHead>Foto</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {eaten.map((meal) => (
+              <TableRow key={meal.id}>
+                <TableCell data-break-glass-moment>{meal.when}</TableCell>
+                <TableCell>{meal.type}</TableCell>
+                <TableCell data-break-glass-meal>{meal.eaten}</TableCell>
+                <TableCell data-break-glass-meal>{meal.totals}</TableCell>
+                <TableCell data-break-glass-meal>{meal.note}</TableCell>
+                <TableCell data-break-glass-origin>{meal.photo}</TableCell>
               </TableRow>
             ))}
           </TableBody>
