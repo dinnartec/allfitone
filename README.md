@@ -15,17 +15,17 @@ Normative product and architecture documentation lives in `allfitone-docs`.
 
 Be aware of the actual state before you start:
 
-|                          |                                                                                                                         |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
-| `apps/api`               | The four surfaces mounted — `/space/v1`, `/studio/v1`, `/backoffice/v1`, `/catalog/v1` — plus a readiness `GET /health` |
-| `apps/worker`            | Cron-invoked outbox jobs: invitation delivery, Backoffice authentication cleanup and account recovery                   |
-| `apps/studio-web`        | Hosted login, profile, organizations and invitations                                                                    |
-| `apps/backoffice-web`    | Password and TOTP sign-in; people, gyms, catalogue, permissions, team, access log, break glass and diagnosis            |
-| `apps/space`             | Headless client of `/space/v1`: registration, sign-in and password recovery                                             |
-| `packages/auth-provider` | Token verification, code exchange, TOTP, session revocation and recovery delivery                                       |
-| `packages/queue`         | Port and its PostgreSQL adapter over `system.outbox_events`                                                             |
-| `packages/contracts`     | Canonical OpenAPI with 118 paths, and the DTOs generated from it                                                        |
-| `packages/db`            | 49 migrations and a pgTAP suite of 1009 assertions                                                                      |
+|                          |                                                                                                                              |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| `apps/api`               | The four surfaces mounted — `/space/v1`, `/studio/v1`, `/backoffice/v1`, `/catalog/v1` — plus a readiness `GET /health`      |
+| `apps/worker`            | Cron-invoked outbox jobs: invitation delivery, Backoffice authentication cleanup and account recovery                        |
+| `apps/studio-web`        | Hosted login, profile, organizations and invitations                                                                         |
+| `apps/backoffice-web`    | Password and TOTP sign-in; the home panel, people, gyms, catalogue, permissions, team, access log, break glass and diagnosis |
+| `apps/space`             | Headless client of `/space/v1`: registration, sign-in and password recovery                                                  |
+| `packages/auth-provider` | Token verification, code exchange, TOTP, session revocation and recovery delivery                                            |
+| `packages/queue`         | Port and its PostgreSQL adapter over `system.outbox_events`                                                                  |
+| `packages/contracts`     | Canonical OpenAPI with 119 paths, and the DTOs generated from it                                                             |
+| `packages/db`            | 50 migrations and a pgTAP suite of 1034 assertions                                                                           |
 
 Payments, planning execution and nutrition have no domain yet, so the Backoffice
 screens that depend on them say so rather than showing an empty number.
@@ -262,6 +262,11 @@ redirect URI in the WorkOS dashboard match. On macOS, Docker Desktop often holds
 task from its own workspace directory, so Bun looks for `apps/api/.env.local` and
 not the root one. The `dev` scripts pass `--env-file=../../.env.local` for exactly
 this reason; a task added without it will not see the root file.
+
+**`bun run db:test` fails after seeding demo data.** A few pgTAP assertions count
+rows across the whole database, so whatever the demo seed or the bootstrap left
+behind shifts them. Run `bun run db:reset` first — that is the database CI builds,
+and the one the result is about.
 
 **Lint passes but you expected an error.** `no-restricted-imports` does not merge
 across flat-config blocks — the last matching block wins. Patterns are composed
