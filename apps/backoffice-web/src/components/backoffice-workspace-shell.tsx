@@ -62,6 +62,7 @@ const ROUTES: readonly WorkspaceRoute[] = [
   { href: '/team', title: 'Equipo de Allfit', icon: 'permissions' },
   { href: '/catalogue/result-contracts', title: 'Reglas de resultados', icon: 'operation' },
   { href: '/catalogue', title: 'Catálogo global', icon: 'operation' },
+  { href: '/plans', title: 'Planes de Allfit', icon: 'operation' },
   { href: '/permissions', title: 'Definiciones de permiso', icon: 'permissions' },
 ]
 

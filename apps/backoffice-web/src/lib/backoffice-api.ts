@@ -45,6 +45,10 @@ export type SupportDeliveryCircuit = AllfitV1Schemas['SupportDeliveryCircuit']
 export type SupportAttentionPanel = AllfitV1Schemas['SupportAttentionPanel']
 export type SupportBusinessPanel = AllfitV1Schemas['SupportBusinessPanel']
 export type SupportBusinessMetric = AllfitV1Schemas['SupportBusinessMetric']
+export type PlatformPlanCatalogue = AllfitV1Schemas['PlatformPlanCatalogue']
+export type PlatformPlan = AllfitV1Schemas['PlatformPlan']
+export type PlatformPlanCreate = AllfitV1Schemas['PlatformPlanCreate']
+export type PlatformPlanVersionProposal = AllfitV1Schemas['PlatformPlanVersionProposal']
 export type SupportPersonMetadata = AllfitV1Schemas['SupportPersonMetadata']
 export type BackofficeAccountRecovery = AllfitV1Schemas['BackofficeAccountRecovery']
 export type BackofficeAccountRecoveryRequest = AllfitV1Schemas['BackofficeAccountRecoveryRequest']
@@ -350,6 +354,39 @@ export const backofficeApi = {
       signal ? { signal } : {},
     ),
 
+  platformPlans: (signal?: AbortSignal) =>
+    requestJson<PlatformPlanCatalogue>('/backoffice/v1/platform-plans', signal ? { signal } : {}),
+
+  createPlatformPlan: (plan: PlatformPlanCreate, command: BackofficeCommand) =>
+    requestJson<PlatformPlan>('/backoffice/v1/platform-plans', {
+      method: 'POST',
+      headers: commandHeaders(command),
+      body: JSON.stringify(plan),
+    }),
+
+  proposePlatformPlanVersion: (
+    planId: string,
+    proposal: PlatformPlanVersionProposal,
+    command: BackofficeCommand,
+  ) =>
+    requestJson<PlatformPlan>(`/backoffice/v1/platform-plans/${planId}/versions`, {
+      method: 'POST',
+      headers: commandHeaders(command),
+      body: JSON.stringify(proposal),
+    }),
+
+  publishPlatformPlanVersion: (planId: string, versionId: string, command: BackofficeCommand) =>
+    requestJson<PlatformPlan>(
+      `/backoffice/v1/platform-plans/${planId}/versions/${versionId}/publication`,
+      { method: 'POST', headers: commandHeaders(command), body: '{}' },
+    ),
+
+  withdrawPlatformPlanVersion: (planId: string, versionId: string, command: BackofficeCommand) =>
+    requestJson<PlatformPlan>(
+      `/backoffice/v1/platform-plans/${planId}/versions/${versionId}/withdrawal`,
+      { method: 'POST', headers: commandHeaders(command), body: '{}' },
+    ),
+
   supportBusiness: (signal?: AbortSignal) =>
     requestJson<SupportBusinessPanel>('/backoffice/v1/support/business', signal ? { signal } : {}),
 
@@ -635,6 +672,7 @@ function backofficeOperation(path: string, method: string): ClientOperation {
   }
   return (
     catalogueOperation(resolved) ??
+    platformPlanOperation(resolved, method) ??
     peopleOperation(resolved) ??
     supportOperation(resolved) ??
     catalogOperation(resolved) ??
@@ -688,6 +726,7 @@ function supportOperation(route: string): ClientOperation | undefined {
     return undefined
   }
   if (segments[3] === 'attention') return 'backoffice.support.attention'
+  if (segments[3] === 'business') return 'backoffice.support.business'
   if (segments[3] === 'operations') return 'backoffice.support.operations'
   if (segments[3] === 'delivery-circuits') return 'backoffice.support.delivery_circuits'
   if (segments[3] !== 'people') return undefined
@@ -711,6 +750,22 @@ function catalogueOperation(route: string): ClientOperation | undefined {
   return segments[5] === 'archival'
     ? 'backoffice.catalog.global_archive'
     : 'backoffice.catalog.global_publish'
+}
+
+/** The plan and the version vary per row, so these routes are matched by shape. */
+function platformPlanOperation(route: string, method: string): ClientOperation | undefined {
+  const segments = route.split('/').filter(Boolean)
+  if (segments[0] !== 'backoffice' || segments[1] !== 'v1' || segments[2] !== 'platform-plans') {
+    return undefined
+  }
+  if (segments.length === 3) {
+    return method === 'POST'
+      ? 'backoffice.commercial.plan_create'
+      : 'backoffice.commercial.plans_read'
+  }
+  if (segments[6] === 'publication') return 'backoffice.commercial.plan_version_publish'
+  if (segments[6] === 'withdrawal') return 'backoffice.commercial.plan_version_withdraw'
+  return segments.length === 5 ? 'backoffice.commercial.plan_version_propose' : undefined
 }
 
 /** The person and the recovery vary per row, so these routes are matched by shape. */
