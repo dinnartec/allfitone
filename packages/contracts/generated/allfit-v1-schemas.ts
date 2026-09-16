@@ -6351,6 +6351,103 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       'Whether a block of the projection can say anything. `unknown` is a statement about the person; `not_modelled` is a statement about the platform, and confusing the two makes the card lie by omission.',
     enum: ['available', 'unknown', 'not_modelled'],
   },
+  SupportBusinessMetric: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      'One figure. `value` is null unless `availability` is `available`, and the period is never absent: a number without a period is not published.',
+    required: ['key', 'availability', 'value', 'reason', 'period'],
+    properties: {
+      key: {
+        $ref: '#/components/schemas/SupportBusinessMetricKey',
+      },
+      availability: {
+        $ref: '#/components/schemas/SupportBusinessMetricAvailability',
+      },
+      value: {
+        type: ['integer', 'null'],
+        minimum: 0,
+      },
+      reason: {
+        type: ['string', 'null'],
+        maxLength: 64,
+        description: 'Why the figure cannot be given, when it cannot.',
+      },
+      period: {
+        $ref: '#/components/schemas/SupportBusinessMetricPeriod',
+      },
+    },
+  },
+  SupportBusinessMetricAvailability: {
+    type: 'string',
+    description:
+      '`below_threshold` is a statement about the group being too small to report; `not_modelled` is a statement about the platform. Neither is zero.',
+    enum: ['available', 'below_threshold', 'not_modelled'],
+  },
+  SupportBusinessMetricKey: {
+    type: 'string',
+    description:
+      '`active_people_this_week` counts people training in Space and has no signal at all; `studio_active_professionals_this_week` counts professionals working in Studio, which is the only activity the platform records. They are not the same question and must not be read as one.',
+    enum: [
+      'registered_people',
+      'new_people_this_week',
+      'active_people_this_week',
+      'studio_active_professionals_this_week',
+      'organizations',
+      'operating_organizations',
+      'unclaimed_organizations',
+      'active_subscriptions',
+      'billed_this_month',
+      'premium_people',
+    ],
+  },
+  SupportBusinessMetricPeriod: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      "The window the figure was measured over. `from` is null for a running total, which has no beginning other than the platform's own.",
+    required: ['kind', 'from', 'to'],
+    properties: {
+      kind: {
+        type: 'string',
+        enum: ['total', 'week', 'month'],
+      },
+      from: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      to: {
+        type: 'string',
+        format: 'date-time',
+      },
+    },
+  },
+  SupportBusinessPanel: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      'Counts only, each carrying the period it was measured over. No identifier, name or contact travels here, so no figure can be used to reach a person.',
+    required: ['generated_at', 'minimum_aggregate', 'metrics'],
+    properties: {
+      generated_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      minimum_aggregate: {
+        type: 'integer',
+        minimum: 1,
+        description:
+          'The smallest group of people the panel will report. A count of people below it is withheld; a true zero is still published.',
+      },
+      metrics: {
+        type: 'array',
+        minItems: 1,
+        items: {
+          $ref: '#/components/schemas/SupportBusinessMetric',
+        },
+      },
+    },
+  },
   SupportDeliveryCircuit: {
     type: 'object',
     additionalProperties: false,

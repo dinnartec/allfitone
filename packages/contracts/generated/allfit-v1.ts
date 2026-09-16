@@ -653,6 +653,28 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/backoffice/v1/support/business': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Read how the business is going
+     * @description Counts of people, gyms and money, each one carrying the period it was measured over. A figure the platform cannot compute is `not_modelled` with no value and a reason, never zero: payments have no tables yet, and Space keeps no session, so "people active this week" has no signal at all.
+     *     A count of people below `minimum_aggregate` is `below_threshold` with no value, so no figure narrows the platform down to somebody. A true zero is published, because it singles nobody out. Nothing here names a person, so reading it records no access, and no figure leads to one.
+     *     Requires `view_platform_metrics`.
+     */
+    get: operations['readBackofficeSupportBusiness']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/backoffice/v1/organizations': {
     parameters: {
       query?: never
@@ -2817,6 +2839,52 @@ export interface components {
       credential_verifications: components['schemas']['AttentionVerificationNotice']
       unclaimed_organizations: components['schemas']['AttentionUnclaimedOrganizationNotice']
       repeated_failures: components['schemas']['AttentionFailureNotice']
+    }
+    /** @description Counts only, each carrying the period it was measured over. No identifier, name or contact travels here, so no figure can be used to reach a person. */
+    SupportBusinessPanel: {
+      /** Format: date-time */
+      generated_at: string
+      /** @description The smallest group of people the panel will report. A count of people below it is withheld; a true zero is still published. */
+      minimum_aggregate: number
+      metrics: components['schemas']['SupportBusinessMetric'][]
+    }
+    /** @description One figure. `value` is null unless `availability` is `available`, and the period is never absent: a number without a period is not published. */
+    SupportBusinessMetric: {
+      key: components['schemas']['SupportBusinessMetricKey']
+      availability: components['schemas']['SupportBusinessMetricAvailability']
+      value: number | null
+      /** @description Why the figure cannot be given, when it cannot. */
+      reason: string | null
+      period: components['schemas']['SupportBusinessMetricPeriod']
+    }
+    /**
+     * @description `active_people_this_week` counts people training in Space and has no signal at all; `studio_active_professionals_this_week` counts professionals working in Studio, which is the only activity the platform records. They are not the same question and must not be read as one.
+     * @enum {string}
+     */
+    SupportBusinessMetricKey:
+      | 'registered_people'
+      | 'new_people_this_week'
+      | 'active_people_this_week'
+      | 'studio_active_professionals_this_week'
+      | 'organizations'
+      | 'operating_organizations'
+      | 'unclaimed_organizations'
+      | 'active_subscriptions'
+      | 'billed_this_month'
+      | 'premium_people'
+    /**
+     * @description `below_threshold` is a statement about the group being too small to report; `not_modelled` is a statement about the platform. Neither is zero.
+     * @enum {string}
+     */
+    SupportBusinessMetricAvailability: 'available' | 'below_threshold' | 'not_modelled'
+    /** @description The window the figure was measured over. `from` is null for a running total, which has no beginning other than the platform's own. */
+    SupportBusinessMetricPeriod: {
+      /** @enum {string} */
+      kind: 'total' | 'week' | 'month'
+      /** Format: date-time */
+      from: string | null
+      /** Format: date-time */
+      to: string
     }
     /**
      * @description Whether a block of the projection can say anything. `unknown` is a statement about the person; `not_modelled` is a statement about the platform, and confusing the two makes the card lie by omission.
@@ -6479,6 +6547,32 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['SupportAttentionPanel']
+        }
+      }
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  readBackofficeSupportBusiness: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description How the business is going, as of now */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SupportBusinessPanel']
         }
       }
       401: components['responses']['Unauthenticated']
