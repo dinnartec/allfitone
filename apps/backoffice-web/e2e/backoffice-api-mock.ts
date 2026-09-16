@@ -23,6 +23,7 @@ export interface BackofficeFixture {
   teamInvitations?: TeamInvitationFixture
   accountRecovery?: AccountRecoveryFixture
   globalCatalogue?: GlobalCatalogueFixture
+  platformPlans?: PlatformPlansFixture
   attention?: AttentionFixture
   business?: BusinessFixture
   verification?: VerificationFixture
@@ -1256,6 +1257,10 @@ export async function mockBackofficeApi(
       await routeGlobalCatalogue(route, request, fixture)
       return
     }
+    if (request.path.startsWith('/backoffice/v1/platform-plans')) {
+      await routePlatformPlans(route, request, fixture)
+      return
+    }
     if (request.path.startsWith('/backoffice/v1/support/')) {
       await routeSupport(route, request, fixture)
       return
@@ -1884,6 +1889,272 @@ export function globalCatalogueFixture(
   overrides: Partial<GlobalCatalogueFixture> = {},
 ): GlobalCatalogueFixture {
   return { disciplines: [], activityTypes: [], movements: [], ...overrides }
+}
+
+/**
+ * Allfit's own plans. The mock keeps the rules the screen depends on seeing — one
+ * proposal at a time, nobody publishes their own, a proposal that changes nothing is
+ * refused, publishing retires the version in force — so a screen that ignored them would
+ * be caught here rather than in production.
+ */
+export interface PlatformPlansFixture {
+  refusal?: { status: number; code: string }
+  commandRefusal?: { status: number; code: string }
+  lostCommands?: number
+  features: PlatformFeatureFixture[]
+  plans: PlatformPlanFixture[]
+}
+
+export interface PlatformFeatureFixture {
+  code: string
+  name: string
+  unit: string | null
+}
+
+export interface PlatformPlanLimitFixture {
+  feature_code: string
+  enabled: boolean
+  limit_value: number | null
+}
+
+export interface PlatformPlanVersionFixture {
+  id: string
+  version_number: number
+  status: 'draft' | 'published' | 'deprecated' | 'archived'
+  amount_minor: number
+  currency_code: string | null
+  billing_period: 'month' | 'year' | null
+  features: PlatformPlanLimitFixture[]
+  supersedes_version_id: string | null
+  changes: Array<{
+    field: 'amount_minor' | 'currency_code' | 'billing_period' | 'feature'
+    feature_code: string | null
+    before: unknown
+    after: unknown
+  }> | null
+  proposed_by_person_id: string
+  proposed_by_self: boolean
+  proposed_at: string
+  published_by_person_id: string | null
+  published_at: string | null
+  deprecated_at: string | null
+  withdrawn_by_person_id: string | null
+  withdrawn_at: string | null
+}
+
+export interface PlatformPlanFixture {
+  id: string
+  code: string
+  name: string
+  plan_kind: 'free' | 'paid'
+  status: 'draft' | 'published'
+  created_by_person_id: string
+  created_at: string
+  versions: PlatformPlanVersionFixture[]
+}
+
+export const PLAN_OPERATOR_ID = '019a3000-0000-7000-8000-00000000c001'
+export const PLAN_COLLEAGUE_ID = '019a3000-0000-7000-8000-00000000c002'
+
+export function platformPlanVersion(
+  overrides: Partial<PlatformPlanVersionFixture> = {},
+): PlatformPlanVersionFixture {
+  const proposedBySelf = overrides.proposed_by_self ?? false
+  return {
+    id: nextAssignmentId(),
+    version_number: 1,
+    status: 'published',
+    amount_minor: 3990000,
+    currency_code: 'COP',
+    billing_period: 'month',
+    features: [],
+    supersedes_version_id: null,
+    changes: null,
+    proposed_by_person_id: proposedBySelf ? PLAN_OPERATOR_ID : PLAN_COLLEAGUE_ID,
+    proposed_by_self: proposedBySelf,
+    proposed_at: '2026-09-18T12:00:00.000Z',
+    published_by_person_id: PLAN_OPERATOR_ID,
+    published_at: '2026-09-18T12:05:00.000Z',
+    deprecated_at: null,
+    withdrawn_by_person_id: null,
+    withdrawn_at: null,
+    ...overrides,
+  }
+}
+
+export function platformPlan(overrides: Partial<PlatformPlanFixture> = {}): PlatformPlanFixture {
+  return {
+    id: nextAssignmentId(),
+    code: 'premium',
+    name: 'Premium',
+    plan_kind: 'paid',
+    status: 'draft',
+    created_by_person_id: PLAN_OPERATOR_ID,
+    created_at: '2026-09-18T11:00:00.000Z',
+    versions: [],
+    ...overrides,
+  }
+}
+
+export function platformPlansFixture(
+  overrides: Partial<PlatformPlansFixture> = {},
+): PlatformPlansFixture {
+  return { features: [], plans: [], ...overrides }
+}
+
+function planProjection(plan: PlatformPlanFixture) {
+  const { versions, ...rest } = plan
+  return {
+    ...rest,
+    current_version: versions.find((version) => version.status === 'published') ?? null,
+    proposal: versions.find((version) => version.status === 'draft') ?? null,
+    history: [...versions].sort((left, right) => right.version_number - left.version_number),
+  }
+}
+
+function planChanges(
+  before: PlatformPlanVersionFixture,
+  after: PlatformPlanVersionFixture,
+): NonNullable<PlatformPlanVersionFixture['changes']> {
+  const changes: NonNullable<PlatformPlanVersionFixture['changes']> = []
+  for (const field of ['amount_minor', 'currency_code', 'billing_period'] as const) {
+    if (before[field] !== after[field]) {
+      changes.push({ field, feature_code: null, before: before[field], after: after[field] })
+    }
+  }
+  const codes = new Set([...before.features, ...after.features].map((entry) => entry.feature_code))
+  for (const code of [...codes].sort()) {
+    const was = before.features.find((entry) => entry.feature_code === code)
+    const is = after.features.find((entry) => entry.feature_code === code)
+    const state = (entry: PlatformPlanLimitFixture | undefined) =>
+      entry ? { enabled: entry.enabled, limit_value: entry.limit_value } : null
+    if (JSON.stringify(state(was)) !== JSON.stringify(state(is))) {
+      changes.push({ field: 'feature', feature_code: code, before: state(was), after: state(is) })
+    }
+  }
+  return changes
+}
+
+async function routePlatformPlans(
+  route: Route,
+  request: MockRequest,
+  fixture: BackofficeFixture,
+): Promise<void> {
+  const state = fixture.platformPlans ?? platformPlansFixture()
+  fixture.platformPlans = state
+  const segments = request.path.split('/').filter(Boolean)
+  const now = new Date().toISOString()
+
+  if (request.method === 'GET') {
+    if (state.refusal) {
+      await fulfillProblem(route, state.refusal.status, state.refusal.code)
+      return
+    }
+    await fulfill(route, 200, {
+      generated_at: now,
+      feature_catalog: state.features,
+      plans: [...state.plans]
+        .sort((left, right) =>
+          left.plan_kind === right.plan_kind
+            ? left.code.localeCompare(right.code)
+            : left.plan_kind === 'free'
+              ? -1
+              : 1,
+        )
+        .map(planProjection),
+    })
+    return
+  }
+
+  if (state.lostCommands && state.lostCommands > 0) {
+    state.lostCommands -= 1
+    await route.abort('failed')
+    return
+  }
+  if (state.commandRefusal) {
+    await fulfillProblem(route, state.commandRefusal.status, state.commandRefusal.code)
+    return
+  }
+
+  const body = (request.body ?? {}) as Record<string, unknown>
+
+  if (segments.length === 3) {
+    const code = String(body.code ?? '')
+    const kind = body.plan_kind === 'free' ? 'free' : 'paid'
+    if (
+      state.plans.some((plan) => plan.code === code) ||
+      (kind === 'free' && state.plans.some((plan) => plan.plan_kind === 'free'))
+    ) {
+      await fulfillProblem(route, 409, 'conflict')
+      return
+    }
+    const plan = platformPlan({ code, name: String(body.name ?? ''), plan_kind: kind })
+    state.plans.push(plan)
+    await fulfill(route, 201, planProjection(plan))
+    return
+  }
+
+  const plan = state.plans.find((candidate) => candidate.id === segments[3])
+  if (!plan) {
+    await fulfillProblem(route, 404, 'not-found')
+    return
+  }
+  const inForce = plan.versions.find((version) => version.status === 'published')
+  const open = plan.versions.find((version) => version.status === 'draft')
+
+  if (segments.length === 5) {
+    if (open) {
+      await fulfillProblem(route, 409, 'conflict')
+      return
+    }
+    const proposal = platformPlanVersion({
+      version_number: plan.versions.length + 1,
+      status: 'draft',
+      amount_minor: Number(body.amount_minor),
+      currency_code: (body.currency_code as string | null) ?? null,
+      billing_period: (body.billing_period as 'month' | 'year' | null) ?? null,
+      features: (body.features as PlatformPlanLimitFixture[]) ?? [],
+      supersedes_version_id: inForce?.id ?? null,
+      proposed_by_self: true,
+      proposed_at: now,
+      published_by_person_id: null,
+      published_at: null,
+    })
+    if (inForce) {
+      proposal.changes = planChanges(inForce, proposal)
+      if (proposal.changes.length === 0) {
+        await fulfillProblem(route, 409, 'conflict')
+        return
+      }
+    }
+    plan.versions.push(proposal)
+    await fulfill(route, 201, planProjection(plan))
+    return
+  }
+
+  if (!open || open.id !== segments[5]) {
+    await fulfillProblem(route, 409, 'conflict')
+    return
+  }
+  if (segments[6] === 'publication') {
+    if (open.proposed_by_self) {
+      await fulfillProblem(route, 403, 'forbidden')
+      return
+    }
+    if (inForce) {
+      inForce.status = 'deprecated'
+      inForce.deprecated_at = now
+    }
+    open.status = 'published'
+    open.published_at = now
+    open.published_by_person_id = PLAN_OPERATOR_ID
+    plan.status = 'published'
+  } else {
+    open.status = 'archived'
+    open.withdrawn_at = now
+    open.withdrawn_by_person_id = PLAN_OPERATOR_ID
+  }
+  await fulfill(route, 200, planProjection(plan))
 }
 
 async function routeGlobalCatalogue(
