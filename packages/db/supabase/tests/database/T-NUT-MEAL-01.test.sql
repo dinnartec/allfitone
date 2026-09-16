@@ -12,7 +12,7 @@
 
 begin;
 
-select plan(53);
+select plan(58);
 
 insert into identity.people (id, given_name, family_name, status)
 values
@@ -120,9 +120,9 @@ $fn$;
 
 -- One item with two nutrients, used where the shape is not the point.
 create function pg_temp.rice() returns jsonb language sql as $fn$
-  select '[{"name": "Arroz", "quantity": 150, "quantity_unit_code": "g",
-            "nutrients": [{"nutrient_code": "energy", "value": 195, "unit_code": "kcal"},
-                          {"nutrient_code": "carbohydrates", "value": 42, "unit_code": "g"}]}]'::jsonb
+  select '[{"position": 1, "name": "Arroz", "quantity": 150, "quantity_unit": "g",
+            "nutrients": [{"nutrient_code": "energy", "value": 195, "unit": "kcal"},
+                          {"nutrient_code": "carbohydrates", "value": 42, "unit": "g"}]}]'::jsonb
 $fn$;
 
 -- ---------------------------------------------------------------------------
@@ -160,12 +160,12 @@ create temporary table lunch on commit drop as
 select * from pg_temp.eat(
   'subject_meal', '019b7000-0000-7000-8000-000000000501',
   timestamptz '2026-09-15 23:30:00+00', 'America/Bogota', 'dinner', 'Con poca sal',
-  '[{"name": "Pollo a la plancha", "quantity": 120, "quantity_unit_code": "g",
-     "nutrients": [{"nutrient_code": "energy", "value": 198, "unit_code": "kcal"},
-                   {"nutrient_code": "protein", "value": 37, "unit_code": "g"}]},
-    {"name": "Agua", "quantity": 500, "quantity_unit_code": "ml",
-     "nutrients": [{"nutrient_code": "water", "value": 500, "unit_code": "ml"}]},
-    {"name": "Ensalada",
+  '[{"position": 1, "name": "Pollo a la plancha", "quantity": 120, "quantity_unit": "g",
+     "nutrients": [{"nutrient_code": "energy", "value": 198, "unit": "kcal"},
+                   {"nutrient_code": "protein", "value": 37, "unit": "g"}]},
+    {"position": 2, "name": "Agua", "quantity": 500, "quantity_unit": "ml",
+     "nutrients": [{"nutrient_code": "water", "value": 500, "unit": "ml"}]},
+    {"position": 3, "name": "Ensalada",
      "nutrients": []}]'::jsonb,
   'a0000000-0000-4000-8000-000000000701', decode(repeat('61', 32), 'hex')
 );
@@ -180,14 +180,14 @@ select results_eq(
 );
 
 select results_eq(
-  $$ select item->>'position', item->>'name', (item->>'quantity')::numeric, item->>'quantity_unit_code',
+  $$ select item->>'position', item->>'name', (item->>'quantity')::numeric, item->>'quantity_unit',
             jsonb_array_length(item->'nutrients')
      from lunch, jsonb_array_elements(result->'items') as item
      order by (item->>'position')::integer $$,
   $$ values ('1'::text, 'Pollo a la plancha'::text, 120::numeric, 'g'::text, 2),
             ('2'::text, 'Agua'::text, 500::numeric, 'ml'::text, 1),
             ('3'::text, 'Ensalada'::text, null::numeric, null::text, 0) $$,
-  'items keep the order they were written in, and a quantity is optional'
+  'items keep the positions the client gave them, and a quantity is optional'
 );
 
 select is(
@@ -210,12 +210,12 @@ select results_eq(
   $$ select result->>'id', replayed
      from pg_temp.eat('subject_meal', '019b7000-0000-7000-8000-000000000501',
        timestamptz '2026-09-15 23:30:00+00', 'America/Bogota', 'dinner', 'Con poca sal',
-       '[{"name": "Pollo a la plancha", "quantity": 120, "quantity_unit_code": "g",
-          "nutrients": [{"nutrient_code": "energy", "value": 198, "unit_code": "kcal"},
-                        {"nutrient_code": "protein", "value": 37, "unit_code": "g"}]},
-         {"name": "Agua", "quantity": 500, "quantity_unit_code": "ml",
-          "nutrients": [{"nutrient_code": "water", "value": 500, "unit_code": "ml"}]},
-         {"name": "Ensalada", "nutrients": []}]'::jsonb,
+       '[{"position": 1, "name": "Pollo a la plancha", "quantity": 120, "quantity_unit": "g",
+          "nutrients": [{"nutrient_code": "energy", "value": 198, "unit": "kcal"},
+                        {"nutrient_code": "protein", "value": 37, "unit": "g"}]},
+         {"position": 2, "name": "Agua", "quantity": 500, "quantity_unit": "ml",
+          "nutrients": [{"nutrient_code": "water", "value": 500, "unit": "ml"}]},
+         {"position": 3, "name": "Ensalada", "nutrients": []}]'::jsonb,
        'a0000000-0000-4000-8000-000000000701', decode(repeat('61', 32), 'hex')) $$,
   $$ values ('019b7000-0000-7000-8000-000000000501'::text, true) $$,
   'a retried recording answers the same meal instead of a second one'
@@ -239,7 +239,7 @@ select throws_ok(
 select throws_ok(
   $$ select * from pg_temp.eat('subject_meal', extensions.uuid_generate_v7(), now(),
        'America/Bogota', 'lunch', null,
-       '[{"name": "Sal", "nutrients": [{"nutrient_code": "sodium", "value": 1, "unit_code": "g"}]}]'::jsonb) $$,
+       '[{"position": 1, "name": "Sal", "nutrients": [{"nutrient_code": "sodium", "value": 1, "unit": "g"}]}]'::jsonb) $$,
   '22023', null,
   'a nutrient outside the published catalogue is refused'
 );
@@ -247,7 +247,7 @@ select throws_ok(
 select throws_ok(
   $$ select * from pg_temp.eat('subject_meal', extensions.uuid_generate_v7(), now(),
        'America/Bogota', 'lunch', null,
-       '[{"name": "Pan", "nutrients": [{"nutrient_code": "energy", "value": 800, "unit_code": "kg"}]}]'::jsonb) $$,
+       '[{"position": 1, "name": "Pan", "nutrients": [{"nutrient_code": "energy", "value": 800, "unit": "kg"}]}]'::jsonb) $$,
   '22023', null,
   'a nutrient is written in its own unit'
 );
@@ -255,7 +255,7 @@ select throws_ok(
 select throws_ok(
   $$ select * from pg_temp.eat('subject_meal', extensions.uuid_generate_v7(), now(),
        'America/Bogota', 'lunch', null,
-       '[{"name": "Pan", "nutrients": [{"nutrient_code": "fat", "value": -1, "unit_code": "g"}]}]'::jsonb) $$,
+       '[{"position": 1, "name": "Pan", "nutrients": [{"nutrient_code": "fat", "value": -1, "unit": "g"}]}]'::jsonb) $$,
   '22023', null,
   'a nutrient value is never negative'
 );
@@ -263,8 +263,8 @@ select throws_ok(
 select throws_ok(
   $$ select * from pg_temp.eat('subject_meal', extensions.uuid_generate_v7(), now(),
        'America/Bogota', 'lunch', null,
-       '[{"name": "Pan", "nutrients": [{"nutrient_code": "fat", "value": 2, "unit_code": "g"},
-                                       {"nutrient_code": "fat", "value": 3, "unit_code": "g"}]}]'::jsonb) $$,
+       '[{"position": 1, "name": "Pan", "nutrients": [{"nutrient_code": "fat", "value": 2, "unit": "g"},
+                                       {"nutrient_code": "fat", "value": 3, "unit": "g"}]}]'::jsonb) $$,
   '22023', null,
   'an item says each nutrient once'
 );
@@ -272,7 +272,7 @@ select throws_ok(
 select throws_ok(
   $$ select * from pg_temp.eat('subject_meal', extensions.uuid_generate_v7(), now(),
        'America/Bogota', 'lunch', null,
-       '[{"name": "Pan", "quantity": 2, "quantity_unit_code": "percent", "nutrients": []}]'::jsonb) $$,
+       '[{"position": 1, "name": "Pan", "quantity": 2, "quantity_unit": "percent", "nutrients": []}]'::jsonb) $$,
   '22023', null,
   'a quantity is a mass or a volume'
 );
@@ -280,7 +280,7 @@ select throws_ok(
 select throws_ok(
   $$ select * from pg_temp.eat('subject_meal', extensions.uuid_generate_v7(), now(),
        'America/Bogota', 'lunch', null,
-       '[{"name": "Pan", "quantity": 2, "nutrients": []}]'::jsonb) $$,
+       '[{"position": 1, "name": "Pan", "quantity": 2, "nutrients": []}]'::jsonb) $$,
   '22023', null,
   'a quantity comes with its unit'
 );
@@ -288,16 +288,32 @@ select throws_ok(
 select throws_ok(
   $$ select * from pg_temp.eat('subject_meal', extensions.uuid_generate_v7(), now(),
        'America/Bogota', 'lunch', null,
-       '[{"name": "Pan", "quantity": "2", "quantity_unit_code": "g", "nutrients": []}]'::jsonb) $$,
+       '[{"position": 1, "name": "Pan", "quantity": "2", "quantity_unit": "g", "nutrients": []}]'::jsonb) $$,
   '22023', null,
   'a quantity is a number, not text that looks like one'
 );
 
 select throws_ok(
   $$ select * from pg_temp.eat('subject_meal', extensions.uuid_generate_v7(), now(),
-       'America/Bogota', 'lunch', null, '[{"name": "  ", "nutrients": []}]'::jsonb) $$,
+       'America/Bogota', 'lunch', null, '[{"position": 1, "name": "  ", "nutrients": []}]'::jsonb) $$,
   '22023', null,
   'an item has a name'
+);
+
+select throws_ok(
+  $$ select * from pg_temp.eat('subject_meal', extensions.uuid_generate_v7(), now(),
+       'America/Bogota', 'lunch', null,
+       '[{"position": 1, "name": "Pan", "nutrients": []},
+         {"position": 1, "name": "Queso", "nutrients": []}]'::jsonb) $$,
+  '22023', null,
+  'two items never share a position'
+);
+
+select throws_ok(
+  $$ select * from pg_temp.eat('subject_meal', extensions.uuid_generate_v7(), now(),
+       'America/Bogota', 'lunch', null, '[{"position": 1.5, "name": "Pan", "nutrients": []}]'::jsonb) $$,
+  '22023', null,
+  'a position is a whole number'
 );
 
 select throws_ok(
@@ -400,7 +416,7 @@ select * from pg_temp.eat('other_meal', '019b7000-0000-7000-8000-000000000601',
 
 select results_eq(
   $$ select entry->>'id' from jsonb_array_elements(nutrition.list_meals(
-       'workos', 'https://issuer.test', 'subject_meal', 50
+       'workos', 'https://issuer.test', 'subject_meal', date '2026-09-01', current_date + 1, 50
      )->'items') as entry $$,
   $$ values ('019b7000-0000-7000-8000-000000000503'::text),
             ('019b7000-0000-7000-8000-000000000502'::text),
@@ -409,14 +425,15 @@ select results_eq(
 );
 
 select is(
-  (select nutrition.list_meals('workos', 'https://issuer.test', 'subject_meal', 2)->>'has_more'),
+  (select nutrition.list_meals('workos', 'https://issuer.test', 'subject_meal',
+     date '2026-09-01', current_date + 1, 2)->>'has_more'),
   'true',
   'the list says when there is more than it returned'
 );
 
 select results_eq(
   $$ select entry->>'id' from jsonb_array_elements(nutrition.list_meals(
-       'workos', 'https://issuer.test', 'subject_meal', 50,
+       'workos', 'https://issuer.test', 'subject_meal', date '2026-09-01', current_date + 1, 50,
        (select occurred_at from nutrition.meals where id = '019b7000-0000-7000-8000-000000000502'),
        '019b7000-0000-7000-8000-000000000502'
      )->'items') as entry $$,
@@ -425,15 +442,32 @@ select results_eq(
 );
 
 select throws_ok(
-  $$ select nutrition.list_meals('workos', 'https://issuer.test', 'nobody_meal', 10) $$,
+  $$ select nutrition.list_meals('workos', 'https://issuer.test', 'nobody_meal',
+       current_date, current_date, 10) $$,
   '42501', null,
   'a token that resolves to nobody reads nothing'
+);
+
+select results_eq(
+  $$ select entry->>'id' from jsonb_array_elements(nutrition.list_meals(
+       'workos', 'https://issuer.test', 'subject_meal', date '2026-09-15', date '2026-09-15', 50
+     )->'items') as entry $$,
+  $$ values ('019b7000-0000-7000-8000-000000000501'::text) $$,
+  'a page reads the local days it names, not the UTC ones'
+);
+
+select throws_ok(
+  $$ select nutrition.list_meals('workos', 'https://issuer.test', 'subject_meal',
+       date '2026-08-01', date '2026-09-15', 50) $$,
+  '22023', null,
+  'and never more than a month of them at once'
 );
 
 select ok(
   (select bool_and(not entry ? 'person_id' and not entry ? 'media_ref')
    from jsonb_array_elements(nutrition.list_meals(
-     'workos', 'https://issuer.test', 'subject_meal', 50)->'items') as entry),
+     'workos', 'https://issuer.test', 'subject_meal', date '2026-09-01', current_date + 1, 50
+   )->'items') as entry),
   'a meal never says whose it is or where its photo would be'
 );
 
@@ -575,6 +609,20 @@ select results_eq(
 );
 
 select throws_ok(
+  $$ select * from pg_temp.eat('subject_meal', '019b7000-0000-7000-8000-000000000501',
+       timestamptz '2026-09-15 23:30:00+00', 'America/Bogota', 'dinner', 'Con poca sal',
+       '[{"position": 1, "name": "Pollo a la plancha", "quantity": 120, "quantity_unit": "g",
+          "nutrients": [{"nutrient_code": "energy", "value": 198, "unit": "kcal"},
+                        {"nutrient_code": "protein", "value": 37, "unit": "g"}]},
+         {"position": 2, "name": "Agua", "quantity": 500, "quantity_unit": "ml",
+          "nutrients": [{"nutrient_code": "water", "value": 500, "unit": "ml"}]},
+         {"position": 3, "name": "Ensalada", "nutrients": []}]'::jsonb,
+       'a0000000-0000-4000-8000-000000000701', decode(repeat('61', 32), 'hex')) $$,
+  'AF410', null,
+  'replaying the recording of a deleted meal says it was deleted, and does not bring it back'
+);
+
+select throws_ok(
   $$ select * from pg_temp.forget('other_meal', '019b7000-0000-7000-8000-000000000502') $$,
   'P0002', null,
   'nobody deletes someone else''s meal'
@@ -657,7 +705,7 @@ select ok(
   has_function_privilege('allfit_api',
     'nutrition.record_meal(text,text,text,uuid,timestamptz,text,text,text,jsonb,uuid,bytea)', 'EXECUTE')
   and has_function_privilege('allfit_api',
-    'nutrition.list_meals(text,text,text,integer,timestamptz,uuid)', 'EXECUTE')
+    'nutrition.list_meals(text,text,text,date,date,integer,timestamptz,uuid)', 'EXECUTE')
   and has_function_privilege('allfit_api',
     'nutrition.delete_meal(text,text,text,uuid,uuid,uuid,bytea)', 'EXECUTE')
   and not has_function_privilege('allfit_api', 'nutrition.meal_projection(uuid)', 'EXECUTE'),

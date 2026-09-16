@@ -9,6 +9,9 @@
 -- moment, the zone and the day it belongs to are fixed at recording: the day is the day in
 -- that zone, so a dinner at 18:30 in Bogotá is not filed under tomorrow in UTC.
 --
+-- The shapes are the published contract's: the client numbers its items, a nutrient carries
+-- its `unit` and an item its `quantity_unit`, and a page is a range of local days.
+--
 -- **Not built here.** Revising a meal and its photo (OP-NUT-003) and the daily summaries
 -- (OP-NUT-005) are their own pieces. Until revision exists a recorded meal is not rewritten,
 -- and no photo is accepted, so a meal never claims one.
@@ -111,8 +114,8 @@ create table nutrition.meals (
   constraint fk_meals_person foreign key (person_id) references identity.people(id) on delete restrict,
   constraint ck_meals_revision check (revision_number >= 0),
   constraint ck_meals_media check (has_media = (media_ref is not null)),
-  constraint ck_meals_note check (note is null or (btrim(note) <> '' and char_length(note) <= 500)),
-  constraint ck_meals_timezone check (char_length(timezone) between 1 and 64)
+  constraint ck_meals_note check (note is null or (btrim(note) <> '' and char_length(note) <= 1000)),
+  constraint ck_meals_timezone check (char_length(timezone) between 3 and 100)
 );
 
 create index idx_meals_person on nutrition.meals (person_id, occurred_at desc, id desc);
@@ -157,8 +160,8 @@ create table nutrition.meal_items (
   constraint uq_meal_items_position unique (meal_id, position),
   constraint fk_meal_items_meal foreign key (meal_id, person_id) references nutrition.meals(id, person_id) on delete cascade,
   constraint fk_meal_items_unit foreign key (quantity_unit_code) references catalog.units(code) on delete restrict,
-  constraint ck_meal_items_position check (position between 1 and 50),
-  constraint ck_meal_items_name check (btrim(name) <> '' and char_length(name) <= 120),
+  constraint ck_meal_items_position check (position between 1 and 100),
+  constraint ck_meal_items_name check (btrim(name) <> '' and char_length(name) <= 160),
   constraint ck_meal_items_quantity check (
     (quantity_numeric is null) = (quantity_unit_code is null)
     and (quantity_numeric is null or quantity_numeric > 0)
@@ -460,8 +463,8 @@ as $function$
     'local_date', meal.local_date,
     'meal_type', meal.meal_type,
     'note', meal.note,
+    'revision_number', meal.revision_number,
     'has_media', meal.has_media,
-    'recorded_at', meal.created_at,
     'items', coalesce(
       (
         select jsonb_agg(
@@ -469,14 +472,14 @@ as $function$
             'position', item.position,
             'name', item.name,
             'quantity', item.quantity_numeric,
-            'quantity_unit_code', item.quantity_unit_code,
+            'quantity_unit', item.quantity_unit_code,
             'nutrients', coalesce(
               (
                 select jsonb_agg(
                   jsonb_build_object(
                     'nutrient_code', nutrient.code,
                     'value', value.value_numeric,
-                    'unit_code', value.unit_code
+                    'unit', value.unit_code
                   )
                   order by nutrient.code
                 )
@@ -527,11 +530,12 @@ declare
   receipt record;
   words text := nullif(btrim(p_note), '');
   entry jsonb;
-  entry_position bigint;
+  entry_position integer;
   item_name text;
   quantity numeric;
   quantity_unit text;
   item_id uuid;
+  numbers integer[] := array[]::integer[];
   nutrient_entry jsonb;
   nutrient nutrition.nutrient_definitions%rowtype;
   amount numeric;
@@ -555,12 +559,12 @@ begin
      or not (p_meal_type = any (enum_range(null::nutrition.meal_type)::text[])) then
     raise exception 'a meal is one of the five kinds' using errcode = '22023';
   end if;
-  if p_note is not null and (words is null or char_length(words) > 500) then
+  if p_note is not null and (words is null or char_length(words) > 1000) then
     raise exception 'a note says something, briefly' using errcode = '22023';
   end if;
   if p_items is null or jsonb_typeof(p_items) <> 'array'
-     or jsonb_array_length(p_items) = 0 or jsonb_array_length(p_items) > 50 then
-    raise exception 'a meal has between one and fifty items' using errcode = '22023';
+     or jsonb_array_length(p_items) = 0 or jsonb_array_length(p_items) > 100 then
+    raise exception 'a meal has between one and a hundred items' using errcode = '22023';
   end if;
 
   select * into receipt
@@ -571,6 +575,10 @@ begin
   if not receipt.claimed then
     if receipt.aggregate_id is null then
       raise exception 'idempotent meal not found' using errcode = '40001';
+    end if;
+    -- Allfit-defined: the command ran, and the meal it recorded has been deleted since.
+    if not exists (select 1 from nutrition.meals as meal where meal.id = receipt.aggregate_id) then
+      raise exception 'the meal this command recorded was deleted' using errcode = 'AF410';
     end if;
     return query select nutrition.meal_projection(receipt.aggregate_id), true;
     return;
@@ -583,31 +591,39 @@ begin
   );
 
   -- Any invalid part raises, and the whole meal with its receipt rolls back.
-  for entry, entry_position in
-    select element.value, element.ordinality
-    from jsonb_array_elements(p_items) with ordinality as element(value, ordinality)
-  loop
+  for entry in select element.value from jsonb_array_elements(p_items) as element(value) loop
     if jsonb_typeof(entry) <> 'object'
+       or jsonb_typeof(entry->'position') is distinct from 'number'
        or jsonb_typeof(entry->'name') is distinct from 'string'
        or jsonb_typeof(entry->'nutrients') is distinct from 'array'
        or jsonb_array_length(entry->'nutrients') > 6 then
-      raise exception 'an item has a name and a list of nutrients' using errcode = '22023';
+      raise exception 'an item has a position, a name and a list of nutrients' using errcode = '22023';
     end if;
+    -- The client numbers its items; a number is used once and fits the meal.
+    if (entry->>'position')::numeric not between 1 and 100
+       or (entry->>'position')::numeric <> trunc((entry->>'position')::numeric) then
+      raise exception 'an item position is a whole number from 1 to 100' using errcode = '22023';
+    end if;
+    entry_position := (entry->>'position')::integer;
+    if entry_position = any (numbers) then
+      raise exception 'two items cannot share a position' using errcode = '22023';
+    end if;
+    numbers := numbers || entry_position;
     item_name := btrim(entry->>'name');
-    if item_name = '' or char_length(item_name) > 120 then
+    if item_name = '' or char_length(item_name) > 160 then
       raise exception 'an item has a short name' using errcode = '22023';
     end if;
 
     quantity := null;
     quantity_unit := null;
     if coalesce(jsonb_typeof(entry->'quantity'), 'null') <> 'null'
-       or coalesce(jsonb_typeof(entry->'quantity_unit_code'), 'null') <> 'null' then
+       or coalesce(jsonb_typeof(entry->'quantity_unit'), 'null') <> 'null' then
       if jsonb_typeof(entry->'quantity') is distinct from 'number'
-         or jsonb_typeof(entry->'quantity_unit_code') is distinct from 'string' then
+         or jsonb_typeof(entry->'quantity_unit') is distinct from 'string' then
         raise exception 'a quantity comes with its unit' using errcode = '22023';
       end if;
       quantity := (entry->>'quantity')::numeric;
-      quantity_unit := entry->>'quantity_unit_code';
+      quantity_unit := entry->>'quantity_unit';
       if quantity <= 0 or quantity > 100000 or not exists (
         select 1 from catalog.units as unit
         where unit.code = quantity_unit and unit.dimension in ('mass', 'volume')
@@ -636,7 +652,7 @@ begin
         raise exception 'an item says each nutrient once' using errcode = '22023';
       end if;
       seen := seen || nutrient.code;
-      if nutrient_entry->>'unit_code' is distinct from nutrient.canonical_unit_code then
+      if nutrient_entry->>'unit' is distinct from nutrient.canonical_unit_code then
         raise exception 'a nutrient is written in its own unit' using errcode = '22023';
       end if;
       amount := (nutrient_entry->>'value')::numeric;
@@ -670,6 +686,8 @@ create or replace function nutrition.list_meals(
   p_provider text,
   p_issuer text,
   p_subject text,
+  p_from date,
+  p_to date,
   p_limit integer,
   p_before_occurred_at timestamptz default null,
   p_before_id uuid default null
@@ -689,12 +707,17 @@ begin
      or (p_before_occurred_at is null) <> (p_before_id is null) then
     raise exception 'a page has a size and, after the first, a complete cursor' using errcode = '22023';
   end if;
+  -- The local days of the person's own meals, at most a month of them per read.
+  if p_from is null or p_to is null or p_to < p_from or p_to - p_from > 30 then
+    raise exception 'a page covers from one to thirty-one days' using errcode = '22023';
+  end if;
 
   with ordered as (
     select meal.id,
            row_number() over (order by meal.occurred_at desc, meal.id desc) as position
     from nutrition.meals as meal
     where meal.person_id = person
+      and meal.local_date between p_from and p_to
       and (
         p_before_occurred_at is null
         or (meal.occurred_at, meal.id) < (p_before_occurred_at, p_before_id)
@@ -1024,7 +1047,7 @@ alter function nutrition.meal_projection(uuid) owner to allfit_owner;
 alter function nutrition.record_meal(
   text, text, text, uuid, timestamptz, text, text, text, jsonb, uuid, bytea
 ) owner to allfit_owner;
-alter function nutrition.list_meals(text, text, text, integer, timestamptz, uuid)
+alter function nutrition.list_meals(text, text, text, date, date, integer, timestamptz, uuid)
   owner to allfit_owner;
 alter function nutrition.delete_meal(text, text, text, uuid, uuid, uuid, bytea)
   owner to allfit_owner;
@@ -1042,7 +1065,7 @@ revoke all on function nutrition.meal_projection(uuid) from public;
 revoke all on function nutrition.record_meal(
   text, text, text, uuid, timestamptz, text, text, text, jsonb, uuid, bytea
 ) from public;
-revoke all on function nutrition.list_meals(text, text, text, integer, timestamptz, uuid)
+revoke all on function nutrition.list_meals(text, text, text, date, date, integer, timestamptz, uuid)
   from public;
 revoke all on function nutrition.delete_meal(text, text, text, uuid, uuid, uuid, bytea)
   from public;
@@ -1052,7 +1075,7 @@ revoke all on function support.exercise_break_glass(uuid, uuid, uuid, text, text
 grant execute on function nutrition.record_meal(
   text, text, text, uuid, timestamptz, text, text, text, jsonb, uuid, bytea
 ) to allfit_api;
-grant execute on function nutrition.list_meals(text, text, text, integer, timestamptz, uuid)
+grant execute on function nutrition.list_meals(text, text, text, date, date, integer, timestamptz, uuid)
   to allfit_api;
 grant execute on function nutrition.delete_meal(text, text, text, uuid, uuid, uuid, bytea)
   to allfit_api;
