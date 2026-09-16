@@ -15,25 +15,20 @@ Normative product and architecture documentation lives in `allfitone-docs`.
 
 Be aware of the actual state before you start:
 
-|                          |                                                                                                            |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------- |
-| `apps/api`               | `GET /health` plus the Studio hosted login flow, verified end to end against a real provider environment   |
-| `apps/worker`            | Empty. Starts and exits immediately                                                                        |
-| `apps/studio-web`        | Next.js app with the Studio hosted-login entry point                                                       |
-| `apps/backoffice-web`    | Next.js app; MFA login remains blocked on the Backoffice API surface                                       |
-| `apps/space`             | Not scaffolded. README only                                                                                |
-| `packages/auth-provider` | Working. Token verification, code exchange, sessions revocation                                            |
-| `packages/queue`         | Port defined; the Postgres adapter throws until `system.outbox_events` exists                              |
-| `packages/contracts`     | Canonical OpenAPI with 18 paths. `generated/` not produced yet                                             |
-| `packages/db`            | PostgreSQL-only Supabase stack with identity, access-account and Studio-session migrations and pgTAP tests |
+|                          |                                                                                                                         |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| `apps/api`               | The four surfaces mounted — `/space/v1`, `/studio/v1`, `/backoffice/v1`, `/catalog/v1` — plus a readiness `GET /health` |
+| `apps/worker`            | Cron-invoked outbox jobs: invitation delivery, Backoffice authentication cleanup and account recovery                   |
+| `apps/studio-web`        | Hosted login, profile, organizations and invitations                                                                    |
+| `apps/backoffice-web`    | Password and TOTP sign-in; people, gyms, catalogue, permissions, team, access log, break glass and diagnosis            |
+| `apps/space`             | Headless client of `/space/v1`: registration, sign-in and password recovery                                             |
+| `packages/auth-provider` | Token verification, code exchange, TOTP, session revocation and recovery delivery                                       |
+| `packages/queue`         | Port and its PostgreSQL adapter over `system.outbox_events`                                                             |
+| `packages/contracts`     | Canonical OpenAPI with 118 paths, and the DTOs generated from it                                                        |
+| `packages/db`            | 49 migrations and a pgTAP suite of 1009 assertions                                                                      |
 
-Studio sign-in resolves or creates the external access account and establishes a
-persistent encrypted session. Linking that account to a domain person is a
-separate product operation and may remain pending.
-
-Lint, typecheck, formatting, OpenAPI validation and the git hooks all run. Tests
-cover the identity port, Studio login routes, physical database structure, RLS
-and persistent session functions.
+Payments, planning execution and nutrition have no domain yet, so the Backoffice
+screens that depend on them say so rather than showing an empty number.
 
 ## Prerequisites
 
@@ -73,8 +68,12 @@ bun run dev
 
 ```bash
 curl http://localhost:8080/health
-# {"status":"ok"}
+# {"status":"ok","checks":{"database":"ok"}}
 ```
+
+It answers 503 with `"status":"degraded"` when PostgreSQL does not answer: the API
+serves no route without it, so a probe that only proved the process was alive would
+send traffic into an outage.
 
 Any other route returns 404 until surfaces are mounted in
 `apps/api/src/surfaces.ts`.

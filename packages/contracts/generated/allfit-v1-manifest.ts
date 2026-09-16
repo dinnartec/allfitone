@@ -930,7 +930,8 @@ export const allfitV1ContractManifest = {
       classification: 'operational',
       owner: 'platform',
       lifecycle: 'permanent',
-      reason: 'Liveness belongs to deployment operations, not the product API.',
+      reason:
+        'Readiness belongs to deployment operations, not the product API. It reports whether PostgreSQL answers, because the API serves no route without it.',
     },
     {
       method: 'POST',
