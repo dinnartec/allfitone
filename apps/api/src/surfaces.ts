@@ -37,6 +37,7 @@ import {
   backofficeOrganizationRoutes,
   studioOrganizationRoutes,
 } from './domains/organizations/index.js'
+import { backofficePlatformPlanRoutes } from './domains/payments/index.js'
 import { studioPlanningRoutes } from './domains/planning/index.js'
 import { backofficePrivacyRoutes } from './domains/privacy/index.js'
 import {
@@ -77,6 +78,7 @@ export function mountSurfaces(app: Hono): void {
   app.route('/backoffice/v1', backofficeCatalogRoutes())
   app.route('/backoffice/v1', backofficeGlobalCatalogueRoutes())
   app.route('/backoffice/v1', backofficeOrganizationRoutes())
+  app.route('/backoffice/v1', backofficePlatformPlanRoutes())
 
   // The global catalogue is one surface, not a copy per product: it has no
   // subject and no tenant, so every product reads the same mount.
