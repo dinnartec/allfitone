@@ -55,12 +55,14 @@ menu {
    Sweeping all 43 screens found only these carrying a browser default; every
    other slot with a margin has a round, deliberate value. Listed rather than
    reset app-wide for the reason given above, and belonging upstream for the
-   same reason the list reset does: Space and Backoffice have it too. */
-[data-slot='dialog-title'],
-[data-slot='dialog-description'],
-[data-slot='alert-dialog-title'],
-[data-slot='alert-dialog-description'],
-[data-slot='empty-description'] {
+   same reason the list reset does: Space and Backoffice have it too.
+
+   Marked at each call site rather than selected by `data-slot`. That attribute
+   is the Design System's, and reaching for it from here is what
+   `check:ui-boundaries` forbids: an app that styles a component by its internal
+   slot is restyling the library. Studio placed these elements, so Studio marks
+   the ones whose browser default it resets. */
+[data-flush-text] {
   margin-block: 0;
 }
 
@@ -232,12 +234,12 @@ menu {
    The ellipsis belongs with it: the value already carries `overflow: hidden`
    and `white-space: nowrap` from the Design System but not `text-overflow`, so
    two thirds of the standard trio were in place and the name simply stopped. */
-[data-sidebar-switcher] [data-slot='select-trigger'] {
+[data-sidebar-switcher] [data-switcher-trigger] {
   width: 100%;
   min-width: 0;
 }
 
-[data-sidebar-switcher] [data-slot='select-value'] {
+[data-sidebar-switcher] [data-switcher-value] {
   text-overflow: ellipsis;
 }
 
@@ -572,8 +574,8 @@ menu {
    still applies to a lone stat — a staff member who reads the directory but not
    the invitation register sees one count, and one number centred in 1024px is
    what the cap was put there to prevent. */
-[data-overview-signals]:has([data-slot='stat-strip-item']:nth-child(2)),
-[data-profile-signals]:has([data-slot='stat-strip-item']:nth-child(2)) {
+[data-overview-signals][data-signals-multiple],
+[data-profile-signals][data-signals-multiple] {
   min-width: 100%;
 }
 
@@ -647,8 +649,8 @@ menu {
 
 /* Both roots are grids now, so without this the trigger stretches to the whole
    canvas — 1024px of ghost button for a six-word label. */
-[data-credential-history] > [data-slot='collapsible-trigger'],
-[data-membership-history] > [data-slot='collapsible-trigger'] {
+[data-credential-history] > [data-history-trigger],
+[data-membership-history] > [data-history-trigger] {
   justify-self: start;
 }
 
@@ -758,8 +760,7 @@ menu {
 [data-studio-loading-body] > p,
 [data-ready-later-item] > p,
 [data-trajectory-body] > p,
-[data-membership-card-body] > p,
-[data-slot='setup-panel-actions'] > p {
+[data-membership-card-body] > p {
   margin-block: 0;
 }
 
@@ -917,8 +918,8 @@ menu {
   /* The same rule, reached differently: these triggers are not in an action
      row, they are direct children of the collapsible, so they take the width
      themselves. */
-  [data-membership-history] > [data-slot='collapsible-trigger'],
-  [data-credential-history] > [data-slot='collapsible-trigger'] {
+  [data-membership-history] > [data-history-trigger],
+  [data-credential-history] > [data-history-trigger] {
     width: 100%;
     justify-self: stretch;
   }

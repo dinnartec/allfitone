@@ -75,7 +75,7 @@ export function InvitationWaiting({
                 <FoundationIcon name="organization" decorative />
               </EmptyMedia>
               <EmptyTitle>Sin membresías activas</EmptyTitle>
-              <EmptyDescription>
+              <EmptyDescription data-flush-text>
                 Puedes cerrar esta sesión con tranquilidad y volver desde el enlace de acceso.
               </EmptyDescription>
             </EmptyHeader>

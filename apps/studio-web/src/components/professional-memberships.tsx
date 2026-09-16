@@ -51,7 +51,8 @@ export function ProfessionalMemberships({ memberships }: { memberships: Membersh
           </p>
         </div>
       </header>
-      <div data-profile-signals>
+      {/* Always two figures, so the strip always shares the row. */}
+      <div data-profile-signals data-signals-multiple>
         <StatStrip>
           <StatStripItem value={active.length} label="Espacios activos" />
           <StatStripItem value={terminated.length} label="Vinculaciones finalizadas" />
@@ -64,7 +65,7 @@ export function ProfessionalMemberships({ memberships }: { memberships: Membersh
               <FoundationIcon name="organization" decorative />
             </EmptyMedia>
             <EmptyTitle>Aún no tienes espacios</EmptyTitle>
-            <EmptyDescription>
+            <EmptyDescription data-flush-text>
               Puedes crear una organización o aceptar una invitación cuando lo necesites.
             </EmptyDescription>
           </EmptyHeader>
@@ -101,7 +102,7 @@ export function ProfessionalMemberships({ memberships }: { memberships: Membersh
       )}
       {terminated.length > 0 ? (
         <Collapsible data-membership-history>
-          <CollapsibleTrigger render={<Button variant="ghost" />}>
+          <CollapsibleTrigger render={<Button variant="ghost" />} data-history-trigger>
             Historial de vinculaciones · {terminated.length}
           </CollapsibleTrigger>
           <CollapsibleContent>

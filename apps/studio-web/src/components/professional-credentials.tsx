@@ -211,7 +211,7 @@ export function ProfessionalCredentials({
           <EmptyHeader>
             <EmptyMedia variant="icon">01</EmptyMedia>
             <EmptyTitle>Aún no has declarado credenciales</EmptyTitle>
-            <EmptyDescription>
+            <EmptyDescription data-flush-text>
               Añade una credencial cuando quieras aportar contexto sobre tu formación.
             </EmptyDescription>
           </EmptyHeader>
@@ -243,7 +243,7 @@ export function ProfessionalCredentials({
 
       {retired.length > 0 ? (
         <Collapsible data-credential-history>
-          <CollapsibleTrigger render={<Button variant="ghost" />}>
+          <CollapsibleTrigger render={<Button variant="ghost" />} data-history-trigger>
             Historial retirado · {retired.length}
           </CollapsibleTrigger>
           <CollapsibleContent>
@@ -298,8 +298,8 @@ export function ProfessionalCredentials({
             another product. */}
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>¿Retirar esta credencial?</AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogTitle data-flush-text>¿Retirar esta credencial?</AlertDialogTitle>
+            <AlertDialogDescription data-flush-text>
               Permanecerá en tu historial y dejará de aparecer entre tus credenciales activas.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -465,10 +465,10 @@ function CredentialDialog({
     <Dialog open={Boolean(intent)} onOpenChange={onOpenChange} key={intentKey}>
       <DialogContent data-credential-dialog showCloseButton={false}>
         <DialogHeader>
-          <DialogTitle>
+          <DialogTitle data-flush-text>
             {intent?.kind === 'revise' ? 'Crear una revisión' : 'Declarar una credencial'}
           </DialogTitle>
-          <DialogDescription>
+          <DialogDescription data-flush-text>
             {intent?.kind === 'revise'
               ? 'La revisión crea una versión nueva y no hereda la verificación anterior.'
               : 'Registra la información tal como aparece en el documento o la fuente.'}

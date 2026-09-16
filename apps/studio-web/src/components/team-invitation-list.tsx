@@ -230,7 +230,7 @@ export function TeamInvitationList() {
           {listState ? (
             <Empty>
               <EmptyTitle>{listState.title}</EmptyTitle>
-              <EmptyDescription>{listState.description}</EmptyDescription>
+              <EmptyDescription data-flush-text>{listState.description}</EmptyDescription>
             </Empty>
           ) : (
             <ul data-team-directory-card-list>
@@ -338,8 +338,8 @@ export function TeamInvitationList() {
             another product. */}
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>¿Revocar esta invitación?</AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogTitle data-flush-text>¿Revocar esta invitación?</AlertDialogTitle>
+            <AlertDialogDescription data-flush-text>
               El enlace enviado a <strong>{revokeIntent?.contact}</strong> dejará de funcionar. Esta
               acción no se puede deshacer.
             </AlertDialogDescription>

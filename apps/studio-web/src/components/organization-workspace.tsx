@@ -98,7 +98,14 @@ export function OrganizationWorkspace() {
 
   return (
     <div data-organization-overview>
-      <section data-overview-signals aria-label={`Estado de ${current.display_name}`}>
+      {/* Studio knows how many figures it is about to render, so it says so here
+          rather than making the stylesheet count Design System children. The cap
+          on the strip is lifted only when a second figure shares the row. */}
+      <section
+        data-overview-signals
+        {...(members && invitations ? { 'data-signals-multiple': '' } : {})}
+        aria-label={`Estado de ${current.display_name}`}
+      >
         {loading ? (
           <Skeleton data-overview-signals-placeholder />
         ) : error ? (
@@ -229,7 +236,7 @@ export function OrganizationWorkspace() {
                     <FoundationIcon name="people" decorative />
                   </EmptyMedia>
                   <EmptyTitle>Trabajas en solitario por ahora</EmptyTitle>
-                  <EmptyDescription>
+                  <EmptyDescription data-flush-text>
                     Cuando alguien acepte una invitación aparecerá aquí.
                   </EmptyDescription>
                 </EmptyHeader>

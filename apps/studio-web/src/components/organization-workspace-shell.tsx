@@ -130,8 +130,10 @@ function OrganizationSidebar({ basePath, pathname }: { basePath: string; pathnam
                     value: membership.organization_id,
                   }))}
                 >
-                  <SelectTrigger id="workspace-organization-switcher">
-                    <SelectValue />
+                  {/* Studio placed both, so Studio marks them: the CSS sizes the
+                      trigger to the rail and gives the value its ellipsis. */}
+                  <SelectTrigger id="workspace-organization-switcher" data-switcher-trigger>
+                    <SelectValue data-switcher-value />
                   </SelectTrigger>
                   <SelectContent align="start">
                     {memberships.map((membership) => (
