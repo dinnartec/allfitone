@@ -518,4 +518,58 @@ describe('Backoffice break-glass API contract', () => {
       resourceType: 'identity.health_context_claims',
     })
   })
+
+  test('T-BG-API-23 returns the meals an allowed read carries, with a photo flag and no photo', async () => {
+    const allowed: AllfitV1Schemas['BreakGlassExerciseOutcome'] = {
+      outcome: 'allowed',
+      reason_code: 'authorized_exercise',
+      break_glass_event_id: '019a8000-0000-7000-8000-000000000605',
+      occurred_at: '2026-09-10T18:09:00.000Z',
+      category: 'nutrition_intake',
+      content: {
+        nutrition_intake: [
+          {
+            id: '019a8000-0000-7000-8000-000000000901',
+            occurred_at: '2026-09-09T17:30:00+00:00',
+            local_date: '2026-09-09',
+            timezone: 'America/Bogota',
+            meal_type: 'lunch',
+            note: null,
+            revision_number: 0,
+            has_media: false,
+            items: [
+              {
+                position: 1,
+                name: 'Arroz',
+                quantity: 150,
+                quantity_unit: 'g',
+                nutrients: [{ nutrient_code: 'energy', value: 195, unit: 'kcal' }],
+              },
+            ],
+          },
+        ],
+      },
+    }
+    const response = await routes(
+      windowService({
+        exercise: (_actor, input) => {
+          captured.push({ operation: 'exercise', input })
+          return Promise.resolve(allowed)
+        },
+      }),
+    ).fetch(
+      post(`/break-glass/requests/${REQUEST_ID}/reads`, {
+        body: { category: 'nutrition_intake', resource_type: 'nutrition.meals' },
+      }),
+    )
+
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as typeof allowed
+    expect(body).toEqual(allowed)
+    expect(body.content?.nutrition_intake?.[0]).not.toHaveProperty('photo')
+    expect(captured[0]?.input).toMatchObject({
+      category: 'nutrition_intake',
+      resourceType: 'nutrition.meals',
+    })
+  })
 })
