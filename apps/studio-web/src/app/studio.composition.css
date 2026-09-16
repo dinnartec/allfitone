@@ -652,7 +652,6 @@ menu {
   justify-self: start;
 }
 
-
 /* -------------------------------------------------------------------- team */
 
 [data-team-directory-cards] {
@@ -836,7 +835,6 @@ menu {
 [data-session-ending-overlay] {
   z-index: 60;
 }
-
 
 [data-session-checking],
 [data-session-closing],
