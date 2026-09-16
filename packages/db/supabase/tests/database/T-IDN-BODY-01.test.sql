@@ -15,7 +15,7 @@
 
 begin;
 
-select plan(49);
+select plan(50);
 
 insert into identity.people (id, given_name, family_name, status)
 values
@@ -472,6 +472,21 @@ select results_eq(
        decode(repeat('82', 32), 'hex')) $$,
   $$ select result->>'disposition_case_id', true from forgotten $$,
   'a retried deletion answers the same case instead of opening another'
+);
+
+-- T-IDEM-08: the recording ran, and its measurement is gone.
+select * from pg_temp.record(
+  'subject_body', '019b5000-0000-7000-8000-000000000504', 'hip', 95, 'cm', current_date,
+  'a0000000-0000-4000-8000-000000000504', decode(repeat('54', 32), 'hex')
+);
+select * from pg_temp.forget('subject_body', '019b5000-0000-7000-8000-000000000504');
+
+select throws_ok(
+  $$ select * from pg_temp.record(
+       'subject_body', '019b5000-0000-7000-8000-000000000504', 'hip', 95, 'cm', current_date,
+       'a0000000-0000-4000-8000-000000000504', decode(repeat('54', 32), 'hex')) $$,
+  'AF410', null,
+  'replaying the recording of a deleted measurement says it was deleted, and does not bring it back'
 );
 
 select throws_ok(

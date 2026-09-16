@@ -12,7 +12,7 @@
 
 begin;
 
-select plan(45);
+select plan(46);
 
 insert into identity.people (id, given_name, family_name, status)
 values
@@ -454,6 +454,23 @@ select results_eq(
        decode(repeat('82', 32), 'hex')) $$,
   $$ select result->>'disposition_case_id', true from forgotten $$,
   'a retried deletion answers the same case instead of opening another'
+);
+
+-- T-IDEM-08: the declaration ran, and its claim is gone.
+select * from pg_temp.declare(
+  'subject_health', '019b6000-0000-7000-8000-000000000504', 'pain', 'Molestia pasajera', null,
+  now() - interval '3 days', null,
+  'a0000000-0000-4000-8000-000000000504', decode(repeat('54', 32), 'hex')
+);
+select * from pg_temp.forget('subject_health', '019b6000-0000-7000-8000-000000000504');
+
+select throws_ok(
+  $$ select * from pg_temp.declare(
+       'subject_health', '019b6000-0000-7000-8000-000000000504', 'pain', 'Molestia pasajera',
+       null, now() - interval '3 days', null,
+       'a0000000-0000-4000-8000-000000000504', decode(repeat('54', 32), 'hex')) $$,
+  'AF410', null,
+  'replaying the declaration of a deleted claim says it was deleted, and does not bring it back'
 );
 
 select throws_ok(
