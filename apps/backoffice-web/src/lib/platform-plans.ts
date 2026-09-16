@@ -197,7 +197,7 @@ export function reviewNote(proposal: PlatformPlanVersion): string {
   if (proposal.proposed_by_self) {
     return 'Tú la propusiste, así que la publica otra persona del equipo con el deber comercial. Puedes retirarla si cambiaste de idea.'
   }
-  return 'La propuso otra persona. Revisa qué cambia: si estás de acuerdo, publícala; si no, retírala.'
+  return 'La propuso otra persona. Revisa qué cambia: si estás de acuerdo, publícala; si no, retírala. Publicarla no cambia nada a quien ya está suscrito: conserva la versión que aceptó.'
 }
 
 export interface FeatureDraft {

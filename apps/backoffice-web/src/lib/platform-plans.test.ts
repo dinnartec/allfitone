@@ -150,6 +150,9 @@ describe('platform plan presentation', () => {
       'la publica otra persona',
     )
     expect(reviewNote(version({ status: 'draft', proposed_by_self: false }))).toContain('publícala')
+    expect(reviewNote(version({ status: 'draft', proposed_by_self: false }))).toContain(
+      'conserva la versión que aceptó',
+    )
     expect(versionStatus('draft')).toEqual({ label: 'En revisión', tone: 'warning' })
     expect(versionStatus('deprecated').label).toBe('Reemplazada')
   })
