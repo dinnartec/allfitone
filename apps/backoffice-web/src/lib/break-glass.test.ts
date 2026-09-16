@@ -7,6 +7,9 @@ import {
   canDecide,
   canExercise,
   categoryLabel,
+  emptyReadMessage,
+  formatDay,
+  healthContextRows,
   measurementRows,
   outcomeMessage,
   projectedTier,
@@ -274,6 +277,80 @@ describe('break-glass presentation rules', () => {
     const { content: _content, ...withoutContent } = allowed
     expect(measurementRows({ ...withoutContent, outcome: 'content_unavailable' })).toEqual([])
     expect(measurementRows({ ...allowed, outcome: 'denied' })).toEqual([])
+  })
+
+  test('shows a health claim as declared, with where it came from', () => {
+    const allowed: BreakGlassExerciseOutcome = {
+      outcome: 'allowed',
+      reason_code: 'authorized_exercise',
+      break_glass_event_id: '019a8000-0000-7000-8000-000000000604',
+      occurred_at: '2026-09-10T18:08:00.000Z',
+      category: 'health_context',
+      content: {
+        health_context: [
+          {
+            id: '019a8000-0000-7000-8000-000000000801',
+            context_type: 'limitation',
+            description: 'No puedo levantar los brazos por encima de la cabeza',
+            body_area: 'shoulder',
+            provenance: 'person_declared',
+            valid_from: '2026-09-01T10:00:00.000Z',
+            valid_to: null,
+            recorded_at: '2026-09-01T10:05:00.000Z',
+          },
+          {
+            id: '019a8000-0000-7000-8000-000000000802',
+            context_type: 'recovery',
+            description: 'Recuperación de esguince',
+            body_area: null,
+            provenance: 'professional_observation',
+            valid_from: '2026-08-20T10:00:00.000Z',
+            valid_to: '2026-10-01T10:00:00.000Z',
+            recorded_at: '2026-08-20T10:05:00.000Z',
+          },
+        ],
+      },
+    }
+
+    expect(healthContextRows(allowed)).toEqual([
+      {
+        id: '019a8000-0000-7000-8000-000000000801',
+        type: 'Limitación',
+        description: 'No puedo levantar los brazos por encima de la cabeza',
+        area: 'Hombro',
+        since: formatDay('2026-09-01T10:00:00.000Z'),
+        until: 'Sin fecha de fin',
+        provenance: 'Lo declaró la persona',
+      },
+      {
+        id: '019a8000-0000-7000-8000-000000000802',
+        type: 'Recuperación',
+        description: 'Recuperación de esguince',
+        area: 'Sin zona indicada',
+        since: formatDay('2026-08-20T10:00:00.000Z'),
+        until: formatDay('2026-10-01T10:00:00.000Z'),
+        provenance: 'Lo observó un profesional',
+      },
+    ])
+    expect(healthContextRows({ ...allowed, outcome: 'denied' })).toEqual([])
+    // A body read carries no claims, and a claim is never read as a measurement.
+    expect(healthContextRows({ ...allowed, content: { body_progress: [] } })).toEqual([])
+    expect(measurementRows(allowed)).toEqual([])
+  })
+
+  test('dates a claim by its day, which is all a declaration knows', () => {
+    expect(formatDay('2026-09-01T10:00:00.000Z')).not.toMatch(/d:dd/)
+    expect(formatDay('2026-09-01T10:00:00.000Z')).toContain('2026')
+    expect(formatDay('not a date')).toBe('—')
+  })
+
+  test('says what an empty authorised read means for the category it read', () => {
+    expect(emptyReadMessage('body_progress')).toBe('La persona no tiene mediciones registradas.')
+    expect(emptyReadMessage('health_context')).toBe(
+      'La persona no ha declarado dolores, limitaciones ni recuperaciones.',
+    )
+    expect(emptyReadMessage('nutrition_guidance')).toBe('La lectura no devolvió registros.')
+    expect(emptyReadMessage(undefined)).toBe('La lectura no devolvió registros.')
   })
 
   test('answers the state machine with the next action, never a retry', () => {

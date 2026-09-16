@@ -73,6 +73,8 @@ import {
   canDecide,
   canExercise,
   categoryLabel,
+  emptyReadMessage,
+  healthContextRows,
   measurementRows,
   outcomeMessage,
   purposeLabel,
@@ -147,7 +149,9 @@ export function BreakGlassWindows() {
   const consequence = tierConsequence(categories)
   const readFile = outcome ? files.find((file) => file.id === outcome.fileId) : undefined
   const readStillOpen = readFile ? canExercise(readFile, now) : false
-  const rows = outcome && readStillOpen ? measurementRows(outcome.answer) : []
+  const shown = outcome && readStillOpen ? outcome.answer : null
+  const rows = shown ? measurementRows(shown) : []
+  const claims = shown ? healthContextRows(shown) : []
 
   async function run(operation: () => Promise<unknown>, success: string) {
     setBusy(true)
@@ -236,8 +240,8 @@ export function BreakGlassWindows() {
             {outcome.answer.outcome === 'allowed' && !readStillOpen
               ? ' La ventana cerró y lo que devolvió dejó de mostrarse.'
               : null}
-            {outcome.answer.outcome === 'allowed' && readStillOpen && rows.length === 0
-              ? ' La persona no tiene mediciones registradas.'
+            {shown?.outcome === 'allowed' && rows.length === 0 && claims.length === 0
+              ? ` ${emptyReadMessage(shown.category)}`
               : null}
           </AlertDescription>
         </Alert>
@@ -263,6 +267,34 @@ export function BreakGlassWindows() {
                 <TableCell numeric>{row.normalized}</TableCell>
                 <TableCell>{row.measuredOn}</TableCell>
                 <TableCell>{row.photo}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      ) : null}
+
+      {claims.length > 0 ? (
+        <Table scrollAreaLabel="Contexto de salud de la persona" data-break-glass-content>
+          <TableCaption>Contexto de salud de la persona</TableCaption>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Tipo</TableHead>
+              <TableHead>Lo que declaró</TableHead>
+              <TableHead>Zona</TableHead>
+              <TableHead>Desde</TableHead>
+              <TableHead>Hasta</TableHead>
+              <TableHead>Origen</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {claims.map((claim) => (
+              <TableRow key={claim.id}>
+                <TableCell>{claim.type}</TableCell>
+                <TableCell data-break-glass-declared>{claim.description}</TableCell>
+                <TableCell>{claim.area}</TableCell>
+                <TableCell>{claim.since}</TableCell>
+                <TableCell>{claim.until}</TableCell>
+                <TableCell data-break-glass-origin>{claim.provenance}</TableCell>
               </TableRow>
             ))}
           </TableBody>

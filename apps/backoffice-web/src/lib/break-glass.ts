@@ -30,6 +30,9 @@ export type BreakGlassExerciseOutcome = AllfitV1Schemas['BreakGlassExerciseOutco
 export type BodyProgressRecord = AllfitV1Schemas['BodyProgressRecord']
 type BodyProgressMetricCode = AllfitV1Schemas['BodyProgressMetricCode']
 type BodyProgressUnitCode = AllfitV1Schemas['BodyProgressUnitCode']
+type HealthContextType = AllfitV1Schemas['HealthContextType']
+type HealthContextBodyArea = AllfitV1Schemas['HealthContextBodyArea']
+type Provenance = AllfitV1Schemas['Provenance']
 
 /** Only what can be approved. The forbidden set is absent, not disabled. */
 export const BREAK_GLASS_CATEGORIES: readonly BreakGlassCategory[] = [
@@ -329,6 +332,78 @@ function calendarDay(value: string): string {
   if (Number.isNaN(parsed)) return value
   // Read and shown in UTC, so the day never shifts with the operator's time zone.
   return new Intl.DateTimeFormat('es-CO', { dateStyle: 'long', timeZone: 'UTC' }).format(parsed)
+}
+
+const CONTEXT_TYPE_LABELS: Record<HealthContextType, string> = {
+  pain: 'Dolor',
+  limitation: 'Limitación',
+  recovery: 'Recuperación',
+}
+
+const BODY_AREA_LABELS: Record<HealthContextBodyArea, string> = {
+  neck: 'Cuello',
+  shoulder: 'Hombro',
+  upper_back: 'Espalda alta',
+  lower_back: 'Espalda baja',
+  chest: 'Pecho',
+  abdomen: 'Abdomen',
+  arm: 'Brazo',
+  elbow: 'Codo',
+  wrist_hand: 'Muñeca o mano',
+  hip: 'Cadera',
+  thigh: 'Muslo',
+  knee: 'Rodilla',
+  lower_leg: 'Pierna',
+  ankle_foot: 'Tobillo o pie',
+}
+
+// Who said it matters as much as what was said: a declaration is not an observation.
+const PROVENANCE_LABELS: Record<Provenance, string> = {
+  person_declared: 'Lo declaró la persona',
+  professional_observation: 'Lo observó un profesional',
+  device_observed: 'Lo midió un dispositivo',
+  system_inferred: 'Lo infirió el sistema',
+  authority_verified: 'Lo verificó una autoridad',
+}
+
+export interface HealthContextRow {
+  id: string
+  type: string
+  description: string
+  area: string
+  since: string
+  until: string
+  provenance: string
+}
+
+/** The claims an allowed read returned, most recent start first as the server sent them. */
+export function healthContextRows(outcome: BreakGlassExerciseOutcome): HealthContextRow[] {
+  if (outcome.outcome !== 'allowed') return []
+  return (outcome.content?.health_context ?? []).map((claim) => ({
+    id: claim.id,
+    type: CONTEXT_TYPE_LABELS[claim.context_type],
+    description: claim.description,
+    area: claim.body_area === null ? 'Sin zona indicada' : BODY_AREA_LABELS[claim.body_area],
+    since: formatDay(claim.valid_from),
+    until: claim.valid_to === null ? 'Sin fecha de fin' : formatDay(claim.valid_to),
+    provenance: PROVENANCE_LABELS[claim.provenance],
+  }))
+}
+
+/** The day a claim starts or ends, in the operator's zone; the hour adds nothing to it. */
+export function formatDay(value: string): string {
+  const parsed = Date.parse(value)
+  if (Number.isNaN(parsed)) return '—'
+  return new Intl.DateTimeFormat('es-CO', { dateStyle: 'medium' }).format(parsed)
+}
+
+/** An allowed read that returned nothing still has to say what it looked for. */
+export function emptyReadMessage(category: BreakGlassCategory | undefined): string {
+  if (category === 'body_progress') return 'La persona no tiene mediciones registradas.'
+  if (category === 'health_context') {
+    return 'La persona no ha declarado dolores, limitaciones ni recuperaciones.'
+  }
+  return 'La lectura no devolvió registros.'
 }
 
 export function breakGlassMessage(code: string): string {
