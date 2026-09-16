@@ -43,6 +43,10 @@ tags:
     description: >-
       The organization directory Allfit's team uses to reach a gym, and later its
       lifecycle. Organizations only: nothing here searches or returns a person.
+  - name: Backoffice Commercial
+    description: >-
+      The plans Allfit sells to people: versions, prices and what each one includes.
+      Nothing here charges anybody.
   - name: Backoffice Support
     description: >-
       The minimised operational projection Allfit staff read to resolve a case.
@@ -1717,6 +1721,250 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/platform-plans:
+    get:
+      tags: [Backoffice Commercial]
+      operationId: listBackofficePlatformPlans
+      x-allfit-operation: NEW-PAY-PLATFORM-PLAN
+      x-allfit-cache: no-store
+      summary: Read the plans Allfit sells
+      description: >-
+        Every plan with the version in force, the proposal waiting for review with what
+        it changes, and the full history. Also the catalogue of functions a plan can
+        limit, which changes only with a deployment because each function needs code
+        that enforces it; it may be empty.
+
+        A price list is nobody's data, so reading it records no access. Requires
+        `manage_platform_commercial`.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+      responses:
+        '200':
+          description: The plans and the functions they can limit
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformPlanCatalogue'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+    post:
+      tags: [Backoffice Commercial]
+      operationId: createBackofficePlatformPlan
+      x-allfit-operation: OP-PAY-024
+      x-allfit-cache: no-store
+      summary: Create a plan
+      description: >-
+        A plan is a stable code, a name and a kind, and it is a draft until its first
+        version is published. There is one free plan, ever: its limits change by
+        publishing versions of it, so a second free plan answers 409, and so does a
+        code that is already taken.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlatformPlanCreate'
+      responses:
+        '201':
+          description: The new plan
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformPlan'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/platform-plans/{planId}/versions:
+    post:
+      tags: [Backoffice Commercial]
+      operationId: proposeBackofficePlatformPlanVersion
+      x-allfit-operation: OP-PAY-025
+      x-allfit-cache: no-store
+      summary: Propose a new version of a plan
+      description: >-
+        The price, currency, billing period and what the version does with every
+        function in the catalogue, none left out and none added. The free plan costs
+        zero and has no currency or period; a paid plan costs something every month or
+        year. A proposal waits for somebody else to publish it and carries what it
+        changes against the version in force.
+
+        A plan has one proposal open at a time, and a proposal that changes nothing
+        answers 409. Privacy functions are not in the catalogue, so no version can
+        limit them.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/PlatformPlanId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlatformPlanVersionProposal'
+      responses:
+        '201':
+          description: The plan, with the proposal open
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformPlan'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/platform-plans/{planId}/versions/{versionId}/publication:
+    post:
+      tags: [Backoffice Commercial]
+      operationId: publishBackofficePlatformPlanVersion
+      x-allfit-operation: OP-PAY-017
+      x-allfit-cache: no-store
+      summary: Publish a proposal somebody else made
+      description: >-
+        The version comes into force and the one it replaces is retired, never
+        rewritten: whoever subscribed to it keeps what they accepted. The person who
+        proposed a version cannot publish it (403). A proposal that was already
+        published or withdrawn answers 409. The command carries no body.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/PlatformPlanId'
+        - $ref: '#/components/parameters/PlatformPlanVersionId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      responses:
+        '200':
+          description: The plan, with the new version in force
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformPlan'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/platform-plans/{planId}/versions/{versionId}/withdrawal:
+    post:
+      tags: [Backoffice Commercial]
+      operationId: withdrawBackofficePlatformPlanVersion
+      x-allfit-operation: OP-PAY-026
+      x-allfit-cache: no-store
+      summary: Withdraw a proposal
+      description: >-
+        The proposer changing their mind and a reviewer who disagrees end the same way:
+        the proposal is kept as withdrawn, with who withdrew it, and its number is never
+        reused. Only an open proposal is withdrawn (409 otherwise). The command carries
+        no body.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/PlatformPlanId'
+        - $ref: '#/components/parameters/PlatformPlanVersionId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      responses:
+        '200':
+          description: The plan, with no proposal open
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformPlan'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
 
@@ -5924,6 +6172,20 @@ components:
       schema:
         type: string
         pattern: '^[a-z][a-z0-9_]{1,63}$'
+    PlatformPlanId:
+      name: planId
+      in: path
+      required: true
+      description: One of the plans Allfit sells.
+      schema:
+        $ref: '#/components/schemas/UuidV7'
+    PlatformPlanVersionId:
+      name: versionId
+      in: path
+      required: true
+      description: One version of that plan.
+      schema:
+        $ref: '#/components/schemas/UuidV7'
     AccountRecoveryRequestId:
       name: requestId
       in: path
@@ -7757,6 +8019,280 @@ components:
           $ref: '#/components/schemas/AttentionUnclaimedOrganizationNotice'
         repeated_failures:
           $ref: '#/components/schemas/AttentionFailureNotice'
+    PlatformPlanCatalogue:
+      type: object
+      additionalProperties: false
+      required: [generated_at, feature_catalog, plans]
+      properties:
+        generated_at:
+          type: string
+          format: date-time
+        feature_catalog:
+          type: array
+          description: >-
+            The functions a plan can limit. Each one arrives with the code that enforces
+            it, so the list changes only with a deployment, and it may be empty.
+          items:
+            $ref: '#/components/schemas/PlatformFeature'
+        plans:
+          type: array
+          description: The free plan first, then the paid ones by code.
+          items:
+            $ref: '#/components/schemas/PlatformPlan'
+    PlatformFeature:
+      type: object
+      additionalProperties: false
+      required: [code, name, unit]
+      properties:
+        code:
+          $ref: '#/components/schemas/PlatformFeatureCode'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        unit:
+          type: [string, 'null']
+          maxLength: 32
+          description: What the limit counts, such as `items` or `weeks`.
+    PlatformFeatureCode:
+      type: string
+      pattern: '^[a-z][a-z0-9_]{1,63}$'
+    PlatformPlanCode:
+      type: string
+      pattern: '^[a-z][a-z0-9_]{1,39}$'
+    PlatformPlanKind:
+      type: string
+      enum: [free, paid]
+    PlatformPlanBillingPeriod:
+      type: string
+      enum: [month, year]
+    PlatformPlanCreate:
+      type: object
+      additionalProperties: false
+      required: [code, name, plan_kind]
+      properties:
+        code:
+          $ref: '#/components/schemas/PlatformPlanCode'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        plan_kind:
+          $ref: '#/components/schemas/PlatformPlanKind'
+    PlatformPlanFeatureLimit:
+      type: object
+      additionalProperties: false
+      required: [feature_code, enabled, limit_value]
+      description: >-
+        `enabled: false` leaves the function out of the plan and carries no limit. A
+        null limit on an enabled function means unlimited.
+      properties:
+        feature_code:
+          $ref: '#/components/schemas/PlatformFeatureCode'
+        enabled:
+          type: boolean
+        limit_value:
+          type: [integer, 'null']
+          minimum: 0
+          maximum: 2147483647
+    PlatformPlanVersionProposal:
+      type: object
+      additionalProperties: false
+      required: [amount_minor, currency_code, billing_period, features]
+      description: >-
+        The free plan sends `amount_minor: 0` with no currency and no period. A paid
+        plan sends a positive amount in minor units of an ISO 4217 currency and a
+        monthly or yearly period. `features` lists every function in the catalogue
+        exactly once.
+      properties:
+        amount_minor:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 100000000000
+        currency_code:
+          type: [string, 'null']
+          pattern: '^[A-Z]{3}$'
+        billing_period:
+          oneOf:
+            - $ref: '#/components/schemas/PlatformPlanBillingPeriod'
+            - type: 'null'
+        features:
+          type: array
+          maxItems: 200
+          items:
+            $ref: '#/components/schemas/PlatformPlanFeatureLimit'
+    PlatformPlanFeatureState:
+      type: object
+      additionalProperties: false
+      required: [enabled, limit_value]
+      properties:
+        enabled:
+          type: boolean
+        limit_value:
+          type: [integer, 'null']
+          minimum: 0
+    PlatformPlanVersionChange:
+      type: object
+      additionalProperties: false
+      required: [field, feature_code, before, after]
+      description: >-
+        One difference against the version this one would replace. `before` and
+        `after` are an amount, a currency, a period or a function's state, and are null
+        where the value was or becomes absent.
+      properties:
+        field:
+          type: string
+          enum: [amount_minor, currency_code, billing_period, feature]
+        feature_code:
+          oneOf:
+            - $ref: '#/components/schemas/PlatformFeatureCode'
+            - type: 'null'
+        before:
+          $ref: '#/components/schemas/PlatformPlanChangeValue'
+        after:
+          $ref: '#/components/schemas/PlatformPlanChangeValue'
+    PlatformPlanChangeValue:
+      oneOf:
+        - type: integer
+          format: int64
+        - type: string
+        - $ref: '#/components/schemas/PlatformPlanFeatureState'
+        - type: 'null'
+    PlatformPlanVersion:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - version_number
+        - status
+        - amount_minor
+        - currency_code
+        - billing_period
+        - features
+        - supersedes_version_id
+        - changes
+        - proposed_by_person_id
+        - proposed_by_self
+        - proposed_at
+        - published_by_person_id
+        - published_at
+        - deprecated_at
+        - withdrawn_by_person_id
+        - withdrawn_at
+      description: >-
+        A version never changes once published: `draft` is a proposal waiting for
+        review, `published` is in force, `deprecated` was replaced and still says what
+        its subscribers accepted, and `archived` is a proposal that was withdrawn.
+      properties:
+        id:
+          $ref: '#/components/schemas/UuidV7'
+        version_number:
+          type: integer
+          minimum: 1
+        status:
+          type: string
+          enum: [draft, published, deprecated, archived]
+        amount_minor:
+          type: integer
+          format: int64
+          minimum: 0
+        currency_code:
+          type: [string, 'null']
+          pattern: '^[A-Z]{3}$'
+        billing_period:
+          oneOf:
+            - $ref: '#/components/schemas/PlatformPlanBillingPeriod'
+            - type: 'null'
+        features:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlatformPlanFeatureLimit'
+        supersedes_version_id:
+          oneOf:
+            - $ref: '#/components/schemas/UuidV7'
+            - type: 'null'
+        changes:
+          type: [array, 'null']
+          description: >-
+            What this version changes against the one it would replace; null for the
+            first version of a plan, which replaces nothing.
+          items:
+            $ref: '#/components/schemas/PlatformPlanVersionChange'
+        proposed_by_person_id:
+          $ref: '#/components/schemas/Uuid'
+        proposed_by_self:
+          type: boolean
+          description: >-
+            Whether the operator reading proposed it. Whoever proposed a version cannot
+            publish it.
+        proposed_at:
+          type: string
+          format: date-time
+        published_by_person_id:
+          oneOf:
+            - $ref: '#/components/schemas/Uuid'
+            - type: 'null'
+        published_at:
+          type: [string, 'null']
+          format: date-time
+        deprecated_at:
+          type: [string, 'null']
+          format: date-time
+        withdrawn_by_person_id:
+          oneOf:
+            - $ref: '#/components/schemas/Uuid'
+            - type: 'null'
+        withdrawn_at:
+          type: [string, 'null']
+          format: date-time
+    PlatformPlan:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - code
+        - name
+        - plan_kind
+        - status
+        - created_by_person_id
+        - created_at
+        - current_version
+        - proposal
+        - history
+      properties:
+        id:
+          $ref: '#/components/schemas/UuidV7'
+        code:
+          $ref: '#/components/schemas/PlatformPlanCode'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        plan_kind:
+          $ref: '#/components/schemas/PlatformPlanKind'
+        status:
+          type: string
+          description: A plan is a draft until its first version is published.
+          enum: [draft, published]
+        created_by_person_id:
+          $ref: '#/components/schemas/Uuid'
+        created_at:
+          type: string
+          format: date-time
+        current_version:
+          oneOf:
+            - $ref: '#/components/schemas/PlatformPlanVersion'
+            - type: 'null'
+        proposal:
+          oneOf:
+            - $ref: '#/components/schemas/PlatformPlanVersion'
+            - type: 'null'
+        history:
+          type: array
+          description: Every version, newest first, withdrawn proposals included.
+          items:
+            $ref: '#/components/schemas/PlatformPlanVersion'
     SupportBusinessPanel:
       type: object
       additionalProperties: false

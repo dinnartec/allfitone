@@ -4424,6 +4424,398 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  PlatformFeature: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['code', 'name', 'unit'],
+    properties: {
+      code: {
+        $ref: '#/components/schemas/PlatformFeatureCode',
+      },
+      name: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 120,
+      },
+      unit: {
+        type: ['string', 'null'],
+        maxLength: 32,
+        description: 'What the limit counts, such as `items` or `weeks`.',
+      },
+    },
+  },
+  PlatformFeatureCode: {
+    type: 'string',
+    pattern: '^[a-z][a-z0-9_]{1,63}$',
+  },
+  PlatformPlan: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'id',
+      'code',
+      'name',
+      'plan_kind',
+      'status',
+      'created_by_person_id',
+      'created_at',
+      'current_version',
+      'proposal',
+      'history',
+    ],
+    properties: {
+      id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      code: {
+        $ref: '#/components/schemas/PlatformPlanCode',
+      },
+      name: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 80,
+      },
+      plan_kind: {
+        $ref: '#/components/schemas/PlatformPlanKind',
+      },
+      status: {
+        type: 'string',
+        description: 'A plan is a draft until its first version is published.',
+        enum: ['draft', 'published'],
+      },
+      created_by_person_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      created_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      current_version: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/PlatformPlanVersion',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      proposal: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/PlatformPlanVersion',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      history: {
+        type: 'array',
+        description: 'Every version, newest first, withdrawn proposals included.',
+        items: {
+          $ref: '#/components/schemas/PlatformPlanVersion',
+        },
+      },
+    },
+  },
+  PlatformPlanBillingPeriod: {
+    type: 'string',
+    enum: ['month', 'year'],
+  },
+  PlatformPlanCatalogue: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['generated_at', 'feature_catalog', 'plans'],
+    properties: {
+      generated_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      feature_catalog: {
+        type: 'array',
+        description:
+          'The functions a plan can limit. Each one arrives with the code that enforces it, so the list changes only with a deployment, and it may be empty.',
+        items: {
+          $ref: '#/components/schemas/PlatformFeature',
+        },
+      },
+      plans: {
+        type: 'array',
+        description: 'The free plan first, then the paid ones by code.',
+        items: {
+          $ref: '#/components/schemas/PlatformPlan',
+        },
+      },
+    },
+  },
+  PlatformPlanChangeValue: {
+    oneOf: [
+      {
+        type: 'integer',
+        format: 'int64',
+      },
+      {
+        type: 'string',
+      },
+      {
+        $ref: '#/components/schemas/PlatformPlanFeatureState',
+      },
+      {
+        type: 'null',
+      },
+    ],
+  },
+  PlatformPlanCode: {
+    type: 'string',
+    pattern: '^[a-z][a-z0-9_]{1,39}$',
+  },
+  PlatformPlanCreate: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['code', 'name', 'plan_kind'],
+    properties: {
+      code: {
+        $ref: '#/components/schemas/PlatformPlanCode',
+      },
+      name: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 80,
+      },
+      plan_kind: {
+        $ref: '#/components/schemas/PlatformPlanKind',
+      },
+    },
+  },
+  PlatformPlanFeatureLimit: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['feature_code', 'enabled', 'limit_value'],
+    description:
+      '`enabled: false` leaves the function out of the plan and carries no limit. A null limit on an enabled function means unlimited.',
+    properties: {
+      feature_code: {
+        $ref: '#/components/schemas/PlatformFeatureCode',
+      },
+      enabled: {
+        type: 'boolean',
+      },
+      limit_value: {
+        type: ['integer', 'null'],
+        minimum: 0,
+        maximum: 2147483647,
+      },
+    },
+  },
+  PlatformPlanFeatureState: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['enabled', 'limit_value'],
+    properties: {
+      enabled: {
+        type: 'boolean',
+      },
+      limit_value: {
+        type: ['integer', 'null'],
+        minimum: 0,
+      },
+    },
+  },
+  PlatformPlanKind: {
+    type: 'string',
+    enum: ['free', 'paid'],
+  },
+  PlatformPlanVersion: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'id',
+      'version_number',
+      'status',
+      'amount_minor',
+      'currency_code',
+      'billing_period',
+      'features',
+      'supersedes_version_id',
+      'changes',
+      'proposed_by_person_id',
+      'proposed_by_self',
+      'proposed_at',
+      'published_by_person_id',
+      'published_at',
+      'deprecated_at',
+      'withdrawn_by_person_id',
+      'withdrawn_at',
+    ],
+    description:
+      'A version never changes once published: `draft` is a proposal waiting for review, `published` is in force, `deprecated` was replaced and still says what its subscribers accepted, and `archived` is a proposal that was withdrawn.',
+    properties: {
+      id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      version_number: {
+        type: 'integer',
+        minimum: 1,
+      },
+      status: {
+        type: 'string',
+        enum: ['draft', 'published', 'deprecated', 'archived'],
+      },
+      amount_minor: {
+        type: 'integer',
+        format: 'int64',
+        minimum: 0,
+      },
+      currency_code: {
+        type: ['string', 'null'],
+        pattern: '^[A-Z]{3}$',
+      },
+      billing_period: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/PlatformPlanBillingPeriod',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      features: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/PlatformPlanFeatureLimit',
+        },
+      },
+      supersedes_version_id: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/UuidV7',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      changes: {
+        type: ['array', 'null'],
+        description:
+          'What this version changes against the one it would replace; null for the first version of a plan, which replaces nothing.',
+        items: {
+          $ref: '#/components/schemas/PlatformPlanVersionChange',
+        },
+      },
+      proposed_by_person_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      proposed_by_self: {
+        type: 'boolean',
+        description:
+          'Whether the operator reading proposed it. Whoever proposed a version cannot publish it.',
+      },
+      proposed_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      published_by_person_id: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/Uuid',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      published_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      deprecated_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      withdrawn_by_person_id: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/Uuid',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      withdrawn_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+    },
+  },
+  PlatformPlanVersionChange: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['field', 'feature_code', 'before', 'after'],
+    description:
+      "One difference against the version this one would replace. `before` and `after` are an amount, a currency, a period or a function's state, and are null where the value was or becomes absent.",
+    properties: {
+      field: {
+        type: 'string',
+        enum: ['amount_minor', 'currency_code', 'billing_period', 'feature'],
+      },
+      feature_code: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/PlatformFeatureCode',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      before: {
+        $ref: '#/components/schemas/PlatformPlanChangeValue',
+      },
+      after: {
+        $ref: '#/components/schemas/PlatformPlanChangeValue',
+      },
+    },
+  },
+  PlatformPlanVersionProposal: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['amount_minor', 'currency_code', 'billing_period', 'features'],
+    description:
+      'The free plan sends `amount_minor: 0` with no currency and no period. A paid plan sends a positive amount in minor units of an ISO 4217 currency and a monthly or yearly period. `features` lists every function in the catalogue exactly once.',
+    properties: {
+      amount_minor: {
+        type: 'integer',
+        format: 'int64',
+        minimum: 0,
+        maximum: 100000000000,
+      },
+      currency_code: {
+        type: ['string', 'null'],
+        pattern: '^[A-Z]{3}$',
+      },
+      billing_period: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/PlatformPlanBillingPeriod',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      features: {
+        type: 'array',
+        maxItems: 200,
+        items: {
+          $ref: '#/components/schemas/PlatformPlanFeatureLimit',
+        },
+      },
+    },
+  },
   PlatformRoleAssignment: {
     type: 'object',
     additionalProperties: false,

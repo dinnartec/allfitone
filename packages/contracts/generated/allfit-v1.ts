@@ -675,6 +675,92 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/backoffice/v1/platform-plans': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Read the plans Allfit sells
+     * @description Every plan with the version in force, the proposal waiting for review with what it changes, and the full history. Also the catalogue of functions a plan can limit, which changes only with a deployment because each function needs code that enforces it; it may be empty.
+     *     A price list is nobody's data, so reading it records no access. Requires `manage_platform_commercial`.
+     */
+    get: operations['listBackofficePlatformPlans']
+    put?: never
+    /**
+     * Create a plan
+     * @description A plan is a stable code, a name and a kind, and it is a draft until its first version is published. There is one free plan, ever: its limits change by publishing versions of it, so a second free plan answers 409, and so does a code that is already taken.
+     */
+    post: operations['createBackofficePlatformPlan']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/platform-plans/{planId}/versions': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Propose a new version of a plan
+     * @description The price, currency, billing period and what the version does with every function in the catalogue, none left out and none added. The free plan costs zero and has no currency or period; a paid plan costs something every month or year. A proposal waits for somebody else to publish it and carries what it changes against the version in force.
+     *     A plan has one proposal open at a time, and a proposal that changes nothing answers 409. Privacy functions are not in the catalogue, so no version can limit them.
+     */
+    post: operations['proposeBackofficePlatformPlanVersion']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/platform-plans/{planId}/versions/{versionId}/publication': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Publish a proposal somebody else made
+     * @description The version comes into force and the one it replaces is retired, never rewritten: whoever subscribed to it keeps what they accepted. The person who proposed a version cannot publish it (403). A proposal that was already published or withdrawn answers 409. The command carries no body.
+     */
+    post: operations['publishBackofficePlatformPlanVersion']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/platform-plans/{planId}/versions/{versionId}/withdrawal': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Withdraw a proposal
+     * @description The proposer changing their mind and a reviewer who disagrees end the same way: the proposal is kept as withdrawn, with who withdrew it, and its number is never reused. Only an open proposal is withdrawn (409 otherwise). The command carries no body.
+     */
+    post: operations['withdrawBackofficePlatformPlanVersion']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/backoffice/v1/organizations': {
     parameters: {
       query?: never
@@ -2839,6 +2925,105 @@ export interface components {
       credential_verifications: components['schemas']['AttentionVerificationNotice']
       unclaimed_organizations: components['schemas']['AttentionUnclaimedOrganizationNotice']
       repeated_failures: components['schemas']['AttentionFailureNotice']
+    }
+    PlatformPlanCatalogue: {
+      /** Format: date-time */
+      generated_at: string
+      /** @description The functions a plan can limit. Each one arrives with the code that enforces it, so the list changes only with a deployment, and it may be empty. */
+      feature_catalog: components['schemas']['PlatformFeature'][]
+      /** @description The free plan first, then the paid ones by code. */
+      plans: components['schemas']['PlatformPlan'][]
+    }
+    PlatformFeature: {
+      code: components['schemas']['PlatformFeatureCode']
+      name: string
+      /** @description What the limit counts, such as `items` or `weeks`. */
+      unit: string | null
+    }
+    PlatformFeatureCode: string
+    PlatformPlanCode: string
+    /** @enum {string} */
+    PlatformPlanKind: 'free' | 'paid'
+    /** @enum {string} */
+    PlatformPlanBillingPeriod: 'month' | 'year'
+    PlatformPlanCreate: {
+      code: components['schemas']['PlatformPlanCode']
+      name: string
+      plan_kind: components['schemas']['PlatformPlanKind']
+    }
+    /** @description `enabled: false` leaves the function out of the plan and carries no limit. A null limit on an enabled function means unlimited. */
+    PlatformPlanFeatureLimit: {
+      feature_code: components['schemas']['PlatformFeatureCode']
+      enabled: boolean
+      limit_value: number | null
+    }
+    /** @description The free plan sends `amount_minor: 0` with no currency and no period. A paid plan sends a positive amount in minor units of an ISO 4217 currency and a monthly or yearly period. `features` lists every function in the catalogue exactly once. */
+    PlatformPlanVersionProposal: {
+      /** Format: int64 */
+      amount_minor: number
+      currency_code: string | null
+      billing_period: components['schemas']['PlatformPlanBillingPeriod'] | null
+      features: components['schemas']['PlatformPlanFeatureLimit'][]
+    }
+    PlatformPlanFeatureState: {
+      enabled: boolean
+      limit_value: number | null
+    }
+    /** @description One difference against the version this one would replace. `before` and `after` are an amount, a currency, a period or a function's state, and are null where the value was or becomes absent. */
+    PlatformPlanVersionChange: {
+      /** @enum {string} */
+      field: 'amount_minor' | 'currency_code' | 'billing_period' | 'feature'
+      feature_code: components['schemas']['PlatformFeatureCode'] | null
+      before: components['schemas']['PlatformPlanChangeValue']
+      after: components['schemas']['PlatformPlanChangeValue']
+    }
+    PlatformPlanChangeValue:
+      number | string | components['schemas']['PlatformPlanFeatureState'] | null
+    /** @description A version never changes once published: `draft` is a proposal waiting for review, `published` is in force, `deprecated` was replaced and still says what its subscribers accepted, and `archived` is a proposal that was withdrawn. */
+    PlatformPlanVersion: {
+      id: components['schemas']['UuidV7']
+      version_number: number
+      /** @enum {string} */
+      status: 'draft' | 'published' | 'deprecated' | 'archived'
+      /** Format: int64 */
+      amount_minor: number
+      currency_code: string | null
+      billing_period: components['schemas']['PlatformPlanBillingPeriod'] | null
+      features: components['schemas']['PlatformPlanFeatureLimit'][]
+      supersedes_version_id: components['schemas']['UuidV7'] | null
+      /** @description What this version changes against the one it would replace; null for the first version of a plan, which replaces nothing. */
+      changes: components['schemas']['PlatformPlanVersionChange'][] | null
+      proposed_by_person_id: components['schemas']['Uuid']
+      /** @description Whether the operator reading proposed it. Whoever proposed a version cannot publish it. */
+      proposed_by_self: boolean
+      /** Format: date-time */
+      proposed_at: string
+      published_by_person_id: components['schemas']['Uuid'] | null
+      /** Format: date-time */
+      published_at: string | null
+      /** Format: date-time */
+      deprecated_at: string | null
+      withdrawn_by_person_id: components['schemas']['Uuid'] | null
+      /** Format: date-time */
+      withdrawn_at: string | null
+    }
+    PlatformPlan: {
+      id: components['schemas']['UuidV7']
+      code: components['schemas']['PlatformPlanCode']
+      name: string
+      plan_kind: components['schemas']['PlatformPlanKind']
+      /**
+       * @description A plan is a draft until its first version is published.
+       * @enum {string}
+       */
+      status: 'draft' | 'published'
+      created_by_person_id: components['schemas']['Uuid']
+      /** Format: date-time */
+      created_at: string
+      current_version: components['schemas']['PlatformPlanVersion'] | null
+      proposal: components['schemas']['PlatformPlanVersion'] | null
+      /** @description Every version, newest first, withdrawn proposals included. */
+      history: components['schemas']['PlatformPlanVersion'][]
     }
     /** @description Counts only, each carrying the period it was measured over. No identifier, name or contact travels here, so no figure can be used to reach a person. */
     SupportBusinessPanel: {
@@ -5218,6 +5403,10 @@ export interface components {
     SupportPersonId: components['schemas']['Uuid']
     /** @description The stable code of a global catalogue entry. */
     CatalogueCode: string
+    /** @description One of the plans Allfit sells. */
+    PlatformPlanId: components['schemas']['UuidV7']
+    /** @description One version of that plan. */
+    PlatformPlanVersionId: components['schemas']['UuidV7']
     /** @description The recovery, identified by the command that started it. */
     AccountRecoveryRequestId: components['schemas']['UuidV7']
     /** @description Exactly one lookup parameter is accepted per search. */
@@ -6577,6 +6766,197 @@ export interface operations {
       }
       401: components['responses']['Unauthenticated']
       403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listBackofficePlatformPlans: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The plans and the functions they can limit */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['PlatformPlanCatalogue']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  createBackofficePlatformPlan: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformPlanCreate']
+      }
+    }
+    responses: {
+      /** @description The new plan */
+      201: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['PlatformPlan']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  proposeBackofficePlatformPlanVersion: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        /** @description One of the plans Allfit sells. */
+        planId: components['parameters']['PlatformPlanId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformPlanVersionProposal']
+      }
+    }
+    responses: {
+      /** @description The plan, with the proposal open */
+      201: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['PlatformPlan']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  publishBackofficePlatformPlanVersion: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        /** @description One of the plans Allfit sells. */
+        planId: components['parameters']['PlatformPlanId']
+        /** @description One version of that plan. */
+        versionId: components['parameters']['PlatformPlanVersionId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The plan, with the new version in force */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['PlatformPlan']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  withdrawBackofficePlatformPlanVersion: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        /** @description One of the plans Allfit sells. */
+        planId: components['parameters']['PlatformPlanId']
+        /** @description One version of that plan. */
+        versionId: components['parameters']['PlatformPlanVersionId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The plan, with no proposal open */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['PlatformPlan']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
       503: components['responses']['UpstreamUnavailable']
     }
   }
