@@ -111,7 +111,27 @@ export interface BreakGlassFixture {
   bodyProgress?: BodyProgressRecordFixture[]
   /** What the subject has declared. Only a health_context read returns it. */
   healthContext?: HealthContextClaimFixture[]
+  /** What the subject has eaten. Only a nutrition_intake read returns it. */
+  meals?: BreakGlassMealFixture[]
   files: BreakGlassFileFixture[]
+}
+
+export interface BreakGlassMealFixture {
+  id: string
+  occurred_at: string
+  local_date: string
+  timezone: string
+  meal_type: string
+  note: string | null
+  revision_number: number
+  has_media: boolean
+  items: Array<{
+    position: number
+    name: string
+    quantity: number | null
+    quantity_unit: string | null
+    nutrients: Array<{ nutrient_code: string; value: number; unit: string }>
+  }>
 }
 
 export interface HealthContextClaimFixture {
@@ -1713,6 +1733,7 @@ async function routeBreakGlass(
     const readable: Record<string, string> = {
       body_progress: 'identity.body_progress_records',
       health_context: 'identity.health_context_claims',
+      nutrition_intake: 'nutrition.meals',
     }
     const ownTable = readable[category]
     const forced = glass.nextExerciseDenial
@@ -1751,6 +1772,13 @@ async function routeBreakGlass(
         reason_code: 'authorized_exercise',
         ...event,
         content: { health_context: glass.healthContext ?? [] },
+      })
+    } else if (category === 'nutrition_intake') {
+      await fulfill(route, 200, {
+        outcome: 'allowed',
+        reason_code: 'authorized_exercise',
+        ...event,
+        content: { nutrition_intake: glass.meals ?? [] },
       })
     } else {
       await fulfill(route, 200, {

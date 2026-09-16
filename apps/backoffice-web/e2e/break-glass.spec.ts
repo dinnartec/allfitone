@@ -430,6 +430,101 @@ test('an authorised read of someone who declared nothing says so', async ({ cont
   await expect(page.getByRole('table', { name: 'Contexto de salud de la persona' })).toHaveCount(0)
 })
 
+test('an authorised read of nutrition intake shows what the person ate and what it added up to', async ({
+  context,
+  page,
+}) => {
+  const fixture = createBackofficeFixture({
+    session: activeSession(),
+    breakGlass: {
+      files: [openBreakGlassWindow(10, { categories: ['nutrition_intake'] })],
+      meals: [
+        {
+          id: '019a8000-0000-7000-8000-000000000901',
+          occurred_at: '2026-09-15T23:30:00+00:00',
+          local_date: '2026-09-15',
+          timezone: 'America/Bogota',
+          meal_type: 'dinner',
+          note: 'Con poca sal, sin aceite y con el arroz del día anterior recalentado',
+          revision_number: 0,
+          has_media: true,
+          items: [
+            {
+              position: 1,
+              name: 'Pollo a la plancha',
+              quantity: 120,
+              quantity_unit: 'g',
+              nutrients: [
+                { nutrient_code: 'energy', value: 198, unit: 'kcal' },
+                { nutrient_code: 'protein', value: 37.5, unit: 'g' },
+              ],
+            },
+            {
+              position: 2,
+              name: 'Arroz blanco',
+              quantity: 150,
+              quantity_unit: 'g',
+              nutrients: [
+                { nutrient_code: 'energy', value: 195, unit: 'kcal' },
+                { nutrient_code: 'carbohydrates', value: 42, unit: 'g' },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+  })
+  await mockBackofficeApi(context, fixture)
+  // A laptop screen: the meals fit without scrolling sideways.
+  await page.setViewportSize({ width: 1280, height: 900 })
+
+  await page.goto(PATH)
+  await page.getByRole('button', { name: 'Leer ingesta nutricional' }).click()
+
+  const outcome = page.locator('[data-break-glass-outcome]')
+  await expect(outcome.getByText('Lectura autorizada y registrada')).toBeVisible()
+
+  const meals = page.getByRole('table', { name: 'Comidas de la persona' })
+  const dinner = meals.getByRole('row', { name: /Cena/ })
+  await expect(dinner).toContainText('America/Bogota')
+  await expect(dinner).toContainText('Pollo a la plancha, 120 g · Arroz blanco, 150 g')
+  await expect(dinner).toContainText('393 kcal · 37,5 g de proteína · 42 g de carbohidratos')
+  await expect(dinner).toContainText('Con poca sal')
+  await expect(dinner).toContainText('Tiene foto; no se muestra aquí')
+  await expect(meals.getByRole('img')).toHaveCount(0)
+  const region = page.getByRole('region', { name: 'Comidas de la persona' })
+  expect(await region.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true)
+
+  const read = fixture.requests.filter((request) => request.path.endsWith('/reads'))
+  expect(read[0]?.body).toEqual({ category: 'nutrition_intake', resource_type: 'nutrition.meals' })
+
+  await page.getByRole('button', { name: 'Cerrar la ventana' }).click()
+  await expect(page.getByText(/Ninguna lectura entrega contenido desde ahora/)).toBeVisible()
+  await expect(meals).toHaveCount(0)
+  await expect(page.getByText('Pollo a la plancha, 120 g')).toHaveCount(0)
+})
+
+test('an authorised read of someone who recorded no meals says so', async ({ context, page }) => {
+  await mockBackofficeApi(
+    context,
+    createBackofficeFixture({
+      session: activeSession(),
+      breakGlass: {
+        files: [openBreakGlassWindow(10, { categories: ['nutrition_intake'] })],
+        meals: [],
+      },
+    }),
+  )
+
+  await page.goto(PATH)
+  await page.getByRole('button', { name: 'Leer ingesta nutricional' }).click()
+
+  await expect(
+    page.locator('[data-break-glass-outcome]').getByText(/La persona no ha registrado comidas/),
+  ).toBeVisible()
+  await expect(page.getByRole('table', { name: 'Comidas de la persona' })).toHaveCount(0)
+})
+
 test('a second read replaces what the first one showed', async ({ context, page }) => {
   await mockBackofficeApi(
     context,
