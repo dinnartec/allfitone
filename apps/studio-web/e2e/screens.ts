@@ -301,6 +301,26 @@ interface InvitationOptions {
   newPerson?: boolean
   /** No session: the invitation still resolves, but deciding needs a sign-in. */
   signedOut?: boolean
+  /**
+   * An organization Allfit hands over (AFO-214) rather than a team invitation.
+   * The same route and the same token: the page asks for a team invitation
+   * first, so this makes that one answer 404 and the ownership one resolve.
+   */
+  ownership?: boolean
+}
+
+const ownershipPresentation = {
+  id: INVITATION_ID,
+  organization: {
+    id: activeMembership.organization_id,
+    display_name: activeMembership.display_name,
+    type_name: 'Gimnasio',
+    party_kind: 'legal_entity',
+    legal_name: 'Norte Fitness SAS',
+    site_name: 'Sede Principal',
+  },
+  expires_at: '2030-09-20T12:00:00.000Z',
+  intent: { id: INTENT_ID, status: 'pending' },
 }
 
 function invitationFixture(options: InvitationOptions = {}): StudioApiFixture {
@@ -318,7 +338,26 @@ function invitationFixture(options: InvitationOptions = {}): StudioApiFixture {
     intercept: async (request) => {
       if (request.path === '/studio/v1/invitations/resolve') {
         if (options.stallResolve) await new Promise((resolve) => setTimeout(resolve, 15_000))
+        // A team token is tried first, so an ownership one has to be refused
+        // here before the page will ask about it.
+        if (options.ownership) return { status: 404, body: error('not-found') }
         return options.resolve ?? { status: 200, body: invitationPresentation }
+      }
+      if (request.path === '/studio/v1/ownership-invitations/resolve') {
+        return { status: 200, body: ownershipPresentation }
+      }
+      if (request.path === '/studio/v1/ownership-invitations/decisions') {
+        const decision = options.decisionOutcome ?? 'accepted'
+        return {
+          status: 200,
+          body: {
+            invitation_id: INVITATION_ID,
+            invitation_status: 'completed',
+            organization_id: activeMembership.organization_id,
+            intent: { id: INTENT_ID, status: decision },
+            replayed: false,
+          },
+        }
       }
       if (request.path === '/studio/v1/invitations/decisions') {
         if (options.decision) return options.decision
@@ -536,6 +575,41 @@ export const SCREENS: Screen[] = [
     settled: async (page) => {
       await settledByHeading(page)
       await expect(page.getByText(/Se hicieron demasiados intentos/)).toBeVisible()
+    },
+  },
+
+  // --- the same route, for an organization Allfit hands over (AFO-214) --------
+  // These arrived from `main` after the inventory was closed, so nothing had
+  // swept them. Reviewing them found the faults the team panel had already had:
+  // a title that ran five lines, and a summary list with no styling at all.
+  {
+    stories: 'AFO-214 · receive an organization Allfit hands over',
+    path: invitationWithToken,
+    fixture: () => invitationFixture({ ownership: true }),
+    settled: async (page) => {
+      await settledByHeading(page)
+      await expect(page.getByRole('button', { name: /Aceptar y recibir/ })).toBeVisible()
+    },
+  },
+  {
+    stories: 'AFO-214 · receive an organization before signing in',
+    path: invitationWithToken,
+    fixture: () => invitationFixture({ ownership: true, signedOut: true }),
+    settled: async (page) => {
+      await settledByHeading(page)
+      await expect(page.getByRole('link', { name: 'Entrar para decidir' })).toBeVisible()
+    },
+  },
+  {
+    // The rejection stage is shared with team invitations but says something
+    // else: the organization stays, and stays shut.
+    stories: 'AFO-214 · the handover was declined',
+    path: invitationWithToken,
+    fixture: () => invitationFixture({ ownership: true, decisionOutcome: 'rejected' }),
+    reveal: async (page) => {
+      await page.getByRole('button', { name: /Aceptar y recibir/ }).waitFor()
+      await page.getByRole('button', { name: 'Rechazar' }).click()
+      await expect(page.getByText(/sigue sin operar/)).toBeVisible()
     },
   },
 

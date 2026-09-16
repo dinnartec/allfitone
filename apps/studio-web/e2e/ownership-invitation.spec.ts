@@ -68,9 +68,11 @@ test('an organization Allfit hands over opens on the same invitation page', asyn
 
   await page.goto(`/invitations#token=${TOKEN}`)
 
-  await expect(
-    page.getByRole('heading', { name: 'Handover Norte está lista para que la recibas.' }),
-  ).toBeVisible()
+  // The organization is the heading on its own now: inside the sentence the
+  // title ran five lines on a desktop and four on a phone, so the verb moved to
+  // the description, where this still asserts it.
+  await expect(page.getByRole('heading', { name: 'Handover Norte' })).toBeVisible()
+  await expect(page.getByText(/está lista para que la recibas/)).toBeVisible()
   await expect(page.getByText(/existe pero no opera/)).toBeVisible()
   await expect(page.getByText('Norte Fitness SAS')).toBeVisible()
   expect(new URL(page.url()).hash).toBe('')

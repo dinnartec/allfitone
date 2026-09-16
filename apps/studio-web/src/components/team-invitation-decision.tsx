@@ -320,7 +320,18 @@ export function TeamInvitationDecision() {
     </SetupPanelActions>
   ) : (
     <SetupPanelActions>
+      {/* Both are needed. The slot is what applies the Design System's own
+          treatment — without it this link missed the gradient and stayed at
+          177px of its 285 — and `buttonVariants()` is what gives it a button's
+          padding, radius, centring and no underline. Dropping the helper to
+          match the weight left an underlined bar of text.
+
+          One difference survives: the helper emits `font-extrabold` while
+          `<Button>` renders weight 400, so this link is bolder than the buttons
+          it stands in for. That belongs upstream, not in an override here. */}
       <a
+        data-slot="button"
+        data-variant="default"
         className={buttonVariants({ size: 'lg' })}
         href={`${studioApi.apiUrl}/studio/v1/auth/start`}
         onClick={prepareStudioAuthentication}
@@ -337,23 +348,23 @@ export function TeamInvitationDecision() {
         <SetupPanel>
           <SetupPanelIntro>
             <SetupPanelEyebrow>Entrega de organización</SetupPanelEyebrow>
-            <SetupPanelTitle>
-              {invitation.organization.display_name} está lista para que la recibas.
-            </SetupPanelTitle>
+            {/* The organization is the headline, not a phrase wrapped around it.
+                Inside the sentence this title ran five lines on a desktop and
+                four on a phone; the verb belongs in the description, the same
+                way the team panel below it reads. */}
+            <SetupPanelTitle>{invitation.organization.display_name}</SetupPanelTitle>
             <SetupPanelDescription>
-              Allfit la preparó para ti. Aceptarla te hace su propietario y la organización empieza
-              a operar; mientras no la aceptes, existe pero no opera.
+              Allfit la preparó para ti y está lista para que la recibas. Aceptarla te hace su
+              propietario y la organización empieza a operar; mientras no la aceptes, existe pero no
+              opera.
             </SetupPanelDescription>
             {signInNote}
           </SetupPanelIntro>
           <SetupPanelContent>
             <Card>
               <CardContent>
+                {/* No "Organización" row: the title above is that same name. */}
                 <dl data-ownership-invitation-summary>
-                  <div>
-                    <dt>Organización</dt>
-                    <dd>{invitation.organization.display_name}</dd>
-                  </div>
                   <div>
                     <dt>Tipo</dt>
                     <dd>{invitation.organization.type_name}</dd>

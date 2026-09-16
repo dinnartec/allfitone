@@ -488,6 +488,7 @@ menu {
 }
 
 [data-team-invitation-summary],
+[data-ownership-invitation-summary],
 /* Two fixed columns left a hole whenever there was one pair to show, which on a
    membership card is the common case: a person who has not left has no end
    date. `auto-fit` gives the pair the row and still splits it when a second
@@ -500,11 +501,13 @@ menu {
 }
 
 [data-team-invitation-summary] > div,
+[data-ownership-invitation-summary] > div,
 [data-credential-details] > div {
   min-width: 0;
 }
 
 [data-team-invitation-summary] dd,
+[data-ownership-invitation-summary] dd,
 [data-team-member-facts] dd,
 [data-credential-details] dd {
   margin-inline: 0;
@@ -519,6 +522,7 @@ menu {
    value in `StatStripItem`, through its own `--afo-typography-label-*` tokens,
    rather than a weight invented here. */
 [data-team-invitation-summary] dt,
+[data-ownership-invitation-summary] dt,
 [data-team-member-facts] dt,
 [data-credential-details] dt {
   font-family: var(--afo-typography-label-font-family);
