@@ -107,7 +107,21 @@ export interface BreakGlassFixture {
    * between the answer that offered the read and the click that took it.
    */
   nextExerciseDenial?: string | undefined
+  /** What the subject has recorded. Only a body_progress read returns it. */
+  bodyProgress?: BodyProgressRecordFixture[]
   files: BreakGlassFileFixture[]
+}
+
+export interface BodyProgressRecordFixture {
+  id: string
+  metric_code: string
+  value: number
+  unit_code: string
+  original_value: number | null
+  original_unit_code: string | null
+  measured_on: string
+  has_media: boolean
+  recorded_at: string
 }
 
 export interface BreakGlassFileFixture {
@@ -1682,6 +1696,7 @@ async function routeBreakGlass(
   if (action === 'reads') {
     const body = request.body as { category?: string; resource_type?: string } | undefined
     const category = body?.category ?? ''
+    const readsMeasurements = category === 'body_progress'
     const forced = glass.nextExerciseDenial
     glass.nextExerciseDenial = undefined
     const denial =
@@ -1692,17 +1707,33 @@ async function routeBreakGlass(
           ? 'window_not_open'
           : !file.categories.includes(category)
             ? 'category_out_of_scope'
-            : null)
+            : readsMeasurements && body?.resource_type !== 'identity.body_progress_records'
+              ? 'resource_out_of_scope'
+              : null)
     // Only an authorised attempt raises the counter, matching the projection, which
     // counts events with result 'allowed'. A denial is recorded too, as an event.
     if (denial === null) file.exercise_count += 1
-    await fulfill(route, 200, {
-      outcome: denial === null ? 'content_unavailable' : 'denied',
-      reason_code: denial ?? 'execution_and_nutrition_absent',
+    const event = {
       break_glass_event_id: nextAssignmentId(),
       occurred_at: now,
       ...(category ? { category } : {}),
-    })
+    }
+    if (denial !== null) {
+      await fulfill(route, 200, { outcome: 'denied', reason_code: denial, ...event })
+    } else if (readsMeasurements) {
+      await fulfill(route, 200, {
+        outcome: 'allowed',
+        reason_code: 'authorized_exercise',
+        ...event,
+        content: { body_progress: glass.bodyProgress ?? [] },
+      })
+    } else {
+      await fulfill(route, 200, {
+        outcome: 'content_unavailable',
+        reason_code: 'execution_and_nutrition_absent',
+        ...event,
+      })
+    }
     return
   }
 

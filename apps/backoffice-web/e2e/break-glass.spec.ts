@@ -243,6 +243,139 @@ test('an authorised read that finds nothing is reported as recorded, not as a fa
   expect(read[0]?.headers['idempotency-key']).toBeUndefined()
 })
 
+test('an authorised read of body progress shows the measurements until the window closes', async ({
+  context,
+  page,
+}) => {
+  const fixture = createBackofficeFixture({
+    session: activeSession(),
+    breakGlass: {
+      files: [openBreakGlassWindow(10, { categories: ['body_progress'] })],
+      bodyProgress: [
+        {
+          id: '019a8000-0000-7000-8000-000000000701',
+          metric_code: 'waist',
+          value: 0.82,
+          unit_code: 'm',
+          original_value: 82,
+          original_unit_code: 'cm',
+          measured_on: '2026-09-01',
+          has_media: true,
+          recorded_at: '2026-09-01T11:00:00.000Z',
+        },
+        {
+          id: '019a8000-0000-7000-8000-000000000702',
+          metric_code: 'weight',
+          value: 80,
+          unit_code: 'kg',
+          original_value: 176.37,
+          original_unit_code: 'lb',
+          measured_on: '2026-08-31',
+          has_media: false,
+          recorded_at: '2026-08-31T11:00:00.000Z',
+        },
+      ],
+    },
+  })
+  await mockBackofficeApi(context, fixture)
+
+  await page.goto(PATH)
+  await page.getByRole('button', { name: 'Leer progreso corporal' }).click()
+
+  const outcome = page.locator('[data-break-glass-outcome]')
+  await expect(outcome.getByText('Lectura autorizada y registrada')).toBeVisible()
+  await expect(
+    outcome.getByText(/verá este intento en su propio registro de accesos/),
+  ).toBeVisible()
+
+  // As the person recorded it and as the platform normalized it; a photo is a flag.
+  const measurements = page.getByRole('table', { name: 'Mediciones de la persona' })
+  const waist = measurements.getByRole('row', { name: /Cintura/ })
+  await expect(waist).toContainText('82 cm')
+  await expect(waist).toContainText('0,82 m')
+  await expect(waist).toContainText('1 de septiembre de 2026')
+  await expect(waist).toContainText('Tiene foto; no se muestra aquí')
+  const weight = measurements.getByRole('row', { name: /Peso/ })
+  await expect(weight).toContainText('176,37 lb')
+  await expect(weight).toContainText('80 kg')
+  await expect(measurements.getByRole('img')).toHaveCount(0)
+
+  // The evidence names the table that was opened, not a generic one.
+  const read = fixture.requests.filter((request) => request.path.endsWith('/reads'))
+  expect(read).toHaveLength(1)
+  expect(read[0]?.body).toEqual({
+    category: 'body_progress',
+    resource_type: 'identity.body_progress_records',
+  })
+  expect(fixture.breakGlass?.files[0]?.exercise_count).toBe(1)
+
+  // Closing the window takes the content off the screen with it.
+  await page.getByRole('button', { name: 'Cerrar la ventana' }).click()
+  await expect(page.getByText(/Ninguna lectura entrega contenido desde ahora/)).toBeVisible()
+  await expect(measurements).toHaveCount(0)
+  await expect(page.getByText('82 cm')).toHaveCount(0)
+})
+
+test('an authorised read of someone with no measurements says so', async ({ context, page }) => {
+  await mockBackofficeApi(
+    context,
+    createBackofficeFixture({
+      session: activeSession(),
+      breakGlass: {
+        files: [openBreakGlassWindow(10, { categories: ['body_progress'] })],
+        bodyProgress: [],
+      },
+    }),
+  )
+
+  await page.goto(PATH)
+  await page.getByRole('button', { name: 'Leer progreso corporal' }).click()
+
+  const outcome = page.locator('[data-break-glass-outcome]')
+  await expect(outcome.getByText('Lectura autorizada y registrada')).toBeVisible()
+  await expect(outcome.getByText(/La persona no tiene mediciones registradas/)).toBeVisible()
+  await expect(page.getByRole('table', { name: 'Mediciones de la persona' })).toHaveCount(0)
+})
+
+test('a read whose window lapses on screen stops showing what it returned', async ({
+  context,
+  page,
+}) => {
+  await mockBackofficeApi(
+    context,
+    createBackofficeFixture({
+      session: activeSession(),
+      breakGlass: {
+        // Six seconds: long enough to read, short enough to watch it lapse.
+        files: [openBreakGlassWindow(0.1, { categories: ['body_progress'] })],
+        bodyProgress: [
+          {
+            id: '019a8000-0000-7000-8000-000000000703',
+            metric_code: 'hip',
+            value: 0.95,
+            unit_code: 'm',
+            original_value: 95,
+            original_unit_code: 'cm',
+            measured_on: '2026-09-02',
+            has_media: false,
+            recorded_at: '2026-09-02T11:00:00.000Z',
+          },
+        ],
+      },
+    }),
+  )
+
+  await page.goto(PATH)
+  await page.getByRole('button', { name: 'Leer progreso corporal' }).click()
+  const measurements = page.getByRole('table', { name: 'Mediciones de la persona' })
+  await expect(measurements.getByRole('row', { name: /Cadera/ })).toBeVisible()
+
+  // The window outlives the default five-second wait, so this one waits it out.
+  await expect(page.getByText(/La ventana ya venció/)).toBeVisible({ timeout: 10_000 })
+  await expect(measurements).toHaveCount(0)
+  await expect(page.getByText(/dejó de mostrarse/)).toBeVisible()
+})
+
 test('a denied attempt is shown as a recorded fact rather than an error', async ({
   context,
   page,
