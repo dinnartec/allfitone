@@ -169,3 +169,34 @@ test('sends an unauthenticated operator back to the access screen', async ({ con
 
   await expect(page.getByRole('heading', { name: 'Identifica tu acceso.' })).toBeVisible()
 })
+
+test('reaches the whole inventory instead of showing the first page as if it were all', async ({
+  context,
+  page,
+}) => {
+  const roles = Array.from({ length: 5 }, (_, index) =>
+    platformRole({ person_id: `019a3000-0000-7000-8000-00000000010${index}` }),
+  )
+  await mockBackofficeApi(
+    context,
+    createBackofficeFixture({
+      session: activeSession(),
+      platformAccess: { roles, duties: [], pageSize: 2 },
+    }),
+  )
+
+  await page.goto('/team')
+
+  const rows = page.getByRole('row').filter({ hasText: '019a3000-0000-7000-8000-0000000001' })
+  await expect(rows).toHaveCount(2)
+
+  const more = page.getByRole('button', { name: 'Ver más asignaciones de rol base' })
+  await expect(more).toBeVisible()
+  await more.click()
+  await expect(rows).toHaveCount(4)
+
+  await more.click()
+  await expect(rows).toHaveCount(5)
+  // Nothing left to fetch, so the invitation to fetch disappears.
+  await expect(more).toBeHidden()
+})

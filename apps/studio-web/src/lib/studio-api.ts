@@ -25,6 +25,9 @@ export type TeamInvitation = AllfitV1Schemas['TeamInvitation']
 export type TeamInvitationPresentation = AllfitV1Schemas['TeamInvitationPresentation']
 export type TeamInvitationDecisionCreate = AllfitV1Schemas['TeamInvitationDecisionCreate']
 export type TeamInvitationDecisionResult = AllfitV1Schemas['TeamInvitationDecisionResult']
+export type OwnershipInvitationPresentation = AllfitV1Schemas['OwnershipInvitationPresentation']
+export type OwnershipInvitationDecisionCreate = AllfitV1Schemas['OwnershipInvitationDecisionCreate']
+export type OwnershipInvitationDecisionResult = AllfitV1Schemas['OwnershipInvitationDecisionResult']
 export type TeamInvitationPage = AllfitV1Schemas['TeamInvitationPage']
 export type TeamInvitationListItem = AllfitV1Schemas['TeamInvitationListItem']
 export type TeamInvitationStatus = AllfitV1Schemas['TeamInvitationStatus']
@@ -207,6 +210,25 @@ export const studioApi = {
         body: JSON.stringify(body),
       },
       telemetryContext(invitationDecisionFlowStep(body.decisions[0]?.decision)),
+    ),
+
+  // An organization Allfit hands over arrives at the same invitation page, so the page
+  // asks for it when the token is not a team invitation.
+  resolveOwnershipInvitation: (token: string) =>
+    request<OwnershipInvitationPresentation>('/studio/v1/ownership-invitations/resolve', {
+      method: 'POST',
+      body: JSON.stringify({ token }),
+    }),
+
+  decideOwnershipInvitation: (body: OwnershipInvitationDecisionCreate, command: CommandHeaders) =>
+    request<OwnershipInvitationDecisionResult>(
+      '/studio/v1/ownership-invitations/decisions',
+      {
+        method: 'POST',
+        headers: commandHeaders(command),
+        body: JSON.stringify(body),
+      },
+      telemetryContext(invitationDecisionFlowStep(body.decision)),
     ),
 
   teamInvitations: (
@@ -404,6 +426,8 @@ function studioOperation(
     '/studio/v1/organizations': 'studio.organization.create',
     '/studio/v1/invitations/resolve': 'studio.invitation.resolve',
     '/studio/v1/invitations/decisions': 'studio.invitation.decide',
+    '/studio/v1/ownership-invitations/resolve': 'studio.invitation.resolve',
+    '/studio/v1/ownership-invitations/decisions': 'studio.invitation.decide',
   }
   if (exact[pathname]) return exact[pathname]
   if (/^\/studio\/v1\/onboarding-attempts\/[^/]+\/eligibility-evidence$/.test(pathname)) {

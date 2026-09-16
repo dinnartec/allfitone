@@ -1,8 +1,13 @@
 import { expect, test } from '@playwright/test'
 
-import { activeSession, createBackofficeFixture, mockBackofficeApi } from './backoffice-api-mock'
+import {
+  activeSession,
+  createBackofficeFixture,
+  mockBackofficeApi,
+  publishedCatalogue,
+} from './backoffice-api-mock'
 
-const ACTIVITY_TYPE_ID = '019a5000-0000-7000-8000-000000000301'
+const ACTIVITY_TYPE_NAME = 'Sesión de fuerza de prueba'
 const PATH = '/catalogue/result-contracts'
 
 async function fillPublication(
@@ -10,7 +15,9 @@ async function fillPublication(
   overrides: { code?: string; minimums?: string } = {},
 ) {
   await page.getByLabel('Código del contrato').fill(overrides.code ?? 'test.backoffice_front')
-  await page.getByLabel('Tipo de actividad').fill(ACTIVITY_TYPE_ID)
+  // The identifier is chosen from the global catalogue, never typed.
+  await page.getByRole('combobox', { name: 'Tipo de actividad' }).click()
+  await page.getByRole('option', { name: ACTIVITY_TYPE_NAME }).click()
   await page.getByLabel('Mínimos por completitud').fill(overrides.minimums ?? '{"target_sets":1}')
   await page.getByLabel('Resultado esperado del caso aceptado').fill('accepted')
   await page.getByLabel('Resultado esperado del caso rechazado').fill('missing_sets')
@@ -158,4 +165,67 @@ test('sends an unauthenticated operator back to the access screen', async ({ con
   await page.goto(PATH)
 
   await expect(page.getByRole('heading', { name: 'Identifica tu acceso.' })).toBeVisible()
+})
+
+test('offers the published catalogue grouped by discipline instead of an identifier', async ({
+  context,
+  page,
+}) => {
+  const fixture = createBackofficeFixture({ session: activeSession() })
+  await mockBackofficeApi(context, fixture)
+
+  await page.goto(PATH)
+  await page.getByRole('combobox', { name: 'Tipo de actividad' }).click()
+
+  await expect(page.getByRole('option', { name: ACTIVITY_TYPE_NAME })).toBeVisible()
+  await expect(page.getByText('Fuerza de prueba', { exact: true })).toBeVisible()
+  await expect(page.getByText('Resistencia de prueba', { exact: true })).toBeVisible()
+
+  await expect
+    .poll(() => fixture.requests.filter((request) => request.path.startsWith('/catalog/v1')).length)
+    .toBeGreaterThan(0)
+})
+
+test('shows what the chosen type already validates against, and what the version supersedes', async ({
+  context,
+  page,
+}) => {
+  await mockBackofficeApi(context, createBackofficeFixture({ session: activeSession() }))
+
+  await page.goto(PATH)
+  await fillPublication(page)
+
+  await expect(
+    page.getByRole('heading', { name: 'Contratos vigentes de este tipo de actividad' }),
+  ).toBeVisible()
+  await expect(page.getByText('Ninguno vigente todavía')).toBeVisible()
+
+  await page.getByRole('button', { name: 'Publicar versión' }).click()
+  await expect(page.getByText('Publicada la versión 1 de test.backoffice_front')).toBeVisible()
+
+  // The panel is re-read after the publication changed it.
+  await expect(
+    page.getByRole('cell', { name: 'test.backoffice_front v1 (por omisión)' }),
+  ).toBeVisible()
+  await expect(
+    page.getByText('Publicar una versión nueva cierra la asociación vigente'),
+  ).toBeVisible()
+})
+
+test('reports a catalogue it cannot read without pretending the screen still works', async ({
+  context,
+  page,
+}) => {
+  await mockBackofficeApi(
+    context,
+    createBackofficeFixture({
+      session: activeSession(),
+      catalogue: { ...publishedCatalogue(), refusal: { status: 403, code: 'forbidden' } },
+    }),
+  )
+
+  await page.goto(PATH)
+
+  await expect(page.getByText('No se pudo leer el catálogo global')).toBeVisible()
+  await expect(page.getByRole('combobox', { name: 'Tipo de actividad' })).toBeDisabled()
 })

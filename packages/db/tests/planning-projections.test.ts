@@ -79,8 +79,8 @@ function actorTransaction<T>(
 }
 
 async function cleanup(): Promise<void> {
-  // Published Planning rows are protected by immutability triggers, so only that
-  // step runs as `replica`; the rest keeps foreign-key cascades working.
+  // Published Planning rows and the access log are protected by immutability triggers,
+  // so only those steps run as `replica`; the rest keeps foreign-key cascades working.
   await admin.begin(async (transaction) => {
     await transaction`set local session_replication_role = replica`
     await transaction`
@@ -93,11 +93,13 @@ async function cleanup(): Promise<void> {
         select id from planning.session_templates where owner_organization_id = ${ORGANIZATION_ID}::uuid
       )
     `
-  })
-  await admin.begin(async (transaction) => {
+    // The log is append-only for every role in normal operation; only this disposable
+    // fixture is removed, and only because its rows pin the organization it audits.
     await transaction`
       delete from privacy.access_events where subject_organization_id = ${ORGANIZATION_ID}::uuid
     `
+  })
+  await admin.begin(async (transaction) => {
     await transaction`
       delete from system.outbox_events where aggregate_id in (
         select id from planning.programs where owner_organization_id = ${ORGANIZATION_ID}::uuid

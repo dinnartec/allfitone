@@ -87,6 +87,7 @@ export function PlatformAccess() {
   const [inventory, setInventory] = useState<Inventory>(EMPTY)
   const [notice, setNotice] = useState<{ tone: 'success' | 'danger'; message: string } | null>(null)
   const [busy, setBusy] = useState(false)
+  const [appending, setAppending] = useState<'roles' | 'duties' | null>(null)
 
   const load = useCallback(async (signal?: AbortSignal) => {
     try {
@@ -118,6 +119,39 @@ export function PlatformAccess() {
       controller.abort()
     }
   }, [load])
+
+  /**
+   * The inventory answers a page at a time. Showing only the first one would
+   * tell the founder that it is the whole team, which is the opposite of what
+   * this screen is for, so the rest is reachable and the button says so.
+   */
+  async function loadMore(which: 'roles' | 'duties') {
+    const cursor = which === 'roles' ? inventory.roleCursor : inventory.dutyCursor
+    if (!cursor) return
+    setAppending(which)
+    setNotice(null)
+    try {
+      if (which === 'roles') {
+        const page = await backofficeApi.platformRoles(cursor)
+        setInventory((current) => ({
+          ...current,
+          roles: [...current.roles, ...page.data],
+          roleCursor: page.page.next_cursor,
+        }))
+      } else {
+        const page = await backofficeApi.platformDuties({ cursor })
+        setInventory((current) => ({
+          ...current,
+          duties: [...current.duties, ...page.data],
+          dutyCursor: page.page.next_cursor,
+        }))
+      }
+    } catch (error) {
+      setNotice({ tone: 'danger', message: failureMessage(error) })
+    } finally {
+      setAppending(null)
+    }
+  }
 
   const run = useCallback(
     async (operation: () => Promise<unknown>, success: string) => {
@@ -190,6 +224,9 @@ export function PlatformAccess() {
       <BaseRoleSection
         assignments={inventory.roles}
         busy={busy}
+        hasMore={inventory.roleCursor !== null}
+        appending={appending === 'roles'}
+        onLoadMore={() => void loadMore('roles')}
         onGrant={(personId) =>
           run(
             () => backofficeApi.grantPlatformRole(personId, newBackofficeCommand()),
@@ -207,6 +244,9 @@ export function PlatformAccess() {
       <DutySection
         assignments={inventory.duties}
         busy={busy}
+        hasMore={inventory.dutyCursor !== null}
+        appending={appending === 'duties'}
+        onLoadMore={() => void loadMore('duties')}
         onGrant={(input) =>
           run(
             () => backofficeApi.grantPlatformDuty(input, newBackofficeCommand()),
@@ -233,11 +273,17 @@ export function PlatformAccess() {
 function BaseRoleSection({
   assignments,
   busy,
+  hasMore,
+  appending,
+  onLoadMore,
   onGrant,
   onRevoke,
 }: {
   assignments: PlatformRoleAssignment[]
   busy: boolean
+  hasMore: boolean
+  appending: boolean
+  onLoadMore: () => void
   onGrant: (personId: string) => void
   onRevoke: (assignmentId: string) => void
 }) {
@@ -344,6 +390,12 @@ function BaseRoleSection({
             )}
           </TableBody>
         </Table>
+        <LoadMore
+          label="Ver más asignaciones de rol base"
+          hasMore={hasMore}
+          appending={appending}
+          onLoadMore={onLoadMore}
+        />
       </CardContent>
     </Card>
   )
@@ -352,12 +404,18 @@ function BaseRoleSection({
 function DutySection({
   assignments,
   busy,
+  hasMore,
+  appending,
+  onLoadMore,
   onGrant,
   onSuspend,
   onRevoke,
 }: {
   assignments: PlatformDutyAssignment[]
   busy: boolean
+  hasMore: boolean
+  appending: boolean
+  onLoadMore: () => void
   onGrant: (input: {
     personId: string
     dutyCode: PlatformDutyCode
@@ -552,8 +610,37 @@ function DutySection({
             )}
           </TableBody>
         </Table>
+        <LoadMore
+          label="Ver más deberes"
+          hasMore={hasMore}
+          appending={appending}
+          onLoadMore={onLoadMore}
+        />
       </CardContent>
     </Card>
+  )
+}
+
+/**
+ * Absent when there is nothing left, so its presence is the honest signal that
+ * the list on screen is not the whole history.
+ */
+function LoadMore({
+  label,
+  hasMore,
+  appending,
+  onLoadMore,
+}: {
+  label: string
+  hasMore: boolean
+  appending: boolean
+  onLoadMore: () => void
+}) {
+  if (!hasMore) return null
+  return (
+    <Button type="button" variant="outline" size="sm" disabled={appending} onClick={onLoadMore}>
+      {appending ? 'Cargando…' : label}
+    </Button>
   )
 }
 

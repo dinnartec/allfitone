@@ -14,6 +14,10 @@ import {
   type InvitationBatchResult,
 } from './invitations.js'
 import {
+  createOwnershipInvitationBatchProcessor,
+  createOwnershipInvitationDeliveryDatabase,
+} from './ownership-invitations.js'
+import {
   createBackofficeAuthBatchProcessor,
   createBackofficeAuthCleanupDatabase,
   type BackofficeAuthBatchResult,
@@ -161,22 +165,31 @@ function processorsFromEnvironment(): WorkerJobProcessors {
     connect_timeout: 10,
   })
   const queue = createPostgresQueue(sql, { visibilityTimeoutMs: 120_000, maxAttempts: 5 })
-  const invitations = createInvitationBatchProcessor({
+  const deliveryEnabled = process.env.STAFF_INVITATION_DELIVERY_ENABLED === 'true'
+  const email = deliveryEnabled
+    ? createResendEmailSender({
+        apiKey: required('RESEND_API_KEY'),
+        from: required('RESEND_FROM_EMAIL'),
+      })
+    : {
+        send: async () => {
+          throw new Error('Invitation delivery is disabled')
+        },
+      }
+  const publicBaseUrl = required('STAFF_INVITATION_PUBLIC_BASE_URL')
+  const teamInvitations = createInvitationBatchProcessor({
     queue,
     database: createInvitationDeliveryDatabase(sql),
-    email:
-      process.env.STAFF_INVITATION_DELIVERY_ENABLED === 'true'
-        ? createResendEmailSender({
-            apiKey: required('RESEND_API_KEY'),
-            from: required('RESEND_FROM_EMAIL'),
-          })
-        : {
-            send: async () => {
-              throw new Error('Invitation delivery is disabled')
-            },
-          },
-    publicBaseUrl: required('STAFF_INVITATION_PUBLIC_BASE_URL'),
-    deliveryEnabled: process.env.STAFF_INVITATION_DELIVERY_ENABLED === 'true',
+    email,
+    publicBaseUrl,
+    deliveryEnabled,
+  })
+  const ownershipInvitations = createOwnershipInvitationBatchProcessor({
+    queue,
+    database: createOwnershipInvitationDeliveryDatabase(sql),
+    email,
+    publicBaseUrl,
+    deliveryEnabled,
   })
   const backofficeAuthentication = createBackofficeAuthBatchProcessor({
     queue,
@@ -184,7 +197,19 @@ function processorsFromEnvironment(): WorkerJobProcessors {
     provider: createBackofficeAuthMaintenanceFromEnv(),
   })
   cachedProcessors = {
-    invitationDelivery: invitations,
+    // One delivery job for both kinds: the same page, the same switch and the same
+    // expiry, which the team batch already runs for every pending invitation.
+    invitationDelivery: async () => {
+      const team = await teamInvitations()
+      const ownership = await ownershipInvitations()
+      return {
+        claimed: team.claimed + ownership.claimed,
+        delivered: team.delivered + ownership.delivered,
+        deadOrDelayed: team.deadOrDelayed + ownership.deadOrDelayed,
+        skipped: team.skipped + ownership.skipped,
+        expired: team.expired,
+      }
+    },
     backofficeAuthCleanup: backofficeAuthentication,
   }
   return cachedProcessors

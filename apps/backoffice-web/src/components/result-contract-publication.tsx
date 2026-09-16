@@ -4,16 +4,16 @@
  * `HU-BO-023` — publishing what an activity requires for a session to count as
  * complete.
  *
- * The screen shows the published version rather than a browsable catalogue,
- * because `OP-CAT-006` is a command and the two queries that would list existing
- * contracts — `OP-CAT-008` and `OP-CAT-012` — belong to the `/catalog/v1`
- * surface, which is not mounted yet. Inventing a read here would put a second,
- * uncontracted endpoint in the product.
+ * The activity type is chosen from the global catalogue rather than typed:
+ * `OP-CAT-008` and `OP-CAT-012` live on `/catalog/v1`, the one surface with no
+ * tenant and no subject, so the operator reads the same published content Studio
+ * and Space read. Pasting an identifier was only ever a stand-in for that read.
  *
- * What the response does carry is the evidence the story asks for: the version
- * number the server assigned, and the association it superseded with the window
- * that closed it. Publishing a correction is visibly a new version, never an
- * edit of the previous one.
+ * Showing what is already effective before publishing matters: a correction is a
+ * new version, never an edit, and the operator should see which version they are
+ * about to supersede. What the response then carries is the evidence the story
+ * asks for — the version number the server assigned, and the association it
+ * closed with the window that closed it.
  */
 
 import { Alert, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
@@ -31,7 +31,9 @@ import { Input } from '@allfitone/react/components/input'
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@allfitone/react/components/select'
@@ -44,24 +46,30 @@ import {
   TableRow,
 } from '@allfitone/react/components/table'
 import { Textarea } from '@allfitone/react/components/textarea'
-import { useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 
 import {
   BackofficeApiError,
   BackofficeNetworkError,
   backofficeApi,
   newBackofficeCommand,
+  type ActivityTypeResultContract,
+  type CatalogActivityType,
+  type CatalogDiscipline,
   type ResultContract,
 } from '@/lib/backoffice-api'
 import { formatInstant } from '@/lib/platform-access'
 import {
   ACTIVITY_FAMILIES,
   activityFamilyLabel,
+  catalogueReadMessage,
   contractStatusLabel,
+  effectiveContractLabel,
   emptyFixtures,
   fixtureIssue,
   fixtureIssueMessage,
   fixturesDemonstrateBothOutcomes,
+  groupActivityTypes,
   isValidActivityTypeId,
   isValidContractCode,
   parseJsonDocument,
@@ -82,6 +90,57 @@ export function ResultContractPublication() {
   const [busy, setBusy] = useState(false)
   const [published, setPublished] = useState<ResultContract | null>(null)
   const [notice, setNotice] = useState<{ tone: 'success' | 'danger'; message: string } | null>(null)
+  const [disciplines, setDisciplines] = useState<CatalogDiscipline[]>([])
+  const [activityTypes, setActivityTypes] = useState<CatalogActivityType[]>([])
+  const [catalogueError, setCatalogueError] = useState<string | null>(null)
+  const [effective, setEffective] = useState<ActivityTypeResultContract[] | null>(null)
+  const [catalogueRevision, setCatalogueRevision] = useState(0)
+
+  useEffect(() => {
+    const controller = new AbortController()
+    void (async () => {
+      try {
+        const [readDisciplines, readActivityTypes] = await Promise.all([
+          backofficeApi.catalogDisciplines(controller.signal),
+          backofficeApi.catalogActivityTypes(controller.signal),
+        ])
+        setDisciplines(readDisciplines.items)
+        setActivityTypes(readActivityTypes.items)
+        setCatalogueError(null)
+      } catch (failure) {
+        if (controller.signal.aborted) return
+        setCatalogueError(catalogueFailureMessage(failure))
+      }
+    })()
+    return () => controller.abort()
+  }, [])
+
+  // The effective associations are what this publication would supersede, so they
+  // are read for the chosen type and never carried across a change of type.
+  useEffect(() => {
+    if (!isValidActivityTypeId(activityTypeId)) {
+      setEffective(null)
+      return
+    }
+    const controller = new AbortController()
+    void (async () => {
+      try {
+        const read = await backofficeApi.catalogActivityTypeResultContracts(
+          activityTypeId,
+          controller.signal,
+        )
+        setEffective(read.items)
+      } catch {
+        if (!controller.signal.aborted) setEffective(null)
+      }
+    })()
+    return () => controller.abort()
+  }, [activityTypeId, catalogueRevision])
+
+  const activityTypeGroups = useMemo(
+    () => groupActivityTypes(activityTypes, disciplines),
+    [activityTypes, disciplines],
+  )
 
   function updateFixture(index: number, patch: Partial<FixtureDraft>) {
     setFixtures((current) =>
@@ -96,7 +155,7 @@ export function ResultContractPublication() {
       return
     }
     if (!isValidActivityTypeId(activityTypeId)) {
-      setError('Escribe el identificador del tipo de actividad.')
+      setError('Elige el tipo de actividad al que aplica el contrato.')
       return
     }
     const parsedEnvelope = parseJsonDocument(envelope)
@@ -135,6 +194,7 @@ export function ResultContractPublication() {
         newBackofficeCommand(),
       )
       setPublished(resource)
+      setCatalogueRevision((current) => current + 1)
       setNotice({
         tone: 'success',
         message: `Publicada la versión ${resource.version_number} de ${resource.contract_code}.`,
@@ -156,6 +216,7 @@ export function ResultContractPublication() {
         newBackofficeCommand(),
       )
       setPublished(resource)
+      setCatalogueRevision((current) => current + 1)
       setNotice({
         tone: 'success',
         message: 'Contrato deprecado. Las ejecuciones que ya lo congelaron siguen válidas.',
@@ -173,6 +234,13 @@ export function ResultContractPublication() {
         <Alert live="polite" variant={notice.tone === 'success' ? 'success' : 'danger'}>
           <AlertTitle>{notice.tone === 'success' ? 'Hecho' : 'No se publicó'}</AlertTitle>
           <AlertDescription>{notice.message}</AlertDescription>
+        </Alert>
+      ) : null}
+
+      {catalogueError ? (
+        <Alert live="polite" variant="warning">
+          <AlertTitle>No se pudo leer el catálogo global</AlertTitle>
+          <AlertDescription>{catalogueError}</AlertDescription>
         </Alert>
       ) : null}
 
@@ -220,14 +288,29 @@ export function ResultContractPublication() {
               </Field>
               <Field orientation="responsive">
                 <FieldLabel htmlFor="contract-activity-type">Tipo de actividad</FieldLabel>
-                <Input
-                  id="contract-activity-type"
+                <Select
                   value={activityTypeId}
-                  onChange={(event) => setActivityTypeId(event.target.value)}
-                  placeholder="019a5000-0000-7000-8000-000000000301"
-                  autoComplete="off"
-                  disabled={busy}
-                />
+                  onValueChange={(value) => setActivityTypeId(value ?? '')}
+                >
+                  <SelectTrigger
+                    id="contract-activity-type"
+                    disabled={busy || activityTypeGroups.length === 0}
+                  >
+                    <SelectValue placeholder="Elige un tipo de actividad publicado" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {activityTypeGroups.map((group) => (
+                      <SelectGroup key={group.disciplineCode}>
+                        <SelectLabel>{group.disciplineName}</SelectLabel>
+                        {group.activityTypes.map((activityType) => (
+                          <SelectItem key={activityType.id} value={activityType.id}>
+                            {activityType.name}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    ))}
+                  </SelectContent>
+                </Select>
               </Field>
               <Field>
                 <FieldLabel htmlFor="contract-envelope">Envelope</FieldLabel>
@@ -284,6 +367,8 @@ export function ResultContractPublication() {
         </CardContent>
       </Card>
 
+      {effective ? <EffectiveContracts contracts={effective} /> : null}
+
       {published ? (
         <PublishedContract contract={published} busy={busy} onDeprecate={() => void deprecate()} />
       ) : (
@@ -291,12 +376,59 @@ export function ResultContractPublication() {
           <AlertTitle>Todavía no publicaste una versión</AlertTitle>
           <AlertDescription>
             Aquí aparecerá la versión que el servidor asigne, con sus casos de prueba y la
-            asociación que reemplace. Consultar el catálogo ya publicado necesita las operaciones de
-            lectura de <code>/catalog/v1</code>, que aún no están montadas.
+            asociación que reemplace.
           </AlertDescription>
         </Alert>
       )}
     </div>
+  )
+}
+
+/**
+ * What the chosen activity type already validates against. A published version is
+ * immutable, so this is what the next version would supersede — not something to
+ * edit here.
+ */
+function EffectiveContracts({ contracts }: { contracts: readonly ActivityTypeResultContract[] }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle role="heading" aria-level={2}>
+          Contratos vigentes de este tipo de actividad
+        </CardTitle>
+        <CardDescription>
+          {contracts.length === 0
+            ? 'Ninguno vigente todavía. La versión que publiques será la primera.'
+            : 'Publicar una versión nueva cierra la asociación vigente en lugar de editarla.'}
+        </CardDescription>
+      </CardHeader>
+      {contracts.length > 0 ? (
+        <CardContent>
+          <Table scrollAreaLabel="Contratos vigentes">
+            <TableHeader>
+              <TableRow>
+                <TableHead>Contrato</TableHead>
+                <TableHead>Familia</TableHead>
+                <TableHead>Vigente desde</TableHead>
+                <TableHead>Mínimos</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {contracts.map((contract) => (
+                <TableRow key={contract.result_contract_id}>
+                  <TableCell>{effectiveContractLabel(contract)}</TableCell>
+                  <TableCell>{activityFamilyLabel(contract.activity_family)}</TableCell>
+                  <TableCell>{formatInstant(contract.valid_from)}</TableCell>
+                  <TableCell>
+                    <code>{JSON.stringify(contract.minimums)}</code>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      ) : null}
+    </Card>
   )
 }
 
@@ -378,6 +510,12 @@ function PublishedContract({
       </CardContent>
     </Card>
   )
+}
+
+function catalogueFailureMessage(error: unknown): string {
+  if (error instanceof BackofficeNetworkError) return catalogueReadMessage('network-unavailable')
+  if (error instanceof BackofficeApiError) return catalogueReadMessage(error.code)
+  return catalogueReadMessage('upstream-unavailable')
 }
 
 function failureMessage(error: unknown): string {

@@ -7,9 +7,30 @@
  */
 
 export { backofficePlatformAccessRoutes } from './handlers/backoffice.js'
-export { platformAccessService } from './dependencies.js'
-export type { PlatformAccessService } from './application/index.js'
+export { backofficeSupportMetadataRoutes } from './handlers/backoffice-metadata.js'
+export { backofficeBreakGlassRoutes } from './handlers/backoffice-break-glass.js'
+export {
+  breakGlassService,
+  platformAccessService,
+  supportAttentionService,
+  supportDiagnosisService,
+  supportMetadataService,
+} from './dependencies.js'
 export type {
+  BreakGlassService,
+  PlatformAccessService,
+  SupportAttentionService,
+  SupportDiagnosisService,
+  SupportMetadataService,
+} from './application/index.js'
+export type {
+  BreakGlassRequest,
+  BreakGlassExerciseOutcome,
+  SupportAttentionPanel,
+  SupportDeliveryCircuit,
+  SupportOperation,
+  SupportPersonMetadata,
+  SupportPeopleSearch,
   PlatformDutyAssignment,
   PlatformDutyCode,
   PlatformDutyStatus,

@@ -4,9 +4,89 @@
  */
 
 export const allfitV1ContractSchemas: Record<string, unknown> = {
+  AccessEvent: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      'The record of one access. It never carries what was read: the table it comes from has no content columns, and the closed query returns this exact shape.',
+    required: [
+      'actor_person_id',
+      'subject_person_id',
+      'resource',
+      'resource_id',
+      'purpose',
+      'result',
+      'scope_code',
+      'scope_version',
+      'access_mode',
+      'occurred_at',
+    ],
+    properties: {
+      actor_person_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      subject_person_id: {
+        type: ['string', 'null'],
+        format: 'uuid',
+      },
+      resource: {
+        type: 'string',
+        description: 'The kind of data that was read, such as `nutrition.intake_entries`.',
+      },
+      resource_id: {
+        type: ['string', 'null'],
+        format: 'uuid',
+      },
+      purpose: {
+        type: 'string',
+      },
+      result: {
+        type: 'string',
+        enum: ['allowed', 'denied'],
+      },
+      scope_code: {
+        type: ['string', 'null'],
+      },
+      scope_version: {
+        type: ['integer', 'null'],
+      },
+      access_mode: {
+        $ref: '#/components/schemas/AccessMode',
+      },
+      occurred_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+    },
+  },
+  AccessEventPage: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['items', 'withheld_from_you'],
+    properties: {
+      items: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/AccessEvent',
+        },
+      },
+      withheld_from_you: {
+        type: 'integer',
+        minimum: 0,
+        description:
+          'How many records matching these filters were removed because this auditor requested or approved the break-glass window they belong to. Reported separately from the list so that it survives an empty one.',
+      },
+    },
+  },
   AccessLevel: {
     type: 'string',
     enum: ['read', 'contribute'],
+  },
+  AccessMode: {
+    type: 'string',
+    description:
+      'How the access was authorised. `break_glass` is the exceptional path and is the only one subject to the per-case auditor disqualification.',
+    enum: ['live', 'frozen', 'break_glass', 'organization_operational', 'support_metadata'],
   },
   ActivityFamily: {
     type: 'string',
@@ -49,6 +129,71 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         type: 'string',
         minLength: 1,
         maxLength: 120,
+      },
+    },
+  },
+  ActivityTypeResultContract: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      "One effective association. The minimums travel so a client can explain a rejection locally; they never replace the server's validation.",
+    required: [
+      'result_contract_id',
+      'contract_code',
+      'version_number',
+      'activity_family',
+      'contract_schema_version',
+      'envelope',
+      'minimums',
+      'is_default',
+      'valid_from',
+    ],
+    properties: {
+      result_contract_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      contract_code: {
+        type: 'string',
+        pattern: '^[a-z][a-z0-9_.]{1,63}$',
+      },
+      version_number: {
+        type: 'integer',
+        minimum: 1,
+      },
+      activity_family: {
+        $ref: '#/components/schemas/ActivityFamily',
+      },
+      contract_schema_version: {
+        type: 'integer',
+        const: 1,
+      },
+      envelope: {
+        type: 'object',
+        additionalProperties: true,
+      },
+      minimums: {
+        type: 'object',
+        additionalProperties: true,
+      },
+      is_default: {
+        type: 'boolean',
+      },
+      valid_from: {
+        type: 'string',
+        format: 'date-time',
+      },
+    },
+  },
+  ActivityTypeResultContractList: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['items'],
+    properties: {
+      items: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/ActivityTypeResultContract',
+        },
       },
     },
   },
@@ -328,6 +473,157 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
       status: {
         $ref: '#/components/schemas/ExecutionStatus',
+      },
+    },
+  },
+  AttentionBillingNotice: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      'Failed charges and suspended subscriptions. Payments have no tables yet, so this says so instead of printing a zero.',
+    required: ['availability'],
+    properties: {
+      availability: {
+        type: 'string',
+        enum: ['not_modelled'],
+      },
+    },
+  },
+  AttentionFailureGroup: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      'One notification type or command operation that failed at least twice. `failures` counts failed delivery attempts or stranded commands; `affected` counts the notifications or commands involved.',
+    required: ['source', 'label', 'affected', 'failures', 'latest_occurred_at', 'last_error_code'],
+    properties: {
+      source: {
+        $ref: '#/components/schemas/SupportOperationSourceKind',
+      },
+      label: {
+        type: 'string',
+        maxLength: 120,
+      },
+      affected: {
+        type: 'integer',
+        minimum: 1,
+      },
+      failures: {
+        type: 'integer',
+        minimum: 2,
+      },
+      latest_occurred_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      last_error_code: {
+        type: ['string', 'null'],
+        maxLength: 120,
+      },
+    },
+  },
+  AttentionFailureNotice: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      'System errors that repeat inside the window, and delivery channels that tripped. `withheld` without `diagnose_support_metadata`; the lists are then null.',
+    required: ['availability', 'window_hours', 'groups', 'groups_truncated', 'open_circuits'],
+    properties: {
+      availability: {
+        type: 'string',
+        enum: ['available', 'withheld'],
+      },
+      window_hours: {
+        type: 'integer',
+        enum: [24],
+      },
+      groups: {
+        type: ['array', 'null'],
+        maxItems: 20,
+        items: {
+          $ref: '#/components/schemas/AttentionFailureGroup',
+        },
+      },
+      groups_truncated: {
+        type: ['boolean', 'null'],
+      },
+      open_circuits: {
+        type: ['array', 'null'],
+        items: {
+          $ref: '#/components/schemas/AttentionOpenCircuit',
+        },
+      },
+    },
+  },
+  AttentionOpenCircuit: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['event_type', 'state', 'failure_count', 'opened_until'],
+    properties: {
+      event_type: {
+        type: 'string',
+        maxLength: 120,
+      },
+      state: {
+        type: 'string',
+        enum: ['open', 'half_open'],
+      },
+      failure_count: {
+        type: 'integer',
+        minimum: 0,
+      },
+      opened_until: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+    },
+  },
+  AttentionUnclaimedOrganizationNotice: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      'Organizations Allfit created that nobody claimed. `needs_follow_up_count` counts the ones whose latest ownership invitation lapsed, was declined or never existed. `withheld` without a duty that reads the organization directory.',
+    required: ['availability', 'count', 'oldest_created_at', 'needs_follow_up_count'],
+    properties: {
+      availability: {
+        type: 'string',
+        enum: ['available', 'withheld'],
+      },
+      count: {
+        type: ['integer', 'null'],
+        minimum: 0,
+      },
+      oldest_created_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      needs_follow_up_count: {
+        type: ['integer', 'null'],
+        minimum: 0,
+      },
+    },
+  },
+  AttentionVerificationNotice: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      '`withheld` when the operator does not hold `verify_professional_credentials`; every count is then null, never zero.',
+    required: ['availability', 'pending_count', 'oldest_requested_at', 'renewals_due_count'],
+    properties: {
+      availability: {
+        type: 'string',
+        enum: ['available', 'withheld'],
+      },
+      pending_count: {
+        type: ['integer', 'null'],
+        minimum: 0,
+      },
+      oldest_requested_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      renewals_due_count: {
+        type: ['integer', 'null'],
+        minimum: 0,
       },
     },
   },
@@ -619,6 +915,259 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
     },
     description: 'Enrollment secrets are present only for a first-factor attempt.',
   },
+  BackofficeOrganizationFile: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'organization',
+      'owner',
+      'team',
+      'team_counts',
+      'team_truncated',
+      'sites',
+      'people_served',
+      'plans_availability',
+      'payment_method_availability',
+      'premium_availability',
+    ],
+    properties: {
+      organization: {
+        type: 'object',
+        additionalProperties: false,
+        required: [
+          'organization_id',
+          'display_name',
+          'type_code',
+          'type_name',
+          'status',
+          'party_kind',
+          'legal_name',
+          'created_at',
+          'claimed_at',
+          'cancelled_at',
+        ],
+        properties: {
+          organization_id: {
+            $ref: '#/components/schemas/Uuid',
+          },
+          display_name: {
+            type: 'string',
+          },
+          type_code: {
+            $ref: '#/components/schemas/OrganizationTypeCode',
+          },
+          type_name: {
+            type: 'string',
+          },
+          status: {
+            $ref: '#/components/schemas/OrganizationLifecycleStatus',
+          },
+          party_kind: {
+            $ref: '#/components/schemas/OrganizationPartyKind',
+          },
+          legal_name: {
+            type: ['string', 'null'],
+            description: "A company's legal name. Always null for a natural person.",
+          },
+          created_at: {
+            type: 'string',
+            format: 'date-time',
+          },
+          claimed_at: {
+            type: ['string', 'null'],
+            format: 'date-time',
+          },
+          cancelled_at: {
+            type: ['string', 'null'],
+            format: 'date-time',
+          },
+        },
+      },
+      owner: {
+        type: ['object', 'null'],
+        additionalProperties: false,
+        required: ['person_id', 'membership_id', 'since'],
+        properties: {
+          person_id: {
+            $ref: '#/components/schemas/Uuid',
+          },
+          membership_id: {
+            $ref: '#/components/schemas/Uuid',
+          },
+          since: {
+            type: 'string',
+            format: 'date-time',
+          },
+        },
+      },
+      team: {
+        type: 'array',
+        maxItems: 200,
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['membership_id', 'person_id', 'roles', 'joined_at'],
+          properties: {
+            membership_id: {
+              $ref: '#/components/schemas/Uuid',
+            },
+            person_id: {
+              $ref: '#/components/schemas/Uuid',
+            },
+            roles: {
+              type: 'array',
+              items: {
+                type: 'string',
+                enum: ['owner', 'admin', 'coach', 'staff'],
+              },
+            },
+            joined_at: {
+              type: 'string',
+              format: 'date-time',
+            },
+          },
+        },
+      },
+      team_counts: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['active', 'terminated'],
+        properties: {
+          active: {
+            type: 'integer',
+            minimum: 0,
+          },
+          terminated: {
+            type: 'integer',
+            minimum: 0,
+          },
+        },
+      },
+      team_truncated: {
+        type: 'boolean',
+        description: 'True when the team has more active members than the file lists.',
+      },
+      sites: {
+        type: 'array',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['site_id', 'name', 'address', 'address_withheld', 'status'],
+          properties: {
+            site_id: {
+              $ref: '#/components/schemas/Uuid',
+            },
+            name: {
+              type: 'string',
+            },
+            address: {
+              type: ['string', 'null'],
+            },
+            address_withheld: {
+              type: 'boolean',
+              description: "A natural person's address is withheld, because it can be their home.",
+            },
+            status: {
+              type: 'string',
+              enum: ['active', 'inactive'],
+            },
+          },
+        },
+      },
+      people_served: {
+        type: ['integer', 'null'],
+        minimum: 0,
+        description: 'Null until service relationships exist. Never zero in their place.',
+      },
+      plans_availability: {
+        $ref: '#/components/schemas/ModelAvailability',
+      },
+      payment_method_availability: {
+        $ref: '#/components/schemas/ModelAvailability',
+      },
+      premium_availability: {
+        $ref: '#/components/schemas/ModelAvailability',
+      },
+    },
+  },
+  BackofficeOrganizationPage: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['data', 'page'],
+    properties: {
+      data: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/BackofficeOrganizationSummary',
+        },
+      },
+      page: {
+        $ref: '#/components/schemas/Page',
+      },
+    },
+  },
+  BackofficeOrganizationSummary: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      'An organization as the directory shows it. Nothing here identifies a person: no legal name and no responsible party.',
+    required: [
+      'organization_id',
+      'display_name',
+      'type_code',
+      'type_name',
+      'status',
+      'created_at',
+      'claimed_at',
+      'cancelled_at',
+      'active_member_count',
+      'site_count',
+      'people_served',
+    ],
+    properties: {
+      organization_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      display_name: {
+        type: 'string',
+      },
+      type_code: {
+        type: 'string',
+      },
+      type_name: {
+        type: 'string',
+      },
+      status: {
+        $ref: '#/components/schemas/OrganizationLifecycleStatus',
+      },
+      created_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      claimed_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      cancelled_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      active_member_count: {
+        type: 'integer',
+        minimum: 0,
+      },
+      site_count: {
+        type: 'integer',
+        minimum: 0,
+      },
+      people_served: {
+        type: ['integer', 'null'],
+        minimum: 0,
+        description:
+          'Null until service relationships exist. Not zero, because zero would say the organization serves nobody.',
+      },
+    },
+  },
   BackofficePasswordRequest: {
     type: 'object',
     additionalProperties: false,
@@ -697,6 +1246,350 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  BreakGlassApproval: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['approver_person_id', 'decision', 'reason_code', 'decided_at'],
+    properties: {
+      approver_person_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      decision: {
+        type: 'string',
+        enum: ['approved', 'rejected'],
+      },
+      reason_code: {
+        type: 'string',
+        pattern: '^[A-Z][A-Z0-9_-]{2,63}$',
+      },
+      decided_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+    },
+  },
+  BreakGlassCategory: {
+    type: 'string',
+    description:
+      'The approvable categories. Everything else — media, identity, contact, secrets, payments, raw sensor data — is not a category with a higher bar: it can never be approved.',
+    enum: [
+      'relationship_training',
+      'prior_training_history',
+      'nutrition_guidance',
+      'body_progress',
+      'health_context',
+      'nutrition_intake',
+    ],
+  },
+  BreakGlassDecision: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['decision', 'reason_code'],
+    properties: {
+      decision: {
+        type: 'string',
+        enum: ['approved', 'rejected'],
+      },
+      reason_code: {
+        type: 'string',
+        pattern: '^[A-Z][A-Z0-9_-]{2,63}$',
+      },
+    },
+  },
+  BreakGlassExercise: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['category', 'resource_type'],
+    properties: {
+      category: {
+        $ref: '#/components/schemas/BreakGlassCategory',
+      },
+      resource_type: {
+        type: 'string',
+        pattern: '^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*$',
+      },
+      resource_id: {
+        type: ['string', 'null'],
+        format: 'uuid',
+      },
+    },
+  },
+  BreakGlassExerciseOutcome: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      'Every attempt is recorded before this answers, so `break_glass_event_id` is the evidence of this exact attempt. No outcome carries content in this version.',
+    required: ['outcome', 'reason_code', 'break_glass_event_id', 'occurred_at'],
+    properties: {
+      outcome: {
+        type: 'string',
+        enum: ['denied', 'content_unavailable'],
+      },
+      reason_code: {
+        type: 'string',
+        pattern: '^[a-z][a-z0-9_]{1,63}$',
+      },
+      break_glass_event_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      occurred_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      category: {
+        $ref: '#/components/schemas/BreakGlassCategory',
+      },
+    },
+  },
+  BreakGlassPurpose: {
+    type: 'string',
+    description:
+      'Five closed purposes. There is deliberately no `other`: marketing, commercial recovery, AI training and operational curiosity are not purposes, and an open field would become all four.',
+    enum: [
+      'service_dispute',
+      'legal_or_regulatory_obligation',
+      'customer_support_request',
+      'security_investigation',
+      'authorized_quality_review',
+    ],
+  },
+  BreakGlassRequest: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      "The file. It carries metadata about purpose and subject, and never the person's content.",
+    required: [
+      'id',
+      'requester_person_id',
+      'subject_person_id',
+      'categories',
+      'purpose',
+      'case_reference',
+      'sensitivity_tier',
+      'required_approvals',
+      'requested_duration_minutes',
+      'requested_at',
+      'request_expires_at',
+      'status',
+      'window_starts_at',
+      'window_ends_at',
+      'closed_at',
+      'reviewed_at',
+      'review_outcome',
+      'approvals',
+      'exercise_count',
+      'viewer_is_requester',
+      'viewer_can_decide',
+      'viewer_can_exercise',
+    ],
+    properties: {
+      id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      requester_person_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      subject_person_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      categories: {
+        type: 'array',
+        minItems: 1,
+        items: {
+          $ref: '#/components/schemas/BreakGlassCategory',
+        },
+      },
+      purpose: {
+        $ref: '#/components/schemas/BreakGlassPurpose',
+      },
+      case_reference: {
+        type: 'string',
+        pattern: '^[A-Z][A-Z0-9_-]{2,63}$',
+      },
+      sensitivity_tier: {
+        $ref: '#/components/schemas/BreakGlassTier',
+      },
+      required_approvals: {
+        type: 'integer',
+        minimum: 1,
+        maximum: 2,
+      },
+      requested_duration_minutes: {
+        type: 'integer',
+        minimum: 1,
+        maximum: 30,
+      },
+      requested_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      request_expires_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      status: {
+        $ref: '#/components/schemas/BreakGlassStatus',
+      },
+      window_starts_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      window_ends_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      closed_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      reviewed_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      review_outcome: {
+        type: ['string', 'null'],
+        enum: ['justified', 'unjustified', 'incident_opened', null],
+      },
+      approvals: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/BreakGlassApproval',
+        },
+      },
+      exercise_count: {
+        type: 'integer',
+        minimum: 0,
+      },
+      viewer_is_requester: {
+        type: 'boolean',
+        description:
+          'Whether the caller opened this file. The Backoffice session carries no domain identifier, so the server answers this rather than the client re-deriving it from one.',
+      },
+      viewer_can_decide: {
+        type: 'boolean',
+        description:
+          'A hint for the screen, never authority: it saves offering a button that would always be refused. Every command revalidates on its own.',
+      },
+      viewer_can_exercise: {
+        type: 'boolean',
+        description: 'A hint for the screen, on the same terms as `viewer_can_decide`.',
+      },
+    },
+  },
+  BreakGlassRequestCreate: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      'No tier, no approval count and no duration: the server derives all three from the categories.',
+    required: ['subject_person_id', 'categories', 'purpose', 'case_reference'],
+    properties: {
+      subject_person_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      categories: {
+        type: 'array',
+        minItems: 1,
+        maxItems: 6,
+        items: {
+          $ref: '#/components/schemas/BreakGlassCategory',
+        },
+      },
+      purpose: {
+        $ref: '#/components/schemas/BreakGlassPurpose',
+      },
+      case_reference: {
+        type: 'string',
+        pattern: '^[A-Z][A-Z0-9_-]{2,63}$',
+      },
+    },
+  },
+  BreakGlassRequestList: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['items'],
+    properties: {
+      items: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/BreakGlassRequest',
+        },
+      },
+    },
+  },
+  BreakGlassStatus: {
+    type: 'string',
+    enum: ['requested', 'approved', 'rejected', 'closed', 'expired'],
+  },
+  BreakGlassTier: {
+    type: 'string',
+    description: 'Derived from the categories by the server, never sent by a client.',
+    enum: ['standard', 'restricted'],
+  },
+  CatalogActivityType: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['id', 'discipline_code', 'code', 'name'],
+    properties: {
+      id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      discipline_code: {
+        type: 'string',
+        pattern: '^[a-z][a-z0-9_]{1,63}$',
+      },
+      code: {
+        type: 'string',
+        pattern: '^[a-z][a-z0-9_]{1,63}$',
+      },
+      name: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 120,
+      },
+    },
+  },
+  CatalogActivityTypeList: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['items'],
+    properties: {
+      items: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/CatalogActivityType',
+        },
+      },
+    },
+  },
+  CatalogDiscipline: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['code', 'name'],
+    properties: {
+      code: {
+        type: 'string',
+        pattern: '^[a-z][a-z0-9_]{1,63}$',
+      },
+      name: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 120,
+      },
+    },
+  },
+  CatalogDisciplineList: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['items'],
+    properties: {
+      items: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/CatalogDiscipline',
+        },
+      },
+    },
+  },
   CompletenessLevel: {
     type: 'string',
     enum: ['partial', 'summary', 'detailed', 'sensor_enriched'],
@@ -745,6 +1638,326 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         maxLength: 200,
       },
     },
+  },
+  CredentialRenewalCreate: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['credential_id'],
+    properties: {
+      credential_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+    },
+  },
+  CredentialRenewalDue: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'credential_id',
+      'credential_type_code',
+      'credential_type_name',
+      'credential_name',
+      'issuer',
+      'holder_person_id',
+      'holder_given_name',
+      'holder_family_name',
+      'last_valid_to',
+    ],
+    properties: {
+      credential_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      credential_type_code: {
+        type: 'string',
+      },
+      credential_type_name: {
+        type: 'string',
+      },
+      credential_name: {
+        type: 'string',
+      },
+      issuer: {
+        type: 'string',
+      },
+      holder_person_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      holder_given_name: {
+        type: 'string',
+      },
+      holder_family_name: {
+        type: 'string',
+      },
+      last_valid_to: {
+        type: 'string',
+        format: 'date-time',
+      },
+    },
+  },
+  CredentialRenewalDueList: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['items'],
+    properties: {
+      items: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/CredentialRenewalDue',
+        },
+      },
+    },
+  },
+  CredentialVerificationDecisionCreate: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      'No policy, no validity and no evidence fingerprint: the server derives all three, so a client cannot decide how long its own verification lasts.',
+    required: [
+      'request_id',
+      'result',
+      'method',
+      'source_authority',
+      'source_jurisdiction',
+      'source_reference',
+      'source_status',
+      'source_checked_at',
+    ],
+    properties: {
+      request_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      result: {
+        $ref: '#/components/schemas/CredentialVerificationResult',
+      },
+      method: {
+        $ref: '#/components/schemas/CredentialVerificationMethod',
+      },
+      source_authority: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 200,
+      },
+      source_jurisdiction: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 200,
+      },
+      source_reference: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 200,
+        description: 'Kept as evidence and never returned by any read.',
+      },
+      source_status: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 200,
+      },
+      source_checked_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      source_valid_to: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+    },
+  },
+  CredentialVerificationMethod: {
+    type: 'string',
+    description:
+      'How a credential was checked. Documents, civil identity, health and a complete profile are never verifiable in V1, so no method exists for them.',
+    enum: ['official_registry_lookup', 'issuer_confirmation'],
+  },
+  CredentialVerificationOutcome: {
+    type: 'object',
+    additionalProperties: false,
+    description: 'The outcome, never the evidence — no registry reference and no fingerprint.',
+    required: [
+      'request_id',
+      'kind',
+      'status',
+      'credential_id',
+      'created_at',
+      'resolved_at',
+      'verification',
+    ],
+    properties: {
+      request_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      kind: {
+        type: 'string',
+        enum: ['initial', 'renewal'],
+      },
+      status: {
+        type: 'string',
+        enum: ['pending', 'resolved', 'cancelled'],
+      },
+      credential_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      created_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      resolved_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      verification: {
+        anyOf: [
+          {
+            $ref: '#/components/schemas/CredentialVerificationRecord',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+    },
+  },
+  CredentialVerificationRecord: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['id', 'result', 'method', 'decided_at', 'valid_from', 'valid_to'],
+    properties: {
+      id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      result: {
+        type: 'string',
+        enum: ['verified', 'rejected', 'unverifiable', 'revoked'],
+      },
+      method: {
+        $ref: '#/components/schemas/CredentialVerificationMethod',
+      },
+      decided_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      valid_from: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      valid_to: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+    },
+  },
+  CredentialVerificationRequest: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'request_id',
+      'kind',
+      'requested_at',
+      'credential_id',
+      'credential_type_code',
+      'credential_type_name',
+      'issuer',
+      'credential_name',
+      'credential_identifier',
+      'issued_on',
+      'expires_on',
+      'verification_url',
+      'holder_person_id',
+      'holder_given_name',
+      'holder_family_name',
+      'suggested_method',
+      'previous_result',
+      'previous_valid_to',
+      'viewer_can_decide',
+    ],
+    properties: {
+      request_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      kind: {
+        type: 'string',
+        enum: ['initial', 'renewal'],
+      },
+      requested_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      credential_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      credential_type_code: {
+        type: 'string',
+      },
+      credential_type_name: {
+        type: 'string',
+      },
+      issuer: {
+        type: 'string',
+      },
+      credential_name: {
+        type: 'string',
+      },
+      credential_identifier: {
+        type: ['string', 'null'],
+      },
+      issued_on: {
+        type: ['string', 'null'],
+        format: 'date',
+      },
+      expires_on: {
+        type: ['string', 'null'],
+        format: 'date',
+      },
+      verification_url: {
+        type: ['string', 'null'],
+        format: 'uri',
+      },
+      holder_person_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      holder_given_name: {
+        type: 'string',
+      },
+      holder_family_name: {
+        type: 'string',
+      },
+      suggested_method: {
+        $ref: '#/components/schemas/CredentialVerificationMethod',
+      },
+      previous_result: {
+        type: ['string', 'null'],
+        description:
+          'The latest result recorded for this exact version, so a renewal shows what it renews.',
+      },
+      previous_valid_to: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      viewer_can_decide: {
+        type: 'boolean',
+        description:
+          'A hint for the screen, never authority. False when the caller is the holder or shares an active organization with them.',
+      },
+    },
+  },
+  CredentialVerificationRequestList: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['items'],
+    properties: {
+      items: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/CredentialVerificationRequest',
+        },
+      },
+    },
+  },
+  CredentialVerificationResult: {
+    type: 'string',
+    description:
+      'What a verifier may record. There is no default, and `unverifiable` is the answer whenever the evidence does not reach.',
+    enum: ['verified', 'rejected', 'unverifiable'],
   },
   EnduranceTarget: {
     type: 'object',
@@ -1114,6 +2327,12 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         enum: ['left', 'right', 'bilateral', 'not_applicable'],
       },
     },
+  },
+  ModelAvailability: {
+    type: 'string',
+    description:
+      '`not_modelled` means the platform has no table for this yet. It is a fact about Allfit, never about the organization or the person.',
+    enum: ['not_modelled'],
   },
   NutrientCode: {
     type: 'string',
@@ -2050,6 +3269,152 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  OrganizationHandover: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'organization_id',
+      'display_name',
+      'type_code',
+      'type_name',
+      'party_kind',
+      'legal_name',
+      'status',
+      'created_at',
+      'claimed_at',
+      'cancelled_at',
+      'site',
+      'invitation',
+    ],
+    properties: {
+      organization_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      display_name: {
+        type: 'string',
+      },
+      type_code: {
+        $ref: '#/components/schemas/OrganizationTypeCode',
+      },
+      type_name: {
+        type: 'string',
+      },
+      party_kind: {
+        $ref: '#/components/schemas/OrganizationPartyKind',
+      },
+      legal_name: {
+        type: ['string', 'null'],
+      },
+      status: {
+        $ref: '#/components/schemas/OrganizationLifecycleStatus',
+      },
+      created_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      claimed_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      cancelled_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      site: {
+        type: ['object', 'null'],
+        additionalProperties: false,
+        required: ['site_id', 'name', 'address'],
+        properties: {
+          site_id: {
+            $ref: '#/components/schemas/Uuid',
+          },
+          name: {
+            type: 'string',
+          },
+          address: {
+            type: ['string', 'null'],
+          },
+        },
+      },
+      invitation: {
+        type: ['object', 'null'],
+        additionalProperties: false,
+        required: ['invitation_id', 'status', 'intent_status', 'contact_hint', 'expires_at'],
+        description: 'The latest ownership invitation. The address is a hint, never the address.',
+        properties: {
+          invitation_id: {
+            $ref: '#/components/schemas/Uuid',
+          },
+          status: {
+            $ref: '#/components/schemas/TeamInvitationStatus',
+          },
+          intent_status: {
+            $ref: '#/components/schemas/TeamInvitationIntentStatus',
+          },
+          contact_hint: {
+            type: 'string',
+          },
+          expires_at: {
+            type: 'string',
+            format: 'date-time',
+          },
+        },
+      },
+    },
+  },
+  OrganizationHandoverCreate: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['display_name', 'type_code', 'party_kind', 'owner_email'],
+    properties: {
+      display_name: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 120,
+      },
+      type_code: {
+        $ref: '#/components/schemas/OrganizationTypeCode',
+      },
+      party_kind: {
+        $ref: '#/components/schemas/OrganizationPartyKind',
+      },
+      legal_name: {
+        type: ['string', 'null'],
+        minLength: 1,
+        maxLength: 160,
+        description: 'Required for a company and refused for a natural person.',
+      },
+      site: {
+        type: ['object', 'null'],
+        additionalProperties: false,
+        required: ['name'],
+        properties: {
+          name: {
+            type: 'string',
+            minLength: 1,
+            maxLength: 120,
+          },
+          address: {
+            type: ['string', 'null'],
+            minLength: 1,
+            maxLength: 240,
+          },
+        },
+      },
+      owner_email: {
+        type: 'string',
+        format: 'email',
+        minLength: 3,
+        maxLength: 254,
+      },
+    },
+  },
+  OrganizationLifecycleStatus: {
+    type: 'string',
+    description:
+      '`unclaimed` exists but does not operate: Allfit created it and its owner has not accepted yet. `cancelled` was never claimed. `closed` operated and ended.',
+    enum: ['unclaimed', 'active', 'closed', 'cancelled'],
+  },
   OrganizationMembershipListItem: {
     type: 'object',
     additionalProperties: false,
@@ -2142,6 +3507,12 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         $ref: '#/components/schemas/Uuid',
       },
     },
+  },
+  OrganizationPartyKind: {
+    type: 'string',
+    description:
+      "Whether the organization answers as a company or as a natural person. A natural person's name is never written by Allfit.",
+    enum: ['natural_person', 'legal_entity'],
   },
   OrganizationRole: {
     type: 'object',
@@ -2327,6 +3698,118 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
       type_code: {
         $ref: '#/components/schemas/OrganizationTypeCode',
+      },
+    },
+  },
+  OwnershipInvitationDecisionCreate: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['token', 'intent_id', 'decision'],
+    properties: {
+      token: {
+        type: 'string',
+        minLength: 43,
+        maxLength: 43,
+        pattern: '^[A-Za-z0-9_-]{43}$',
+      },
+      intent_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      decision: {
+        type: 'string',
+        enum: ['accepted', 'rejected'],
+      },
+    },
+  },
+  OwnershipInvitationDecisionResult: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['invitation_id', 'invitation_status', 'organization_id', 'intent', 'replayed'],
+    properties: {
+      invitation_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      invitation_status: {
+        type: 'string',
+        const: 'completed',
+      },
+      organization_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      intent: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['id', 'status', 'membership_id'],
+        properties: {
+          id: {
+            $ref: '#/components/schemas/Uuid',
+          },
+          status: {
+            type: 'string',
+            enum: ['accepted', 'rejected'],
+          },
+          membership_id: {
+            type: ['string', 'null'],
+            format: 'uuid',
+          },
+        },
+      },
+      replayed: {
+        type: 'boolean',
+      },
+    },
+  },
+  OwnershipInvitationPresentation: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['id', 'organization', 'expires_at', 'intent'],
+    properties: {
+      id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      organization: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['id', 'display_name', 'type_name', 'party_kind', 'legal_name', 'site_name'],
+        properties: {
+          id: {
+            $ref: '#/components/schemas/Uuid',
+          },
+          display_name: {
+            type: 'string',
+            minLength: 1,
+          },
+          type_name: {
+            type: 'string',
+          },
+          party_kind: {
+            $ref: '#/components/schemas/OrganizationPartyKind',
+          },
+          legal_name: {
+            type: ['string', 'null'],
+          },
+          site_name: {
+            type: ['string', 'null'],
+          },
+        },
+      },
+      expires_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      intent: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['id', 'status'],
+        properties: {
+          id: {
+            $ref: '#/components/schemas/Uuid',
+          },
+          status: {
+            type: 'string',
+            const: 'pending',
+          },
+        },
       },
     },
   },
@@ -3498,6 +4981,105 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       'nutrition_media',
     ],
   },
+  ScopeDefinition: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['id', 'scope_code', 'version_number', 'status', 'published_at', 'rules'],
+    properties: {
+      id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      scope_code: {
+        $ref: '#/components/schemas/ScopeCode',
+      },
+      version_number: {
+        type: 'integer',
+        minimum: 1,
+      },
+      status: {
+        $ref: '#/components/schemas/PublicationStatus',
+      },
+      published_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      rules: {
+        type: 'array',
+        minItems: 1,
+        items: {
+          $ref: '#/components/schemas/ScopeResourceRule',
+        },
+      },
+    },
+  },
+  ScopeDefinitionList: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['items'],
+    properties: {
+      items: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/ScopeDefinition',
+        },
+      },
+    },
+  },
+  ScopeDefinitionPublication: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      'No version number: the server assigns the next one. At least one rule must be included, because a version made only of exclusions grants nothing.',
+    required: ['scope_code', 'rules'],
+    properties: {
+      scope_code: {
+        $ref: '#/components/schemas/ScopeCode',
+      },
+      rules: {
+        type: 'array',
+        minItems: 1,
+        maxItems: 200,
+        items: {
+          $ref: '#/components/schemas/ScopeResourceRule',
+        },
+      },
+    },
+  },
+  ScopeResourceRule: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      'One resource and field the version speaks about. An exclusion is stated rather than left out, because criterion 1 asks what a permission excludes and an absence cannot answer that.',
+    required: ['resource', 'field', 'data_classification_code', 'max_action'],
+    properties: {
+      resource: {
+        type: 'string',
+        pattern: '^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*$',
+      },
+      field: {
+        type: 'string',
+        description: 'A field name, or `*` for every field of the resource.',
+        maxLength: 64,
+      },
+      data_classification_code: {
+        type: 'string',
+        pattern: '^[a-z][a-z0-9_]{1,63}$',
+      },
+      max_action: {
+        $ref: '#/components/schemas/AccessLevel',
+      },
+      is_excluded: {
+        type: 'boolean',
+        default: false,
+      },
+      historical_readable: {
+        type: 'boolean',
+        default: false,
+        description:
+          'Whether the field may be read for periods before the grant existed. Only valid on an included, read-only field.',
+      },
+    },
+  },
   SelfNutritionGoalVersionCreate: {
     type: 'object',
     additionalProperties: false,
@@ -4347,6 +5929,305 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
       analytics: {
         $ref: '#/components/schemas/AnalyticsIdentity',
+      },
+    },
+  },
+  SupportAttentionPanel: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      'Counters only. No person, organization or aggregate identifier travels here, so a counter cannot be used to open anything.',
+    required: [
+      'generated_at',
+      'billing',
+      'credential_verifications',
+      'unclaimed_organizations',
+      'repeated_failures',
+    ],
+    properties: {
+      generated_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      billing: {
+        $ref: '#/components/schemas/AttentionBillingNotice',
+      },
+      credential_verifications: {
+        $ref: '#/components/schemas/AttentionVerificationNotice',
+      },
+      unclaimed_organizations: {
+        $ref: '#/components/schemas/AttentionUnclaimedOrganizationNotice',
+      },
+      repeated_failures: {
+        $ref: '#/components/schemas/AttentionFailureNotice',
+      },
+    },
+  },
+  SupportBlockAvailability: {
+    type: 'string',
+    description:
+      'Whether a block of the projection can say anything. `unknown` is a statement about the person; `not_modelled` is a statement about the platform, and confusing the two makes the card lie by omission.',
+    enum: ['available', 'unknown', 'not_modelled'],
+  },
+  SupportDeliveryCircuit: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'event_type',
+      'state',
+      'window_started_at',
+      'success_count',
+      'failure_count',
+      'opened_until',
+    ],
+    properties: {
+      event_type: {
+        type: 'string',
+        maxLength: 120,
+      },
+      state: {
+        type: 'string',
+        maxLength: 32,
+      },
+      window_started_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      success_count: {
+        type: 'integer',
+        minimum: 0,
+      },
+      failure_count: {
+        type: 'integer',
+        minimum: 0,
+      },
+      opened_until: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+    },
+  },
+  SupportDeliveryCircuitList: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['items'],
+    properties: {
+      items: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/SupportDeliveryCircuit',
+        },
+      },
+    },
+  },
+  SupportOperation: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      "Identifiers, states, timestamps, error codes and retries. No payload, no stored response, no principal fingerprint and no request hash: this read exists to diagnose without opening anyone's data.",
+    required: [
+      'source',
+      'reference_id',
+      'subject_kind',
+      'subject_id',
+      'label',
+      'state',
+      'occurred_at',
+      'attempt_count',
+      'last_error_code',
+      'resolved_at',
+    ],
+    properties: {
+      source: {
+        $ref: '#/components/schemas/SupportOperationSourceKind',
+      },
+      reference_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      subject_kind: {
+        type: ['string', 'null'],
+        maxLength: 64,
+      },
+      subject_id: {
+        type: ['string', 'null'],
+        format: 'uuid',
+      },
+      label: {
+        type: 'string',
+        maxLength: 120,
+      },
+      state: {
+        $ref: '#/components/schemas/SupportOperationState',
+      },
+      occurred_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      attempt_count: {
+        type: 'integer',
+        minimum: 0,
+      },
+      last_error_code: {
+        type: ['string', 'null'],
+        maxLength: 120,
+      },
+      resolved_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+    },
+  },
+  SupportOperationPage: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['data', 'page'],
+    properties: {
+      data: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/SupportOperation',
+        },
+      },
+      page: {
+        $ref: '#/components/schemas/Page',
+      },
+    },
+  },
+  SupportOperationSourceKind: {
+    type: 'string',
+    enum: ['notification', 'command'],
+  },
+  SupportOperationState: {
+    type: 'string',
+    description:
+      '`pending` is a notification not sent yet and `retrying` one that already failed, kept apart so a healthy queue does not read as a pile of failures. `stalled` is a command still processing long after it started.',
+    enum: [
+      'pending',
+      'retrying',
+      'delivered',
+      'dead_lettered',
+      'processing',
+      'stalled',
+      'succeeded',
+      'rejected_final',
+    ],
+  },
+  SupportPeopleSearch: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      'The outcome travels beside the items so a client cannot render an unexplained empty list. `HU-BO-006` criterion 3 is a contract obligation here, not a copy decision in one screen.',
+    required: ['outcome', 'items'],
+    properties: {
+      outcome: {
+        type: 'string',
+        enum: ['found', 'not_found'],
+      },
+      items: {
+        type: 'array',
+        maxItems: 1,
+        items: {
+          $ref: '#/components/schemas/SupportPersonMetadata',
+        },
+      },
+    },
+  },
+  SupportPersonMetadata: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      'The minimised operational state. No name, no full contact and no identity provider subject appear here, by construction rather than by filtering.',
+    required: [
+      'person_id',
+      'account_status',
+      'created_at',
+      'activated_at',
+      'contact_email_masked',
+      'contact_phone_masked',
+      'email_verified_at',
+      'phone_verified_at',
+      'has_access_account',
+      'access_account_linked_at',
+      'active_session_count',
+      'last_seen_at',
+      'has_professional_profile',
+      'membership_count',
+      'active_membership_count',
+      'relationships_availability',
+      'plan_availability',
+      'premium_availability',
+      'permissions_availability',
+    ],
+    properties: {
+      person_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      account_status: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 32,
+      },
+      created_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      activated_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      contact_email_masked: {
+        type: ['string', 'null'],
+        maxLength: 254,
+      },
+      contact_phone_masked: {
+        type: ['string', 'null'],
+        maxLength: 32,
+      },
+      email_verified_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      phone_verified_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      has_access_account: {
+        type: 'boolean',
+      },
+      access_account_linked_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      active_session_count: {
+        type: 'integer',
+        minimum: 0,
+      },
+      last_seen_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      has_professional_profile: {
+        type: 'boolean',
+      },
+      membership_count: {
+        type: 'integer',
+        minimum: 0,
+      },
+      active_membership_count: {
+        type: 'integer',
+        minimum: 0,
+      },
+      relationships_availability: {
+        $ref: '#/components/schemas/SupportBlockAvailability',
+      },
+      plan_availability: {
+        $ref: '#/components/schemas/SupportBlockAvailability',
+      },
+      premium_availability: {
+        $ref: '#/components/schemas/SupportBlockAvailability',
+      },
+      permissions_availability: {
+        $ref: '#/components/schemas/SupportBlockAvailability',
       },
     },
   },

@@ -113,10 +113,7 @@ export function renderTeamInvitationEmail(input: {
 }): { subject: string; text: string; html: string } {
   const organization = escapeHtml(input.organizationName)
   const role = roleLabel(input.proposedRoleCode)
-  const roleDisplay = role.toLocaleUpperCase('es-CO')
   const expires = formatInvitationExpiry(input.expiresAt)
-  const url = escapeHtml(input.invitationUrl)
-  const brandAssetUrl = escapeHtml(input.brandAssetUrl)
   return {
     subject: `${input.organizationName} te invitó a su equipo en Allfit One`,
     text: [
@@ -127,14 +124,91 @@ export function renderTeamInvitationEmail(input: {
       'Aceptar crea tu membresía. Abrir este correo o revisar la invitación no lo hace.',
       'Si no esperabas esta invitación, puedes ignorar este correo.',
     ].join('\n\n'),
-    html: `<!doctype html>
+    html: invitationEmailHtml({
+      title: `${organization} te invitó a su equipo en Allfit One`,
+      preheader: `${organization} te invitó como ${role}. Revisa la invitación antes del ${expires}.`,
+      eyebrow: 'INVITACIÓN DE EQUIPO',
+      heading: `${organization} quiere sumarte a su equipo`,
+      lead: 'Revisa el rol propuesto y la vigencia antes de decidir.',
+      detailLabel: 'ROL PROPUESTO',
+      detailValue: role.toLocaleUpperCase('es-CO'),
+      expires,
+      invitationUrl: escapeHtml(input.invitationUrl),
+      brandAssetUrl: escapeHtml(input.brandAssetUrl),
+      note: 'Aceptar crea tu membresía. Abrir este correo o revisar la invitación no lo hace.',
+      footer: `Puedes ignorar este correo; no se hará ningún cambio. Allfit One lo envió en nombre de ${organization}.`,
+    }),
+  }
+}
+
+/**
+ * The email that hands an organization Allfit created to its owner (`HU-BO-014`).
+ *
+ * It says, before anything else, that the organization does not operate until it is
+ * accepted: the recipient is being offered ownership, not told they already have it.
+ * Nobody from the organization sent it, so it never claims to speak in its name.
+ */
+export function renderOwnershipInvitationEmail(input: {
+  organizationName: string
+  invitationUrl: string
+  brandAssetUrl: string
+  expiresAt: Date
+}): { subject: string; text: string; html: string } {
+  const organization = escapeHtml(input.organizationName)
+  const expires = formatInvitationExpiry(input.expiresAt)
+  return {
+    subject: `${input.organizationName} te espera en Allfit One`,
+    text: [
+      `Allfit preparó ${input.organizationName} en Allfit One para que la recibas como propietario.`,
+      'Mientras no la aceptes, la organización existe pero no opera.',
+      `Válida hasta: ${expires}`,
+      `Revisar invitación: ${input.invitationUrl}`,
+      'Aceptar te hace su propietario. Abrir este correo o revisar la invitación no lo hace.',
+      'Si no esperabas esta invitación, puedes ignorar este correo.',
+    ].join('\n\n'),
+    html: invitationEmailHtml({
+      title: `${organization} te espera en Allfit One`,
+      preheader: `Allfit preparó ${organization} para ti. Revisa la invitación antes del ${expires}.`,
+      eyebrow: 'ENTREGA DE ORGANIZACIÓN',
+      heading: `${organization} está lista para que la recibas`,
+      lead: 'Allfit la preparó para ti. Mientras no la aceptes, la organización existe pero no opera.',
+      detailLabel: 'ORGANIZACIÓN',
+      detailValue: organization,
+      expires,
+      invitationUrl: escapeHtml(input.invitationUrl),
+      brandAssetUrl: escapeHtml(input.brandAssetUrl),
+      note: 'Aceptar te hace su propietario. Abrir este correo o revisar la invitación no lo hace.',
+      footer:
+        'Puedes ignorar este correo; no se hará ningún cambio. Allfit One lo envió porque el equipo de Allfit preparó esta organización para esta dirección.',
+    }),
+  }
+}
+
+/** Every value arrives already escaped: the caller knows which parts came from a person. */
+interface InvitationEmailParts {
+  title: string
+  preheader: string
+  eyebrow: string
+  heading: string
+  lead: string
+  detailLabel: string
+  detailValue: string
+  expires: string
+  invitationUrl: string
+  brandAssetUrl: string
+  note: string
+  footer: string
+}
+
+function invitationEmailHtml(parts: InvitationEmailParts): string {
+  return `<!doctype html>
 <html lang="es">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light only">
     <meta name="supported-color-schemes" content="light">
-    <title>${organization} te invitó a su equipo en Allfit One</title>
+    <title>${parts.title}</title>
     <style>
       :root { color-scheme: light only; supported-color-schemes: light; }
       body { margin: 0; padding: 0; width: 100% !important; background: #EDF6F6; }
@@ -153,7 +227,7 @@ export function renderTeamInvitationEmail(input: {
   </head>
   <body style="margin:0;padding:0;width:100%;background-color:#EDF6F6;">
     <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;mso-hide:all;">
-      ${organization} te invitó como ${role}. Revisa la invitación antes del ${expires}.
+      ${parts.preheader}
     </div>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#EDF6F6" style="width:100%;background-color:#EDF6F6;border-collapse:collapse;">
       <tr>
@@ -168,7 +242,7 @@ export function renderTeamInvitationEmail(input: {
                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;">
                   <tr>
                     <td>
-                      <img src="${brandAssetUrl}" width="168" alt="Allfit One" style="display:block;width:168px;max-width:100%;height:auto;border:0;outline:none;text-decoration:none;">
+                      <img src="${parts.brandAssetUrl}" width="168" alt="Allfit One" style="display:block;width:168px;max-width:100%;height:auto;border:0;outline:none;text-decoration:none;">
                     </td>
                     <td align="right" style="font-family:'Manrope',Arial,sans-serif;font-size:11px;font-weight:700;line-height:1.25;letter-spacing:1.5px;color:#536A73;">
                       STUDIO
@@ -180,13 +254,13 @@ export function renderTeamInvitationEmail(input: {
             <tr>
               <td class="afo-content" style="padding:38px 40px 40px;">
                 <p style="margin:0 0 10px;font-family:'Manrope',Arial,sans-serif;font-size:12px;font-weight:700;line-height:1.25;letter-spacing:2px;color:#176D72;">
-                  INVITACIÓN DE EQUIPO
+                  ${parts.eyebrow}
                 </p>
                 <h1 style="margin:0 0 16px;font-family:'Barlow Condensed','Arial Narrow',Arial,sans-serif;font-size:38px;font-weight:600;line-height:1.05;letter-spacing:-1px;color:#0A1B22;">
-                  ${organization} quiere sumarte a su equipo
+                  ${parts.heading}
                 </h1>
                 <p style="margin:0 0 28px;font-family:'Manrope',Arial,sans-serif;font-size:16px;font-weight:400;line-height:1.6;color:#456069;">
-                  Revisa el rol propuesto y la vigencia antes de decidir.
+                  ${parts.lead}
                 </p>
 
                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#030713" style="width:100%;background-color:#030713;border-left:6px solid #55EFFB;border-radius:12px;border-collapse:separate;">
@@ -200,12 +274,12 @@ export function renderTeamInvitationEmail(input: {
                   </tr>
                   <tr>
                     <td class="afo-detail" width="50%" valign="top" style="width:50%;padding:20px 22px 22px;">
-                      <p style="margin:0 0 7px;font-family:'Manrope',Arial,sans-serif;font-size:11px;font-weight:700;line-height:1.25;letter-spacing:1.4px;color:#9DB4BC;">ROL PROPUESTO</p>
-                      <p style="margin:0;font-family:'Barlow Condensed','Arial Narrow',Arial,sans-serif;font-size:26px;font-weight:600;line-height:1;color:#EAFFFF;">${roleDisplay}</p>
+                      <p style="margin:0 0 7px;font-family:'Manrope',Arial,sans-serif;font-size:11px;font-weight:700;line-height:1.25;letter-spacing:1.4px;color:#9DB4BC;">${parts.detailLabel}</p>
+                      <p style="margin:0;font-family:'Barlow Condensed','Arial Narrow',Arial,sans-serif;font-size:26px;font-weight:600;line-height:1;color:#EAFFFF;">${parts.detailValue}</p>
                     </td>
                     <td class="afo-detail afo-detail-expiry" width="50%" valign="top" style="width:50%;padding:20px 22px 22px;border-left:1px solid #456069;">
                       <p style="margin:0 0 7px;font-family:'Manrope',Arial,sans-serif;font-size:11px;font-weight:700;line-height:1.25;letter-spacing:1.4px;color:#9DB4BC;">VÁLIDA HASTA</p>
-                      <p style="margin:0;font-family:'Manrope',Arial,sans-serif;font-size:15px;font-weight:600;line-height:1.35;color:#EAFFFF;">${expires}</p>
+                      <p style="margin:0;font-family:'Manrope',Arial,sans-serif;font-size:15px;font-weight:600;line-height:1.35;color:#EAFFFF;">${parts.expires}</p>
                     </td>
                   </tr>
                 </table>
@@ -213,13 +287,13 @@ export function renderTeamInvitationEmail(input: {
                 <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:28px;border-collapse:separate;">
                   <tr>
                     <td align="center" bgcolor="#55EFFB" style="background-color:#55EFFB;border-radius:999px;">
-                      <a href="${url}" target="_blank" style="display:inline-block;padding:15px 26px;font-family:'Manrope',Arial,sans-serif;font-size:15px;font-weight:700;line-height:1;text-decoration:none;color:#06282B;border:1px solid #55EFFB;border-radius:999px;">Revisar invitación</a>
+                      <a href="${parts.invitationUrl}" target="_blank" style="display:inline-block;padding:15px 26px;font-family:'Manrope',Arial,sans-serif;font-size:15px;font-weight:700;line-height:1;text-decoration:none;color:#06282B;border:1px solid #55EFFB;border-radius:999px;">Revisar invitación</a>
                     </td>
                   </tr>
                 </table>
 
                 <p style="margin:22px 0 0;font-family:'Manrope',Arial,sans-serif;font-size:13px;font-weight:400;line-height:1.55;color:#536A73;">
-                  Aceptar crea tu membresía. Abrir este correo o revisar la invitación no lo hace.
+                  ${parts.note}
                 </p>
               </td>
             </tr>
@@ -229,7 +303,7 @@ export function renderTeamInvitationEmail(input: {
                   ¿No esperabas esta invitación?
                 </p>
                 <p style="margin:0;font-family:'Manrope',Arial,sans-serif;font-size:12px;font-weight:400;line-height:1.6;color:#536A73;">
-                  Puedes ignorar este correo; no se hará ningún cambio. Allfit One lo envió en nombre de ${organization}.
+                  ${parts.footer}
                 </p>
               </td>
             </tr>
@@ -239,8 +313,7 @@ export function renderTeamInvitationEmail(input: {
       </tr>
     </table>
   </body>
-</html>`,
-  }
+</html>`
 }
 
 function formatInvitationExpiry(expiresAt: Date): string {

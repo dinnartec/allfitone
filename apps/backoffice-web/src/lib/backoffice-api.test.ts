@@ -98,3 +98,37 @@ test('parses both Retry-After forms', () => {
   expect(parseRetryAfter('Wed, 12 Aug 2026 12:00:05 GMT', now)).toBe(5_000)
   expect(parseRetryAfter('invalid', now)).toBeUndefined()
 })
+
+describe('the shared catalogue surface', () => {
+  test('reads the catalogue from /catalog/v1 with the session cookie', async () => {
+    const calls: { url: string; credentials: RequestCredentials | undefined }[] = []
+    globalThis.fetch = (async (input, init) => {
+      calls.push({ url: String(input), credentials: init?.credentials })
+      return Response.json({ items: [] })
+    }) as typeof fetch
+
+    await backofficeApi.catalogDisciplines()
+    await backofficeApi.catalogActivityTypes()
+    await backofficeApi.catalogActivityTypeResultContracts('019f0000-0000-7000-8000-000000000003')
+
+    expect(calls.map((call) => new URL(call.url).pathname)).toEqual([
+      '/catalog/v1/disciplines',
+      '/catalog/v1/activity-types',
+      '/catalog/v1/activity-types/019f0000-0000-7000-8000-000000000003/result-contracts',
+    ])
+    expect(calls.every((call) => call.credentials === 'include')).toBe(true)
+  })
+
+  test('reports a refused catalogue read with its problem code', async () => {
+    globalThis.fetch = (async () =>
+      Response.json(
+        { type: 'https://errors.allfit.invalid/forbidden' },
+        { status: 403 },
+      )) as unknown as typeof fetch
+
+    await expect(backofficeApi.catalogActivityTypes()).rejects.toMatchObject({
+      status: 403,
+      code: 'forbidden',
+    })
+  })
+})

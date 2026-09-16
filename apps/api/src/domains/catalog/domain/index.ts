@@ -59,3 +59,27 @@ export interface ProfessionalCatalogDatabase {
   listSpecialties(personId: string): Promise<ProfessionalCatalogItem[]>
   listCredentialTypes(personId: string): Promise<ProfessionalCatalogItem[]>
 }
+
+/**
+ * The global catalogue: published content with no tenant and no subject, read by
+ * every surface. `CatalogReader` carries the actor kind because the same rows are
+ * read by a person in Studio and by a support actor in Backoffice, and the audit
+ * context should say which.
+ */
+export type CatalogDiscipline = AllfitV1Schemas['CatalogDiscipline']
+export type CatalogActivityType = AllfitV1Schemas['CatalogActivityType']
+export type ActivityTypeResultContract = AllfitV1Schemas['ActivityTypeResultContract']
+
+export interface CatalogReader {
+  personId: string
+  actorKind: 'person' | 'support'
+}
+
+export interface GlobalCatalogDatabase {
+  listDisciplines(reader: CatalogReader): Promise<CatalogDiscipline[]>
+  listActivityTypes(reader: CatalogReader): Promise<CatalogActivityType[]>
+  listActivityTypeResultContracts(
+    reader: CatalogReader,
+    activityTypeId: string,
+  ): Promise<ActivityTypeResultContract[]>
+}

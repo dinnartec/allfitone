@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "./tsconfig.json",
+  // The end-to-end suite is outside the app config on purpose: the Next plugin
+  // and `.next/types` belong to the app, and Playwright's globals do not belong
+  // in a screen. It still has to be typechecked — the mock and the specs are the
+  // only description of what the API answers, and a drifted fixture would make a
+  // suite pass against a shape the server never sends.
+  "compilerOptions": {
+    "plugins": []
+  },
+  "include": ["e2e/**/*.ts"],
+  "exclude": ["node_modules"]
+}

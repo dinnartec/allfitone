@@ -9,7 +9,7 @@
     "build": "next build",
     "start": "next start --port 3001",
     "lint": "eslint . --ignore-pattern .next-e2e --ignore-pattern .next-build --ignore-pattern playwright-report --ignore-pattern test-results",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.e2e.json",
     "test": "bun test src",
     "test:e2e": "playwright test"
   },
