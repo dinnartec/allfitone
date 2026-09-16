@@ -1,5 +1,7 @@
 /** Identity module composition. */
 
+import { randomUUID } from 'node:crypto'
+
 import { authProvider } from '../../platform/auth/index.js'
 import {
   createBackofficeAuthenticationService,
@@ -58,6 +60,22 @@ import {
   type AccountRecoveryService,
 } from './application/account-recovery.js'
 import { createAccountRecoveryDatabase } from './infrastructure/account-recovery.js'
+import { createBodyProgressService, type BodyProgressService } from './application/body-progress.js'
+import { createBodyProgressDatabase } from './infrastructure/body-progress.js'
+
+let cachedBodyProgress: BodyProgressService | undefined
+
+export function spaceBodyProgressService(): BodyProgressService {
+  if (cachedBodyProgress) return cachedBodyProgress
+  const issuer = process.env.WORKOS_ISSUER
+  if (!issuer) throw new Error('WORKOS_ISSUER is not set')
+  cachedBodyProgress = createBodyProgressService({
+    database: createBodyProgressDatabase(),
+    issuer,
+    requestId: () => randomUUID(),
+  })
+  return cachedBodyProgress
+}
 
 let cachedRecoveries: AccountRecoveryService | undefined
 
