@@ -811,6 +811,87 @@ export type Database = {
           },
         ]
       }
+      body_progress_metrics: {
+        Row: {
+          code: string
+          created_at: string
+          dimension: string
+          maximum_value: number
+          name: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          dimension: string
+          maximum_value: number
+          name: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          dimension?: string
+          maximum_value?: number
+          name?: string
+        }
+        Relationships: []
+      }
+      body_progress_records: {
+        Row: {
+          created_at: string
+          has_media: boolean
+          id: string
+          measured_on: string
+          media_ref: string | null
+          metric_code: string
+          original_unit_code: string | null
+          original_value: number | null
+          person_id: string
+          unit_code: string
+          value_numeric: number
+        }
+        Insert: {
+          created_at?: string
+          has_media?: boolean
+          id: string
+          measured_on: string
+          media_ref?: string | null
+          metric_code: string
+          original_unit_code?: string | null
+          original_value?: number | null
+          person_id: string
+          unit_code: string
+          value_numeric: number
+        }
+        Update: {
+          created_at?: string
+          has_media?: boolean
+          id?: string
+          measured_on?: string
+          media_ref?: string | null
+          metric_code?: string
+          original_unit_code?: string | null
+          original_value?: number | null
+          person_id?: string
+          unit_code?: string
+          value_numeric?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_body_progress_records_metric'
+            columns: ['metric_code']
+            isOneToOne: false
+            referencedRelation: 'body_progress_metrics'
+            referencedColumns: ['code']
+          },
+          {
+            foreignKeyName: 'fk_body_progress_records_person'
+            columns: ['person_id']
+            isOneToOne: false
+            referencedRelation: 'people'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       credential_verification_requests: {
         Row: {
           cancelled_at: string | null
@@ -1716,6 +1797,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      body_progress_projection: { Args: { p_record_id: string }; Returns: Json }
       cancel_account_recovery: {
         Args: {
           p_actor_person_id: string
@@ -1881,6 +1963,21 @@ export type Database = {
           replayed: boolean
         }[]
       }
+      delete_body_progress: {
+        Args: {
+          p_command_id: string
+          p_idempotency_key: string
+          p_issuer: string
+          p_provider: string
+          p_record_id: string
+          p_request_hash: string
+          p_subject: string
+        }
+        Returns: {
+          replayed: boolean
+          result: Json
+        }[]
+      }
       expire_backoffice_authentication_attempts: {
         Args: { p_limit: number }
         Returns: number
@@ -1924,6 +2021,17 @@ export type Database = {
           p_actor_person_id: string
           p_actor_session_id: string
           p_organization_id: string
+        }
+        Returns: Json
+      }
+      list_body_progress: {
+        Args: {
+          p_before_id?: string
+          p_before_measured_on?: string
+          p_issuer: string
+          p_limit: number
+          p_provider: string
+          p_subject: string
         }
         Returns: Json
       }
@@ -2204,6 +2312,24 @@ export type Database = {
           terminal: boolean
         }[]
       }
+      record_body_progress: {
+        Args: {
+          p_idempotency_key: string
+          p_issuer: string
+          p_measured_on: string
+          p_metric_code: string
+          p_provider: string
+          p_record_id: string
+          p_request_hash: string
+          p_subject: string
+          p_unit_code: string
+          p_value: number
+        }
+        Returns: {
+          replayed: boolean
+          result: Json
+        }[]
+      }
       recover_backoffice_totp_factor: {
         Args: {
           p_approved_by_person_id: string
@@ -2228,6 +2354,10 @@ export type Database = {
       require_professional_actor: {
         Args: { p_person_id: string }
         Returns: undefined
+      }
+      require_space_person: {
+        Args: { p_issuer: string; p_provider: string; p_subject: string }
+        Returns: string
       }
       resend_account_recovery: {
         Args: {
