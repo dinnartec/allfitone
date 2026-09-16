@@ -24,6 +24,7 @@ export interface BackofficeFixture {
   accountRecovery?: AccountRecoveryFixture
   globalCatalogue?: GlobalCatalogueFixture
   attention?: AttentionFixture
+  business?: BusinessFixture
   verification?: VerificationFixture
   breakGlass?: BreakGlassFixture
   requests: MockRequest[]
@@ -606,6 +607,113 @@ export function teamInvitationRecord(
 }
 
 /**
+ * How the business is going. Whether a figure can be given at all is the
+ * database's decision, so the fixture states the answer rather than deriving it.
+ */
+export interface BusinessFixture {
+  refusal?: { status: number; code: string }
+  panel?: BusinessPanelFixture
+}
+
+export interface BusinessMetricFixture {
+  key: string
+  availability: 'available' | 'below_threshold' | 'not_modelled'
+  value: number | null
+  reason: string | null
+  period: { kind: 'total' | 'week' | 'month'; from: string | null; to: string }
+}
+
+export interface BusinessPanelFixture {
+  generated_at: string
+  minimum_aggregate: number
+  metrics: BusinessMetricFixture[]
+}
+
+/** One of each answer: a figure, a true zero, a group too small, and four gaps. */
+export function businessPanelRecord(
+  overrides: Partial<BusinessPanelFixture> = {},
+): BusinessPanelFixture {
+  const now = new Date()
+  const to = now.toISOString()
+  const week = new Date(now.getTime() - 7 * 86_400_000).toISOString()
+  const month = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString()
+  const total = { kind: 'total', from: null, to } as const
+  const lastWeek = { kind: 'week', from: week, to } as const
+
+  return {
+    generated_at: to,
+    minimum_aggregate: 5,
+    metrics: [
+      {
+        key: 'registered_people',
+        availability: 'available',
+        value: 1284,
+        reason: null,
+        period: total,
+      },
+      {
+        key: 'new_people_this_week',
+        availability: 'available',
+        value: 37,
+        reason: null,
+        period: lastWeek,
+      },
+      {
+        key: 'active_people_this_week',
+        availability: 'not_modelled',
+        value: null,
+        reason: 'space_sessions_not_recorded',
+        period: lastWeek,
+      },
+      {
+        key: 'studio_active_professionals_this_week',
+        availability: 'below_threshold',
+        value: null,
+        reason: null,
+        period: lastWeek,
+      },
+      { key: 'organizations', availability: 'available', value: 12, reason: null, period: total },
+      {
+        key: 'operating_organizations',
+        availability: 'available',
+        value: 9,
+        reason: null,
+        period: total,
+      },
+      {
+        key: 'unclaimed_organizations',
+        availability: 'available',
+        value: 0,
+        reason: null,
+        period: total,
+      },
+      {
+        key: 'active_subscriptions',
+        availability: 'not_modelled',
+        value: null,
+        reason: 'payments_not_modelled',
+        period: total,
+      },
+      {
+        key: 'billed_this_month',
+        availability: 'not_modelled',
+        value: null,
+        reason: 'payments_not_modelled',
+        period: { kind: 'month', from: month, to },
+      },
+      {
+        key: 'premium_people',
+        availability: 'not_modelled',
+        value: null,
+        reason: 'payments_not_modelled',
+        period: total,
+      },
+    ],
+    ...overrides,
+  }
+}
+
+/**
  * The attention panel. Which notices are withheld is the database's decision, so
  * the fixture states the answer rather than simulating duties.
  */
@@ -1125,6 +1233,10 @@ export async function mockBackofficeApi(
       await routeAttention(route, fixture)
       return
     }
+    if (request.path === '/backoffice/v1/support/business') {
+      await routeBusiness(route, fixture)
+      return
+    }
     if (
       request.path === '/backoffice/v1/support/operations' ||
       request.path === '/backoffice/v1/support/delivery-circuits'
@@ -1160,6 +1272,15 @@ async function routeAttention(route: Route, fixture: BackofficeFixture): Promise
     return
   }
   await fulfill(route, 200, attention.panel ?? attentionPanelRecord())
+}
+
+async function routeBusiness(route: Route, fixture: BackofficeFixture): Promise<void> {
+  const business = fixture.business ?? {}
+  if (business.refusal) {
+    await fulfillProblem(route, business.refusal.status, business.refusal.code)
+    return
+  }
+  await fulfill(route, 200, business.panel ?? businessPanelRecord())
 }
 
 /**
