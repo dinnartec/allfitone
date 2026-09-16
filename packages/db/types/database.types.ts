@@ -988,6 +988,50 @@ export type Database = {
           },
         ]
       }
+      health_context_claims: {
+        Row: {
+          body_area: string | null
+          context_type: string
+          created_at: string
+          description: string
+          id: string
+          person_id: string
+          provenance: Database['identity']['Enums']['provenance']
+          valid_from: string
+          valid_to: string | null
+        }
+        Insert: {
+          body_area?: string | null
+          context_type: string
+          created_at?: string
+          description: string
+          id: string
+          person_id: string
+          provenance: Database['identity']['Enums']['provenance']
+          valid_from: string
+          valid_to?: string | null
+        }
+        Update: {
+          body_area?: string | null
+          context_type?: string
+          created_at?: string
+          description?: string
+          id?: string
+          person_id?: string
+          provenance?: Database['identity']['Enums']['provenance']
+          valid_from?: string
+          valid_to?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_health_context_claims_person'
+            columns: ['person_id']
+            isOneToOne: false
+            referencedRelation: 'people'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       identity_action_events: {
         Row: {
           actor_duty_assignment_id: string | null
@@ -1978,6 +2022,21 @@ export type Database = {
           result: Json
         }[]
       }
+      delete_health_context: {
+        Args: {
+          p_claim_id: string
+          p_command_id: string
+          p_idempotency_key: string
+          p_issuer: string
+          p_provider: string
+          p_request_hash: string
+          p_subject: string
+        }
+        Returns: {
+          replayed: boolean
+          result: Json
+        }[]
+      }
       expire_backoffice_authentication_attempts: {
         Args: { p_limit: number }
         Returns: number
@@ -1991,6 +2050,7 @@ export type Database = {
         Args: { p_person_id: string; p_request_id: string }
         Returns: Json
       }
+      health_context_projection: { Args: { p_claim_id: string }; Returns: Json }
       issue_staff_invitation: {
         Args: {
           p_channel: string
@@ -2080,6 +2140,17 @@ export type Database = {
           issuer: string
           last_valid_to: string
         }[]
+      }
+      list_health_context: {
+        Args: {
+          p_before_id?: string
+          p_before_valid_from?: string
+          p_issuer: string
+          p_limit: number
+          p_provider: string
+          p_subject: string
+        }
+        Returns: Json
       }
       list_staff_invitations: {
         Args: {
@@ -2324,6 +2395,25 @@ export type Database = {
           p_subject: string
           p_unit_code: string
           p_value: number
+        }
+        Returns: {
+          replayed: boolean
+          result: Json
+        }[]
+      }
+      record_health_context: {
+        Args: {
+          p_body_area: string
+          p_claim_id: string
+          p_context_type: string
+          p_description: string
+          p_idempotency_key: string
+          p_issuer: string
+          p_provider: string
+          p_request_hash: string
+          p_subject: string
+          p_valid_from: string
+          p_valid_to: string
         }
         Returns: {
           replayed: boolean
@@ -2596,6 +2686,12 @@ export type Database = {
       onboarding_status: 'open' | 'activated' | 'ineligible' | 'expired'
       password_reset_receipt_result: 'processed' | 'account_absent'
       person_status: 'pending_activation' | 'active' | 'closed'
+      provenance:
+        | 'person_declared'
+        | 'professional_observation'
+        | 'device_observed'
+        | 'system_inferred'
+        | 'authority_verified'
     }
     CompositeTypes: {
       [_ in never]: never
@@ -4131,6 +4227,13 @@ export const Constants = {
       onboarding_status: ['open', 'activated', 'ineligible', 'expired'],
       password_reset_receipt_result: ['processed', 'account_absent'],
       person_status: ['pending_activation', 'active', 'closed'],
+      provenance: [
+        'person_declared',
+        'professional_observation',
+        'device_observed',
+        'system_inferred',
+        'authority_verified',
+      ],
     },
   },
   organizations: {
