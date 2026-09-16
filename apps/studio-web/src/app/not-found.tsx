@@ -27,12 +27,9 @@ export default function NotFound() {
             La dirección puede estar mal escrita, o lo que buscabas ya no está donde estaba.
           </AlertDescription>
           <AlertAction>
-            <Link
-              href="/"
-              data-slot="button"
-              data-variant="default"
-              className={buttonVariants({ size: 'lg' })}
-            >
+            {/* Default size, like the other three error stages. `lg` belongs to
+                the entry panel, where the action is the point of the screen. */}
+            <Link href="/" data-slot="button" data-variant="default" className={buttonVariants()}>
               Volver a Studio
             </Link>
           </AlertAction>

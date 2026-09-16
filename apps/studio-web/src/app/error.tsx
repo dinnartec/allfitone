@@ -39,14 +39,14 @@ export default function StudioError({
             Falló al dibujarse. No se perdió nada de lo que ya habías guardado.
           </AlertDescription>
           <AlertAction>
-            <Button size="lg" onClick={reset}>
-              Reintentar
-            </Button>
+            {/* Default size, like the other three error stages. `lg` belongs to
+                the entry panel, where the action is the point of the screen. */}
+            <Button onClick={reset}>Reintentar</Button>
             <Link
               href="/"
               data-slot="button"
               data-variant="outline"
-              className={buttonVariants({ size: 'lg', variant: 'outline' })}
+              className={buttonVariants({ variant: 'outline' })}
             >
               Volver a Studio
             </Link>
