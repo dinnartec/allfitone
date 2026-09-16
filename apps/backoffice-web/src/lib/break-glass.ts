@@ -14,6 +14,9 @@
  *
  * And a window says how long it has left, because fifteen minutes is short and
  * "approved" alone does not tell an operator to hurry.
+ *
+ * What an allowed read returns is shown as the person recorded it, beside the value the
+ * platform normalized, and a photo is only ever a flag: the reference never reaches here.
  */
 
 import type { AllfitV1Schemas } from '@allfitone/contracts'
@@ -24,6 +27,9 @@ export type BreakGlassPurpose = AllfitV1Schemas['BreakGlassPurpose']
 export type BreakGlassStatus = AllfitV1Schemas['BreakGlassStatus']
 export type BreakGlassTier = AllfitV1Schemas['BreakGlassTier']
 export type BreakGlassExerciseOutcome = AllfitV1Schemas['BreakGlassExerciseOutcome']
+export type BodyProgressRecord = AllfitV1Schemas['BodyProgressRecord']
+type BodyProgressMetricCode = AllfitV1Schemas['BodyProgressMetricCode']
+type BodyProgressUnitCode = AllfitV1Schemas['BodyProgressUnitCode']
 
 /** Only what can be approved. The forbidden set is absent, not disabled. */
 export const BREAK_GLASS_CATEGORIES: readonly BreakGlassCategory[] = [
@@ -66,6 +72,21 @@ const PURPOSE_LABELS: Record<BreakGlassPurpose, string> = {
 
 export function purposeLabel(purpose: BreakGlassPurpose): string {
   return PURPOSE_LABELS[purpose]
+}
+
+// The evidence records what was opened, so each category names its own table. The
+// server refuses a category that returns content when it is pointed at another one.
+const CATEGORY_RESOURCES: Record<BreakGlassCategory, string> = {
+  relationship_training: 'execution.executed_sessions',
+  prior_training_history: 'execution.executed_sessions',
+  nutrition_guidance: 'nutrition.goal_versions',
+  body_progress: 'identity.body_progress_records',
+  health_context: 'identity.health_context_claims',
+  nutrition_intake: 'nutrition.meals',
+}
+
+export function resourceTypeFor(category: BreakGlassCategory): string {
+  return CATEGORY_RESOURCES[category]
 }
 
 export const BREAK_GLASS_STATUSES: readonly BreakGlassStatus[] = [
@@ -234,6 +255,10 @@ const OUTCOME_MESSAGES: Record<string, string> = {
   window_not_open: 'La ventana no está abierta: venció, se cerró o aún no fue aprobada.',
   quorum_incomplete: 'Falta una aprobación para que la ventana se abra.',
   category_out_of_scope: 'Esa categoría no está dentro del alcance aprobado.',
+  resource_out_of_scope:
+    'Esa lectura no corresponde a la categoría aprobada. Quedó registrado el intento.',
+  authorized_exercise:
+    'Lectura autorizada. Es lo que la persona tiene registrado ahora y deja de verse cuando la ventana cierra.',
   execution_and_nutrition_absent:
     'La ventana es válida y el intento quedó registrado, pero el contenido todavía no existe en la plataforma.',
 }
@@ -246,6 +271,64 @@ export function outcomeMessage(outcome: BreakGlassExerciseOutcome): string {
   return (
     OUTCOME_MESSAGES[outcome.reason_code] ?? 'El intento quedó registrado y no entregó contenido.'
   )
+}
+
+const METRIC_LABELS: Record<BodyProgressMetricCode, string> = {
+  weight: 'Peso',
+  muscle_mass: 'Masa muscular',
+  body_fat: 'Grasa corporal',
+  waist: 'Cintura',
+  hip: 'Cadera',
+  chest: 'Pecho',
+  arm: 'Brazo',
+  thigh: 'Muslo',
+}
+
+const UNIT_SYMBOLS: Record<BodyProgressUnitCode, string> = {
+  kg: 'kg',
+  lb: 'lb',
+  m: 'm',
+  cm: 'cm',
+  in: 'in',
+  percent: '%',
+}
+
+export interface MeasurementRow {
+  id: string
+  metric: string
+  recorded: string
+  normalized: string
+  measuredOn: string
+  photo: string
+}
+
+/** The measurements an allowed read returned, newest first as the server sent them. */
+export function measurementRows(outcome: BreakGlassExerciseOutcome): MeasurementRow[] {
+  if (outcome.outcome !== 'allowed') return []
+  return (outcome.content?.body_progress ?? []).map((record) => ({
+    id: record.id,
+    metric: METRIC_LABELS[record.metric_code],
+    // No original means the person already typed the canonical unit.
+    recorded:
+      record.original_value === null || record.original_unit_code === null
+        ? quantity(record.value, record.unit_code)
+        : quantity(record.original_value, record.original_unit_code),
+    normalized: quantity(record.value, record.unit_code),
+    measuredOn: calendarDay(record.measured_on),
+    photo: record.has_media ? 'Tiene foto; no se muestra aquí' : 'Sin foto',
+  }))
+}
+
+function quantity(value: number, unit: BodyProgressUnitCode): string {
+  const amount = new Intl.NumberFormat('es-CO', { maximumFractionDigits: 3 }).format(value)
+  return `${amount} ${UNIT_SYMBOLS[unit]}`
+}
+
+function calendarDay(value: string): string {
+  const parsed = Date.parse(`${value}T00:00:00Z`)
+  if (Number.isNaN(parsed)) return value
+  // Read and shown in UTC, so the day never shifts with the operator's time zone.
+  return new Intl.DateTimeFormat('es-CO', { dateStyle: 'long', timeZone: 'UTC' }).format(parsed)
 }
 
 export function breakGlassMessage(code: string): string {

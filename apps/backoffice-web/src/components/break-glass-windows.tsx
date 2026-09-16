@@ -20,6 +20,9 @@
  * **A denied attempt is shown as a recorded fact, not an error.** The evidence is
  * the point: the operator sees which reason was written, and the person whose data
  * it was sees the same attempt in their own audit trail.
+ *
+ * What an allowed read returned lives only as long as its window: when the window
+ * closes or lapses, the content leaves the screen with it.
  */
 
 import { Alert, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
@@ -43,6 +46,15 @@ import {
   SelectValue,
 } from '@allfitone/react/components/select'
 import { Spinner } from '@allfitone/react/components/spinner'
+import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@allfitone/react/components/table'
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 
 import {
@@ -61,11 +73,13 @@ import {
   canDecide,
   canExercise,
   categoryLabel,
+  measurementRows,
   outcomeMessage,
   purposeLabel,
   quorumSentence,
   requestIssue,
   requestIssueMessage,
+  resourceTypeFor,
   statusLabel,
   statusTone,
   tierConsequence,
@@ -89,7 +103,10 @@ export function BreakGlassWindows() {
   const [purpose, setPurpose] = useState<BreakGlassPurpose>('customer_support_request')
   const [categories, setCategories] = useState<BreakGlassCategory[]>([])
   const [error, setError] = useState<string | null>(null)
-  const [outcome, setOutcome] = useState<BreakGlassExerciseOutcome | null>(null)
+  const [outcome, setOutcome] = useState<{
+    fileId: string
+    answer: BreakGlassExerciseOutcome
+  } | null>(null)
   const [now, setNow] = useState(() => Date.now())
 
   const load = useCallback(async (signal?: AbortSignal) => {
@@ -128,6 +145,9 @@ export function BreakGlassWindows() {
   }, [hasOpenWindow])
 
   const consequence = tierConsequence(categories)
+  const readFile = outcome ? files.find((file) => file.id === outcome.fileId) : undefined
+  const readStillOpen = readFile ? canExercise(readFile, now) : false
+  const rows = outcome && readStillOpen ? measurementRows(outcome.answer) : []
 
   async function run(operation: () => Promise<unknown>, success: string) {
     setBusy(true)
@@ -176,9 +196,9 @@ export function BreakGlassWindows() {
       // a fact rather than as a failure.
       const answer = await backofficeApi.exerciseBreakGlass(file.id, {
         category,
-        resource_type: 'execution.executed_sessions',
+        resource_type: resourceTypeFor(category),
       })
-      setOutcome(answer)
+      setOutcome({ fileId: file.id, answer })
       await load()
     } catch (caught) {
       setNotice({ tone: 'danger', message: failureMessage(caught) })
@@ -208,19 +228,45 @@ export function BreakGlassWindows() {
       ) : null}
 
       {outcome ? (
-        <Alert
-          live="assertive"
-          variant={outcome.outcome === 'denied' ? 'warning' : 'info'}
-          data-break-glass-outcome
-        >
-          <AlertTitle>
-            {outcome.outcome === 'denied' ? 'Intento denegado y registrado' : 'Intento registrado'}
-          </AlertTitle>
+        <Alert live="assertive" variant={outcomeTone(outcome.answer)} data-break-glass-outcome>
+          <AlertTitle>{outcomeTitle(outcome.answer)}</AlertTitle>
           <AlertDescription>
-            {outcomeMessage(outcome)} La persona verá este intento en su propio registro de accesos,
-            con la hora exacta.
+            {outcomeMessage(outcome.answer)} La persona verá este intento en su propio registro de
+            accesos, con la hora exacta.
+            {outcome.answer.outcome === 'allowed' && !readStillOpen
+              ? ' La ventana cerró y lo que devolvió dejó de mostrarse.'
+              : null}
+            {outcome.answer.outcome === 'allowed' && readStillOpen && rows.length === 0
+              ? ' La persona no tiene mediciones registradas.'
+              : null}
           </AlertDescription>
         </Alert>
+      ) : null}
+
+      {rows.length > 0 ? (
+        <Table scrollAreaLabel="Mediciones de la persona" data-break-glass-content>
+          <TableCaption>Mediciones de la persona</TableCaption>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Medida</TableHead>
+              <TableHead>Como la registró</TableHead>
+              <TableHead>Normalizada</TableHead>
+              <TableHead>Fecha</TableHead>
+              <TableHead>Foto</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((row) => (
+              <TableRow key={row.id}>
+                <TableCell>{row.metric}</TableCell>
+                <TableCell numeric>{row.recorded}</TableCell>
+                <TableCell numeric>{row.normalized}</TableCell>
+                <TableCell>{row.measuredOn}</TableCell>
+                <TableCell>{row.photo}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       ) : null}
 
       <Card>
@@ -484,6 +530,17 @@ export function BreakGlassWindows() {
       )}
     </div>
   )
+}
+
+function outcomeTitle(answer: BreakGlassExerciseOutcome): string {
+  if (answer.outcome === 'denied') return 'Intento denegado y registrado'
+  if (answer.outcome === 'allowed') return 'Lectura autorizada y registrada'
+  return 'Intento registrado'
+}
+
+function outcomeTone(answer: BreakGlassExerciseOutcome): 'warning' | 'success' | 'info' {
+  if (answer.outcome === 'denied') return 'warning'
+  return answer.outcome === 'allowed' ? 'success' : 'info'
 }
 
 function failureMessage(error: unknown): string {

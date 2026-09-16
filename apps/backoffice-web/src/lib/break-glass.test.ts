@@ -7,17 +7,20 @@ import {
   canDecide,
   canExercise,
   categoryLabel,
+  measurementRows,
   outcomeMessage,
   projectedTier,
   purposeLabel,
   quorumSentence,
   requestIssue,
   requestIssueMessage,
+  resourceTypeFor,
   statusLabel,
   statusTone,
   tierConsequence,
   windowSentence,
   type BreakGlassCategory,
+  type BreakGlassExerciseOutcome,
   type BreakGlassRequest,
 } from './break-glass'
 
@@ -193,6 +196,84 @@ describe('break-glass presentation rules', () => {
     })
     expect(unavailable).toContain('válida')
     expect(unavailable).toContain('registrado')
+    expect(
+      outcomeMessage({ ...base, outcome: 'allowed', reason_code: 'authorized_exercise' }),
+    ).toContain('autorizada')
+    expect(
+      outcomeMessage({ ...base, outcome: 'denied', reason_code: 'resource_out_of_scope' }),
+    ).toContain('no corresponde a la categoría')
+  })
+
+  test('names the table each category reads, so the evidence says what was opened', () => {
+    expect(resourceTypeFor('body_progress')).toBe('identity.body_progress_records')
+    expect(resourceTypeFor('health_context')).toBe('identity.health_context_claims')
+    expect(resourceTypeFor('nutrition_intake')).toBe('nutrition.meals')
+    expect(resourceTypeFor('nutrition_guidance')).toBe('nutrition.goal_versions')
+    expect(resourceTypeFor('relationship_training')).toBe('execution.executed_sessions')
+    expect(resourceTypeFor('prior_training_history')).toBe('execution.executed_sessions')
+    for (const category of BREAK_GLASS_CATEGORIES) {
+      expect(resourceTypeFor(category)).toMatch(/^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$/)
+    }
+  })
+
+  test('shows a measurement as the person recorded it and as it was normalized', () => {
+    const allowed: BreakGlassExerciseOutcome = {
+      outcome: 'allowed',
+      reason_code: 'authorized_exercise',
+      break_glass_event_id: '019a8000-0000-7000-8000-000000000603',
+      occurred_at: '2026-09-10T18:07:00.000Z',
+      category: 'body_progress',
+      content: {
+        body_progress: [
+          {
+            id: '019a8000-0000-7000-8000-000000000701',
+            metric_code: 'waist',
+            value: 0.82,
+            unit_code: 'm',
+            original_value: 82,
+            original_unit_code: 'cm',
+            measured_on: '2026-09-01',
+            has_media: false,
+            recorded_at: '2026-09-01T11:00:00.000Z',
+          },
+          {
+            id: '019a8000-0000-7000-8000-000000000702',
+            metric_code: 'body_fat',
+            value: 18.5,
+            unit_code: 'percent',
+            original_value: null,
+            original_unit_code: null,
+            measured_on: '2026-08-31',
+            has_media: true,
+            recorded_at: '2026-08-31T11:00:00.000Z',
+          },
+        ],
+      },
+    }
+
+    // A date without a time is the day the person measured, in any time zone: read
+    // as UTC midnight and shown in Bogotá it would move to the day before.
+    expect(measurementRows(allowed)).toEqual([
+      {
+        id: '019a8000-0000-7000-8000-000000000701',
+        metric: 'Cintura',
+        recorded: '82 cm',
+        normalized: '0,82 m',
+        measuredOn: '1 de septiembre de 2026',
+        photo: 'Sin foto',
+      },
+      {
+        id: '019a8000-0000-7000-8000-000000000702',
+        metric: 'Grasa corporal',
+        recorded: '18,5 %',
+        normalized: '18,5 %',
+        measuredOn: '31 de agosto de 2026',
+        photo: 'Tiene foto; no se muestra aquí',
+      },
+    ])
+    const { content: _content, ...withoutContent } = allowed
+    expect(measurementRows({ ...withoutContent, outcome: 'content_unavailable' })).toEqual([])
+    expect(measurementRows({ ...allowed, outcome: 'denied' })).toEqual([])
   })
 
   test('answers the state machine with the next action, never a retry', () => {
