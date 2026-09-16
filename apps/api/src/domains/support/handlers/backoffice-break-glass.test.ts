@@ -427,4 +427,52 @@ describe('Backoffice break-glass API contract', () => {
       })
     }
   })
+
+  test('T-BG-API-21 returns the measurements an allowed read carries, and nothing else', async () => {
+    const measurement: AllfitV1Schemas['BodyProgressRecord'] = {
+      id: '019a8000-0000-7000-8000-000000000701',
+      metric_code: 'waist',
+      value: 0.82,
+      unit_code: 'm',
+      original_value: 82,
+      original_unit_code: 'cm',
+      measured_on: '2026-09-09',
+      has_media: false,
+      recorded_at: '2026-09-09T11:00:00.000Z',
+    }
+    const allowed: AllfitV1Schemas['BreakGlassExerciseOutcome'] = {
+      outcome: 'allowed',
+      reason_code: 'authorized_exercise',
+      break_glass_event_id: '019a8000-0000-7000-8000-000000000603',
+      occurred_at: '2026-09-10T18:07:00.000Z',
+      category: 'body_progress',
+      content: { body_progress: [measurement] },
+    }
+    const response = await routes(
+      windowService({
+        exercise: (_actor, input) => {
+          captured.push({ operation: 'exercise', input })
+          return Promise.resolve(allowed)
+        },
+      }),
+    ).fetch(
+      post(`/break-glass/requests/${REQUEST_ID}/reads`, {
+        body: {
+          category: 'body_progress',
+          resource_type: 'identity.body_progress_records',
+          resource_id: SUBJECT_ID,
+        },
+      }),
+    )
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('cache-control')).toBe('no-store')
+    await expect(response.json()).resolves.toEqual(allowed)
+    expect(captured[0]?.input).toMatchObject({
+      breakGlassRequestId: REQUEST_ID,
+      category: 'body_progress',
+      resourceType: 'identity.body_progress_records',
+      resourceId: SUBJECT_ID,
+    })
+  })
 })
