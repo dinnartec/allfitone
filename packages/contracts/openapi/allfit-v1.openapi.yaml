@@ -1684,7 +1684,7 @@ paths:
     get:
       tags: [Backoffice Support]
       operationId: readBackofficeSupportBusiness
-      x-allfit-operation: NEW-SUP-BUSINESS
+      x-allfit-operation: NEW-SUP-DASHBOARD
       x-allfit-cache: no-store
       summary: Read how the business is going
       description: >-

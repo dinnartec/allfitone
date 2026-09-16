@@ -243,7 +243,9 @@ describe('Backoffice support metadata API contract', () => {
   test('T-SUP-API-21 mounts every support metadata operation with its contract method', () => {
     const contract = allfitV1ContractManifest.operations
       .filter((operation) =>
-        ['OP-SUP-005', 'NEW-SUP-ATTENTION', 'NEW-SUP-BUSINESS'].includes(operation.allfitOperation),
+        ['OP-SUP-005', 'NEW-SUP-ATTENTION', 'NEW-SUP-DASHBOARD'].includes(
+          operation.allfitOperation,
+        ),
       )
       .map((operation) => `${operation.method} ${colonPath(operation.path)}`)
       .sort()

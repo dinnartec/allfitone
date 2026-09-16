@@ -1,4 +1,4 @@
--- T-SUP-BIZ-01 — NEW-SUP-BUSINESS: how the business is going (`HU-BO-004`).
+-- T-SUP-BIZ-01 — NEW-SUP-DASHBOARD: how the business is going (`HU-BO-004`).
 --
 -- **A number without a period is not shown.** Every metric carries the window it was
 -- measured over, because a count means nothing until it says since when.

@@ -310,7 +310,7 @@ export const allfitV1ContractManifest = {
       method: 'GET',
       path: '/backoffice/v1/support/business',
       operationId: 'readBackofficeSupportBusiness',
-      allfitOperation: 'NEW-SUP-BUSINESS',
+      allfitOperation: 'NEW-SUP-DASHBOARD',
       responses: ['200', '401', '403', '503'],
     },
     {

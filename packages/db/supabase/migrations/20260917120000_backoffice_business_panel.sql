@@ -1,4 +1,4 @@
--- NEW-SUP-BUSINESS — how the business is going (`HU-BO-004`).
+-- NEW-SUP-DASHBOARD — how the business is going (`HU-BO-004`).
 --
 -- The founder's screen. It answers with counts and nothing else, and four decisions
 -- shape what it is allowed to say.
