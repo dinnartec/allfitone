@@ -663,6 +663,39 @@ export const SCREENS: Screen[] = [
     fixture: memberOfTwo,
   },
 
+  // --- the two screens the framework used to answer for us -------------------
+  {
+    // Reachable by a typo, a stale bookmark or an old link. Until this screen
+    // existed Next answered with its own unstyled English page.
+    stories: 'entry · an address that matches no screen',
+    path: '/una-direccion-que-no-existe',
+    fixture: () => createStudioApiFixture({ memberships: [activeMembership] }),
+    settled: async (page) => {
+      await expect(
+        page.getByRole('heading', { level: 1, name: 'Esta página no existe' }),
+      ).toBeVisible()
+    },
+  },
+  {
+    // A payload the screen dereferences while rendering, which is what an error
+    // boundary is for. Without one the framework answered here too.
+    stories: 'entry · a screen that failed while rendering',
+    path: invitationWithToken,
+    fixture: () =>
+      createStudioApiFixture({
+        memberships: [activeMembership],
+        intercept: (request) =>
+          request.path === '/studio/v1/invitations/resolve'
+            ? { status: 200, body: { id: 'x', status: 'pending', organization: null, intents: [] } }
+            : undefined,
+      }),
+    settled: async (page) => {
+      await expect(
+        page.getByRole('heading', { level: 1, name: 'No pudimos mostrar esta página' }),
+      ).toBeVisible()
+    },
+  },
+
   // --- HU-002 · the screens the session guard puts in front of the app --------
   // `session-logout.spec.ts` proves all five behave correctly, but none of them
   // had ever gone through the three sweeps. One entry per rendering: the end

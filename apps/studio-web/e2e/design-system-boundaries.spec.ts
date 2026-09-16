@@ -14,6 +14,14 @@ function designSystemViolations(page: Page): Promise<string[]> {
       .filter((control) => {
         const element = control as HTMLElement
         if (element.matches('[data-next-mark]')) return false
+        // Playwright's locators pierce shadow roots; `document.querySelectorAll`
+        // does not. Next's development overlay lives in one, hosted by
+        // `<nextjs-portal>`, which is why the sweep sees buttons the page never
+        // rendered ("Open issues overlay", "Copy Error Info"). They are the
+        // framework's, not ours, and no production build has them. Studio uses
+        // no shadow DOM, so "outside the document tree" names the exclusion
+        // exactly, where matching the overlay's attributes one by one does not.
+        if (element.getRootNode() !== document) return false
         const visible = element.getClientRects().length > 0
         if (!visible) return false
         return !element.matches('[data-slot]') && !element.closest('[data-slot]')
