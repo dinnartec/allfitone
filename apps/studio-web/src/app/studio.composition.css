@@ -158,6 +158,14 @@ menu {
   margin-block: 0;
 }
 
+/* Two stacked actions that the Design System's own container does not space:
+   `AccessPanelAction` is `flex flex-col` with no gap, which is right for the one
+   action it was built around and leaves these two touching. */
+[data-access-recovery-actions] {
+  display: grid;
+  gap: var(--afo-space-3);
+}
+
 [data-studio-header-actions],
 [data-page-header-actions],
 [data-profile-setup-actions],
