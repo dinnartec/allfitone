@@ -1697,6 +1697,13 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
           $ref: '#/components/schemas/HealthContextClaim',
         },
       },
+      nutrition_intake: {
+        type: 'array',
+        maxItems: 500,
+        items: {
+          $ref: '#/components/schemas/BreakGlassMeal',
+        },
+      },
     },
   },
   BreakGlassDecision: {
@@ -1759,6 +1766,58 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
       category: {
         $ref: '#/components/schemas/BreakGlassCategory',
+      },
+    },
+  },
+  BreakGlassMeal: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'id',
+      'occurred_at',
+      'local_date',
+      'timezone',
+      'meal_type',
+      'note',
+      'revision_number',
+      'has_media',
+      'items',
+    ],
+    properties: {
+      id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      occurred_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      local_date: {
+        type: 'string',
+        format: 'date',
+      },
+      timezone: {
+        $ref: '#/components/schemas/IanaTimeZone',
+      },
+      meal_type: {
+        $ref: '#/components/schemas/MealType',
+      },
+      note: {
+        type: ['string', 'null'],
+        maxLength: 1000,
+      },
+      revision_number: {
+        type: 'integer',
+        minimum: 0,
+      },
+      has_media: {
+        type: 'boolean',
+        description: 'Whether a photo exists. The photo itself never travels here.',
+      },
+      items: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/NutritionMealItem',
+        },
       },
     },
   },

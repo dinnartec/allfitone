@@ -1075,7 +1075,7 @@ export interface paths {
     /**
      * Exercise an approved break-glass window
      * @description Only the exact requester exercises. Every attempt, allowed or denied, writes evidence before anything is returned — a denial is an answer with a recorded reason, not an error, because the record of a refused attempt is the point.
-     *     The content projection is not available in this version: `execution` and `nutrition` do not exist yet, so an authorised exercise answers `content_unavailable` rather than inventing data.
+     *     An authorised read of body progress, health context or nutrition intake returns that category's data; `execution` does not exist yet, so the training categories and nutrition guidance answer `content_unavailable` rather than inventing data.
      */
     post: operations['exerciseBackofficeBreakGlass']
     delete?: never
@@ -2307,10 +2307,17 @@ export interface paths {
       path?: never
       cookie?: never
     }
-    /** List meals owned by the authenticated person */
+    /**
+     * List meals owned by the authenticated person
+     * @description `from` and `to` are local days, the same days `local_date` carries. Most recent meal first; a cursor only continues the query that produced it.
+     */
     get: operations['listMyNutritionMeals']
     put?: never
-    /** Record one structured meal using Command-Id as its durable identity */
+    /**
+     * Record one structured meal using Command-Id as its durable identity
+     * @description The meal, its items and their nutrient values are written together or not at all. Nutrients come from the published V1 catalogue, each in its one unit. `local_date` is the day of `occurred_at` in `timezone`. A photo is not accepted in this version, so `photo` is always null.
+     *     Replaying the recording of a meal that was deleted since answers 410. Only a token that resolves to an active person records anything (403).
+     */
     post: operations['createNutritionMeal']
     delete?: never
     options?: never
@@ -2328,7 +2335,10 @@ export interface paths {
     get?: never
     put?: never
     post?: never
-    /** Delete one personal meal through governed disposition */
+    /**
+     * Delete one personal meal through governed disposition
+     * @description The meal, its items and its values are deleted now, and a disposition case records that nutrition data was deleted at the person's request. Someone else's meal and one that does not exist both answer 404.
+     */
     delete: operations['deleteNutritionMeal']
     options?: never
     head?: never
@@ -3006,10 +3016,25 @@ export interface components {
       /** @enum {string} */
       status: 'deleted'
     }
+    BreakGlassMeal: {
+      id: components['schemas']['Uuid']
+      /** Format: date-time */
+      occurred_at: string
+      /** Format: date */
+      local_date: string
+      timezone: components['schemas']['IanaTimeZone']
+      meal_type: components['schemas']['MealType']
+      note: string | null
+      revision_number: number
+      /** @description Whether a photo exists. The photo itself never travels here. */
+      has_media: boolean
+      items: components['schemas']['NutritionMealItem'][]
+    }
     /** @description What an allowed read returns, under the category that was read. Only categories whose data the platform stores appear; the rest answer `content_unavailable` instead. */
     BreakGlassContent: {
       body_progress?: components['schemas']['BodyProgressRecord'][]
       health_context?: components['schemas']['HealthContextClaim'][]
+      nutrition_intake?: components['schemas']['BreakGlassMeal'][]
     }
     /** @description Every attempt is recorded before this answers, so `break_glass_event_id` is the evidence of this exact attempt. Only `allowed` carries content, and only for a category whose data the platform stores; the others answer `content_unavailable`. A category that returns content reads only its own kind of data, so pointing it at another is `denied` with `resource_out_of_scope`. */
     BreakGlassExerciseOutcome: {
@@ -10329,6 +10354,8 @@ export interface operations {
       }
       400: components['responses']['BadRequest']
       401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
     }
   }
   createNutritionMeal: {
@@ -10364,8 +10391,12 @@ export interface operations {
       }
       400: components['responses']['BadRequest']
       401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
       409: components['responses']['Conflict']
+      410: components['responses']['CommandEffectDisposed']
+      415: components['responses']['UnsupportedMediaType']
       422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
     }
   }
   deleteNutritionMeal: {
@@ -10393,10 +10424,13 @@ export interface operations {
         }
         content?: never
       }
+      400: components['responses']['BadRequest']
       401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
       404: components['responses']['NotFound']
       409: components['responses']['Conflict']
       410: components['responses']['CommandEffectDisposed']
+      503: components['responses']['UpstreamUnavailable']
     }
   }
   updateNutritionMeal: {

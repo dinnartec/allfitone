@@ -2803,9 +2803,10 @@ paths:
         recorded reason, not an error, because the record of a refused attempt is
         the point.
 
-        The content projection is not available in this version: `execution` and
-        `nutrition` do not exist yet, so an authorised exercise answers
-        `content_unavailable` rather than inventing data.
+        An authorised read of body progress, health context or nutrition intake
+        returns that category's data; `execution` does not exist yet, so the
+        training categories and nutrition guidance answer `content_unavailable`
+        rather than inventing data.
       security:
         - backofficeCookieAuth: []
       parameters:
@@ -5888,6 +5889,14 @@ paths:
       x-allfit-cache: no-store
       x-allfit-command-resource-id: true
       summary: Record one structured meal using Command-Id as its durable identity
+      description: >-
+        The meal, its items and their nutrient values are written together or not
+        at all. Nutrients come from the published V1 catalogue, each in its one
+        unit. `local_date` is the day of `occurred_at` in `timezone`. A photo is
+        not accepted in this version, so `photo` is always null.
+
+        Replaying the recording of a meal that was deleted since answers 410.
+        Only a token that resolves to an active person records anything (403).
       security:
         - bearerAuth: []
       parameters:
@@ -5919,16 +5928,28 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '409':
           $ref: '#/components/responses/Conflict'
+        '410':
+          $ref: '#/components/responses/CommandEffectDisposed'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '422':
           $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
     get:
       tags: [Space Nutrition]
       operationId: listMyNutritionMeals
       x-allfit-operation: OP-NUT-002
       x-allfit-cache: private, no-store
       summary: List meals owned by the authenticated person
+      description: >-
+        `from` and `to` are local days, the same days `local_date` carries.
+        Most recent meal first; a cursor only continues the query that produced
+        it.
       security:
         - bearerAuth: []
       parameters:
@@ -5950,6 +5971,10 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
 
   /space/v1/nutrition/meals/{mealId}:
     patch:
@@ -6003,6 +6028,10 @@ paths:
       x-allfit-operation: OP-NUT-004
       x-allfit-cache: no-store
       summary: Delete one personal meal through governed disposition
+      description: >-
+        The meal, its items and its values are deleted now, and a disposition
+        case records that nutrition data was deleted at the person's request.
+        Someone else's meal and one that does not exist both answer 404.
       security:
         - bearerAuth: []
       parameters:
@@ -6017,14 +6046,20 @@ paths:
               $ref: '#/components/headers/NoStore'
             Idempotent-Replay:
               $ref: '#/components/headers/IdempotentReplay'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
         '410':
           $ref: '#/components/responses/CommandEffectDisposed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
 
   /space/v1/nutrition/daily-summaries:
     get:
@@ -8243,6 +8278,38 @@ components:
         status:
           type: string
           enum: [deleted]
+    BreakGlassMeal:
+      type: object
+      additionalProperties: false
+      required:
+        [id, occurred_at, local_date, timezone, meal_type, note, revision_number,
+         has_media, items]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        occurred_at:
+          type: string
+          format: date-time
+        local_date:
+          type: string
+          format: date
+        timezone:
+          $ref: '#/components/schemas/IanaTimeZone'
+        meal_type:
+          $ref: '#/components/schemas/MealType'
+        note:
+          type: [string, 'null']
+          maxLength: 1000
+        revision_number:
+          type: integer
+          minimum: 0
+        has_media:
+          type: boolean
+          description: Whether a photo exists. The photo itself never travels here.
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/NutritionMealItem'
     BreakGlassContent:
       type: object
       additionalProperties: false
@@ -8261,6 +8328,11 @@ components:
           maxItems: 500
           items:
             $ref: '#/components/schemas/HealthContextClaim'
+        nutrition_intake:
+          type: array
+          maxItems: 500
+          items:
+            $ref: '#/components/schemas/BreakGlassMeal'
     BreakGlassExerciseOutcome:
       type: object
       additionalProperties: false
