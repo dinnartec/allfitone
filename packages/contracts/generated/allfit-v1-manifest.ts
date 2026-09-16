@@ -518,6 +518,27 @@ export const allfitV1ContractManifest = {
     },
     {
       method: 'GET',
+      path: '/space/v1/health-context',
+      operationId: 'listSpaceHealthContext',
+      allfitOperation: 'OP-IDN-049',
+      responses: ['200', '400', '401', '403', '503'],
+    },
+    {
+      method: 'POST',
+      path: '/space/v1/health-context',
+      operationId: 'declareSpaceHealthContext',
+      allfitOperation: 'OP-IDN-008',
+      responses: ['201', '400', '401', '403', '409', '415', '422', '503'],
+    },
+    {
+      method: 'DELETE',
+      path: '/space/v1/health-context/{claimId}',
+      operationId: 'deleteSpaceHealthContext',
+      allfitOperation: 'OP-IDN-050',
+      responses: ['200', '400', '401', '403', '404', '409', '503'],
+    },
+    {
+      method: 'GET',
       path: '/space/v1/nutrition/daily-summaries',
       operationId: 'listMyNutritionDailySummaries',
       allfitOperation: 'OP-NUT-005',

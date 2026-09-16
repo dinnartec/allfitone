@@ -2153,6 +2153,51 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/space/v1/health-context': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Read my health context
+     * @description The pains, limitations and recoveries the person declared, the most recent start first. Nobody else's claim ever appears.
+     */
+    get: operations['listSpaceHealthContext']
+    put?: never
+    /**
+     * Declare a pain, limitation or recovery
+     * @description Health context is the most protected category V1 keeps, and it is not a clinical record: three types, a short description in the person's own words and, optionally, one body area. There is no field for a diagnosis, a test result or a document. The `Command-Id` is the claim's identifier, so a device can declare offline and send it later without duplicating it. A declared claim is never rewritten.
+     *     Only a token that resolves to an active person declares anything (403).
+     */
+    post: operations['declareSpaceHealthContext']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/health-context/{claimId}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    post?: never
+    /**
+     * Delete one of my health context claims
+     * @description The claim is deleted physically, now, and a disposition case records that health data was deleted at the person's request and under which policy, without keeping what it said. Grants are untouched. Someone else's claim and one that does not exist both answer 404.
+     */
+    delete: operations['deleteSpaceHealthContext']
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/space/v1/agenda': {
     parameters: {
       query?: never
@@ -2894,9 +2939,77 @@ export interface components {
       /** @enum {string} */
       status: 'deleted'
     }
+    /** @enum {string} */
+    HealthContextType: 'pain' | 'limitation' | 'recovery'
+    /** @enum {string} */
+    HealthContextBodyArea:
+      | 'neck'
+      | 'shoulder'
+      | 'upper_back'
+      | 'lower_back'
+      | 'chest'
+      | 'abdomen'
+      | 'arm'
+      | 'elbow'
+      | 'wrist_hand'
+      | 'hip'
+      | 'thigh'
+      | 'knee'
+      | 'lower_leg'
+      | 'ankle_foot'
+    /**
+     * @description Where a claim comes from. Space only writes `person_declared`; whether a value was verified is a separate matter.
+     * @enum {string}
+     */
+    Provenance:
+      | 'person_declared'
+      | 'professional_observation'
+      | 'device_observed'
+      | 'system_inferred'
+      | 'authority_verified'
+    HealthContextClaimCreate: {
+      context_type: components['schemas']['HealthContextType']
+      /** @description In the person's own words. Surrounding spaces are removed. */
+      description: string
+      body_area?: components['schemas']['HealthContextBodyArea'] | null
+      /**
+       * Format: date-time
+       * @description When it started; never later than tomorrow.
+       */
+      valid_from: string
+      /**
+       * Format: date-time
+       * @description When it ends, if the person knows; after `valid_from`.
+       */
+      valid_to?: string | null
+    }
+    HealthContextClaim: {
+      id: components['schemas']['UuidV7']
+      context_type: components['schemas']['HealthContextType']
+      description: string
+      body_area: components['schemas']['HealthContextBodyArea'] | null
+      provenance: components['schemas']['Provenance']
+      /** Format: date-time */
+      valid_from: string
+      /** Format: date-time */
+      valid_to: string | null
+      /** Format: date-time */
+      recorded_at: string
+    }
+    HealthContextPage: {
+      items: components['schemas']['HealthContextClaim'][]
+      has_more: boolean
+    }
+    HealthContextDeletion: {
+      health_context_claim_id: components['schemas']['UuidV7']
+      disposition_case_id: components['schemas']['UuidV7']
+      /** @enum {string} */
+      status: 'deleted'
+    }
     /** @description What an allowed read returns, under the category that was read. Only categories whose data the platform stores appear; the rest answer `content_unavailable` instead. */
     BreakGlassContent: {
       body_progress?: components['schemas']['BodyProgressRecord'][]
+      health_context?: components['schemas']['HealthContextClaim'][]
     }
     /** @description Every attempt is recorded before this answers, so `break_glass_event_id` is the evidence of this exact attempt. Only `allowed` carries content, and only for a category whose data the platform stores; the others answer `content_unavailable`. A category that returns content reads only its own kind of data, so pointing it at another is `denied` with `resource_out_of_scope`. */
     BreakGlassExerciseOutcome: {
@@ -9846,6 +9959,110 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['BodyProgressDeletion']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listSpaceHealthContext: {
+    parameters: {
+      query?: {
+        limit?: number
+        /** @description The `valid_from` of the last claim already read. */
+        before_valid_from?: string
+        /** @description The `id` of the last claim already read; sent with `before_valid_from`. */
+        before_id?: components['schemas']['UuidV7']
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description One page of my health context */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HealthContextPage']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  declareSpaceHealthContext: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['HealthContextClaimCreate']
+      }
+    }
+    responses: {
+      /** @description The declared claim */
+      201: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HealthContextClaim']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  deleteSpaceHealthContext: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        claimId: components['schemas']['UuidV7']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The claim is gone and the case that recorded it */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HealthContextDeletion']
         }
       }
       400: components['responses']['BadRequest']

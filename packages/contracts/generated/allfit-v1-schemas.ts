@@ -1690,6 +1690,13 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
           $ref: '#/components/schemas/BodyProgressRecord',
         },
       },
+      health_context: {
+        type: 'array',
+        maxItems: 500,
+        items: {
+          $ref: '#/components/schemas/HealthContextClaim',
+        },
+      },
     },
   },
   BreakGlassDecision: {
@@ -2717,6 +2724,148 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         minimum: 0,
       },
     },
+  },
+  HealthContextBodyArea: {
+    type: 'string',
+    enum: [
+      'neck',
+      'shoulder',
+      'upper_back',
+      'lower_back',
+      'chest',
+      'abdomen',
+      'arm',
+      'elbow',
+      'wrist_hand',
+      'hip',
+      'thigh',
+      'knee',
+      'lower_leg',
+      'ankle_foot',
+    ],
+  },
+  HealthContextClaim: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'id',
+      'context_type',
+      'description',
+      'body_area',
+      'provenance',
+      'valid_from',
+      'valid_to',
+      'recorded_at',
+    ],
+    properties: {
+      id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      context_type: {
+        $ref: '#/components/schemas/HealthContextType',
+      },
+      description: {
+        type: 'string',
+      },
+      body_area: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/HealthContextBodyArea',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      provenance: {
+        $ref: '#/components/schemas/Provenance',
+      },
+      valid_from: {
+        type: 'string',
+        format: 'date-time',
+      },
+      valid_to: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      recorded_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+    },
+  },
+  HealthContextClaimCreate: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['context_type', 'description', 'valid_from'],
+    properties: {
+      context_type: {
+        $ref: '#/components/schemas/HealthContextType',
+      },
+      description: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 500,
+        description: "In the person's own words. Surrounding spaces are removed.",
+      },
+      body_area: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/HealthContextBodyArea',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      valid_from: {
+        type: 'string',
+        format: 'date-time',
+        description: 'When it started; never later than tomorrow.',
+      },
+      valid_to: {
+        type: ['string', 'null'],
+        format: 'date-time',
+        description: 'When it ends, if the person knows; after `valid_from`.',
+      },
+    },
+  },
+  HealthContextDeletion: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['health_context_claim_id', 'disposition_case_id', 'status'],
+    properties: {
+      health_context_claim_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      disposition_case_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      status: {
+        type: 'string',
+        enum: ['deleted'],
+      },
+    },
+  },
+  HealthContextPage: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['items', 'has_more'],
+    properties: {
+      items: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/HealthContextClaim',
+        },
+      },
+      has_more: {
+        type: 'boolean',
+      },
+    },
+  },
+  HealthContextType: {
+    type: 'string',
+    enum: ['pain', 'limitation', 'recovery'],
   },
   IanaTimeZone: {
     type: 'string',
@@ -5693,6 +5842,18 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         $ref: '#/components/schemas/Uuid',
       },
     },
+  },
+  Provenance: {
+    type: 'string',
+    description:
+      'Where a claim comes from. Space only writes `person_declared`; whether a value was verified is a separate matter.',
+    enum: [
+      'person_declared',
+      'professional_observation',
+      'device_observed',
+      'system_inferred',
+      'authority_verified',
+    ],
   },
   PublicationStatus: {
     type: 'string',

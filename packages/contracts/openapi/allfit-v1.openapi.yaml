@@ -5478,6 +5478,158 @@ paths:
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
 
+  /space/v1/health-context:
+    get:
+      tags: [Space Identity]
+      operationId: listSpaceHealthContext
+      x-allfit-operation: OP-IDN-049
+      x-allfit-cache: no-store
+      summary: Read my health context
+      description: >-
+        The pains, limitations and recoveries the person declared, the most
+        recent start first. Nobody else's claim ever appears.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: before_valid_from
+          in: query
+          required: false
+          description: The `valid_from` of the last claim already read.
+          schema:
+            type: string
+            format: date-time
+        - name: before_id
+          in: query
+          required: false
+          description: The `id` of the last claim already read; sent with `before_valid_from`.
+          schema:
+            $ref: '#/components/schemas/UuidV7'
+      responses:
+        '200':
+          description: One page of my health context
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthContextPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+    post:
+      tags: [Space Identity]
+      operationId: declareSpaceHealthContext
+      x-allfit-operation: OP-IDN-008
+      x-allfit-cache: no-store
+      summary: Declare a pain, limitation or recovery
+      description: >-
+        Health context is the most protected category V1 keeps, and it is not a
+        clinical record: three types, a short description in the person's own
+        words and, optionally, one body area. There is no field for a diagnosis,
+        a test result or a document. The `Command-Id` is the claim's identifier,
+        so a device can declare offline and send it later without duplicating it.
+        A declared claim is never rewritten.
+
+        Only a token that resolves to an active person declares anything (403).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HealthContextClaimCreate'
+      responses:
+        '201':
+          description: The declared claim
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthContextClaim'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /space/v1/health-context/{claimId}:
+    delete:
+      tags: [Space Identity]
+      operationId: deleteSpaceHealthContext
+      x-allfit-operation: OP-IDN-050
+      x-allfit-cache: no-store
+      summary: Delete one of my health context claims
+      description: >-
+        The claim is deleted physically, now, and a disposition case records that
+        health data was deleted at the person's request and under which policy,
+        without keeping what it said. Grants are untouched. Someone else's claim
+        and one that does not exist both answer 404.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: claimId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/UuidV7'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      responses:
+        '200':
+          description: The claim is gone and the case that recorded it
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthContextDeletion'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
   /space/v1/agenda:
     get:
       tags: [Space Agenda]
@@ -7979,6 +8131,118 @@ components:
         status:
           type: string
           enum: [deleted]
+    HealthContextType:
+      type: string
+      enum: [pain, limitation, recovery]
+    HealthContextBodyArea:
+      type: string
+      enum:
+        - neck
+        - shoulder
+        - upper_back
+        - lower_back
+        - chest
+        - abdomen
+        - arm
+        - elbow
+        - wrist_hand
+        - hip
+        - thigh
+        - knee
+        - lower_leg
+        - ankle_foot
+    Provenance:
+      type: string
+      description: >-
+        Where a claim comes from. Space only writes `person_declared`; whether a
+        value was verified is a separate matter.
+      enum:
+        - person_declared
+        - professional_observation
+        - device_observed
+        - system_inferred
+        - authority_verified
+    HealthContextClaimCreate:
+      type: object
+      additionalProperties: false
+      required: [context_type, description, valid_from]
+      properties:
+        context_type:
+          $ref: '#/components/schemas/HealthContextType'
+        description:
+          type: string
+          minLength: 1
+          maxLength: 500
+          description: In the person's own words. Surrounding spaces are removed.
+        body_area:
+          oneOf:
+            - $ref: '#/components/schemas/HealthContextBodyArea'
+            - type: 'null'
+        valid_from:
+          type: string
+          format: date-time
+          description: When it started; never later than tomorrow.
+        valid_to:
+          type: [string, 'null']
+          format: date-time
+          description: When it ends, if the person knows; after `valid_from`.
+    HealthContextClaim:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - context_type
+        - description
+        - body_area
+        - provenance
+        - valid_from
+        - valid_to
+        - recorded_at
+      properties:
+        id:
+          $ref: '#/components/schemas/UuidV7'
+        context_type:
+          $ref: '#/components/schemas/HealthContextType'
+        description:
+          type: string
+        body_area:
+          oneOf:
+            - $ref: '#/components/schemas/HealthContextBodyArea'
+            - type: 'null'
+        provenance:
+          $ref: '#/components/schemas/Provenance'
+        valid_from:
+          type: string
+          format: date-time
+        valid_to:
+          type: [string, 'null']
+          format: date-time
+        recorded_at:
+          type: string
+          format: date-time
+    HealthContextPage:
+      type: object
+      additionalProperties: false
+      required: [items, has_more]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/HealthContextClaim'
+        has_more:
+          type: boolean
+    HealthContextDeletion:
+      type: object
+      additionalProperties: false
+      required: [health_context_claim_id, disposition_case_id, status]
+      properties:
+        health_context_claim_id:
+          $ref: '#/components/schemas/UuidV7'
+        disposition_case_id:
+          $ref: '#/components/schemas/UuidV7'
+        status:
+          type: string
+          enum: [deleted]
     BreakGlassContent:
       type: object
       additionalProperties: false
@@ -7992,6 +8256,11 @@ components:
           maxItems: 500
           items:
             $ref: '#/components/schemas/BodyProgressRecord'
+        health_context:
+          type: array
+          maxItems: 500
+          items:
+            $ref: '#/components/schemas/HealthContextClaim'
     BreakGlassExerciseOutcome:
       type: object
       additionalProperties: false
