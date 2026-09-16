@@ -139,7 +139,10 @@ export function AccessLanding({
             {closing ? null : (
               <AccessPanelAction>
                 {recovery ? (
-                  <>
+                  /* `AccessPanelAction` is a flex column with no gap: right for
+                     the single "Entrar a Studio" it was built around, but these
+                     two recovery actions met edge to edge, 0px apart. */
+                  <div data-access-recovery-actions>
                     <form action={`${studioApi.apiUrl}/studio/v1/auth/logout`} method="post">
                       <input type="hidden" name="reason" value="recovery" />
                       <Button type="submit" size="lg">
@@ -151,7 +154,7 @@ export function AccessLanding({
                         Reintentar
                       </Button>
                     ) : null}
-                  </>
+                  </div>
                 ) : (
                   <a
                     data-slot="button"

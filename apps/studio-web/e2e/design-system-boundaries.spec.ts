@@ -1,6 +1,34 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 
+import { DESKTOP, SCREENS, openScreen } from './screens'
 import { activeMembership, createStudioApiFixture, installStudioApiMock } from './studio-api-mock'
+
+/**
+ * Every visible control must come from the Design System: it carries a
+ * `data-slot`, or sits inside something that does. Raw markup here is how a
+ * surface drifts away from the shared library one element at a time.
+ */
+function designSystemViolations(page: Page): Promise<string[]> {
+  return page.locator('button, input, select, textarea, table, dialog').evaluateAll((controls) =>
+    controls
+      .filter((control) => {
+        const element = control as HTMLElement
+        if (element.matches('[data-next-mark]')) return false
+        // Playwright's locators pierce shadow roots; `document.querySelectorAll`
+        // does not. Next's development overlay lives in one, hosted by
+        // `<nextjs-portal>`, which is why the sweep sees buttons the page never
+        // rendered ("Open issues overlay", "Copy Error Info"). They are the
+        // framework's, not ours, and no production build has them. Studio uses
+        // no shadow DOM, so "outside the document tree" names the exclusion
+        // exactly, where matching the overlay's attributes one by one does not.
+        if (element.getRootNode() !== document) return false
+        const visible = element.getClientRects().length > 0
+        if (!visible) return false
+        return !element.matches('[data-slot]') && !element.closest('[data-slot]')
+      })
+      .map((control) => control.outerHTML.slice(0, 160)),
+  )
+}
 
 test('uses canonical setup choices and one page heading without overflow', async ({ page }) => {
   await installStudioApiMock(page, createStudioApiFixture())
@@ -32,23 +60,111 @@ test('keeps visible controls inside a Design System contract', async ({ page }) 
   await installStudioApiMock(page, createStudioApiFixture({ memberships: [activeMembership] }))
   await page.goto(`/organizations/${activeMembership.organization_id}/team`)
 
-  const violations = await page
-    .locator('button, input, select, textarea, table, dialog')
-    .evaluateAll((controls) =>
-      controls
-        .filter((control) => {
-          const element = control as HTMLElement
-          if (element.matches('[data-next-mark]')) return false
-          const visible = element.getClientRects().length > 0
-          if (!visible) return false
-          return !element.matches('[data-slot]') && !element.closest('[data-slot]')
-        })
-        .map((control) => control.outerHTML.slice(0, 160)),
-    )
-
-  expect(violations).toEqual([])
+  expect(await designSystemViolations(page)).toEqual([])
   await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1)
 })
+
+/**
+ * The contract above was only ever enforced on the team directory. The AFO-40
+ * brief asks for Design System consistency across the fourteen implemented
+ * stories, so the same check now sweeps every one of their screens.
+ */
+for (const screen of SCREENS) {
+  test(`keeps ${screen.stories} inside the Design System contract`, async ({ page }) => {
+    await openScreen(page, screen, DESKTOP)
+
+    expect(await designSystemViolations(page), screen.stories).toEqual([])
+  })
+}
+
+/**
+ * A control fixed to the viewport lands on whatever the page puts behind it, so
+ * it cannot borrow a background from a parent the way a control inside a panel
+ * can. The privacy control used an outline variant, whose transparent fill left
+ * only a border at roughly 1.24:1 against the entry background — invisible, and
+ * not something the WCAG sweep catches, because axe does not automate non-text
+ * contrast.
+ */
+test('the floating privacy control carries its own surface', async ({ page }) => {
+  await installStudioApiMock(page, createStudioApiFixture({ signedOut: true }))
+  await page.goto('/')
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+
+  const measured = await page.getByRole('button', { name: 'Privacidad' }).evaluate((element) => ({
+    background: getComputedStyle(element).backgroundColor,
+    anchoring: getComputedStyle(element.parentElement as HTMLElement).position,
+  }))
+
+  expect(measured.anchoring, 'the control floats, so this test is about the right thing').toBe(
+    'fixed',
+  )
+  expect(measured.background, 'a floating control with no surface reads as loose text').not.toBe(
+    'rgba(0, 0, 0, 0)',
+  )
+})
+
+/**
+ * Analytics is optional, so the panel asking about it may never stand between a
+ * person and signing in. This is the constraint that decides where the panel
+ * opens: moving it to the corner the collapsed control uses looks tidier and
+ * puts it straight on top of "Entrar a Studio" at 1280x720 and 390x844, because
+ * the access landing places its primary action low.
+ *
+ * The check is what the browser would actually dispatch a click to, not a box
+ * intersection, so a panel that overlaps harmlessly still passes.
+ */
+const CONSENT_VIEWPORTS = [
+  // The panel spans almost the whole width below roughly 420px, so no placement
+  // clears the header there and the wordmark is not asserted.
+  { name: 'desktop', width: 1440, height: 900, clearsHeader: true },
+  { name: 'laptop', width: 1280, height: 720, clearsHeader: true },
+  { name: 'tablet', width: 768, height: 1024, clearsHeader: true },
+  { name: 'mobile', width: 390, height: 844, clearsHeader: false },
+]
+
+for (const viewport of CONSENT_VIEWPORTS) {
+  test(`the consent panel stays out of the way at ${viewport.name}`, async ({ page }) => {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height })
+    await installStudioApiMock(page, createStudioApiFixture({ signedOut: true }), {
+      consent: 'undecided',
+    })
+    await page.goto('/')
+    await expect(page.getByText('Analítica opcional')).toBeVisible()
+
+    const reachable = (selector: string) =>
+      page
+        .locator(selector)
+        .first()
+        .evaluate((element) => {
+          const box = element.getBoundingClientRect()
+          const topmost = document.elementFromPoint(
+            box.left + box.width / 2,
+            box.top + box.height / 2,
+          )
+          return topmost === element || element.contains(topmost)
+        })
+
+    expect(
+      await page.getByRole('link', { name: /Entrar a Studio/ }).evaluate((element) => {
+        const box = element.getBoundingClientRect()
+        const topmost = document.elementFromPoint(
+          box.left + box.width / 2,
+          box.top + box.height / 2,
+        )
+        return topmost === element || element.contains(topmost)
+      }),
+      'the consent panel is covering "Entrar a Studio"',
+    ).toBe(true)
+
+    if (viewport.clearsHeader) {
+      expect(
+        await reachable('[data-slot="access-header"] svg'),
+        'the consent panel is covering the wordmark',
+      ).toBe(true)
+      expect(await reachable('h1'), 'the consent panel is covering the heading').toBe(true)
+    }
+  })
+}
 
 test('ports the dark Studio sidebar to mobile and closes it after navigation', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })

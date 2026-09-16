@@ -167,10 +167,15 @@ export function ProfessionalPresentation({
     <div data-profile-presentation>
       <Card data-profile-editor>
         <CardHeader>
-          <CardTitle>{profile ? 'Edita tu presentación' : 'Crea tu presentación'}</CardTitle>
+          <CardTitle role="heading" aria-level={2}>
+            {profile ? 'Edita tu presentación' : 'Crea tu presentación'}
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <form onSubmit={submit} noValidate>
+          {/* Every other form in Studio carries this: without it the fields and
+              the actions stack flush, and the submit button's top edge sat on
+              the last help line's bottom edge exactly. */}
+          <form data-studio-form onSubmit={submit} noValidate>
             <FieldGroup>
               <Field data-invalid={Boolean(errors.headline)}>
                 <FieldLabel htmlFor="profile-headline">Titular profesional</FieldLabel>
@@ -298,7 +303,6 @@ export function ProfessionalPresentation({
                     ? 'Guardar cambios'
                     : 'Crear mi perfil'}
               </Button>
-              <p>Tu perfil no cambia roles, permisos ni membresías.</p>
             </div>
           </form>
         </CardContent>
@@ -310,7 +314,9 @@ export function ProfessionalPresentation({
         aria-label="Trayectoria profesional"
       >
         <CardHeader>
-          <CardTitle>{profile ? 'Trayectoria declarada' : 'Vista previa'}</CardTitle>
+          <CardTitle role="heading" aria-level={2}>
+            {profile ? 'Trayectoria declarada' : 'Vista previa'}
+          </CardTitle>
         </CardHeader>
         <CardContent data-trajectory-body>
           <StatStrip>
@@ -328,9 +334,11 @@ export function ProfessionalPresentation({
             />
           </StatStrip>
           <p>
+            {/* Nothing publishes a professional profile, so promising that
+                nothing is published yet described a step that does not exist. */}
             {profile
               ? 'Los años se derivan del año en que comenzaste y se actualizan automáticamente.'
-              : 'Esta línea se activa cuando guardas tu perfil. Nada se publica mientras completas el formulario.'}
+              : 'Esta línea se activa cuando guardas tu perfil.'}
           </p>
         </CardContent>
       </Card>

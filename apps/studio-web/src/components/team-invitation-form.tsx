@@ -1,6 +1,6 @@
 'use client'
 
-import { Alert, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
+import { Alert, AlertAction, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
 import { Badge } from '@allfitone/react/components/badge'
 import { Button } from '@allfitone/react/components/button'
 import {
@@ -92,9 +92,11 @@ export function TeamInvitationForm() {
           <AlertDescription>
             Esta función se habilitará cuando el flujo seguro de recepción esté publicado.
           </AlertDescription>
-          <Button onClick={() => router.replace(`/organizations/${current.organization_id}`)}>
-            Volver al espacio
-          </Button>
+          <AlertAction>
+            <Button onClick={() => router.replace(`/organizations/${current.organization_id}`)}>
+              Volver al espacio
+            </Button>
+          </AlertAction>
         </Alert>
       </section>
     )
@@ -207,7 +209,7 @@ export function TeamInvitationForm() {
         </SetupPanelDescription>
         <SetupPanelNote>
           <FoundationIcon name="time" decorative />
-          <p>La invitación estará disponible durante siete días.</p>
+          La invitación estará disponible durante siete días.
         </SetupPanelNote>
       </SetupPanelIntro>
 

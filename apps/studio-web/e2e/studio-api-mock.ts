@@ -35,13 +35,20 @@ export interface StudioApiFixture {
   ) => MockResponse | undefined | Promise<MockResponse | undefined>
 }
 
+/*
+ * Timestamps carry a real time of day on purpose. `joined_at` and `ended_at`
+ * are `format: date-time` and the database fills them with `clock_timestamp()`,
+ * so no real row is ever midnight UTC. Fixtures that were made the screens read
+ * a day early west of Greenwich — "31/12/2024" for a membership that started on
+ * 1 January — which is correct for that instant and looks exactly like a bug.
+ */
 export const activeMembership = {
   membership_id: '01991600-1000-7000-8000-000000000001',
   organization_id: '01991600-1000-7000-8000-000000000002',
   display_name: 'Allfit Gym',
   type_code: 'gym',
   status: 'active',
-  joined_at: '2025-01-01T00:00:00.000Z',
+  joined_at: '2025-01-01T14:32:07.418Z',
   ended_at: null,
   roles: ['owner'],
 }
@@ -52,7 +59,7 @@ export const secondActiveMembership = {
   display_name: 'Movimiento Studio',
   type_code: 'studio',
   status: 'active',
-  joined_at: '2025-02-01T00:00:00.000Z',
+  joined_at: '2025-02-01T09:11:53.204Z',
   ended_at: null,
   roles: ['coach'],
 }
@@ -63,8 +70,8 @@ export const terminatedMembership = {
   display_name: 'Legacy Studio',
   type_code: 'studio',
   status: 'terminated',
-  joined_at: '2023-01-01T00:00:00.000Z',
-  ended_at: '2025-06-01T00:00:00.000Z',
+  joined_at: '2023-01-01T16:45:22.870Z',
+  ended_at: '2025-06-01T21:08:44.319Z',
   roles: ['staff'],
 }
 
@@ -72,7 +79,7 @@ export const activeTeamMember = {
   membership_id: '01991600-7000-7000-8000-000000000001',
   display_name: 'Ada Lovelace',
   status: 'active',
-  joined_at: '2025-01-15T00:00:00.000Z',
+  joined_at: '2025-01-15T13:27:36.052Z',
   ended_at: null,
   roles: ['owner'],
 }
@@ -81,8 +88,8 @@ export const terminatedTeamMember = {
   membership_id: '01991600-7000-7000-8000-000000000002',
   display_name: 'Camila Torres',
   status: 'terminated',
-  joined_at: '2024-02-10T00:00:00.000Z',
-  ended_at: '2026-07-30T00:00:00.000Z',
+  joined_at: '2024-02-10T18:03:19.661Z',
+  ended_at: '2026-07-30T11:56:08.245Z',
   roles: ['staff'],
 }
 
@@ -382,7 +389,16 @@ function defaultResponse(
         id: '01991600-4000-7000-8000-000000000001',
         status: 'open',
         eligibility_status: 'unknown',
-        expires_at: '2026-08-11T00:00:00.000Z',
+        // Relative, never a literal. This was a fixed 2026-08-11, so on that day
+        // every screen built on the default attempt silently switched to the
+        // expired state — "La activación venció", submit disabled — and the
+        // audit swept that instead of the form real people see for over a month.
+        // The specs that exercise activation had already overridden it locally.
+        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+        // Both required by `StudioOnboardingAttempt` in the contract, and both
+        // were missing from the default.
+        terms_version: 'platform_terms_v1',
+        privacy_notice_version: 'privacy_notice_v1',
       },
     }
   }
@@ -410,7 +426,9 @@ function defaultResponse(
         status: 'pending',
         channel: 'email',
         contact_hint: 'p***@example.test',
-        expires_at: '2026-08-18T12:00:00.000Z',
+        // Seven days from now, as the invitation form promises. A literal here
+        // showed a just-created invitation as having expired a month earlier.
+        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
         reused: false,
         intents: [
           {

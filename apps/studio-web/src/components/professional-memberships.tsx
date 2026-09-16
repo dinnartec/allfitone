@@ -25,7 +25,7 @@ import { WorkspaceEyebrow, WorkspaceTitle } from '@allfitone/react/components/wo
 import { FoundationIcon } from '@allfitone/react/icons'
 
 import { organizationTypeLabel } from './membership-selector'
-import { membershipRoleSummary } from '@/lib/membership-roles'
+import { membershipRoleLabels, membershipRoleSummary } from '@/lib/membership-roles'
 import type { Membership } from '@/lib/studio-api'
 
 export function ProfessionalMemberships({ memberships }: { memberships: Membership[] }) {
@@ -41,15 +41,18 @@ export function ProfessionalMemberships({ memberships }: { memberships: Membersh
   return (
     <section data-profile-section aria-labelledby="memberships-title">
       <header data-profile-section-heading>
-        <WorkspaceEyebrow data-profile-kicker>Actividad en Studio</WorkspaceEyebrow>
-        <WorkspaceTitle as="h2" id="memberships-title">
-          Mis espacios
-        </WorkspaceTitle>
-        <p data-page-header-description>
-          Consulta tus vinculaciones. Esta vista no cambia roles ni permisos.
-        </p>
+        <div data-profile-section-heading-text>
+          <WorkspaceEyebrow data-profile-kicker>Actividad en Studio</WorkspaceEyebrow>
+          <WorkspaceTitle as="h2" id="memberships-title">
+            Mis espacios
+          </WorkspaceTitle>
+          <p data-page-header-description>
+            Consulta tus vinculaciones. Esta vista no cambia roles ni permisos.
+          </p>
+        </div>
       </header>
-      <div data-profile-signals>
+      {/* Always two figures, so the strip always shares the row. */}
+      <div data-profile-signals data-signals-multiple>
         <StatStrip>
           <StatStripItem value={active.length} label="Espacios activos" />
           <StatStripItem value={terminated.length} label="Vinculaciones finalizadas" />
@@ -62,7 +65,7 @@ export function ProfessionalMemberships({ memberships }: { memberships: Membersh
               <FoundationIcon name="organization" decorative />
             </EmptyMedia>
             <EmptyTitle>Aún no tienes espacios</EmptyTitle>
-            <EmptyDescription>
+            <EmptyDescription data-flush-text>
               Puedes crear una organización o aceptar una invitación cuando lo necesites.
             </EmptyDescription>
           </EmptyHeader>
@@ -75,12 +78,22 @@ export function ProfessionalMemberships({ memberships }: { memberships: Membersh
                 <CardDescription data-profile-kicker>
                   {organizationTypeLabel(membership.type_code)}
                 </CardDescription>
-                <CardTitle>{membership.display_name}</CardTitle>
-                <CardAction>
-                  <Badge variant="outline">{membershipRoleSummary(membership.roles)}</Badge>
-                </CardAction>
+                <CardTitle role="heading" aria-level={3}>
+                  {membership.display_name}
+                </CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent data-membership-card-body>
+                {/* One badge per role, in the body rather than the header
+                    action. Joined into a single badge that cannot wrap,
+                    "Propietario · Administrador" ran 7px past the viewport at
+                    320px: the header sizes its action column to its content. */}
+                <div data-membership-roles>
+                  {membershipRoleLabels(membership.roles).map((label) => (
+                    <Badge key={label} variant="secondary">
+                      {label}
+                    </Badge>
+                  ))}
+                </div>
                 <p>Vinculación activa desde {formatDate(membership.joined_at)}.</p>
               </CardContent>
             </Card>
@@ -89,7 +102,7 @@ export function ProfessionalMemberships({ memberships }: { memberships: Membersh
       )}
       {terminated.length > 0 ? (
         <Collapsible data-membership-history>
-          <CollapsibleTrigger render={<Button variant="ghost" />}>
+          <CollapsibleTrigger render={<Button variant="ghost" />} data-history-trigger>
             Historial de vinculaciones · {terminated.length}
           </CollapsibleTrigger>
           <CollapsibleContent>
@@ -100,7 +113,9 @@ export function ProfessionalMemberships({ memberships }: { memberships: Membersh
                     <CardDescription data-profile-kicker>
                       {organizationTypeLabel(membership.type_code)}
                     </CardDescription>
-                    <CardTitle>{membership.display_name}</CardTitle>
+                    <CardTitle role="heading" aria-level={3}>
+                      {membership.display_name}
+                    </CardTitle>
                     <CardAction>
                       <Badge variant="outline">Finalizada</Badge>
                     </CardAction>

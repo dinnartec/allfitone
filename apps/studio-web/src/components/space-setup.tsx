@@ -109,7 +109,7 @@ export function SpaceSetup({
               <ChoiceCardDescription>
                 No tienes que crear un espacio ahora. Vuelve cuando un equipo te haya invitado.
               </ChoiceCardDescription>
-              <ChoiceCardAction>Esperar una invitación</ChoiceCardAction>
+              <ChoiceCardAction>Continuar sin espacio</ChoiceCardAction>
             </ChoiceCard>
           </SetupPanelContent>
         </SetupPanel>

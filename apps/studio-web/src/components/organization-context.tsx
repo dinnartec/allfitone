@@ -1,8 +1,9 @@
 'use client'
 
 import { ProductWordmark } from '@allfitone/react/brand'
-import { Alert, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
+import { Alert, AlertAction, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
 import { Button } from '@allfitone/react/components/button'
+import { Card, CardContent } from '@allfitone/react/components/card'
 import { Spinner } from '@allfitone/react/components/spinner'
 import {
   WorkspaceActions,
@@ -27,6 +28,7 @@ import { LogoutForm } from './logout-form'
 import { useStudioEntryContext } from './studio-entry-context'
 import { resolveOrganizationContext } from '@/lib/membership-routing'
 import { StudioApiError, studioApi, type Membership } from '@/lib/studio-api'
+import { isStudioForbidden } from '@/lib/studio-query'
 
 interface OrganizationContextValue {
   current: Membership
@@ -93,6 +95,12 @@ export function OrganizationContextBoundary({
         if (!mounted.current || controller.signal.aborted) return
         if (caught instanceof StudioApiError && caught.status === 401) {
           router.replace('/')
+          return
+        }
+        // A denial is terminal, not a blip: the transient-failure screen below
+        // would offer a retry that cannot succeed.
+        if (isStudioForbidden(caught)) {
+          setState({ kind: 'forbidden' })
           return
         }
         setState((current) =>
@@ -180,10 +188,15 @@ export function OrganizationContextBoundary({
   if (state.kind === 'loading') {
     return (
       <OrganizationStateFrame>
-        <div data-organization-state role="status" aria-live="polite">
-          <Spinner label={state.label} />
-          <p>{state.label}</p>
-        </div>
+        {/* `data-organization-state` stacks its children in a column with a
+            section-sized gap, which is right for an alert and wrong for a
+            spinner beside its own label. */}
+        <Card data-organization-status>
+          <CardContent data-organization-status-body role="status" aria-live="polite">
+            <Spinner role={undefined} aria-hidden="true" />
+            <p>{state.label}</p>
+          </CardContent>
+        </Card>
       </OrganizationStateFrame>
     )
   }
@@ -192,11 +205,15 @@ export function OrganizationContextBoundary({
       <OrganizationStateFrame>
         <div data-organization-state>
           <Alert variant="warning">
-            <AlertTitle>Este espacio no está disponible</AlertTitle>
+            <AlertTitle role="heading" aria-level={1}>
+              Este espacio no está disponible
+            </AlertTitle>
             <AlertDescription>
               No tienes una membresía activa para esta organización.
             </AlertDescription>
-            <Button onClick={() => router.replace('/')}>Elegir otro espacio</Button>
+            <AlertAction>
+              <Button onClick={() => router.replace('/')}>Elegir otro espacio</Button>
+            </AlertAction>
           </Alert>
         </div>
       </OrganizationStateFrame>
@@ -225,10 +242,14 @@ export function OrganizationContextBoundary({
         {blocked ? (
           <div data-organization-verification-overlay>
             {state.verification === 'checking' ? (
-              <div data-organization-state role="status" aria-live="polite">
-                <Spinner label="Comprobando tu acceso…" />
-                <p>Comprobando tu acceso…</p>
-              </div>
+              // The card carries its own surface because it now sits over the
+              // blurred workspace rather than over an emptied page.
+              <Card data-organization-status>
+                <CardContent data-organization-status-body role="status" aria-live="polite">
+                  <Spinner role={undefined} aria-hidden="true" />
+                  <p>Comprobando tu acceso…</p>
+                </CardContent>
+              </Card>
             ) : (
               <OrganizationVerificationError onRetry={() => void load()} />
             )}
@@ -268,12 +289,16 @@ function OrganizationVerificationError({ onRetry }: { onRetry: () => void }) {
   return (
     <div data-organization-state>
       <Alert variant="danger" live="assertive">
-        <AlertTitle>No pudimos comprobar tu acceso</AlertTitle>
+        <AlertTitle role="heading" aria-level={1}>
+          No pudimos comprobar tu acceso
+        </AlertTitle>
         <AlertDescription>
           La conexión falló de forma temporal. El contenido permanecerá bloqueado hasta comprobar
           nuevamente tu membresía.
         </AlertDescription>
-        <Button onClick={onRetry}>Reintentar</Button>
+        <AlertAction>
+          <Button onClick={onRetry}>Reintentar</Button>
+        </AlertAction>
       </Alert>
     </div>
   )
@@ -281,7 +306,7 @@ function OrganizationVerificationError({ onRetry }: { onRetry: () => void }) {
 
 function OrganizationStateFrame({ children }: { children: ReactNode }) {
   return (
-    <WorkspaceShell data-organization-state-shell>
+    <WorkspaceShell>
       <WorkspaceMain>
         <WorkspaceHeader>
           <ProductWordmark
@@ -295,7 +320,11 @@ function OrganizationStateFrame({ children }: { children: ReactNode }) {
             <LogoutForm />
           </WorkspaceActions>
         </WorkspaceHeader>
-        <WorkspaceContent>{children}</WorkspaceContent>
+        {/* Studio's own element: WorkspaceContent is a Design System component
+            and must keep laying itself out. */}
+        <WorkspaceContent>
+          <div data-organization-state-canvas>{children}</div>
+        </WorkspaceContent>
       </WorkspaceMain>
     </WorkspaceShell>
   )

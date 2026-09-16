@@ -32,7 +32,9 @@ export function TeamSectionNavigation() {
       : []),
     {
       href: `${basePath}/roles`,
-      label: 'Roles y permisos',
+      // One word, like its two siblings. "Roles y permisos" wrapped to two lines
+      // on a phone; the page still titles itself in full.
+      label: 'Roles',
       active: pathname === `${basePath}/roles`,
     },
   ]

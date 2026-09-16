@@ -47,7 +47,10 @@ export function AnalyticsControls() {
     })
   })
 
-  const open = telemetry.decision === 'undecided' || expanded
+  // Until the stored decision has been read, the collapsed control is the
+  // honest thing to show: it is the steady state of almost every load, and
+  // opening the panel first would ask again of everyone who already answered.
+  const open = telemetry.resolved && (telemetry.decision === 'undecided' || expanded)
   return (
     <aside
       data-analytics-controls
@@ -98,7 +101,12 @@ export function AnalyticsControls() {
           )}
         </div>
       ) : (
-        <Button type="button" size="sm" variant="outline" onClick={() => setExpanded(true)}>
+        // This control is fixed to the viewport, so it lands on whatever the
+        // page happens to put behind it. An outline variant is transparent and
+        // its border resolves to roughly 1.24:1 against the entry background —
+        // a boundary that thin delimits nothing and the control reads as loose
+        // text. A floating control needs to carry its own surface.
+        <Button type="button" size="sm" variant="secondary" onClick={() => setExpanded(true)}>
           Privacidad
         </Button>
       )}

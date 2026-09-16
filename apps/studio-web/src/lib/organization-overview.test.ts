@@ -1,10 +1,12 @@
 import { describe, expect, test } from 'bun:test'
 
 import {
+  countLabel,
   countPage,
   formatTotal,
   invitationsExpiringWithin,
   recentMembers,
+  type CountedTotal,
 } from './organization-overview.js'
 import type { OrganizationMembership, TeamInvitationListItem } from './studio-api.js'
 
@@ -50,6 +52,17 @@ describe('organization overview totals', () => {
     expect(formatTotal({ value: 12, atLeast: false })).toBe('12')
     expect(formatTotal({ value: 50, atLeast: true })).toBe('50+')
     expect(formatTotal({ value: 0, atLeast: false })).toBe('0')
+  })
+
+  test('agrees with its own number, including the count every organization starts at', () => {
+    const label = (total: CountedTotal) =>
+      countLabel(total, 'Integrante activo', 'Integrantes activos')
+
+    expect(label({ value: 1, atLeast: false })).toBe('Integrante activo')
+    expect(label({ value: 0, atLeast: false })).toBe('Integrantes activos')
+    expect(label({ value: 2, atLeast: false })).toBe('Integrantes activos')
+    // "1+" is an unknown number of people, not one person.
+    expect(label({ value: 1, atLeast: true })).toBe('Integrantes activos')
   })
 })
 
