@@ -50,3 +50,52 @@ export function aside(
   if (to <= position && position < lifted) return ROW_SPAN
   return 0
 }
+
+/** How close to an edge the finger has to get before the list starts moving itself. */
+export const EDGE_ZONE = 72
+
+/** The most it travels in one frame. Sixty of these a second is a brisk but followable list. */
+export const EDGE_SPEED = 9
+
+/**
+ * How far the list should scroll itself this frame, with the finger where it is.
+ *
+ * **Without this a long routine cannot be reordered at all.** The drag lives inside the
+ * list, so anything past the fold is unreachable: somebody has to drop the exercise,
+ * scroll by hand, pick it up again, and repeat. The list has to come to the finger.
+ *
+ * The speed ramps with how far into the edge zone the finger is, rather than switching
+ * on at full tilt — at the boundary it creeps, and pressed against the edge it runs. A
+ * constant speed is the version that always feels wrong: too fast for a small
+ * correction and too slow to cross a long list.
+ *
+ * Negative is upwards. Zero means the finger is in the middle and nothing should move.
+ */
+export function edgeScroll(finger: number, top: number, height: number): number {
+  'worklet'
+  if (height <= 0) return 0
+
+  const intoTop = top + EDGE_ZONE - finger
+  if (intoTop > 0) return -EDGE_SPEED * Math.min(1, intoTop / EDGE_ZONE)
+
+  const intoBottom = finger - (top + height - EDGE_ZONE)
+  if (intoBottom > 0) return EDGE_SPEED * Math.min(1, intoBottom / EDGE_ZONE)
+
+  return 0
+}
+
+/**
+ * Where the list ends up after one frame of chasing, and it is a clamp on both sides.
+ *
+ * **The defect this exists for:** only the top was bounded, so a finger held at the
+ * bottom edge scrolled the list past its own content for as long as it was held — and
+ * because the drag's travel is fed by whatever was scrolled, the destination ran off
+ * with it. Coming back required letting go.
+ *
+ * Returning the current offset when there is nowhere to go is what stops the caller:
+ * it compares, sees no movement, and leaves the travel alone.
+ */
+export function nextOffset(current: number, by: number, max: number): number {
+  'worklet'
+  return Math.max(0, Math.min(Math.max(0, max), current + by))
+}

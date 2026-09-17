@@ -12,9 +12,12 @@ import { describe, expect, test } from 'bun:test'
 import {
   countSets,
   reasonsNotToPublish,
+  chainLetters,
+  chainedWith,
   movedTo,
   reordered,
   replacedStep,
+  unchained,
   stepsFromContent,
   stepsToContent,
   withPicked,
@@ -155,6 +158,7 @@ describe('removing and reordering leave no gap', () => {
 
 describe('dragging an exercise somewhere else', () => {
   const three = () => [step(1, 'A'), step(2, 'B'), step(3, 'C')]
+  const five = () => [1, 2, 3, 4, 5].map((at) => step(at, String.fromCharCode(64 + at)))
 
   test('T-SP-ROUTINE-13 the last one to the front, and everything renumbers', () => {
     expect(movedTo(three(), 3, 1).map((one) => one.name)).toEqual(['C', 'A', 'B'])
@@ -169,6 +173,29 @@ describe('dragging an exercise somewhere else', () => {
     expect(movedTo(three(), 2, 2).map((one) => one.name)).toEqual(['A', 'B', 'C'])
   })
 
+  test('T-SP-ROUTINE-28 dragging anything between two chained exercises does not unchain them', () => {
+    // The defect: a chain was dissolved whenever its members stopped being neighbours,
+    // so dragging an unrelated exercise into the gap silently lost a superset somebody
+    // had just made, with nothing on screen to say so.
+    const chained = chainedWith(five(), 2, 3)
+    const moved = movedTo(chained, 1, 2)
+
+    expect(moved.filter((one) => one.supersetGroup !== undefined)).toHaveLength(2)
+    const group = moved.filter((one) => one.supersetGroup !== undefined).map((one) => one.position)
+    expect(group[1]).toBe((group[0] ?? 0) + 1)
+  })
+
+  test('T-SP-ROUTINE-29 a chain travels whole when any of its members is dragged', () => {
+    const chained = chainedWith(five(), 2, 3)
+    const moved = movedTo(chained, 2, 4)
+
+    expect(moved.map((one) => one.name)).toEqual(['A', 'D', 'E', 'B', 'C'])
+    expect(moved.filter((one) => one.supersetGroup !== undefined).map((one) => one.name)).toEqual([
+      'B',
+      'C',
+    ])
+  })
+
   test('T-SP-ROUTINE-16 a superset survives being moved as a whole', () => {
     const chained = [
       step(1, 'A'),
@@ -181,18 +208,124 @@ describe('dragging an exercise somewhere else', () => {
     expect(moved.filter((one) => one.supersetGroup === 1)).toHaveLength(2)
   })
 
-  test('T-SP-ROUTINE-17 and breaks when one half is dragged out of the chain', () => {
-    // `IX-46` refuses a group whose positions are not contiguous, and it refuses it at
-    // publication — which is far too late to tell somebody their routine is invalid.
+  test('T-SP-ROUTINE-17 nothing can be dropped inside a chain, so it slides off it', () => {
     const chained = [
-      { ...step(1, 'A'), supersetGroup: 1 },
+      step(1, 'A'),
       { ...step(2, 'B'), supersetGroup: 1 },
-      step(3, 'C'),
+      { ...step(3, 'C'), supersetGroup: 1 },
+      step(4, 'D'),
     ]
-    const moved = movedTo(chained, 1, 3)
+    // Asked to land between B and C, which would split them. A block is one item, so
+    // one place of travel past it lands beyond the whole thing.
+    const moved = movedTo(chained, 4, 3)
 
-    expect(moved.map((one) => one.name)).toEqual(['B', 'C', 'A'])
-    expect(moved.every((one) => one.supersetGroup === undefined)).toBe(true)
+    expect(moved.map((one) => one.name)).toEqual(['A', 'D', 'B', 'C'])
+    expect(moved.filter((one) => one.supersetGroup !== undefined)).toHaveLength(2)
+  })
+})
+
+describe('chaining two exercises into a superset', () => {
+  const five = () => [1, 2, 3, 4, 5].map((at) => step(at, String.fromCharCode(64 + at)))
+
+  test('T-SP-ROUTINE-19 two neighbours chain where they stand', () => {
+    const chained = chainedWith(five(), 2, 3)
+
+    expect(chained.map((one) => one.name)).toEqual(['A', 'B', 'C', 'D', 'E'])
+    expect(chained.filter((one) => one.supersetGroup !== undefined).map((one) => one.name)).toEqual(
+      ['B', 'C'],
+    )
+  })
+
+  test('T-SP-ROUTINE-20 a distant one is brought alongside, because the pair must be contiguous', () => {
+    // `IX-46` refuses a group whose positions are not contiguous, so choosing the
+    // fifth to chain with the second has to move it there.
+    const chained = chainedWith(five(), 2, 5)
+
+    expect(chained.map((one) => one.name)).toEqual(['A', 'B', 'E', 'C', 'D'])
+    const group = chained.filter((one) => one.supersetGroup !== undefined)
+    expect(group.map((one) => one.name)).toEqual(['B', 'E'])
+    expect(group.map((one) => one.position)).toEqual([2, 3])
+  })
+
+  test('T-SP-ROUTINE-21 and one from above lands directly before it', () => {
+    const chained = chainedWith(five(), 4, 1)
+    const group = chained.filter((one) => one.supersetGroup !== undefined)
+
+    expect(group.map((one) => one.name)).toEqual(['A', 'D'])
+    expect(group.map((one) => one.position)[1]).toBe((group.map((one) => one.position)[0] ?? 0) + 1)
+  })
+
+  test('T-SP-ROUTINE-22 joining an existing chain makes it three, not a rival pair', () => {
+    const joined = chainedWith(chainedWith(five(), 4, 5), 1, 4)
+    const chained = joined.filter((one) => one.supersetGroup !== undefined)
+
+    expect(chained.map((one) => one.name)).toEqual(['A', 'D', 'E'])
+    expect(new Set(chained.map((one) => one.supersetGroup)).size).toBe(1)
+  })
+
+  test('T-SP-ROUTINE-30 a superset is not a pair: a third joins the same chain', () => {
+    const three = chainedWith(chainedWith(five(), 2, 3), 4, 3)
+    const chained = three.filter((one) => one.supersetGroup !== undefined)
+
+    expect(chained.map((one) => one.name)).toEqual(['B', 'C', 'D'])
+    expect(new Set(chained.map((one) => one.supersetGroup)).size).toBe(1)
+  })
+
+  test('T-SP-ROUTINE-31 leaving a chain of three leaves the other two chained', () => {
+    const three = chainedWith(chainedWith(five(), 2, 3), 4, 3)
+    const freed = unchained(three, 3)
+    const chained = freed.filter((one) => one.supersetGroup !== undefined)
+
+    expect(chained.map((one) => one.name)).toEqual(['B', 'D'])
+    // The one that left cannot stay between them: `IX-46` wants the rest contiguous.
+    expect(chained.map((one) => one.position)[1]).toBe(
+      (chained.map((one) => one.position)[0] ?? 0) + 1,
+    )
+  })
+
+  test('T-SP-ROUTINE-32 but leaving a chain of two dissolves it, because one is nobody', () => {
+    const freed = unchained(chainedWith(five(), 2, 3), 2)
+
+    expect(freed.every((one) => one.supersetGroup === undefined)).toBe(true)
+  })
+
+  test('T-SP-ROUTINE-33 deleting a member never leaves a chain of one behind', () => {
+    const gone = withoutStep(chainedWith(five(), 2, 3), 2)
+
+    expect(gone.every((one) => one.supersetGroup === undefined)).toBe(true)
+  })
+
+  test('T-SP-ROUTINE-23 chaining with itself is not a chain', () => {
+    expect(chainedWith(five(), 2, 2)).toEqual(five())
+  })
+
+  test('T-SP-ROUTINE-25 both halves of a chain carry the same letter', () => {
+    const letters = chainLetters(chainedWith(five(), 2, 3))
+    const marked = chainedWith(five(), 2, 3).filter((one) => one.supersetGroup !== undefined)
+
+    expect(marked).toHaveLength(2)
+    expect(letters.get(marked[0]?.supersetGroup ?? -1)).toBe('A')
+    expect(letters.get(marked[1]?.supersetGroup ?? -1)).toBe('A')
+  })
+
+  test('T-SP-ROUTINE-26 letters follow the order they are read in, not the group number', () => {
+    // The group number counts up as chains are made and broken, so the first superset
+    // of a routine is easily «7». The letter is what somebody sees.
+    const twice = chainedWith(chainedWith(five(), 4, 5), 1, 2)
+    const letters = chainLetters(twice)
+
+    expect([...letters.values()]).toEqual(['A', 'B'])
+    expect(letters.get(twice[0]?.supersetGroup ?? -1)).toBe('A')
+  })
+
+  test('T-SP-ROUTINE-27 a routine with no chains has no letters', () => {
+    expect(chainLetters(five()).size).toBe(0)
+  })
+
+  test('T-SP-ROUTINE-24 unchaining frees both, not only the one asked about', () => {
+    const freed = unchained(chainedWith(five(), 2, 3), 2)
+
+    expect(freed.every((one) => one.supersetGroup === undefined)).toBe(true)
   })
 })
 
