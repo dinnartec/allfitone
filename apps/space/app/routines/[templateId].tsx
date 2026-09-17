@@ -38,6 +38,7 @@ import { useTheme } from '@allfitone/react-native/theme'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import Animated, { FadeOut, LinearTransition, ReduceMotion } from 'react-native-reanimated'
 
 import { ApiError } from '../../src/client'
 import { createSpaceContentFlow } from '../../src/client/content-transport'
@@ -57,6 +58,18 @@ const SUGGESTIONS = ['Empuje', 'Tirón', 'Pierna', 'Full body']
 
 /** Long enough that a name is not a save per keystroke, short enough to feel saved. */
 const SAVE_DELAY_MS = 700
+
+/** DT-010 measures the target, not the glyph, and the glyph here is 16. */
+const PRESS_SLOP = { top: 14, bottom: 14, left: 14, right: 14 }
+
+/** Under the threshold where a press reads as an animation instead of as a response. */
+const PRESS_MS = 120
+
+/** Gone rather than vanished. Opacity only, which is what survives reduced motion. */
+const EXIT = FadeOut.duration(140).reduceMotion(ReduceMotion.System)
+
+/** What the rows below do about the hole. */
+const REFLOW = LinearTransition.duration(180).reduceMotion(ReduceMotion.System)
 
 const EXPIRED = 'Tu sesión venció. Vuelve a entrar para continuar.'
 const SAVE_FAILED = 'No pudimos guardar el borrador. Revisa tu conexión.'
@@ -295,10 +308,10 @@ export default function RoutineEditor() {
               color={theme.color.icon.secondary}
               decorative
             />
-            <Text role="display" size="md">
+            <Text role="control" size="lg" align="center">
               Todavía no hay ejercicios
             </Text>
-            <Text role="body" size="sm" color="muted" style={styles.centered}>
+            <Text role="body" size="md" color="muted" style={styles.centered}>
               Busca en el catálogo y añade el primero. Luego le pones series, peso y descanso.
             </Text>
           </View>
@@ -312,34 +325,30 @@ export default function RoutineEditor() {
 
             <View style={styles.list}>
               {steps.map((step) => (
-                <View
-                  key={step.position}
+                <Animated.View
+                  key={step.movementId}
+                  // The row it leaves behind closes the gap rather than snapping shut,
+                  // and both honour the system setting rather than deciding for it.
+                  exiting={EXIT}
+                  layout={REFLOW}
                   style={[styles.row, { borderColor: theme.color.border.subtle }]}
                 >
-                  <Text role="display" size="sm" color="muted">
+                  <Text role="body" size="sm" color="muted">
                     {String(step.position).padStart(2, '0')}
                   </Text>
                   <View style={styles.rowText}>
-                    <Text role="display" size="sm" uppercase>
+                    <Text role="control" size="md" numberOfLines={1}>
                       {step.name}
                     </Text>
-                    <Text role="body" size="xs" color="accent">
+                    <Text role="body" size="sm" color="accent">
                       {`${step.sets} series · ${step.reps} reps`}
                     </Text>
                   </View>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={`Quitar ${step.name}`}
+                  <RemoveButton
+                    name={step.name}
                     onPress={() => change(withoutStep(steps, step.position))}
-                  >
-                    <FoundationIcon
-                      name="remove"
-                      size="sm"
-                      color={theme.color.icon.secondary}
-                      decorative
-                    />
-                  </Pressable>
-                </View>
+                  />
+                </Animated.View>
               ))}
             </View>
           </>
@@ -363,6 +372,37 @@ export default function RoutineEditor() {
   )
 }
 
+/**
+ * The trash can, which answers the finger before the row goes.
+ *
+ * Removing an exercise is occasional and its purpose is feedback: the press has to
+ * register on press-in, because waiting for the tap to complete is the latency a
+ * person actually perceives. It is a two-state change with no gesture behind it, so
+ * it is a transition on a plain value and not a worklet — nothing here runs per frame.
+ *
+ * 44 pt of reach with `hitSlop` rather than a bigger glyph: `docs/ACCESSIBILITY.md`
+ * measures what the finger can hit, not what the eye can see.
+ */
+function RemoveButton({ name, onPress }: { readonly name: string; readonly onPress: () => void }) {
+  const theme = useTheme()
+  const [held, setHeld] = useState(false)
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Quitar ${name}`}
+      hitSlop={PRESS_SLOP}
+      onPressIn={() => setHeld(true)}
+      onPressOut={() => setHeld(false)}
+      onPress={onPress}
+    >
+      <Animated.View style={[styles.remove, { transform: [{ scale: held ? 0.82 : 1 }] }]}>
+        <FoundationIcon name="remove" size="sm" color={theme.color.icon.secondary} decorative />
+      </Animated.View>
+    </Pressable>
+  )
+}
+
 function Figure({
   value,
   label,
@@ -374,16 +414,10 @@ function Figure({
 }) {
   return (
     <View style={styles.figure}>
-      {accent ? (
-        <Text role="display" size="lg" color="accent">
-          {value}
-        </Text>
-      ) : (
-        <Text role="display" size="lg">
-          {value}
-        </Text>
-      )}
-      <Text role="label" size="2xs" color="muted">
+      <Text role="control" size="2xl" color={accent ? 'accent' : 'primary'}>
+        {value}
+      </Text>
+      <Text role="body" size="sm" color="muted">
         {label}
       </Text>
     </View>
@@ -416,6 +450,8 @@ const styles = StyleSheet.create({
     padding: 14,
   },
   rowText: { flex: 1, gap: 3 },
+  // A transition rather than a worklet: the value is a two-state flip, not a gesture.
+  remove: { transitionProperty: 'transform', transitionDuration: PRESS_MS },
   issues: { borderWidth: 2, borderRadius: 18, padding: 16, gap: 12 },
   issuesHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   issueText: { gap: 2 },
