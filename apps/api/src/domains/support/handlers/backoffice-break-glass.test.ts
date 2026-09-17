@@ -572,4 +572,70 @@ describe('Backoffice break-glass API contract', () => {
       resourceType: 'nutrition.meals',
     })
   })
+
+  test('T-BG-API-24 returns the training sessions an allowed read carries, as the database sent them', async () => {
+    const allowed: AllfitV1Schemas['BreakGlassExerciseOutcome'] = {
+      outcome: 'allowed',
+      reason_code: 'authorized_exercise',
+      break_glass_event_id: '019a8000-0000-7000-8000-000000000606',
+      occurred_at: '2026-09-10T18:11:00.000Z',
+      category: 'prior_training_history',
+      content: {
+        prior_training_history: [
+          {
+            id: '019a8000-0000-7000-8000-000000000a01',
+            activity_type_code: 'test_strength_session',
+            activity_type_name: 'Sesión de fuerza de prueba',
+            discipline_code: 'test_strength',
+            started_at: '2026-09-09T12:00:00+00:00',
+            ended_at: '2026-09-09T13:00:00+00:00',
+            timezone: 'America/Bogota',
+            status: 'completed',
+            validation_status: 'pending',
+            requested_level: 'detailed',
+            achieved_level: null,
+            revision_number: 3,
+            capture_source: 'manual',
+            contract: { id: '019c0000-0000-7000-8000-000000000031', version: 1 },
+            segments: [{ position: 1, activity_type_code: 'test_strength_session' }],
+            strength_sets: [
+              {
+                segment_position: 1,
+                order: 1,
+                movement_id: null,
+                movement_name: null,
+                achieved_reps: 8,
+                load: { value: 80, unit: 'kg' },
+                rpe: 7,
+              },
+            ],
+            endurance_laps: [],
+          },
+        ],
+      },
+    }
+    const response = await routes(
+      windowService({
+        exercise: (_actor, input) => {
+          captured.push({ operation: 'exercise', input })
+          return Promise.resolve(allowed)
+        },
+      }),
+    ).fetch(
+      post(`/break-glass/requests/${REQUEST_ID}/reads`, {
+        body: {
+          category: 'prior_training_history',
+          resource_type: 'execution.executed_sessions',
+        },
+      }),
+    )
+
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as typeof allowed
+    expect(body).toEqual(allowed)
+    expect(captured[0]?.input).toMatchObject({
+      category: 'prior_training_history',
+      resourceType: 'execution.executed_sessions',
+    })
+  })
 })
