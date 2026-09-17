@@ -130,5 +130,16 @@ export function restLabel(seconds: number | undefined): string {
 
 export const REST_PRESETS: readonly number[] = [0, 45, 60, 90, 120, 180, 300]
 
+/** The same seconds as a chip reads them. «Ninguno» is a choice; «sin definir» is not. */
+export function restPresetLabel(seconds: number): string {
+  return seconds === 0 ? 'Ninguno' : restLabel(seconds)
+}
+
+/** The ceiling the stepper stops at. Ten minutes between sets is not a rest any more. */
+export const REST_MAX_SECONDS = 600
+
+/** Where the stepper starts when the exercise has no rest yet. */
+export const REST_OPENING_SECONDS = 90
+
 /** The step somebody edits, and the wheel moves in fifteens. */
 export const REST_STEP_SECONDS = 15

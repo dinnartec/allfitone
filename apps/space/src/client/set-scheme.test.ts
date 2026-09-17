@@ -11,12 +11,16 @@ import { describe, expect, test } from 'bun:test'
 import {
   OPENING_SETS,
   OPENING_UNIT,
+  REST_MAX_SECONDS,
+  REST_OPENING_SECONDS,
   REST_PRESETS,
+  REST_STEP_SECONDS,
   SET_KIND_NAMES,
   SET_KIND_TONES,
   loadLabel,
   otherUnit,
   restLabel,
+  restPresetLabel,
   setsLabel,
   withKind,
   withLoad,
@@ -85,6 +89,26 @@ describe('changing what a set is', () => {
     expect(loadLabel(undefined, 'kg')).toBe('—')
     expect(loadLabel(0, 'kg')).toBe('0 kg')
     expect(loadLabel(60, 'lb')).toBe('60 lb')
+  })
+})
+
+describe('choosing a rest', () => {
+  test('T-SP-SETS-13 zero is a rest somebody chose, and reads as one', () => {
+    expect(restPresetLabel(0)).toBe('Ninguno')
+    expect(restLabel(0)).toBe('Sin descanso')
+    // Not said at all is the third state, and is neither of those.
+    expect(restLabel(undefined)).toBe('Sin descanso definido')
+  })
+
+  test('T-SP-SETS-14 every preset lands on the step the stepper moves by', () => {
+    for (const preset of REST_PRESETS) {
+      expect(preset % REST_STEP_SECONDS).toBe(0)
+      expect(preset).toBeLessThanOrEqual(REST_MAX_SECONDS)
+    }
+  })
+
+  test('T-SP-SETS-15 the opening rest is one of the habitual ones, not a number nobody uses', () => {
+    expect(REST_PRESETS).toContain(REST_OPENING_SECONDS)
   })
 })
 

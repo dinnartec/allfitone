@@ -47,6 +47,7 @@ import { Button } from '@allfitone/react-native/button'
 import { Badge, type BadgeTone } from '@allfitone/react-native/badge'
 import { Chip } from '@allfitone/react-native/chip'
 import { Sheet } from '@allfitone/react-native/sheet'
+import { Stepper } from '@allfitone/react-native/stepper'
 import { FoundationIcon } from '@allfitone/react-native/icons'
 import { InlineAlert } from '@allfitone/react-native/inline-alert'
 import { NumberField } from '@allfitone/react-native/number-field'
@@ -82,12 +83,16 @@ import {
 } from '../../src/client/routine-draft'
 import {
   OPENING_UNIT,
+  REST_MAX_SECONDS,
+  REST_OPENING_SECONDS,
   REST_PRESETS,
+  REST_STEP_SECONDS,
   SET_KIND_DETAILS,
   SET_KIND_NAMES,
   SET_KIND_TONES,
   otherUnit,
   restLabel,
+  restPresetLabel,
   setsLabel,
   withKind,
   withLoad,
@@ -138,6 +143,13 @@ const REFLOW = LinearTransition.duration(220).easing(EASE_OUT).reduceMotion(Redu
  *
  */
 const OPEN = FadeIn.duration(150).delay(60).easing(EASE_OUT).reduceMotion(ReduceMotion.System)
+
+/** The rest the sheet is editing. An exercise with none opens on a habitual one. */
+function restAt(steps: readonly WorkingStep[], sheet: Sheeted | undefined) {
+  if (sheet?.kind !== 'rest') return REST_OPENING_SECONDS
+  const step = steps.find((one) => one.position === sheet.position)
+  return step?.restSeconds ?? REST_OPENING_SECONDS
+}
 
 /** The kind the set-kind sheet is being opened on, so its row can be marked. */
 function kindAt(steps: readonly WorkingStep[], sheet: Sheeted | undefined) {
@@ -669,18 +681,41 @@ export default function RoutineEditor() {
           <Text role="body" size="sm" color="muted">
             Cuánto esperas antes de la siguiente serie.
           </Text>
-          {REST_PRESETS.map((preset) => (
-            <SheetChoice
-              key={preset}
-              name={restLabel(preset)}
-              detail={preset === 0 ? 'Encadenas sin parar' : 'Descanso habitual'}
-              onPress={() => {
-                if (sheet?.kind !== 'rest') return
-                change(withRest(steps, sheet.position, preset))
-                setSheet(undefined)
-              }}
-            />
-          ))}
+
+          {/* Any rest, not one of seven. The presets below are a shortcut to the
+              common answers, never the whole set of them. */}
+          <Stepper
+            accessibilityLabel="Descanso entre series"
+            value={restAt(steps, sheet)}
+            min={0}
+            max={REST_MAX_SECONDS}
+            step={REST_STEP_SECONDS}
+            format={restPresetLabel}
+            caption={`de ${REST_STEP_SECONDS} en ${REST_STEP_SECONDS} segundos`}
+            grow
+            style={{ borderColor: theme.color.border.accent }}
+            onChange={(seconds) => {
+              if (sheet?.kind !== 'rest') return
+              change(withRest(steps, sheet.position, seconds))
+            }}
+          />
+
+          <Text role="control" size="sm" color="secondary">
+            O elige uno habitual
+          </Text>
+          <View style={styles.chips}>
+            {REST_PRESETS.map((preset) => (
+              <Chip
+                key={preset}
+                label={restPresetLabel(preset)}
+                selected={restAt(steps, sheet) === preset}
+                onPress={() => {
+                  if (sheet?.kind !== 'rest') return
+                  change(withRest(steps, sheet.position, preset))
+                }}
+              />
+            ))}
+          </View>
         </View>
       </Sheet>
 
