@@ -13,9 +13,9 @@
  * It is not under `[templateId]` because it does not need to know which routine it
  * came from, and for a routine still being written there is no identifier to know.
  *
- * **The list is already there when it opens.** The catalogue is 38 movements and the
- * search answers 40 by default, so an empty query is the whole library rather than an
- * empty state waiting to be typed at. Searching narrows something already useful.
+ * **The list is already there when it opens.** An empty query is the whole library
+ * rather than an empty state waiting to be typed at, so searching narrows something
+ * already useful.
  *
  * **The filters left the screen they filter.** They were two rows of chips above the
  * list — eighteen muscles in three blocks, then nine equipment — and between them they
@@ -30,6 +30,22 @@
  * Each row carries a second target that opens the movement's detail. Somebody who has
  * never done a hip thrust has to be able to find out what it is before putting it in
  * their routine, and the row alone cannot say.
+ *
+ * **The row leads with the picture.** Four hundred names, many of which differ by one
+ * word, are not something anybody reads their way through; the thumbnail is what makes
+ * the list scannable, so it takes the leading edge and the checkbox that used to sit
+ * there becomes a badge on its corner.
+ *
+ * **And the list is a list, not a stack of cards.** Each row bordered and filled on its
+ * own read as four hundred boxes; the frames took the attention the pictures were put
+ * there to get. A hairline between rows is all that separates them now, which is also
+ * why this list passes no separator — the row draws its own.
+ *
+ * **Only the list scrolls.** Everything above it — the count of what is chosen, the
+ * confirm, the search field, the two filters, the pills and how many are left — is
+ * what somebody uses *while* going through four hundred rows, and all of it used to
+ * scroll away with the first flick. It costs height, which is the trade: fewer rows
+ * on screen, but the way to narrow them is always to hand.
  */
 
 import { DisclosureButton } from '@allfitone/react-native/disclosure-button'
@@ -58,18 +74,19 @@ import {
   toggleFilter,
   type ExerciseFilter,
 } from '../../src/client/exercise-catalogue'
+import { readExerciseLibrary } from '../../src/client/exercise-library'
 import {
   alreadyIn,
   exerciseFilter,
   isPicked,
   offerExercisePick,
   offerable,
+  pickButton,
   pickLabel,
   rememberExerciseFilter,
   togglePick,
   type PickedMovement,
 } from '../../src/client/exercise-pick'
-import { DISCIPLINE } from '../../src/client/routine-draft'
 import { ScreenHeader } from '../../src/components/screen-header'
 
 const EXPIRED = 'Tu sesión venció. Vuelve a entrar para continuar.'
@@ -91,21 +108,18 @@ export default function ExercisePicker() {
   const [picked, setPicked] = useState<readonly PickedMovement[]>([])
   const [failure, setFailure] = useState<string | undefined>(undefined)
 
-  // The whole library, once. Filtering it here is what makes the counts instant and
-  // what lets a filter screen say how many are left before it is applied.
+  // The whole library, once for the flow rather than once per screen. Filtering it
+  // here is what makes the counts instant and what lets a filter screen say how many
+  // are left before it is applied.
   useEffect(() => {
     let active = true
 
-    Promise.all([
-      flow.searchMovements(DISCIPLINE, '', [], []),
-      flow.readMuscles(),
-      flow.readEquipment(),
-    ])
-      .then(([found, worked, needed]) => {
+    readExerciseLibrary(flow)
+      .then((library) => {
         if (!active) return
-        setMovements(found)
-        setMuscles(worked)
-        setEquipment(needed)
+        setMovements(library.movements)
+        setMuscles(library.muscles)
+        setEquipment(library.equipment)
         setFailure(undefined)
       })
       .catch((cause: unknown) => {
@@ -159,6 +173,105 @@ export default function ExercisePicker() {
 
   return (
     <Screen edges={['top', 'bottom']}>
+      {/* Everything but the list is fixed. Searching, filtering and reading how many
+          are left are what somebody does *while* scrolling four hundred rows, and all
+          of it used to scroll away with the first flick. */}
+      <View style={styles.head}>
+        <ScreenHeader
+          title="Añadir ejercicio"
+          subtitle={picked.length === 0 ? 'toca los que quieras' : `${picked.length} elegidos`}
+          onClose={() => router.back()}
+          onConfirm={picked.length === 0 ? undefined : confirm}
+          confirmLabel={pickLabel(picked.length)}
+          confirmText={pickButton(picked.length)}
+        />
+
+        {failure ? <InlineAlert message={failure} /> : null}
+
+        <TextField
+          label="Buscar ejercicio"
+          placeholder="Busca por nombre"
+          value={query}
+          onChangeText={setQuery}
+          autoCapitalize="none"
+        />
+
+        <View style={styles.filters}>
+          <DisclosureButton
+            label="Equipamiento"
+            value={facetSummary(filter, 'equipment')}
+            icon="settings"
+            active={filter.equipment.length > 0}
+            grow
+            onPress={() => router.push('/routines/exercises/equipment')}
+          />
+          <DisclosureButton
+            label="Musculatura"
+            value={facetSummary(filter, 'muscle')}
+            icon="target"
+            active={filter.muscles.length > 0}
+            grow
+            onPress={() => router.push('/routines/exercises/muscles')}
+          />
+        </View>
+
+        {pills.length > 0 ? (
+          <View style={styles.pills}>
+            {pills.map((pill) => (
+              <Pressable
+                key={`${pill.facet}-${pill.code}`}
+                accessibilityRole="button"
+                accessibilityLabel={`Quitar ${pill.name}`}
+                onPress={() =>
+                  change(
+                    toggleFilter(
+                      filter,
+                      pill.facet,
+                      pill.code,
+                      pill.facet === 'muscle' ? muscles : equipment,
+                    ),
+                  )
+                }
+                style={[
+                  styles.pill,
+                  {
+                    backgroundColor: theme.color.accent.tonal,
+                    borderColor: theme.color.accent.tonalBorder,
+                  },
+                ]}
+              >
+                <Text role="control" size="sm" color="accent">
+                  {pill.name}
+                </Text>
+                <FoundationIcon
+                  name="close"
+                  customSize={14}
+                  color={theme.color.text.accent}
+                  decorative
+                />
+              </Pressable>
+            ))}
+            {/* Only past one: beside a single pill it would say the same thing twice. */}
+            {pills.length > 1 ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Quitar todos los filtros"
+                onPress={() => change({ muscles: [], equipment: [] })}
+                style={styles.clear}
+              >
+                <Text role="control" size="sm" color="secondary" style={styles.clearText}>
+                  Quitar todos
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
+
+        <Text role="eyebrow" size="xs" color="muted">
+          {listSummary(shown.length, filtering).toUpperCase()}
+        </Text>
+      </View>
+
       {/* The keyboard moves the scroll inset rather than resizing the container, the
           same as every other screen here that takes typing. */}
       {/* Virtualized: four hundred rows each carrying a network image mounted at once
@@ -175,114 +288,16 @@ export default function ExercisePicker() {
             onOpen={open}
           />
         )}
-        ItemSeparatorComponent={Gap}
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         automaticallyAdjustKeyboardInsets
         // An element and never an inline component: a new component type each render
         // would remount the search field and drop the keyboard on every keystroke.
-        ListHeaderComponent={
-          <View style={styles.head}>
-            <ScreenHeader
-              title="Añadir ejercicio"
-              subtitle={picked.length === 0 ? 'toca los que quieras' : `${picked.length} elegidos`}
-              onClose={() => router.back()}
-              onConfirm={picked.length === 0 ? undefined : confirm}
-              confirmLabel={pickLabel(picked.length)}
-              confirmText
-            />
-
-            {failure ? <InlineAlert message={failure} /> : null}
-
-            <TextField
-              label="Buscar ejercicio"
-              placeholder="Busca por nombre"
-              value={query}
-              onChangeText={setQuery}
-              autoCapitalize="none"
-            />
-
-            <View style={styles.filters}>
-              <DisclosureButton
-                label="Equipamiento"
-                value={facetSummary(filter, 'equipment')}
-                icon="settings"
-                active={filter.equipment.length > 0}
-                grow
-                onPress={() => router.push('/routines/exercises/equipment')}
-              />
-              <DisclosureButton
-                label="Musculatura"
-                value={facetSummary(filter, 'muscle')}
-                icon="target"
-                active={filter.muscles.length > 0}
-                grow
-                onPress={() => router.push('/routines/exercises/muscles')}
-              />
-            </View>
-
-            {pills.length > 0 ? (
-              <View style={styles.pills}>
-                {pills.map((pill) => (
-                  <Pressable
-                    key={`${pill.facet}-${pill.code}`}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Quitar ${pill.name}`}
-                    onPress={() =>
-                      change(
-                        toggleFilter(
-                          filter,
-                          pill.facet,
-                          pill.code,
-                          pill.facet === 'muscle' ? muscles : equipment,
-                        ),
-                      )
-                    }
-                    style={[
-                      styles.pill,
-                      {
-                        backgroundColor: theme.color.accent.tonal,
-                        borderColor: theme.color.accent.tonalBorder,
-                      },
-                    ]}
-                  >
-                    <Text role="display" size="xs" uppercase color="accent">
-                      {pill.name}
-                    </Text>
-                    <FoundationIcon
-                      name="close"
-                      customSize={12}
-                      color={theme.color.text.accent}
-                      decorative
-                    />
-                  </Pressable>
-                ))}
-                {/* Only past one: beside a single pill it would say the same thing twice. */}
-                {pills.length > 1 ? (
-                  <Text
-                    role="control"
-                    size="xs"
-                    color="secondary"
-                    accessibilityRole="button"
-                    style={styles.clear}
-                    onPress={() => change({ muscles: [], equipment: [] })}
-                  >
-                    Quitar todos
-                  </Text>
-                ) : null}
-              </View>
-            ) : null}
-
-            <Text role="eyebrow" size="2xs" color="muted">
-              {listSummary(shown.length, filtering).toUpperCase()}
-            </Text>
-          </View>
-        }
         ListFooterComponent={
           <View style={styles.foot}>
             {movements !== undefined && shown.length === 0 ? (
-              <Text role="body" size="sm" color="muted">
+              <Text role="body" size="md" color="muted" align="center">
                 {filtering
                   ? 'Nada con esos filtros. Quita alguno para ver más.'
                   : 'Tu rutina ya tiene todos los ejercicios del catálogo.'}
@@ -290,12 +305,12 @@ export default function ExercisePicker() {
             ) : null}
 
             {movements === undefined && !failure ? (
-              <Text role="body" size="sm" color="muted">
+              <Text role="body" size="md" color="muted">
                 Cargando el catálogo…
               </Text>
             ) : null}
 
-            <Text role="body" size="xs" color="muted">
+            <Text role="body" size="sm" color="muted">
               Solo el catálogo global de Allfit.
             </Text>
           </View>
@@ -356,17 +371,14 @@ const MovementRow = memo(function MovementRow({
   )
 })
 
-/** The list's own gap, since a virtualized list has no container to space. */
-function Gap() {
-  return <View style={styles.gap} />
-}
-
 const styles = StyleSheet.create({
-  content: { gap: 14, paddingBottom: 48 },
+  // No gap: the rows separate themselves with a hairline, and a gap between them
+  // would turn the list back into the stack of cards this stopped being.
+  content: { paddingBottom: 48 },
   filters: { flexDirection: 'row', gap: 10 },
   pills: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },
   pill: {
-    minHeight: 32,
+    minHeight: 36,
     borderRadius: 999,
     borderWidth: 1,
     paddingLeft: 12,
@@ -375,9 +387,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 7,
   },
-  clear: { minHeight: 32, paddingHorizontal: 4, textDecorationLine: 'underline' },
+  // A height on the text alone leaves its ink at the top of the box, which is why
+  // it sat above the pills it belongs beside.
+  clear: { minHeight: 36, paddingHorizontal: 4, justifyContent: 'center' },
+  clearText: { textDecorationLine: 'underline' },
   preview: { width: '100%', height: '100%' },
-  head: { gap: 14 },
-  gap: { height: 8 },
-  foot: { gap: 14, paddingTop: 14, alignItems: 'center' },
+  head: { gap: 14, paddingBottom: 14 },
+  foot: { gap: 14, paddingTop: 24, alignItems: 'center' },
 })

@@ -53,9 +53,9 @@ import {
   type ExerciseFilter,
 } from '../../../src/client/exercise-catalogue'
 import type { Movement } from '../../../src/client/content'
+import { readExerciseLibrary } from '../../../src/client/exercise-library'
 import { exerciseFilter, rememberExerciseFilter } from '../../../src/client/exercise-pick'
 import { INERT_SLUGS, type BodySide, type BodySlug } from '../../../src/client/focus-form'
-import { DISCIPLINE } from '../../../src/client/routine-draft'
 import { BodyFigure } from '../../../src/components/body-figure'
 import { ScreenHeader } from '../../../src/components/screen-header'
 
@@ -82,11 +82,11 @@ export default function MuscleFilter() {
   useEffect(() => {
     let active = true
 
-    Promise.all([flow.readMuscles(), flow.searchMovements(DISCIPLINE, '', [], [])])
-      .then(([worked, found]) => {
+    readExerciseLibrary(flow)
+      .then((library) => {
         if (!active) return
-        setMuscles(worked)
-        setMovements(found)
+        setMuscles(library.muscles)
+        setMovements(library.movements)
       })
       // The list still works from what is already chosen; a vocabulary that does not
       // arrive leaves an empty screen rather than a broken one.
@@ -119,7 +119,9 @@ export default function MuscleFilter() {
 
   return (
     <Screen edges={['top', 'bottom']}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      {/* Outside the scroll: the way out and the way to undo must not be something
+          somebody has to scroll back up to find. */}
+      <View style={styles.head}>
         <ScreenHeader
           title="Musculatura"
           subtitle={
@@ -132,9 +134,11 @@ export default function MuscleFilter() {
             filter.muscles.length === 0 ? undefined : () => change(clearFacet(filter, 'muscle'))
           }
           confirmLabel="Quitar"
-          confirmText
+          confirmText="Quitar"
         />
+      </View>
 
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.faces}>
           {(['front', 'back'] as const).map((side: BodySide) => (
             <View key={side} style={styles.face}>
@@ -192,6 +196,7 @@ const styles = StyleSheet.create({
   // Clear of the button, which floats over the scroll rather than scrolling with it:
   // its own height plus the home indicator the screen already reserves.
   content: { gap: 14, paddingBottom: 96 },
+  head: { paddingBottom: 14 },
   faces: { flexDirection: 'row', justifyContent: 'center', alignItems: 'flex-end', gap: 4 },
   face: { alignItems: 'center' },
   faceName: { marginTop: 3, letterSpacing: 1.6 },

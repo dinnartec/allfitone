@@ -133,13 +133,21 @@ describe('what each row and each pill says', () => {
   test('T-SP-CAT-11 a row names what it works and what it needs, muscles first', () => {
     const bench = move('Press de banca con barra', ['chest', 'triceps'], ['barbell', 'bench'])
 
-    expect(movementCaption(bench, MUSCLES, EQUIPMENT)).toBe('Pecho · Tríceps · Barra · Banco')
+    expect(movementCaption(bench, MUSCLES, EQUIPMENT)).toBe('Pecho · Barra')
   })
 
-  test('T-SP-CAT-12 a row names at most two muscles, because the line is one line', () => {
-    const many = move('Peso muerto', ['chest', 'triceps', 'glutes', 'lats'], ['barbell'])
+  test('T-SP-CAT-12 one of each, because the line is one line and never wraps', () => {
+    const many = move('Peso muerto', ['chest', 'triceps', 'glutes', 'lats'], ['barbell', 'bench'])
 
-    expect(movementCaption(many, MUSCLES, EQUIPMENT)).toBe('Pecho · Tríceps · Barra')
+    expect(movementCaption(many, MUSCLES, EQUIPMENT)).toBe('Pecho · Barra')
+  })
+
+  test('T-SP-CAT-23 an unknown code is dropped before the line is cut, not after', () => {
+    // Cutting first would spend the one slot on a code the vocabulary cannot name
+    // and leave the caption blank next to a row that does work a muscle.
+    const odd = move('Rara', ['retired', 'chest'], ['gone', 'barbell'])
+
+    expect(movementCaption(odd, MUSCLES, EQUIPMENT)).toBe('Pecho · Barra')
   })
 
   test('T-SP-CAT-13 a code the vocabulary does not have is dropped, not drawn blank', () => {

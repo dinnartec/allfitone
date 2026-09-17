@@ -9,6 +9,7 @@ import {
   isPicked,
   offerExercisePick,
   offerable,
+  pickButton,
   pickLabel,
   takeExercisePick,
   togglePick,
@@ -49,6 +50,15 @@ describe('choosing several exercises at once', () => {
     expect(pickLabel(0)).toBe('Añadir')
     expect(pickLabel(1)).toBe('Añadir 1 ejercicio')
     expect(pickLabel(3)).toBe('Añadir 3 ejercicios')
+  })
+
+  test('T-SP-PICK-12 what is drawn is the count alone, and never longer than the name', () => {
+    expect(pickButton(0)).toBe('Añadir')
+    expect(pickButton(1)).toBe('Añadir 1')
+    expect(pickButton(3)).toBe('Añadir 3')
+    for (const count of [0, 1, 3, 12]) {
+      expect(pickButton(count).length).toBeLessThanOrEqual(pickLabel(count).length)
+    }
   })
 
   test('T-SP-PICK-05 what the routine already trains is not offered a second time', () => {

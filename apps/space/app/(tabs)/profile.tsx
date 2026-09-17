@@ -28,6 +28,7 @@ import { useMemo, useState } from 'react'
 import { ScrollView, StyleSheet, View } from 'react-native'
 
 import { createSpaceSignOutFlow } from '../../src/client/sign-out-transport'
+import { forgetExerciseLibrary } from '../../src/client/exercise-library'
 import { DOCK_HEIGHT } from '../../src/components/tab-bar'
 
 const LOCAL_ONLY =
@@ -57,6 +58,9 @@ export default function Profile() {
         setWarning(true)
         return
       }
+      // Nothing personal is in it, but a cache that outlives the session it was read
+      // under is a cache nobody can reason about.
+      forgetExerciseLibrary()
       // Replaced, not pushed: there must be no way back into a signed-out session.
       router.replace('/welcome')
       if (outcome.state === 'signed-out-locally') setNotice(LOCAL_ONLY)

@@ -10,16 +10,23 @@
  *
  * `confirmText` is the exception, for the screens where the act is not the same
  * every time. Adding three exercises is not the same as adding one, and a circle
- * cannot say which — so those screens draw the count instead of a tick.
+ * cannot say which — so those screens draw the count instead of a tick. It is a
+ * separate string from `confirmLabel` because the two have different jobs: the label
+ * is the whole sentence a screen reader says, and what is drawn has to fit beside a
+ * title at a size somebody can read.
+ *
+ * **Both shapes are the library's, not this file's.** This header drew its own
+ * rounded rectangle with a flat `action.primary`, while `Button` painted its primary
+ * variant with `gradient.signal` — so the same affirmative act looked one way here
+ * and another everywhere else, which is exactly what a hand-built control costs.
  */
 
+import { Button } from '@allfitone/react-native/button'
 import { IconButton } from '@allfitone/react-native/icon-button'
 import { FoundationIcon } from '@allfitone/react-native/icons'
 import { Text } from '@allfitone/react-native/text'
 import { useTheme } from '@allfitone/react-native/theme'
 import { Pressable, StyleSheet, View } from 'react-native'
-
-const CONFIRM = 34
 
 export function ScreenHeader({
   title,
@@ -36,8 +43,8 @@ export function ScreenHeader({
   readonly onClose: () => void
   readonly onConfirm?: (() => void) | undefined
   readonly confirmLabel: string
-  /** Draws the label instead of the tick, for a confirm that changes with the set. */
-  readonly confirmText?: boolean | undefined
+  /** Drawn instead of the tick, for a confirm that changes with the set. */
+  readonly confirmText?: string | undefined
   readonly editable?: boolean | undefined
   readonly onEdit?: (() => void) | undefined
 }) {
@@ -62,46 +69,26 @@ export function ScreenHeader({
             </Pressable>
           ) : null}
         </View>
-        <Text role="body" size="xs" color="muted">
+        <Text role="body" size="sm" color="muted">
           {subtitle}
         </Text>
       </View>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={confirmLabel}
-        accessibilityState={{ disabled: !ready }}
-        disabled={!ready}
-        onPress={onConfirm}
-        style={({ pressed }) => [
-          confirmText ? styles.confirmWide : styles.confirm,
-          {
-            backgroundColor: ready ? theme.color.action.primary : theme.color.background.surface,
-            borderColor: ready ? theme.color.border.accent : theme.color.border.subtle,
-            opacity: pressed ? 0.7 : 1,
-          },
-        ]}
-      >
-        {confirmText ? (
-          <Text
-            role="display"
-            size="sm"
-            uppercase
-            numberOfLines={1}
-            style={{
-              color: ready ? theme.color.action.onPrimary : theme.color.text.muted,
-            }}
-          >
-            {confirmLabel}
-          </Text>
-        ) : (
-          <FoundationIcon
-            name="check"
-            size="sm"
-            color={ready ? theme.color.action.onPrimary : theme.color.icon.secondary}
-            decorative
-          />
-        )}
-      </Pressable>
+      {confirmText === undefined ? (
+        <IconButton
+          icon="check"
+          variant="solid"
+          accessibilityLabel={confirmLabel}
+          disabled={!ready}
+          onPress={onConfirm}
+        />
+      ) : (
+        <Button
+          label={confirmText}
+          accessibilityLabel={confirmLabel}
+          disabled={!ready}
+          onPress={onConfirm}
+        />
+      )}
     </View>
   )
 }
@@ -111,21 +98,4 @@ const styles = StyleSheet.create({
   heading: { flex: 1, gap: 2 },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   title: { flexShrink: 1 },
-  confirmWide: {
-    minHeight: CONFIRM,
-    minWidth: CONFIRM,
-    paddingHorizontal: 16,
-    borderRadius: CONFIRM / 2,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  confirm: {
-    width: CONFIRM,
-    height: CONFIRM,
-    borderRadius: CONFIRM / 2,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
 })

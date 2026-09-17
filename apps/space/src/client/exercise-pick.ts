@@ -59,6 +59,17 @@ export function pickLabel(count: number): string {
   return `Añadir ${count} ejercicios`
 }
 
+/**
+ * The same thing, short enough to be drawn at a size somebody can read.
+ *
+ * The full phrase set in a pill beside the title left room for nothing but a tiny
+ * face; the noun is already on the screen, in its heading, so only the count is news.
+ * `pickLabel` stays the accessible name, which is where the whole sentence belongs.
+ */
+export function pickButton(count: number): string {
+  return count <= 0 ? 'Añadir' : `Añadir ${count}`
+}
+
 /** The catalogue minus what the routine already trains, which is not offered twice. */
 export function offerable(
   movements: readonly Movement[],

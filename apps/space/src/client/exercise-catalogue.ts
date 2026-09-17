@@ -30,8 +30,14 @@ export interface ExerciseFilter {
 
 export const NOTHING_FILTERED: ExerciseFilter = { muscles: [], equipment: [] }
 
-/** How many names of what a movement works fit on its one caption line. */
-const CAPTION_MUSCLES = 2
+/**
+ * The caption is one line and never wraps, so it names the muscle the movement is
+ * for and the thing it is done with. Four terms wrapped and left a word orphaned on
+ * its own line, which is what made a long list look broken.
+ */
+const CAPTION_MUSCLES = 1
+
+const CAPTION_EQUIPMENT = 1
 
 export function codesIn(filter: ExerciseFilter, facet: FilterFacet): readonly string[] {
   return facet === 'muscle' ? filter.muscles : filter.equipment
@@ -132,12 +138,13 @@ export function movementCaption(
   equipment: readonly CatalogueTerm[],
 ): string {
   const worked = movement.muscles
-    .slice(0, CAPTION_MUSCLES)
     .map((code) => nameFor(muscles, code))
     .filter((name) => name !== undefined)
+    .slice(0, CAPTION_MUSCLES)
   const needed = movement.equipment
     .map((code) => nameFor(equipment, code))
     .filter((name) => name !== undefined)
+    .slice(0, CAPTION_EQUIPMENT)
   return [...worked, ...needed].join(' · ')
 }
 
