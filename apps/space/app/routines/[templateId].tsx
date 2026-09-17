@@ -49,6 +49,7 @@ import { Chip } from '@allfitone/react-native/chip'
 import { Sheet } from '@allfitone/react-native/sheet'
 import { Stepper } from '@allfitone/react-native/stepper'
 import { FoundationIcon } from '@allfitone/react-native/icons'
+import { IconButton } from '@allfitone/react-native/icon-button'
 import { InlineAlert } from '@allfitone/react-native/inline-alert'
 import { NumberField } from '@allfitone/react-native/number-field'
 import { Screen } from '@allfitone/react-native/screen'
@@ -1017,18 +1018,48 @@ function SetTable({
 
   return (
     <View style={styles.table}>
+      {/* Every column named, and the one heading that is itself a control says so in
+          the accent. Ink & Signal keeps that colour for what can be acted on, so a
+          blue heading means «press this» rather than «this column is important». */}
+      <View style={styles.tableHead}>
+        <Text role="eyebrow" size="xs" color="muted" style={styles.colOrder}>
+          #
+        </Text>
+        <Text role="eyebrow" size="xs" color="muted" style={styles.colKind}>
+          Tipo
+        </Text>
+        <View style={styles.colCell}>
+          <Text role="eyebrow" size="xs" color="muted">
+            Reps
+          </Text>
+        </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Peso en ${unit}. Cambiar a ${otherUnit(unit)}`}
+          hitSlop={PRESS_SLOP}
+          onPress={onUnit}
+          style={styles.colCell}
+        >
+          <Text role="eyebrow" size="xs" color="accent">
+            {unit}
+          </Text>
+        </Pressable>
+        <View style={styles.colClose} />
+      </View>
+
       {step.sets.map((one, order) => (
         <View key={order} style={[styles.tableRow, { borderTopColor: theme.color.border.subtle }]}>
           <Text role="body" size="sm" color="muted" style={styles.colOrder}>
             {order + 1}
           </Text>
-          <Badge
-            label={SET_KIND_NAMES[one.kind]}
-            tone={SET_KIND_TONES[one.kind]}
-            accessibilityLabel={`Tipo de la serie ${order + 1}: ${SET_KIND_NAMES[one.kind]}`}
-            onPress={() => onKind(order)}
-          />
-          <View style={styles.setSpacer} />
+          <View style={styles.colKind}>
+            <Badge
+              label={SET_KIND_NAMES[one.kind]}
+              tone={SET_KIND_TONES[one.kind]}
+              accessibilityLabel={`Tipo de la serie ${order + 1}: ${SET_KIND_NAMES[one.kind]}`}
+              onPress={() => onKind(order)}
+            />
+          </View>
           <NumberField
             accessibilityLabel={`Repeticiones de la serie ${order + 1}`}
             value={one.reps}
@@ -1066,29 +1097,32 @@ function SetTable({
         </View>
       ))}
 
-      <View style={styles.tableActions}>
-        <Button
-          label="Añadir serie"
-          variant="ghost"
-          icon="add"
-          onPress={() => onChangeSets([...step.sets, { kind: 'normal', reps: 8 }])}
-        />
-        <Button
-          label={`Peso en ${otherUnit(unit)}`}
-          variant="ghost"
-          icon="weight"
-          onPress={onUnit}
-        />
-      </View>
+      {/* Part of the table, not of a toolbar: it belongs after the last set, which is
+          where the finger already is when somebody wants another one. */}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Añadir una serie"
+        hitSlop={PRESS_SLOP}
+        onPress={() => onChangeSets([...step.sets, { kind: 'normal', reps: 8 }])}
+        style={[styles.addSet, { borderTopColor: theme.color.border.subtle }]}
+      >
+        <FoundationIcon name="add" size="sm" color={theme.color.icon.accent} decorative />
+        <Text role="control" size="sm" color="accent">
+          Añadir serie
+        </Text>
+      </Pressable>
 
+      {/* The rest carries a value; the menu opens something. Nothing else belongs in
+          a row under the table. */}
       <View style={styles.tableActions}>
         <Button
           label={restLabel(step.restSeconds)}
           variant="secondary"
+          size="sm"
           icon="time"
           onPress={onRest}
         />
-        <Button label="Más" variant="secondary" icon="more" onPress={onMenu} />
+        <IconButton icon="more" size="sm" accessibilityLabel="Más opciones" onPress={onMenu} />
       </View>
     </View>
   )
@@ -1355,7 +1389,6 @@ const styles = StyleSheet.create({
   rowText: { flex: 1, gap: 3 },
   rowHead: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   table: { gap: 2, paddingTop: 12 },
-  setSpacer: { flex: 1, minWidth: 4 },
   tableRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1364,7 +1397,26 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
   },
   colOrder: { width: 18 },
-  tableActions: { flexDirection: 'row', justifyContent: 'space-between', gap: 8, paddingTop: 8 },
+  addSet: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    height: 44,
+    borderTopWidth: 1,
+  },
+  tableActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    paddingTop: 10,
+  },
+  // Mirrors the set row below it, or the headings sit over the wrong columns.
+  tableHead: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingBottom: 4 },
+  colKind: { flex: 1 },
+  colCell: { minWidth: 62, alignItems: 'center' },
+  colClose: { width: 20 },
   sheet: { gap: 10, paddingBottom: 8 },
   choice: {
     flexDirection: 'row',
