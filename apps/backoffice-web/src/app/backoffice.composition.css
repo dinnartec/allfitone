@@ -337,6 +337,18 @@
   white-space: normal;
 }
 
+/* What a session held is one sentence of sums, so it wraps instead of widening. */
+[data-break-glass-done] {
+  min-width: 9rem;
+  max-width: 11rem;
+  white-space: normal;
+}
+
+[data-break-glass-level] {
+  max-width: 7rem;
+  white-space: normal;
+}
+
 [data-access-log-filters] {
   display: grid;
   gap: 12px;

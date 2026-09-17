@@ -77,6 +77,7 @@ import {
   healthContextRows,
   mealRows,
   measurementRows,
+  trainingRows,
   outcomeMessage,
   purposeLabel,
   quorumSentence,
@@ -154,6 +155,7 @@ export function BreakGlassWindows() {
   const rows = shown ? measurementRows(shown) : []
   const claims = shown ? healthContextRows(shown) : []
   const eaten = shown ? mealRows(shown) : []
+  const trained = shown ? trainingRows(shown) : []
 
   async function run(operation: () => Promise<unknown>, success: string) {
     setBusy(true)
@@ -245,7 +247,8 @@ export function BreakGlassWindows() {
             {shown?.outcome === 'allowed' &&
             rows.length === 0 &&
             claims.length === 0 &&
-            eaten.length === 0
+            eaten.length === 0 &&
+            trained.length === 0
               ? ` ${emptyReadMessage(shown.category)}`
               : null}
           </AlertDescription>
@@ -328,6 +331,34 @@ export function BreakGlassWindows() {
                 <TableCell data-break-glass-meal>{meal.totals}</TableCell>
                 <TableCell data-break-glass-meal>{meal.note}</TableCell>
                 <TableCell data-break-glass-origin>{meal.photo}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      ) : null}
+
+      {trained.length > 0 ? (
+        <Table scrollAreaLabel="Sesiones de entrenamiento de la persona" data-break-glass-content>
+          <TableCaption>Sesiones de entrenamiento de la persona</TableCaption>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Cuándo</TableHead>
+              <TableHead>Actividad</TableHead>
+              <TableHead>Duración</TableHead>
+              <TableHead>Lo que hizo</TableHead>
+              <TableHead>Estado</TableHead>
+              <TableHead>Nivel</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {trained.map((session) => (
+              <TableRow key={session.id}>
+                <TableCell data-break-glass-moment>{session.when}</TableCell>
+                <TableCell>{session.activity}</TableCell>
+                <TableCell>{session.duration}</TableCell>
+                <TableCell data-break-glass-done>{session.done}</TableCell>
+                <TableCell data-break-glass-origin>{session.state}</TableCell>
+                <TableCell data-break-glass-level>{session.level}</TableCell>
               </TableRow>
             ))}
           </TableBody>

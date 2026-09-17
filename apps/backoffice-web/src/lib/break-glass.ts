@@ -28,6 +28,7 @@ export type BreakGlassStatus = AllfitV1Schemas['BreakGlassStatus']
 export type BreakGlassTier = AllfitV1Schemas['BreakGlassTier']
 export type BreakGlassExerciseOutcome = AllfitV1Schemas['BreakGlassExerciseOutcome']
 export type BodyProgressRecord = AllfitV1Schemas['BodyProgressRecord']
+type ExecutionDetail = AllfitV1Schemas['ExecutionDetail']
 type BodyProgressMetricCode = AllfitV1Schemas['BodyProgressMetricCode']
 type BodyProgressUnitCode = AllfitV1Schemas['BodyProgressUnitCode']
 type HealthContextType = AllfitV1Schemas['HealthContextType']
@@ -35,6 +36,9 @@ type HealthContextBodyArea = AllfitV1Schemas['HealthContextBodyArea']
 type Provenance = AllfitV1Schemas['Provenance']
 type MealType = AllfitV1Schemas['MealType']
 type NutrientCode = AllfitV1Schemas['NutrientCode']
+type ExecutionStatus = AllfitV1Schemas['ExecutionStatus']
+type ExecutionValidationStatus = AllfitV1Schemas['ExecutionValidationStatus']
+type CompletenessLevel = AllfitV1Schemas['CompletenessLevel']
 
 /** Only what can be approved. The forbidden set is absent, not disabled. */
 export const BREAK_GLASS_CATEGORIES: readonly BreakGlassCategory[] = [
@@ -264,8 +268,8 @@ const OUTCOME_MESSAGES: Record<string, string> = {
     'Esa lectura no corresponde a la categoría aprobada. Quedó registrado el intento.',
   authorized_exercise:
     'Lectura autorizada. Es lo que la persona tiene registrado ahora y deja de verse cuando la ventana cierra.',
-  execution_and_nutrition_absent:
-    'La ventana es válida y el intento quedó registrado, pero el contenido todavía no existe en la plataforma.',
+  category_content_absent:
+    'La ventana es válida y el intento quedó registrado, pero esa categoría todavía no guarda contenido en la plataforma.',
 }
 
 /**
@@ -483,12 +487,127 @@ function mealMoment(value: string, zone: string): string {
 }
 
 /** An allowed read that returned nothing still has to say what it looked for. */
+
+const EXECUTION_STATUS_LABELS: Record<ExecutionStatus, string> = {
+  in_progress: 'En curso',
+  paused: 'En pausa',
+  completed: 'Completada',
+  abandoned: 'Abandonada',
+}
+
+const VALIDATION_LABELS: Record<ExecutionValidationStatus, string> = {
+  pending: 'sin validar',
+  valid: 'validada',
+  invalid: 'invalidada',
+  annulled: 'anulada',
+}
+
+const LEVEL_LABELS: Record<CompletenessLevel, string> = {
+  partial: 'Parcial',
+  summary: 'Resumen',
+  detailed: 'Detallado',
+  sensor_enriched: 'Con sensores',
+}
+
+export interface TrainingRow {
+  id: string
+  when: string
+  activity: string
+  duration: string
+  done: string
+  state: string
+  level: string
+}
+
+/** The sessions an allowed read returned, most recent first as the server sent them. */
+export function trainingRows(outcome: BreakGlassExerciseOutcome): TrainingRow[] {
+  if (outcome.outcome !== 'allowed') return []
+  return (outcome.content?.prior_training_history ?? []).map((session) => {
+    const zone = String(session.timezone)
+    return {
+      id: session.id,
+      // The hour where it was trained, and the zone that makes that hour true.
+      when: `${mealMoment(session.started_at, zone)} · ${zone}`,
+      activity: session.activity_type_name,
+      duration: sessionLength(session.started_at, session.ended_at),
+      done: whatWasDone(session.strength_sets, session.endurance_laps),
+      state: `${EXECUTION_STATUS_LABELS[session.status]} · ${VALIDATION_LABELS[session.validation_status]}`,
+      level:
+        session.achieved_level === null
+          ? 'Sin nivel certificado'
+          : LEVEL_LABELS[session.achieved_level],
+    }
+  })
+}
+
+function sessionLength(startedAt: string, endedAt: string | null): string {
+  if (endedAt === null) return 'Sin cerrar'
+  const span = Date.parse(endedAt) - Date.parse(startedAt)
+  if (Number.isNaN(span) || span < 0) return '—'
+  const minutes = Math.round(span / 60_000)
+  const hours = Math.floor(minutes / 60)
+  const rest = minutes % 60
+  if (hours === 0) return `${rest} min`
+  return rest === 0 ? `${hours} h` : `${hours} h ${rest} min`
+}
+
+/** What the session held, summed the way a reviewer reads it rather than set by set. */
+function whatWasDone(
+  sets: ExecutionDetail['strength_sets'],
+  laps: ExecutionDetail['endurance_laps'],
+): string {
+  const parts: string[] = []
+  if (sets.length > 0) {
+    const reps = sets.reduce((total, set) => total + (set.achieved_reps ?? 0), 0)
+    parts.push(`${sets.length} ${sets.length === 1 ? 'serie' : 'series'}`)
+    if (reps > 0) parts.push(`${reps} ${reps === 1 ? 'repetición' : 'repeticiones'}`)
+    const heaviest = heaviestByUnit(sets)
+    if (heaviest) parts.push(`hasta ${heaviest}`)
+  }
+  if (laps.length > 0) {
+    const seconds = laps.reduce((total, lap) => total + lap.duration_seconds, 0)
+    parts.push(`${laps.length} ${laps.length === 1 ? 'tramo' : 'tramos'}`)
+    parts.push(coveredByUnit(laps))
+    parts.push(clock(seconds))
+  }
+  return parts.length > 0 ? parts.join(' · ') : 'Sin resultados registrados'
+}
+
+/** Loads in different units are never added together; each unit keeps its own top. */
+function heaviestByUnit(sets: ExecutionDetail['strength_sets']): string {
+  const tops = new Map<string, number>()
+  for (const set of sets) {
+    if (!set.load) continue
+    tops.set(set.load.unit, Math.max(tops.get(set.load.unit) ?? 0, set.load.value))
+  }
+  return [...tops].map(([unit, value]) => `${amount(value)} ${unit}`).join(' y ')
+}
+
+function coveredByUnit(laps: ExecutionDetail['endurance_laps']): string {
+  const totals = new Map<string, number>()
+  for (const lap of laps) {
+    totals.set(lap.distance.unit, (totals.get(lap.distance.unit) ?? 0) + lap.distance.value)
+  }
+  return [...totals].map(([unit, value]) => `${amount(value)} ${unit}`).join(' y ')
+}
+
+function clock(seconds: number): string {
+  const hours = Math.floor(seconds / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+  const rest = seconds % 60
+  const pad = (value: number) => String(value).padStart(2, '0')
+  return hours > 0 ? `${hours}:${pad(minutes)}:${pad(rest)}` : `${minutes}:${pad(rest)}`
+}
+
 export function emptyReadMessage(category: BreakGlassCategory | undefined): string {
   if (category === 'body_progress') return 'La persona no tiene mediciones registradas.'
   if (category === 'health_context') {
     return 'La persona no ha declarado dolores, limitaciones ni recuperaciones.'
   }
   if (category === 'nutrition_intake') return 'La persona no ha registrado comidas.'
+  if (category === 'prior_training_history') {
+    return 'La persona no tiene sesiones de entrenamiento registradas.'
+  }
   return 'La lectura no devolvió registros.'
 }
 

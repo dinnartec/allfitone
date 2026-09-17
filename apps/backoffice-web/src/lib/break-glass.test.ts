@@ -11,6 +11,7 @@ import {
   formatDay,
   healthContextRows,
   mealRows,
+  trainingRows,
   measurementRows,
   outcomeMessage,
   projectedTier,
@@ -196,7 +197,7 @@ describe('break-glass presentation rules', () => {
     const unavailable = outcomeMessage({
       ...base,
       outcome: 'content_unavailable',
-      reason_code: 'execution_and_nutrition_absent',
+      reason_code: 'category_content_absent',
     })
     expect(unavailable).toContain('válida')
     expect(unavailable).toContain('registrado')
@@ -434,6 +435,145 @@ describe('break-glass presentation rules', () => {
     expect(healthContextRows(allowed)).toEqual([])
   })
 
+  test('shows a session as when it was trained, how long it lasted and what it held', () => {
+    const allowed: BreakGlassExerciseOutcome = {
+      outcome: 'allowed',
+      reason_code: 'authorized_exercise',
+      break_glass_event_id: '019a8000-0000-7000-8000-000000000606',
+      occurred_at: '2026-09-10T18:11:00.000Z',
+      category: 'prior_training_history',
+      content: {
+        prior_training_history: [
+          {
+            id: '019a8000-0000-7000-8000-000000000a01',
+            activity_type_code: 'test_strength_session',
+            activity_type_name: 'Sesión de fuerza',
+            discipline_code: 'test_strength',
+            started_at: '2026-09-15T12:00:00+00:00',
+            ended_at: '2026-09-15T13:15:00+00:00',
+            timezone: 'America/Bogota',
+            status: 'completed',
+            validation_status: 'pending',
+            requested_level: 'detailed',
+            achieved_level: null,
+            revision_number: 3,
+            capture_source: 'manual',
+            contract: { id: '019c0000-0000-7000-8000-000000000031', version: 1 },
+            segments: [{ position: 1, activity_type_code: 'test_strength_session' }],
+            strength_sets: [
+              {
+                segment_position: 1,
+                order: 1,
+                movement_id: null,
+                movement_name: 'Sentadilla',
+                achieved_reps: 8,
+                load: { value: 80, unit: 'kg' },
+                rpe: 7,
+              },
+              {
+                segment_position: 1,
+                order: 2,
+                movement_id: null,
+                movement_name: 'Sentadilla',
+                achieved_reps: 6,
+                load: { value: 85, unit: 'kg' },
+                rpe: 8,
+              },
+            ],
+            endurance_laps: [],
+          },
+          {
+            id: '019a8000-0000-7000-8000-000000000a02',
+            activity_type_code: 'test_endurance_session',
+            activity_type_name: 'Sesión de resistencia',
+            discipline_code: 'test_endurance',
+            started_at: '2026-09-14T11:00:00+00:00',
+            ended_at: null,
+            timezone: 'Europe/Madrid',
+            status: 'in_progress',
+            validation_status: 'pending',
+            requested_level: 'summary',
+            achieved_level: null,
+            revision_number: 1,
+            capture_source: 'device',
+            contract: { id: '019c0000-0000-7000-8000-000000000032', version: 2 },
+            segments: [{ position: 1, activity_type_code: 'test_endurance_session' }],
+            strength_sets: [],
+            endurance_laps: [
+              {
+                segment_position: 1,
+                lap_number: 1,
+                distance: { value: 1, unit: 'km' },
+                duration_seconds: 330,
+              },
+              {
+                segment_position: 1,
+                lap_number: 2,
+                distance: { value: 1, unit: 'km' },
+                duration_seconds: 275,
+              },
+            ],
+          },
+        ],
+      },
+    }
+
+    const [strength, run] = trainingRows(allowed)
+    // The hour in the session's own zone: 12:00 UTC is 7:00 in Bogotá, and 11:00 is 13:00 in Madrid.
+    expect(strength?.when).toContain('7:00')
+    expect(strength?.when).toContain('America/Bogota')
+    expect(run?.when).toContain('1:00')
+    expect(run?.when).toContain('Europe/Madrid')
+    expect(strength).toMatchObject({
+      id: '019a8000-0000-7000-8000-000000000a01',
+      activity: 'Sesión de fuerza',
+      duration: '1 h 15 min',
+      done: '2 series · 14 repeticiones · hasta 85 kg',
+      state: 'Completada · sin validar',
+      level: 'Sin nivel certificado',
+    })
+    expect(run).toMatchObject({
+      activity: 'Sesión de resistencia',
+      duration: 'Sin cerrar',
+      done: '2 tramos · 2 km · 10:05',
+      state: 'En curso · sin validar',
+    })
+    const empty = allowed.content?.prior_training_history?.[0]
+    if (!empty) throw new Error('the fixture has a first session')
+    const [nothing] = trainingRows({
+      ...allowed,
+      content: { prior_training_history: [{ ...empty, strength_sets: [], endurance_laps: [] }] },
+    })
+    expect(nothing?.done).toBe('Sin resultados registrados')
+    // Kilos and pounds are never added together; each unit keeps its own top.
+    const [mixed] = trainingRows({
+      ...allowed,
+      content: {
+        prior_training_history: [
+          {
+            ...empty,
+            strength_sets: [
+              ...empty.strength_sets,
+              {
+                segment_position: 1,
+                order: 3,
+                movement_id: null,
+                movement_name: 'Peso muerto',
+                achieved_reps: 5,
+                load: { value: 40, unit: 'lb' },
+                rpe: 8,
+              },
+            ],
+          },
+        ],
+      },
+    })
+    expect(mixed?.done).toContain('hasta 85 kg y 40 lb')
+    expect(trainingRows({ ...allowed, outcome: 'denied' })).toEqual([])
+    expect(measurementRows(allowed)).toEqual([])
+    expect(mealRows(allowed)).toEqual([])
+  })
+
   test('dates a claim by its day, which is all a declaration knows', () => {
     expect(formatDay('2026-09-01T10:00:00.000Z')).not.toMatch(/d:dd/)
     expect(formatDay('2026-09-01T10:00:00.000Z')).toContain('2026')
@@ -446,6 +586,9 @@ describe('break-glass presentation rules', () => {
       'La persona no ha declarado dolores, limitaciones ni recuperaciones.',
     )
     expect(emptyReadMessage('nutrition_intake')).toBe('La persona no ha registrado comidas.')
+    expect(emptyReadMessage('prior_training_history')).toBe(
+      'La persona no tiene sesiones de entrenamiento registradas.',
+    )
     expect(emptyReadMessage('nutrition_guidance')).toBe('La lectura no devolvió registros.')
     expect(emptyReadMessage(undefined)).toBe('La lectura no devolvió registros.')
   })

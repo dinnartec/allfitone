@@ -228,7 +228,9 @@ test('an authorised read that finds nothing is reported as recorded, not as a fa
   const outcome = page.locator('[data-break-glass-outcome]')
   await expect(outcome).toBeVisible()
   await expect(outcome.getByText('Intento registrado', { exact: true })).toBeVisible()
-  await expect(outcome.getByText(/el contenido todavía no existe en la plataforma/)).toBeVisible()
+  await expect(
+    outcome.getByText(/esa categoría todavía no guarda contenido en la plataforma/),
+  ).toBeVisible()
   // The person whose data it was sees the same attempt. Saying so is the point of
   // the screen, not a footnote.
   await expect(
@@ -523,6 +525,146 @@ test('an authorised read of someone who recorded no meals says so', async ({ con
     page.locator('[data-break-glass-outcome]').getByText(/La persona no ha registrado comidas/),
   ).toBeVisible()
   await expect(page.getByRole('table', { name: 'Comidas de la persona' })).toHaveCount(0)
+})
+
+test('an authorised read of prior training shows each session and what it held', async ({
+  context,
+  page,
+}) => {
+  const fixture = createBackofficeFixture({
+    session: activeSession(),
+    breakGlass: {
+      files: [openBreakGlassWindow(10, { categories: ['prior_training_history'] })],
+      sessions: [
+        {
+          id: '019a8000-0000-7000-8000-000000000a01',
+          activity_type_code: 'strength_session',
+          activity_type_name: 'Sesión de fuerza',
+          discipline_code: 'strength',
+          started_at: '2026-09-15T12:00:00+00:00',
+          ended_at: '2026-09-15T13:15:00+00:00',
+          timezone: 'America/Bogota',
+          status: 'completed',
+          validation_status: 'pending',
+          requested_level: 'detailed',
+          achieved_level: null,
+          revision_number: 3,
+          capture_source: 'manual',
+          contract: { id: '019c0000-0000-7000-8000-000000000031', version: 1 },
+          segments: [{ position: 1, activity_type_code: 'strength_session' }],
+          strength_sets: [
+            {
+              segment_position: 1,
+              order: 1,
+              movement_id: null,
+              movement_name: 'Sentadilla',
+              achieved_reps: 8,
+              load: { value: 80, unit: 'kg' },
+              rpe: 7,
+            },
+            {
+              segment_position: 1,
+              order: 2,
+              movement_id: null,
+              movement_name: 'Sentadilla',
+              achieved_reps: 6,
+              load: { value: 85, unit: 'kg' },
+              rpe: 8,
+            },
+          ],
+          endurance_laps: [],
+        },
+        {
+          id: '019a8000-0000-7000-8000-000000000a02',
+          activity_type_code: 'endurance_session',
+          activity_type_name: 'Sesión de resistencia',
+          discipline_code: 'endurance',
+          started_at: '2026-09-14T11:00:00+00:00',
+          ended_at: '2026-09-14T11:45:00+00:00',
+          timezone: 'America/Bogota',
+          status: 'completed',
+          validation_status: 'pending',
+          requested_level: 'summary',
+          achieved_level: null,
+          revision_number: 2,
+          capture_source: 'device',
+          contract: { id: '019c0000-0000-7000-8000-000000000032', version: 2 },
+          segments: [{ position: 1, activity_type_code: 'endurance_session' }],
+          strength_sets: [],
+          endurance_laps: [
+            {
+              segment_position: 1,
+              lap_number: 1,
+              distance: { value: 1, unit: 'km' },
+              duration_seconds: 330,
+            },
+            {
+              segment_position: 1,
+              lap_number: 2,
+              distance: { value: 1, unit: 'km' },
+              duration_seconds: 315,
+            },
+          ],
+        },
+      ],
+    },
+  })
+  await mockBackofficeApi(context, fixture)
+  // A laptop screen: the sessions fit without scrolling sideways.
+  await page.setViewportSize({ width: 1280, height: 900 })
+
+  await page.goto(PATH)
+  await page.getByRole('button', { name: 'Leer historial previo de entrenamiento' }).click()
+
+  const outcome = page.locator('[data-break-glass-outcome]')
+  await expect(outcome.getByText('Lectura autorizada y registrada')).toBeVisible()
+
+  const sessions = page.getByRole('table', { name: 'Sesiones de entrenamiento de la persona' })
+  const strength = sessions.getByRole('row', { name: /Sesión de fuerza/ })
+  await expect(strength).toContainText('America/Bogota')
+  await expect(strength).toContainText('1 h 15 min')
+  await expect(strength).toContainText('2 series · 14 repeticiones · hasta 85 kg')
+  await expect(strength).toContainText('Completada · sin validar')
+  await expect(strength).toContainText('Sin nivel certificado')
+  const run = sessions.getByRole('row', { name: /Sesión de resistencia/ })
+  await expect(run).toContainText('2 tramos · 2 km · 10:45')
+  const region = page.getByRole('region', { name: 'Sesiones de entrenamiento de la persona' })
+  expect(await region.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true)
+
+  const read = fixture.requests.filter((request) => request.path.endsWith('/reads'))
+  expect(read[0]?.body).toEqual({
+    category: 'prior_training_history',
+    resource_type: 'execution.executed_sessions',
+  })
+
+  await page.getByRole('button', { name: 'Cerrar la ventana' }).click()
+  await expect(page.getByText(/Ninguna lectura entrega contenido desde ahora/)).toBeVisible()
+  await expect(sessions).toHaveCount(0)
+})
+
+test('an authorised read of someone who never trained says so', async ({ context, page }) => {
+  await mockBackofficeApi(
+    context,
+    createBackofficeFixture({
+      session: activeSession(),
+      breakGlass: {
+        files: [openBreakGlassWindow(10, { categories: ['prior_training_history'] })],
+        sessions: [],
+      },
+    }),
+  )
+
+  await page.goto(PATH)
+  await page.getByRole('button', { name: 'Leer historial previo de entrenamiento' }).click()
+
+  await expect(
+    page
+      .locator('[data-break-glass-outcome]')
+      .getByText(/La persona no tiene sesiones de entrenamiento registradas/),
+  ).toBeVisible()
+  await expect(
+    page.getByRole('table', { name: 'Sesiones de entrenamiento de la persona' }),
+  ).toHaveCount(0)
 })
 
 test('a second read replaces what the first one showed', async ({ context, page }) => {

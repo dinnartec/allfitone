@@ -113,6 +113,8 @@ export interface BreakGlassFixture {
   healthContext?: HealthContextClaimFixture[]
   /** What the subject has eaten. Only a nutrition_intake read returns it. */
   meals?: BreakGlassMealFixture[]
+  /** What the subject has trained. Only a prior_training_history read returns it. */
+  sessions?: BreakGlassSessionFixture[]
   files: BreakGlassFileFixture[]
 }
 
@@ -131,6 +133,39 @@ export interface BreakGlassMealFixture {
     quantity: number | null
     quantity_unit: string | null
     nutrients: Array<{ nutrient_code: string; value: number; unit: string }>
+  }>
+}
+
+export interface BreakGlassSessionFixture {
+  id: string
+  activity_type_code: string
+  activity_type_name: string
+  discipline_code: string
+  started_at: string
+  ended_at: string | null
+  timezone: string
+  status: string
+  validation_status: string
+  requested_level: string
+  achieved_level: string | null
+  revision_number: number
+  capture_source: string
+  contract: { id: string; version: number }
+  segments: Array<{ position: number; activity_type_code: string }>
+  strength_sets: Array<{
+    segment_position: number
+    order: number
+    movement_id: string | null
+    movement_name: string | null
+    achieved_reps: number | null
+    load: { value: number; unit: string } | null
+    rpe: number | null
+  }>
+  endurance_laps: Array<{
+    segment_position: number
+    lap_number: number
+    distance: { value: number; unit: string }
+    duration_seconds: number
   }>
 }
 
@@ -1734,6 +1769,7 @@ async function routeBreakGlass(
       body_progress: 'identity.body_progress_records',
       health_context: 'identity.health_context_claims',
       nutrition_intake: 'nutrition.meals',
+      prior_training_history: 'execution.executed_sessions',
     }
     const ownTable = readable[category]
     const forced = glass.nextExerciseDenial
@@ -1780,10 +1816,17 @@ async function routeBreakGlass(
         ...event,
         content: { nutrition_intake: glass.meals ?? [] },
       })
+    } else if (category === 'prior_training_history') {
+      await fulfill(route, 200, {
+        outcome: 'allowed',
+        reason_code: 'authorized_exercise',
+        ...event,
+        content: { prior_training_history: glass.sessions ?? [] },
+      })
     } else {
       await fulfill(route, 200, {
         outcome: 'content_unavailable',
-        reason_code: 'execution_and_nutrition_absent',
+        reason_code: 'category_content_absent',
         ...event,
       })
     }
