@@ -804,37 +804,28 @@ paths:
       tags: [Global Catalogue]
       operationId: listCatalogDisciplines
       x-allfit-operation: OP-CAT-007
-      x-allfit-cache: private-revalidate
+      x-allfit-cache: private-no-store
       summary: List the published disciplines of the global catalogue
       description: >-
         The catalogue has no subject and no tenant: it is global published content
         shared by every surface. It still requires an authenticated active person,
         so it is not public. There is no pagination in V1 — the catalogue is small
-        and closed, and the code is stable enough to cache against.
+        and closed. It is served uncached and never answers 304: both callers today
+        are browsers reading across origins, and a 304 reached them without
+        `Access-Control-Allow-Origin`, which the browser blocks.
       security:
         - cookieAuth: []
         - backofficeCookieAuth: []
-      parameters:
-        - $ref: '#/components/parameters/IfNoneMatch'
       responses:
         '200':
           description: Published disciplines ordered by their stable code
           headers:
             Cache-Control:
-              $ref: '#/components/headers/PrivateRevalidate'
-            ETag:
-              $ref: '#/components/headers/ETag'
+              $ref: '#/components/headers/PrivateNoStore'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/CatalogDisciplineList'
-        '304':
-          description: Catalogue has not changed
-          headers:
-            Cache-Control:
-              $ref: '#/components/headers/PrivateRevalidate'
-            ETag:
-              $ref: '#/components/headers/ETag'
         '401':
           $ref: '#/components/responses/Unauthenticated'
         '403':
@@ -847,7 +838,7 @@ paths:
       tags: [Global Catalogue]
       operationId: listCatalogActivityTypes
       x-allfit-operation: OP-CAT-008
-      x-allfit-cache: private-revalidate
+      x-allfit-cache: private-no-store
       summary: List the published global activity types
       description: >-
         Only global published content. An organisation's own activity types belong
@@ -856,27 +847,16 @@ paths:
       security:
         - cookieAuth: []
         - backofficeCookieAuth: []
-      parameters:
-        - $ref: '#/components/parameters/IfNoneMatch'
       responses:
         '200':
           description: Published global activity types ordered by discipline and code
           headers:
             Cache-Control:
-              $ref: '#/components/headers/PrivateRevalidate'
-            ETag:
-              $ref: '#/components/headers/ETag'
+              $ref: '#/components/headers/PrivateNoStore'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/CatalogActivityTypeList'
-        '304':
-          description: Catalogue has not changed
-          headers:
-            Cache-Control:
-              $ref: '#/components/headers/PrivateRevalidate'
-            ETag:
-              $ref: '#/components/headers/ETag'
         '401':
           $ref: '#/components/responses/Unauthenticated'
         '403':
@@ -889,7 +869,7 @@ paths:
       tags: [Global Catalogue]
       operationId: listCatalogActivityTypeResultContracts
       x-allfit-operation: OP-CAT-012
-      x-allfit-cache: private-revalidate
+      x-allfit-cache: private-no-store
       summary: List the effective result contracts of an activity type
       description: >-
         Returns the contracts currently associated with the activity type, their
@@ -901,26 +881,16 @@ paths:
         - backofficeCookieAuth: []
       parameters:
         - $ref: '#/components/parameters/CatalogActivityTypeId'
-        - $ref: '#/components/parameters/IfNoneMatch'
       responses:
         '200':
           description: Effective associations, the default first
           headers:
             Cache-Control:
-              $ref: '#/components/headers/PrivateRevalidate'
-            ETag:
-              $ref: '#/components/headers/ETag'
+              $ref: '#/components/headers/PrivateNoStore'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ActivityTypeResultContractList'
-        '304':
-          description: Catalogue has not changed
-          headers:
-            Cache-Control:
-              $ref: '#/components/headers/PrivateRevalidate'
-            ETag:
-              $ref: '#/components/headers/ETag'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -2786,31 +2756,20 @@ paths:
       tags: [Studio Catalog]
       operationId: listStudioProfessionalSpecialties
       x-allfit-operation: OP-CAT-013
-      x-allfit-cache: private-revalidate
+      x-allfit-cache: private-no-store
       summary: List published professional specialties in governed order
       security:
         - cookieAuth: []
-      parameters:
-        - $ref: '#/components/parameters/IfNoneMatch'
       responses:
         '200':
           description: Published professional specialty catalogue
           headers:
             Cache-Control:
-              $ref: '#/components/headers/PrivateRevalidate'
-            ETag:
-              $ref: '#/components/headers/ETag'
+              $ref: '#/components/headers/PrivateNoStore'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProfessionalSpecialtyList'
-        '304':
-          description: Catalogue has not changed
-          headers:
-            Cache-Control:
-              $ref: '#/components/headers/PrivateRevalidate'
-            ETag:
-              $ref: '#/components/headers/ETag'
         '401':
           $ref: '#/components/responses/Unauthenticated'
         '403':
@@ -2823,31 +2782,20 @@ paths:
       tags: [Studio Catalog]
       operationId: listStudioProfessionalCredentialTypes
       x-allfit-operation: OP-CAT-014
-      x-allfit-cache: private-revalidate
+      x-allfit-cache: private-no-store
       summary: List published professional credential types in governed order
       security:
         - cookieAuth: []
-      parameters:
-        - $ref: '#/components/parameters/IfNoneMatch'
       responses:
         '200':
           description: Published professional credential type catalogue
           headers:
             Cache-Control:
-              $ref: '#/components/headers/PrivateRevalidate'
-            ETag:
-              $ref: '#/components/headers/ETag'
+              $ref: '#/components/headers/PrivateNoStore'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProfessionalCredentialTypeList'
-        '304':
-          description: Catalogue has not changed
-          headers:
-            Cache-Control:
-              $ref: '#/components/headers/PrivateRevalidate'
-            ETag:
-              $ref: '#/components/headers/ETag'
         '401':
           $ref: '#/components/responses/Unauthenticated'
         '403':
@@ -3423,7 +3371,7 @@ paths:
       tags: [Studio Organizations]
       operationId: listStudioOrganizationRoles
       x-allfit-operation: OP-ORG-017
-      x-allfit-cache: private-revalidate
+      x-allfit-cache: private-no-store
       summary: List the governed V1 organization roles and capabilities
       description: >-
         Capabilities describe the governed V1 authorization model, not deployment
@@ -3432,26 +3380,16 @@ paths:
         - cookieAuth: []
       parameters:
         - $ref: '#/components/parameters/OrganizationId'
-        - $ref: '#/components/parameters/IfNoneMatch'
       responses:
         '200':
           description: The four governed V1 roles and their capabilities
           headers:
             Cache-Control:
-              $ref: '#/components/headers/PrivateRevalidate'
-            ETag:
-              $ref: '#/components/headers/ETag'
+              $ref: '#/components/headers/PrivateNoStore'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/OrganizationRoleCatalog'
-        '304':
-          description: The role catalogue has not changed
-          headers:
-            Cache-Control:
-              $ref: '#/components/headers/PrivateRevalidate'
-            ETag:
-              $ref: '#/components/headers/ETag'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':

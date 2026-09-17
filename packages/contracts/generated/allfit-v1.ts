@@ -280,7 +280,7 @@ export interface paths {
     }
     /**
      * List the published disciplines of the global catalogue
-     * @description The catalogue has no subject and no tenant: it is global published content shared by every surface. It still requires an authenticated active person, so it is not public. There is no pagination in V1 — the catalogue is small and closed, and the code is stable enough to cache against.
+     * @description The catalogue has no subject and no tenant: it is global published content shared by every surface. It still requires an authenticated active person, so it is not public. There is no pagination in V1 — the catalogue is small and closed. It is served uncached and never answers 304: both callers today are browsers reading across origins, and a 304 reached them without `Access-Control-Allow-Origin`, which the browser blocks.
      */
     get: operations['listCatalogDisciplines']
     put?: never
@@ -5405,9 +5405,7 @@ export interface operations {
   listCatalogDisciplines: {
     parameters: {
       query?: never
-      header?: {
-        'If-None-Match'?: components['parameters']['IfNoneMatch']
-      }
+      header?: never
       path?: never
       cookie?: never
     }
@@ -5416,22 +5414,12 @@ export interface operations {
       /** @description Published disciplines ordered by their stable code */
       200: {
         headers: {
-          'Cache-Control': components['headers']['PrivateRevalidate']
-          ETag: components['headers']['ETag']
+          'Cache-Control': components['headers']['PrivateNoStore']
           [name: string]: unknown
         }
         content: {
           'application/json': components['schemas']['CatalogDisciplineList']
         }
-      }
-      /** @description Catalogue has not changed */
-      304: {
-        headers: {
-          'Cache-Control': components['headers']['PrivateRevalidate']
-          ETag: components['headers']['ETag']
-          [name: string]: unknown
-        }
-        content?: never
       }
       401: components['responses']['Unauthenticated']
       403: components['responses']['Forbidden']
@@ -5441,9 +5429,7 @@ export interface operations {
   listCatalogActivityTypes: {
     parameters: {
       query?: never
-      header?: {
-        'If-None-Match'?: components['parameters']['IfNoneMatch']
-      }
+      header?: never
       path?: never
       cookie?: never
     }
@@ -5452,22 +5438,12 @@ export interface operations {
       /** @description Published global activity types ordered by discipline and code */
       200: {
         headers: {
-          'Cache-Control': components['headers']['PrivateRevalidate']
-          ETag: components['headers']['ETag']
+          'Cache-Control': components['headers']['PrivateNoStore']
           [name: string]: unknown
         }
         content: {
           'application/json': components['schemas']['CatalogActivityTypeList']
         }
-      }
-      /** @description Catalogue has not changed */
-      304: {
-        headers: {
-          'Cache-Control': components['headers']['PrivateRevalidate']
-          ETag: components['headers']['ETag']
-          [name: string]: unknown
-        }
-        content?: never
       }
       401: components['responses']['Unauthenticated']
       403: components['responses']['Forbidden']
@@ -5477,9 +5453,7 @@ export interface operations {
   listCatalogActivityTypeResultContracts: {
     parameters: {
       query?: never
-      header?: {
-        'If-None-Match'?: components['parameters']['IfNoneMatch']
-      }
+      header?: never
       path: {
         activityTypeId: components['parameters']['CatalogActivityTypeId']
       }
@@ -5490,22 +5464,12 @@ export interface operations {
       /** @description Effective associations, the default first */
       200: {
         headers: {
-          'Cache-Control': components['headers']['PrivateRevalidate']
-          ETag: components['headers']['ETag']
+          'Cache-Control': components['headers']['PrivateNoStore']
           [name: string]: unknown
         }
         content: {
           'application/json': components['schemas']['ActivityTypeResultContractList']
         }
-      }
-      /** @description Catalogue has not changed */
-      304: {
-        headers: {
-          'Cache-Control': components['headers']['PrivateRevalidate']
-          ETag: components['headers']['ETag']
-          [name: string]: unknown
-        }
-        content?: never
       }
       400: components['responses']['BadRequest']
       401: components['responses']['Unauthenticated']
@@ -6932,9 +6896,7 @@ export interface operations {
   listStudioProfessionalSpecialties: {
     parameters: {
       query?: never
-      header?: {
-        'If-None-Match'?: components['parameters']['IfNoneMatch']
-      }
+      header?: never
       path?: never
       cookie?: never
     }
@@ -6943,22 +6905,12 @@ export interface operations {
       /** @description Published professional specialty catalogue */
       200: {
         headers: {
-          'Cache-Control': components['headers']['PrivateRevalidate']
-          ETag: components['headers']['ETag']
+          'Cache-Control': components['headers']['PrivateNoStore']
           [name: string]: unknown
         }
         content: {
           'application/json': components['schemas']['ProfessionalSpecialtyList']
         }
-      }
-      /** @description Catalogue has not changed */
-      304: {
-        headers: {
-          'Cache-Control': components['headers']['PrivateRevalidate']
-          ETag: components['headers']['ETag']
-          [name: string]: unknown
-        }
-        content?: never
       }
       401: components['responses']['Unauthenticated']
       403: components['responses']['RegistrationIncomplete']
@@ -6968,9 +6920,7 @@ export interface operations {
   listStudioProfessionalCredentialTypes: {
     parameters: {
       query?: never
-      header?: {
-        'If-None-Match'?: components['parameters']['IfNoneMatch']
-      }
+      header?: never
       path?: never
       cookie?: never
     }
@@ -6979,22 +6929,12 @@ export interface operations {
       /** @description Published professional credential type catalogue */
       200: {
         headers: {
-          'Cache-Control': components['headers']['PrivateRevalidate']
-          ETag: components['headers']['ETag']
+          'Cache-Control': components['headers']['PrivateNoStore']
           [name: string]: unknown
         }
         content: {
           'application/json': components['schemas']['ProfessionalCredentialTypeList']
         }
-      }
-      /** @description Catalogue has not changed */
-      304: {
-        headers: {
-          'Cache-Control': components['headers']['PrivateRevalidate']
-          ETag: components['headers']['ETag']
-          [name: string]: unknown
-        }
-        content?: never
       }
       401: components['responses']['Unauthenticated']
       403: components['responses']['RegistrationIncomplete']
@@ -7495,9 +7435,7 @@ export interface operations {
   listStudioOrganizationRoles: {
     parameters: {
       query?: never
-      header?: {
-        'If-None-Match'?: components['parameters']['IfNoneMatch']
-      }
+      header?: never
       path: {
         organizationId: components['parameters']['OrganizationId']
       }
@@ -7508,22 +7446,12 @@ export interface operations {
       /** @description The four governed V1 roles and their capabilities */
       200: {
         headers: {
-          'Cache-Control': components['headers']['PrivateRevalidate']
-          ETag: components['headers']['ETag']
+          'Cache-Control': components['headers']['PrivateNoStore']
           [name: string]: unknown
         }
         content: {
           'application/json': components['schemas']['OrganizationRoleCatalog']
         }
-      }
-      /** @description The role catalogue has not changed */
-      304: {
-        headers: {
-          'Cache-Control': components['headers']['PrivateRevalidate']
-          ETag: components['headers']['ETag']
-          [name: string]: unknown
-        }
-        content?: never
       }
       400: components['responses']['BadRequest']
       401: components['responses']['Unauthenticated']

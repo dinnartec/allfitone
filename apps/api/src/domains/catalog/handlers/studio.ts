@@ -1,6 +1,17 @@
-/** Governed professional catalogue routes for Studio. */
+/**
+ * Governed professional catalogue routes for Studio.
+ *
+ * These answer `private, no-store` and never 304. They used to revalidate with
+ * an ETag, and a 304 is what broke them in production: the application sets the
+ * CORS headers on it — `studio.test.ts` asserts so — but the response reached
+ * the browser without `Access-Control-Allow-Origin`, and a cross-origin read
+ * with no such header is blocked whatever its status. It failed on the second
+ * visit only, when Studio had a cached ETag to send.
+ *
+ * The catalogue is small and closed, so revalidation saved almost nothing and
+ * was the one path through which the failure could arrive.
+ */
 
-import { createHash } from 'node:crypto'
 import { Hono, type Context } from 'hono'
 import { getCookie } from 'hono/cookie'
 import { cors } from 'hono/cors'
@@ -17,7 +28,7 @@ import { StudioCatalogError, type StudioCatalogService } from '../application/in
 import { studioCatalogService } from '../dependencies.js'
 import type { ProfessionalCatalogItem } from '../domain/index.js'
 
-const CACHE_CONTROL = 'private, max-age=0, must-revalidate'
+const CACHE_CONTROL = 'private, no-store'
 
 export function studioCatalogRoutes(
   injectedCatalog?: StudioCatalogService,
@@ -65,11 +76,7 @@ async function catalogResponse(
   try {
     const actor = await studioActor(c, sessions)
     if (actor instanceof Response) return actor
-    const body = { items: await load(actor) }
-    const etag = `"${createHash('sha256').update(JSON.stringify(body)).digest('base64url')}"`
-    c.header('ETag', etag)
-    if (c.req.header('if-none-match') === etag) return c.body(null, 304)
-    return c.json(body)
+    return c.json({ items: await load(actor) })
   } catch (error) {
     return operationFailure(c, error)
   }

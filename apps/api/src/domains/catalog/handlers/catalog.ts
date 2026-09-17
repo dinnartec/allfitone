@@ -18,9 +18,15 @@
  * that branch does not exist yet, so a request without a known origin is
  * refused rather than silently resolved from whichever cookie happens to be
  * present.
+ *
+ * Every read answers `private, no-store` and never 304. Both callers today are
+ * browsers reading across origins, and a 304 reached them without
+ * `Access-Control-Allow-Origin` although the application sets it, so the
+ * browser blocked the revalidation outright. When Space arrives with a bearer
+ * credential it is not subject to CORS, and revalidation can be reconsidered
+ * for that branch alone.
  */
 
-import { createHash } from 'node:crypto'
 import { Hono, type Context } from 'hono'
 import { getCookie } from 'hono/cookie'
 import { cors } from 'hono/cors'
@@ -42,7 +48,7 @@ import type { GlobalCatalogService } from '../application/index.js'
 import { globalCatalogService } from '../dependencies.js'
 import type { CatalogReader } from '../domain/index.js'
 
-const CACHE_CONTROL = 'private, max-age=0, must-revalidate'
+const CACHE_CONTROL = 'private, no-store'
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 export function catalogSurfaceRoutes(
@@ -101,10 +107,6 @@ interface CatalogSurfaces {
   backofficeSessions: () => BackofficeAuthenticationService
 }
 
-/**
- * The catalogue is small, closed and identical for every reader, so the ETag is
- * a digest of the projection rather than a stored revision.
- */
 async function catalogResponse(
   c: Context,
   surfaces: CatalogSurfaces,
@@ -114,11 +116,7 @@ async function catalogResponse(
   try {
     const reader = await catalogReader(c, surfaces)
     if (reader instanceof Response) return reader
-    const body = { items: await load(reader) }
-    const etag = `"${createHash('sha256').update(JSON.stringify(body)).digest('base64url')}"`
-    c.header('ETag', etag)
-    if (c.req.header('if-none-match') === etag) return c.body(null, 304)
-    return c.json(body)
+    return c.json({ items: await load(reader) })
   } catch (error) {
     return operationFailure(c, error)
   }
