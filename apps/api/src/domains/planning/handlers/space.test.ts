@@ -261,7 +261,7 @@ describe('the Space planning surface honours the contract', () => {
         operation.path.startsWith('/space/v1/week-plan') ||
         operation.path.startsWith('/space/v1/session-templates'),
     )
-    expect(declared).toHaveLength(13)
+    expect(declared).toHaveLength(15)
     expect(declared.map((operation) => operation.allfitOperation).sort()).toEqual([
       'OP-PLN-001',
       'OP-PLN-002',
@@ -276,10 +276,15 @@ describe('the Space planning surface honours the contract', () => {
       'OP-PLN-020',
       'OP-PLN-021',
       'OP-PLN-022',
+      // Reading a routine back in the shape it is edited in. Without it a saved
+      // draft is unreachable: it exists, it counts, and nothing can open it.
+      'OP-PLN-023',
       'OP-PLN-024',
       // Reading a programme back in the shape it is edited in, which is the one
       // thing no other operation answers.
       'OP-PLN-026',
+      // Throwing a routine away, as a state and never as a deletion.
+      'OP-PLN-028',
     ])
   })
 })

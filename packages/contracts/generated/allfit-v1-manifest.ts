@@ -377,6 +377,20 @@ export const allfitV1ContractManifest = {
       responses: ['201', '400', '401', '403', '404', '409', '422'],
     },
     {
+      method: 'POST',
+      path: '/space/v1/session-templates/{templateId}/discard',
+      operationId: 'discardMySessionTemplate',
+      allfitOperation: 'OP-PLN-028',
+      responses: ['200', '401', '403', '404', '409', '422'],
+    },
+    {
+      method: 'GET',
+      path: '/space/v1/session-templates/{templateId}/draft',
+      operationId: 'readMySessionTemplateDraft',
+      allfitOperation: 'OP-PLN-023',
+      responses: ['200', '401', '403', '404'],
+    },
+    {
       method: 'PUT',
       path: '/space/v1/session-templates/{templateId}/draft',
       operationId: 'replaceMySessionTemplateDraft',
@@ -690,6 +704,13 @@ export const allfitV1ContractManifest = {
       operationId: 'createOrganizationSessionTemplate',
       allfitOperation: 'OP-PLN-001',
       responses: ['201', '400', '401', '403', '404', '409', '415', '422', '503'],
+    },
+    {
+      method: 'GET',
+      path: '/studio/v1/organizations/{organizationId}/session-templates/{templateId}/draft',
+      operationId: 'readSessionTemplateDraft',
+      allfitOperation: 'OP-PLN-023',
+      responses: ['200', '401', '403', '404'],
     },
     {
       method: 'PUT',

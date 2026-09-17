@@ -2662,6 +2662,60 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  PlannedSetContent: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['set_order', 'kind'],
+    properties: {
+      set_order: {
+        type: 'integer',
+        minimum: 1,
+        maximum: 200,
+      },
+      kind: {
+        type: 'string',
+        enum: ['normal', 'warmup', 'to_failure', 'drop'],
+      },
+      target_reps: {
+        type: ['integer', 'null'],
+        minimum: 1,
+        maximum: 2147483647,
+      },
+      target_load_value: {
+        type: ['number', 'null'],
+        minimum: 0,
+      },
+      target_load_unit_code: {
+        type: ['string', 'null'],
+      },
+      target_rpe: {
+        type: ['number', 'null'],
+        minimum: 0,
+        maximum: 10,
+      },
+    },
+    dependentSchemas: {
+      kind: {
+        if: {
+          properties: {
+            kind: {
+              const: 'to_failure',
+            },
+          },
+          required: ['kind'],
+        },
+        then: {
+          properties: {
+            target_reps: {
+              type: 'null',
+            },
+          },
+        },
+      },
+    },
+    description:
+      'One set of a strength step. A set to failure declares no reps, because the count is whatever comes out: "until you cannot" and "until eight" are different instructions, so the contract refuses the contradiction rather than leaving it to a screen.',
+  },
   PlannedStepContent: {
     type: 'object',
     additionalProperties: false,
@@ -2684,6 +2738,13 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       notes: {
         type: ['string', 'null'],
         maxLength: 2000,
+      },
+      superset_group: {
+        type: ['integer', 'null'],
+        minimum: 1,
+        maximum: 200,
+        description:
+          'Steps sharing a group are performed back to back. Only neighbouring steps may share one, and `IX-46` refuses a group whose positions are not consecutive: a chain that skips an exercise describes an order nobody can execute. The rest of a chain is the one on its last step, because the rest happens when the chain ends.',
       },
       target: {
         oneOf: [
@@ -5414,21 +5475,36 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
   StrengthTarget: {
     type: 'object',
     additionalProperties: false,
-    required: ['family', 'target_sets'],
+    required: ['family'],
+    description:
+      'A strength target declares its sets one by one, or the aggregate an older draft carries — `planning.session_content_errors` refuses one with neither. That rule is not written here as `anyOf` on purpose: the generator turns such a union into `unknown`, which would cost every consumer its type to restate a constraint the database enforces anyway, and two guards that can disagree are worse than one.',
     properties: {
       family: {
         type: 'string',
         const: 'strength',
       },
+      sets: {
+        type: 'array',
+        minItems: 1,
+        maxItems: 200,
+        items: {
+          $ref: '#/components/schemas/PlannedSetContent',
+        },
+        description:
+          "Every set, one by one. This is the truth of a strength prescription since `ADR-030`; `target_sets` and `target_reps` are the summary computed from it at publication, kept so that today's session, the week and the whole execution side keep reading what they always read. A draft written by the current editor carries `sets`; an older one carries only the aggregate, and publication synthesises the rows from it.",
+      },
       target_sets: {
         type: 'integer',
         minimum: 1,
         maximum: 2147483647,
+        description:
+          'Derived from `sets` at publication. `IX-47` stops any runtime role authoring it.',
       },
       target_reps: {
         type: ['integer', 'null'],
         minimum: 1,
         maximum: 2147483647,
+        description: 'Derived, and present only when every set agrees.',
       },
       target_load_value: {
         type: ['number', 'null'],
@@ -5441,6 +5517,13 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         type: ['number', 'null'],
         minimum: 0,
         maximum: 10,
+      },
+      target_rest_seconds: {
+        type: ['integer', 'null'],
+        minimum: 0,
+        maximum: 3600,
+        description:
+          'Prescription, not measurement: the rest the step asks for between sets. Nullable because a step may say nothing about it, and a zero would mean "no rest", which is a different instruction from "nobody said".',
       },
     },
   },

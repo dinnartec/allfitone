@@ -1063,7 +1063,11 @@ export interface paths {
       path?: never
       cookie?: never
     }
-    get?: never
+    /**
+     * Read a routine draft in the shape it is edited in
+     * @description The counterpart of the `PUT`, answering the same projection so an editor reads what it writes, and carrying the ETag the next save has to send. A draft outside the caller's organization answers the same as one that never existed.
+     */
+    get: operations['readSessionTemplateDraft']
     /** Replace the editable content of a session-template draft */
     put: operations['replaceOrganizationSessionTemplateDraft']
     post?: never
@@ -1411,13 +1415,37 @@ export interface paths {
       path?: never
       cookie?: never
     }
-    get?: never
+    /**
+     * Read my routine in the shape I edit it in
+     * @description The counterpart of the `PUT`, answering the same projection so the editor reads what it writes. Without it a saved draft is an unreachable draft: it exists, it counts against my content, and nothing can open it again. Whoever edits **loads before writing** — an editor that opens empty over an existing draft and autosaves replaces the work with what it does not know yet. A draft belonging to somebody else and a draft that never existed answer the same, so the answer does not say which.
+     */
+    get: operations['readMySessionTemplateDraft']
     /**
      * Replace the content of my routine draft
      * @description Saved as the person types, so the ETag is the only thing standing between two devices editing the same draft. An incomplete draft is legitimate; it just cannot be published.
      */
     put: operations['replaceMySessionTemplateDraft']
     post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/session-templates/{templateId}/discard': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Discard a routine I never published
+     * @description Leaving a named routine asks whether to keep it as a draft or throw it away, and this is the throwing away. **It is a state, not a deletion:** `allfit_api` has no `DELETE` on this resource and will not get one, because what a person wrote is not destroyed from the runtime and a discard has to be explicable afterwards. A routine with a published version is refused — programmes and assignments may reference it, and retiring a version from new uses is `OP-PLN-005`, which leaves the history alone.
+     */
+    post: operations['discardMySessionTemplate']
     delete?: never
     options?: never
     head?: never
@@ -3043,20 +3071,39 @@ export interface components {
        */
       activity_type_id?: string | null
       notes?: string | null
+      /** @description Steps sharing a group are performed back to back. Only neighbouring steps may share one, and `IX-46` refuses a group whose positions are not consecutive: a chain that skips an exercise describes an order nobody can execute. The rest of a chain is the one on its last step, because the rest happens when the chain ends. */
+      superset_group?: number | null
       target:
         | components['schemas']['StrengthTarget']
         | components['schemas']['EnduranceTarget']
         | components['schemas']['IntervalTarget']
         | components['schemas']['MobilityTarget']
     }
-    StrengthTarget: {
-      /** @constant */
-      family: 'strength'
-      target_sets: number
+    /** @description One set of a strength step. A set to failure declares no reps, because the count is whatever comes out: "until you cannot" and "until eight" are different instructions, so the contract refuses the contradiction rather than leaving it to a screen. */
+    PlannedSetContent: {
+      set_order: number
+      /** @enum {string} */
+      kind: 'normal' | 'warmup' | 'to_failure' | 'drop'
       target_reps?: number | null
       target_load_value?: number | null
       target_load_unit_code?: string | null
       target_rpe?: number | null
+    }
+    /** @description A strength target declares its sets one by one, or the aggregate an older draft carries — `planning.session_content_errors` refuses one with neither. That rule is not written here as `anyOf` on purpose: the generator turns such a union into `unknown`, which would cost every consumer its type to restate a constraint the database enforces anyway, and two guards that can disagree are worse than one. */
+    StrengthTarget: {
+      /** @constant */
+      family: 'strength'
+      /** @description Every set, one by one. This is the truth of a strength prescription since `ADR-030`; `target_sets` and `target_reps` are the summary computed from it at publication, kept so that today's session, the week and the whole execution side keep reading what they always read. A draft written by the current editor carries `sets`; an older one carries only the aggregate, and publication synthesises the rows from it. */
+      sets?: components['schemas']['PlannedSetContent'][]
+      /** @description Derived from `sets` at publication. `IX-47` stops any runtime role authoring it. */
+      target_sets?: number
+      /** @description Derived, and present only when every set agrees. */
+      target_reps?: number | null
+      target_load_value?: number | null
+      target_load_unit_code?: string | null
+      target_rpe?: number | null
+      /** @description Prescription, not measurement: the rest the step asks for between sets. Nullable because a step may say nothing about it, and a zero would mean "no rest", which is a different instruction from "nobody said". */
+      target_rest_seconds?: number | null
     }
     EnduranceTarget: {
       /** @constant */
@@ -6429,6 +6476,34 @@ export interface operations {
       503: components['responses']['UpstreamUnavailable']
     }
   }
+  readSessionTemplateDraft: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+        templateId: components['parameters']['TemplateId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The draft, with the ETag the next save has to send */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          ETag: components['headers']['ETag']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SessionTemplateDraft']
+        }
+      }
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+    }
+  }
   replaceOrganizationSessionTemplateDraft: {
     parameters: {
       query?: never
@@ -7138,6 +7213,33 @@ export interface operations {
       422: components['responses']['ValidationFailed']
     }
   }
+  readMySessionTemplateDraft: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        templateId: components['parameters']['TemplateId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The draft, with the ETag the next save has to send */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          ETag: components['headers']['ETag']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SessionTemplateDraft']
+        }
+      }
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+    }
+  }
   replaceMySessionTemplateDraft: {
     parameters: {
       query?: never
@@ -7173,6 +7275,40 @@ export interface operations {
         }
       }
       400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      422: components['responses']['ValidationFailed']
+    }
+  }
+  discardMySessionTemplate: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        templateId: components['parameters']['TemplateId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The template, now archived and without its draft */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SessionTemplate']
+        }
+      }
       401: components['responses']['Unauthenticated']
       403: components['responses']['Forbidden']
       404: components['responses']['NotFound']
