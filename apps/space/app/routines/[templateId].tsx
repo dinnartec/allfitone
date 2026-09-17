@@ -220,6 +220,7 @@ export default function RoutineEditor() {
   // One `setState` per gesture, never per frame: all it does is stand the layout
   // animation down while the transforms are the ones placing the rows.
   const [dragging, setDragging] = useState(false)
+  const [settling, setSettling] = useState(false)
 
   // Which row is in the air and how far it has gone. Shared so every row can read them
   // in its own worklet; held here because they are the list's state, not one row's.
@@ -273,6 +274,28 @@ export default function RoutineEditor() {
     const to = nextOffset(now, by, content.get() - list.height)
     if (to !== now) scrollTo(scroller, 0, to, false)
   }, false)
+
+  /**
+   * Letting go, in the one order that does not flash.
+   *
+   * **The defect this replaces:** the offsets were zeroed the instant the finger left,
+   * and the reorder was a `setState` React commits a few frames later. In between,
+   * every row was drawn in its old place with no offset at all — the whole list
+   * snapped back to the order it had before the drag and then jumped to the new one,
+   * which read as the rows scrambling.
+   *
+   * An effect runs after the commit that carries the new order, so by the time the
+   * offsets go the rows are already where those offsets were pretending they were.
+   * The layout animation comes back a render later still: turned on any sooner it
+   * would animate rows from where they used to be, which is the same jump again.
+   */
+  useEffect(() => {
+    if (!settling) return
+    liftedFrom.set(0)
+    liftedBy.set(0)
+    setSettling(false)
+    setDragging(false)
+  }, [settling, liftedFrom, liftedBy])
 
   const pending = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   // Held outside state as well: a save scheduled before the creation resolved must
@@ -477,9 +500,7 @@ export default function RoutineEditor() {
   const settle = (fromPosition: number, to: number) => {
     chase.setActive(false)
     if (to !== fromPosition) change(movedTo(steps, fromPosition, to))
-    liftedFrom.set(0)
-    liftedBy.set(0)
-    requestAnimationFrame(() => setDragging(false))
+    setSettling(true)
   }
 
   // Recomputed from the steps rather than stored: a stored letter is one more thing
