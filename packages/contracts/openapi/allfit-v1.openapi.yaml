@@ -2803,10 +2803,10 @@ paths:
         recorded reason, not an error, because the record of a refused attempt is
         the point.
 
-        An authorised read of body progress, health context or nutrition intake
-        returns that category's data; `execution` does not exist yet, so the
-        training categories and nutrition guidance answer `content_unavailable`
-        rather than inventing data.
+        An authorised read of body progress, health context, nutrition intake or
+        prior training history returns that category's data. Training inside a
+        relationship and nutrition guidance answer `content_unavailable`, because
+        relationships and guidance do not exist yet.
       security:
         - backofficeCookieAuth: []
       parameters:
@@ -5678,6 +5678,146 @@ paths:
         '422':
           $ref: '#/components/responses/ValidationFailed'
 
+  /space/v1/executions:
+    post:
+      tags: [Space Execution]
+      operationId: startFreeExecution
+      x-allfit-operation: OP-EXE-004
+      x-allfit-cache: no-store
+      x-allfit-command-resource-id: true
+      summary: Start a session that was not planned, using Command-Id as its identity
+      description: >-
+        A free session belongs to no plan, no relationship and no organization.
+        It freezes the published default result contract of its activity type and
+        that contract's version; a later contract never changes this history.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FreeExecutionCreate'
+      responses:
+        '201':
+          description: Session started
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Location:
+              $ref: '#/components/headers/Location'
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FreeExecutionStarted'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+    get:
+      tags: [Space Execution]
+      operationId: listMyExecutions
+      x-allfit-operation: OP-EXE-014
+      x-allfit-cache: private, no-store
+      summary: List my own sessions
+      description: >-
+        Everything of mine, most recent start first: what is still open and what
+        is finished. The cursor is the start and the identifier of the last
+        session already read.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 25
+        - name: before_started_at
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: before_id
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/UuidV7'
+      responses:
+        '200':
+          description: One page of my sessions
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/PrivateNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExecutionPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /space/v1/executions/{executionId}:
+    get:
+      tags: [Space Execution]
+      operationId: getMyExecution
+      x-allfit-operation: OP-EXE-015
+      x-allfit-cache: private, no-store
+      summary: Open one of my own sessions
+      description: >-
+        Someone else's session and one that does not exist both answer 404.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ExecutionId'
+      responses:
+        '200':
+          description: The session with what was recorded in it
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/PrivateNoStore'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExecutionDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
   /space/v1/planned-sessions/{plannedSessionId}/attempts:
     post:
       tags: [Space Execution]
@@ -5765,6 +5905,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
@@ -5773,6 +5915,8 @@ paths:
           $ref: '#/components/responses/ContractValidationFailed'
         '428':
           $ref: '#/components/responses/PreconditionRequired'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
 
   /space/v1/executions/{executionId}/finalize:
     post:
@@ -5812,6 +5956,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
@@ -5820,6 +5966,8 @@ paths:
           $ref: '#/components/responses/ContractValidationFailed'
         '428':
           $ref: '#/components/responses/PreconditionRequired'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
 
   /studio/v1/organizations/{organizationId}/clients/{personId}/executions/{executionId}:
     get:
@@ -8339,6 +8487,11 @@ components:
           maxItems: 500
           items:
             $ref: '#/components/schemas/BreakGlassMeal'
+        prior_training_history:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/ExecutionDetail'
     BreakGlassExerciseOutcome:
       type: object
       additionalProperties: false
@@ -11805,7 +11958,11 @@ components:
     ExecutionResultsReplace:
       type: object
       additionalProperties: false
-      required: [segments, strength_sets]
+      required: [segments]
+      description: >-
+        The whole working set of the session, replacing what was there. At least
+        one result between `strength_sets` and `endurance_laps`, and each only in
+        a segment of its own family.
       example:
         segments:
           - position: 1
@@ -11829,10 +11986,14 @@ components:
             $ref: '#/components/schemas/ExecutionSegment'
         strength_sets:
           type: array
-          minItems: 1
           maxItems: 1000
           items:
             $ref: '#/components/schemas/StrengthSet'
+        endurance_laps:
+          type: array
+          maxItems: 1000
+          items:
+            $ref: '#/components/schemas/EnduranceLap'
     ExecutionSegment:
       type: object
       additionalProperties: false
@@ -11886,6 +12047,226 @@ components:
         unit:
           type: string
           enum: [kg, lb]
+    FreeExecutionCreate:
+      type: object
+      additionalProperties: false
+      required: [activity_type_code, started_at, timezone, requested_level, capture_source]
+      properties:
+        activity_type_code:
+          type: string
+          pattern: '^[a-z][a-z0-9_]{1,63}$'
+        started_at:
+          type: string
+          format: date-time
+        timezone:
+          $ref: '#/components/schemas/IanaTimeZone'
+        requested_level:
+          $ref: '#/components/schemas/CompletenessLevel'
+        capture_source:
+          type: string
+          enum: [manual, device]
+    FreeExecutionStarted:
+      type: object
+      additionalProperties: false
+      required: [id, status, revision_number, activity_type_code, result_contract]
+      properties:
+        id:
+          $ref: '#/components/schemas/UuidV7'
+        status:
+          type: string
+          const: in_progress
+        revision_number:
+          type: integer
+          minimum: 0
+        activity_type_code:
+          type: string
+        result_contract:
+          $ref: '#/components/schemas/ResultContractRef'
+    EnduranceLap:
+      type: object
+      additionalProperties: false
+      required: [segment_position, lap_number, distance, duration_seconds]
+      properties:
+        segment_position:
+          type: integer
+          minimum: 1
+          maximum: 100
+        lap_number:
+          type: integer
+          minimum: 1
+          maximum: 1000
+        distance:
+          $ref: '#/components/schemas/Distance'
+        duration_seconds:
+          type: number
+          exclusiveMinimum: 0
+          maximum: 604800
+    Distance:
+      type: object
+      additionalProperties: false
+      required: [value, unit]
+      properties:
+        value:
+          type: number
+          exclusiveMinimum: 0
+        unit:
+          type: string
+          enum: [m, km, mi]
+    ExecutionSummary:
+      type: object
+      additionalProperties: false
+      required:
+        [id, activity_type_code, activity_type_name, started_at, ended_at, timezone, status,
+         validation_status, achieved_level, revision_number, result_count]
+      properties:
+        id:
+          $ref: '#/components/schemas/UuidV7'
+        activity_type_code:
+          type: string
+        activity_type_name:
+          type: string
+        started_at:
+          type: string
+          format: date-time
+        ended_at:
+          type: [string, 'null']
+          format: date-time
+        timezone:
+          $ref: '#/components/schemas/IanaTimeZone'
+        status:
+          $ref: '#/components/schemas/ExecutionStatus'
+        validation_status:
+          $ref: '#/components/schemas/ExecutionValidationStatus'
+        achieved_level:
+          oneOf:
+            - $ref: '#/components/schemas/CompletenessLevel'
+            - type: 'null'
+        revision_number:
+          type: integer
+          minimum: 0
+        result_count:
+          type: integer
+          minimum: 0
+    ExecutionValidationStatus:
+      type: string
+      enum: [pending, valid, invalid, annulled]
+    ExecutionDetail:
+      type: object
+      additionalProperties: false
+      description: >-
+        A session with what was recorded in it. A load and a distance come back as
+        the person typed them.
+      required:
+        [id, activity_type_code, activity_type_name, discipline_code, started_at, ended_at,
+         timezone, status, validation_status, requested_level, achieved_level, revision_number,
+         capture_source, contract, segments, strength_sets, endurance_laps]
+      properties:
+        id:
+          $ref: '#/components/schemas/UuidV7'
+        activity_type_code:
+          type: string
+        activity_type_name:
+          type: string
+        discipline_code:
+          type: string
+        started_at:
+          type: string
+          format: date-time
+        ended_at:
+          type: [string, 'null']
+          format: date-time
+        timezone:
+          $ref: '#/components/schemas/IanaTimeZone'
+        status:
+          $ref: '#/components/schemas/ExecutionStatus'
+        validation_status:
+          $ref: '#/components/schemas/ExecutionValidationStatus'
+        requested_level:
+          $ref: '#/components/schemas/CompletenessLevel'
+        achieved_level:
+          oneOf:
+            - $ref: '#/components/schemas/CompletenessLevel'
+            - type: 'null'
+        revision_number:
+          type: integer
+          minimum: 0
+        capture_source:
+          type: string
+          enum: [manual, device]
+        contract:
+          type: object
+          additionalProperties: false
+          required: [id, version]
+          properties:
+            id:
+              $ref: '#/components/schemas/Uuid'
+            version:
+              type: integer
+              minimum: 1
+        segments:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [position, activity_type_code]
+            properties:
+              position:
+                type: integer
+                minimum: 1
+              activity_type_code:
+                type: [string, 'null']
+        strength_sets:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [segment_position, order, movement_id, movement_name, achieved_reps, load, rpe]
+            properties:
+              segment_position:
+                type: [integer, 'null']
+              order:
+                type: integer
+                minimum: 1
+              movement_id:
+                type: [string, 'null']
+                format: uuid
+              movement_name:
+                type: [string, 'null']
+              achieved_reps:
+                type: [integer, 'null']
+              load:
+                oneOf:
+                  - $ref: '#/components/schemas/Load'
+                  - type: 'null'
+              rpe:
+                type: [number, 'null']
+        endurance_laps:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [segment_position, lap_number, distance, duration_seconds]
+            properties:
+              segment_position:
+                type: [integer, 'null']
+              lap_number:
+                type: integer
+                minimum: 1
+              distance:
+                $ref: '#/components/schemas/Distance'
+              duration_seconds:
+                type: number
+    ExecutionPage:
+      type: object
+      additionalProperties: false
+      required: [items, has_more]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExecutionSummary'
+        has_more:
+          type: boolean
     ExecutionResultsState:
       type: object
       additionalProperties: false
@@ -11945,12 +12326,17 @@ components:
           const: completed
         validation_status:
           type: string
-          const: valid
+          description: >-
+            `pending` while the result contracts carry no rule anyone can
+            evaluate: the session is finished, its completeness is not certified.
+          enum: [pending, valid]
         revision_number:
           type: integer
           minimum: 1
         achieved_level:
-          $ref: '#/components/schemas/CompletenessLevel'
+          oneOf:
+            - $ref: '#/components/schemas/CompletenessLevel'
+            - type: 'null'
         is_primary:
           type: boolean
         contract:

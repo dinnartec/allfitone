@@ -1704,6 +1704,13 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
           $ref: '#/components/schemas/BreakGlassMeal',
         },
       },
+      prior_training_history: {
+        type: 'array',
+        maxItems: 100,
+        items: {
+          $ref: '#/components/schemas/ExecutionDetail',
+        },
+      },
     },
   },
   BreakGlassDecision: {
@@ -2495,6 +2502,46 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       'What a verifier may record. There is no default, and `unverifiable` is the answer whenever the evidence does not reach.',
     enum: ['verified', 'rejected', 'unverifiable'],
   },
+  Distance: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['value', 'unit'],
+    properties: {
+      value: {
+        type: 'number',
+        exclusiveMinimum: 0,
+      },
+      unit: {
+        type: 'string',
+        enum: ['m', 'km', 'mi'],
+      },
+    },
+  },
+  EnduranceLap: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['segment_position', 'lap_number', 'distance', 'duration_seconds'],
+    properties: {
+      segment_position: {
+        type: 'integer',
+        minimum: 1,
+        maximum: 100,
+      },
+      lap_number: {
+        type: 'integer',
+        minimum: 1,
+        maximum: 1000,
+      },
+      distance: {
+        $ref: '#/components/schemas/Distance',
+      },
+      duration_seconds: {
+        type: 'number',
+        exclusiveMinimum: 0,
+        maximum: 604800,
+      },
+    },
+  },
   EnduranceTarget: {
     type: 'object',
     additionalProperties: false,
@@ -2551,6 +2598,185 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  ExecutionDetail: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      'A session with what was recorded in it. A load and a distance come back as the person typed them.',
+    required: [
+      'id',
+      'activity_type_code',
+      'activity_type_name',
+      'discipline_code',
+      'started_at',
+      'ended_at',
+      'timezone',
+      'status',
+      'validation_status',
+      'requested_level',
+      'achieved_level',
+      'revision_number',
+      'capture_source',
+      'contract',
+      'segments',
+      'strength_sets',
+      'endurance_laps',
+    ],
+    properties: {
+      id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      activity_type_code: {
+        type: 'string',
+      },
+      activity_type_name: {
+        type: 'string',
+      },
+      discipline_code: {
+        type: 'string',
+      },
+      started_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      ended_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      timezone: {
+        $ref: '#/components/schemas/IanaTimeZone',
+      },
+      status: {
+        $ref: '#/components/schemas/ExecutionStatus',
+      },
+      validation_status: {
+        $ref: '#/components/schemas/ExecutionValidationStatus',
+      },
+      requested_level: {
+        $ref: '#/components/schemas/CompletenessLevel',
+      },
+      achieved_level: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/CompletenessLevel',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      revision_number: {
+        type: 'integer',
+        minimum: 0,
+      },
+      capture_source: {
+        type: 'string',
+        enum: ['manual', 'device'],
+      },
+      contract: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['id', 'version'],
+        properties: {
+          id: {
+            $ref: '#/components/schemas/Uuid',
+          },
+          version: {
+            type: 'integer',
+            minimum: 1,
+          },
+        },
+      },
+      segments: {
+        type: 'array',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['position', 'activity_type_code'],
+          properties: {
+            position: {
+              type: 'integer',
+              minimum: 1,
+            },
+            activity_type_code: {
+              type: ['string', 'null'],
+            },
+          },
+        },
+      },
+      strength_sets: {
+        type: 'array',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: [
+            'segment_position',
+            'order',
+            'movement_id',
+            'movement_name',
+            'achieved_reps',
+            'load',
+            'rpe',
+          ],
+          properties: {
+            segment_position: {
+              type: ['integer', 'null'],
+            },
+            order: {
+              type: 'integer',
+              minimum: 1,
+            },
+            movement_id: {
+              type: ['string', 'null'],
+              format: 'uuid',
+            },
+            movement_name: {
+              type: ['string', 'null'],
+            },
+            achieved_reps: {
+              type: ['integer', 'null'],
+            },
+            load: {
+              oneOf: [
+                {
+                  $ref: '#/components/schemas/Load',
+                },
+                {
+                  type: 'null',
+                },
+              ],
+            },
+            rpe: {
+              type: ['number', 'null'],
+            },
+          },
+        },
+      },
+      endurance_laps: {
+        type: 'array',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['segment_position', 'lap_number', 'distance', 'duration_seconds'],
+          properties: {
+            segment_position: {
+              type: ['integer', 'null'],
+            },
+            lap_number: {
+              type: 'integer',
+              minimum: 1,
+            },
+            distance: {
+              $ref: '#/components/schemas/Distance',
+            },
+            duration_seconds: {
+              type: 'number',
+            },
+          },
+        },
+      },
+    },
+  },
   ExecutionFinalize: {
     type: 'object',
     additionalProperties: false,
@@ -2599,14 +2825,23 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
       validation_status: {
         type: 'string',
-        const: 'valid',
+        description:
+          '`pending` while the result contracts carry no rule anyone can evaluate: the session is finished, its completeness is not certified.',
+        enum: ['pending', 'valid'],
       },
       revision_number: {
         type: 'integer',
         minimum: 1,
       },
       achieved_level: {
-        $ref: '#/components/schemas/CompletenessLevel',
+        oneOf: [
+          {
+            $ref: '#/components/schemas/CompletenessLevel',
+          },
+          {
+            type: 'null',
+          },
+        ],
       },
       is_primary: {
         type: 'boolean',
@@ -2616,10 +2851,28 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  ExecutionPage: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['items', 'has_more'],
+    properties: {
+      items: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/ExecutionSummary',
+        },
+      },
+      has_more: {
+        type: 'boolean',
+      },
+    },
+  },
   ExecutionResultsReplace: {
     type: 'object',
     additionalProperties: false,
-    required: ['segments', 'strength_sets'],
+    required: ['segments'],
+    description:
+      'The whole working set of the session, replacing what was there. At least one result between `strength_sets` and `endurance_laps`, and each only in a segment of its own family.',
     example: {
       segments: [
         {
@@ -2653,10 +2906,16 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
       strength_sets: {
         type: 'array',
-        minItems: 1,
         maxItems: 1000,
         items: {
           $ref: '#/components/schemas/StrengthSet',
+        },
+      },
+      endurance_laps: {
+        type: 'array',
+        maxItems: 1000,
+        items: {
+          $ref: '#/components/schemas/EnduranceLap',
         },
       },
     },
@@ -2714,11 +2973,127 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
     type: 'string',
     enum: ['in_progress', 'paused', 'completed', 'abandoned'],
   },
+  ExecutionSummary: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'id',
+      'activity_type_code',
+      'activity_type_name',
+      'started_at',
+      'ended_at',
+      'timezone',
+      'status',
+      'validation_status',
+      'achieved_level',
+      'revision_number',
+      'result_count',
+    ],
+    properties: {
+      id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      activity_type_code: {
+        type: 'string',
+      },
+      activity_type_name: {
+        type: 'string',
+      },
+      started_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      ended_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      timezone: {
+        $ref: '#/components/schemas/IanaTimeZone',
+      },
+      status: {
+        $ref: '#/components/schemas/ExecutionStatus',
+      },
+      validation_status: {
+        $ref: '#/components/schemas/ExecutionValidationStatus',
+      },
+      achieved_level: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/CompletenessLevel',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      revision_number: {
+        type: 'integer',
+        minimum: 0,
+      },
+      result_count: {
+        type: 'integer',
+        minimum: 0,
+      },
+    },
+  },
+  ExecutionValidationStatus: {
+    type: 'string',
+    enum: ['pending', 'valid', 'invalid', 'annulled'],
+  },
   FitnessDataAccessPolicy: {
     type: 'string',
     description:
       'A role never grants fitness data by itself. Coach still requires an active relationship, assignment, compatible grant, membership, role, and credentials.',
     enum: ['not_granted_by_role', 'requires_relationship_assignment_and_grant'],
+  },
+  FreeExecutionCreate: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['activity_type_code', 'started_at', 'timezone', 'requested_level', 'capture_source'],
+    properties: {
+      activity_type_code: {
+        type: 'string',
+        pattern: '^[a-z][a-z0-9_]{1,63}$',
+      },
+      started_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      timezone: {
+        $ref: '#/components/schemas/IanaTimeZone',
+      },
+      requested_level: {
+        $ref: '#/components/schemas/CompletenessLevel',
+      },
+      capture_source: {
+        type: 'string',
+        enum: ['manual', 'device'],
+      },
+    },
+  },
+  FreeExecutionStarted: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['id', 'status', 'revision_number', 'activity_type_code', 'result_contract'],
+    properties: {
+      id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      status: {
+        type: 'string',
+        const: 'in_progress',
+      },
+      revision_number: {
+        type: 'integer',
+        minimum: 0,
+      },
+      activity_type_code: {
+        type: 'string',
+      },
+      result_contract: {
+        $ref: '#/components/schemas/ResultContractRef',
+      },
+    },
   },
   FrozenContractRef: {
     type: 'object',

@@ -1075,7 +1075,7 @@ export interface paths {
     /**
      * Exercise an approved break-glass window
      * @description Only the exact requester exercises. Every attempt, allowed or denied, writes evidence before anything is returned — a denial is an answer with a recorded reason, not an error, because the record of a refused attempt is the point.
-     *     An authorised read of body progress, health context or nutrition intake returns that category's data; `execution` does not exist yet, so the training categories and nutrition guidance answer `content_unavailable` rather than inventing data.
+     *     An authorised read of body progress, health context, nutrition intake or prior training history returns that category's data. Training inside a relationship and nutrition guidance answer `content_unavailable`, because relationships and guidance do not exist yet.
      */
     post: operations['exerciseBackofficeBreakGlass']
     delete?: never
@@ -2215,6 +2215,50 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/space/v1/executions': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * List my own sessions
+     * @description Everything of mine, most recent start first: what is still open and what is finished. The cursor is the start and the identifier of the last session already read.
+     */
+    get: operations['listMyExecutions']
+    put?: never
+    /**
+     * Start a session that was not planned, using Command-Id as its identity
+     * @description A free session belongs to no plan, no relationship and no organization. It freezes the published default result contract of its activity type and that contract's version; a later contract never changes this history.
+     */
+    post: operations['startFreeExecution']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/executions/{executionId}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Open one of my own sessions
+     * @description Someone else's session and one that does not exist both answer 404.
+     */
+    get: operations['getMyExecution']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/space/v1/planned-sessions/{plannedSessionId}/attempts': {
     parameters: {
       query?: never
@@ -3035,6 +3079,7 @@ export interface components {
       body_progress?: components['schemas']['BodyProgressRecord'][]
       health_context?: components['schemas']['HealthContextClaim'][]
       nutrition_intake?: components['schemas']['BreakGlassMeal'][]
+      prior_training_history?: components['schemas']['ExecutionDetail'][]
     }
     /** @description Every attempt is recorded before this answers, so `break_glass_event_id` is the evidence of this exact attempt. Only `allowed` carries content, and only for a category whose data the platform stores; the others answer `content_unavailable`. A category that returns content reads only its own kind of data, so pointing it at another is `denied` with `resource_out_of_scope`. */
     BreakGlassExerciseOutcome: {
@@ -4571,6 +4616,7 @@ export interface components {
       requested_level: components['schemas']['CompletenessLevel']
     }
     /**
+     * @description The whole working set of the session, replacing what was there. At least one result between `strength_sets` and `endurance_laps`, and each only in a segment of its own family.
      * @example {
      *       "segments": [
      *         {
@@ -4596,7 +4642,8 @@ export interface components {
      */
     ExecutionResultsReplace: {
       segments: components['schemas']['ExecutionSegment'][]
-      strength_sets: components['schemas']['StrengthSet'][]
+      strength_sets?: components['schemas']['StrengthSet'][]
+      endurance_laps?: components['schemas']['EnduranceLap'][]
     }
     ExecutionSegment: {
       position: number
@@ -4617,6 +4664,98 @@ export interface components {
       value: number
       /** @enum {string} */
       unit: 'kg' | 'lb'
+    }
+    FreeExecutionCreate: {
+      activity_type_code: string
+      /** Format: date-time */
+      started_at: string
+      timezone: components['schemas']['IanaTimeZone']
+      requested_level: components['schemas']['CompletenessLevel']
+      /** @enum {string} */
+      capture_source: 'manual' | 'device'
+    }
+    FreeExecutionStarted: {
+      id: components['schemas']['UuidV7']
+      /** @constant */
+      status: 'in_progress'
+      revision_number: number
+      activity_type_code: string
+      result_contract: components['schemas']['ResultContractRef']
+    }
+    EnduranceLap: {
+      segment_position: number
+      lap_number: number
+      distance: components['schemas']['Distance']
+      duration_seconds: number
+    }
+    Distance: {
+      value: number
+      /** @enum {string} */
+      unit: 'm' | 'km' | 'mi'
+    }
+    ExecutionSummary: {
+      id: components['schemas']['UuidV7']
+      activity_type_code: string
+      activity_type_name: string
+      /** Format: date-time */
+      started_at: string
+      /** Format: date-time */
+      ended_at: string | null
+      timezone: components['schemas']['IanaTimeZone']
+      status: components['schemas']['ExecutionStatus']
+      validation_status: components['schemas']['ExecutionValidationStatus']
+      achieved_level: components['schemas']['CompletenessLevel'] | null
+      revision_number: number
+      result_count: number
+    }
+    /** @enum {string} */
+    ExecutionValidationStatus: 'pending' | 'valid' | 'invalid' | 'annulled'
+    /** @description A session with what was recorded in it. A load and a distance come back as the person typed them. */
+    ExecutionDetail: {
+      id: components['schemas']['UuidV7']
+      activity_type_code: string
+      activity_type_name: string
+      discipline_code: string
+      /** Format: date-time */
+      started_at: string
+      /** Format: date-time */
+      ended_at: string | null
+      timezone: components['schemas']['IanaTimeZone']
+      status: components['schemas']['ExecutionStatus']
+      validation_status: components['schemas']['ExecutionValidationStatus']
+      requested_level: components['schemas']['CompletenessLevel']
+      achieved_level: components['schemas']['CompletenessLevel'] | null
+      revision_number: number
+      /** @enum {string} */
+      capture_source: 'manual' | 'device'
+      contract: {
+        id: components['schemas']['Uuid']
+        version: number
+      }
+      segments: {
+        position: number
+        activity_type_code: string | null
+      }[]
+      strength_sets: {
+        segment_position: number | null
+        order: number
+        /** Format: uuid */
+        movement_id: string | null
+        movement_name: string | null
+        achieved_reps: number | null
+        load: components['schemas']['Load'] | null
+        rpe: number | null
+      }[]
+      endurance_laps: {
+        segment_position: number | null
+        lap_number: number
+        distance: components['schemas']['Distance']
+        duration_seconds: number
+      }[]
+    }
+    ExecutionPage: {
+      items: components['schemas']['ExecutionSummary'][]
+      has_more: boolean
     }
     /**
      * @example {
@@ -4662,10 +4801,13 @@ export interface components {
       id: components['schemas']['Uuid']
       /** @constant */
       status: 'completed'
-      /** @constant */
-      validation_status: 'valid'
+      /**
+       * @description `pending` while the result contracts carry no rule anyone can evaluate: the session is finished, its completeness is not certified.
+       * @enum {string}
+       */
+      validation_status: 'pending' | 'valid'
       revision_number: number
-      achieved_level: components['schemas']['CompletenessLevel']
+      achieved_level: components['schemas']['CompletenessLevel'] | null
       is_primary: boolean
       contract: components['schemas']['FrozenContractRef']
     }
@@ -10142,6 +10284,104 @@ export interface operations {
       422: components['responses']['ValidationFailed']
     }
   }
+  listMyExecutions: {
+    parameters: {
+      query?: {
+        limit?: number
+        before_started_at?: string
+        before_id?: components['schemas']['UuidV7']
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description One page of my sessions */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['PrivateNoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ExecutionPage']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  startFreeExecution: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['FreeExecutionCreate']
+      }
+    }
+    responses: {
+      /** @description Session started */
+      201: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          Location: components['headers']['Location']
+          ETag: components['headers']['ETag']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['FreeExecutionStarted']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  getMyExecution: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        executionId: components['parameters']['ExecutionId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The session with what was recorded in it */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['PrivateNoStore']
+          ETag: components['headers']['ETag']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ExecutionDetail']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
   startPlannedSessionAttempt: {
     parameters: {
       query?: never
@@ -10219,10 +10459,12 @@ export interface operations {
       }
       400: components['responses']['BadRequest']
       401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
       404: components['responses']['NotFound']
       409: components['responses']['StaleDraft']
       422: components['responses']['ContractValidationFailed']
       428: components['responses']['PreconditionRequired']
+      503: components['responses']['UpstreamUnavailable']
     }
   }
   finalizeExecution: {
@@ -10261,10 +10503,12 @@ export interface operations {
       }
       400: components['responses']['BadRequest']
       401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
       404: components['responses']['NotFound']
       409: components['responses']['Conflict']
       422: components['responses']['ContractValidationFailed']
       428: components['responses']['PreconditionRequired']
+      503: components['responses']['UpstreamUnavailable']
     }
   }
   getAuthorizedClientExecution: {
