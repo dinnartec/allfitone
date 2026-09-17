@@ -3,11 +3,13 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import {
   alreadyIn,
   declareAlreadyIn,
+  declareReplacing,
   exerciseFilter,
   forgetExerciseFilter,
   rememberExerciseFilter,
   isPicked,
   offerExercisePick,
+  replacingPosition,
   offerable,
   pickButton,
   pickLabel,
@@ -90,6 +92,7 @@ describe('the selection crosses, the draft does not', () => {
   beforeEach(() => {
     takeExercisePick()
     declareAlreadyIn([])
+    declareReplacing(undefined)
     forgetExerciseFilter()
   })
 
@@ -116,6 +119,21 @@ describe('the selection crosses, the draft does not', () => {
     declareAlreadyIn(['m-1', 'm-2'])
 
     expect(alreadyIn()).toEqual(['m-1', 'm-2'])
+  })
+
+  test('T-SP-PICK-14 the picker is told whether it is adding or substituting', () => {
+    declareReplacing(3)
+
+    expect(replacingPosition()).toBe(3)
+  })
+
+  test('T-SP-PICK-15 and adding says so out loud, so a cancelled swap cannot leak', () => {
+    // Set once and never cleared, backing out of a substitution would leave the flag
+    // behind and the next «Añadir ejercicio» would overwrite instead of appending.
+    declareReplacing(3)
+    declareReplacing(undefined)
+
+    expect(replacingPosition()).toBeUndefined()
   })
 
   test('T-SP-PICK-10 the filter survives the trip to a filter screen and back', () => {

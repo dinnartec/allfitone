@@ -12,7 +12,9 @@ import { describe, expect, test } from 'bun:test'
 import {
   countSets,
   reasonsNotToPublish,
+  movedTo,
   reordered,
+  replacedStep,
   stepsFromContent,
   stepsToContent,
   withPicked,
@@ -148,6 +150,68 @@ describe('removing and reordering leave no gap', () => {
 
   test('T-SP-ROUTINE-11 an order naming something that is gone drops it rather than a hole', () => {
     expect(reordered([step(1, 'A')], [1, 99]).map((one) => one.name)).toEqual(['A'])
+  })
+})
+
+describe('dragging an exercise somewhere else', () => {
+  const three = () => [step(1, 'A'), step(2, 'B'), step(3, 'C')]
+
+  test('T-SP-ROUTINE-13 the last one to the front, and everything renumbers', () => {
+    expect(movedTo(three(), 3, 1).map((one) => one.name)).toEqual(['C', 'A', 'B'])
+    expect(movedTo(three(), 3, 1).map((one) => one.position)).toEqual([1, 2, 3])
+  })
+
+  test('T-SP-ROUTINE-14 the first one to the end', () => {
+    expect(movedTo(three(), 1, 3).map((one) => one.name)).toEqual(['B', 'C', 'A'])
+  })
+
+  test('T-SP-ROUTINE-15 dropping it where it already was changes nothing', () => {
+    expect(movedTo(three(), 2, 2).map((one) => one.name)).toEqual(['A', 'B', 'C'])
+  })
+
+  test('T-SP-ROUTINE-16 a superset survives being moved as a whole', () => {
+    const chained = [
+      step(1, 'A'),
+      { ...step(2, 'B'), supersetGroup: 1 },
+      { ...step(3, 'C'), supersetGroup: 1 },
+    ]
+    const moved = movedTo(chained, 1, 3)
+
+    expect(moved.map((one) => one.name)).toEqual(['B', 'C', 'A'])
+    expect(moved.filter((one) => one.supersetGroup === 1)).toHaveLength(2)
+  })
+
+  test('T-SP-ROUTINE-17 and breaks when one half is dragged out of the chain', () => {
+    // `IX-46` refuses a group whose positions are not contiguous, and it refuses it at
+    // publication — which is far too late to tell somebody their routine is invalid.
+    const chained = [
+      { ...step(1, 'A'), supersetGroup: 1 },
+      { ...step(2, 'B'), supersetGroup: 1 },
+      step(3, 'C'),
+    ]
+    const moved = movedTo(chained, 1, 3)
+
+    expect(moved.map((one) => one.name)).toEqual(['B', 'C', 'A'])
+    expect(moved.every((one) => one.supersetGroup === undefined)).toBe(true)
+  })
+})
+
+describe('swapping one exercise for another', () => {
+  test('T-SP-ROUTINE-18 the movement changes and the prescription stays', () => {
+    const loaded: WorkingStep = {
+      ...step(1, 'A'),
+      restSeconds: 90,
+      loadUnit: 'lb',
+      sets: [{ kind: 'warmup', reps: 12, load: 20 }],
+    }
+    const swapped = replacedStep([loaded, step(2, 'B')], 1, { id: 'other', name: 'Press plano' })
+
+    expect(swapped[0]?.name).toBe('Press plano')
+    expect(swapped[0]?.movementId).toBe('other')
+    expect(swapped[0]?.sets).toEqual(loaded.sets)
+    expect(swapped[0]?.restSeconds).toBe(90)
+    expect(swapped[0]?.loadUnit).toBe('lb')
+    expect(swapped[1]?.name).toBe('B')
   })
 })
 

@@ -84,6 +84,7 @@ import {
   pickButton,
   pickLabel,
   rememberExerciseFilter,
+  replacingPosition,
   togglePick,
   type PickedMovement,
 } from '../../src/client/exercise-pick'
@@ -156,10 +157,23 @@ export default function ExercisePicker() {
   )
   const pills = useMemo(() => pillsFor(filter, muscles, equipment), [filter, muscles, equipment])
 
+  // Declared by the editor before it pushed. Substituting is one exercise for one
+  // exercise, so there is nothing to accumulate and nothing to confirm.
+  const substituting = replacingPosition() !== undefined
+
   // Stable so a row's props do not change when another row is picked.
-  const toggle = useCallback((movement: Movement) => {
-    setPicked((current) => togglePick(current, { id: movement.id, name: movement.name }))
-  }, [])
+  const toggle = useCallback(
+    (movement: Movement) => {
+      const one = { id: movement.id, name: movement.name }
+      if (substituting) {
+        offerExercisePick([one])
+        router.back()
+        return
+      }
+      setPicked((current) => togglePick(current, one))
+    },
+    [substituting, router],
+  )
   const open = useCallback(
     (movement: Movement) => router.push(`/routines/exercises/${movement.id}`),
     [router],
@@ -178,16 +192,21 @@ export default function ExercisePicker() {
           of it used to scroll away with the first flick. */}
       <View style={styles.head}>
         <ScreenHeader
-          title="Añadir ejercicio"
+          title={substituting ? 'Reemplazar ejercicio' : 'Añadir ejercicio'}
           subtitle={
-            picked.length === 0
-              ? 'Toca los que quieras'
-              : `${picked.length} ${picked.length === 1 ? 'elegido' : 'elegidos'}`
+            substituting
+              ? 'Toca el que lo sustituye'
+              : picked.length === 0
+                ? 'Toca los que quieras'
+                : `${picked.length} ${picked.length === 1 ? 'elegido' : 'elegidos'}`
           }
           onClose={() => router.back()}
-          onConfirm={picked.length === 0 ? undefined : confirm}
-          confirmLabel={pickLabel(picked.length)}
-          confirmText={pickButton(picked.length)}
+          // No confirm while substituting: the tap on the row is the whole decision,
+          // and a button that says «Añadir 1» would be lying about what happens.
+          onConfirm={substituting || picked.length === 0 ? undefined : confirm}
+          {...(substituting
+            ? {}
+            : { confirmLabel: pickLabel(picked.length), confirmText: pickButton(picked.length) })}
         />
 
         {failure ? <InlineAlert message={failure} /> : null}

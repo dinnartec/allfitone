@@ -8,6 +8,11 @@
  * The confirm is a circle and not a word: it is the same act on every one of these
  * screens, and a circle at the top right is where both platforms put it.
  *
+ * A screen with no `confirmLabel` draws no confirm. The disabled circle is there to
+ * say «there is something to press once you have chosen», and where the choice *is*
+ * the tap — substituting one exercise for another — it promises a step that does not
+ * exist.
+ *
  * `confirmText` is the exception, for the screens where the act is not the same
  * every time. Adding three exercises is not the same as adding one, and a circle
  * cannot say which — so those screens draw the count instead of a tick. It is a
@@ -49,7 +54,8 @@ export function ScreenHeader({
   readonly subtitle: string
   readonly onClose: () => void
   readonly onConfirm?: (() => void) | undefined
-  readonly confirmLabel: string
+  /** Absent draws no confirm at all, for a screen where the choice is the tap itself. */
+  readonly confirmLabel?: string | undefined
   /** Drawn instead of the tick, for a confirm that changes with the set. */
   readonly confirmText?: string | undefined
   readonly editable?: boolean | undefined
@@ -80,7 +86,7 @@ export function ScreenHeader({
           {subtitle}
         </Text>
       </View>
-      {confirmText === undefined ? (
+      {confirmLabel === undefined ? null : confirmText === undefined ? (
         <IconButton
           icon="check"
           variant="solid"

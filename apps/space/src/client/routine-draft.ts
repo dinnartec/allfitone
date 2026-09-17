@@ -221,6 +221,62 @@ export function reordered(
     .map((step, index) => ({ ...step, position: index + 1 }))
 }
 
+/**
+ * One exercise to another index, which is what a drag leaves behind.
+ *
+ * **A superset does not travel with it.** A group is only a group while its members
+ * are neighbours — `IX-46` refuses positions that are not contiguous — so moving one
+ * half of a chain away breaks the chain rather than dragging the other half along.
+ * Clearing the mark here is what stops the screen composing a routine the database
+ * would reject at publication, which is far too late to tell somebody.
+ */
+export function movedTo(
+  steps: readonly WorkingStep[],
+  from: number,
+  to: number,
+): readonly WorkingStep[] {
+  const source = steps.find((step) => step.position === from)
+  if (!source || from === to) return steps
+
+  const rest = steps.filter((step) => step.position !== from)
+  const at = Math.max(0, Math.min(rest.length, to - 1))
+  const moved = [...rest.slice(0, at), source, ...rest.slice(at)]
+
+  return moved
+    .map((step, index) => ({ ...step, position: index + 1 }))
+    .map((step) => (brokenChain(moved, step) ? withoutChain(step) : step))
+}
+
+/** A group whose members are no longer side by side is not a group any more. */
+function brokenChain(moved: readonly WorkingStep[], step: WorkingStep): boolean {
+  if (step.supersetGroup === undefined) return false
+  const mates = moved.filter((one) => one.supersetGroup === step.supersetGroup)
+  const places = mates.map((one) => moved.indexOf(one))
+  return mates.length < 2 || Math.max(...places) - Math.min(...places) + 1 !== mates.length
+}
+
+function withoutChain(step: WorkingStep): WorkingStep {
+  const { supersetGroup: _was, ...rest } = step
+  return rest
+}
+
+/**
+ * Another movement in the same place, keeping everything the place had.
+ *
+ * Sets, rest, unit and the superset it belongs to are the prescription; the movement
+ * is what the prescription is *of*. Somebody swapping an incline press for a flat one
+ * is not asking to type four sets again.
+ */
+export function replacedStep(
+  steps: readonly WorkingStep[],
+  position: number,
+  movement: PickedMovement,
+): readonly WorkingStep[] {
+  return steps.map((step) =>
+    step.position === position ? { ...step, movementId: movement.id, name: movement.name } : step,
+  )
+}
+
 /** The unit the rows agree on, or nothing when none of them carries a weight. */
 function unitOf(sets: readonly Record<string, unknown>[]): MassUnit | undefined {
   for (const one of sets) {

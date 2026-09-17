@@ -100,6 +100,24 @@ export function declareAlreadyIn(ids: readonly string[]): void {
   already = ids
 }
 
+let replacing: number | undefined
+
+/**
+ * Which exercise the picker is opening to substitute, or nothing when it is adding.
+ *
+ * Declared on **both** paths and not only on the replacing one. If it were set and
+ * never cleared, backing out of a substitution without choosing would leave the flag
+ * behind, and the next plain «Añadir ejercicio» would silently overwrite an exercise
+ * instead of appending one — a bug nobody would connect to a screen they left.
+ */
+export function declareReplacing(position: number | undefined): void {
+  replacing = position
+}
+
+export function replacingPosition(): number | undefined {
+  return replacing
+}
+
 export function alreadyIn(): readonly string[] {
   return already
 }

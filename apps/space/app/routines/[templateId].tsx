@@ -56,25 +56,46 @@ import { Text } from '@allfitone/react-native/text'
 import { TextField } from '@allfitone/react-native/text-field'
 import { useTheme } from '@allfitone/react-native/theme'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native'
+import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import Animated, {
   Easing,
   FadeIn,
   FadeOut,
   LinearTransition,
   ReduceMotion,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+  type SharedValue,
 } from 'react-native-reanimated'
+
+import { scheduleOnRN } from 'react-native-worklets'
 
 import { ApiError } from '../../src/client'
 import { createSpaceContentFlow } from '../../src/client/content-transport'
+import { aside, placeOf } from '../../src/client/drag-order'
 import { readExerciseLibrary } from '../../src/client/exercise-library'
-import { declareAlreadyIn, takeExercisePick } from '../../src/client/exercise-pick'
+import {
+  declareAlreadyIn,
+  declareReplacing,
+  replacingPosition,
+  takeExercisePick,
+} from '../../src/client/exercise-pick'
 import {
   DISCIPLINE,
   countSets,
   reasonsNotToPublish,
-  reordered,
+  movedTo,
+  replacedStep,
   stepsFromContent,
   stepsToContent,
   withPicked,
@@ -118,6 +139,9 @@ const PRESS_MS = 120
 
 /** `ease-out`, never `ease-in`: a slow start delays the moment the finger asks about. */
 const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1)
+
+/** Quick enough that a row reads as answering the finger rather than following it. */
+const STEP_ASIDE = { duration: 160, easing: EASE_OUT }
 
 /** Gone rather than vanished. Opacity only, which is what survives reduced motion. */
 const EXIT = FadeOut.duration(140).reduceMotion(ReduceMotion.System)
@@ -190,6 +214,14 @@ export default function RoutineEditor() {
   const [loaded, setLoaded] = useState(false)
   const [open, setOpen] = useState<number | undefined>(undefined)
   const [sheet, setSheet] = useState<Sheeted | undefined>(undefined)
+  // One `setState` per gesture, never per frame: all it does is stand the layout
+  // animation down while the transforms are the ones placing the rows.
+  const [dragging, setDragging] = useState(false)
+
+  // Which row is in the air and how far it has gone. Shared so every row can read them
+  // in its own worklet; held here because they are the list's state, not one row's.
+  const liftedFrom = useSharedValue(0)
+  const liftedBy = useSharedValue(0)
 
   const pending = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   // Held outside state as well: a save scheduled before the creation resolved must
@@ -314,8 +346,13 @@ export default function RoutineEditor() {
     useCallback(() => {
       const picked = takeExercisePick()
       if (picked.length === 0) return
+      const substituted = replacingPosition()
       setSteps((current) => {
-        const next = withPicked(current, picked)
+        const first = picked[0]
+        const next =
+          substituted !== undefined && first !== undefined
+            ? replacedStep(current, substituted, first)
+            : withPicked(current, picked)
         // One save for the whole batch. The sheet wrote the draft once per exercise.
         schedule(named.current, next)
         return next
@@ -375,6 +412,22 @@ export default function RoutineEditor() {
         cause instanceof ApiError && cause.failure === 'unauthenticated' ? EXPIRED : SAVE_FAILED,
       )
     }
+  }
+
+  /**
+   * Putting a row down without it jumping.
+   *
+   * The order is committed while the layout animation is still stood down, so React
+   * places the rows directly where the transforms already showed them. Only then do
+   * the shared values go back to zero and the animation come back — a frame later,
+   * which is what stops the row from snapping to its old slot and sliding forward
+   * again.
+   */
+  const settle = (fromPosition: number, to: number) => {
+    if (to !== fromPosition) change(movedTo(steps, fromPosition, to))
+    liftedFrom.set(0)
+    liftedBy.set(0)
+    requestAnimationFrame(() => setDragging(false))
   }
 
   const subtitle = () => {
@@ -511,12 +564,19 @@ export default function RoutineEditor() {
           </View>
         ) : (
           steps.map((step) => (
-            <Animated.View
+            <DraggableRow
               key={step.movementId}
-              // The row it leaves behind closes the gap rather than snapping shut,
-              // and both honour the system setting rather than deciding for it.
-              exiting={EXIT}
-              layout={REFLOW}
+              step={step}
+              count={steps.length}
+              open={open === step.position}
+              dragging={dragging}
+              from={liftedFrom}
+              travel={liftedBy}
+              onLift={() => {
+                setOpen(undefined)
+                setDragging(true)
+              }}
+              onDrop={(to) => settle(step.position, to)}
               style={[
                 styles.row,
                 {
@@ -531,9 +591,12 @@ export default function RoutineEditor() {
                 onPress={() => setOpen(open === step.position ? undefined : step.position)}
                 style={styles.rowHead}
               >
-                <Text role="body" size="sm" color="muted">
-                  {String(step.position).padStart(2, '0')}
-                </Text>
+                <Handle
+                  name={step.name}
+                  position={step.position}
+                  count={steps.length}
+                  onMove={(to) => change(movedTo(steps, step.position, to))}
+                />
                 <View style={styles.rowText}>
                   <Text role="control" size="md" numberOfLines={1}>
                     {step.name}
@@ -592,7 +655,7 @@ export default function RoutineEditor() {
                   />
                 </Animated.View>
               ) : null}
-            </Animated.View>
+            </DraggableRow>
           ))
         )}
       </ScrollView>
@@ -607,6 +670,7 @@ export default function RoutineEditor() {
           icon={steps.length === 0 ? 'search' : 'add'}
           onPress={() => {
             declareAlreadyIn(steps.map((one) => one.movementId))
+            declareReplacing(undefined)
             router.push('/routines/exercises')
           }}
         />
@@ -759,7 +823,12 @@ export default function RoutineEditor() {
             detail="Buscar otro y conservar las series"
             onPress={() => {
               if (sheet?.kind !== 'menu') return
-              declareAlreadyIn(steps.map((one) => one.movementId))
+              // Everything but the one being swapped, so the picker does not offer
+              // back an exercise the routine already trains.
+              declareAlreadyIn(
+                steps.filter((one) => one.position !== sheet.position).map((one) => one.movementId),
+              )
+              declareReplacing(sheet.position)
               setSheet(undefined)
               router.push('/routines/exercises')
             }}
@@ -785,26 +854,6 @@ export default function RoutineEditor() {
               }}
             />
           )}
-          <SheetChoice
-            name="Mover arriba"
-            detail="Cambia su lugar en la rutina"
-            onPress={() => {
-              if (sheet?.kind !== 'menu') return
-              change(movedUp(steps, sheet.position))
-              setOpen(undefined)
-              setSheet(undefined)
-            }}
-          />
-          <SheetChoice
-            name="Quitar de la rutina"
-            detail="Se pierden sus series"
-            onPress={() => {
-              if (sheet?.kind !== 'menu') return
-              change(withoutStep(steps, sheet.position))
-              setOpen(undefined)
-              setSheet(undefined)
-            }}
-          />
         </View>
       </Sheet>
     </Screen>
@@ -938,18 +987,6 @@ function withChain(
 }
 
 /** Moving one up is the only reorder the canvases ask for, and it renumbers. */
-function movedUp(steps: readonly WorkingStep[], position: number): readonly WorkingStep[] {
-  if (position <= 1) return steps
-  const order = steps.map((step) => step.position)
-  const at = order.indexOf(position)
-  const swapped = [...order]
-  const previous = swapped[at - 1]
-  const current = swapped[at]
-  if (previous === undefined || current === undefined) return steps
-  swapped[at - 1] = current
-  swapped[at] = previous
-  return reordered(steps, swapped)
-}
 
 /**
  * The sets of one exercise, and the three sheets it opens.
@@ -1058,6 +1095,155 @@ function SetTable({
 }
 
 /**
+ * A row that can be picked up, with every other row getting out of its way as it goes.
+ *
+ * **The whole list moves during the drag, not after it.** Two shared values say it:
+ * which position is in the air and how far it has travelled. Every row reads both in
+ * its own `useAnimatedStyle` and works out whether the one in the air has passed over
+ * it — if it has, the row steps aside by exactly one place. That computation is a
+ * worklet, so it runs per frame on the UI runtime and React renders nothing at all
+ * between picking up and putting down.
+ *
+ * **Held, not pressed.** The pan activates after a quarter of a second of stillness,
+ * which is what both platforms use for reorder and what keeps this gesture from
+ * fighting the scroll view it lives in — a pan that won immediately would make the
+ * list unscrollable wherever a finger happened to land on a grip.
+ *
+ * **The layout animation stands down while a drag is on.** `REFLOW` animates a row
+ * from where it used to be to where it now is, which is exactly the wrong thing at the
+ * moment of dropping: the transform has already put the row in its new place, so the
+ * two would fight and the row would jump back a slot before sliding forward again. It
+ * comes back a frame after the order is committed, which is one `setState` per gesture
+ * rather than per frame.
+ */
+function DraggableRow({
+  step,
+  count,
+  open,
+  dragging,
+  from,
+  travel,
+  onLift,
+  onDrop,
+  style,
+  children,
+}: {
+  readonly step: WorkingStep
+  readonly count: number
+  /** An open row is not draggable: its own content takes the long press. */
+  readonly open: boolean
+  readonly dragging: boolean
+  readonly from: SharedValue<number>
+  readonly travel: SharedValue<number>
+  readonly onLift: () => void
+  readonly onDrop: (to: number) => void
+  readonly style: StyleProp<ViewStyle>
+  readonly children: ReactNode
+}) {
+  const position = step.position
+
+  const drag = Gesture.Pan()
+    // Shut only. Open, the row holds a table of number fields, and a long press on one
+    // of them would lift the whole exercise instead of putting a caret in it.
+    .enabled(!open)
+    .activateAfterLongPress(250)
+    .onStart(() => {
+      from.set(position)
+      travel.set(0)
+      scheduleOnRN(onLift)
+    })
+    .onUpdate((event) => {
+      travel.set(event.translationY)
+    })
+    .onEnd((event, success) => {
+      const landed = success ? placeOf(position, event.translationY, count) : position
+      scheduleOnRN(onDrop, landed)
+    })
+
+  const moving = useAnimatedStyle(() => {
+    const lifted = from.get()
+    if (lifted === 0) return { transform: [{ translateY: 0 }, { scale: 1 }], opacity: 1, zIndex: 0 }
+    if (lifted === position) {
+      return {
+        transform: [{ translateY: travel.get() }, { scale: 1.02 }],
+        opacity: 0.94,
+        zIndex: 2,
+      }
+    }
+    return {
+      transform: [
+        { translateY: withTiming(aside(position, lifted, travel.get(), count), STEP_ASIDE) },
+        { scale: 1 },
+      ],
+      opacity: 1,
+      zIndex: 0,
+    }
+  })
+
+  return (
+    <GestureDetector gesture={drag}>
+      <Animated.View
+        // The row it leaves behind closes the gap rather than snapping shut, and both
+        // honour the system setting rather than deciding for it.
+        exiting={EXIT}
+        {...(dragging ? {} : { layout: REFLOW })}
+        style={[style, moving]}
+      >
+        {children}
+      </Animated.View>
+    </GestureDetector>
+  )
+}
+
+/**
+ * The grip. It is the drag's affordance and, for anyone who cannot drag, its equal.
+ *
+ * A pan is invisible to a screen reader and impossible with a switch or a keyboard, so
+ * the same control is `adjustable`: the reader announces where the exercise is, and an
+ * increment or decrement moves it one place. Dragging is the fast path, never the only
+ * one — `ACCESSIBILITY.md` asks for the equivalent, not for the same gesture.
+ */
+function Handle({
+  name,
+  position,
+  count,
+  onMove,
+}: {
+  readonly name: string
+  readonly position: number
+  readonly count: number
+  readonly onMove: (to: number) => void
+}) {
+  const theme = useTheme()
+
+  return (
+    <View
+      accessible
+      accessibilityRole="adjustable"
+      accessibilityLabel={`Orden de ${name}`}
+      accessibilityValue={{ min: 1, max: count, now: position, text: `${position} de ${count}` }}
+      accessibilityHint="Con el ejercicio cerrado, mantén pulsado y arrastra para moverlo"
+      onAccessibilityAction={(event) => {
+        if (event.nativeEvent.actionName === 'increment') onMove(Math.min(count, position + 1))
+        if (event.nativeEvent.actionName === 'decrement') onMove(Math.max(1, position - 1))
+      }}
+      accessibilityActions={ACCESSIBLE_MOVES}
+      style={styles.handle}
+    >
+      <FoundationIcon name="reorder" size="sm" color={theme.color.icon.secondary} decorative />
+      <Text role="body" size="sm" color="muted">
+        {String(position).padStart(2, '0')}
+      </Text>
+    </View>
+  )
+}
+
+const ACCESSIBLE_MOVES = [
+  { name: 'increment' as const, label: 'Bajarlo un lugar' },
+  { name: 'decrement' as const, label: 'Subirlo un lugar' },
+]
+
+/**
  * The trash can, which answers the finger before the row goes.
  *
  * Removing an exercise is occasional and its purpose is feedback: the press has to
@@ -1164,6 +1350,8 @@ const styles = StyleSheet.create({
   // laid the two side by side: `rowText` takes the free space with `flex: 1`, so
   // the table was squeezed to its minimum width and read as nothing opening.
   row: { borderWidth: 1, borderRadius: 16, padding: 14, overflow: 'hidden' },
+  // The grip and the number read as one thing: what the row is and where it sits.
+  handle: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   rowText: { flex: 1, gap: 3 },
   rowHead: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   table: { gap: 2, paddingTop: 12 },
@@ -1176,7 +1364,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
   },
   colOrder: { width: 18 },
-  tableActions: { flexDirection: 'row', gap: 8, paddingTop: 8 },
+  tableActions: { flexDirection: 'row', justifyContent: 'space-between', gap: 8, paddingTop: 8 },
   sheet: { gap: 10, paddingBottom: 8 },
   choice: {
     flexDirection: 'row',
