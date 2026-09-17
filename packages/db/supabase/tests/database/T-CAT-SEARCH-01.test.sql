@@ -57,13 +57,25 @@ select set_config('app.actor_person_id', '019eb000-0000-7000-8000-000000000001',
 -- Counted over this test's own fixtures rather than over the whole library. The
 -- curated catalogue is loaded into the same database the app uses and this asserted
 -- an empty one, so running the app and running the tests were mutually exclusive.
+--
+-- Asked per discipline rather than in one unfiltered page. The fixtures use
+-- disciplines the curated catalogue does not, and a single page is capped: once the
+-- library passed four hundred movements an unfiltered read stopped reaching them, and
+-- this counted one of three for a reason that had nothing to do with the search.
 select is(
   (select count(*)::integer
-   from jsonb_array_elements(catalog.read_movements(
-     '019eb000-0000-7000-8000-000000000001', null, null, 200)->'data') as found
+   from (
+     select found->>'id' as id
+     from jsonb_array_elements(catalog.read_movements(
+       '019eb000-0000-7000-8000-000000000001', 'test_strength', null, 200)->'data') as found
+     union all
+     select found->>'id'
+     from jsonb_array_elements(catalog.read_movements(
+       '019eb000-0000-7000-8000-000000000001', 'test_endurance', null, 200)->'data') as found
+   ) as answered
    -- By id, not by name: the curated catalogue has a 'Sentadilla con barra' of its
    -- own, and matching on the word would count both.
-   where (found->>'id')::uuid in (
+   where id::uuid in (
      '019eb000-0000-7000-8000-0000000000f1',
      '019eb000-0000-7000-8000-0000000000f2',
      '019eb000-0000-7000-8000-0000000000f3')),
@@ -150,10 +162,12 @@ select is(
   null::text[],
   'T-CAT-SEARCH-11 a movement with no label appears under no chip');
 
+-- Narrowed to the fixtures' own discipline for the same reason as `T-CAT-SEARCH-01`:
+-- an unfiltered page no longer reaches them.
 select is(
   (select (found->'muscles')::jsonb
    from jsonb_array_elements(catalog.read_movements(
-     '019eb000-0000-7000-8000-000000000001', null, null, 200)->'data') as found
+     '019eb000-0000-7000-8000-000000000001', 'test_strength', null, 200)->'data') as found
    where found->>'id' = '019eb000-0000-7000-8000-0000000000f1'),
   '["test_chest"]'::jsonb,
   'T-CAT-SEARCH-12 every movement says what it trains, so the row can explain itself');

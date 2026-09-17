@@ -148,6 +148,255 @@ export type Database = {
         }
         Relationships: []
       }
+      equipment: {
+        Row: {
+          code: string | null
+          content_scope: Database['catalog']['Enums']['content_scope']
+          created_at: string
+          display_order: number
+          id: string
+          name: string
+          owner_organization_id: string | null
+          status: Database['catalog']['Enums']['publication_status']
+        }
+        Insert: {
+          code?: string | null
+          content_scope: Database['catalog']['Enums']['content_scope']
+          created_at?: string
+          display_order?: number
+          id?: string
+          name: string
+          owner_organization_id?: string | null
+          status?: Database['catalog']['Enums']['publication_status']
+        }
+        Update: {
+          code?: string | null
+          content_scope?: Database['catalog']['Enums']['content_scope']
+          created_at?: string
+          display_order?: number
+          id?: string
+          name?: string
+          owner_organization_id?: string | null
+          status?: Database['catalog']['Enums']['publication_status']
+        }
+        Relationships: []
+      }
+      movement_aliases: {
+        Row: {
+          id: string
+          locale: string
+          movement_id: string
+          name: string
+        }
+        Insert: {
+          id?: string
+          locale?: string
+          movement_id: string
+          name: string
+        }
+        Update: {
+          id?: string
+          locale?: string
+          movement_id?: string
+          name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_movement_aliases_movement'
+            columns: ['movement_id']
+            isOneToOne: false
+            referencedRelation: 'movements'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      movement_equipment: {
+        Row: {
+          equipment_id: string
+          id: string
+          movement_id: string
+          requirement: string
+        }
+        Insert: {
+          equipment_id: string
+          id?: string
+          movement_id: string
+          requirement?: string
+        }
+        Update: {
+          equipment_id?: string
+          id?: string
+          movement_id?: string
+          requirement?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_movement_equipment_equipment'
+            columns: ['equipment_id']
+            isOneToOne: false
+            referencedRelation: 'equipment'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'fk_movement_equipment_movement'
+            columns: ['movement_id']
+            isOneToOne: false
+            referencedRelation: 'movements'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      movement_instructions: {
+        Row: {
+          id: string
+          locale: string
+          movement_id: string
+          position: number
+          text: string
+        }
+        Insert: {
+          id?: string
+          locale?: string
+          movement_id: string
+          position: number
+          text: string
+        }
+        Update: {
+          id?: string
+          locale?: string
+          movement_id?: string
+          position?: number
+          text?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_movement_instructions_movement'
+            columns: ['movement_id']
+            isOneToOne: false
+            referencedRelation: 'movements'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      movement_media: {
+        Row: {
+          byte_size: number
+          checksum: string
+          content_type: string
+          height: number
+          id: string
+          kind: string
+          movement_id: string
+          object_key: string
+          width: number
+        }
+        Insert: {
+          byte_size: number
+          checksum: string
+          content_type: string
+          height: number
+          id?: string
+          kind?: string
+          movement_id: string
+          object_key: string
+          width: number
+        }
+        Update: {
+          byte_size?: number
+          checksum?: string
+          content_type?: string
+          height?: number
+          id?: string
+          kind?: string
+          movement_id?: string
+          object_key?: string
+          width?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_movement_media_movement'
+            columns: ['movement_id']
+            isOneToOne: false
+            referencedRelation: 'movements'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      movement_muscles: {
+        Row: {
+          id: string
+          is_primary: boolean
+          movement_id: string
+          muscle_id: string
+        }
+        Insert: {
+          id?: string
+          is_primary?: boolean
+          movement_id: string
+          muscle_id: string
+        }
+        Update: {
+          id?: string
+          is_primary?: boolean
+          movement_id?: string
+          muscle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_movement_muscles_movement'
+            columns: ['movement_id']
+            isOneToOne: false
+            referencedRelation: 'movements'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'fk_movement_muscles_muscle'
+            columns: ['muscle_id']
+            isOneToOne: false
+            referencedRelation: 'muscles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      movement_variants: {
+        Row: {
+          base_movement_id: string
+          id: string
+          note: string | null
+          relation: string
+          variant_movement_id: string
+        }
+        Insert: {
+          base_movement_id: string
+          id?: string
+          note?: string | null
+          relation?: string
+          variant_movement_id: string
+        }
+        Update: {
+          base_movement_id?: string
+          id?: string
+          note?: string | null
+          relation?: string
+          variant_movement_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_movement_variants_base'
+            columns: ['base_movement_id']
+            isOneToOne: false
+            referencedRelation: 'movements'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'fk_movement_variants_variant'
+            columns: ['variant_movement_id']
+            isOneToOne: false
+            referencedRelation: 'movements'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       movements: {
         Row: {
           content_scope: Database['catalog']['Enums']['content_scope']
@@ -201,6 +450,39 @@ export type Database = {
             referencedColumns: ['id']
           },
         ]
+      }
+      muscles: {
+        Row: {
+          body_slug: string | null
+          code: string
+          created_at: string
+          display_order: number
+          id: string
+          name: string
+          region: string
+          status: Database['catalog']['Enums']['publication_status']
+        }
+        Insert: {
+          body_slug?: string | null
+          code: string
+          created_at?: string
+          display_order?: number
+          id?: string
+          name: string
+          region: string
+          status?: Database['catalog']['Enums']['publication_status']
+        }
+        Update: {
+          body_slug?: string | null
+          code?: string
+          created_at?: string
+          display_order?: number
+          id?: string
+          name?: string
+          region?: string
+          status?: Database['catalog']['Enums']['publication_status']
+        }
+        Relationships: []
       }
       professional_credential_types: {
         Row: {
@@ -347,9 +629,40 @@ export type Database = {
           name: string
         }[]
       }
+      movement_cursor: {
+        Args: { p_id: string; p_name: string }
+        Returns: string
+      }
+      movement_cursor_parts: {
+        Args: { p_cursor: string }
+        Returns: {
+          sort_id: string
+          sort_name: string
+        }[]
+      }
+      normalize_movement_name: { Args: { p_name: string }; Returns: string }
+      read_equipment: { Args: { p_person_id: string }; Returns: Json }
+      read_movement: {
+        Args: { p_movement_id: string; p_person_id: string }
+        Returns: Json
+      }
+      read_movements: {
+        Args: {
+          p_cursor?: string
+          p_discipline_code: string
+          p_equipment?: string[]
+          p_limit: number
+          p_muscles?: string[]
+          p_person_id: string
+          p_query: string
+        }
+        Returns: Json
+      }
+      read_muscles: { Args: { p_person_id: string }; Returns: Json }
     }
     Enums: {
       activity_family: 'strength' | 'endurance' | 'interval' | 'mobility'
+      completeness_level: 'partial' | 'summary' | 'detailed' | 'sensor_enriched'
       content_scope: 'global' | 'organization' | 'person'
       publication_status: 'draft' | 'published' | 'deprecated' | 'archived'
     }
@@ -2641,6 +2954,7 @@ export type Database = {
           status: string
           template_version_id: string
           timezone: string
+          week_starts_on: string
         }
         Insert: {
           assignment_id: string
@@ -2650,6 +2964,7 @@ export type Database = {
           status?: string
           template_version_id: string
           timezone: string
+          week_starts_on: string
         }
         Update: {
           assignment_id?: string
@@ -2659,6 +2974,7 @@ export type Database = {
           status?: string
           template_version_id?: string
           timezone?: string
+          week_starts_on?: string
         }
         Relationships: [
           {
@@ -2677,6 +2993,50 @@ export type Database = {
           },
         ]
       }
+      planned_sets: {
+        Row: {
+          created_at: string
+          id: string
+          kind: Database['planning']['Enums']['set_kind']
+          planned_step_id: string
+          set_order: number
+          target_load_unit_code: string | null
+          target_load_value: number | null
+          target_reps: number | null
+          target_rpe: number | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          kind?: Database['planning']['Enums']['set_kind']
+          planned_step_id: string
+          set_order: number
+          target_load_unit_code?: string | null
+          target_load_value?: number | null
+          target_reps?: number | null
+          target_rpe?: number | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          kind?: Database['planning']['Enums']['set_kind']
+          planned_step_id?: string
+          set_order?: number
+          target_load_unit_code?: string | null
+          target_load_value?: number | null
+          target_reps?: number | null
+          target_rpe?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_planned_sets_step'
+            columns: ['planned_step_id']
+            isOneToOne: false
+            referencedRelation: 'planned_steps'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       planned_steps: {
         Row: {
           activity_type_id: string | null
@@ -2684,6 +3044,7 @@ export type Database = {
           movement_id: string | null
           notes: string | null
           position: number
+          superset_group: number | null
           template_version_id: string
         }
         Insert: {
@@ -2692,6 +3053,7 @@ export type Database = {
           movement_id?: string | null
           notes?: string | null
           position: number
+          superset_group?: number | null
           template_version_id: string
         }
         Update: {
@@ -2700,6 +3062,7 @@ export type Database = {
           movement_id?: string | null
           notes?: string | null
           position?: number
+          superset_group?: number | null
           template_version_id?: string
         }
         Relationships: [
@@ -2715,6 +3078,7 @@ export type Database = {
       program_assignments: {
         Row: {
           assigned_at: string
+          display_order: number
           id: string
           lifecycle: Database['planning']['Enums']['assignment_lifecycle']
           origin_relationship_id: string | null
@@ -2725,6 +3089,7 @@ export type Database = {
         }
         Insert: {
           assigned_at?: string
+          display_order: number
           id?: string
           lifecycle: Database['planning']['Enums']['assignment_lifecycle']
           origin_relationship_id?: string | null
@@ -2735,6 +3100,7 @@ export type Database = {
         }
         Update: {
           assigned_at?: string
+          display_order?: number
           id?: string
           lifecycle?: Database['planning']['Enums']['assignment_lifecycle']
           origin_relationship_id?: string | null
@@ -3112,6 +3478,7 @@ export type Database = {
           target_load_unit_code: string | null
           target_load_value: number | null
           target_reps: number | null
+          target_rest_seconds: number | null
           target_rpe: number | null
           target_sets: number
         }
@@ -3121,6 +3488,7 @@ export type Database = {
           target_load_unit_code?: string | null
           target_load_value?: number | null
           target_reps?: number | null
+          target_rest_seconds?: number | null
           target_rpe?: number | null
           target_sets: number
         }
@@ -3130,6 +3498,7 @@ export type Database = {
           target_load_unit_code?: string | null
           target_load_value?: number | null
           target_reps?: number | null
+          target_rest_seconds?: number | null
           target_rpe?: number | null
           target_sets?: number
         }
@@ -3156,6 +3525,7 @@ export type Database = {
         Args: { p_organization_id: string; p_person_id: string }
         Returns: string
       }
+      assert_own_content: { Args: { p_person_id: string }; Returns: undefined }
       audit_organization_read: {
         Args: { p_organization_id: string; p_person_id: string }
         Returns: undefined
@@ -3164,6 +3534,33 @@ export type Database = {
       canonical_session_content: { Args: { p_content: Json }; Returns: Json }
       canonical_target: { Args: { p_target: Json }; Returns: Json }
       content_etag: { Args: { p_content: Json }; Returns: string }
+      create_my_program: {
+        Args: {
+          p_command_id: string
+          p_idempotency_key: string
+          p_person_id: string
+          p_request_hash: string
+          p_title: string
+        }
+        Returns: {
+          program: Json
+          replayed: boolean
+        }[]
+      }
+      create_my_session_template: {
+        Args: {
+          p_command_id: string
+          p_discipline_code: string
+          p_idempotency_key: string
+          p_person_id: string
+          p_request_hash: string
+          p_title: string
+        }
+        Returns: {
+          replayed: boolean
+          template: Json
+        }[]
+      }
       create_program: {
         Args: {
           p_command_id: string
@@ -3239,6 +3636,23 @@ export type Database = {
           result: Json
         }[]
       }
+      discard_my_session_template: {
+        Args: {
+          p_command_id: string
+          p_idempotency_key: string
+          p_person_id: string
+          p_request_hash: string
+          p_template_id: string
+        }
+        Returns: {
+          replayed: boolean
+          template: Json
+        }[]
+      }
+      fork_program_version: {
+        Args: { p_person_id: string; p_program_version_id: string }
+        Returns: string
+      }
       list_programs: {
         Args: {
           p_cursor_id: string
@@ -3275,6 +3689,7 @@ export type Database = {
         Args: { p_step_id: string; p_target: Json }
         Returns: undefined
       }
+      planned_set_errors: { Args: { p_sets: Json }; Returns: string[] }
       program_content_errors: {
         Args: {
           p_content: Json
@@ -3307,6 +3722,34 @@ export type Database = {
           p_template_id: string
         }
         Returns: string
+      }
+      publish_my_program: {
+        Args: {
+          p_command_id: string
+          p_expected_etag: string
+          p_idempotency_key: string
+          p_person_id: string
+          p_program_id: string
+          p_request_hash: string
+        }
+        Returns: {
+          replayed: boolean
+          version: Json
+        }[]
+      }
+      publish_my_session_template: {
+        Args: {
+          p_command_id: string
+          p_expected_etag: string
+          p_idempotency_key: string
+          p_person_id: string
+          p_request_hash: string
+          p_template_id: string
+        }
+        Returns: {
+          replayed: boolean
+          version: Json
+        }[]
       }
       publish_program_version: {
         Args: {
@@ -3349,6 +3792,30 @@ export type Database = {
           title: string
         }[]
       }
+      read_my_content: { Args: { p_person_id: string }; Returns: Json }
+      read_my_program_draft: {
+        Args: { p_person_id: string; p_program_id: string }
+        Returns: Json
+      }
+      read_my_programs: {
+        Args: { p_person_id: string }
+        Returns: {
+          assignment_id: string
+          days_per_week: number
+          editable: boolean
+          program_id: string
+          program_version_id: string
+          sessions_done: number
+          sessions_planned: number
+          starts_on: string
+          title: string
+          weeks: number
+        }[]
+      }
+      read_my_session_template_draft: {
+        Args: { p_person_id: string; p_template_id: string }
+        Returns: Json
+      }
       read_program_catalogue: {
         Args: { p_person_id: string }
         Returns: {
@@ -3378,6 +3845,14 @@ export type Database = {
           weeks: number
         }[]
       }
+      read_session_template_draft: {
+        Args: {
+          p_organization_id: string
+          p_person_id: string
+          p_template_id: string
+        }
+        Returns: Json
+      }
       read_session_template_version: {
         Args: {
           p_organization_id: string
@@ -3386,6 +3861,72 @@ export type Database = {
           p_version_number: number
         }
         Returns: Json
+      }
+      read_today_session: {
+        Args: { p_person_id: string; p_timezone: string }
+        Returns: {
+          assignment_id: string
+          discipline_code: string
+          executed_session_id: string
+          execution_status: string
+          exercise_count: number
+          planned_session_id: string
+          program_title: string
+          scheduled_on: string
+          session_title: string
+          status: string
+        }[]
+      }
+      read_week_plan: {
+        Args: { p_person_id: string; p_timezone: string }
+        Returns: {
+          assignment_id: string
+          program_title: string
+          program_version_id: string
+          program_week: number
+          sessions: Json
+          week_starts_on: string
+        }[]
+      }
+      reorder_my_programs: {
+        Args: {
+          p_assignment_ids: string[]
+          p_command_id: string
+          p_idempotency_key: string
+          p_person_id: string
+          p_request_hash: string
+        }
+        Returns: number
+      }
+      replace_my_program_draft: {
+        Args: {
+          p_command_id: string
+          p_content: Json
+          p_expected_etag: string
+          p_idempotency_key: string
+          p_person_id: string
+          p_program_id: string
+          p_request_hash: string
+        }
+        Returns: {
+          draft: Json
+          replayed: boolean
+        }[]
+      }
+      replace_my_session_template_draft: {
+        Args: {
+          p_command_id: string
+          p_content: Json
+          p_expected_etag: string
+          p_idempotency_key: string
+          p_person_id: string
+          p_request_hash: string
+          p_template_id: string
+        }
+        Returns: {
+          draft: Json
+          replayed: boolean
+        }[]
       }
       replace_program_draft: {
         Args: {
@@ -3419,6 +3960,16 @@ export type Database = {
           result: Json
         }[]
       }
+      restate_my_program_assignment: {
+        Args: {
+          p_command_id: string
+          p_idempotency_key: string
+          p_person_id: string
+          p_program_version_id: string
+          p_request_hash: string
+        }
+        Returns: string
+      }
       self_assign_program: {
         Args: {
           p_command_id: string
@@ -3451,6 +4002,7 @@ export type Database = {
     }
     Enums: {
       assignment_lifecycle: 'active' | 'detached_pending_choice' | 'personal' | 'ended'
+      set_kind: 'normal' | 'warmup' | 'to_failure' | 'drop'
     }
     CompositeTypes: {
       [_ in never]: never
@@ -3576,6 +4128,7 @@ export const Constants = {
   catalog: {
     Enums: {
       activity_family: ['strength', 'endurance', 'interval', 'mobility'],
+      completeness_level: ['partial', 'summary', 'detailed', 'sensor_enriched'],
       content_scope: ['global', 'organization', 'person'],
       publication_status: ['draft', 'published', 'deprecated', 'archived'],
     },
@@ -3618,6 +4171,7 @@ export const Constants = {
   planning: {
     Enums: {
       assignment_lifecycle: ['active', 'detached_pending_choice', 'personal', 'ended'],
+      set_kind: ['normal', 'warmup', 'to_failure', 'drop'],
     },
   },
 } as const
