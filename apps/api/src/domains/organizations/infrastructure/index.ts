@@ -243,7 +243,7 @@ export function createOrganizationDatabase(): OrganizationDatabase {
               ${input.personId}::uuid,
               ${input.organizationId}::uuid,
               ${input.expectedRevision}::bigint,
-              ${JSON.stringify(patch)}::jsonb,
+              ${JSON.stringify(patch)}::text::jsonb,
               ${input.idempotencyKey}::uuid,
               ${input.commandId}::uuid,
               ${input.requestHash}
@@ -263,7 +263,7 @@ export function createOrganizationDatabase(): OrganizationDatabase {
             select * from organizations.create_site(
               ${input.personId}::uuid,
               ${input.organizationId}::uuid,
-              ${JSON.stringify(input.site)}::jsonb,
+              ${JSON.stringify(input.site)}::text::jsonb,
               ${input.idempotencyKey}::uuid,
               ${input.commandId}::uuid,
               ${input.requestHash}
@@ -285,7 +285,7 @@ export function createOrganizationDatabase(): OrganizationDatabase {
               ${input.organizationId}::uuid,
               ${input.siteId}::uuid,
               ${input.expectedRevision}::bigint,
-              ${JSON.stringify(input.patch)}::jsonb,
+              ${JSON.stringify(input.patch)}::text::jsonb,
               ${input.idempotencyKey}::uuid,
               ${input.commandId}::uuid,
               ${input.requestHash}

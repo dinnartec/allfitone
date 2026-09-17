@@ -53,7 +53,7 @@ export function createPlatformPlanDatabase(): PlatformPlanDatabase {
           select * from payments.propose_platform_plan_version(
             ${input.actorPersonId}::uuid, ${input.actorSessionId}::uuid, ${input.planId}::uuid,
             ${input.proposal.amount_minor}::bigint, ${input.proposal.currency_code},
-            ${input.proposal.billing_period}, ${JSON.stringify(input.proposal.features)}::jsonb,
+            ${input.proposal.billing_period}, ${JSON.stringify(input.proposal.features)}::text::jsonb,
             ${input.idempotencyKey}::uuid, ${input.commandId}::uuid, ${input.requestHash}
           )
         `

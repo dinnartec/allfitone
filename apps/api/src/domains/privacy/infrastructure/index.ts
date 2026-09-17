@@ -69,7 +69,7 @@ export function createScopeDefinitionDatabase(): ScopeDefinitionDatabase {
           select * from privacy.publish_scope_definition(
             ${input.actorPersonId}::uuid, ${input.actorSessionId}::uuid,
             ${input.publication.scope_code},
-            ${JSON.stringify(input.publication.rules)}::jsonb,
+            ${JSON.stringify(input.publication.rules)}::text::jsonb,
             ${input.idempotencyKey}::uuid, ${input.commandId}::uuid, ${input.requestHash}
           )
         `
