@@ -213,7 +213,19 @@ insert into curated_equipment (ordinal, code, name) values
   (6, 'cable',          'Polea'),
   (7, 'bench',          'Banco'),
   (8, 'pull_up_bar',    'Barra fija'),
-  (9, 'cardio_machine', 'Máquina de cardio');
+  (9, 'cardio_machine', 'Máquina de cardio'),
+  -- Wave one of the catalogue needs these: without them a fifth of the movements have
+  -- no honest way to say what they require. Same rule as everything here — the ordinal
+  -- is the identity and is never renumbered.
+  (10, 'band',           'Banda elástica'),
+  (11, 'smith_machine',  'Multipower'),
+  (12, 'weighted',       'Lastre'),
+  (13, 'stability_ball', 'Balón de estabilidad'),
+  (14, 'assisted',       'Asistido'),
+  (15, 'medicine_ball',  'Balón medicinal'),
+  (16, 'rope',           'Cuerda'),
+  (17, 'ab_wheel',       'Rueda abdominal'),
+  (18, 'foam_roller',    'Rodillo de espuma');
 
 alter table curated_equipment add column id uuid;
 update curated_equipment set id = ('019f1200-0000-7000-8000-' || lpad(ordinal::text, 12, '0'))::uuid;
