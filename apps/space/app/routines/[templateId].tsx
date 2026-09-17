@@ -56,6 +56,7 @@ import { Screen } from '@allfitone/react-native/screen'
 import { Text } from '@allfitone/react-native/text'
 import { TextField } from '@allfitone/react-native/text-field'
 import { useTheme } from '@allfitone/react-native/theme'
+import { Image } from 'expo-image'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native'
@@ -221,6 +222,9 @@ export default function RoutineEditor() {
   // animation down while the transforms are the ones placing the rows.
   const [dragging, setDragging] = useState(false)
   const [settling, setSettling] = useState(false)
+  // Presentation, not prescription: the draft carries a movement's identifier and
+  // nothing about how it looks, so the picture is looked up rather than stored.
+  const [previews, setPreviews] = useState<ReadonlyMap<string, string | null>>(new Map())
 
   // Which row is in the air and how far it has gone. Shared so every row can read them
   // in its own worklet; held here because they are the list's state, not one row's.
@@ -371,13 +375,20 @@ export default function RoutineEditor() {
     let active = true
 
     const resume = async (): Promise<void> => {
+      // Read whether or not there is a draft: a routine started from nothing shows
+      // pictures too, and the library is a process-lifetime cache, so asking twice in
+      // one session costs nothing.
+      const library = await readExerciseLibrary(flow)
+      if (!active) return
+      setPreviews(new Map(library.movements.map((movement) => [movement.id, movement.demo_url])))
+
       let id = params.templateId === 'new' ? undefined : params.templateId
       if (!id) {
         const mine = await flow.readMyRoutines()
         id = mine.find((routine) => routine.template_version_id === null)?.template_id
       }
       if (!id) return
-      const [draft, library] = await Promise.all([flow.openTemplate(id), readExerciseLibrary(flow)])
+      const draft = await flow.openTemplate(id)
       if (!active) return
       const names = new Map(library.movements.map((movement) => [movement.id, movement.name]))
       identity.current = id
@@ -726,6 +737,23 @@ export default function RoutineEditor() {
                   position={step.position}
                   count={steps.length}
                   onMove={(to) => change(movedTo(steps, step.position, to))}
+                />
+                {/* Still, not playing: a routine is a list to read, and six looping
+                    clips at once cost more than the recognition they buy. One frame
+                    is enough to tell a press from a fly. */}
+                <Image
+                  // `null` and not `undefined`: `exactOptionalPropertyTypes` refuses a
+                  // key that is present and absent at once, and the image reads both
+                  // as «nothing to show».
+                  source={previews.get(step.movementId) ?? null}
+                  style={[
+                    styles.preview,
+                    { backgroundColor: theme.color.background.surfaceSubtle },
+                  ]}
+                  contentFit="contain"
+                  autoplay={false}
+                  recyclingKey={step.movementId}
+                  accessible={false}
                 />
                 <View style={styles.rowText}>
                   <Text role="control" size="md" numberOfLines={1}>
@@ -1375,6 +1403,11 @@ function DraggableRow({
  * the same control is `adjustable`: the reader announces where the exercise is, and an
  * increment or decrement moves it one place. Dragging is the fast path, never the only
  * one — `ACCESSIBILITY.md` asks for the equivalent, not for the same gesture.
+ *
+ * **The number is announced and not drawn.** «01» spent a column saying what the row's
+ * own place in the list already says, and the room it took came out of the name. What
+ * it was genuinely for — telling a screen reader where the exercise sits — is what
+ * `accessibilityValue` does, and it says it better: «3 de 6» rather than «cero tres».
  */
 function Handle({
   name,
@@ -1404,9 +1437,6 @@ function Handle({
       style={styles.handle}
     >
       <FoundationIcon name="reorder" size="sm" color={theme.color.icon.secondary} decorative />
-      <Text role="body" size="sm" color="muted">
-        {String(position).padStart(2, '0')}
-      </Text>
     </View>
   )
 }
@@ -1523,8 +1553,10 @@ const styles = StyleSheet.create({
   // laid the two side by side: `rowText` takes the free space with `flex: 1`, so
   // the table was squeezed to its minimum width and read as nothing opening.
   row: { borderWidth: 1, borderRadius: 16, padding: 14, overflow: 'hidden' },
-  // The grip and the number read as one thing: what the row is and where it sits.
-  handle: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  handle: { alignItems: 'center', justifyContent: 'center' },
+  // Smaller than the picker's sixty: there the picture is what somebody is choosing
+  // from, and here it only has to confirm what they already chose.
+  preview: { width: 44, height: 44, borderRadius: 10 },
   rowText: { flex: 1, gap: 3 },
   rowHead: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   table: { gap: 2, paddingTop: 12 },
