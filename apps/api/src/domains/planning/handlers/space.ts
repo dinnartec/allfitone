@@ -154,6 +154,53 @@ export function spacePlanningRoutes(
     }
   })
 
+  routes.get('/session-templates/:templateId/draft', async (c) => {
+    c.header('Cache-Control', 'no-store')
+    const token = await verified(c, verify)
+    if (!token) return fail(c, 'unauthenticated')
+
+    const templateId = c.req.param('templateId')
+    if (!UUID_V7.test(templateId)) return fail(c, 'invalid-request')
+
+    try {
+      const personId = await actors().personFor(token.subject)
+      const draft = await planning().readMySessionTemplateDraft({
+        personId,
+        templateId,
+        requestId: c.req.header('x-request-id') ?? '',
+      })
+      // Somebody else's routine, one that was discarded and one that never existed all
+      // answer the same. Separating them would let identifiers be walked.
+      if (!draft) return fail(c, 'not-found')
+      c.header('ETag', draft.etag)
+      return c.json(draft, 200)
+    } catch (cause) {
+      return failure(c, cause)
+    }
+  })
+
+  routes.post('/session-templates/:templateId/discard', async (c) => {
+    c.header('Cache-Control', 'no-store')
+    const token = await verified(c, verify)
+    if (!token) return fail(c, 'unauthenticated')
+
+    const templateId = c.req.param('templateId')
+    const command = commandContext(c, undefined)
+    if (!UUID_V7.test(templateId) || !command) return fail(c, 'invalid-request')
+
+    try {
+      const personId = await actors().personFor(token.subject)
+      const template = await planning().discardMySessionTemplate({
+        personId,
+        templateId,
+        ...command,
+      })
+      return c.json(template, 200)
+    } catch (cause) {
+      return failure(c, cause)
+    }
+  })
+
   routes.post('/session-templates/:templateId/versions', async (c) => {
     c.header('Cache-Control', 'no-store')
     const token = await verified(c, verify)

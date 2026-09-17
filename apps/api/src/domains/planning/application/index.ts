@@ -61,6 +61,11 @@ export interface StudioPlanningService {
   ) => infer R
     ? (actor: AccountActor, input: Omit<I, 'personId'>) => R
     : never
+  readSessionTemplateDraft: PlanningDatabase['readSessionTemplateDraft'] extends (
+    input: infer I,
+  ) => infer R
+    ? (actor: AccountActor, input: Omit<I, 'personId'>) => R
+    : never
 }
 
 export function createStudioPlanningService(database: PlanningDatabase): StudioPlanningService {
@@ -92,5 +97,7 @@ export function createStudioPlanningService(database: PlanningDatabase): StudioP
     listPrograms: (actor, input) => database.listPrograms({ personId: personId(actor), ...input }),
     readSessionTemplateVersion: (actor, input) =>
       database.readSessionTemplateVersion({ personId: personId(actor), ...input }),
+    readSessionTemplateDraft: (actor, input) =>
+      database.readSessionTemplateDraft({ personId: personId(actor), ...input }),
   }
 }

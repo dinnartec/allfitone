@@ -209,6 +209,27 @@ export function createSpacePlanningDatabase(): SpacePlanningDatabase {
         return answered(row?.version, 'publish the session template')
       }),
 
+    readMySessionTemplateDraft: (input) =>
+      transact(sql, input.personId, input.requestId, async (transaction) => {
+        const [row] = await transaction<{ draft: SessionTemplateDraft | null }[]>`
+          select planning.read_my_session_template_draft(
+            ${input.personId}::uuid, ${input.templateId}::uuid
+          ) as draft
+        `
+        return row?.draft ?? null
+      }),
+
+    discardMySessionTemplate: (input) =>
+      command(sql, input.personId, async (transaction) => {
+        const [row] = await transaction<{ template: SessionTemplate }[]>`
+          select template from planning.discard_my_session_template(
+            ${input.personId}::uuid, ${input.templateId}::uuid,
+            ${input.idempotencyKey}::uuid, ${input.commandId}::uuid, ${input.requestHash}
+          )
+        `
+        return answered(row?.template, 'discard the session template')
+      }),
+
     createMyProgram: (input) =>
       command(sql, input.personId, async (transaction) => {
         const [row] = await transaction<{ program: Program }[]>`

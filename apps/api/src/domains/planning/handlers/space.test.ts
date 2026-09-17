@@ -196,6 +196,8 @@ function harness(overrides?: {
     createMySessionTemplate: async () => template,
     replaceMySessionTemplateDraft: async () => templateDraft,
     publishMySessionTemplate: async () => ({}) as never,
+    readMySessionTemplateDraft: async () => templateDraft,
+    discardMySessionTemplate: async () => template,
     createMyProgram: async () => program,
     replaceMyProgramDraft: async () => programDraft,
     publishMyProgram: async () => ({}) as never,
@@ -757,6 +759,75 @@ describe('GET /space/v1/programs/{programId}/draft', () => {
 
   test('T-PLN-API-110 requires a bearer token', async () => {
     const response = await harness().request(`/space/v1/programs/${PROGRAM_ID}/draft`)
+
+    expect(response.status).toBe(401)
+  })
+})
+
+describe('GET /space/v1/session-templates/{templateId}/draft', () => {
+  test('T-PLN-API-113 answers the draft with the etag the next save has to send', async () => {
+    const response = await harness().request(`/space/v1/session-templates/${TEMPLATE_ID}/draft`, {
+      headers: authorized,
+    })
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('ETag')).toBe(templateDraft.etag)
+    expect(await response.json()).toEqual(templateDraft)
+  })
+
+  test('T-PLN-API-114 answers not-found for a routine that is not mine, discarded, or gone', async () => {
+    // The three cases answer the same on purpose. Telling them apart would let
+    // identifiers be walked to learn which routines exist.
+    const none = harness({ service: { readMySessionTemplateDraft: async () => null } })
+    const response = await none.request(`/space/v1/session-templates/${TEMPLATE_ID}/draft`, {
+      headers: authorized,
+    })
+
+    expect(response.status).toBe(404)
+  })
+
+  test('T-PLN-API-115 refuses an identifier that is not a routine', async () => {
+    const response = await harness().request('/space/v1/session-templates/nope/draft', {
+      headers: authorized,
+    })
+
+    expect(response.status).toBe(400)
+  })
+
+  test('T-PLN-API-116 requires a bearer token', async () => {
+    const response = await harness().request(`/space/v1/session-templates/${TEMPLATE_ID}/draft`)
+
+    expect(response.status).toBe(401)
+  })
+})
+
+describe('POST /space/v1/session-templates/{templateId}/discard', () => {
+  test('T-PLN-API-117 answers the archived routine', async () => {
+    const response = await harness().request(`/space/v1/session-templates/${TEMPLATE_ID}/discard`, {
+      method: 'POST',
+      headers: commanded,
+    })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual(template)
+  })
+
+  test('T-PLN-API-118 refuses a discard with no command headers', async () => {
+    // Discarding is a command and converges on replay, which is what the headers are
+    // for. Without them a retry after a timeout would be a second, unrelated discard.
+    const response = await harness().request(`/space/v1/session-templates/${TEMPLATE_ID}/discard`, {
+      method: 'POST',
+      headers: authorized,
+    })
+
+    expect(response.status).toBe(400)
+  })
+
+  test('T-PLN-API-119 requires a bearer token', async () => {
+    const response = await harness().request(`/space/v1/session-templates/${TEMPLATE_ID}/discard`, {
+      method: 'POST',
+      headers: { 'idempotency-key': IDEMPOTENCY_KEY, 'command-id': COMMAND_ID },
+    })
 
     expect(response.status).toBe(401)
   })

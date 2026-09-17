@@ -166,6 +166,8 @@ describe('Studio planning API contract', () => {
       'OP-PLN-019',
       'OP-PLN-020',
       'OP-PLN-021',
+      // Reading a draft back in the shape it is edited in.
+      'OP-PLN-023',
     ])
     // Scoped to the Studio surface: `OP-PLN-020` now answers on `/space/v1` as well,
     // and this assertion is about what **this** router mounts.
@@ -674,6 +676,7 @@ function planningService(
     incompleteProgram?: boolean
     failure?: unknown
     replayed?: boolean
+    missingDraft?: boolean
   } = {},
 ): StudioPlanningService {
   const capture = <T>(operation: string, input: object, resource: T) => {
@@ -722,6 +725,13 @@ function planningService(
         input: input as Record<string, unknown>,
       })
       return Promise.resolve(templateVersion)
+    },
+    readSessionTemplateDraft: (_actor, input) => {
+      calls.push({
+        operation: 'readSessionTemplateDraft',
+        input: input as Record<string, unknown>,
+      })
+      return Promise.resolve(errors.missingDraft ? null : templateDraft)
     },
   }
 }

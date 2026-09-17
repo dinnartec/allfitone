@@ -97,6 +97,16 @@ export interface SpacePlanningDatabase {
   publishMyProgram(
     input: OwnContentCommand & { personId: string; programId: string; expectedEtag: string },
   ): Promise<ProgramVersion>
+  /** Null when the routine is somebody else's, discarded, or never existed. */
+  readMySessionTemplateDraft(input: {
+    personId: string
+    templateId: string
+    requestId: string
+  }): Promise<SessionTemplateDraft | null>
+  /** Archived rather than deleted; refused when a version was ever published. */
+  discardMySessionTemplate(
+    input: OwnContentCommand & { personId: string; templateId: string },
+  ): Promise<SessionTemplate>
   /** Null when the programme is somebody else's, or was taken rather than written. */
   readMyProgramDraft(input: {
     personId: string
