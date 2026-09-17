@@ -126,7 +126,7 @@ export default function MuscleFilter() {
           title="Musculatura"
           subtitle={
             filter.muscles.length === 0
-              ? 'toca en la figura o en la lista'
+              ? 'Toca en la figura o en la lista'
               : `${filter.muscles.length} ${filter.muscles.length === 1 ? 'músculo' : 'músculos'}`
           }
           onClose={() => router.back()}

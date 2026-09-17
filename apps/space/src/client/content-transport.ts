@@ -122,6 +122,22 @@ export function createSpaceContentFlow(): ContentFlow {
             etag,
           ),
         ),
+      readTemplateDraft: (templateId) =>
+        authenticated((token) =>
+          authorizedGet<SessionTemplateDraft>(
+            `/space/v1/session-templates/${templateId}/draft`,
+            token,
+          ),
+        ),
+      discardTemplate: (command, templateId) =>
+        authenticated((token) =>
+          authorizedPost<SessionTemplate>(
+            `/space/v1/session-templates/${templateId}/discard`,
+            command,
+            undefined,
+            token,
+          ),
+        ),
       readProgramDraft: (programId) =>
         authenticated((token) =>
           authorizedGet<ProgramDraft>(`/space/v1/programs/${programId}/draft`, token),

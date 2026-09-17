@@ -19,6 +19,13 @@
  * rounded rectangle with a flat `action.primary`, while `Button` painted its primary
  * variant with `gradient.signal` — so the same affirmative act looked one way here
  * and another everywhere else, which is exactly what a hand-built control costs.
+ *
+ * **One face for every title, and it is not the condensed one.** A section label and
+ * somebody's own routine name briefly had separate treatments here — caps for the
+ * app's words, sentence case for theirs. It read as two headers rather than one, and
+ * the seam showed a single tap apart: «Añadir ejercicio» in condensed caps, opened
+ * from a routine whose own name sat in the control face. Uppercase display is for
+ * editorial moments, not for the line that says where you are.
  */
 
 import { Button } from '@allfitone/react-native/button'
@@ -56,7 +63,7 @@ export function ScreenHeader({
       <IconButton icon="close" accessibilityLabel="Cerrar" onPress={onClose} />
       <View style={styles.heading}>
         <View style={styles.titleRow}>
-          <Text role="display" size="xl" uppercase accessibilityRole="header" style={styles.title}>
+          <Text role="control" size="xl" accessibilityRole="header" style={styles.title}>
             {title}
           </Text>
           {editable ? (

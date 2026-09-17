@@ -66,6 +66,8 @@ export interface ContentTransport {
     templateId: string,
     etag: string,
   ): Promise<SessionTemplateVersion>
+  readTemplateDraft(templateId: string): Promise<SessionTemplateDraft>
+  discardTemplate(command: CommandHeaders, templateId: string): Promise<SessionTemplate>
   readProgramDraft(programId: string): Promise<ProgramDraft>
   createProgram(command: CommandHeaders, title: string): Promise<Program>
   saveProgramDraft(
@@ -88,6 +90,10 @@ export interface ContentFlowDependencies {
 }
 
 export interface ContentFlow {
+  /** The routine as it is edited. Remembers the etag the next save has to send. */
+  openTemplate(templateId: string): Promise<SessionTemplateDraft>
+  /** Archives it. A routine with a published version is refused by the server. */
+  discardTemplate(templateId: string): Promise<SessionTemplate>
   searchMovements(
     discipline: string,
     query: string,
@@ -165,6 +171,25 @@ export function createContentFlow(dependencies: ContentFlowDependencies): Conten
       const draft = await dependencies.transport.readProgramDraft(programId)
       etags.set(programId, draft.etag)
       return draft
+    },
+
+    /**
+     * The etag is remembered here for the same reason as a programme's: a screen that
+     * forgets it saves nothing and says so far too late.
+     */
+    async openTemplate(templateId) {
+      const draft = await dependencies.transport.readTemplateDraft(templateId)
+      etags.set(templateId, draft.etag)
+      return draft
+    },
+
+    async discardTemplate(templateId) {
+      const template = await dependencies.transport.discardTemplate(
+        dependencies.newCommand(),
+        templateId,
+      )
+      etags.delete(templateId)
+      return template
     },
 
     async createTemplate(disciplineCode, title) {

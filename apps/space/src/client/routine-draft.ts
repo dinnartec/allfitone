@@ -13,6 +13,7 @@
 
 import type { SessionTemplateDraftContent } from './content'
 import type { PickedMovement } from './exercise-pick'
+import { OPENING_SETS, OPENING_UNIT, type MassUnit, type WorkingSet } from './set-scheme'
 
 /**
  * Every routine a person builds in Space is strength.
@@ -28,9 +29,13 @@ export interface WorkingStep {
   readonly position: number
   readonly movementId: string
   readonly name: string
-  readonly sets: number
-  readonly reps: number
+  /** One entry per set, in order. The truth of the prescription since `ADR-030`. */
+  readonly sets: readonly WorkingSet[]
   readonly restSeconds?: number
+  /** Shared with a neighbour to run them back to back; only neighbours may share one. */
+  readonly supersetGroup?: number
+  /** What the weights of this exercise are said in. One bar, one unit.  */
+  readonly loadUnit?: MassUnit
 }
 
 export interface PublishIssue {
@@ -57,10 +62,14 @@ export function reasonsNotToPublish(
   }
 
   for (const step of steps) {
-    if (step.sets < 1) {
+    if (step.sets.length === 0) {
       issues.push({ title: `«${step.name}» no tiene ninguna serie`, hint: 'Añádele al menos una' })
-    } else if (step.reps < 1) {
-      issues.push({ title: `«${step.name}» no tiene repeticiones`, hint: 'Está vacía' })
+      continue
+    }
+    // A set to failure is the one kind that legitimately has no number.
+    const empty = step.sets.some((one) => one.kind !== 'to_failure' && (one.reps ?? 0) < 1)
+    if (empty) {
+      issues.push({ title: `«${step.name}» tiene una serie vacía`, hint: 'Ponle repeticiones' })
     }
   }
 
@@ -68,7 +77,7 @@ export function reasonsNotToPublish(
 }
 
 export function countSets(steps: readonly WorkingStep[]): number {
-  return steps.reduce((total, step) => total + step.sets, 0)
+  return steps.reduce((total, step) => total + step.sets.length, 0)
 }
 
 /**
@@ -93,19 +102,37 @@ export function stepsToContent(
     steps: steps.map((step, index) => ({
       position: index + 1,
       movement_id: step.movementId,
+      ...(step.supersetGroup === undefined ? {} : { superset_group: step.supersetGroup }),
       target: {
         family: 'strength' as const,
-        target_sets: step.sets,
-        target_reps: step.reps,
+        // The aggregate is deliberately not sent: it is derived at publication, and a
+        // second copy of a number is a second copy that can disagree.
+        sets: step.sets.map((one, order) => ({
+          set_order: order + 1,
+          kind: one.kind,
+          ...(one.reps === undefined ? {} : { target_reps: one.reps }),
+          // Value and unit travel together or not at all: the column pair is what
+          // `planned_sets` checks, and a number with no unit is not a weight.
+          ...(one.load === undefined
+            ? {}
+            : {
+                target_load_value: one.load,
+                target_load_unit_code: step.loadUnit ?? OPENING_UNIT,
+              }),
+        })),
         ...(step.restSeconds === undefined ? {} : { target_rest_seconds: step.restSeconds }),
       },
     })),
   }
 }
 
-/** What an exercise starts at until the routine editor can set them. */
-const DEFAULT_SETS = 4
-const DEFAULT_REPS = 8
+/**
+ * What an exercise opens with, and it is a starting point rather than a decision.
+ *
+ * Before `ADR-030` this was the whole prescription and nothing could change it, so
+ * every exercise anybody added was four sets of eight forever. The point of the
+ * screen is that every one of those rows gets edited.
+ */
 
 /**
  * Appends a whole batch, which is what makes picking several one save and not several.
@@ -124,10 +151,53 @@ export function withPicked(
       position: 0,
       movementId: movement.id,
       name: movement.name,
-      sets: DEFAULT_SETS,
-      reps: DEFAULT_REPS,
+      sets: OPENING_SETS,
     })),
   ].map((step, index) => ({ ...step, position: index + 1 }))
+}
+
+/**
+ * The draft as it arrived, back into what the screen edits.
+ *
+ * The name is not in the content: a step carries `movement_id` and nothing else about
+ * the movement, so a reopened routine shows identifiers until the catalogue is read.
+ * The picker already holds that catalogue, and the editor asks it by id.
+ */
+export function stepsFromContent(
+  content: SessionTemplateDraftContent,
+  nameFor: (movementId: string) => string | undefined = () => undefined,
+): readonly WorkingStep[] {
+  return content.steps.map((step, index) => {
+    const target = step.target as Record<string, unknown>
+    const sets = Array.isArray(target.sets) ? (target.sets as Record<string, unknown>[]) : []
+    const movementId = typeof step.movement_id === 'string' ? step.movement_id : ''
+    const rest = target.target_rest_seconds
+    const group = (step as Record<string, unknown>).superset_group
+    const unit = unitOf(sets)
+    return {
+      position: index + 1,
+      movementId,
+      name: nameFor(movementId) ?? 'Ejercicio',
+      sets:
+        sets.length > 0
+          ? sets.map((one) => ({
+              kind: (typeof one.kind === 'string' ? one.kind : 'normal') as WorkingSet['kind'],
+              ...(typeof one.target_reps === 'number' ? { reps: one.target_reps } : {}),
+              ...(typeof one.target_load_value === 'number' ? { load: one.target_load_value } : {}),
+            }))
+          : // An older draft says how many and how hard, and meant that many identical
+            // sets. Publication does the same thing on its side.
+            Array.from({ length: Number(target.target_sets ?? 0) }, () => ({
+              kind: 'normal' as const,
+              ...(typeof target.target_reps === 'number' ? { reps: target.target_reps } : {}),
+            })),
+      ...(typeof rest === 'number' ? { restSeconds: rest } : {}),
+      ...(typeof group === 'number' ? { supersetGroup: group } : {}),
+      // Read off the first set that carries one: the unit is the exercise's, and the
+      // rows only hold it because that is where the table keeps it.
+      ...(unit === undefined ? {} : { loadUnit: unit }),
+    }
+  })
 }
 
 /** Renumbering is the whole operation: a gap in `position` is refused by the database. */
@@ -149,4 +219,13 @@ export function reordered(
     .map((position) => byPosition.get(position))
     .filter((step): step is WorkingStep => step !== undefined)
     .map((step, index) => ({ ...step, position: index + 1 }))
+}
+
+/** The unit the rows agree on, or nothing when none of them carries a weight. */
+function unitOf(sets: readonly Record<string, unknown>[]): MassUnit | undefined {
+  for (const one of sets) {
+    const code = one.target_load_unit_code
+    if (code === 'kg' || code === 'lb') return code
+  }
+  return undefined
 }

@@ -25,12 +25,31 @@
  * The route avoids the duplication by carrying a **selection** and never a draft.
  * `exercise-pick` is the mailbox; this screen stays the only thing that writes, and it
  * appends the whole batch in one save.
+ *
+ * **It loads before it writes, and that order is the whole safety of the screen.**
+ * A draft is saved on the server and, until `OP-PLN-023`, could never be read back —
+ * so this opened empty every time and every routine anybody started was orphaned. Now
+ * it opens the most recent unpublished draft; the autosave is held until that read
+ * lands, because an editor that saves what it has not loaded replaces the work with
+ * nothing.
+ *
+ * **Leaving asks.** A named routine is already on the server, so closing it silently
+ * would leave something nobody asked to keep. The X offers keeping it as a draft or
+ * discarding it, and discarding is `OP-PLN-028` — a state, never a deletion.
+ *
+ * **An exercise opens.** Sets are rows now, each with its own kind, because nobody
+ * does four identical ones: the first warms up, the last goes to failure and has no
+ * rep count. `ADR-030` carries why the model works that way; the sheets here are the
+ * four the canvases draw — set kind, rest, superset and the exercise's own menu.
  */
 
 import { Button } from '@allfitone/react-native/button'
+import { Badge, type BadgeTone } from '@allfitone/react-native/badge'
 import { Chip } from '@allfitone/react-native/chip'
+import { Sheet } from '@allfitone/react-native/sheet'
 import { FoundationIcon } from '@allfitone/react-native/icons'
 import { InlineAlert } from '@allfitone/react-native/inline-alert'
+import { NumberField } from '@allfitone/react-native/number-field'
 import { Screen } from '@allfitone/react-native/screen'
 import { Text } from '@allfitone/react-native/text'
 import { TextField } from '@allfitone/react-native/text-field'
@@ -38,20 +57,44 @@ import { useTheme } from '@allfitone/react-native/theme'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
-import Animated, { FadeOut, LinearTransition, ReduceMotion } from 'react-native-reanimated'
+import Animated, {
+  Easing,
+  FadeIn,
+  FadeOut,
+  LinearTransition,
+  ReduceMotion,
+} from 'react-native-reanimated'
 
 import { ApiError } from '../../src/client'
 import { createSpaceContentFlow } from '../../src/client/content-transport'
+import { readExerciseLibrary } from '../../src/client/exercise-library'
 import { declareAlreadyIn, takeExercisePick } from '../../src/client/exercise-pick'
 import {
   DISCIPLINE,
   countSets,
   reasonsNotToPublish,
+  reordered,
+  stepsFromContent,
   stepsToContent,
   withPicked,
   withoutStep,
   type WorkingStep,
 } from '../../src/client/routine-draft'
+import {
+  OPENING_UNIT,
+  REST_PRESETS,
+  SET_KIND_DETAILS,
+  SET_KIND_NAMES,
+  SET_KIND_TONES,
+  otherUnit,
+  restLabel,
+  setsLabel,
+  withKind,
+  withLoad,
+  withReps,
+  type MassUnit,
+  type WorkingSet,
+} from '../../src/client/set-scheme'
 import { ScreenHeader } from '../../src/components/screen-header'
 
 const SUGGESTIONS = ['Empuje', 'Tirón', 'Pierna', 'Full body']
@@ -62,14 +105,55 @@ const SAVE_DELAY_MS = 700
 /** DT-010 measures the target, not the glyph, and the glyph here is 16. */
 const PRESS_SLOP = { top: 14, bottom: 14, left: 14, right: 14 }
 
+/** Keeps the button off the very bottom edge, the same amount as every other footer. */
+const FOOTER_LIFT = 16
+
 /** Under the threshold where a press reads as an animation instead of as a response. */
 const PRESS_MS = 120
+
+/** `ease-out`, never `ease-in`: a slow start delays the moment the finger asks about. */
+const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1)
 
 /** Gone rather than vanished. Opacity only, which is what survives reduced motion. */
 const EXIT = FadeOut.duration(140).reduceMotion(ReduceMotion.System)
 
-/** What the rows below do about the hole. */
-const REFLOW = LinearTransition.duration(180).reduceMotion(ReduceMotion.System)
+/** What the rows below do about the hole, and what opens and closes an exercise. */
+const REFLOW = LinearTransition.duration(220).easing(EASE_OUT).reduceMotion(ReduceMotion.System)
+
+/**
+ * Opening an exercise, and closing it, which are not mirror images on purpose.
+ *
+ * **Opening is two beats.** The row grows by two hundred points and the table appears
+ * inside it; done at once the content lands before there is room for it and the eye
+ * reads a flicker rather than a drawer. So the height goes first — `REFLOW`, a layout
+ * animation on the UI thread that never touches a `height` style — and the table
+ * fades in behind it after a beat.
+ *
+ * **Closing is one.** It used to fade the table out and only then collapse the row,
+ * and that is what read as unharmonious: Reanimated holds an exiting child in the
+ * tree until its animation ends, so the first ninety milliseconds were a full-height
+ * row with nothing in it, standing still, before anything moved. Now the table simply
+ * goes and the collapse is the whole motion — one continuous movement with no pause
+ * in front of it. Reveal gently, dismiss briskly.
+ *
+ */
+const OPEN = FadeIn.duration(150).delay(60).easing(EASE_OUT).reduceMotion(ReduceMotion.System)
+
+/** The kind the set-kind sheet is being opened on, so its row can be marked. */
+function kindAt(steps: readonly WorkingStep[], sheet: Sheeted | undefined) {
+  if (sheet?.kind !== 'set-kind') return undefined
+  return steps.find((one) => one.position === sheet.position)?.sets[sheet.order]?.kind
+}
+
+/** Which sheet is up, and about what. One at a time, which is what a sheet is. */
+type Sheeted =
+  | { readonly kind: 'leaving' }
+  | { readonly kind: 'menu'; readonly position: number }
+  | { readonly kind: 'rest'; readonly position: number }
+  | { readonly kind: 'superset'; readonly position: number }
+  | { readonly kind: 'set-kind'; readonly position: number; readonly order: number }
+
+const LOAD_FAILED = 'No pudimos abrir el borrador. Revisa tu conexión.'
 
 const EXPIRED = 'Tu sesión venció. Vuelve a entrar para continuar.'
 const SAVE_FAILED = 'No pudimos guardar el borrador. Revisa tu conexión.'
@@ -89,6 +173,11 @@ export default function RoutineEditor() {
   const [saved, setSaved] = useState(false)
   const [failure, setFailure] = useState<string | undefined>(undefined)
   const [showIssues, setShowIssues] = useState(false)
+  // Nothing is written before this turns true. It is the guard that stops an editor
+  // that opened empty from saving that emptiness over a draft it had not read.
+  const [loaded, setLoaded] = useState(false)
+  const [open, setOpen] = useState<number | undefined>(undefined)
+  const [sheet, setSheet] = useState<Sheeted | undefined>(undefined)
 
   const pending = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   // Held outside state as well: a save scheduled before the creation resolved must
@@ -107,6 +196,9 @@ export default function RoutineEditor() {
     async (nextTitle: string, nextSteps: readonly WorkingStep[]): Promise<boolean> => {
       const trimmed = nextTitle.trim()
       if (trimmed === '') return false
+      // The guard, and the reason it is here rather than at the call sites: a save
+      // scheduled before the draft arrived would write an empty routine over it.
+      if (!loaded) return false
 
       setSaving(true)
       try {
@@ -132,7 +224,7 @@ export default function RoutineEditor() {
         setSaving(false)
       }
     },
-    [flow],
+    [flow, loaded],
   )
 
   const schedule = useCallback(
@@ -149,6 +241,52 @@ export default function RoutineEditor() {
     },
     [],
   )
+
+  /**
+   * Opening: either the routine named in the route, or the most recent draft.
+   *
+   * `/routines/new` used to mean "start empty", which is what left every unfinished
+   * routine unreachable. It now means "carry on", because a person who left a draft
+   * and came back is not asking for a blank page.
+   */
+  useEffect(() => {
+    let active = true
+
+    const resume = async (): Promise<void> => {
+      let id = params.templateId === 'new' ? undefined : params.templateId
+      if (!id) {
+        const mine = await flow.readMyRoutines()
+        id = mine.find((routine) => routine.template_version_id === null)?.template_id
+      }
+      if (!id) return
+      const [draft, library] = await Promise.all([flow.openTemplate(id), readExerciseLibrary(flow)])
+      if (!active) return
+      const names = new Map(library.movements.map((movement) => [movement.id, movement.name]))
+      identity.current = id
+      activityType.current = draft.content.activity_type_id
+      setTemplateId(id)
+      setTitle(draft.content.title)
+      setSteps(stepsFromContent(draft.content, (movementId) => names.get(movementId)))
+      setSaved(true)
+    }
+
+    resume()
+      .catch((cause: unknown) => {
+        if (!active) return
+        setFailure(
+          cause instanceof ApiError && cause.failure === 'unauthenticated' ? EXPIRED : LOAD_FAILED,
+        )
+      })
+      // Whatever happened, the screen stops holding the pen. A failure that left it
+      // locked would be a screen nobody can type in, which is worse than a message.
+      .finally(() => {
+        if (active) setLoaded(true)
+      })
+
+    return () => {
+      active = false
+    }
+  }, [flow, params.templateId])
 
   // Read through a ref so the effect below does not depend on it: naming a routine is
   // typing, and a dependency on the name would resubscribe on every keystroke.
@@ -188,6 +326,24 @@ export default function RoutineEditor() {
   const issues = reasonsNotToPublish(title, steps)
   const publishable = issues.length === 0 && templateId !== undefined
 
+  /**
+   * Throwing it away. `OP-PLN-028` archives rather than deletes, and the pending save
+   * is cancelled first: a timer that fires afterwards would write to something the
+   * person just discarded.
+   */
+  const discard = async () => {
+    if (!templateId) return router.back()
+    if (pending.current) clearTimeout(pending.current)
+    try {
+      await flow.discardTemplate(templateId)
+      router.back()
+    } catch (cause: unknown) {
+      setFailure(
+        cause instanceof ApiError && cause.failure === 'unauthenticated' ? EXPIRED : SAVE_FAILED,
+      )
+    }
+  }
+
   const publish = async () => {
     if (!templateId) return
     if (!publishable) {
@@ -210,26 +366,24 @@ export default function RoutineEditor() {
   }
 
   const subtitle = () => {
-    if (saving) return 'guardando…'
-    if (failure) return 'sin guardar'
-    if (saved) return 'borrador guardado'
-    return 'aún sin guardar'
+    if (saving) return 'Guardando…'
+    if (failure) return 'Sin guardar'
+    if (saved) return 'Borrador guardado'
+    return 'Aún sin guardar'
   }
 
   return (
     <Screen edges={['top', 'bottom']}>
-      {/* The keyboard moves the scroll inset rather than resizing the container, the
-          same as every other screen here that takes typing. */}
-      <ScrollView
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-        automaticallyAdjustKeyboardInsets
-      >
+      {/* Everything down to the counts stays put: the name, what it says about itself
+          and how much of it there is are the frame, and a frame that scrolls away
+          leaves somebody editing a list with no idea what they are editing. */}
+      <View style={styles.frame}>
         <ScreenHeader
           title={title.trim() === '' ? 'Nueva rutina' : title}
           subtitle={subtitle()}
-          onClose={() => router.back()}
+          // A named routine is already on the server, so leaving silently would keep
+          // something nobody asked to keep.
+          onClose={() => (templateId ? setSheet({ kind: 'leaving' }) : router.back())}
           onConfirm={templateId ? publish : undefined}
           confirmLabel="Listo"
         />
@@ -253,10 +407,10 @@ export default function RoutineEditor() {
                 color={theme.color.status.danger}
                 decorative
               />
-              <Text role="eyebrow" size="2xs" style={{ color: theme.color.status.danger }}>
+              <Text role="control" size="xs" style={{ color: theme.color.status.danger }}>
                 {issues.length === 1
-                  ? 'FALTA UNA COSA PARA GUARDAR'
-                  : `FALTAN ${issues.length} COSAS PARA GUARDAR`}
+                  ? 'Falta una cosa para guardar'
+                  : `Faltan ${issues.length} cosas para guardar`}
               </Text>
             </View>
             {issues.map((issue) => (
@@ -292,6 +446,31 @@ export default function RoutineEditor() {
           </View>
         </View>
 
+        {steps.length === 0 ? null : (
+          <View
+            style={[
+              styles.stats,
+              {
+                borderColor: theme.color.border.subtle,
+                backgroundColor: theme.color.background.surface,
+              },
+            ]}
+          >
+            <Figure icon="training" value={String(steps.length)} label="Ejercicios" />
+            <View style={[styles.divider, { backgroundColor: theme.color.border.subtle }]} />
+            <Figure icon="frequency" value={String(countSets(steps))} label="Series" accent />
+          </View>
+        )}
+      </View>
+
+      {/* Takes what the frame and the anchor leave, and no more: without this it
+          sizes to its content and pushes the button off the bottom of the screen. */}
+      <ScrollView
+        style={styles.scroller}
+        contentContainerStyle={styles.list}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
         {steps.length === 0 ? (
           <View
             style={[
@@ -314,48 +493,104 @@ export default function RoutineEditor() {
             <Text role="body" size="md" color="muted" style={styles.centered}>
               Busca en el catálogo y añade el primero. Luego le pones series, peso y descanso.
             </Text>
+            <Text role="body" size="sm" color="muted" style={styles.centered}>
+              Se guarda como borrador según escribes. Necesita conexión.
+            </Text>
           </View>
         ) : (
-          <>
-            <View style={[styles.stats, { borderColor: theme.color.border.subtle }]}>
-              <Figure value={String(steps.length)} label="ejercicios" />
-              <View style={[styles.divider, { backgroundColor: theme.color.border.subtle }]} />
-              <Figure value={String(countSets(steps))} label="series" accent />
-            </View>
-
-            <View style={styles.list}>
-              {steps.map((step) => (
-                <Animated.View
-                  key={step.movementId}
-                  // The row it leaves behind closes the gap rather than snapping shut,
-                  // and both honour the system setting rather than deciding for it.
-                  exiting={EXIT}
-                  layout={REFLOW}
-                  style={[styles.row, { borderColor: theme.color.border.subtle }]}
-                >
-                  <Text role="body" size="sm" color="muted">
-                    {String(step.position).padStart(2, '0')}
+          steps.map((step) => (
+            <Animated.View
+              key={step.movementId}
+              // The row it leaves behind closes the gap rather than snapping shut,
+              // and both honour the system setting rather than deciding for it.
+              exiting={EXIT}
+              layout={REFLOW}
+              style={[
+                styles.row,
+                {
+                  borderColor:
+                    open === step.position ? theme.color.border.accent : theme.color.border.subtle,
+                },
+              ]}
+            >
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`${open === step.position ? 'Cerrar' : 'Abrir'} ${step.name}`}
+                onPress={() => setOpen(open === step.position ? undefined : step.position)}
+                style={styles.rowHead}
+              >
+                <Text role="body" size="sm" color="muted">
+                  {String(step.position).padStart(2, '0')}
+                </Text>
+                <View style={styles.rowText}>
+                  <Text role="control" size="md" numberOfLines={1}>
+                    {step.name}
                   </Text>
-                  <View style={styles.rowText}>
-                    <Text role="control" size="md" numberOfLines={1}>
-                      {step.name}
+                  <Text role="body" size="sm" color="accent">
+                    {`${setsLabel(step.sets)} · ${restLabel(step.restSeconds)}`}
+                  </Text>
+                  {step.supersetGroup === undefined ? null : (
+                    <Text role="control" size="xs" color="muted">
+                      {`Superserie con ${String(chainMate(steps, step)).padStart(2, '0')}`}
                     </Text>
-                    <Text role="body" size="sm" color="accent">
-                      {`${step.sets} series · ${step.reps} reps`}
-                    </Text>
-                  </View>
-                  <RemoveButton
-                    name={step.name}
-                    onPress={() => change(withoutStep(steps, step.position))}
+                  )}
+                </View>
+                {/* One glyph that turns, not two that swap: a swap has no
+                        in-between and reads as a blink at this size. */}
+                <Animated.View
+                  style={[
+                    styles.chevron,
+                    { transform: [{ rotate: open === step.position ? '180deg' : '0deg' }] },
+                  ]}
+                >
+                  <FoundationIcon
+                    name="expand"
+                    size="sm"
+                    color={theme.color.icon.secondary}
+                    decorative
                   />
                 </Animated.View>
-              ))}
-            </View>
-          </>
-        )}
+                {/* Kept beside the chevron as well as in the menu: removing an
+                        exercise is the one thing done often enough to deserve a
+                        target of its own. */}
+                <RemoveButton
+                  name={step.name}
+                  onPress={() => {
+                    setOpen(undefined)
+                    change(withoutStep(steps, step.position))
+                  }}
+                />
+              </Pressable>
 
+              {open === step.position ? (
+                <Animated.View entering={OPEN}>
+                  <SetTable
+                    step={step}
+                    onChangeSets={(sets) => change(withSets(steps, step.position, sets))}
+                    onKind={(order) =>
+                      setSheet({ kind: 'set-kind', position: step.position, order })
+                    }
+                    onUnit={() =>
+                      change(
+                        withUnit(steps, step.position, otherUnit(step.loadUnit ?? OPENING_UNIT)),
+                      )
+                    }
+                    onRest={() => setSheet({ kind: 'rest', position: step.position })}
+                    onMenu={() => setSheet({ kind: 'menu', position: step.position })}
+                  />
+                </Animated.View>
+              ) : null}
+            </Animated.View>
+          ))
+        )}
+      </ScrollView>
+
+      {/* Anchored: adding the next exercise is the one thing somebody does over and
+          over here, and scrolling to the bottom of their own list to reach it is a
+          tax that grows with the routine. */}
+      <View style={styles.anchor}>
         <Button
-          label={steps.length === 0 ? 'BUSCAR Y AÑADIR EJERCICIO' : 'Añadir ejercicio'}
+          label={steps.length === 0 ? 'Buscar y añadir ejercicio' : 'Añadir ejercicio'}
           variant={steps.length === 0 ? 'primary' : 'secondary'}
           icon={steps.length === 0 ? 'search' : 'add'}
           onPress={() => {
@@ -363,12 +598,427 @@ export default function RoutineEditor() {
             router.push('/routines/exercises')
           }}
         />
+      </View>
 
-        <Text role="body" size="sm" color="muted" style={styles.centered}>
-          Se guarda como borrador según escribes. Necesita conexión.
-        </Text>
-      </ScrollView>
+      <Sheet
+        visible={sheet?.kind === 'leaving'}
+        onDismiss={() => setSheet(undefined)}
+        title="¿Guardas esta rutina?"
+      >
+        <View style={styles.sheet}>
+          <Text role="body" size="md" color="muted">
+            Se está guardando como borrador según escribes. Puedes dejarla para después o tirarla.
+          </Text>
+          <Button
+            label="Guardar borrador"
+            onPress={() => {
+              setSheet(undefined)
+              router.back()
+            }}
+          />
+          <Button
+            label="Descartar rutina"
+            variant="ghost"
+            icon="remove"
+            onPress={() => {
+              setSheet(undefined)
+              void discard()
+            }}
+          />
+        </View>
+      </Sheet>
+
+      <Sheet
+        visible={sheet?.kind === 'set-kind'}
+        onDismiss={() => setSheet(undefined)}
+        title="Tipo de serie"
+      >
+        <View style={styles.sheet}>
+          {(['normal', 'warmup', 'to_failure', 'drop'] as const).map((kind) => (
+            <SheetChoice
+              key={kind}
+              name={SET_KIND_NAMES[kind]}
+              tone={SET_KIND_TONES[kind]}
+              selected={kindAt(steps, sheet) === kind}
+              detail={SET_KIND_DETAILS[kind]}
+              onPress={() => {
+                if (sheet?.kind !== 'set-kind') return
+                const step = steps.find((one) => one.position === sheet.position)
+                const current = step?.sets[sheet.order]
+                if (!step || !current) return
+                change(
+                  withSets(
+                    steps,
+                    sheet.position,
+                    step.sets.map((each, at) => (at === sheet.order ? withKind(each, kind) : each)),
+                  ),
+                )
+                setSheet(undefined)
+              }}
+            />
+          ))}
+        </View>
+      </Sheet>
+
+      <Sheet
+        visible={sheet?.kind === 'rest'}
+        onDismiss={() => setSheet(undefined)}
+        title="Descanso entre series"
+      >
+        <View style={styles.sheet}>
+          <Text role="body" size="sm" color="muted">
+            Cuánto esperas antes de la siguiente serie.
+          </Text>
+          {REST_PRESETS.map((preset) => (
+            <SheetChoice
+              key={preset}
+              name={restLabel(preset)}
+              detail={preset === 0 ? 'Encadenas sin parar' : 'Descanso habitual'}
+              onPress={() => {
+                if (sheet?.kind !== 'rest') return
+                change(withRest(steps, sheet.position, preset))
+                setSheet(undefined)
+              }}
+            />
+          ))}
+        </View>
+      </Sheet>
+
+      <Sheet
+        visible={sheet?.kind === 'superset'}
+        onDismiss={() => setSheet(undefined)}
+        title="Superserie"
+      >
+        <View style={styles.sheet}>
+          <Text role="body" size="sm" color="muted">
+            Se hacen seguidos, sin descanso entre medias. Solo puedes encadenar con un ejercicio
+            contiguo; para encadenar otro, muévelo antes.
+          </Text>
+          {neighbours(steps, sheet?.kind === 'superset' ? sheet.position : 0).map((mate) => (
+            <SheetChoice
+              key={mate.position}
+              name={mate.name}
+              detail={`${String(mate.position).padStart(2, '0')} · ${
+                mate.position < (sheet?.kind === 'superset' ? sheet.position : 0)
+                  ? 'justo antes'
+                  : 'justo después'
+              }`}
+              onPress={() => {
+                if (sheet?.kind !== 'superset') return
+                change(withChain(steps, sheet.position, mate.position))
+                setSheet(undefined)
+              }}
+            />
+          ))}
+        </View>
+      </Sheet>
+
+      <Sheet
+        visible={sheet?.kind === 'menu'}
+        onDismiss={() => setSheet(undefined)}
+        title="Ejercicio"
+      >
+        <View style={styles.sheet}>
+          <SheetChoice
+            name="Reemplazar ejercicio"
+            detail="Buscar otro y conservar las series"
+            onPress={() => {
+              if (sheet?.kind !== 'menu') return
+              declareAlreadyIn(steps.map((one) => one.movementId))
+              setSheet(undefined)
+              router.push('/routines/exercises')
+            }}
+          />
+          {sheet?.kind === 'menu' &&
+          steps.find((one) => one.position === sheet.position)?.supersetGroup !== undefined ? (
+            <SheetChoice
+              name="Quitar de la superserie"
+              detail="Deja de encadenarse con su vecino"
+              onPress={() => {
+                if (sheet?.kind !== 'menu') return
+                change(withChain(steps, sheet.position, undefined))
+                setSheet(undefined)
+              }}
+            />
+          ) : (
+            <SheetChoice
+              name="Hacer superserie"
+              detail="Encadenarlo con el de al lado"
+              onPress={() => {
+                if (sheet?.kind !== 'menu') return
+                setSheet({ kind: 'superset', position: sheet.position })
+              }}
+            />
+          )}
+          <SheetChoice
+            name="Mover arriba"
+            detail="Cambia su lugar en la rutina"
+            onPress={() => {
+              if (sheet?.kind !== 'menu') return
+              change(movedUp(steps, sheet.position))
+              setOpen(undefined)
+              setSheet(undefined)
+            }}
+          />
+          <SheetChoice
+            name="Quitar de la rutina"
+            detail="Se pierden sus series"
+            onPress={() => {
+              if (sheet?.kind !== 'menu') return
+              change(withoutStep(steps, sheet.position))
+              setOpen(undefined)
+              setSheet(undefined)
+            }}
+          />
+        </View>
+      </Sheet>
     </Screen>
+  )
+}
+
+/** One line of a sheet: what it is, why, and what it will look like. */
+function SheetChoice({
+  name,
+  detail,
+  shape,
+  tone,
+  selected,
+  onPress,
+}: {
+  readonly name: string
+  readonly detail: string
+  readonly shape?: string
+  /** Draws the name as its badge instead of as a word, for a choice that has one. */
+  readonly tone?: BadgeTone
+  readonly selected?: boolean
+  readonly onPress: () => void
+}) {
+  const theme = useTheme()
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={name}
+      accessibilityHint={detail}
+      accessibilityState={{ selected: selected ?? false }}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.choice,
+        {
+          borderColor: selected ? theme.color.border.accent : theme.color.border.subtle,
+          backgroundColor: theme.color.background.surface,
+          opacity: pressed ? 0.7 : 1,
+        },
+      ]}
+    >
+      <View style={styles.choiceText}>
+        {tone === undefined ? (
+          <Text role="control" size="md">
+            {name}
+          </Text>
+        ) : (
+          <Badge label={name} tone={tone} />
+        )}
+        <Text role="body" size="sm" color="muted">
+          {detail}
+        </Text>
+      </View>
+      {shape === undefined ? null : (
+        <Text role="body" size="sm" color="accent">
+          {shape}
+        </Text>
+      )}
+    </Pressable>
+  )
+}
+
+/** Only the exercise before and the one after: `IX-46` refuses anything else. */
+function neighbours(steps: readonly WorkingStep[], position: number): readonly WorkingStep[] {
+  return steps.filter((step) => step.position === position - 1 || step.position === position + 1)
+}
+
+/** Who the chain's other end is, for the line that says so. */
+function chainMate(steps: readonly WorkingStep[], step: WorkingStep): number {
+  const mate = steps.find(
+    (one) => one.supersetGroup === step.supersetGroup && one.position !== step.position,
+  )
+  return mate?.position ?? step.position
+}
+
+function withSets(
+  steps: readonly WorkingStep[],
+  position: number,
+  sets: readonly WorkingSet[],
+): readonly WorkingStep[] {
+  return steps.map((step) => (step.position === position ? { ...step, sets } : step))
+}
+
+/** One bar, one unit: the exercise carries it and every set of it is said in it. */
+function withUnit(
+  steps: readonly WorkingStep[],
+  position: number,
+  loadUnit: MassUnit,
+): readonly WorkingStep[] {
+  return steps.map((step) => (step.position === position ? { ...step, loadUnit } : step))
+}
+
+function withRest(
+  steps: readonly WorkingStep[],
+  position: number,
+  restSeconds: number | undefined,
+): readonly WorkingStep[] {
+  return steps.map((step) =>
+    step.position === position
+      ? { ...step, ...(restSeconds === undefined ? {} : { restSeconds }) }
+      : step,
+  )
+}
+
+/**
+ * Chaining, and only with a neighbour.
+ *
+ * `IX-46` refuses a group whose positions are not consecutive, so offering to chain
+ * with anything else would be offering something the server rejects. Unchaining frees
+ * both ends: a chain of one is not a chain.
+ */
+function withChain(
+  steps: readonly WorkingStep[],
+  position: number,
+  mate: number | undefined,
+): readonly WorkingStep[] {
+  if (mate === undefined) {
+    const group = steps.find((step) => step.position === position)?.supersetGroup
+    return steps.map((step) => {
+      if (step.supersetGroup !== group) return step
+      // Removed rather than set to undefined: the key's absence is what the contract
+      // means by "not chained", and `exactOptionalPropertyTypes` agrees.
+      const { supersetGroup: _chained, ...rest } = step
+      return rest
+    })
+  }
+  const group = Math.max(0, ...steps.map((step) => step.supersetGroup ?? 0)) + 1
+  return steps.map((step) =>
+    step.position === position || step.position === mate ? { ...step, supersetGroup: group } : step,
+  )
+}
+
+/** Moving one up is the only reorder the canvases ask for, and it renumbers. */
+function movedUp(steps: readonly WorkingStep[], position: number): readonly WorkingStep[] {
+  if (position <= 1) return steps
+  const order = steps.map((step) => step.position)
+  const at = order.indexOf(position)
+  const swapped = [...order]
+  const previous = swapped[at - 1]
+  const current = swapped[at]
+  if (previous === undefined || current === undefined) return steps
+  swapped[at - 1] = current
+  swapped[at] = previous
+  return reordered(steps, swapped)
+}
+
+/**
+ * The sets of one exercise, and the three sheets it opens.
+ *
+ * Reps are edited in place with a stepper rather than a keyboard: a number pad over a
+ * table is a keyboard covering the thing being edited, and the values are small.
+ */
+function SetTable({
+  step,
+  onChangeSets,
+  onKind,
+  onUnit,
+  onRest,
+  onMenu,
+}: {
+  readonly step: WorkingStep
+  readonly onChangeSets: (sets: readonly WorkingSet[]) => void
+  readonly onKind: (order: number) => void
+  readonly onUnit: () => void
+  readonly onRest: () => void
+  readonly onMenu: () => void
+}) {
+  const theme = useTheme()
+
+  const unit = step.loadUnit ?? OPENING_UNIT
+  const edit = (order: number, set: WorkingSet) =>
+    onChangeSets(step.sets.map((each, at) => (at === order ? set : each)))
+
+  return (
+    <View style={styles.table}>
+      {step.sets.map((one, order) => (
+        <View key={order} style={[styles.tableRow, { borderTopColor: theme.color.border.subtle }]}>
+          <Text role="body" size="sm" color="muted" style={styles.colOrder}>
+            {order + 1}
+          </Text>
+          <Badge
+            label={SET_KIND_NAMES[one.kind]}
+            tone={SET_KIND_TONES[one.kind]}
+            accessibilityLabel={`Tipo de la serie ${order + 1}: ${SET_KIND_NAMES[one.kind]}`}
+            onPress={() => onKind(order)}
+          />
+          <View style={styles.setSpacer} />
+          <NumberField
+            accessibilityLabel={`Repeticiones de la serie ${order + 1}`}
+            value={one.reps}
+            unit="reps"
+            min={1}
+            max={100}
+            // A set to failure has no number by definition, and the database refuses
+            // the pair rather than correcting it.
+            {...(one.kind === 'to_failure' ? { fixedAs: 'máx' } : {})}
+            onChange={(reps) => edit(order, withReps(one, reps))}
+          />
+          <NumberField
+            accessibilityLabel={`Peso de la serie ${order + 1} en ${unit}`}
+            value={one.load}
+            unit={unit}
+            max={500}
+            onChange={(load) => edit(order, withLoad(one, load))}
+          />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Quitar la serie ${order + 1}`}
+            hitSlop={PRESS_SLOP}
+            disabled={step.sets.length === 1}
+            onPress={() => onChangeSets(step.sets.filter((_, at) => at !== order))}
+          >
+            <FoundationIcon
+              name="close"
+              size="md"
+              color={
+                step.sets.length === 1 ? theme.color.text.disabled : theme.color.icon.secondary
+              }
+              decorative
+            />
+          </Pressable>
+        </View>
+      ))}
+
+      <View style={styles.tableActions}>
+        <Button
+          label="Añadir serie"
+          variant="ghost"
+          icon="add"
+          onPress={() => onChangeSets([...step.sets, { kind: 'normal', reps: 8 }])}
+        />
+        <Button
+          label={`Peso en ${otherUnit(unit)}`}
+          variant="ghost"
+          icon="weight"
+          onPress={onUnit}
+        />
+      </View>
+
+      <View style={styles.tableActions}>
+        <Button
+          label={restLabel(step.restSeconds)}
+          variant="secondary"
+          icon="time"
+          onPress={onRest}
+        />
+        <Button label="Más" variant="secondary" icon="more" onPress={onMenu} />
+      </View>
+    </View>
   )
 }
 
@@ -403,18 +1053,36 @@ function RemoveButton({ name, onPress }: { readonly name: string; readonly onPre
   )
 }
 
+/**
+ * One count in the summary card: its glyph, the number, the word.
+ *
+ * The number is set in the `data` role — the library's own role for a metric — which
+ * is condensed and uses tabular figures. Both matter here: proportional digits change
+ * width, so the word beside them shifted every time an exercise was added, and the
+ * condensed face is what lets the count and its label share one line instead of
+ * stacking into a card twice as tall as it needs to be.
+ */
 function Figure({
+  icon,
   value,
   label,
   accent,
 }: {
+  readonly icon: 'training' | 'frequency'
   readonly value: string
   readonly label: string
   readonly accent?: boolean
 }) {
+  const theme = useTheme()
   return (
     <View style={styles.figure}>
-      <Text role="control" size="2xl" color={accent ? 'accent' : 'primary'}>
+      <FoundationIcon
+        name={icon}
+        size="sm"
+        color={accent ? theme.color.icon.accent : theme.color.icon.secondary}
+        decorative
+      />
+      <Text role="data" size="2xl" color={accent ? 'accent' : 'primary'}>
         {value}
       </Text>
       <Text role="body" size="sm" color="muted">
@@ -425,7 +1093,14 @@ function Figure({
 }
 
 const styles = StyleSheet.create({
-  content: { gap: 18, paddingBottom: 48 },
+  // The frozen part and the moving part. The list owns the gap between its rows;
+  // the frame owns the air around the things that do not move.
+  frame: { gap: 18, paddingBottom: 16 },
+  scroller: { flex: 1 },
+  list: { gap: 10, paddingBottom: 16 },
+  // The safe area only reserves the home indicator; it is not air. The same lift the
+  // onboarding footers use, so a button at the bottom sits the same everywhere.
+  anchor: { paddingTop: 12, paddingBottom: FOOTER_LIFT },
   section: { gap: 10 },
   chips: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   centered: { textAlign: 'center' },
@@ -437,21 +1112,50 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
   },
-  stats: { flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, paddingBottom: 14 },
-  figure: { flex: 1, alignItems: 'center', gap: 2 },
-  divider: { width: 1, height: 32 },
-  list: { gap: 10 },
-  row: {
+  // A card, not a rule under the numbers: the two counts are one reading of the
+  // routine, and the divider between them is what says so.
+  stats: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingVertical: 12,
+  },
+  // Glyph, number and word on one line. Stacked, the card was eighty points of
+  // mostly nothing above a list that is what the screen is actually about.
+  figure: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  divider: { width: 1, alignSelf: 'stretch' },
+  // A column. It held only the head until the table went in beside it, and a row
+  // laid the two side by side: `rowText` takes the free space with `flex: 1`, so
+  // the table was squeezed to its minimum width and read as nothing opening.
+  row: { borderWidth: 1, borderRadius: 16, padding: 14, overflow: 'hidden' },
+  rowText: { flex: 1, gap: 3 },
+  rowHead: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  table: { gap: 2, paddingTop: 12 },
+  setSpacer: { flex: 1, minWidth: 4 },
+  tableRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 8,
+    borderTopWidth: 1,
+  },
+  colOrder: { width: 18 },
+  tableActions: { flexDirection: 'row', gap: 8, paddingTop: 8 },
+  sheet: { gap: 10, paddingBottom: 8 },
+  choice: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     borderWidth: 1,
-    borderRadius: 16,
-    padding: 14,
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
   },
-  rowText: { flex: 1, gap: 3 },
+  choiceText: { flex: 1, gap: 2 },
   // A transition rather than a worklet: the value is a two-state flip, not a gesture.
   remove: { transitionProperty: 'transform', transitionDuration: PRESS_MS },
+  chevron: { transitionProperty: 'transform', transitionDuration: 200 },
   issues: { borderWidth: 2, borderRadius: 18, padding: 16, gap: 12 },
   issuesHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   issueText: { gap: 2 },

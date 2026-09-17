@@ -179,7 +179,11 @@ export default function ExercisePicker() {
       <View style={styles.head}>
         <ScreenHeader
           title="Añadir ejercicio"
-          subtitle={picked.length === 0 ? 'toca los que quieras' : `${picked.length} elegidos`}
+          subtitle={
+            picked.length === 0
+              ? 'Toca los que quieras'
+              : `${picked.length} ${picked.length === 1 ? 'elegido' : 'elegidos'}`
+          }
           onClose={() => router.back()}
           onConfirm={picked.length === 0 ? undefined : confirm}
           confirmLabel={pickLabel(picked.length)}

@@ -97,7 +97,7 @@ export default function EquipmentFilter() {
           title="Equipamiento"
           subtitle={
             filter.equipment.length === 0
-              ? 'con qué vas a entrenar'
+              ? 'Con qué vas a entrenar'
               : `${filter.equipment.length} ${filter.equipment.length === 1 ? 'tipo' : 'tipos'}`
           }
           onClose={() => router.back()}

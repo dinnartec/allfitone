@@ -49,6 +49,8 @@ function harness(overrides: Partial<ContentTransport> = {}) {
       sent.push({ command: headers.idempotencyKey, etag })
       return { id: VERSION_ID } as never
     },
+    readTemplateDraft: async () => ({}) as never,
+    discardTemplate: async () => ({}) as never,
     readProgramDraft: async (programId) =>
       ({ id: 'draft', program_id: programId, etag: 'opened-etag' }) as never,
     createProgram: async (headers) => {

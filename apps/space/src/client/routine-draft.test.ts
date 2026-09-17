@@ -13,6 +13,7 @@ import {
   countSets,
   reasonsNotToPublish,
   reordered,
+  stepsFromContent,
   stepsToContent,
   withPicked,
   withoutStep,
@@ -23,8 +24,7 @@ const step = (position: number, name: string, sets = 4, reps = 8): WorkingStep =
   position,
   movementId: `movement-${position}`,
   name,
-  sets,
-  reps,
+  sets: Array.from({ length: sets }, () => ({ kind: 'normal' as const, reps })),
 })
 
 describe('what stops a routine from being published', () => {
@@ -87,6 +87,43 @@ describe('the draft as the contract wants it', () => {
 
     expect(content.activity_type_id).toBe(ACTIVITY)
   })
+
+  test('T-SP-ROUTINE-10 a weight travels with its unit, or it is not a weight', () => {
+    const loaded: WorkingStep = {
+      ...step(1, 'A'),
+      loadUnit: 'lb',
+      sets: [
+        { kind: 'normal', reps: 8, load: 135 },
+        { kind: 'normal', reps: 8 },
+      ],
+    }
+    const sets = stepsToContent('Empuje', [loaded], ACTIVITY).steps[0]?.target as {
+      sets: Record<string, unknown>[]
+    }
+
+    expect(sets.sets[0]).toMatchObject({ target_load_value: 135, target_load_unit_code: 'lb' })
+    // The column pair is what `planned_sets` checks: half of it is refused.
+    expect(sets.sets[1]).not.toHaveProperty('target_load_value')
+    expect(sets.sets[1]).not.toHaveProperty('target_load_unit_code')
+  })
+
+  test("T-SP-ROUTINE-11 and comes back as the exercise's unit when the draft is reopened", () => {
+    const loaded: WorkingStep = {
+      ...step(1, 'A'),
+      loadUnit: 'lb',
+      sets: [{ kind: 'normal', reps: 8, load: 135 }],
+    }
+    const reopened = stepsFromContent(stepsToContent('Empuje', [loaded], ACTIVITY))
+
+    expect(reopened[0]?.loadUnit).toBe('lb')
+    expect(reopened[0]?.sets[0]?.load).toBe(135)
+  })
+
+  test('T-SP-ROUTINE-12 a routine nobody weighed carries no unit either', () => {
+    const reopened = stepsFromContent(stepsToContent('Empuje', [step(1, 'A')], ACTIVITY))
+
+    expect(reopened[0]?.loadUnit).toBeUndefined()
+  })
 })
 
 describe('removing and reordering leave no gap', () => {
@@ -143,10 +180,43 @@ describe('a whole batch of exercises arrives at once', () => {
     expect(withPicked(first, picked).length).toBe(3)
   })
 
-  test('T-SP-ROUTINE-15 a batch starts at the defaults, which is all the editor can set today', () => {
+  test('T-SP-ROUTINE-15 a batch opens on the first scheme, which the screen then edits', () => {
     const [first] = withPicked([], picked.slice(0, 1))
 
-    expect(first?.sets).toBe(4)
-    expect(first?.reps).toBe(8)
+    expect(first?.sets).toEqual([
+      { kind: 'normal', reps: 8 },
+      { kind: 'normal', reps: 8 },
+      { kind: 'normal', reps: 8 },
+      { kind: 'normal', reps: 8 },
+    ])
+  })
+
+  test('T-SP-ROUTINE-16 and what is sent is the sets, never the aggregate', () => {
+    // The summary is derived at publication. Sending a second copy of a number is
+    // sending something that can disagree with the rows it summarises.
+    const content = stepsToContent('Empuje', withPicked([], picked.slice(0, 1)), 'activity')
+    const target = content.steps[0]?.target as Record<string, unknown>
+
+    expect(target.sets).toHaveLength(4)
+    expect(target.target_sets).toBeUndefined()
+    expect(target.target_reps).toBeUndefined()
+  })
+
+  test('T-SP-ROUTINE-17 a set to failure carries no repetitions, because the number is whatever comes out', () => {
+    const failing: WorkingStep = {
+      position: 1,
+      movementId: 'movement-1',
+      name: 'Press',
+      sets: [{ kind: 'to_failure' }],
+    }
+    const target = stepsToContent('Empuje', [failing], 'activity').steps[0]?.target as Record<
+      string,
+      unknown
+    >
+    const [only] = target.sets as { kind: string; target_reps?: number }[]
+
+    expect(only?.kind).toBe('to_failure')
+    expect(only?.target_reps).toBeUndefined()
+    expect(reasonsNotToPublish('Empuje', [failing])).toEqual([])
   })
 })
