@@ -148,6 +148,7 @@ const noOtherApps = (self) => ({
 // internals are reachable, so the list is part of creating a domain.
 const DOMAINS = [
   'catalog',
+  'execution',
   'identity',
   'nutrition',
   'organizations',
