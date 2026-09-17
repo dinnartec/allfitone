@@ -44,7 +44,7 @@
  */
 
 import { Button } from '@allfitone/react-native/button'
-import { Badge, type BadgeTone } from '@allfitone/react-native/badge'
+import { Badge, badgeToneColor, identityTone, type BadgeTone } from '@allfitone/react-native/badge'
 import { Chip } from '@allfitone/react-native/chip'
 import { Sheet } from '@allfitone/react-native/sheet'
 import { Stepper } from '@allfitone/react-native/stepper'
@@ -58,14 +58,7 @@ import { TextField } from '@allfitone/react-native/text-field'
 import { useTheme } from '@allfitone/react-native/theme'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import {
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  View,
-  type StyleProp,
-  type ViewStyle,
-} from 'react-native'
+import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import Animated, {
   Easing,
@@ -73,7 +66,12 @@ import Animated, {
   FadeOut,
   LinearTransition,
   ReduceMotion,
+  measure,
+  scrollTo,
+  useAnimatedRef,
   useAnimatedStyle,
+  useFrameCallback,
+  useScrollOffset,
   useSharedValue,
   withTiming,
   type SharedValue,
@@ -83,7 +81,8 @@ import { scheduleOnRN } from 'react-native-worklets'
 
 import { ApiError } from '../../src/client'
 import { createSpaceContentFlow } from '../../src/client/content-transport'
-import { aside, placeOf } from '../../src/client/drag-order'
+import { aside, edgeScroll, nextOffset, placeOf } from '../../src/client/drag-order'
+import { revealOffset, type Frame } from '../../src/client/reveal'
 import { readExerciseLibrary } from '../../src/client/exercise-library'
 import {
   declareAlreadyIn,
@@ -95,10 +94,13 @@ import {
   DISCIPLINE,
   countSets,
   reasonsNotToPublish,
+  chainLetters,
+  chainedWith,
   movedTo,
   replacedStep,
   stepsFromContent,
   stepsToContent,
+  unchained,
   withPicked,
   withoutStep,
   type WorkingStep,
@@ -223,6 +225,54 @@ export default function RoutineEditor() {
   // in its own worklet; held here because they are the list's state, not one row's.
   const liftedFrom = useSharedValue(0)
   const liftedBy = useSharedValue(0)
+
+  // Measured rather than assumed: an open exercise is four times a shut one, and the
+  // amount to scroll is the difference between the two.
+  const scroller = useAnimatedRef<Animated.ScrollView>()
+  const frames = useRef(new Map<number, Frame>())
+  // Only the height. The offset comes from `scrolled`, which Reanimated keeps, and a
+  // second copy of it is a second copy that falls behind.
+  const viewport = useRef(0)
+
+  // Where the finger is and how far the list has scrolled, both on the UI runtime:
+  // the list has to follow a finger held against its edge, and doing that from JS
+  // would mean a round trip per frame while a gesture is in flight.
+  const fingerY = useSharedValue(0)
+  // Reanimated's own view of where the list is. Not a number of ours: what the list
+  // was *asked* to do and what it did are different at the end of the content, and
+  // only the second one can be trusted.
+  const scrolled = useScrollOffset(scroller)
+  const chased = useSharedValue(0)
+  const content = useSharedValue(0)
+
+  /**
+   * The list coming to the finger, once per frame and only while something is lifted.
+   *
+   * `travel` is bumped by whatever was scrolled, because the row being dragged lives
+   * inside the list: without that it would ride away with the content instead of
+   * staying under the finger — and the destination, which is read off `travel`, would
+   * stop advancing exactly when the list started moving.
+   */
+  const chase = useFrameCallback(() => {
+    if (liftedFrom.get() === 0) return
+    const list = measure(scroller)
+    if (list === null) return
+
+    // What the list *did* since the last frame, never what it was asked to do. The
+    // platform stops at the real end of its content, and adding the request instead
+    // was the defect: held at the bottom edge, the drag ran away below the list for
+    // as long as the finger stayed there.
+    const now = scrolled.get()
+    const moved = now - chased.get()
+    if (moved !== 0) liftedBy.set(liftedBy.get() + moved)
+    chased.set(now)
+
+    const by = edgeScroll(fingerY.get(), list.pageY, list.height)
+    if (by === 0) return
+
+    const to = nextOffset(now, by, content.get() - list.height)
+    if (to !== now) scrollTo(scroller, 0, to, false)
+  }, false)
 
   const pending = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   // Held outside state as well: a save scheduled before the creation resolved must
@@ -425,10 +475,47 @@ export default function RoutineEditor() {
    * again.
    */
   const settle = (fromPosition: number, to: number) => {
+    chase.setActive(false)
     if (to !== fromPosition) change(movedTo(steps, fromPosition, to))
     liftedFrom.set(0)
     liftedBy.set(0)
     requestAnimationFrame(() => setDragging(false))
+  }
+
+  // Recomputed from the steps rather than stored: a stored letter is one more thing
+  // that can disagree with the list it labels.
+  const letters = chainLetters(steps)
+
+  /** A letter and a colour per chain, so two of them one after the other are two. */
+  const chainMark = (group: number | undefined) => {
+    if (group === undefined) return undefined
+    const letter = letters.get(group)
+    if (letter === undefined) return undefined
+    const tone = identityTone([...letters.keys()].indexOf(group))
+    return { letter, tone, color: badgeToneColor(theme, tone) }
+  }
+
+  /**
+   * Brings whatever is open wholly into view, on the measurement rather than on the
+   * press: the row is still its shut height when the finger leaves it, and scrolling
+   * then would aim at a box that is about to grow.
+   */
+  const remember = (position: number, frame: Frame) => {
+    frames.current.set(position, frame)
+    if (position !== open) return
+    // Read at the moment it is needed rather than tracked: one reader, once, and no
+    // second copy of the offset to fall behind the first.
+    const to = revealOffset(frame, { offset: scrolled.get(), height: viewport.current })
+    if (to !== undefined) scroller.current?.scrollTo({ y: to, animated: true })
+  }
+
+  const sheetTitle = () => {
+    if (sheet?.kind === 'leaving') return '¿Guardas esta rutina?'
+    if (sheet?.kind === 'set-kind') return 'Tipo de serie'
+    if (sheet?.kind === 'rest') return 'Descanso entre series'
+    if (sheet?.kind === 'superset') return 'Superserie'
+    if (sheet?.kind === 'menu') return 'Ejercicio'
+    return ''
   }
 
   const subtitle = () => {
@@ -531,11 +618,17 @@ export default function RoutineEditor() {
 
       {/* Takes what the frame and the anchor leave, and no more: without this it
           sizes to its content and pushes the button off the bottom of the screen. */}
-      <ScrollView
+      <Animated.ScrollView
+        ref={scroller}
         style={styles.scroller}
         contentContainerStyle={styles.list}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
+        onLayout={(event) => {
+          viewport.current = event.nativeEvent.layout.height
+        }}
+        onContentSizeChange={(_width, height) => content.set(height)}
+        scrollEventThrottle={16}
       >
         {steps.length === 0 ? (
           <View
@@ -573,17 +666,32 @@ export default function RoutineEditor() {
               dragging={dragging}
               from={liftedFrom}
               travel={liftedBy}
+              finger={fingerY}
               onLift={() => {
                 setOpen(undefined)
                 setDragging(true)
+                // From where the list stands now, or the first frame would count every
+                // point it had been scrolled before the drag as travel.
+                chased.set(scrolled.get())
+                chase.setActive(true)
               }}
               onDrop={(to) => settle(step.position, to)}
+              onFrame={(frame) => remember(step.position, frame)}
               style={[
                 styles.row,
                 {
                   borderColor:
                     open === step.position ? theme.color.border.accent : theme.color.border.subtle,
                 },
+                // The indicator that needs no reading: both members of a chain are
+                // struck down its leading edge in that chain's own colour, so two
+                // supersets one after the other are visibly two.
+                chainMark(step.supersetGroup) === undefined
+                  ? null
+                  : {
+                      borderLeftWidth: 3,
+                      borderLeftColor: chainMark(step.supersetGroup)?.color,
+                    },
               ]}
             >
               <Pressable
@@ -605,10 +713,11 @@ export default function RoutineEditor() {
                   <Text role="body" size="sm" color="accent">
                     {`${setsLabel(step.sets)} · ${restLabel(step.restSeconds)}`}
                   </Text>
-                  {step.supersetGroup === undefined ? null : (
-                    <Text role="control" size="xs" color="muted">
-                      {`Superserie con ${String(chainMate(steps, step)).padStart(2, '0')}`}
-                    </Text>
+                  {chainMark(step.supersetGroup) === undefined ? null : (
+                    <Badge
+                      label={`Superserie ${chainMark(step.supersetGroup)?.letter ?? ''}`}
+                      tone={chainMark(step.supersetGroup)?.tone ?? 'accent'}
+                    />
                   )}
                 </View>
                 {/* One glyph that turns, not two that swap: a swap has no
@@ -659,7 +768,7 @@ export default function RoutineEditor() {
             </DraggableRow>
           ))
         )}
-      </ScrollView>
+      </Animated.ScrollView>
 
       {/* Anchored: adding the next exercise is the one thing somebody does over and
           over here, and scrolling to the bottom of their own list to reach it is a
@@ -677,185 +786,187 @@ export default function RoutineEditor() {
         />
       </View>
 
+      {/* One sheet, not five. `Sheeted` is a union — only one can ever be up — and a
+          `Sheet` is a real `Modal` that stays mounted through its own exit animation.
+          Five of them meant that moving from the exercise menu to the superset list
+          presented a modal while another was still dismissing, which iOS refuses: the
+          new sheet never appeared and the old one's invisible layer kept eating every
+          touch. Everything froze, and nothing was on screen to say why. */}
       <Sheet
-        visible={sheet?.kind === 'leaving'}
+        visible={sheet !== undefined}
         onDismiss={() => setSheet(undefined)}
-        title="¿Guardas esta rutina?"
+        title={sheetTitle()}
       >
-        <View style={styles.sheet}>
-          <Text role="body" size="md" color="muted">
-            Se está guardando como borrador según escribes. Puedes dejarla para después o tirarla.
-          </Text>
-          <Button
-            label="Guardar borrador"
-            onPress={() => {
-              setSheet(undefined)
-              router.back()
-            }}
-          />
-          <Button
-            label="Descartar rutina"
-            variant="ghost"
-            icon="remove"
-            onPress={() => {
-              setSheet(undefined)
-              void discard()
-            }}
-          />
-        </View>
-      </Sheet>
-
-      <Sheet
-        visible={sheet?.kind === 'set-kind'}
-        onDismiss={() => setSheet(undefined)}
-        title="Tipo de serie"
-      >
-        <View style={styles.sheet}>
-          {(['normal', 'warmup', 'to_failure', 'drop'] as const).map((kind) => (
-            <SheetChoice
-              key={kind}
-              name={SET_KIND_NAMES[kind]}
-              tone={SET_KIND_TONES[kind]}
-              selected={kindAt(steps, sheet) === kind}
-              detail={SET_KIND_DETAILS[kind]}
+        {sheet?.kind === 'leaving' ? (
+          <View style={styles.sheet}>
+            <Text role="body" size="md" color="muted">
+              Se está guardando como borrador según escribes. Puedes dejarla para después o tirarla.
+            </Text>
+            <Button
+              label="Guardar borrador"
               onPress={() => {
-                if (sheet?.kind !== 'set-kind') return
-                const step = steps.find((one) => one.position === sheet.position)
-                const current = step?.sets[sheet.order]
-                if (!step || !current) return
-                change(
-                  withSets(
-                    steps,
-                    sheet.position,
-                    step.sets.map((each, at) => (at === sheet.order ? withKind(each, kind) : each)),
-                  ),
-                )
                 setSheet(undefined)
+                router.back()
               }}
             />
-          ))}
-        </View>
-      </Sheet>
+            <Button
+              label="Descartar rutina"
+              variant="ghost"
+              icon="remove"
+              onPress={() => {
+                setSheet(undefined)
+                void discard()
+              }}
+            />
+          </View>
+        ) : null}
 
-      <Sheet
-        visible={sheet?.kind === 'rest'}
-        onDismiss={() => setSheet(undefined)}
-        title="Descanso entre series"
-      >
-        <View style={styles.sheet}>
-          <Text role="body" size="sm" color="muted">
-            Cuánto esperas antes de la siguiente serie.
-          </Text>
-
-          {/* Any rest, not one of seven. The presets below are a shortcut to the
-              common answers, never the whole set of them. */}
-          <Stepper
-            accessibilityLabel="Descanso entre series"
-            value={restAt(steps, sheet)}
-            min={0}
-            max={REST_MAX_SECONDS}
-            step={REST_STEP_SECONDS}
-            format={restPresetLabel}
-            caption={`de ${REST_STEP_SECONDS} en ${REST_STEP_SECONDS} segundos`}
-            grow
-            style={{ borderColor: theme.color.border.accent }}
-            onChange={(seconds) => {
-              if (sheet?.kind !== 'rest') return
-              change(withRest(steps, sheet.position, seconds))
-            }}
-          />
-
-          <Text role="control" size="sm" color="secondary">
-            O elige uno habitual
-          </Text>
-          <View style={styles.chips}>
-            {REST_PRESETS.map((preset) => (
-              <Chip
-                key={preset}
-                label={restPresetLabel(preset)}
-                selected={restAt(steps, sheet) === preset}
+        {sheet?.kind === 'set-kind' ? (
+          <View style={styles.sheet}>
+            {(['normal', 'warmup', 'to_failure', 'drop'] as const).map((kind) => (
+              <SheetChoice
+                key={kind}
+                name={SET_KIND_NAMES[kind]}
+                tone={SET_KIND_TONES[kind]}
+                selected={kindAt(steps, sheet) === kind}
+                detail={SET_KIND_DETAILS[kind]}
                 onPress={() => {
-                  if (sheet?.kind !== 'rest') return
-                  change(withRest(steps, sheet.position, preset))
+                  if (sheet?.kind !== 'set-kind') return
+                  const step = steps.find((one) => one.position === sheet.position)
+                  const current = step?.sets[sheet.order]
+                  if (!step || !current) return
+                  change(
+                    withSets(
+                      steps,
+                      sheet.position,
+                      step.sets.map((each, at) =>
+                        at === sheet.order ? withKind(each, kind) : each,
+                      ),
+                    ),
+                  )
+                  setSheet(undefined)
                 }}
               />
             ))}
           </View>
-        </View>
-      </Sheet>
+        ) : null}
 
-      <Sheet
-        visible={sheet?.kind === 'superset'}
-        onDismiss={() => setSheet(undefined)}
-        title="Superserie"
-      >
-        <View style={styles.sheet}>
-          <Text role="body" size="sm" color="muted">
-            Se hacen seguidos, sin descanso entre medias. Solo puedes encadenar con un ejercicio
-            contiguo; para encadenar otro, muévelo antes.
-          </Text>
-          {neighbours(steps, sheet?.kind === 'superset' ? sheet.position : 0).map((mate) => (
-            <SheetChoice
-              key={mate.position}
-              name={mate.name}
-              detail={`${String(mate.position).padStart(2, '0')} · ${
-                mate.position < (sheet?.kind === 'superset' ? sheet.position : 0)
-                  ? 'justo antes'
-                  : 'justo después'
-              }`}
-              onPress={() => {
-                if (sheet?.kind !== 'superset') return
-                change(withChain(steps, sheet.position, mate.position))
-                setSheet(undefined)
+        {sheet?.kind === 'rest' ? (
+          <View style={styles.sheet}>
+            <Text role="body" size="sm" color="muted">
+              Cuánto esperas antes de la siguiente serie.
+            </Text>
+
+            {/* Any rest, not one of seven. The presets below are a shortcut to the
+                common answers, never the whole set of them. */}
+            <Stepper
+              accessibilityLabel="Descanso entre series"
+              value={restAt(steps, sheet)}
+              min={0}
+              max={REST_MAX_SECONDS}
+              step={REST_STEP_SECONDS}
+              format={restPresetLabel}
+              caption={`de ${REST_STEP_SECONDS} en ${REST_STEP_SECONDS} segundos`}
+              grow
+              style={{ borderColor: theme.color.border.accent }}
+              onChange={(seconds) => {
+                if (sheet?.kind !== 'rest') return
+                change(withRest(steps, sheet.position, seconds))
               }}
             />
-          ))}
-        </View>
-      </Sheet>
 
-      <Sheet
-        visible={sheet?.kind === 'menu'}
-        onDismiss={() => setSheet(undefined)}
-        title="Ejercicio"
-      >
-        <View style={styles.sheet}>
-          <SheetChoice
-            name="Reemplazar ejercicio"
-            detail="Buscar otro y conservar las series"
-            onPress={() => {
-              if (sheet?.kind !== 'menu') return
-              // Everything but the one being swapped, so the picker does not offer
-              // back an exercise the routine already trains.
-              declareAlreadyIn(
-                steps.filter((one) => one.position !== sheet.position).map((one) => one.movementId),
-              )
-              declareReplacing(sheet.position)
-              setSheet(undefined)
-              router.push('/routines/exercises')
-            }}
-          />
-          {sheet?.kind === 'menu' &&
-          steps.find((one) => one.position === sheet.position)?.supersetGroup !== undefined ? (
+            <Text role="control" size="sm" color="secondary">
+              O elige uno habitual
+            </Text>
+            <View style={styles.chips}>
+              {REST_PRESETS.map((preset) => (
+                <Chip
+                  key={preset}
+                  label={restPresetLabel(preset)}
+                  selected={restAt(steps, sheet) === preset}
+                  onPress={() => {
+                    if (sheet?.kind !== 'rest') return
+                    change(withRest(steps, sheet.position, preset))
+                  }}
+                />
+              ))}
+            </View>
+          </View>
+        ) : null}
+
+        {sheet?.kind === 'superset' ? (
+          <View style={styles.sheet}>
+            <Text role="body" size="sm" color="muted">
+              Se hacen seguidos, sin descanso entre medias. El que elijas queda al lado de este.
+            </Text>
+            {others(steps, sheet).map((mate) => (
+              <SheetChoice
+                key={mate.position}
+                name={mate.name}
+                // The same rule its row wears, so «already in a superset, and in that
+                // one» is read rather than explained.
+                {...(chainMark(mate.supersetGroup) === undefined
+                  ? {}
+                  : { edge: chainMark(mate.supersetGroup)?.color })}
+                onPress={() => {
+                  if (sheet?.kind !== 'superset') return
+                  change(chainedWith(steps, sheet.position, mate.position))
+                  setSheet(undefined)
+                }}
+              />
+            ))}
+          </View>
+        ) : null}
+
+        {sheet?.kind === 'menu' ? (
+          <View style={styles.sheet}>
             <SheetChoice
-              name="Quitar de la superserie"
-              detail="Deja de encadenarse con su vecino"
+              name="Reemplazar ejercicio"
+              detail="Buscar otro y conservar las series"
               onPress={() => {
                 if (sheet?.kind !== 'menu') return
-                change(withChain(steps, sheet.position, undefined))
+                // Everything but the one being swapped, so the picker does not offer
+                // back an exercise the routine already trains.
+                declareAlreadyIn(
+                  steps
+                    .filter((one) => one.position !== sheet.position)
+                    .map((one) => one.movementId),
+                )
+                declareReplacing(sheet.position)
                 setSheet(undefined)
+                router.push('/routines/exercises')
               }}
             />
-          ) : (
-            <SheetChoice
-              name="Hacer superserie"
-              detail="Encadenarlo con el de al lado"
-              onPress={() => {
-                if (sheet?.kind !== 'menu') return
-                setSheet({ kind: 'superset', position: sheet.position })
-              }}
-            />
-          )}
-        </View>
+            {sheet?.kind === 'menu' &&
+            steps.find((one) => one.position === sheet.position)?.supersetGroup !== undefined ? (
+              <SheetChoice
+                name="Quitar de la superserie"
+                detail="Deja de encadenarse con su vecino"
+                onPress={() => {
+                  if (sheet?.kind !== 'menu') return
+                  change(unchained(steps, sheet.position))
+                  setSheet(undefined)
+                }}
+              />
+            ) : (
+              <SheetChoice
+                name="Hacer superserie"
+                detail={
+                  steps.length < 2
+                    ? 'Necesitas otro ejercicio en la rutina'
+                    : 'Encadenarlo con otro ejercicio'
+                }
+                // Nothing to chain with. Offered and then refused is worse than offered
+                // as unavailable, because the second says why without being pressed.
+                disabled={steps.length < 2}
+                onPress={() => {
+                  if (sheet?.kind !== 'menu') return
+                  setSheet({ kind: 'superset', position: sheet.position })
+                }}
+              />
+            )}
+          </View>
+        ) : null}
       </Sheet>
     </Screen>
   )
@@ -868,14 +979,20 @@ function SheetChoice({
   shape,
   tone,
   selected,
+  disabled,
+  edge,
   onPress,
 }: {
   readonly name: string
-  readonly detail: string
+  /** Absent leaves the name alone, for a list where the name is the whole answer. */
+  readonly detail?: string
   readonly shape?: string
   /** Draws the name as its badge instead of as a word, for a choice that has one. */
   readonly tone?: BadgeTone
   readonly selected?: boolean
+  readonly disabled?: boolean
+  /** A rule down the leading edge, for a choice that already belongs to something. */
+  readonly edge?: string | undefined
   readonly onPress: () => void
 }) {
   const theme = useTheme()
@@ -884,16 +1001,18 @@ function SheetChoice({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={name}
-      accessibilityHint={detail}
-      accessibilityState={{ selected: selected ?? false }}
+      {...(detail === undefined ? {} : { accessibilityHint: detail })}
+      accessibilityState={{ selected: selected ?? false, disabled: disabled ?? false }}
+      disabled={disabled ?? false}
       onPress={onPress}
       style={({ pressed }) => [
         styles.choice,
         {
           borderColor: selected ? theme.color.border.accent : theme.color.border.subtle,
           backgroundColor: theme.color.background.surface,
-          opacity: pressed ? 0.7 : 1,
+          opacity: disabled ? 0.45 : pressed ? 0.7 : 1,
         },
+        edge === undefined ? null : { borderLeftWidth: 3, borderLeftColor: edge },
       ]}
     >
       <View style={styles.choiceText}>
@@ -904,9 +1023,11 @@ function SheetChoice({
         ) : (
           <Badge label={name} tone={tone} />
         )}
-        <Text role="body" size="sm" color="muted">
-          {detail}
-        </Text>
+        {detail === undefined ? null : (
+          <Text role="body" size="sm" color="muted">
+            {detail}
+          </Text>
+        )}
       </View>
       {shape === undefined ? null : (
         <Text role="body" size="sm" color="accent">
@@ -918,17 +1039,13 @@ function SheetChoice({
 }
 
 /** Only the exercise before and the one after: `IX-46` refuses anything else. */
-function neighbours(steps: readonly WorkingStep[], position: number): readonly WorkingStep[] {
-  return steps.filter((step) => step.position === position - 1 || step.position === position + 1)
+/** Everything the superset sheet can offer: the whole routine but this exercise. */
+function others(steps: readonly WorkingStep[], sheet: Sheeted | undefined) {
+  if (sheet?.kind !== 'superset') return []
+  return steps.filter((step) => step.position !== sheet.position)
 }
 
 /** Who the chain's other end is, for the line that says so. */
-function chainMate(steps: readonly WorkingStep[], step: WorkingStep): number {
-  const mate = steps.find(
-    (one) => one.supersetGroup === step.supersetGroup && one.position !== step.position,
-  )
-  return mate?.position ?? step.position
-}
 
 function withSets(
   steps: readonly WorkingStep[],
@@ -966,26 +1083,6 @@ function withRest(
  * with anything else would be offering something the server rejects. Unchaining frees
  * both ends: a chain of one is not a chain.
  */
-function withChain(
-  steps: readonly WorkingStep[],
-  position: number,
-  mate: number | undefined,
-): readonly WorkingStep[] {
-  if (mate === undefined) {
-    const group = steps.find((step) => step.position === position)?.supersetGroup
-    return steps.map((step) => {
-      if (step.supersetGroup !== group) return step
-      // Removed rather than set to undefined: the key's absence is what the contract
-      // means by "not chained", and `exactOptionalPropertyTypes` agrees.
-      const { supersetGroup: _chained, ...rest } = step
-      return rest
-    })
-  }
-  const group = Math.max(0, ...steps.map((step) => step.supersetGroup ?? 0)) + 1
-  return steps.map((step) =>
-    step.position === position || step.position === mate ? { ...step, supersetGroup: group } : step,
-  )
-}
 
 /** Moving one up is the only reorder the canvases ask for, and it renumbers. */
 
@@ -1157,8 +1254,10 @@ function DraggableRow({
   dragging,
   from,
   travel,
+  finger,
   onLift,
   onDrop,
+  onFrame,
   style,
   children,
 }: {
@@ -1169,8 +1268,12 @@ function DraggableRow({
   readonly dragging: boolean
   readonly from: SharedValue<number>
   readonly travel: SharedValue<number>
+  /** Where the finger is on screen, which is what the edges are measured against. */
+  readonly finger: SharedValue<number>
   readonly onLift: () => void
   readonly onDrop: (to: number) => void
+  /** Where it sits in the list, so whatever opens can be scrolled into view. */
+  readonly onFrame: (frame: Frame) => void
   readonly style: StyleProp<ViewStyle>
   readonly children: ReactNode
 }) {
@@ -1181,16 +1284,26 @@ function DraggableRow({
     // of them would lift the whole exercise instead of putting a caret in it.
     .enabled(!open)
     .activateAfterLongPress(250)
-    .onStart(() => {
+    .onStart((event) => {
       from.set(position)
       travel.set(0)
+      finger.set(event.absoluteY)
+      // The frame loop is started from `onLift`, on the other side of `scheduleOnRN`.
+      // `setActive` closes over the registry and a React ref, both of which exist only
+      // on the RN runtime; called from here it writes to a copy, and the UI side then
+      // times a callback it has no record of.
       scheduleOnRN(onLift)
     })
-    .onUpdate((event) => {
-      travel.set(event.translationY)
+    // `onChange` rather than `onUpdate`: what is added is the movement since the last
+    // frame. The frame loop puts what the list scrolled into the same number, and
+    // assigning the whole translation would throw that away sixty times a second —
+    // the row would sit still while the list ran underneath it.
+    .onChange((event) => {
+      finger.set(event.absoluteY)
+      travel.set(travel.get() + event.changeY)
     })
-    .onEnd((event, success) => {
-      const landed = success ? placeOf(position, event.translationY, count) : position
+    .onEnd((_event, success) => {
+      const landed = success ? placeOf(position, travel.get(), count) : position
       scheduleOnRN(onDrop, landed)
     })
 
@@ -1221,6 +1334,11 @@ function DraggableRow({
         // honour the system setting rather than deciding for it.
         exiting={EXIT}
         {...(dragging ? {} : { layout: REFLOW })}
+        // Fires again when the exercise opens, which is the measurement that matters:
+        // the shut height says nothing about what has to be brought into view.
+        onLayout={(event) =>
+          onFrame({ y: event.nativeEvent.layout.y, height: event.nativeEvent.layout.height })
+        }
         style={[style, moving]}
       >
         {children}
