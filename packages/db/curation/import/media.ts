@@ -45,12 +45,16 @@
 import { mkdir } from 'node:fs/promises'
 
 import { DEMONSTRATIONS, movementId, type Demonstration } from './demonstrations.js'
+import type { Chosen } from './selection.js'
+import * as wave from './wave-1.js'
+import type { Authored } from './wave-1.js'
 import { canvasOf, declareWhiteBackground } from './webp.js'
 import type { SourceExercise } from './snapshot.js'
 
 const here = (name: string) => new URL(`./${name}`, import.meta.url).pathname
 
 const SNAPSHOT = here('exercisedb-snapshot.json')
+const WAVE = here('wave.json')
 const MANIFEST = here('movement-media.json')
 const CURATION = new URL('../002_movement_demonstrations.sql', import.meta.url).pathname
 /** Everything the run needs, split so the deploy is only ever what gets served. */
@@ -127,12 +131,20 @@ async function encoder(): Promise<void> {
   if (!found) throw new Error('gif2webp is not installed — brew install webp')
 }
 
-/** Kept on disk so a rerun is a conversion, not a download of the whole catalogue. */
-async function gif(pairing: Demonstration, from: string): Promise<string> {
+/**
+ * Kept on disk so a rerun is a conversion, not a download of the whole catalogue.
+ *
+ * **A missing image is not a failure.** The source lists exercises whose artwork it
+ * does not actually serve, and answers 404 for them. A movement without a demonstration
+ * is a supported state end to end — the projection answers null and the screen draws
+ * the muscle group — so one absent file must not cost the other three hundred.
+ */
+async function gif(pairing: Demonstration, from: string): Promise<string | null> {
   const path = `${WORK}/gif/${pairing.exerciseId}.gif`
   if (await Bun.file(path).exists()) return path
 
   const response = await fetch(from)
+  if (response.status === 404) return null
   if (!response.ok) throw new Error(`${pairing.slug}: ${from} answered ${response.status}`)
   await Bun.write(path, await response.arrayBuffer())
   return path
@@ -229,16 +241,48 @@ commit;
 `
 }
 
+/**
+ * Wave one needs no hand-written pairing: each movement in it **is** a chosen exercise,
+ * so the identifier that selected it is the identifier of its artwork. The reviewed
+ * table is only needed where a Spanish movement predates the source and had to be
+ * matched to it by a person.
+ */
+async function wavePairings(): Promise<readonly Demonstration[]> {
+  const file = Bun.file(WAVE)
+  if (!(await file.exists())) return []
+  const chosen = ((await file.json()) as { chosen: readonly Chosen[] }).chosen
+  const written = new Map(
+    (Object.values(wave).filter(Array.isArray).flat() as Authored[]).map((one) => [one.id, one]),
+  )
+
+  const pairings: Demonstration[] = []
+  chosen.forEach((one, index) => {
+    const authored = written.get(one.exerciseId)
+    if (!authored) return
+    pairings.push({
+      ordinal: 38 + index + 1,
+      slug: authored.slug,
+      exerciseId: one.exerciseId,
+      source: one.source,
+    })
+  })
+  return pairings
+}
+
 async function main(): Promise<void> {
   await encoder()
   const pool = await snapshot()
 
   const rows: MediaRow[] = []
-  for (const pairing of DEMONSTRATIONS) {
+  const absent: string[] = []
+  for (const pairing of [...DEMONSTRATIONS, ...(await wavePairings())]) {
     const exercise = await resolve(pairing, pool)
-    const encoded = declareWhiteBackground(
-      await convert(await gif(pairing, exercise.gifUrl), pairing.slug),
-    )
+    const source = await gif(pairing, exercise.gifUrl)
+    if (source === null) {
+      absent.push(pairing.slug)
+      continue
+    }
+    const encoded = declareWhiteBackground(await convert(source, pairing.slug))
     const { width, height } = canvasOf(encoded)
     const checksum = new Bun.CryptoHasher('sha256').update(encoded).digest('hex')
 
@@ -271,6 +315,9 @@ async function main(): Promise<void> {
 
   const weight = rows.reduce((sum, one) => sum + one.byte_size, 0)
   console.log(`\n${rows.length} demonstrations, ${(weight / 1024 / 1024).toFixed(1)} MB in ${SITE}`)
+  if (absent.length > 0) {
+    console.log(`${absent.length} the source lists but does not serve: ${absent.join(', ')}`)
+  }
 }
 
 await main()
