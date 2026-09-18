@@ -20,52 +20,6 @@
   --studio-canvas: 64rem;
 }
 
-/* ------------------------------------------------------------------- reset */
-
-/* `@allfitone/react/app.css` calls itself the application baseline and says it
-   holds "the global canvas, typography bridge, and browser reset". It resets
-   box-sizing, the body margin and control fonts, and stops there — so every
-   list in every consuming app keeps the browser's own 16px block margin and
-   40px inline indent.
-
-   This belongs in that file, not here: Space and Backoffice have the same hole.
-   It sits in Studio because the alternative was a seventh copy of `margin: 0;
-   padding: 0` on a seventh list, and because a Design System component cannot
-   be reached from here — `NavigationMenuList` sets `list-none` and leaves the
-   box, which is what put a 40px indent under the team section tabs.
-
-   Lists only. Paragraphs and headings carry the same leak, but resetting those
-   changes spacing on every screen at once and this app has no visual snapshots
-   to catch it; they are a separate change with a review behind it. */
-ul,
-ol,
-menu {
-  margin: 0;
-  padding: 0;
-}
-
-/* The same hole, one level down. `DialogTitle` and `AlertDialogTitle` render an
-   `h2`, their descriptions render a `p`, and `EmptyDescription` renders a `p` —
-   none of them resets the browser's own block margin. Their headers already
-   declare a `gap`, and margins do not collapse inside flex or grid, so the two
-   add up: a declared 10px gap between a dialog's title and its description
-   measured 41px (10 + 16.6 + 14), and the gap to the body measured 34 (20 + 14).
-   Nothing designed those numbers.
-
-   Sweeping all 43 screens found only these carrying a browser default; every
-   other slot with a margin has a round, deliberate value. Listed rather than
-   reset app-wide for the reason given above, and belonging upstream for the
-   same reason the list reset does: Space and Backoffice have it too.
-
-   Marked at each call site rather than selected by `data-slot`. That attribute
-   is the Design System's, and reaching for it from here is what
-   `check:ui-boundaries` forbids: an app that styles a component by its internal
-   slot is restyling the library. Studio placed these elements, so Studio marks
-   the ones whose browser default it resets. */
-[data-flush-text] {
-  margin-block: 0;
-}
-
 /* ---------------------------------------------------------------- canvases */
 
 [data-organization-content] > *,
@@ -128,7 +82,6 @@ menu {
 
 [data-page-header-description] {
   max-width: var(--studio-measure);
-  margin: 0;
 }
 
 /* A title stack beside an action, the same shape as the page header above.
@@ -150,14 +103,6 @@ menu {
   display: grid;
   min-width: 0;
   gap: var(--afo-space-2);
-}
-
-/* The grid owns the spacing, but a bare `h2` still brings the browser's own
-   17px block margin and pushes the whole stack down. The membership section
-   renders its title through `WorkspaceTitle`, which has no margin, so the two
-   sections sat 31px and 14px below the same tab strip. */
-[data-profile-section-heading-text] > h2 {
-  margin-block: 0;
 }
 
 /* Two stacked actions that the Design System's own container does not space:
@@ -217,7 +162,6 @@ menu {
   display: flex;
   flex-wrap: wrap;
   gap: var(--afo-space-2);
-  margin: 0;
   padding-inline: var(--afo-space-2);
 }
 
@@ -497,20 +441,12 @@ menu {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(10rem, 100%), 1fr));
   gap: var(--afo-space-4);
-  margin: 0;
 }
 
 [data-team-invitation-summary] > div,
 [data-ownership-invitation-summary] > div,
 [data-credential-details] > div {
   min-width: 0;
-}
-
-[data-team-invitation-summary] dd,
-[data-ownership-invitation-summary] dd,
-[data-team-member-facts] dd,
-[data-credential-details] dd {
-  margin-inline: 0;
 }
 
 /* Studio renders these lists itself, so nothing was styling them: every `dt`
@@ -548,7 +484,6 @@ menu {
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: var(--afo-space-2) var(--afo-space-4);
-  margin: 0;
 }
 
 /* ---------------------------------------------------------------- overview */
@@ -588,15 +523,12 @@ menu {
   width: min(100%, 24rem);
 }
 
-/* No `margin: 0; padding: 0` any more: six lists carried that by hand to
-   compensate for the missing reset above. */
 [data-overview-attention-list],
 [data-overview-team-list],
 [data-team-directory-card-list],
 [data-role-capability-list] {
   display: grid;
   gap: var(--afo-space-3);
-  list-style: none;
 }
 
 [data-overview-attention-list] > li,
@@ -685,7 +617,6 @@ menu {
 
 [data-team-directory-note] {
   max-width: var(--studio-measure);
-  margin: 0;
 }
 
 /* ------------------------------------------------------------------- roles */
@@ -748,24 +679,6 @@ menu {
 [data-trajectory-body] {
   display: grid;
   gap: var(--afo-space-4);
-}
-
-/* A gap already owns the space between these children, but a paragraph brings
-   the browser's own 14px block margin with it and adds it on top — and at the
-   end of a card, on top of the card's padding too, which put the trajectory
-   panel's last line 34px off the bottom edge instead of 20px.
-
-   Listed rather than reset app-wide. Sweeping all 43 screens found paragraphs
-   inside a gap in exactly six containers, five of them Studio's own and one the
-   Design System's (`EmptyDescription` renders the paragraph itself, so it is
-   not reachable from here). `p { margin: 0 }` would reach far more than the
-   measured problem; the reset noted at the top of this file is still the right
-   eventual fix. */
-[data-studio-loading-body] > p,
-[data-ready-later-item] > p,
-[data-trajectory-body] > p,
-[data-membership-card-body] > p {
-  margin-block: 0;
 }
 
 [data-profile-combobox-option] {
@@ -1015,7 +928,6 @@ menu {
 }
 
 [data-analytics-panel] p {
-  margin: 0;
   font-size: var(--afo-font-size-sm);
   line-height: var(--afo-line-height-relaxed);
 }

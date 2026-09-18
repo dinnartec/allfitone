@@ -194,6 +194,8 @@ export function TeamInvitationList() {
           INVITATION_ISSUANCE_ENABLED && canInviteTeam(current.roles) ? (
             <Link
               href={`/organizations/${current.organization_id}/team/invitations/new`}
+              data-slot="button"
+              data-variant="default"
               className={buttonVariants()}
             >
               Nueva invitación
@@ -230,7 +232,7 @@ export function TeamInvitationList() {
           {listState ? (
             <Empty>
               <EmptyTitle>{listState.title}</EmptyTitle>
-              <EmptyDescription data-flush-text>{listState.description}</EmptyDescription>
+              <EmptyDescription>{listState.description}</EmptyDescription>
             </Empty>
           ) : (
             <ul data-team-directory-card-list>
@@ -338,8 +340,8 @@ export function TeamInvitationList() {
             another product. */}
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle data-flush-text>¿Revocar esta invitación?</AlertDialogTitle>
-            <AlertDialogDescription data-flush-text>
+            <AlertDialogTitle>¿Revocar esta invitación?</AlertDialogTitle>
+            <AlertDialogDescription>
               El enlace enviado a <strong>{revokeIntent?.contact}</strong> dejará de funcionar. Esta
               acción no se puede deshacer.
             </AlertDialogDescription>

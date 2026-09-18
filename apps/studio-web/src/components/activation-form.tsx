@@ -266,9 +266,7 @@ export function ActivationForm({
               </Button>
               {/* The progress bar above already says which step this is, so the
                   region stays empty until it has something new to announce. */}
-              <p aria-live="polite" data-flush-text>
-                {submitting ? 'Guardando tus confirmaciones…' : null}
-              </p>
+              <p aria-live="polite">{submitting ? 'Guardando tus confirmaciones…' : null}</p>
             </SetupPanelActions>
           </form>
         </SetupPanelContent>

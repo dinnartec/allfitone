@@ -65,7 +65,7 @@ export function ProfessionalMemberships({ memberships }: { memberships: Membersh
               <FoundationIcon name="organization" decorative />
             </EmptyMedia>
             <EmptyTitle>Aún no tienes espacios</EmptyTitle>
-            <EmptyDescription data-flush-text>
+            <EmptyDescription>
               Puedes crear una organización o aceptar una invitación cuando lo necesites.
             </EmptyDescription>
           </EmptyHeader>

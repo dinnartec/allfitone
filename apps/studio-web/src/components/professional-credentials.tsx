@@ -211,7 +211,7 @@ export function ProfessionalCredentials({
           <EmptyHeader>
             <EmptyMedia variant="icon">01</EmptyMedia>
             <EmptyTitle>Aún no has declarado credenciales</EmptyTitle>
-            <EmptyDescription data-flush-text>
+            <EmptyDescription>
               Añade una credencial cuando quieras aportar contexto sobre tu formación.
             </EmptyDescription>
           </EmptyHeader>
@@ -298,8 +298,8 @@ export function ProfessionalCredentials({
             another product. */}
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle data-flush-text>¿Retirar esta credencial?</AlertDialogTitle>
-            <AlertDialogDescription data-flush-text>
+            <AlertDialogTitle>¿Retirar esta credencial?</AlertDialogTitle>
+            <AlertDialogDescription>
               Permanecerá en tu historial y dejará de aparecer entre tus credenciales activas.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -465,10 +465,10 @@ function CredentialDialog({
     <Dialog open={Boolean(intent)} onOpenChange={onOpenChange} key={intentKey}>
       <DialogContent data-credential-dialog showCloseButton={false}>
         <DialogHeader>
-          <DialogTitle data-flush-text>
+          <DialogTitle>
             {intent?.kind === 'revise' ? 'Crear una revisión' : 'Declarar una credencial'}
           </DialogTitle>
-          <DialogDescription data-flush-text>
+          <DialogDescription>
             {intent?.kind === 'revise'
               ? 'La revisión crea una versión nueva y no hereda la verificación anterior.'
               : 'Registra la información tal como aparece en el documento o la fuente.'}
