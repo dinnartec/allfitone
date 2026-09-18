@@ -3636,6 +3636,19 @@ export type Database = {
           result: Json
         }[]
       }
+      discard_my_program: {
+        Args: {
+          p_command_id: string
+          p_idempotency_key: string
+          p_person_id: string
+          p_program_id: string
+          p_request_hash: string
+        }
+        Returns: {
+          program: Json
+          replayed: boolean
+        }[]
+      }
       discard_my_session_template: {
         Args: {
           p_command_id: string
@@ -3814,6 +3827,10 @@ export type Database = {
       }
       read_my_session_template_draft: {
         Args: { p_person_id: string; p_template_id: string }
+        Returns: Json
+      }
+      read_my_unpublished_program: {
+        Args: { p_person_id: string }
         Returns: Json
       }
       read_program_catalogue: {

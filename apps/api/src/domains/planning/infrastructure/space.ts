@@ -230,6 +230,25 @@ export function createSpacePlanningDatabase(): SpacePlanningDatabase {
         return answered(row?.template, 'discard the session template')
       }),
 
+    readMyUnpublishedProgram: (input) =>
+      transact(sql, input.personId, input.requestId, async (transaction) => {
+        const [row] = await transaction<{ program: Program | null }[]>`
+          select planning.read_my_unpublished_program(${input.personId}::uuid) as program
+        `
+        return row?.program ?? null
+      }),
+
+    discardMyProgram: (input) =>
+      command(sql, input.personId, async (transaction) => {
+        const [row] = await transaction<{ program: Program }[]>`
+          select program from planning.discard_my_program(
+            ${input.personId}::uuid, ${input.programId}::uuid,
+            ${input.idempotencyKey}::uuid, ${input.commandId}::uuid, ${input.requestHash}
+          )
+        `
+        return answered(row?.program, 'discard the program')
+      }),
+
     createMyProgram: (input) =>
       command(sql, input.personId, async (transaction) => {
         const [row] = await transaction<{ program: Program }[]>`

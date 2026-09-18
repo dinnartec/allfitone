@@ -198,6 +198,8 @@ function harness(overrides?: {
     publishMySessionTemplate: async () => ({}) as never,
     readMySessionTemplateDraft: async () => templateDraft,
     discardMySessionTemplate: async () => template,
+    discardMyProgram: async () => program,
+    readMyUnpublishedProgram: async () => program,
     createMyProgram: async () => program,
     replaceMyProgramDraft: async () => programDraft,
     publishMyProgram: async () => ({}) as never,
@@ -263,7 +265,7 @@ describe('the Space planning surface honours the contract', () => {
         operation.path.startsWith('/space/v1/week-plan') ||
         operation.path.startsWith('/space/v1/session-templates'),
     )
-    expect(declared).toHaveLength(15)
+    expect(declared).toHaveLength(17)
     expect(declared.map((operation) => operation.allfitOperation).sort()).toEqual([
       'OP-PLN-001',
       'OP-PLN-002',
@@ -287,6 +289,11 @@ describe('the Space planning surface honours the contract', () => {
       'OP-PLN-026',
       // Throwing a routine away, as a state and never as a deletion.
       'OP-PLN-028',
+      // And the same for a programme, so one somebody abandons is not orphaned.
+      'OP-PLN-029',
+      // Finding that programme again, which no other query could: every one of them
+      // starts from an assignment, and an unpublished programme has none.
+      'OP-PLN-030',
     ])
   })
 })
@@ -828,6 +835,74 @@ describe('POST /space/v1/session-templates/{templateId}/discard', () => {
       method: 'POST',
       headers: { 'idempotency-key': IDEMPOTENCY_KEY, 'command-id': COMMAND_ID },
     })
+
+    expect(response.status).toBe(401)
+  })
+})
+
+describe('POST /space/v1/programs/{programId}/discard', () => {
+  test('T-PLN-API-120 answers the archived programme', async () => {
+    const response = await harness().request(`/space/v1/programs/${PROGRAM_ID}/discard`, {
+      method: 'POST',
+      headers: commanded,
+    })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual(program)
+  })
+
+  test('T-PLN-API-121 refuses a discard with no command headers', async () => {
+    // The twin of the routine's. Without them a retry after a timeout would be a
+    // second, unrelated discard.
+    const response = await harness().request(`/space/v1/programs/${PROGRAM_ID}/discard`, {
+      method: 'POST',
+      headers: authorized,
+    })
+
+    expect(response.status).toBe(400)
+  })
+
+  test('T-PLN-API-122 refuses an identifier that is not a UUIDv7', async () => {
+    const response = await harness().request('/space/v1/programs/not-a-uuid/discard', {
+      method: 'POST',
+      headers: commanded,
+    })
+
+    expect(response.status).toBe(400)
+  })
+
+  test('T-PLN-API-123 requires a bearer token', async () => {
+    const response = await harness().request(`/space/v1/programs/${PROGRAM_ID}/discard`, {
+      method: 'POST',
+      headers: { 'idempotency-key': IDEMPOTENCY_KEY, 'command-id': COMMAND_ID },
+    })
+
+    expect(response.status).toBe(401)
+  })
+})
+
+describe('GET /space/v1/programs/unpublished', () => {
+  test('T-PLN-API-124 answers the programme somebody left unpublished', async () => {
+    const response = await harness().request('/space/v1/programs/unpublished', {
+      headers: authorized,
+    })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual(program)
+  })
+
+  test('T-PLN-API-125 is read as a word and not as an identifier', async () => {
+    // Registered after `/programs/:programId`, this path would be taken for a
+    // programme called «unpublished» and answered with a 400 for a bad UUID.
+    const response = await harness().request('/space/v1/programs/unpublished', {
+      headers: authorized,
+    })
+
+    expect(response.status).not.toBe(400)
+  })
+
+  test('T-PLN-API-126 requires a bearer token', async () => {
+    const response = await harness().request('/space/v1/programs/unpublished')
 
     expect(response.status).toBe(401)
   })

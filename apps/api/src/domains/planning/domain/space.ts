@@ -107,6 +107,12 @@ export interface SpacePlanningDatabase {
   discardMySessionTemplate(
     input: OwnContentCommand & { personId: string; templateId: string },
   ): Promise<SessionTemplate>
+  /** The programme somebody started and never published, or null. */
+  readMyUnpublishedProgram(input: { personId: string; requestId: string }): Promise<Program | null>
+  /** Archived rather than deleted; refused when a version was ever published. */
+  discardMyProgram(
+    input: OwnContentCommand & { personId: string; programId: string },
+  ): Promise<Program>
   /** Null when the programme is somebody else's, or was taken rather than written. */
   readMyProgramDraft(input: {
     personId: string

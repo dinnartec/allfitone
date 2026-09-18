@@ -3715,6 +3715,72 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  /space/v1/programs/unpublished:
+    get:
+      tags: [Space Planning]
+      operationId: readMyUnpublishedProgram
+      x-allfit-operation: OP-PLN-030
+      x-allfit-cache: no-store
+      summary: The programme I started and never published
+      description: >-
+        **Without this a programme draft cannot be resumed at all.** `OP-PLN-022` lists the programmes a person follows and it starts from assignments, so one that was never published has no version and no assignment and appears in no query — it exists, it counts, and nobody can get back to it. The same hole `OP-PLN-023` closed for routines, except that a routine at least appeared in the person's own list and a programme appears nowhere. Answers the most recently touched one, or nothing.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: The programme and its draft, or null when there is none
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/Program'
+                  - type: 'null'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /space/v1/programs/{programId}/discard:
+    post:
+      tags: [Space Planning]
+      operationId: discardMyProgram
+      x-allfit-operation: OP-PLN-029
+      x-allfit-cache: no-store
+      summary: Discard a programme I never published
+      description: >-
+        The twin of `OP-PLN-028` and for the same reasons. Leaving a named programme asks whether to keep it as a draft or throw it away, and this is the throwing away. **It is a state, not a deletion:** `allfit_api` has no `DELETE` on this resource. A programme with a published version is refused, because assignments reference that version and sessions have been materialised against it. Without this, a programme somebody starts and abandons is orphaned — it exists, it counts, and nobody can reach it.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ProgramId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      responses:
+        '200':
+          description: The programme, now archived and without its draft
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Program'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
   /space/v1/programs/{programId}/versions:
     post:
       tags: [Space Planning]

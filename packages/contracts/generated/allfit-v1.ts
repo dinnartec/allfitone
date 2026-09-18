@@ -1496,6 +1496,46 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/space/v1/programs/unpublished': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * The programme I started and never published
+     * @description **Without this a programme draft cannot be resumed at all.** `OP-PLN-022` lists the programmes a person follows and it starts from assignments, so one that was never published has no version and no assignment and appears in no query — it exists, it counts, and nobody can get back to it. The same hole `OP-PLN-023` closed for routines, except that a routine at least appeared in the person's own list and a programme appears nowhere. Answers the most recently touched one, or nothing.
+     */
+    get: operations['readMyUnpublishedProgram']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/programs/{programId}/discard': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Discard a programme I never published
+     * @description The twin of `OP-PLN-028` and for the same reasons. Leaving a named programme asks whether to keep it as a draft or throw it away, and this is the throwing away. **It is a state, not a deletion:** `allfit_api` has no `DELETE` on this resource. A programme with a published version is refused, because assignments reference that version and sessions have been materialised against it. Without this, a programme somebody starts and abandons is orphaned — it exists, it counts, and nobody can reach it.
+     */
+    post: operations['discardMyProgram']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/space/v1/programs/{programId}/versions': {
     parameters: {
       query?: never
@@ -7416,6 +7456,63 @@ export interface operations {
         }
       }
       400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      422: components['responses']['ValidationFailed']
+    }
+  }
+  readMyUnpublishedProgram: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The programme and its draft, or null when there is none */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Program'] | null
+        }
+      }
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+    }
+  }
+  discardMyProgram: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        programId: components['parameters']['ProgramId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The programme, now archived and without its draft */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Program']
+        }
+      }
       401: components['responses']['Unauthenticated']
       403: components['responses']['Forbidden']
       404: components['responses']['NotFound']

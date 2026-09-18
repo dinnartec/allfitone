@@ -328,6 +328,13 @@ export const allfitV1ContractManifest = {
       responses: ['201', '400', '401', '403', '404', '409', '422'],
     },
     {
+      method: 'POST',
+      path: '/space/v1/programs/{programId}/discard',
+      operationId: 'discardMyProgram',
+      allfitOperation: 'OP-PLN-029',
+      responses: ['200', '401', '403', '404', '409', '422'],
+    },
+    {
       method: 'GET',
       path: '/space/v1/programs/{programId}/draft',
       operationId: 'readMyProgramDraft',
@@ -368,6 +375,13 @@ export const allfitV1ContractManifest = {
       operationId: 'reorderMyPrograms',
       allfitOperation: 'OP-PLN-024',
       responses: ['200', '400', '401', '403'],
+    },
+    {
+      method: 'GET',
+      path: '/space/v1/programs/unpublished',
+      operationId: 'readMyUnpublishedProgram',
+      allfitOperation: 'OP-PLN-030',
+      responses: ['200', '401', '403'],
     },
     {
       method: 'POST',

@@ -39,6 +39,8 @@ export interface SpacePlanningService {
   publishMySessionTemplate: SpacePlanningDatabase['publishMySessionTemplate']
   readMySessionTemplateDraft: SpacePlanningDatabase['readMySessionTemplateDraft']
   discardMySessionTemplate: SpacePlanningDatabase['discardMySessionTemplate']
+  discardMyProgram: SpacePlanningDatabase['discardMyProgram']
+  readMyUnpublishedProgram: SpacePlanningDatabase['readMyUnpublishedProgram']
   createMyProgram: SpacePlanningDatabase['createMyProgram']
   replaceMyProgramDraft: SpacePlanningDatabase['replaceMyProgramDraft']
   publishMyProgram: SpacePlanningDatabase['publishMyProgram']
@@ -117,6 +119,8 @@ export function createSpacePlanningService(database: SpacePlanningDatabase): Spa
     readMyPrograms: (input) => database.readMyPrograms(input),
     readMySessionTemplateDraft: (input) => database.readMySessionTemplateDraft(input),
     discardMySessionTemplate: (input) => database.discardMySessionTemplate(input),
+    discardMyProgram: (input) => database.discardMyProgram(input),
+    readMyUnpublishedProgram: (input) => database.readMyUnpublishedProgram(input),
     readMyProgramDraft: (input) => database.readMyProgramDraft(input),
 
     /**

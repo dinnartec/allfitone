@@ -298,6 +298,43 @@ export function spacePlanningRoutes(
     }
   })
 
+  // Before the parameterised routes: `unpublished` is a word, not an identifier, and
+  // registered after them it would be read as a programme called that.
+  routes.get('/programs/unpublished', async (c) => {
+    c.header('Cache-Control', 'no-store')
+    const token = await verified(c, verify)
+    if (!token) return fail(c, 'unauthenticated')
+
+    try {
+      const personId = await actors().personFor(token.subject)
+      const program = await planning().readMyUnpublishedProgram({
+        personId,
+        requestId: c.req.header('x-request-id') ?? '',
+      })
+      return c.json(program, 200)
+    } catch (cause) {
+      return failure(c, cause)
+    }
+  })
+
+  routes.post('/programs/:programId/discard', async (c) => {
+    c.header('Cache-Control', 'no-store')
+    const token = await verified(c, verify)
+    if (!token) return fail(c, 'unauthenticated')
+
+    const programId = c.req.param('programId')
+    const command = commandContext(c, undefined)
+    if (!UUID_V7.test(programId) || !command) return fail(c, 'invalid-request')
+
+    try {
+      const personId = await actors().personFor(token.subject)
+      const program = await planning().discardMyProgram({ personId, programId, ...command })
+      return c.json(program, 200)
+    } catch (cause) {
+      return failure(c, cause)
+    }
+  })
+
   routes.post('/programs/:programId/versions', async (c) => {
     c.header('Cache-Control', 'no-store')
     const token = await verified(c, verify)
