@@ -39,30 +39,8 @@ export type RegistrationAccepted = AllfitV1Schemas['SpaceRegistrationAccepted']
 export type SessionTokens = AllfitV1Schemas['SpaceSessionTokens']
 export type SessionRefreshed = AllfitV1Schemas['SpaceSessionRefreshed']
 
-export type ApiFailure =
-  /** The request was malformed. Only reachable if client validation drifts. */
-  | 'invalid-request'
-  /** Wrong code, wrong password, unknown address — one answer, by design. */
-  | 'unauthenticated'
-  /** Too short for the provider's floor, or known to be breached. */
-  | 'weak-password'
-  /** Something else already holds what was asked for. Only a username, today. */
-  | 'conflict'
-  /**
-   * Not there, or not yours. The API answers both the same way on purpose: a
-   * distinguishable "forbidden" would make somebody else's catalogue enumerable one
-   * identifier at a time.
-   */
-  | 'not-found'
-  /** The API or the provider did not answer. Retryable; nothing else is. */
-  | 'unavailable'
-
-export class ApiError extends Error {
-  constructor(readonly failure: ApiFailure) {
-    super(failure)
-    this.name = 'ApiError'
-  }
-}
+export { ApiError, type ApiFailure } from './api-error'
+import { ApiError, type ApiFailure } from './api-error'
 
 /** The port the API listens on. Only the host varies between simulator and device. */
 const API_PORT = 8080
