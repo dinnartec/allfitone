@@ -3,14 +3,9 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { StudioApiError, invitationDecisionFlowStep, newCommand, studioApi } from './studio-api.js'
 
 const originalFetch = globalThis.fetch
-const originalSessionStorage = globalThis.sessionStorage
 
 afterEach(() => {
   globalThis.fetch = originalFetch
-  Object.defineProperty(globalThis, 'sessionStorage', {
-    configurable: true,
-    value: originalSessionStorage,
-  })
 })
 
 test('uses UUIDv4 for HTTP idempotency and UUIDv7 for durable command identity', () => {
@@ -44,10 +39,6 @@ test('loads the combined Studio entry context in one credentialed request', asyn
 
 describe('professional profile API', () => {
   test('forwards caller cancellation through every cache-managed account read', async () => {
-    Object.defineProperty(globalThis, 'sessionStorage', {
-      configurable: true,
-      value: memoryStorage(),
-    })
     const requests: RequestInit[] = []
     globalThis.fetch = (async (input, init) => {
       requests.push(init ?? {})
@@ -188,33 +179,29 @@ describe('professional profile API', () => {
     )
   })
 
-  test('revalidates cached catalogs with ETag and reuses the payload on 304', async () => {
-    Object.defineProperty(globalThis, 'sessionStorage', {
-      configurable: true,
-      value: memoryStorage(),
-    })
+  // Studio used to cache each catalogue's ETag and send it back, and the 304 that
+  // came back reached the browser without CORS headers and was blocked. The API
+  // no longer revalidates these; this keeps the client from asking it to.
+  test('reads catalogs without a revalidation tag, even on a repeat read', async () => {
     const requests: RequestInit[] = []
     globalThis.fetch = (async (_input, init) => {
       requests.push(init ?? {})
-      if (requests.length === 1) {
-        return Response.json(
-          {
-            items: [
-              { code: 'personal_training', name: 'Entrenamiento personal', description: null },
-            ],
-          },
-          { headers: { ETag: '"specialties-v1"' } },
-        )
-      }
-      return new Response(null, { status: 304 })
+      return Response.json(
+        {
+          items: [{ code: 'personal_training', name: 'Entrenamiento personal', description: null }],
+        },
+        { headers: { ETag: '"a-server-that-still-sends-one"' } },
+      )
     }) as typeof fetch
 
     const first = await studioApi.professionalSpecialties()
     const second = await studioApi.professionalSpecialties()
 
     expect(second).toEqual(first)
-    expect(new Headers(requests[0]?.headers).has('If-None-Match')).toBe(false)
-    expect(new Headers(requests[1]?.headers).get('If-None-Match')).toBe('"specialties-v1"')
+    expect(requests).toHaveLength(2)
+    for (const init of requests) {
+      expect(new Headers(init.headers).has('If-None-Match')).toBe(false)
+    }
   })
 
   test('preserves stable error codes and details', async () => {
@@ -272,19 +259,12 @@ describe('organization team API', () => {
     expect(capturedInit?.signal).toBe(controller.signal)
   })
 
-  test('revalidates the global role catalog per organization and never serves it after 403', async () => {
-    Object.defineProperty(globalThis, 'sessionStorage', {
-      configurable: true,
-      value: memoryStorage(),
-    })
+  test('reads the role catalog per organization and never serves it after 403', async () => {
     const requests: Array<{ url: string; init: RequestInit }> = []
     globalThis.fetch = (async (input, init) => {
       const request = { url: String(input), init: init ?? {} }
       requests.push(request)
-      if (requests.length === 1) {
-        return Response.json(roleCatalogResponse(), { headers: { ETag: '"roles-v1"' } })
-      }
-      if (requests.length === 2) return new Response(null, { status: 304 })
+      if (requests.length <= 2) return Response.json(roleCatalogResponse())
       return Response.json({ error: { code: 'forbidden' } }, { status: 403 })
     }) as typeof fetch
 
@@ -300,27 +280,14 @@ describe('organization team API', () => {
       '/studio/v1/organizations/organization-two/roles',
       '/studio/v1/organizations/organization-three/roles',
     ])
-    expect(new Headers(requests[0]?.init.headers).has('If-None-Match')).toBe(false)
-    expect(new Headers(requests[1]?.init.headers).get('If-None-Match')).toBe('"roles-v1"')
-    expect(new Headers(requests[2]?.init.headers).get('If-None-Match')).toBe('"roles-v1"')
+    // No revalidation tag: a 304 here reached Studio without CORS headers.
+    for (const { init } of requests) {
+      expect(new Headers(init.headers).has('If-None-Match')).toBe(false)
+    }
     expect(forbidden).toBeInstanceOf(StudioApiError)
     expect((forbidden as StudioApiError).status).toBe(403)
   })
 })
-
-function memoryStorage(): Storage {
-  const values = new Map<string, string>()
-  return {
-    get length() {
-      return values.size
-    },
-    clear: () => values.clear(),
-    getItem: (key) => values.get(key) ?? null,
-    key: (index) => Array.from(values.keys())[index] ?? null,
-    removeItem: (key) => values.delete(key),
-    setItem: (key, value) => values.set(key, value),
-  }
-}
 
 function credentialResponse() {
   return {
