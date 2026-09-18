@@ -10,7 +10,7 @@
 -- it, which is exactly the state this migration exists to leave behind.
 begin;
 
-select plan(18);
+select plan(20);
 
 insert into identity.people (id, given_name, family_name)
 values
@@ -33,14 +33,21 @@ values
 insert into planning.programs (id, content_scope, status)
 values ('019e6000-0000-7000-8000-000000000301', 'global', 'published');
 
+-- One of the two routines has a cover. Taking the programme copies its versions, and a
+-- copy that dropped the cover would quietly change how Allfit's routine looks the
+-- moment it became somebody's own.
+
 select set_config('app.planning_publication', 'true', true);
 insert into planning.session_template_versions (
-  id, template_id, version_number, discipline_code, activity_type_id, title, content_hash
+  id, template_id, version_number, discipline_code, activity_type_id, title,
+  cover_kind, cover_icon, content_hash
 ) values
   ('019e6000-0000-7000-8000-000000000211', '019e6000-0000-7000-8000-000000000201', 1,
-   'test_strength', '019c0000-0000-7000-8000-000000000011', 'Empuje', decode(repeat('61', 32), 'hex')),
+   'test_strength', '019c0000-0000-7000-8000-000000000011', 'Empuje',
+   'icon', 'strength', decode(repeat('61', 32), 'hex')),
   ('019e6000-0000-7000-8000-000000000212', '019e6000-0000-7000-8000-000000000202', 1,
-   'test_strength', '019c0000-0000-7000-8000-000000000011', 'Tirón', decode(repeat('62', 32), 'hex'));
+   'test_strength', '019c0000-0000-7000-8000-000000000011', 'Tirón',
+   null, null, decode(repeat('62', 32), 'hex'));
 
 insert into planning.planned_steps (id, template_version_id, position)
 values
@@ -104,6 +111,19 @@ select is(
   (select count(*)::integer from planning.session_templates
     where owner_person_id = '019e6000-0000-7000-8000-000000000001'),
   'T-PLN-FORK-03 one copied template per distinct template the program composes');
+
+-- La copia es una plantilla nueva con identidad propia, así que las métricas de la
+-- persona cuentan su copia. La procedencia es lo único que permite agregar cuánta gente
+-- entrena algo derivado de un programa de Allfit: sin ella son plantillas sueltas que
+-- se parecen. `ADR-009`, invariante 7.
+select is(
+  (select array_agg(distinct copy.derived_from_version_id::text
+                    order by copy.derived_from_version_id::text)
+   from planning.session_template_versions as copy
+   join planning.session_templates as owner on owner.id = copy.template_id
+   where owner.owner_person_id = '019e6000-0000-7000-8000-000000000001'),
+  array['019e6000-0000-7000-8000-000000000211', '019e6000-0000-7000-8000-000000000212'],
+  'T-PLN-FORK-3b and each copy says which version of Allfit it came from');
 
 select is(
   (select count(*)::integer from planning.planned_steps as step
@@ -202,6 +222,20 @@ select is(
   (select assignment_id from planning.read_my_programs('019e6000-0000-7000-8000-000000000001') limit 1),
   :'second_assignment'::uuid,
   'T-PLN-FORK-11 the programme just taken is the one the tab opens on');
+
+-- `IX-48` · the fork is a copy, and a copy keeps what the person will see. Four rows
+-- and not two because this programme was taken twice, and each take forks again.
+select is(
+  (select jsonb_agg(copied.cover order by copied.cover->>'title')
+   from (
+     select distinct jsonb_build_object('title', mine.title, 'kind', mine.cover_kind,
+                                        'icon', mine.cover_icon) as cover
+     from planning.session_template_versions as mine
+     join planning.session_templates as owned on owned.id = mine.template_id
+     where owned.owner_person_id = '019e6000-0000-7000-8000-000000000001'
+   ) as copied),
+  '[{"kind": "icon", "icon": "strength", "title": "Empuje"}, {"kind": null, "icon": null, "title": "Tirón"}]'::jsonb,
+  'T-PLN-FORK-14 taking a programme copies each routine cover, and the absence of one');
 
 select is(
   planning.reorder_my_programs(
