@@ -189,7 +189,7 @@ export function TeamMembershipList() {
           {tableState ? (
             <Empty>
               <EmptyTitle>{tableState.title}</EmptyTitle>
-              <EmptyDescription data-flush-text>{tableState.description}</EmptyDescription>
+              <EmptyDescription>{tableState.description}</EmptyDescription>
               {'action' in tableState && tableState.action ? (
                 <EmptyContent>{tableState.action}</EmptyContent>
               ) : null}

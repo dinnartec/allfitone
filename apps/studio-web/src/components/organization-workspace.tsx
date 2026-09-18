@@ -236,7 +236,7 @@ export function OrganizationWorkspace() {
                     <FoundationIcon name="people" decorative />
                   </EmptyMedia>
                   <EmptyTitle>Trabajas en solitario por ahora</EmptyTitle>
-                  <EmptyDescription data-flush-text>
+                  <EmptyDescription>
                     Cuando alguien acepte una invitación aparecerá aquí.
                   </EmptyDescription>
                 </EmptyHeader>
