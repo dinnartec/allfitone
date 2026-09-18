@@ -24,7 +24,8 @@ import { Screen } from '@allfitone/react-native/screen'
 import { Sheet } from '@allfitone/react-native/sheet'
 import { Text } from '@allfitone/react-native/text'
 import { TextField } from '@allfitone/react-native/text-field'
-import { Monogram } from '@allfitone/react-native/monogram'
+import { CoverTile } from '@allfitone/react-native/cover-tile'
+import { Monogram, markOf } from '@allfitone/react-native/monogram'
 import { useTheme } from '@allfitone/react-native/theme'
 import { useFocusEffect, useRouter } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -40,12 +41,16 @@ import {
   collapseBaseWeek,
   expandBaseWeek,
   programLoad,
+  revisedWeek,
   summarizeBaseWeek,
   weeksLabel,
   type BaseWeekDay,
   type MyRoutine,
 } from '../client/content'
 import { ScreenHeader } from './screen-header'
+import { coverArt } from './routine-cover-art'
+import { readExerciseLibrary, type ExerciseLibrary } from '../client/exercise-library'
+import { readSession } from '../client/session'
 
 /** Monday first, because the week the plan lands on is the calendar week. */
 const DAYS = [
@@ -65,6 +70,9 @@ const DEFAULT_WEEKS = 8
 const MIN_WEEKS = 1
 const MAX_WEEKS = 52
 const SAVE_DELAY_MS = 700
+
+/** `CoverTile`'s own `sm`. The art draws inside it, so it has to be told. */
+const COVER_SM = 56
 
 const EXPIRED = 'Tu sesión venció. Vuelve a entrar para continuar.'
 const READ_FAILED = 'No pudimos cargar tus rutinas. Inténtalo otra vez.'
@@ -107,6 +115,12 @@ export function ProgramEditor({ programId }: { readonly programId?: string }) {
     DAYS.map((day) => ({ day: day.day, templateVersionId: null })),
   )
   const [routines, setRoutines] = useState<readonly MyRoutine[] | undefined>(undefined)
+  // Only the cover art needs it, and only to turn a muscle code into a part of the
+  // figure and an equipment id into its picture.
+  const [library, setLibrary] = useState<ExerciseLibrary | undefined>(undefined)
+  // A photograph cover is fetched by `expo-image`, so the rows have to hand it the
+  // bearer header: the bytes come through the API and there is no public url.
+  const [token, setToken] = useState<string | undefined>(undefined)
   const [choosing, setChoosing] = useState<number | undefined>(undefined)
   const [discarding, setDiscarding] = useState(false)
   const [leaving, setLeaving] = useState(false)
@@ -268,6 +282,15 @@ export function ProgramEditor({ programId }: { readonly programId?: string }) {
   // The day somebody left this screen to write a routine for. Held in a ref because
   // nothing renders from it.
   const awaiting = useRef<number | undefined>(undefined)
+  /**
+   * The routine somebody left to go and edit, and the version it held while it sat here.
+   *
+   * The week points at **versions**, and republishing mints a new one — so a routine
+   * already on a Monday came back as a version this week had never heard of, matched
+   * nothing, and vanished from the day and from the list. Remembering which version was
+   * being replaced is what lets it keep its place.
+   */
+  const revising = useRef<{ templateId: string; versionId: string } | undefined>(undefined)
 
   /**
    * Puts a newly written routine on the day it was written for.
@@ -283,8 +306,26 @@ export function ProgramEditor({ programId }: { readonly programId?: string }) {
   const fill = useCallback(() => {
     const day = awaiting.current
     awaiting.current = undefined
+    const revised = revising.current
+    revising.current = undefined
     const written = takePublishedRoutine()
-    if (day === undefined || !written) return
+    if (!written) return
+
+    // A routine that was already in the week and has just been republished keeps every
+    // day it was on. Publishing the same content answers the version that exists, so
+    // nothing moves when nothing changed.
+    if (revised && revised.templateId === written.templateId) {
+      if (revised.versionId === written.versionId) return
+      setWeek((current) => {
+        const next = revisedWeek(current, revised.versionId, written.versionId)
+        setSaved(false)
+        schedule(titled.current, next, repeated.current)
+        return next
+      })
+      return
+    }
+
+    if (day === undefined) return
 
     setWeek((current) => {
       // Not over something already there: the trip took time, and a day filled in the
@@ -318,11 +359,16 @@ export function ProgramEditor({ programId }: { readonly programId?: string }) {
     useCallback(() => {
       let active = true
 
-      flow
-        .readMyRoutines()
-        .then((found) => {
+      // The library comes along because the covers are drawn from it and it is a
+      // process-lifetime cache: the editor of the routine has already paid for it.
+      Promise.all([flow.readMyRoutines(), readExerciseLibrary(flow)])
+        .then(([found, read]) => {
           if (!active) return
           setRoutines(found)
+          setLibrary(read)
+          void readSession().then((stored) => {
+            if (active) setToken(stored?.accessToken)
+          })
           fill()
         })
         .catch((cause: unknown) => {
@@ -623,7 +669,15 @@ export function ProgramEditor({ programId }: { readonly programId?: string }) {
                 accessibilityRole="button"
                 accessibilityLabel={`Abrir ${routine.title}`}
                 accessibilityHint={daysOf(routine.template_version_id ?? '')}
-                onPress={() => router.push(`/routines/${routine.template_id}`)}
+                onPress={() => {
+                  // Said before leaving, because on the way back the version it held is
+                  // no longer anywhere: the new one has replaced it in the list.
+                  revising.current = {
+                    templateId: routine.template_id,
+                    versionId: routine.template_version_id ?? '',
+                  }
+                  router.push(`/routines/${routine.template_id}`)
+                }}
                 style={({ pressed }) => [
                   styles.included,
                   {
@@ -633,7 +687,7 @@ export function ProgramEditor({ programId }: { readonly programId?: string }) {
                   },
                 ]}
               >
-                <Monogram name={routine.title} />
+                <RoutineMark routine={routine} library={library} token={token} />
                 <View style={styles.rowText}>
                   <Text role="control" size="sm" numberOfLines={1}>
                     {routine.title}
@@ -888,6 +942,42 @@ export function ProgramEditor({ programId }: { readonly programId?: string }) {
         )}
       </Sheet>
     </Screen>
+  )
+}
+
+/**
+ * What a card shows before its name: the cover, or the letter that stood in for one.
+ *
+ * Always the same square, whichever it is. A circle for some rows and a picture for
+ * others would make the list change height depending on what each routine happens to
+ * have chosen, which is the shape `CoverTile` exists to hold still.
+ */
+function RoutineMark({
+  routine,
+  library,
+  token,
+}: {
+  readonly routine: MyRoutine
+  readonly library: ExerciseLibrary | undefined
+  readonly token: string | undefined
+}) {
+  return (
+    <CoverTile
+      size="sm"
+      hint={
+        <Text role="control" size="sm" color="accent">
+          {markOf(routine.title)}
+        </Text>
+      }
+    >
+      {coverArt({
+        cover: routine.cover ?? undefined,
+        worked: routine.muscles,
+        muscles: library?.muscles ?? [],
+        side: COVER_SM,
+        token: token,
+      })}
+    </CoverTile>
   )
 }
 

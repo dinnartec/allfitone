@@ -13,8 +13,14 @@ export type ApiFailure =
   | 'invalid-request'
   /** Wrong code, wrong password, unknown address — one answer, by design. */
   | 'unauthenticated'
-  /** Too short for the provider's floor, or known to be breached. */
-  | 'weak-password'
+  /**
+   * The request was well formed and the server would not take it.
+   *
+   * Deliberately **not** named after one of its cases. A `422` is a password the
+   * provider refused, an image that will not decode, or anything else a route declares
+   * as unusable; the screen that sent it knows which of those it asked for and says so.
+   */
+  | 'validation-failed'
   /** Something else already holds what was asked for. Only a username, today. */
   | 'conflict'
   /**

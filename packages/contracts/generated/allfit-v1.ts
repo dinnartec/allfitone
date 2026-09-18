@@ -1452,6 +1452,46 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/space/v1/session-templates/{templateId}/cover-photo': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Upload a photograph for my routine's cover
+     * @description `ADR-031` keeps personal binaries in PostgreSQL rather than in a bucket, because the deletion of personal data has to propagate to the store and with the bytes inside the transaction the delete **is** that confirmation. The server never stores what it received: it decodes the image and re-encodes it to WebP within its own size limits, which removes EXIF and geolocation by construction, and **fails closed** — an image that will not decode, or that exceeds the pixel limit, is refused with nothing written. Uploading does not change the cover; saving a draft that names the returned id does.
+     */
+    post: operations['uploadMyRoutineCoverPhoto']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/routine-covers/{photoId}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * The bytes of a routine cover photograph
+     * @description The *authenticated api proxy* mode of `x-allfit-media-url-policy`: authorization is re-evaluated on every request, the bytes are never redirected to a store and no response carries a storage reference. A photograph belonging to somebody else answers `404` and not `403`, so asking cannot reveal that it exists.
+     */
+    get: operations['readMyRoutineCoverPhoto']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/space/v1/session-templates/{templateId}/versions': {
     parameters: {
       query?: never
@@ -2498,6 +2538,9 @@ export interface components {
       status: string
       /** @description The published version a programme can point at. Null means the routine is still only a draft. */
       template_version_id: components['schemas']['UuidV7'] | null
+      cover: components['schemas']['RoutineCover'] | null
+      /** @description Catalogue muscle codes the routine works, the ones it trains first. They are what a muscle cover is drawn from, and a list cannot compute them: only the reader knows which movements the routine holds. */
+      muscles: string[]
       exercise_count: number
       set_count: number
       has_unpublished_changes: boolean
@@ -3092,6 +3135,90 @@ export interface components {
       discipline_code: string
       title: string
     }
+    /**
+     * @description How a routine shows itself in a list. One variant per kind, so a muscle cover cannot also carry an icon. The database refuses that too; refusing it in the contract means it cannot be expressed.
+     *     Absent or null is a routine with no cover, which is not an incomplete routine: it is recognised by its name, the way it always was.
+     */
+    RoutineCover:
+      | components['schemas']['RoutineCoverMuscles']
+      | components['schemas']['RoutineCoverIcon']
+      | components['schemas']['RoutineCoverPhoto']
+    /** @description Drawn from the exercises the routine already has, so it stores nothing else. Copying the muscles here would be a second truth that ages the moment somebody edits the routine. */
+    RoutineCoverMuscles: {
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      kind: 'muscles'
+    }
+    /** @description A choice nothing else can reconstruct, so it is stored. The vocabulary lives in the database rather than in the catalogue: nobody searches or filters by it, they declare it. */
+    RoutineCoverIcon: {
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      kind: 'icon'
+      /**
+       * @description What the routine is about, not what it is done with. Closed, and appended to rather than reordered: an identifier is never reused, so a routine saved with one keeps drawing the same thing. Which order the grid uses is the app's.
+       * @enum {string}
+       */
+      icon:
+        | 'strength'
+        | 'run'
+        | 'cycling'
+        | 'interval'
+        | 'cardio'
+        | 'burn'
+        | 'power'
+        | 'challenge'
+        | 'mountain'
+        | 'time'
+        | 'mobility'
+        | 'swim'
+        | 'arms'
+        | 'weights'
+        | 'technique'
+        | 'endurance'
+        | 'pace'
+        | 'energy'
+        | 'focus'
+        | 'recovery'
+        | 'morning'
+        | 'evening'
+        | 'night'
+        | 'cold'
+        | 'outdoor'
+        | 'route'
+        | 'pool'
+        | 'team'
+        | 'record'
+        | 'favourite'
+        | 'light'
+        | 'countdown'
+    }
+    /** @description A photograph the person uploaded against this routine. The bytes belong to the routine they were uploaded for, which is a composite foreign key and not a convention: naming somebody else's photograph is refused where the person can see it, and could not reach a published version anyway. */
+    RoutineCoverPhoto: {
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      kind: 'photo'
+      /** @description What `GET /space/v1/routine-covers/{photoId}` serves. It is the photograph's own identifier and never a storage reference: `ADR-031` keeps the bytes in the database and serves them through the API, so no response ever carries a path into an object store. */
+      photo_id: components['schemas']['Uuid']
+    }
+    RoutineCoverPhotoUpload: {
+      /**
+       * @description What is being sent. What gets stored is always `image/webp`.
+       * @enum {string}
+       */
+      content_type: 'image/jpeg' | 'image/png' | 'image/webp'
+      /** @description The image, base64 encoded, as `NutritionPhotoUpload` already specifies for the meal photograph. The server decodes it, re-encodes it and stores only the result: re-encoding removes EXIF and geolocation by construction rather than trying to trim them out, and an image that will not decode is refused with nothing written. */
+      content: string
+    }
+    /** @description Uploading is not choosing. The photograph exists from here, but the cover does not change until a draft names this id and is saved — so an upload that fails halfway never leaves a routine pointing at something that is not there. */
+    RoutineCoverPhotoStored: {
+      id: components['schemas']['Uuid']
+    }
     SessionTemplateDraftContent: {
       title: string
       /**
@@ -3099,6 +3226,7 @@ export interface components {
        * @description Null is allowed only while the draft is incomplete.
        */
       activity_type_id: string | null
+      cover?: components['schemas']['RoutineCover'] | null
       steps: components['schemas']['PlannedStepContent'][]
     }
     PlannedStepContent: {
@@ -3216,6 +3344,7 @@ export interface components {
       /** Format: uuid */
       derived_from_version_id?: string | null
       title: string
+      cover?: components['schemas']['RoutineCover'] | null
       /** @enum {string} */
       status: 'published' | 'deprecated'
       /** Format: date-time */
@@ -7354,6 +7483,69 @@ export interface operations {
       404: components['responses']['NotFound']
       409: components['responses']['Conflict']
       422: components['responses']['ValidationFailed']
+    }
+  }
+  uploadMyRoutineCoverPhoto: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        templateId: components['parameters']['TemplateId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['RoutineCoverPhotoUpload']
+      }
+    }
+    responses: {
+      /** @description The photograph, sanitised and stored */
+      201: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['RoutineCoverPhotoStored']
+        }
+      }
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      422: components['responses']['ValidationFailed']
+    }
+  }
+  readMyRoutineCoverPhoto: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        photoId: components['schemas']['Uuid']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The image */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'image/webp': string
+        }
+      }
+      401: components['responses']['Unauthenticated']
+      404: components['responses']['NotFound']
     }
   }
   publishMySessionTemplate: {

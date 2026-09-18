@@ -3488,6 +3488,143 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  RoutineCover: {
+    oneOf: [
+      {
+        $ref: '#/components/schemas/RoutineCoverMuscles',
+      },
+      {
+        $ref: '#/components/schemas/RoutineCoverIcon',
+      },
+      {
+        $ref: '#/components/schemas/RoutineCoverPhoto',
+      },
+    ],
+    discriminator: {
+      propertyName: 'kind',
+      mapping: {
+        muscles: '#/components/schemas/RoutineCoverMuscles',
+        icon: '#/components/schemas/RoutineCoverIcon',
+        photo: '#/components/schemas/RoutineCoverPhoto',
+      },
+    },
+    description:
+      'How a routine shows itself in a list. One variant per kind, so a muscle cover cannot also carry an icon. The database refuses that too; refusing it in the contract means it cannot be expressed.\nAbsent or null is a routine with no cover, which is not an incomplete routine: it is recognised by its name, the way it always was.',
+  },
+  RoutineCoverIcon: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['kind', 'icon'],
+    properties: {
+      kind: {
+        type: 'string',
+        enum: ['icon'],
+      },
+      icon: {
+        type: 'string',
+        enum: [
+          'strength',
+          'run',
+          'cycling',
+          'interval',
+          'cardio',
+          'burn',
+          'power',
+          'challenge',
+          'mountain',
+          'time',
+          'mobility',
+          'swim',
+          'arms',
+          'weights',
+          'technique',
+          'endurance',
+          'pace',
+          'energy',
+          'focus',
+          'recovery',
+          'morning',
+          'evening',
+          'night',
+          'cold',
+          'outdoor',
+          'route',
+          'pool',
+          'team',
+          'record',
+          'favourite',
+          'light',
+          'countdown',
+        ],
+        description:
+          "What the routine is about, not what it is done with. Closed, and appended to rather than reordered: an identifier is never reused, so a routine saved with one keeps drawing the same thing. Which order the grid uses is the app's.",
+      },
+    },
+    description:
+      'A choice nothing else can reconstruct, so it is stored. The vocabulary lives in the database rather than in the catalogue: nobody searches or filters by it, they declare it.',
+  },
+  RoutineCoverMuscles: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['kind'],
+    properties: {
+      kind: {
+        type: 'string',
+        enum: ['muscles'],
+      },
+    },
+    description:
+      'Drawn from the exercises the routine already has, so it stores nothing else. Copying the muscles here would be a second truth that ages the moment somebody edits the routine.',
+  },
+  RoutineCoverPhoto: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['kind', 'photo_id'],
+    properties: {
+      kind: {
+        type: 'string',
+        enum: ['photo'],
+      },
+      photo_id: {
+        $ref: '#/components/schemas/Uuid',
+        description:
+          "What `GET /space/v1/routine-covers/{photoId}` serves. It is the photograph's own identifier and never a storage reference: `ADR-031` keeps the bytes in the database and serves them through the API, so no response ever carries a path into an object store.",
+      },
+    },
+    description:
+      "A photograph the person uploaded against this routine. The bytes belong to the routine they were uploaded for, which is a composite foreign key and not a convention: naming somebody else's photograph is refused where the person can see it, and could not reach a published version anyway.",
+  },
+  RoutineCoverPhotoStored: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['id'],
+    properties: {
+      id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+    },
+    description:
+      'Uploading is not choosing. The photograph exists from here, but the cover does not change until a draft names this id and is saved — so an upload that fails halfway never leaves a routine pointing at something that is not there.',
+  },
+  RoutineCoverPhotoUpload: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['content_type', 'content'],
+    properties: {
+      content_type: {
+        type: 'string',
+        enum: ['image/jpeg', 'image/png', 'image/webp'],
+        description: 'What is being sent. What gets stored is always `image/webp`.',
+      },
+      content: {
+        type: 'string',
+        contentEncoding: 'base64',
+        maxLength: 14000000,
+        description:
+          'The image, base64 encoded, as `NutritionPhotoUpload` already specifies for the meal photograph. The server decodes it, re-encodes it and stores only the result: re-encoding removes EXIF and geolocation by construction rather than trying to trim them out, and an image that will not decode is refused with nothing written.',
+      },
+    },
+  },
   ScopeCode: {
     type: 'string',
     enum: [
@@ -3645,6 +3782,16 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         format: 'uuid',
         description: 'Null is allowed only while the draft is incomplete.',
       },
+      cover: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/RoutineCover',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
       steps: {
         type: 'array',
         maxItems: 200,
@@ -3707,6 +3854,16 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
       title: {
         type: 'string',
+      },
+      cover: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/RoutineCover',
+          },
+          {
+            type: 'null',
+          },
+        ],
       },
       status: {
         type: 'string',
@@ -4200,6 +4357,8 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       'discipline_code',
       'status',
       'template_version_id',
+      'cover',
+      'muscles',
       'exercise_count',
       'set_count',
       'has_unpublished_changes',
@@ -4229,6 +4388,24 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         ],
         description:
           'The published version a programme can point at. Null means the routine is still only a draft.',
+      },
+      cover: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/RoutineCover',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      muscles: {
+        type: 'array',
+        items: {
+          type: 'string',
+        },
+        description:
+          'Catalogue muscle codes the routine works, the ones it trains first. They are what a muscle cover is drawn from, and a list cannot compute them: only the reader knows which movements the routine holds.',
       },
       exercise_count: {
         type: 'integer',

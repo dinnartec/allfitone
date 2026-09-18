@@ -28,6 +28,7 @@ export type SessionTemplate = AllfitV1Schemas['SessionTemplate']
 export type SessionTemplateDraft = AllfitV1Schemas['SessionTemplateDraft']
 export type SessionTemplateDraftContent = AllfitV1Schemas['SessionTemplateDraftContent']
 export type SessionTemplateVersion = AllfitV1Schemas['SessionTemplateVersion']
+export type CoverPhotoStored = AllfitV1Schemas['RoutineCoverPhotoStored']
 export type Program = AllfitV1Schemas['Program']
 export type ProgramDraft = AllfitV1Schemas['ProgramDraft']
 export type ProgramDraftContent = AllfitV1Schemas['ProgramDraftContent']
@@ -68,6 +69,12 @@ export interface ContentTransport {
   ): Promise<SessionTemplateVersion>
   readTemplateDraft(templateId: string): Promise<SessionTemplateDraft>
   discardTemplate(command: CommandHeaders, templateId: string): Promise<SessionTemplate>
+  uploadCoverPhoto(
+    command: CommandHeaders,
+    templateId: string,
+    contentType: string,
+    content: string,
+  ): Promise<CoverPhotoStored>
   readProgramDraft(programId: string): Promise<ProgramDraft>
   readMyUnpublishedProgram(): Promise<Program | null>
   discardProgram(command: CommandHeaders, programId: string): Promise<Program>
@@ -96,6 +103,17 @@ export interface ContentFlow {
   openTemplate(templateId: string): Promise<SessionTemplateDraft>
   /** Archives it. A routine with a published version is refused by the server. */
   discardTemplate(templateId: string): Promise<SessionTemplate>
+  /**
+   * Stores a photograph against a routine and answers its identifier.
+   *
+   * **Uploading is not choosing.** The cover does not change until a draft names the id
+   * and is saved, so an upload that fails halfway leaves the routine as it was.
+   */
+  uploadCoverPhoto(
+    templateId: string,
+    contentType: string,
+    content: string,
+  ): Promise<CoverPhotoStored>
   searchMovements(
     discipline: string,
     query: string,
@@ -202,6 +220,14 @@ export function createContentFlow(dependencies: ContentFlowDependencies): Conten
       etags.delete(templateId)
       return template
     },
+
+    uploadCoverPhoto: (templateId, contentType, content) =>
+      dependencies.transport.uploadCoverPhoto(
+        dependencies.newCommand(),
+        templateId,
+        contentType,
+        content,
+      ),
 
     async createTemplate(disciplineCode, title) {
       const key = `template:${disciplineCode}:${title}`
@@ -366,6 +392,28 @@ export function programLoad(
 }
 
 /** What `PR-1` shows under the week: how much of it there actually is. */
+/**
+ * The same week, with a republished routine keeping every day it was on.
+ *
+ * **The week points at versions, and publishing mints a new one.** A routine already on
+ * a Monday came back from its editor as a version the week had never heard of: it matched
+ * no day and no row, so it disappeared from the programme somebody was in the middle of
+ * building. This is the swap that keeps it there.
+ *
+ * Publishing content that did not change answers the version that already exists, so the
+ * two ids being equal is the ordinary case and leaves the week untouched.
+ */
+export function revisedWeek(
+  week: readonly BaseWeekDay[],
+  replaced: string,
+  published: string,
+): readonly BaseWeekDay[] {
+  if (replaced === published || replaced === '') return week
+  return week.map((day) =>
+    day.templateVersionId === replaced ? { ...day, templateVersionId: published } : day,
+  )
+}
+
 export function summarizeBaseWeek(
   baseWeek: readonly BaseWeekDay[],
   weeks: number,

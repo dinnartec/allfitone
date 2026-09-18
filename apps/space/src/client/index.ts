@@ -62,6 +62,17 @@ function resolveBaseUrl(): string {
 
 const BASE_URL = resolveBaseUrl()
 
+/**
+ * Where the API is, for the one thing that is fetched by the platform and not by us.
+ *
+ * `expo-image` loads its own bytes, so a cover photograph cannot go through the helpers
+ * below: the screen hands it a uri and the bearer header instead. `ADR-031` serves the
+ * bytes through the API, so there is no public url to point at.
+ */
+export function apiBaseUrl(): string {
+  return BASE_URL
+}
+
 /** Long enough for a cold provider call, short enough to not feel hung. */
 const TIMEOUT_MS = 15_000
 
@@ -114,7 +125,7 @@ function failureFor(status: number): ApiFailure {
   if (status === 401) return 'unauthenticated'
   if (status === 404) return 'not-found'
   if (status === 409) return 'conflict'
-  if (status === 422) return 'weak-password'
+  if (status === 422) return 'validation-failed'
   return 'unavailable'
 }
 

@@ -16,6 +16,14 @@ export type TodaySession = AllfitV1Schemas['SpaceTodaySession']
 export type WeekPlan = AllfitV1Schemas['SpaceWeekPlan']
 export type MyProgram = AllfitV1Schemas['SpaceMyProgram']
 export type MyRoutine = AllfitV1Schemas['SpaceMyRoutine']
+export type CoverPhotoStored = AllfitV1Schemas['RoutineCoverPhotoStored']
+
+/** What the proxy sends back. Never a storage reference: `ADR-031` has no store. */
+export interface CoverPhoto {
+  readonly content_type: string
+  readonly byte_size: number
+  readonly bytes: Buffer
+}
 export type ProgramOrder = AllfitV1Schemas['SpaceProgramOrder']
 
 /**
@@ -107,6 +115,21 @@ export interface SpacePlanningDatabase {
   discardMySessionTemplate(
     input: OwnContentCommand & { personId: string; templateId: string },
   ): Promise<SessionTemplate>
+  /**
+   * Stores an already sanitised cover photograph and answers its identifier.
+   *
+   * The bytes that reach here are what the server produced, never what it received:
+   * `ADR-031` puts the re-encoding before this call and fails closed if it cannot.
+   */
+  storeMyCoverPhoto(
+    input: OwnContentCommand & { personId: string; templateId: string; bytes: Buffer },
+  ): Promise<CoverPhotoStored>
+  /** The bytes, or null — which is also what somebody else's photograph answers. */
+  readMyCoverPhoto(input: {
+    personId: string
+    photoId: string
+    requestId: string
+  }): Promise<CoverPhoto | null>
   /** The programme somebody started and never published, or null. */
   readMyUnpublishedProgram(input: { personId: string; requestId: string }): Promise<Program | null>
   /** Archived rather than deleted; refused when a version was ever published. */

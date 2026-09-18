@@ -54,12 +54,21 @@ import { InlineAlert } from '@allfitone/react-native/inline-alert'
 import { NumberField } from '@allfitone/react-native/number-field'
 import { Screen } from '@allfitone/react-native/screen'
 import { Text } from '@allfitone/react-native/text'
+import { CoverTile } from '@allfitone/react-native/cover-tile'
+import { SegmentedControl } from '@allfitone/react-native/segmented-control'
 import { TextField } from '@allfitone/react-native/text-field'
 import { useTheme } from '@allfitone/react-native/theme'
 import { Image } from 'expo-image'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native'
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import Animated, {
   Easing,
@@ -84,10 +93,10 @@ import { ApiError } from '../../src/client'
 import { createSpaceContentFlow } from '../../src/client/content-transport'
 import { aside, edgeScroll, nextOffset, placeOf } from '../../src/client/drag-order'
 import { createQueue } from '../../src/client/queue'
-import { saveFailure } from '../../src/client/save-failure'
+import { coverFailure, saveFailure } from '../../src/client/save-failure'
 import { offerPublishedRoutine } from '../../src/client/routine-handoff'
 import { revealOffset, type Frame } from '../../src/client/reveal'
-import { readExerciseLibrary } from '../../src/client/exercise-library'
+import { readExerciseLibrary, type ExerciseLibrary } from '../../src/client/exercise-library'
 import {
   declareAlreadyIn,
   declareReplacing,
@@ -129,6 +138,20 @@ import {
   type WorkingSet,
 } from '../../src/client/set-scheme'
 import { ScreenHeader } from '../../src/components/screen-header'
+import { coverArt } from '../../src/components/routine-cover-art'
+import {
+  COVER_ICONS,
+  coverFromContent,
+  iconCover,
+  MUSCLE_COVER,
+  musclesWorked,
+  photoCover,
+  sameCover,
+  withCover,
+  type RoutineCover,
+} from '../../src/client/routine-cover'
+import { canPickPhotos, pickCoverPhoto } from '../../src/client/cover-picking'
+import { readSession } from '../../src/client/session'
 
 const SUGGESTIONS = ['Empuje', 'Tirón', 'Pierna', 'Full body']
 
@@ -140,6 +163,18 @@ const PRESS_SLOP = { top: 14, bottom: 14, left: 14, right: 14 }
 
 /** Keeps the button off the very bottom edge, the same amount as every other footer. */
 const FOOTER_LIFT = 16
+
+/** `CoverTile`'s own `md`. The art has to be told, because it draws inside it. */
+const COVER_MD = 72
+
+/**
+ * What every cover panel occupies, whichever one is showing.
+ *
+ * Three rows of the grid. Without it the sheet was a different height on each tab and
+ * grew and shrank under the thumb as somebody compared them, which is the one moment
+ * they are meant to be comparable. The grid scrolls past it; the other two centre in it.
+ */
+const COVER_PANEL = 3 * COVER_MD + 2 * 10
 
 /** Under the threshold where a press reads as an animation instead of as a response. */
 const PRESS_MS = 120
@@ -196,6 +231,7 @@ type Sheeted =
   | { readonly kind: 'rest'; readonly position: number }
   | { readonly kind: 'superset'; readonly position: number }
   | { readonly kind: 'set-kind'; readonly position: number; readonly order: number }
+  | { readonly kind: 'cover' }
 
 const LOAD_FAILED = 'No pudimos abrir el borrador. Revisa tu conexión.'
 
@@ -243,6 +279,24 @@ export default function RoutineEditor() {
   // Presentation, not prescription: the draft carries a movement's identifier and
   // nothing about how it looks, so the picture is looked up rather than stored.
   const [previews, setPreviews] = useState<ReadonlyMap<string, string | null>>(new Map())
+  /**
+   * How this routine wants to be seen, which is a choice and not a requirement.
+   *
+   * Kept in a ref as well as in state for the same reason the activity type is: a save
+   * scheduled before the last press settled reads the ref, and state would still be
+   * showing the cover somebody just replaced.
+   */
+  const [cover, setCover] = useState<RoutineCover | undefined>(undefined)
+  const chosenCover = useRef<RoutineCover | undefined>(undefined)
+  // The vocabularies the cover sheet chooses from. The library is cached for the life
+  // of the process, so holding it here costs a reference and no round trip.
+  const [library, setLibrary] = useState<ExerciseLibrary | undefined>(undefined)
+  const [coverTab, setCoverTab] = useState<'muscles' | 'icon' | 'photo'>('icon')
+  const [uploading, setUploading] = useState(false)
+  // A photograph is fetched by `expo-image` and not by us, so the screen has to hand it
+  // the bearer header: `ADR-031` serves the bytes through the API and there is no
+  // public url to point at.
+  const [token, setToken] = useState<string | undefined>(undefined)
 
   // Which row is in the air and how far it has gone. Shared so every row can read them
   // in its own worklet; held here because they are the list's state, not one row's.
@@ -353,7 +407,10 @@ export default function RoutineEditor() {
           }
           await flow.saveTemplateDraft(
             identity.current,
-            stepsToContent(trimmed, nextSteps, activityType.current),
+            withCover(
+              stepsToContent(trimmed, nextSteps, activityType.current),
+              chosenCover.current,
+            ),
           )
           setSaved(true)
           setFailure(undefined)
@@ -410,6 +467,10 @@ export default function RoutineEditor() {
       // one session costs nothing.
       const [library, mine] = await Promise.all([readExerciseLibrary(flow), flow.readMyRoutines()])
       if (!active) return
+      setLibrary(library)
+      void readSession().then((stored) => {
+        if (active) setToken(stored?.accessToken)
+      })
       setPreviews(new Map(library.movements.map((movement) => [movement.id, movement.demo_url])))
 
       let id = params.templateId === 'new' ? undefined : params.templateId
@@ -428,6 +489,8 @@ export default function RoutineEditor() {
       setTemplateId(id)
       setTitle(draft.content.title)
       setSteps(stepsFromContent(draft.content, (movementId) => names.get(movementId)))
+      chosenCover.current = coverFromContent(draft.content)
+      setCover(chosenCover.current)
       setEditing(known?.template_version_id != null)
       setSaved(true)
     }
@@ -489,6 +552,64 @@ export default function RoutineEditor() {
     setSaved(false)
     schedule(title, next)
   }
+
+  /**
+   * Choosing a cover, or taking it off — which is the same act with no argument.
+   *
+   * The ref moves first because `schedule` runs the save from it, and a `setState` that
+   * had not landed yet would save the cover this one replaces.
+   */
+  const chooseCover = (next: RoutineCover | undefined) => {
+    chosenCover.current = next
+    setCover(next)
+    setSaved(false)
+    setSheet(undefined)
+    schedule(title, steps)
+  }
+
+  /**
+   * Taking a photograph for the cover.
+   *
+   * **The routine has to exist first.** A photograph is stored against a template, so
+   * there is nothing to attach it to until the name has created one; the tab says so
+   * rather than opening a picker that cannot end anywhere.
+   *
+   * It goes through the same queue as the saves. An upload racing the autosave would
+   * have the draft naming a photograph the server has not finished storing.
+   */
+  const takePhoto = async () => {
+    if (!identity.current) return
+
+    // Everything is inside, including the picker. Outside it, anything the picker threw
+    // left the screen looking untouched and surfaced as an unhandled rejection with a
+    // message nobody could act on — which is how a missing native module reported
+    // itself, since Metro inlines requires and only loads it at the first press.
+    setUploading(true)
+    try {
+      const picked = await pickCoverPhoto()
+      if (picked === undefined) return
+
+      const stored = await saves(() =>
+        flow.uploadCoverPhoto(identity.current as string, picked.contentType, picked.content),
+      )
+      chooseCover(photoCover(stored.id))
+    } catch (cause: unknown) {
+      setFailure(coverFailure(cause))
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  // Asked once: whether this build carries the picker at all. A press that cannot end
+  // anywhere is better not offered than offered and refused.
+  const pickable = canPickPhotos()
+
+  // What a muscle cover draws, recomputed from the exercises rather than stored: a
+  // saved list of muscles would describe the routine that used to be here.
+  const worked = musclesWorked(
+    steps.map((step) => step.movementId),
+    library?.movements ?? [],
+  )
 
   const issues = reasonsNotToPublish(title, steps)
   const publishable = issues.length === 0 && templateId !== undefined
@@ -581,6 +702,7 @@ export default function RoutineEditor() {
     if (sheet?.kind === 'rest') return 'Descanso entre series'
     if (sheet?.kind === 'superset') return 'Superserie'
     if (sheet?.kind === 'menu') return 'Ejercicio'
+    if (sheet?.kind === 'cover') return 'Portada de la rutina'
     return ''
   }
 
@@ -667,13 +789,41 @@ export default function RoutineEditor() {
         ) : null}
 
         <View style={styles.section}>
-          <TextField
-            label="Ponle un nombre"
-            placeholder="Empuje, Pierna, Día 1…"
-            value={title}
-            onChangeText={rename}
-            autoCapitalize="sentences"
-          />
+          {/* The cover sits beside the name because the two are the same question
+              asked twice: what is this routine, and how will I know it again. */}
+          <View style={styles.naming}>
+            <CoverTile
+              size="md"
+              onPress={() => setSheet({ kind: 'cover' })}
+              accessibilityLabel={cover === undefined ? 'Elegir portada' : 'Cambiar portada'}
+              hint={
+                <View style={styles.coverHint}>
+                  <FoundationIcon name="camera" size="sm" color={theme.color.icon.secondary} />
+                  <Text role="eyebrow" size="2xs" color="muted">
+                    PORTADA
+                  </Text>
+                </View>
+              }
+            >
+              {coverArt({
+                cover: cover,
+                worked: worked,
+                muscles: library?.muscles ?? [],
+                side: COVER_MD,
+                token: token,
+              })}
+            </CoverTile>
+
+            <View style={styles.namingField}>
+              <TextField
+                label="Ponle un nombre"
+                placeholder="Empuje, Pierna, Día 1…"
+                value={title}
+                onChangeText={rename}
+                autoCapitalize="sentences"
+              />
+            </View>
+          </View>
           <View style={styles.chips}>
             {SUGGESTIONS.map((suggestion) => (
               <Chip
@@ -903,6 +1053,126 @@ export default function RoutineEditor() {
         onDismiss={() => setSheet(undefined)}
         title={sheetTitle()}
       >
+        {sheet?.kind === 'cover' ? (
+          <View style={styles.sheet}>
+            <Text role="body" size="sm" color="muted">
+              {`Elige cómo se ve «${title.trim() === '' ? 'esta rutina' : title.trim()}» en tu lista.`}
+            </Text>
+
+            <SegmentedControl
+              items={[
+                { value: 'muscles', label: 'Músculos' },
+                { value: 'icon', label: 'Icono' },
+                { value: 'photo', label: 'Foto' },
+              ]}
+              value={coverTab}
+              onChange={setCoverTab}
+              accessibilityLabel="Tipo de portada"
+            />
+
+            {coverTab === 'photo' ? (
+              <View style={[styles.coverPanel, styles.coverFigure]}>
+                <CoverTile
+                  size="md"
+                  selected={cover?.kind === 'photo'}
+                  onPress={pickable ? () => void takePhoto() : undefined}
+                  accessibilityLabel={
+                    cover?.kind === 'photo' ? 'Cambiar la foto' : 'Elegir una foto'
+                  }
+                  hint={
+                    <FoundationIcon
+                      name="camera"
+                      size="md"
+                      color={theme.color.icon.secondary}
+                      decorative
+                    />
+                  }
+                >
+                  {cover?.kind === 'photo'
+                    ? coverArt({
+                        cover: cover,
+                        worked: worked,
+                        muscles: library?.muscles ?? [],
+                        side: COVER_MD,
+                        token: token,
+                      })
+                    : null}
+                </CoverTile>
+                <Text role="body" size="xs" color="muted" align="center">
+                  {!pickable
+                    ? // An older build without the picker in it. Said plainly rather
+                      // than left to fail on the press, which is how it used to read.
+                      'Esta versión de la app todavía no puede abrir tus fotos. Actualízala.'
+                    : templateId === undefined
+                      ? // Nothing to attach it to yet: a photograph is stored against a
+                        // routine, and the routine exists once it has a name.
+                        'Ponle un nombre a la rutina y después elige la foto.'
+                      : uploading
+                        ? 'Subiendo la foto…'
+                        : 'Se recorta cuadrada y se guarda sin los datos de dónde la tomaste.'}
+                </Text>
+              </View>
+            ) : coverTab === 'muscles' ? (
+              <View style={[styles.coverPanel, styles.coverFigure]}>
+                <CoverTile
+                  size="md"
+                  selected={sameCover(cover, MUSCLE_COVER)}
+                  onPress={() => chooseCover(MUSCLE_COVER)}
+                  accessibilityLabel="Los músculos que entrena"
+                >
+                  {coverArt({
+                    cover: MUSCLE_COVER,
+                    worked: worked,
+                    muscles: library?.muscles ?? [],
+                    side: COVER_MD,
+                    token: token,
+                  })}
+                </CoverTile>
+                <Text role="body" size="xs" color="muted" align="center">
+                  {worked.length === 0
+                    ? 'Añade ejercicios y aquí se dibuja lo que trabajan.'
+                    : 'Se dibuja sola con los ejercicios que tenga.'}
+                </Text>
+              </View>
+            ) : (
+              <ScrollView
+                style={styles.coverPanel}
+                contentContainerStyle={styles.coverGrid}
+                showsVerticalScrollIndicator={false}
+              >
+                {COVER_ICONS.map((one) => (
+                  <CoverTile
+                    key={one.icon}
+                    size="md"
+                    selected={sameCover(cover, iconCover(one.icon))}
+                    onPress={() => chooseCover(iconCover(one.icon))}
+                    // The glyph carries no words, so the name has to be said here or
+                    // the grid is twelve unlabelled squares to a screen reader.
+                    accessibilityLabel={one.name}
+                  >
+                    {coverArt({
+                      cover: iconCover(one.icon),
+                      worked: worked,
+                      muscles: library?.muscles ?? [],
+                      side: COVER_MD,
+                      token: token,
+                    })}
+                  </CoverTile>
+                ))}
+              </ScrollView>
+            )}
+
+            {cover === undefined ? null : (
+              <Button
+                label="Quitar portada"
+                variant="ghost"
+                icon="remove"
+                onPress={() => chooseCover(undefined)}
+              />
+            )}
+          </View>
+        ) : null}
+
         {sheet?.kind === 'discarding' ? (
           <View style={styles.sheet}>
             <Text role="body" size="md" color="muted">
@@ -1606,6 +1876,16 @@ const styles = StyleSheet.create({
   // onboarding footers use, so a button at the bottom sits the same everywhere.
   anchor: { paddingTop: 12, paddingBottom: FOOTER_LIFT },
   section: { gap: 10 },
+  // The tile and the field share a line, and the field takes whatever is left: the
+  // cover is a fixed square and the name is as wide as the screen allows.
+  naming: { flexDirection: 'row', gap: 12, alignItems: 'center' },
+  namingField: { flex: 1 },
+  coverHint: { alignItems: 'center', gap: 4 },
+  coverPanel: { height: COVER_PANEL },
+  coverGrid: { flexDirection: 'row', gap: 10, flexWrap: 'wrap', justifyContent: 'center' },
+  // Centred in the panel rather than sitting at its top: one tile floating against the
+  // ceiling of a space three rows tall reads as something missing underneath.
+  coverFigure: { alignItems: 'center', justifyContent: 'center', gap: 10 },
   chips: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   centered: { textAlign: 'center' },
   empty: {

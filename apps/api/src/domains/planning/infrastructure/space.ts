@@ -15,6 +15,8 @@ import type postgres from 'postgres'
 import { database } from '../../../platform/db/index.js'
 import { measureStudioRequestPhase } from '../../../platform/observability/index.js'
 import type {
+  CoverPhoto,
+  CoverPhotoStored,
   Program,
   ProgramDraft,
   ProgramVersion,
@@ -228,6 +230,26 @@ export function createSpacePlanningDatabase(): SpacePlanningDatabase {
           )
         `
         return answered(row?.template, 'discard the session template')
+      }),
+
+    storeMyCoverPhoto: (input) =>
+      command(sql, input.personId, async (transaction) => {
+        const [row] = await transaction<{ photo: CoverPhotoStored }[]>`
+          select photo from planning.upload_my_cover_photo(
+            ${input.personId}::uuid, ${input.templateId}::uuid, ${input.bytes},
+            ${input.idempotencyKey}::uuid, ${input.commandId}::uuid, ${input.requestHash}
+          )
+        `
+        return answered(row?.photo, 'store the cover photo')
+      }),
+
+    readMyCoverPhoto: (input) =>
+      transact(sql, input.personId, input.requestId, async (transaction) => {
+        const [row] = await transaction<CoverPhoto[]>`
+          select content_type, byte_size, bytes
+          from planning.read_my_cover_photo(${input.personId}::uuid, ${input.photoId}::uuid)
+        `
+        return row ?? null
       }),
 
     readMyUnpublishedProgram: (input) =>

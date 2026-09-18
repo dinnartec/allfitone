@@ -48,7 +48,7 @@ const PASSWORD_RULE = 'Al menos 8 caracteres, con una mayúscula, una minúscula
 function messageFor(cause: unknown): string {
   if (!(cause instanceof ApiError)) return 'Algo salió mal. Inténtalo otra vez.'
   switch (cause.failure) {
-    case 'weak-password':
+    case 'validation-failed':
       // Reached only when the password passed our rules and the provider still
       // refused it, which now means it resembles something already breached
       // rather than that it is short.

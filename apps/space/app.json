@@ -12,7 +12,8 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.dinnartec.allfitspace",
       "infoPlist": {
-        "CADisableMinimumFrameDurationOnPhone": true
+        "CADisableMinimumFrameDurationOnPhone": true,
+        "NSPhotoLibraryUsageDescription": "Allfit Space usa tus fotos solo para que elijas la portada de una rutina."
       }
     },
     "android": {

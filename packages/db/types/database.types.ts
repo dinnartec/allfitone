@@ -3339,6 +3339,44 @@ export type Database = {
         }
         Relationships: []
       }
+      session_template_cover_photos: {
+        Row: {
+          byte_size: number
+          bytes: string
+          checksum: string
+          content_type: string
+          created_at: string
+          id: string
+          template_id: string
+        }
+        Insert: {
+          byte_size: number
+          bytes: string
+          checksum: string
+          content_type: string
+          created_at?: string
+          id?: string
+          template_id: string
+        }
+        Update: {
+          byte_size?: number
+          bytes?: string
+          checksum?: string
+          content_type?: string
+          created_at?: string
+          id?: string
+          template_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_session_template_cover_photos_template'
+            columns: ['template_id']
+            isOneToOne: false
+            referencedRelation: 'session_templates'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       session_template_drafts: {
         Row: {
           content: Json
@@ -3385,6 +3423,9 @@ export type Database = {
         Row: {
           activity_type_id: string
           content_hash: string
+          cover_icon: Database['planning']['Enums']['routine_cover_icon'] | null
+          cover_kind: Database['planning']['Enums']['routine_cover'] | null
+          cover_photo_id: string | null
           derived_from_version_id: string | null
           discipline_code: string
           id: string
@@ -3397,6 +3438,9 @@ export type Database = {
         Insert: {
           activity_type_id: string
           content_hash: string
+          cover_icon?: Database['planning']['Enums']['routine_cover_icon'] | null
+          cover_kind?: Database['planning']['Enums']['routine_cover'] | null
+          cover_photo_id?: string | null
           derived_from_version_id?: string | null
           discipline_code: string
           id?: string
@@ -3409,6 +3453,9 @@ export type Database = {
         Update: {
           activity_type_id?: string
           content_hash?: string
+          cover_icon?: Database['planning']['Enums']['routine_cover_icon'] | null
+          cover_kind?: Database['planning']['Enums']['routine_cover'] | null
+          cover_photo_id?: string | null
           derived_from_version_id?: string | null
           discipline_code?: string
           id?: string
@@ -3419,6 +3466,13 @@ export type Database = {
           version_number?: number
         }
         Relationships: [
+          {
+            foreignKeyName: 'fk_session_template_versions_cover_photo'
+            columns: ['cover_photo_id', 'template_id']
+            isOneToOne: false
+            referencedRelation: 'session_template_cover_photos'
+            referencedColumns: ['id', 'template_id']
+          },
           {
             foreignKeyName: 'fk_session_template_versions_derivation'
             columns: ['derived_from_version_id']
@@ -3533,6 +3587,10 @@ export type Database = {
       canonical_program_content: { Args: { p_content: Json }; Returns: Json }
       canonical_session_content: { Args: { p_content: Json }; Returns: Json }
       canonical_target: { Args: { p_target: Json }; Returns: Json }
+      collect_cover_photos: {
+        Args: { p_reason: string; p_template_id: string }
+        Returns: number
+      }
       content_etag: { Args: { p_content: Json }; Returns: string }
       create_my_program: {
         Args: {
@@ -3806,6 +3864,14 @@ export type Database = {
         }[]
       }
       read_my_content: { Args: { p_person_id: string }; Returns: Json }
+      read_my_cover_photo: {
+        Args: { p_person_id: string; p_photo_id: string }
+        Returns: {
+          byte_size: number
+          bytes: string
+          content_type: string
+        }[]
+      }
       read_my_program_draft: {
         Args: { p_person_id: string; p_program_id: string }
         Returns: Json
@@ -4016,9 +4082,57 @@ export type Database = {
         Args: { p_version_id: string }
         Returns: Json
       }
+      upload_my_cover_photo: {
+        Args: {
+          p_bytes: string
+          p_command_id: string
+          p_idempotency_key: string
+          p_person_id: string
+          p_request_hash: string
+          p_template_id: string
+        }
+        Returns: {
+          photo: Json
+          replayed: boolean
+        }[]
+      }
     }
     Enums: {
       assignment_lifecycle: 'active' | 'detached_pending_choice' | 'personal' | 'ended'
+      routine_cover: 'muscles' | 'icon' | 'photo'
+      routine_cover_icon:
+        | 'strength'
+        | 'run'
+        | 'cycling'
+        | 'interval'
+        | 'cardio'
+        | 'burn'
+        | 'power'
+        | 'challenge'
+        | 'mountain'
+        | 'time'
+        | 'mobility'
+        | 'swim'
+        | 'arms'
+        | 'weights'
+        | 'technique'
+        | 'endurance'
+        | 'pace'
+        | 'energy'
+        | 'focus'
+        | 'recovery'
+        | 'morning'
+        | 'evening'
+        | 'night'
+        | 'cold'
+        | 'outdoor'
+        | 'route'
+        | 'pool'
+        | 'team'
+        | 'record'
+        | 'favourite'
+        | 'light'
+        | 'countdown'
       set_kind: 'normal' | 'warmup' | 'to_failure' | 'drop'
     }
     CompositeTypes: {
@@ -4188,6 +4302,41 @@ export const Constants = {
   planning: {
     Enums: {
       assignment_lifecycle: ['active', 'detached_pending_choice', 'personal', 'ended'],
+      routine_cover: ['muscles', 'icon', 'photo'],
+      routine_cover_icon: [
+        'strength',
+        'run',
+        'cycling',
+        'interval',
+        'cardio',
+        'burn',
+        'power',
+        'challenge',
+        'mountain',
+        'time',
+        'mobility',
+        'swim',
+        'arms',
+        'weights',
+        'technique',
+        'endurance',
+        'pace',
+        'energy',
+        'focus',
+        'recovery',
+        'morning',
+        'evening',
+        'night',
+        'cold',
+        'outdoor',
+        'route',
+        'pool',
+        'team',
+        'record',
+        'favourite',
+        'light',
+        'countdown',
+      ],
       set_kind: ['normal', 'warmup', 'to_failure', 'drop'],
     },
   },

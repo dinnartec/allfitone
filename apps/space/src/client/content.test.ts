@@ -15,6 +15,7 @@ import {
   expandBaseWeek,
   MissingEtagError,
   programLoad,
+  revisedWeek,
   summarizeBaseWeek,
   weeksLabel,
   type ContentTransport,
@@ -39,6 +40,7 @@ function harness(overrides: Partial<ContentTransport> = {}) {
     readMuscles: async () => [],
     readMovement: async () => ({}) as never,
     readMyRoutines: async () => [],
+    uploadCoverPhoto: async () => ({ id: '019f9000-0000-7000-8000-0000000000c1' }),
     createTemplate: async (headers) => {
       sent.push({ command: headers.idempotencyKey })
       return { id: TEMPLATE_ID, draft: { etag: 'etag-1' } } as never
@@ -296,5 +298,34 @@ describe('throwing a programme away', () => {
     return flow.discardProgram('program-1').then(() => {
       expect(flow.etagFor('program-1')).toBeUndefined()
     })
+  })
+})
+
+describe('a routine republished while it sits in a week', () => {
+  const week = [
+    { day: 1, templateVersionId: 'v1' },
+    { day: 3, templateVersionId: 'v2' },
+    { day: 5, templateVersionId: 'v1' },
+  ]
+
+  test('T-SP-WEEK-10 keeps every day it was on, under its new version', () => {
+    // The defect this closes: the week points at versions, publishing mints a new one,
+    // and the routine vanished from the programme somebody was in the middle of
+    // building — from its days and from the list of what the programme includes.
+    expect(revisedWeek(week, 'v1', 'v9')).toEqual([
+      { day: 1, templateVersionId: 'v9' },
+      { day: 3, templateVersionId: 'v2' },
+      { day: 5, templateVersionId: 'v9' },
+    ])
+  })
+
+  test('T-SP-WEEK-11 leaves the week alone when nothing was republished', () => {
+    // Publishing content that did not change answers the version that already exists.
+    expect(revisedWeek(week, 'v1', 'v1')).toEqual(week)
+    expect(revisedWeek(week, '', 'v9')).toEqual(week)
+  })
+
+  test('T-SP-WEEK-12 and never touches a day holding somebody else', () => {
+    expect(revisedWeek(week, 'v7', 'v9')).toEqual(week)
   })
 })
