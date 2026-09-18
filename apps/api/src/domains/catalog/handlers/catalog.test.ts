@@ -140,22 +140,21 @@ describe('Global catalogue surface', () => {
     expect(mounted).not.toContain('GET /backoffice/v1/disciplines')
   })
 
-  test('T-CAT-API-15 answers with a revalidating ETag and 304 on an exact match', async () => {
+  // Both callers are browsers reading across origins, and a 304 reached them
+  // without `Access-Control-Allow-Origin`, so the catalogue is served uncached and
+  // a caller still holding an ETag receives the body rather than a 304.
+  test('T-CAT-API-15 serves the catalogue uncached and never answers 304', async () => {
     const first = await routes().fetch(request('/disciplines'))
     expect(first.status).toBe(200)
-    expect(first.headers.get('cache-control')).toBe('private, max-age=0, must-revalidate')
+    expect(first.headers.get('cache-control')).toBe('private, no-store')
+    expect(first.headers.get('etag')).toBeNull()
     await expect(first.json()).resolves.toEqual({ items: [discipline] })
 
-    const etag = first.headers.get('etag') ?? ''
-    expect(etag).toMatch(/^"[\w-]+"$/)
-
-    const second = await routes().fetch(request('/disciplines', { ifNoneMatch: etag }))
-    expect(second.status).toBe(304)
-    expect(second.headers.get('etag')).toBe(etag)
-    expect(await second.text()).toBe('')
-
-    const stale = await routes().fetch(request('/disciplines', { ifNoneMatch: '"stale"' }))
-    expect(stale.status).toBe(200)
+    const revalidation = await routes().fetch(
+      request('/disciplines', { ifNoneMatch: '"a-tab-kept-this"' }),
+    )
+    expect(revalidation.status).toBe(200)
+    await expect(revalidation.json()).resolves.toEqual({ items: [discipline] })
   })
 
   test('T-CAT-API-16 serves activity types and their effective result contracts', async () => {

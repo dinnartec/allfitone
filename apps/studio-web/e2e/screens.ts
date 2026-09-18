@@ -706,6 +706,40 @@ export const SCREENS: Screen[] = [
       ).toBeVisible()
     },
   },
+  // The two waits on this route. Neither was in the inventory, so neither had
+  // been swept or looked at, and production showed them as a bare spinner and a
+  // paragraph against the left edge.
+  {
+    stories: 'HU-005 · opening the account',
+    path: '/account',
+    fixture: stall('/studio/v1/me'),
+    hasHeading: false,
+    settled: async (page) => {
+      await expect(page.getByText('Reuniendo tus espacios y opciones personales…')).toBeVisible()
+    },
+  },
+  {
+    stories: 'HU-005 · gathering the professional catalogues',
+    path: '/account',
+    fixture: () =>
+      createStudioApiFixture({
+        me: { profile: null, memberships: [activeMembership] },
+        memberships: [activeMembership],
+        intercept: async (request) => {
+          if (request.path === '/studio/v1/professional-specialties') {
+            await new Promise((resolve) => setTimeout(resolve, 15_000))
+          }
+          return undefined
+        },
+      }),
+    hasHeading: false,
+    reveal: async (page) => {
+      await page.getByRole('button', { name: 'Configurar perfil profesional' }).click()
+      await expect(page.getByText('Reuniendo especialidades y tipos de credencial…')).toBeVisible()
+      // One status at a time: the refresh line fired during the first load too.
+      await expect(page.getByText('Actualizando tu cuenta…')).toBeHidden()
+    },
+  },
 
   // --- the team section -------------------------------------------------------
   { stories: 'HU-017 · team directory', path: `${workspace}/team`, fixture: memberOfTwo },
