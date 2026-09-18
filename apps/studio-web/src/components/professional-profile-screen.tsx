@@ -13,7 +13,6 @@ import {
   CardHeader,
   CardTitle,
 } from '@allfitone/react/components/card'
-import { Spinner } from '@allfitone/react/components/spinner'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@allfitone/react/components/tabs'
 import { Toaster } from '@allfitone/react/components/sonner'
 import {
@@ -33,6 +32,7 @@ import { LogoutForm } from './logout-form'
 import { ProfessionalCredentials } from './professional-credentials'
 import { ProfessionalMemberships } from './professional-memberships'
 import { ProfessionalPresentation } from './professional-presentation'
+import { LoadingCard } from './studio-frame'
 import { StudioApiError, type ProfessionalCatalogItem, type StudioMe } from '@/lib/studio-api'
 import { useCompactViewport } from '@/lib/use-compact-viewport'
 import {
@@ -96,8 +96,11 @@ export function ProfessionalProfileScreen() {
 
   return (
     <AccountShell onSpaces={() => router.push('/')}>
+      {/* A refresh of what is already on screen, never a first load. Gated on
+          `catalogsEnabled` it also fired while the catalogues loaded for the first
+          time, so "Actualizando tu cuenta…" sat above the catalogue loader. */}
       {(meQuery.isFetching && !meQuery.isPending) ||
-      (catalogsEnabled && (specialtiesQuery.isFetching || credentialTypesQuery.isFetching)) ? (
+      (catalogsReady && (specialtiesQuery.isFetching || credentialTypesQuery.isFetching)) ? (
         <p data-query-refreshing role="status" aria-live="polite">
           Actualizando tu cuenta…
         </p>
@@ -120,11 +123,11 @@ export function ProfessionalProfileScreen() {
           </AlertAction>
         </Alert>
       ) : null}
+      {/* The same card as every other wait in Studio. Composed here by hand, a
+          lone spinner and a paragraph sat against the page's left edge, and the
+          spinner's open arc read as a letter C. */}
       {meQuery.isPending ? (
-        <div data-profile-state role="status" aria-live="polite">
-          <Spinner label="Cargando tu cuenta" />
-          <p>Reuniendo tus espacios y opciones personales…</p>
-        </div>
+        <LoadingCard label="Reuniendo tus espacios y opciones personales…" />
       ) : !meQuery.data ? (
         <div data-profile-state>
           <Alert variant="danger" live="assertive">
@@ -166,10 +169,7 @@ export function ProfessionalProfileScreen() {
           onBack={!meQuery.data.profile ? () => setSetupStarted(false) : undefined}
         />
       ) : (
-        <div data-profile-state role="status" aria-live="polite">
-          <Spinner label="Preparando la configuración profesional" />
-          <p>Reuniendo especialidades y tipos de credencial…</p>
-        </div>
+        <LoadingCard label="Reuniendo especialidades y tipos de credencial…" />
       )}
     </AccountShell>
   )
