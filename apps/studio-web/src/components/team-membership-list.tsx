@@ -108,6 +108,8 @@ export function TeamMembershipList() {
           <AlertAction>
             <Link
               href={`/organizations/${current.organization_id}/team/roles`}
+              data-slot="button"
+              data-variant="outline"
               className={buttonVariants({ variant: 'outline' })}
             >
               Ver roles y permisos
@@ -156,6 +158,8 @@ export function TeamMembershipList() {
           INVITATIONS_ENABLED && canInviteTeam(current.roles) ? (
             <Link
               href={`/organizations/${current.organization_id}/team/invitations/new`}
+              data-slot="button"
+              data-variant="default"
               className={buttonVariants()}
             >
               Invitar integrante

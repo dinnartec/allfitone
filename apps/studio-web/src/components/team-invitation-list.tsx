@@ -194,6 +194,8 @@ export function TeamInvitationList() {
           INVITATION_ISSUANCE_ENABLED && canInviteTeam(current.roles) ? (
             <Link
               href={`/organizations/${current.organization_id}/team/invitations/new`}
+              data-slot="button"
+              data-variant="default"
               className={buttonVariants()}
             >
               Nueva invitación

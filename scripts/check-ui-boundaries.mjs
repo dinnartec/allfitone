@@ -111,6 +111,43 @@ async function verifyEslintBoundaryRule() {
   }
 }
 
+async function verifyButtonSlotRule() {
+  const ruleId = 'allfitone/button-variants-need-slot'
+  const eslint = new ESLint({ cwd: repositoryRoot })
+  const lint = async (source, name) => {
+    const [result] = await eslint.lintText(source, {
+      filePath: `apps/studio-web/src/${name}.tsx`,
+    })
+    return result.messages.filter((message) => message.ruleId === ruleId).length
+  }
+
+  const invalid = [
+    // No slot: the link keeps the flat primary colour instead of the gradient.
+    '<a href="/" className={buttonVariants()}>Go</a>',
+    '<a href="/" data-slot="button" data-variant="default" className={buttonVariants({ variant: "outline" })}>Go</a>',
+    '<a href="/" data-slot="button" className={buttonVariants({ variant: "outline" })}>Go</a>',
+  ]
+  const valid = [
+    '<a href="/" data-slot="button" data-variant="default" className={buttonVariants({ size: "lg" })}>Go</a>',
+    '<a href="/" data-slot="button" data-variant="outline" className={buttonVariants({ variant: "outline", size: "sm" })}>Go</a>',
+    '<a href="/" data-slot="button" data-variant={kind} className={buttonVariants({ variant: kind })}>Go</a>',
+    '<a href="/" className="plain">Go</a>',
+  ]
+  const wrap = (element) =>
+    `import { buttonVariants } from '@allfitone/react/components/button'\nexport function Fixture({ kind }: { kind: 'outline' }) { return ${element} }`
+
+  const missed = []
+  for (const [index, element] of invalid.entries()) {
+    if ((await lint(wrap(element), `__button-slot-invalid-${index}__`)) !== 1) missed.push(element)
+  }
+  for (const [index, element] of valid.entries()) {
+    if ((await lint(wrap(element), `__button-slot-valid-${index}__`)) !== 0) missed.push(element)
+  }
+  if (missed.length > 0) {
+    throw new Error(`ESLint button slot self-test failed on: ${missed.join(' | ')}`)
+  }
+}
+
 function verifyCssBoundaryRules() {
   const initialCount = violations.length
   inspectCompositionCss(
@@ -143,6 +180,7 @@ function verifyCssBoundaryRules() {
 
 verifyCssBoundaryRules()
 await verifyEslintBoundaryRule()
+await verifyButtonSlotRule()
 
 await Promise.all(appRoots.map((appRoot) => inspectDirectory(resolve(repositoryRoot, appRoot))))
 

@@ -162,6 +162,8 @@ export function OrganizationWorkspace() {
             <CardAction>
               <Link
                 href={`${teamPath}/invitations`}
+                data-slot="button"
+                data-variant="outline"
                 className={buttonVariants({ variant: 'outline', size: 'sm' })}
               >
                 Ver invitaciones
@@ -196,7 +198,12 @@ export function OrganizationWorkspace() {
               Las últimas personas que se sumaron a la organización.
             </CardDescription>
             <CardAction>
-              <Link href={teamPath} className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+              <Link
+                href={teamPath}
+                data-slot="button"
+                data-variant="outline"
+                className={buttonVariants({ variant: 'outline', size: 'sm' })}
+              >
                 Ver equipo
               </Link>
             </CardAction>
@@ -266,6 +273,8 @@ function OrientationPanel({ roles, teamPath }: { roles: Membership['roles']; tea
           <CardAction>
             <Link
               href={`${teamPath}/roles`}
+              data-slot="button"
+              data-variant="outline"
               className={buttonVariants({ variant: 'outline', size: 'sm' })}
             >
               Ver roles y permisos
