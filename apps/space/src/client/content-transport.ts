@@ -142,6 +142,19 @@ export function createSpaceContentFlow(): ContentFlow {
         authenticated((token) =>
           authorizedGet<ProgramDraft>(`/space/v1/programs/${programId}/draft`, token),
         ),
+      readMyUnpublishedProgram: () =>
+        authenticated((token) =>
+          authorizedGet<Program | null>('/space/v1/programs/unpublished', token),
+        ),
+      discardProgram: (command, programId) =>
+        authenticated((token) =>
+          authorizedPost<Program>(
+            `/space/v1/programs/${programId}/discard`,
+            command,
+            undefined,
+            token,
+          ),
+        ),
       createProgram: (command, title) =>
         authenticated((token) =>
           authorizedPost<Program>('/space/v1/programs', command, { title }, token),

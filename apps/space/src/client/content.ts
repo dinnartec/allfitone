@@ -69,6 +69,8 @@ export interface ContentTransport {
   readTemplateDraft(templateId: string): Promise<SessionTemplateDraft>
   discardTemplate(command: CommandHeaders, templateId: string): Promise<SessionTemplate>
   readProgramDraft(programId: string): Promise<ProgramDraft>
+  readMyUnpublishedProgram(): Promise<Program | null>
+  discardProgram(command: CommandHeaders, programId: string): Promise<Program>
   createProgram(command: CommandHeaders, title: string): Promise<Program>
   saveProgramDraft(
     command: CommandHeaders,
@@ -112,6 +114,15 @@ export interface ContentFlow {
   publishTemplate(templateId: string): Promise<SessionTemplateVersion>
   /** Opens a programme that already exists, and remembers the etag its next save needs. */
   openProgram(programId: string): Promise<ProgramDraft>
+  /**
+   * The programme somebody started and never published, or nothing.
+   *
+   * No other query can answer it: every one of them starts from an assignment, and an
+   * unpublished programme has none. Without it a saved draft is unreachable.
+   */
+  readMyUnpublishedProgram(): Promise<Program | null>
+  /** Archives it. A programme with a published version is refused by the server. */
+  discardProgram(programId: string): Promise<Program>
   createProgram(title: string): Promise<Program>
   saveProgramDraft(programId: string, content: ProgramDraftContent): Promise<ProgramDraft>
   /** Publishing leaves the author following it; the server takes or restates, never both. */
@@ -223,6 +234,17 @@ export function createContentFlow(dependencies: ContentFlowDependencies): Conten
       return version
     },
 
+    readMyUnpublishedProgram: () => dependencies.transport.readMyUnpublishedProgram(),
+
+    async discardProgram(programId) {
+      const program = await dependencies.transport.discardProgram(
+        dependencies.newCommand(),
+        programId,
+      )
+      etags.delete(programId)
+      return program
+    },
+
     async createProgram(title) {
       const key = `program:${title}`
       const program = await dependencies.transport.createProgram(once(key), title)
@@ -317,6 +339,30 @@ export function collapseBaseWeek(sessions: ProgramDraftContent['sessions']): {
     // zero would put the stepper below its own minimum.
     weeks: Math.max(1, ...sessions.map((session) => session.week)),
   }
+}
+
+/** «8 semanas», and «1 semana» when there is only one of them. */
+export function weeksLabel(weeks: number): string {
+  return weeks === 1 ? '1 semana' : `${weeks} semanas`
+}
+
+/**
+ * What a programme amounts to, in one line.
+ *
+ * Three figures in a case read as something to act on, and these are a consequence of
+ * the week rather than a control: the only number anybody sets on that screen is the
+ * duration, and it has a card of its own. A week with nothing in it says so instead of
+ * reporting zero sessions, which is a number nobody asked for.
+ */
+export function programLoad(
+  weeks: number,
+  summary: { daysPerWeek: number; sessions: number },
+): string {
+  if (summary.daysPerWeek === 0) return `${weeksLabel(weeks)} · sin días puestos todavía`
+  const perWeek =
+    summary.daysPerWeek === 1 ? '1 día por semana' : `${summary.daysPerWeek} días por semana`
+  const sessions = summary.sessions === 1 ? '1 sesión' : `${summary.sessions} sesiones`
+  return `${weeksLabel(weeks)} · ${perWeek} · ${sessions}`
 }
 
 /** What `PR-1` shows under the week: how much of it there actually is. */

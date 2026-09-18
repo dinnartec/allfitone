@@ -14,7 +14,9 @@ import {
   createContentFlow,
   expandBaseWeek,
   MissingEtagError,
+  programLoad,
   summarizeBaseWeek,
+  weeksLabel,
   type ContentTransport,
 } from './content'
 
@@ -51,6 +53,8 @@ function harness(overrides: Partial<ContentTransport> = {}) {
     },
     readTemplateDraft: async () => ({}) as never,
     discardTemplate: async () => ({}) as never,
+    discardProgram: async () => ({}) as never,
+    readMyUnpublishedProgram: async () => null,
     readProgramDraft: async (programId) =>
       ({ id: 'draft', program_id: programId, etag: 'opened-etag' }) as never,
     createProgram: async (headers) => {
@@ -255,5 +259,42 @@ describe('opening a programme that already exists', () => {
     await flow.openProgram(PROGRAM_ID)
 
     expect(flow.etagFor(PROGRAM_ID)).toBe('opened-etag')
+  })
+})
+
+describe('what a programme amounts to', () => {
+  test('T-SP-PROGRAM-20 one line, with every plural agreeing', () => {
+    expect(programLoad(8, { daysPerWeek: 3, sessions: 24 })).toBe(
+      '8 semanas · 3 días por semana · 24 sesiones',
+    )
+    expect(programLoad(1, { daysPerWeek: 1, sessions: 1 })).toBe(
+      '1 semana · 1 día por semana · 1 sesión',
+    )
+  })
+
+  test('T-SP-PROGRAM-21 a week with nothing in it says so rather than reporting zero', () => {
+    // «0 días por semana · 0 sesiones» is arithmetic nobody asked for, and it reads as
+    // a programme that is wrong rather than one that is not finished.
+    expect(programLoad(8, { daysPerWeek: 0, sessions: 0 })).toBe(
+      '8 semanas · sin días puestos todavía',
+    )
+  })
+
+  test('T-SP-PROGRAM-22 the duration reads the same wherever it is drawn', () => {
+    expect(weeksLabel(1)).toBe('1 semana')
+    expect(weeksLabel(12)).toBe('12 semanas')
+  })
+})
+
+describe('throwing a programme away', () => {
+  test('T-SP-PROGRAM-23 discarding forgets its etag, so a later save cannot resurrect it', () => {
+    // The etag is what the flow answers `If-Match` with. Kept after a discard, a stale
+    // screen could save onto something the person meant to be gone.
+    const { flow } = harness()
+    flow.remember('program-1', '"sha256:kept"')
+
+    return flow.discardProgram('program-1').then(() => {
+      expect(flow.etagFor('program-1')).toBeUndefined()
+    })
   })
 })

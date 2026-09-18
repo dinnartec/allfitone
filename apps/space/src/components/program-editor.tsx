@@ -17,25 +17,31 @@
  */
 
 import { Button } from '@allfitone/react-native/button'
+import { IconButton } from '@allfitone/react-native/icon-button'
 import { FoundationIcon } from '@allfitone/react-native/icons'
 import { InlineAlert } from '@allfitone/react-native/inline-alert'
 import { Screen } from '@allfitone/react-native/screen'
 import { Sheet } from '@allfitone/react-native/sheet'
-import { Stepper } from '@allfitone/react-native/stepper'
 import { Text } from '@allfitone/react-native/text'
 import { TextField } from '@allfitone/react-native/text-field'
+import { Monogram } from '@allfitone/react-native/monogram'
 import { useTheme } from '@allfitone/react-native/theme'
-import { useRouter } from 'expo-router'
+import { useFocusEffect, useRouter } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
 
 import { ApiError } from '../../src/client'
 import { createSpaceContentFlow } from '../client/content-transport'
+import { forgetPublishedRoutine, takePublishedRoutine } from '../client/routine-handoff'
+import { createQueue } from '../client/queue'
+import { saveFailure } from '../client/save-failure'
 import { deviceTimezone } from '../client/timezone'
 import {
   collapseBaseWeek,
   expandBaseWeek,
+  programLoad,
   summarizeBaseWeek,
+  weeksLabel,
   type BaseWeekDay,
   type MyRoutine,
 } from '../client/content'
@@ -52,13 +58,15 @@ const DAYS = [
   { day: 7, letter: 'D', name: 'domingo' },
 ] as const
 
+/** Keeps the button off the very bottom edge, the same amount as every other footer. */
+const FOOTER_LIFT = 16
+
 const DEFAULT_WEEKS = 8
 const MIN_WEEKS = 1
 const MAX_WEEKS = 52
 const SAVE_DELAY_MS = 700
 
 const EXPIRED = 'Tu sesión venció. Vuelve a entrar para continuar.'
-const SAVE_FAILED = 'No pudimos guardar el borrador. Revisa tu conexión.'
 const READ_FAILED = 'No pudimos cargar tus rutinas. Inténtalo otra vez.'
 const OPEN_FAILED = 'No pudimos abrir este programa. Inténtalo otra vez.'
 const NOT_MINE = 'Este programa no se puede editar aquí.'
@@ -66,6 +74,11 @@ const NOT_MINE = 'Este programa no se puede editar aquí.'
 // can take a personal programme, so that warning explained a rule that never applied.
 // It names Entrenar because that is a tab somebody can open. "Tu agenda" is the
 // domain's word and "el calendario" is a screen this app does not have.
+/** Days are stored in lower case, because a sentence needs them that way. */
+function named(day: string): string {
+  return day === '' ? '' : `${day[0]?.toUpperCase() ?? ''}${day.slice(1)}`
+}
+
 const WHAT_A_PROGRAM_IS =
   'Un programa es tu semana de entrenamiento, repetida. Eliges qué rutina toca cada día y cuántas semanas dura; al publicarlo, esas rutinas te aparecen en Entrenar, semana a semana.'
 
@@ -80,6 +93,7 @@ export function ProgramEditor({ programId }: { readonly programId?: string }) {
   const router = useRouter()
   const theme = useTheme()
   const flow = useMemo(() => createSpaceContentFlow(), [])
+  const saves = useMemo(() => createQueue(), [])
 
   const [title, setTitle] = useState('')
   const [weeks, setWeeks] = useState(DEFAULT_WEEKS)
@@ -94,6 +108,21 @@ export function ProgramEditor({ programId }: { readonly programId?: string }) {
   )
   const [routines, setRoutines] = useState<readonly MyRoutine[] | undefined>(undefined)
   const [choosing, setChoosing] = useState<number | undefined>(undefined)
+  const [discarding, setDiscarding] = useState(false)
+  const [leaving, setLeaving] = useState(false)
+
+  /**
+   * Whether this programme already exists as a published version.
+   *
+   * `/programs/new` writes one and `/programs/edit/[programId]` edits one, and the
+   * list that route is reached from only carries programmes that have a version — so
+   * the prop is the answer and nothing has to be asked for to know it.
+   *
+   * It changes what the screen is, the same way it does for a routine: writing saves
+   * as it goes, editing holds the changes until the tick and lets the X throw them
+   * away.
+   */
+  const editing = programId !== undefined
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [failure, setFailure] = useState<string | undefined>(undefined)
@@ -101,25 +130,15 @@ export function ProgramEditor({ programId }: { readonly programId?: string }) {
   const pending = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const identity = useRef<string | undefined>(programId)
 
+  // Read through refs so the deferred assignment does not depend on them: naming a
+  // programme is typing, and a dependency on the name would re-read the routines on
+  // every keystroke.
+  const titled = useRef(title)
+  const repeated = useRef(weeks)
   useEffect(() => {
-    let active = true
-
-    flow
-      .readMyRoutines()
-      .then((found) => {
-        if (active) setRoutines(found)
-      })
-      .catch((cause: unknown) => {
-        if (!active) return
-        setFailure(
-          cause instanceof ApiError && cause.failure === 'unauthenticated' ? EXPIRED : READ_FAILED,
-        )
-      })
-
-    return () => {
-      active = false
-    }
-  }, [flow])
+    titled.current = title
+    repeated.current = weeks
+  }, [title, weeks])
 
   /**
    * Opening one that already exists.
@@ -132,13 +151,23 @@ export function ProgramEditor({ programId }: { readonly programId?: string }) {
    * cannot be said as a base week, and the list does not offer to open those.
    */
   useEffect(() => {
-    if (!programId) return
     let active = true
 
-    flow
-      .openProgram(programId)
+    const resume = async () => {
+      // Either the programme named in the route, or the one somebody left unpublished.
+      // «Programa nuevo» used to mean «start empty», which is what made every saved
+      // draft unreachable: it existed, it counted, and nothing could open it.
+      const id = programId ?? (await flow.readMyUnpublishedProgram())?.id
+      if (!active || !id) return
+      identity.current = id
+      const draft = await flow.openProgram(id)
+      if (!active) return
+      return draft
+    }
+
+    resume()
       .then((draft) => {
-        if (!active) return
+        if (!active || !draft) return
         const { baseWeek, weeks: repeats } = collapseBaseWeek(draft.content.sessions)
         setTitle(draft.content.title)
         setNotes(draft.content.notes ?? null)
@@ -180,41 +209,53 @@ export function ProgramEditor({ programId }: { readonly programId?: string }) {
       const trimmed = nextTitle.trim()
       if (trimmed === '' || !openable) return false
 
-      setSaving(true)
-      try {
-        if (!identity.current) {
-          const program = await flow.createProgram(trimmed)
-          identity.current = program.id
+      // Queued, never raced. A save answers with the etag the next one has to send, so
+      // two in flight means the second carries an etag the first is replacing — which
+      // is exactly what pressing «guardar» inside the autosave's delay used to do.
+      return saves(async () => {
+        setSaving(true)
+        try {
+          if (!identity.current) {
+            const program = await flow.createProgram(trimmed)
+            identity.current = program.id
+          }
+          await flow.saveProgramDraft(identity.current, {
+            title: trimmed,
+            notes,
+            sessions: expandBaseWeek(nextWeek, nextWeeks),
+          })
+          setSaved(true)
+          setFailure(undefined)
+          return true
+        } catch (cause: unknown) {
+          setFailure(saveFailure(cause))
+          return false
+        } finally {
+          setSaving(false)
         }
-        await flow.saveProgramDraft(identity.current, {
-          title: trimmed,
-          notes,
-          sessions: expandBaseWeek(nextWeek, nextWeeks),
-        })
-        setSaved(true)
-        setFailure(undefined)
-        return true
-      } catch (cause: unknown) {
-        setFailure(
-          cause instanceof ApiError && cause.failure === 'unauthenticated' ? EXPIRED : SAVE_FAILED,
-        )
-        return false
-      } finally {
-        setSaving(false)
-      }
+      })
     },
-    [flow, notes, openable],
+    [flow, notes, openable, saves],
   )
 
+  /**
+   * The autosave, and it belongs to writing rather than to editing.
+   *
+   * A programme being written has nowhere else to live, so it goes to its draft as it
+   * is built. One that is already published has somewhere else to live — the version
+   * people are training from — and half an edit written into its draft as it is typed
+   * means leaving the screen leaves the edit behind, which is not what cancel means.
+   */
   const schedule = useCallback(
     (nextTitle: string, nextWeek: readonly BaseWeekDay[], nextWeeks: number) => {
+      if (editing) return
       if (pending.current) clearTimeout(pending.current)
       pending.current = setTimeout(
         () => void persist(nextTitle, nextWeek, nextWeeks),
         SAVE_DELAY_MS,
       )
     },
-    [persist],
+    [persist, editing],
   )
 
   useEffect(
@@ -222,6 +263,81 @@ export function ProgramEditor({ programId }: { readonly programId?: string }) {
       if (pending.current) clearTimeout(pending.current)
     },
     [],
+  )
+
+  // The day somebody left this screen to write a routine for. Held in a ref because
+  // nothing renders from it.
+  const awaiting = useRef<number | undefined>(undefined)
+
+  /**
+   * Puts a newly written routine on the day it was written for.
+   *
+   * The routine is the one the editor handed back, not one deduced from a list. The
+   * deduction was the defect: two routines published in one trip, or an existing one
+   * republished — which mints a new version and so looks new — and it either guessed
+   * wrong or gave up silently.
+   *
+   * Taken whether or not a day is waiting, so a routine written from somewhere else
+   * never sits in the mailbox waiting to land on an unrelated Monday.
+   */
+  const fill = useCallback(() => {
+    const day = awaiting.current
+    awaiting.current = undefined
+    const written = takePublishedRoutine()
+    if (day === undefined || !written) return
+
+    setWeek((current) => {
+      // Not over something already there: the trip took time, and a day filled in the
+      // meantime was filled on purpose.
+      if (current.find((one) => one.day === day)?.templateVersionId) return current
+      const next = current.map((one) =>
+        one.day === day ? { ...one, templateVersionId: written.versionId } : one,
+      )
+      setSaved(false)
+      schedule(titled.current, next, repeated.current)
+      return next
+    })
+    // `schedule` and not nothing: it is rebuilt when the programme finishes opening,
+    // and the copy captured at mount would still be the one that refuses to save.
+  }, [schedule])
+
+  /**
+   * The routines this programme can be built from, re-read every time the screen is
+   * looked at again.
+   *
+   * **On focus and not on mount, which is the defect this replaces.** The screen stays
+   * on the stack while the routine editor is pushed over it, so the list was read once
+   * and never again: somebody who left to make a routine came back to a programme that
+   * had never heard of it. Mounting happens once; returning happens every time.
+   *
+   * And a routine made *for* a day goes onto that day. Leaving to write one was not a
+   * detour — it was the answer to «qué toca el lunes», and coming back to pick it out
+   * of a list again is a step that exists only because the app forgot the question.
+   */
+  useFocusEffect(
+    useCallback(() => {
+      let active = true
+
+      flow
+        .readMyRoutines()
+        .then((found) => {
+          if (!active) return
+          setRoutines(found)
+          fill()
+        })
+        .catch((cause: unknown) => {
+          if (!active) return
+          setFailure(
+            cause instanceof ApiError && cause.failure === 'unauthenticated'
+              ? EXPIRED
+              : READ_FAILED,
+          )
+        })
+
+      return () => {
+        active = false
+      }
+    }, [flow, fill]),
   )
 
   const published = (routines ?? []).filter((routine) => routine.template_version_id !== null)
@@ -232,6 +348,21 @@ export function ProgramEditor({ programId }: { readonly programId?: string }) {
     const filled = week.find((one) => one.day === day)
     if (!filled?.templateVersionId) return undefined
     return published.find((one) => one.template_version_id === filled.templateVersionId)
+  }
+
+  /**
+   * Off to write a routine, remembering what it is for.
+   *
+   * Only the day. Which routine was written is the editor's to say, and it says it
+   * when it publishes.
+   */
+  const leaveToWrite = (day: number | undefined) => {
+    awaiting.current = day
+    // Nothing left over from an earlier trip: the mailbox is emptied on the way out as
+    // well as on the way in, so what lands on this day is what was written for it.
+    forgetPublishedRoutine()
+    setChoosing(undefined)
+    router.push('/routines/new')
   }
 
   const put = (day: number, templateVersionId: string | null) => {
@@ -267,27 +398,64 @@ export function ProgramEditor({ programId }: { readonly programId?: string }) {
       // Taking it from here as well is what left an edit with two assignments, the
       // empty one in front, and both tabs reading a progress that never moved.
       await flow.publishProgram(identity.current, deviceTimezone())
-      // To Entrenar rather than back: this is now the programme being trained, and that
-      // is the tab that says so.
-      router.replace('/train')
+      // To Hoy, which is where every other act in the app lands and — the reason this
+      // read as a jolt — the tab already selected underneath. Going to Entrenar changed
+      // the screen *and* the tab in one frame, and a tab change does not animate by
+      // design, so half the motion was missing and the other half looked broken.
+      router.replace('/today')
     } catch (cause: unknown) {
-      setFailure(
-        cause instanceof ApiError && cause.failure === 'unauthenticated' ? EXPIRED : SAVE_FAILED,
-      )
+      setFailure(saveFailure(cause))
+    }
+  }
+
+  /**
+   * The X, and the two screens this one is.
+   *
+   * Writing, the draft is already on the server and leaving keeps it — there is
+   * nothing to decide. Editing, the visit is a set of changes nobody has applied:
+   * untouched it is just a way out, touched it asks once.
+   */
+  const leave = () => {
+    if (editing) return saved ? router.back() : setDiscarding(true)
+    // Writing: the draft is already on the server, so the question is whether to keep
+    // it. Unnamed there is nothing to keep — nothing was ever created.
+    if (identity.current === undefined) return router.back()
+    setLeaving(true)
+  }
+
+  const throwAway = async () => {
+    setLeaving(false)
+    if (!identity.current) return router.back()
+    try {
+      await flow.discardProgram(identity.current)
+      router.back()
+    } catch (cause: unknown) {
+      setFailure(saveFailure(cause))
     }
   }
 
   const subtitle = () => {
-    if (saving) return 'guardando…'
-    if (failure) return 'sin guardar'
-    if (saved) return 'programa propio · borrador'
-    return 'aún sin guardar'
+    if (saving) return 'Guardando…'
+    if (failure) return 'Sin guardar'
+    // «Borrador» would be a lie on a programme that is published and deliberately
+    // not being written to until the tick.
+    if (editing) return saved ? 'Publicado' : 'Con cambios sin guardar'
+    if (saved) return 'Programa propio · borrador'
+    return 'Aún sin guardar'
   }
 
   // How many weeks a routine is used counts once per week, because the base week is
   // what repeats: saying "8×" would be counting the repetition twice.
-  const timesPerWeek = (templateVersionId: string) =>
-    week.filter((one) => one.templateVersionId === templateVersionId).length
+  /** The days a routine falls on, named: «Lunes · Viernes». */
+  const daysOf = (templateVersionId: string) =>
+    week
+      .filter((one) => one.templateVersionId === templateVersionId)
+      .map((one) => named(DAYS.find((day) => day.day === one.day)?.name ?? ''))
+      .join(' · ')
+
+  const included = published.filter((routine) =>
+    week.some((one) => one.templateVersionId === routine.template_version_id),
+  )
 
   const chosenDay = DAYS.find((one) => one.day === choosing)
 
@@ -295,18 +463,14 @@ export function ProgramEditor({ programId }: { readonly programId?: string }) {
     <Screen edges={['top', 'bottom']}>
       {/* The keyboard moves the scroll inset rather than resizing the container, the
           same as every other screen here that takes typing. */}
-      <ScrollView
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-        automaticallyAdjustKeyboardInsets
-      >
+      {/* The frame stays put: whose programme this is, what it is called and how much
+          of it there is. A frame that scrolls away leaves somebody editing a week with
+          no idea what they are editing. */}
+      <View style={styles.frame}>
         <ScreenHeader
           title={title.trim() === '' ? 'Programa nuevo' : title}
           subtitle={subtitle()}
-          onClose={() => router.back()}
-          onConfirm={publishable ? publish : undefined}
-          confirmLabel="Listo"
+          onClose={leave}
         />
 
         {failure ? <InlineAlert message={failure} /> : null}
@@ -319,20 +483,65 @@ export function ProgramEditor({ programId }: { readonly programId?: string }) {
           autoCapitalize="sentences"
         />
 
-        <View style={[styles.load, { borderColor: theme.color.border.subtle }]}>
-          <Figure value={String(weeks)} label="semanas" />
-          <View style={[styles.divider, { backgroundColor: theme.color.border.subtle }]} />
-          <Figure value={String(summary.sessions)} label="sesiones" accent />
-          <View style={[styles.divider, { backgroundColor: theme.color.border.subtle }]} />
-          <Figure value={String(summary.daysPerWeek)} label="por semana" />
+        {/* What the programme amounts to, as one sentence rather than three figures in
+            a case. The numbers are a consequence of the week below, not a control, and
+            a case of them read as something to act on. */}
+        <Text role="body" size="sm" color="secondary">
+          {programLoad(weeks, summary)}
+        </Text>
+      </View>
+
+      <ScrollView
+        style={styles.scroller}
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <View
+          style={[
+            styles.duration,
+            {
+              borderColor: theme.color.border.subtle,
+              backgroundColor: theme.color.background.surface,
+            },
+          ]}
+        >
+          <FoundationIcon name="frequency" size="sm" color={theme.color.icon.accent} decorative />
+          <View style={styles.rowText}>
+            <Text role="body" size="xs" color="muted">
+              Duración del programa
+            </Text>
+            <Text role="control" size="md">
+              {weeksLabel(weeks)}
+            </Text>
+          </View>
+          {/* Two buttons and no third number. A `Stepper` carries its own value, and
+              the card has already said «8 semanas» right there — the same figure twice
+              in one row is a row somebody has to read twice to be sure. */}
+          <View style={styles.tune}>
+            <IconButton
+              icon="subtract"
+              size="sm"
+              accessibilityLabel={`Quitar una semana. Ahora ${weeksLabel(weeks)}`}
+              disabled={weeks <= MIN_WEEKS}
+              onPress={() => repeat(weeks - 1)}
+            />
+            <IconButton
+              icon="add"
+              size="sm"
+              accessibilityLabel={`Añadir una semana. Ahora ${weeksLabel(weeks)}`}
+              disabled={weeks >= MAX_WEEKS}
+              onPress={() => repeat(weeks + 1)}
+            />
+          </View>
         </View>
 
         <View style={styles.section}>
-          <Text role="eyebrow" size="2xs" color="muted">
-            LA SEMANA BASE
+          <Text role="control" size="sm" color="secondary">
+            La semana base
           </Text>
           <Text role="body" size="sm" color="muted">
-            Defínela una vez. Se repite en todas las semanas.
+            {`Se repite igual las ${weeksLabel(weeks)}. Los días libres son descanso.`}
           </Text>
 
           <View style={styles.days}>
@@ -340,330 +549,372 @@ export function ProgramEditor({ programId }: { readonly programId?: string }) {
               const routine = routineOn(day.day)
               const filled = routine !== undefined
               return (
-                <View key={day.day} style={styles.dayColumn}>
-                  <Text role="label" size="2xs" color="muted">
+                <Pressable
+                  key={day.day}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    filled
+                      ? `${day.name}: ${routine.title}. Cambiar`
+                      : `${day.name}: libre. Poner una rutina`
+                  }
+                  onPress={() => setChoosing(day.day)}
+                  style={({ pressed }) => [
+                    styles.dayCell,
+                    {
+                      backgroundColor: filled
+                        ? theme.color.accent.tonal
+                        : theme.color.background.surface,
+                      borderColor: filled ? theme.color.border.accent : theme.color.border.subtle,
+                      opacity: pressed ? 0.7 : 1,
+                    },
+                  ]}
+                >
+                  <Text role="label" size="2xs" color={filled ? 'accent' : 'muted'}>
                     {day.letter}
                   </Text>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={
-                      filled
-                        ? `${day.name}: ${routine.title}. Cambiar`
-                        : `${day.name}: sin rutina. Poner una`
-                    }
-                    onPress={() => setChoosing(day.day)}
-                    style={({ pressed }) => [
-                      styles.dayCell,
-                      {
-                        backgroundColor: filled
-                          ? theme.color.accent.tonal
-                          : theme.color.background.surface,
-                        borderColor: filled ? theme.color.border.accent : theme.color.border.subtle,
-                        borderWidth: filled ? 1.5 : 1,
-                        opacity: pressed ? 0.7 : 1,
-                      },
-                    ]}
-                  >
-                    {filled ? (
-                      <Text role="label" size="2xs" color="accent" align="center" numberOfLines={2}>
-                        {routine.title}
-                      </Text>
-                    ) : (
+                  {filled ? (
+                    <Monogram name={routine.title} size="sm" />
+                  ) : (
+                    <View style={styles.dayFree}>
                       <FoundationIcon
                         name="add"
                         size="sm"
                         color={theme.color.icon.secondary}
                         decorative
                       />
-                    )}
-                  </Pressable>
-                </View>
+                    </View>
+                  )}
+                  {/* One word, and it is allowed to be cut: the mark above carries the
+                      recognition, and seven names at a seventh of the width never fit. */}
+                  <Text
+                    role="body"
+                    size="2xs"
+                    color={filled ? 'primary' : 'muted'}
+                    align="center"
+                    numberOfLines={1}
+                  >
+                    {filled ? routine.title : 'Libre'}
+                  </Text>
+                </Pressable>
               )
             })}
           </View>
-
-          <View
-            style={[
-              styles.repeat,
-              {
-                borderColor: theme.color.border.subtle,
-                backgroundColor: theme.color.background.surface,
-              },
-            ]}
-          >
-            <FoundationIcon name="frequency" size="sm" color={theme.color.icon.accent} decorative />
-            <View style={styles.rowText}>
-              <Text role="body" size="xs" color="muted">
-                Se repite durante
-              </Text>
-              <Text role="control" size="md">
-                {weeks === 1 ? '1 semana' : `${weeks} semanas`}
-              </Text>
-            </View>
-            <Stepper
-              accessibilityLabel="Semanas que se repite"
-              value={weeks}
-              onChange={repeat}
-              min={MIN_WEEKS}
-              max={MAX_WEEKS}
-            />
-          </View>
-
-          <Text role="body" size="sm" color="muted" style={styles.centered}>
-            Toca un día para poner o cambiar su rutina.
-          </Text>
         </View>
 
         <View style={styles.section}>
-          <Text role="eyebrow" size="2xs" color="muted">
-            RUTINAS QUE INCLUYE
-          </Text>
-          {summary.daysPerWeek === 0 ? (
+          <View style={styles.sectionHead}>
+            <Text role="control" size="sm" color="secondary">
+              Rutinas que incluye
+            </Text>
+            {included.length === 0 ? null : (
+              <Text role="control" size="sm" color="accent">
+                {String(included.length)}
+              </Text>
+            )}
+          </View>
+          {included.length === 0 ? (
             <Text role="body" size="sm" color="muted">
               Todavía no hay ninguna rutina en la semana.
             </Text>
           ) : (
-            <View>
-              {published
-                .filter((routine) => timesPerWeek(routine.template_version_id ?? '') > 0)
-                .map((routine) => (
-                  <View
-                    key={routine.template_id}
-                    style={[styles.included, { borderColor: theme.color.border.subtle }]}
-                  >
-                    <View style={styles.rowText}>
-                      <Text role="control" size="sm">
-                        {routine.title}
-                      </Text>
-                      <Text role="body" size="xs" color="muted">
-                        {`${routine.exercise_count} ejercicios · ${routine.set_count} series`}
-                      </Text>
-                    </View>
-                    <Text role="label" size="2xs" color="secondary">
-                      {`${timesPerWeek(routine.template_version_id ?? '')}×/sem`}
-                    </Text>
-                  </View>
-                ))}
-            </View>
-          )}
-        </View>
-
-        <View style={[styles.notice, { backgroundColor: theme.color.background.surfaceSubtle }]}>
-          <FoundationIcon name="info" size="sm" color={theme.color.icon.secondary} decorative />
-          <Text role="body" size="sm" color="secondary" style={styles.noticeText}>
-            {WHAT_A_PROGRAM_IS}
-          </Text>
-        </View>
-      </ScrollView>
-
-      <Sheet
-        visible={choosing !== undefined}
-        onDismiss={() => setChoosing(undefined)}
-        title={chosenDay ? `Qué toca el ${chosenDay.name}` : 'Qué toca ese día'}
-      >
-        <View style={styles.sheetBody}>
-          <Text role="body" size="xs" color="muted">
-            {published.length === 0
-              ? 'Todavía no tienes ninguna rutina que poner aquí.'
-              : chosenDay
-                ? `Se repetirá todos los ${chosenDay.name} del programa.`
-                : ''}
-          </Text>
-
-          {published.length === 0 ? (
-            <View style={styles.emptySheet}>
-              <View
-                style={[
-                  styles.emptyIcon,
-                  {
-                    borderColor: theme.color.border.subtle,
-                    backgroundColor: theme.color.background.surfaceSubtle,
-                  },
-                ]}
-              >
-                <FoundationIcon
-                  name="training"
-                  size="lg"
-                  color={theme.color.icon.secondary}
-                  decorative
-                />
-              </View>
-              <Text role="display" size="lg" align="center">
-                Crea tu primera rutina
-              </Text>
-              <Text role="body" size="sm" color="muted" style={styles.centered}>
-                Una rutina es la sesión que se repite: sus ejercicios, sus series y sus pesos.
-                Cuando tengas una, podrás ponerla en cualquier día del programa.
-              </Text>
-              <Button
-                label="CREAR UNA RUTINA"
-                icon="add"
-                onPress={() => {
-                  setChoosing(undefined)
-                  router.push('/routines/new')
-                }}
-              />
-              <Button
-                label="Ver los de Allfit"
-                variant="secondary"
-                icon="explore"
-                onPress={() => {
-                  setChoosing(undefined)
-                  router.push('/programs')
-                }}
-              />
-            </View>
-          ) : (
-            <ScrollView style={styles.sheetList} showsVerticalScrollIndicator={false}>
-              {published.map((routine) => {
-                const chosen =
-                  week.find((one) => one.day === choosing)?.templateVersionId ===
-                  routine.template_version_id
-                return (
-                  <Pressable
-                    key={routine.template_id}
-                    accessibilityRole="button"
-                    accessibilityLabel={routine.title}
-                    accessibilityState={{ selected: chosen }}
-                    onPress={() => put(choosing ?? 1, routine.template_version_id)}
-                    style={[
-                      styles.option,
-                      {
-                        backgroundColor: chosen
-                          ? theme.color.accent.tonal
-                          : theme.color.background.surfaceSubtle,
-                        borderColor: chosen ? theme.color.border.accent : theme.color.border.subtle,
-                        borderWidth: chosen ? 1.5 : 1,
-                      },
-                    ]}
-                  >
-                    <View style={styles.rowText}>
-                      <Text role="control" size="sm">
-                        {routine.title}
-                      </Text>
-                      <Text role="body" size="xs" color="muted">
-                        {`${routine.exercise_count} ejercicios · ${routine.set_count} series`}
-                      </Text>
-                    </View>
-                    {chosen ? (
-                      <FoundationIcon
-                        name="check"
-                        size="sm"
-                        color={theme.color.icon.accent}
-                        decorative
-                      />
-                    ) : null}
-                  </Pressable>
-                )
-              })}
-
+            included.map((routine) => (
               <Pressable
+                key={routine.template_id}
                 accessibilityRole="button"
-                accessibilityLabel={
-                  chosenDay ? `Dejar el ${chosenDay.name} libre` : 'Dejar el día libre'
-                }
-                onPress={() => put(choosing ?? 1, null)}
-                style={[
-                  styles.option,
+                accessibilityLabel={`Abrir ${routine.title}`}
+                accessibilityHint={daysOf(routine.template_version_id ?? '')}
+                onPress={() => router.push(`/routines/${routine.template_id}`)}
+                style={({ pressed }) => [
+                  styles.included,
                   {
-                    backgroundColor: theme.color.background.surfaceSubtle,
                     borderColor: theme.color.border.subtle,
-                    borderWidth: 1,
+                    backgroundColor: theme.color.background.surface,
+                    opacity: pressed ? 0.7 : 1,
                   },
                 ]}
               >
+                <Monogram name={routine.title} />
+                <View style={styles.rowText}>
+                  <Text role="control" size="sm" numberOfLines={1}>
+                    {routine.title}
+                  </Text>
+                  {/* Which days, not how many times: «Lunes · Viernes» is the answer to
+                      what somebody is looking at the list for, and «2×/sem» is not. */}
+                  <Text role="body" size="xs" color="muted" numberOfLines={1}>
+                    {daysOf(routine.template_version_id ?? '')}
+                  </Text>
+                </View>
                 <FoundationIcon
-                  name="rest"
+                  name="next"
                   size="sm"
                   color={theme.color.icon.secondary}
                   decorative
                 />
-                <View style={styles.rowText}>
-                  <Text role="control" size="sm">
-                    Día de descanso
-                  </Text>
-                  <Text role="body" size="xs" color="muted">
-                    {chosenDay ? `deja el ${chosenDay.name} libre` : 'deja el día libre'}
-                  </Text>
-                </View>
               </Pressable>
+            ))
+          )}
+        </View>
 
-              <Button
-                label="Crear una rutina nueva"
-                variant="secondary"
-                icon="add"
-                onPress={() => {
-                  setChoosing(undefined)
-                  router.push('/routines/new')
-                }}
-              />
+        {/* Only while the week is empty. It answers «what is this screen» and stops
+            answering it the moment somebody has plainly worked it out. */}
+        {summary.daysPerWeek > 0 ? null : (
+          <View style={[styles.notice, { backgroundColor: theme.color.background.surfaceSubtle }]}>
+            <FoundationIcon name="info" size="sm" color={theme.color.icon.secondary} decorative />
+            <Text role="body" size="sm" color="secondary" style={styles.noticeText}>
+              {WHAT_A_PROGRAM_IS}
+            </Text>
+          </View>
+        )}
+      </ScrollView>
 
-              {(routines ?? []).some((routine) => routine.template_version_id === null) ? (
-                <View style={styles.footnote}>
+      {/* Anchored, and it says what it does. The tick in the header is the same act,
+          but «Listo» on a screen that has been saving a draft all along says nothing
+          about the one press that turns it into weeks of training. */}
+      <View style={styles.anchor}>
+        <Button label="Guardar programa" icon="check" disabled={!publishable} onPress={publish} />
+      </View>
+
+      {/* One sheet, not two. A `Sheet` is a real `Modal` that stays mounted through its
+          own exit animation, so two of them on one screen present while the other is
+          still dismissing — which iOS refuses, leaving nothing on screen and an
+          invisible layer eating every touch. */}
+      <Sheet
+        visible={choosing !== undefined || discarding || leaving}
+        onDismiss={() => {
+          setChoosing(undefined)
+          setDiscarding(false)
+          setLeaving(false)
+        }}
+        title={
+          discarding
+            ? '¿Descartar cambios?'
+            : leaving
+              ? '¿Guardas este programa?'
+              : chosenDay
+                ? `Qué toca el ${chosenDay.name}`
+                : 'Qué toca ese día'
+        }
+      >
+        {leaving ? (
+          <View style={styles.sheetBody}>
+            <Text role="body" size="md" color="muted">
+              Se está guardando como borrador según lo armas. Puedes dejarlo para después o tirarlo.
+            </Text>
+            <Button
+              label="Guardar borrador"
+              onPress={() => {
+                setLeaving(false)
+                router.back()
+              }}
+            />
+            <Button
+              label="Descartar programa"
+              variant="ghost"
+              icon="remove"
+              onPress={() => void throwAway()}
+            />
+          </View>
+        ) : discarding ? (
+          <View style={styles.sheetBody}>
+            <Text role="body" size="md" color="muted">
+              Lo que cambiaste aquí no se ha aplicado todavía. Si lo descartas, el programa se queda
+              como estaba.
+            </Text>
+            <Button
+              label="Descartar cambios"
+              variant="ghost"
+              icon="remove"
+              onPress={() => {
+                setDiscarding(false)
+                router.back()
+              }}
+            />
+            <Button
+              label="Seguir editando"
+              variant="secondary"
+              onPress={() => setDiscarding(false)}
+            />
+          </View>
+        ) : (
+          <View style={styles.sheetBody}>
+            <Text role="body" size="xs" color="muted">
+              {published.length === 0
+                ? 'Todavía no tienes ninguna rutina que poner aquí.'
+                : chosenDay
+                  ? `Se repetirá todos los ${chosenDay.name} del programa.`
+                  : ''}
+            </Text>
+
+            {published.length === 0 ? (
+              <View style={styles.emptySheet}>
+                <View
+                  style={[
+                    styles.emptyIcon,
+                    {
+                      borderColor: theme.color.border.subtle,
+                      backgroundColor: theme.color.background.surfaceSubtle,
+                    },
+                  ]}
+                >
                   <FoundationIcon
-                    name="locked"
+                    name="training"
+                    size="lg"
+                    color={theme.color.icon.secondary}
+                    decorative
+                  />
+                </View>
+                <Text role="display" size="lg" align="center">
+                  Crea tu primera rutina
+                </Text>
+                <Text role="body" size="sm" color="muted" style={styles.centered}>
+                  Una rutina es la sesión que se repite: sus ejercicios, sus series y sus pesos.
+                  Cuando tengas una, podrás ponerla en cualquier día del programa.
+                </Text>
+                <Button
+                  label="Crear una rutina"
+                  icon="add"
+                  onPress={() => leaveToWrite(choosing)}
+                />
+                <Button
+                  label="Ver los de Allfit"
+                  variant="secondary"
+                  icon="explore"
+                  onPress={() => {
+                    setChoosing(undefined)
+                    router.push('/programs')
+                  }}
+                />
+              </View>
+            ) : (
+              <ScrollView style={styles.sheetList} showsVerticalScrollIndicator={false}>
+                {published.map((routine) => {
+                  const chosen =
+                    week.find((one) => one.day === choosing)?.templateVersionId ===
+                    routine.template_version_id
+                  return (
+                    <Pressable
+                      key={routine.template_id}
+                      accessibilityRole="button"
+                      accessibilityLabel={routine.title}
+                      accessibilityState={{ selected: chosen }}
+                      onPress={() => put(choosing ?? 1, routine.template_version_id)}
+                      style={[
+                        styles.option,
+                        {
+                          backgroundColor: chosen
+                            ? theme.color.accent.tonal
+                            : theme.color.background.surfaceSubtle,
+                          borderColor: chosen
+                            ? theme.color.border.accent
+                            : theme.color.border.subtle,
+                          borderWidth: chosen ? 1.5 : 1,
+                        },
+                      ]}
+                    >
+                      <View style={styles.rowText}>
+                        <Text role="control" size="sm">
+                          {routine.title}
+                        </Text>
+                        <Text role="body" size="xs" color="muted">
+                          {`${routine.exercise_count} ejercicios · ${routine.set_count} series`}
+                        </Text>
+                      </View>
+                      {chosen ? (
+                        <FoundationIcon
+                          name="check"
+                          size="sm"
+                          color={theme.color.icon.accent}
+                          decorative
+                        />
+                      ) : null}
+                    </Pressable>
+                  )
+                })}
+
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    chosenDay ? `Dejar el ${chosenDay.name} libre` : 'Dejar el día libre'
+                  }
+                  onPress={() => put(choosing ?? 1, null)}
+                  style={[
+                    styles.option,
+                    {
+                      backgroundColor: theme.color.background.surfaceSubtle,
+                      borderColor: theme.color.border.subtle,
+                      borderWidth: 1,
+                    },
+                  ]}
+                >
+                  <FoundationIcon
+                    name="rest"
                     size="sm"
                     color={theme.color.icon.secondary}
                     decorative
                   />
-                  <Text role="body" size="sm" color="muted" style={styles.noticeText}>
-                    Tienes rutinas en borrador. Publícalas para poder ponerlas en un día.
-                  </Text>
-                </View>
-              ) : null}
-            </ScrollView>
-          )}
-        </View>
+                  <View style={styles.rowText}>
+                    <Text role="control" size="sm">
+                      Día de descanso
+                    </Text>
+                    <Text role="body" size="xs" color="muted">
+                      {chosenDay ? `deja el ${chosenDay.name} libre` : 'deja el día libre'}
+                    </Text>
+                  </View>
+                </Pressable>
+
+                <Button
+                  label="Crear una rutina nueva"
+                  variant="secondary"
+                  icon="add"
+                  onPress={() => leaveToWrite(choosing)}
+                />
+
+                {(routines ?? []).some((routine) => routine.template_version_id === null) ? (
+                  <View style={styles.footnote}>
+                    <FoundationIcon
+                      name="locked"
+                      size="sm"
+                      color={theme.color.icon.secondary}
+                      decorative
+                    />
+                    <Text role="body" size="sm" color="muted" style={styles.noticeText}>
+                      Tienes rutinas en borrador. Publícalas para poder ponerlas en un día.
+                    </Text>
+                  </View>
+                ) : null}
+              </ScrollView>
+            )}
+          </View>
+        )}
       </Sheet>
     </Screen>
   )
 }
 
-function Figure({
-  value,
-  label,
-  accent,
-}: {
-  readonly value: string
-  readonly label: string
-  readonly accent?: boolean
-}) {
-  return (
-    <View style={styles.figure}>
-      {accent ? (
-        <Text role="display" size="lg" color="accent">
-          {value}
-        </Text>
-      ) : (
-        <Text role="display" size="lg">
-          {value}
-        </Text>
-      )}
-      <Text role="label" size="2xs" color="muted">
-        {label}
-      </Text>
-    </View>
-  )
-}
-
 const styles = StyleSheet.create({
-  content: { gap: 18, paddingBottom: 48 },
+  // The part that stays and the part that moves.
+  frame: { gap: 18, paddingBottom: 16 },
+  scroller: { flex: 1 },
+  content: { gap: 18, paddingBottom: 16 },
   section: { gap: 10 },
   centered: { textAlign: 'center' },
-  load: { flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, paddingBottom: 14 },
-  figure: { flex: 1, alignItems: 'center', gap: 2 },
-  divider: { width: 1, height: 32 },
-  days: { flexDirection: 'row', gap: 5 },
-  dayColumn: { flex: 1, alignItems: 'center', gap: 5 },
+  sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  days: { flexDirection: 'row', gap: 4 },
+  // One pill per day holding its letter, its mark and its name. Three loose pieces
+  // stacked read as three rows of seven things; one box reads as a day.
   dayCell: {
-    width: '100%',
-    height: 54,
-    borderRadius: 12,
+    flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 3,
+    gap: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 2,
   },
-  repeat: {
+  // The same room the mark takes, so a free day is the same height as a full one.
+  dayFree: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
+  tune: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  duration: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
@@ -671,13 +922,15 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 12,
   },
+  anchor: { paddingTop: 12, paddingBottom: FOOTER_LIFT },
   rowText: { flex: 1, gap: 2 },
   included: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    borderBottomWidth: 1,
-    paddingVertical: 12,
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 12,
   },
   notice: { flexDirection: 'row', gap: 10, borderRadius: 16, padding: 14 },
   noticeText: { flex: 1 },

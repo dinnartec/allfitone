@@ -83,6 +83,9 @@ import { scheduleOnRN } from 'react-native-worklets'
 import { ApiError } from '../../src/client'
 import { createSpaceContentFlow } from '../../src/client/content-transport'
 import { aside, edgeScroll, nextOffset, placeOf } from '../../src/client/drag-order'
+import { createQueue } from '../../src/client/queue'
+import { saveFailure } from '../../src/client/save-failure'
+import { offerPublishedRoutine } from '../../src/client/routine-handoff'
 import { revealOffset, type Frame } from '../../src/client/reveal'
 import { readExerciseLibrary } from '../../src/client/exercise-library'
 import {
@@ -188,6 +191,7 @@ function kindAt(steps: readonly WorkingStep[], sheet: Sheeted | undefined) {
 /** Which sheet is up, and about what. One at a time, which is what a sheet is. */
 type Sheeted =
   | { readonly kind: 'leaving' }
+  | { readonly kind: 'discarding' }
   | { readonly kind: 'menu'; readonly position: number }
   | { readonly kind: 'rest'; readonly position: number }
   | { readonly kind: 'superset'; readonly position: number }
@@ -196,12 +200,12 @@ type Sheeted =
 const LOAD_FAILED = 'No pudimos abrir el borrador. Revisa tu conexión.'
 
 const EXPIRED = 'Tu sesión venció. Vuelve a entrar para continuar.'
-const SAVE_FAILED = 'No pudimos guardar el borrador. Revisa tu conexión.'
 
 export default function RoutineEditor() {
   const router = useRouter()
   const theme = useTheme()
   const flow = useMemo(() => createSpaceContentFlow(), [])
+  const saves = useMemo(() => createQueue(), [])
   const params = useLocalSearchParams<{ templateId: string }>()
 
   const [templateId, setTemplateId] = useState<string | undefined>(
@@ -222,6 +226,20 @@ export default function RoutineEditor() {
   // animation down while the transforms are the ones placing the rows.
   const [dragging, setDragging] = useState(false)
   const [settling, setSettling] = useState(false)
+  /**
+   * Whether this routine already exists as a published version.
+   *
+   * It changes what the screen *is*. A new routine is being written, so it saves as it
+   * goes and leaving asks whether to keep the draft. One that is already out there is
+   * being **edited**, and editing has a cancel: nothing is written until the tick, and
+   * the X throws the visit away.
+   *
+   * The signal is a published version of this template, which is what `my-content`
+   * reports. It is deliberately **not** the draft's `derived_from_version_id`: that
+   * one records a draft forked *from somebody else's* version, and a template
+   * publishing its own leaves it null — as the database plainly shows.
+   */
+  const [editing, setEditing] = useState(false)
   // Presentation, not prescription: the draft carries a movement's identifier and
   // nothing about how it looks, so the picture is looked up rather than stored.
   const [previews, setPreviews] = useState<ReadonlyMap<string, string | null>>(new Map())
@@ -322,39 +340,51 @@ export default function RoutineEditor() {
       // scheduled before the draft arrived would write an empty routine over it.
       if (!loaded) return false
 
-      setSaving(true)
-      try {
-        if (!identity.current) {
-          const template = await flow.createTemplate(DISCIPLINE, trimmed)
-          identity.current = template.id
-          activityType.current = template.draft.content.activity_type_id
-          setTemplateId(template.id)
+      // Queued, never raced. A save answers with the etag the next one has to send, so
+      // two in flight means the second carries an etag the first is replacing.
+      return saves(async () => {
+        setSaving(true)
+        try {
+          if (!identity.current) {
+            const template = await flow.createTemplate(DISCIPLINE, trimmed)
+            identity.current = template.id
+            activityType.current = template.draft.content.activity_type_id
+            setTemplateId(template.id)
+          }
+          await flow.saveTemplateDraft(
+            identity.current,
+            stepsToContent(trimmed, nextSteps, activityType.current),
+          )
+          setSaved(true)
+          setFailure(undefined)
+          return true
+        } catch (cause: unknown) {
+          setFailure(saveFailure(cause))
+          return false
+        } finally {
+          setSaving(false)
         }
-        await flow.saveTemplateDraft(
-          identity.current,
-          stepsToContent(trimmed, nextSteps, activityType.current),
-        )
-        setSaved(true)
-        setFailure(undefined)
-        return true
-      } catch (cause: unknown) {
-        setFailure(
-          cause instanceof ApiError && cause.failure === 'unauthenticated' ? EXPIRED : SAVE_FAILED,
-        )
-        return false
-      } finally {
-        setSaving(false)
-      }
+      })
     },
-    [flow, loaded],
+    [flow, loaded, saves],
   )
 
+  /**
+   * The autosave, and it belongs to writing rather than to editing.
+   *
+   * A routine being written for the first time has nowhere else to live, so every
+   * keystroke goes to its draft. A routine that is already published does have
+   * somewhere else to live — the version somebody is training from — and writing half
+   * an edit into its draft as it is typed means leaving the screen leaves the edit
+   * behind, which is not what cancel means anywhere else.
+   */
   const schedule = useCallback(
     (nextTitle: string, nextSteps: readonly WorkingStep[]) => {
+      if (editing) return
       if (pending.current) clearTimeout(pending.current)
       pending.current = setTimeout(() => void persist(nextTitle, nextSteps), SAVE_DELAY_MS)
     },
-    [persist],
+    [persist, editing],
   )
 
   useEffect(
@@ -378,16 +408,18 @@ export default function RoutineEditor() {
       // Read whether or not there is a draft: a routine started from nothing shows
       // pictures too, and the library is a process-lifetime cache, so asking twice in
       // one session costs nothing.
-      const library = await readExerciseLibrary(flow)
+      const [library, mine] = await Promise.all([readExerciseLibrary(flow), flow.readMyRoutines()])
       if (!active) return
       setPreviews(new Map(library.movements.map((movement) => [movement.id, movement.demo_url])))
 
       let id = params.templateId === 'new' ? undefined : params.templateId
-      if (!id) {
-        const mine = await flow.readMyRoutines()
-        id = mine.find((routine) => routine.template_version_id === null)?.template_id
-      }
+      if (!id) id = mine.find((routine) => routine.template_version_id === null)?.template_id
       if (!id) return
+
+      // Asked for before the draft, because it decides what this screen is: writing
+      // one that does not exist yet, or editing one somebody may already be training
+      // from. Everything below reads differently depending on the answer.
+      const known = mine.find((routine) => routine.template_id === id)
       const draft = await flow.openTemplate(id)
       if (!active) return
       const names = new Map(library.movements.map((movement) => [movement.id, movement.name]))
@@ -396,6 +428,7 @@ export default function RoutineEditor() {
       setTemplateId(id)
       setTitle(draft.content.title)
       setSteps(stepsFromContent(draft.content, (movementId) => names.get(movementId)))
+      setEditing(known?.template_version_id != null)
       setSaved(true)
     }
 
@@ -472,9 +505,7 @@ export default function RoutineEditor() {
       await flow.discardTemplate(templateId)
       router.back()
     } catch (cause: unknown) {
-      setFailure(
-        cause instanceof ApiError && cause.failure === 'unauthenticated' ? EXPIRED : SAVE_FAILED,
-      )
+      setFailure(saveFailure(cause))
     }
   }
 
@@ -490,12 +521,14 @@ export default function RoutineEditor() {
       // publish whatever the server still holds, and leaving hides the message.
       const stored = await persist(title, steps)
       if (!stored) return
-      await flow.publishTemplate(templateId)
+      const version = await flow.publishTemplate(templateId)
+      // Said out loud rather than left to be deduced: whoever sent us here — a
+      // programme waiting to put this on a Monday — cannot work out which routine was
+      // just written by looking at a list, and does not have to.
+      offerPublishedRoutine({ templateId, versionId: version.id })
       router.back()
     } catch (cause: unknown) {
-      setFailure(
-        cause instanceof ApiError && cause.failure === 'unauthenticated' ? EXPIRED : SAVE_FAILED,
-      )
+      setFailure(saveFailure(cause))
     }
   }
 
@@ -543,6 +576,7 @@ export default function RoutineEditor() {
 
   const sheetTitle = () => {
     if (sheet?.kind === 'leaving') return '¿Guardas esta rutina?'
+    if (sheet?.kind === 'discarding') return '¿Descartar cambios?'
     if (sheet?.kind === 'set-kind') return 'Tipo de serie'
     if (sheet?.kind === 'rest') return 'Descanso entre series'
     if (sheet?.kind === 'superset') return 'Superserie'
@@ -550,9 +584,30 @@ export default function RoutineEditor() {
     return ''
   }
 
+  /**
+   * The X, and the two screens this one is.
+   *
+   * **Writing.** A new routine has nowhere to live but its draft, which is being
+   * written as somebody types, so leaving has to ask what to do with it.
+   *
+   * **Editing.** A published routine is already somewhere, and this visit is a set of
+   * changes that have not been applied. Untouched, the X is just a way out and asking
+   * anything would be noise. Touched, it asks once — and «descartar» here throws the
+   * changes away, never the routine.
+   */
+  const leave = () => {
+    if (!templateId) return router.back()
+    if (!editing) return setSheet({ kind: 'leaving' })
+    if (saved) return router.back()
+    setSheet({ kind: 'discarding' })
+  }
+
   const subtitle = () => {
     if (saving) return 'Guardando…'
     if (failure) return 'Sin guardar'
+    // «Borrador guardado» would be a lie on a routine that is already out there and is
+    // deliberately not being written to until the tick.
+    if (editing) return saved ? 'Publicada' : 'Con cambios sin guardar'
     if (saved) return 'Borrador guardado'
     return 'Aún sin guardar'
   }
@@ -568,7 +623,7 @@ export default function RoutineEditor() {
           subtitle={subtitle()}
           // A named routine is already on the server, so leaving silently would keep
           // something nobody asked to keep.
-          onClose={() => (templateId ? setSheet({ kind: 'leaving' }) : router.back())}
+          onClose={leave}
           onConfirm={templateId ? publish : undefined}
           confirmLabel="Listo"
         />
@@ -685,7 +740,9 @@ export default function RoutineEditor() {
               Busca en el catálogo y añade el primero. Luego le pones series, peso y descanso.
             </Text>
             <Text role="body" size="sm" color="muted" style={styles.centered}>
-              Se guarda como borrador según escribes. Necesita conexión.
+              {editing
+                ? 'Los cambios se aplican al guardar. Necesita conexión.'
+                : 'Se guarda como borrador según escribes. Necesita conexión.'}
             </Text>
           </View>
         ) : (
@@ -846,6 +903,29 @@ export default function RoutineEditor() {
         onDismiss={() => setSheet(undefined)}
         title={sheetTitle()}
       >
+        {sheet?.kind === 'discarding' ? (
+          <View style={styles.sheet}>
+            <Text role="body" size="md" color="muted">
+              Lo que cambiaste aquí no se ha aplicado todavía. Si lo descartas, la rutina se queda
+              como estaba.
+            </Text>
+            <Button
+              label="Descartar cambios"
+              variant="ghost"
+              icon="remove"
+              onPress={() => {
+                setSheet(undefined)
+                router.back()
+              }}
+            />
+            <Button
+              label="Seguir editando"
+              variant="secondary"
+              onPress={() => setSheet(undefined)}
+            />
+          </View>
+        ) : null}
+
         {sheet?.kind === 'leaving' ? (
           <View style={styles.sheet}>
             <Text role="body" size="md" color="muted">
