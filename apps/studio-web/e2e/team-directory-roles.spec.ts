@@ -77,14 +77,16 @@ test('coach sees only the governed role catalog and never requests the team dire
   await installStudioApiMock(page, fixture)
   await page.goto(`/organizations/${coachMembership.organization_id}/team`)
 
-  // The section exists for everyone and explains the denial in place; hiding
-  // the destination made the same sidebar label resolve to a different page per
-  // person. The directory itself is still never requested.
+  // Every section exists for everyone and explains its own denial in place;
+  // hiding a destination made the same label resolve to a different page per
+  // person. This expected `Invitaciones` to be hidden, which was the one
+  // section still doing the opposite, and left a coach who opened an invitation
+  // URL on a page with no tab selected. The data itself is still never read.
   await expect(page.getByText('No tienes acceso a este directorio')).toBeVisible()
   const sectionNavigation = page.getByRole('navigation', { name: 'Secciones del equipo' })
   await expect(sectionNavigation.getByRole('link', { name: 'Integrantes' })).toBeVisible()
+  await expect(sectionNavigation.getByRole('link', { name: 'Invitaciones' })).toBeVisible()
   await expect(sectionNavigation.getByRole('link', { name: 'Roles', exact: true })).toBeVisible()
-  await expect(sectionNavigation.getByRole('link', { name: 'Invitaciones' })).toHaveCount(0)
   await expect(
     page.locator('[data-organization-sidebar]').getByRole('link', { name: 'Equipo' }),
   ).toHaveAttribute('href', `/organizations/${coachMembership.organization_id}/team`)

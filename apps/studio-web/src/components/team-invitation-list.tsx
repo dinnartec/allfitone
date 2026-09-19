@@ -10,7 +10,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@allfitone/react/components/alert-dialog'
-import { Alert, AlertAction, AlertDescription } from '@allfitone/react/components/alert'
+import { Alert, AlertAction, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
 import { Badge } from '@allfitone/react/components/badge'
 import { Button, buttonVariants } from '@allfitone/react/components/button'
 import { Card, CardContent, CardHeader } from '@allfitone/react/components/card'
@@ -75,22 +75,23 @@ export function TeamInvitationList() {
   const [revokeError, setRevokeError] = useState<string>()
   const [revokeCommandIntent] = useState(() => createCommandIntentManager(newCommand))
   const options = organizationInvitationsQueryOptions(current.organization_id, filter, 50)
-  const query = useInfiniteQuery(options)
+  // The register is governed by the invite capability, not by a separate read
+  // one: `identity.list_staff_invitations` refuses a coach with 42501.
+  const canReadInvitations = canInviteTeam(current.roles)
+  const query = useInfiniteQuery({ ...options, enabled: canReadInvitations })
   const forbidden = isStudioForbidden(query.error)
   const staleCursor =
     query.isFetchNextPageError &&
     query.error instanceof StudioApiError &&
     query.error.status === 422
-  const items = forbidden ? [] : flattenInvitationPages(query.data)
-  const loading = query.isPending
+  const items = flattenInvitationPages(query.data)
+  const loading = query.isPending && canReadInvitations
   const loadingMore = query.isFetchingNextPage
   const nextCursor =
     !staleCursor && query.hasNextPage ? (query.data?.pages.at(-1)?.page.next_cursor ?? null) : null
-  const error = forbidden
-    ? 'Tu rol actual no permite consultar las invitaciones.'
-    : query.isError
-      ? 'La conexión falló de forma temporal. Inténtalo de nuevo.'
-      : undefined
+  const error = query.isError
+    ? 'La conexión falló de forma temporal. Inténtalo de nuevo.'
+    : undefined
   const revokeMutation = useStudioSessionMutation({
     mutationFn: (
       { invitationId, command }: { invitationId: string; command: CommandHeaders },
@@ -156,6 +157,33 @@ export function TeamInvitationList() {
         setRevokeError('No pudimos revocar la invitación. Inténtalo de nuevo.')
       }
     }
+  }
+
+  // Refusal is not a failed load: it has no retry, and the section still exists
+  // for this person. `forbidden` covers a role that changed mid-session.
+  if (!canReadInvitations || forbidden) {
+    return (
+      <section data-team-page aria-label="Invitaciones del equipo">
+        <WorkspacePageHeader description="Las invitaciones del equipo las gestionan quienes pueden proponerlas." />
+        <Alert variant="warning">
+          <AlertTitle>No puedes consultar las invitaciones</AlertTitle>
+          <AlertDescription>
+            Tu rol no incluye esta parte del equipo. Puedes consultar los roles y entender qué
+            permite cada uno.
+          </AlertDescription>
+          <AlertAction>
+            <Link
+              href={`/organizations/${current.organization_id}/team/roles`}
+              data-slot="button"
+              data-variant="outline"
+              className={buttonVariants({ variant: 'outline' })}
+            >
+              Ver roles y permisos
+            </Link>
+          </AlertAction>
+        </Alert>
+      </section>
+    )
   }
 
   // One derived state for the whole list. The error and the empty result used

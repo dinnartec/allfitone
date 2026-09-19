@@ -39,7 +39,7 @@ import {
 } from '@allfitone/react/components/select'
 import { useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
-import { type FormEvent, useState } from 'react'
+import { type FormEvent, useEffect, useState } from 'react'
 
 import { useOrganizationContext } from './organization-context'
 import { useStudioSessionMutation } from './studio-query-provider'
@@ -83,8 +83,19 @@ export function TeamInvitationForm() {
     },
   })
   const submitting = createMutation.isPending
+  const refused = !canInviteTeam(current.roles)
 
-  if (!INVITATIONS_ENABLED || !canInviteTeam(current.roles)) {
+  // Two different situations used to share one screen. A role that cannot
+  // invite goes to the register, which refuses it in place and leaves its tab
+  // selected; the heading here would otherwise announce a form that never came.
+  useEffect(() => {
+    if (refused) router.replace(`/organizations/${current.organization_id}/team/invitations`)
+  }, [refused, router, current.organization_id])
+
+  if (refused) return null
+
+  // The flag is a product state, not a permission: it reaches every role.
+  if (!INVITATIONS_ENABLED) {
     return (
       <section data-team-invitation-state>
         <Alert variant="warning">
