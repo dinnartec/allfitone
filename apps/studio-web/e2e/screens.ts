@@ -114,6 +114,27 @@ const withoutProfile = () =>
     memberships: [activeMembership],
   })
 
+const withProfileAndNoCredentials = () =>
+  createStudioApiFixture({
+    me: {
+      profile: { ...professionalProfile, credentials: [] },
+      memberships: [activeMembership],
+    },
+    memberships: [activeMembership],
+  })
+
+/** Every space this person had has ended, which is not the same as never having one. */
+const withoutActiveSpaces = () =>
+  createStudioApiFixture({
+    me: {
+      profile: { ...professionalProfile, credentials: [professionalCredential] },
+      memberships: [terminatedMembership],
+    },
+    memberships: [activeMembership],
+  })
+
+const asCoach = () => createStudioApiFixture({ memberships: [secondActiveMembership] })
+
 /** Holds one endpoint open so a pending stage can be audited before it resolves. */
 /**
  * The mock answers only POST on the invitations collection, so a GET falls
@@ -638,6 +659,17 @@ export const SCREENS: Screen[] = [
     fixture: () => createStudioApiFixture({ memberships: [secondActiveMembership] }),
   },
   {
+    // The workspace of someone whose organization is still only them.
+    stories: 'HU-004 · workspace with nobody else in the team',
+    path: workspace,
+    fixture: () =>
+      createStudioApiFixture({ memberships: [activeMembership], organizationMemberships: [] }),
+    settled: async (page) => {
+      await settledByHeading(page)
+      await expect(page.getByText('Trabajas en solitario por ahora')).toBeVisible()
+    },
+  },
+  {
     stories: 'organization · verifying your access',
     path: workspace,
     fixture: stall('/studio/v1/me/memberships'),
@@ -687,6 +719,24 @@ export const SCREENS: Screen[] = [
     reveal: async (page) => {
       await page.getByRole('tab', { name: 'Mis espacios' }).click()
       await expect(page.getByText('Espacios activos')).toBeVisible()
+    },
+  },
+  {
+    stories: 'HU-005 · no credentials declared yet',
+    path: '/account',
+    fixture: withProfileAndNoCredentials,
+    reveal: async (page) => {
+      await page.getByRole('tab', { name: 'Credenciales', exact: true }).click()
+      await expect(page.getByText('Aún no has declarado credenciales')).toBeVisible()
+    },
+  },
+  {
+    stories: 'HU-006 · no active spaces',
+    path: '/account',
+    fixture: withoutActiveSpaces,
+    reveal: async (page) => {
+      await page.getByRole('tab', { name: 'Mis espacios' }).click()
+      await expect(page.getByText('Aún no tienes espacios')).toBeVisible()
     },
   },
   {
@@ -751,7 +801,43 @@ export const SCREENS: Screen[] = [
     fixture: memberOfTwo,
     viewport: MOBILE,
   },
+  {
+    // A coach keeps the section and is told why it is shut, rather than losing
+    // the link and finding the same label lead somewhere else.
+    stories: 'HU-017 · team directory a coach may not read',
+    path: `/organizations/${secondActiveMembership.organization_id}/team`,
+    fixture: asCoach,
+    settled: async (page) => {
+      await settledByHeading(page)
+      await expect(page.getByText('No tienes acceso a este directorio')).toBeVisible()
+    },
+  },
+  {
+    // Reached by opening either invitation URL: `/new` redirects here, because
+    // there is no form to show a role that cannot propose one.
+    stories: 'HU-015 · invitations a coach may not read',
+    path: `/organizations/${secondActiveMembership.organization_id}/team/invitations`,
+    fixture: asCoach,
+    settled: async (page) => {
+      await settledByHeading(page)
+      await expect(page.getByText('No puedes consultar las invitaciones')).toBeVisible()
+    },
+  },
   { stories: 'HU-018 · role catalog', path: `${workspace}/team/roles`, fixture: memberOfTwo },
+  {
+    stories: 'HU-018 · the role catalog was refused',
+    path: `${workspace}/team/roles`,
+    fixture: () =>
+      createStudioApiFixture({
+        memberships: [activeMembership],
+        intercept: (request) =>
+          request.path.endsWith('/roles') ? { status: 403, body: error('forbidden') } : undefined,
+      }),
+    settled: async (page) => {
+      await settledByHeading(page)
+      await expect(page.getByText('No puedes consultar estos roles')).toBeVisible()
+    },
+  },
   {
     stories: 'HU-015 / HU-016 · issued invitations',
     path: `${workspace}/team/invitations`,
