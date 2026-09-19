@@ -125,6 +125,28 @@ test.describe('layout', () => {
       })
       expect(offscreen, `${screen.stories} puts content off the screen`).toEqual([])
 
+      // A wide table may scroll; a tab strip may not. The exemption above hides
+      // this case, because the strip is the scroll region: a tab outside it is a
+      // section the person never learns exists.
+      //
+      // Measured by scrolling rather than by comparing `scrollWidth` with
+      // `clientWidth`: both are rounded, so a strip overflowing by a fraction of
+      // a pixel reports as fitting. Known blind spot — this runs headless, where
+      // text measures slightly narrower than in a real window, so a strip that
+      // fits by a hair here can still scroll on someone's screen.
+      const clippedTabs = await page.evaluate(() =>
+        [...document.querySelectorAll<HTMLElement>('[data-slot="tabs-list"]')]
+          .map((list) => {
+            list.scrollLeft = list.scrollWidth
+            const hidden = list.scrollLeft
+            list.scrollLeft = 0
+            return { label: list.getAttribute('aria-label') ?? 'tabs', hidden }
+          })
+          .filter(({ hidden }) => hidden > 0)
+          .map(({ label, hidden }) => `${label} hides ${hidden}px`),
+      )
+      expect(clippedTabs, `${screen.stories} hides a tab behind a scroll`).toEqual([])
+
       // One h1 per screen: the audit brief asks for visual hierarchy, and a
       // page with zero or several top-level headings has none to speak of. A
       // spinner stage is exempt — it has no content to rank.

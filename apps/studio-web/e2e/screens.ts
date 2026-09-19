@@ -677,7 +677,7 @@ export const SCREENS: Screen[] = [
     path: '/account',
     fixture: withProfile,
     reveal: async (page) => {
-      await page.getByRole('tab', { name: 'Credenciales opcionales' }).click()
+      await page.getByRole('tab', { name: 'Credenciales', exact: true }).click()
     },
   },
   {

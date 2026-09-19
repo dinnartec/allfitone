@@ -301,7 +301,10 @@ function ProfessionalArea({
       <Tabs defaultValue="presentation" data-profile-tabs>
         <TabsList variant="line" aria-label="Secciones de mi cuenta">
           <TabsTrigger value="presentation">Presentación</TabsTrigger>
-          <TabsTrigger value="credentials">Credenciales opcionales</TabsTrigger>
+          {/* One word, like its two siblings. "Credenciales opcionales" was
+              193px of a 358px strip and pushed "Mis espacios" behind a scroll;
+              the panel itself opens by saying they are not required. */}
+          <TabsTrigger value="credentials">Credenciales</TabsTrigger>
           <TabsTrigger value="spaces">Mis espacios</TabsTrigger>
         </TabsList>
         <TabsContent value="presentation">
