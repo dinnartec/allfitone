@@ -23,7 +23,7 @@ import { authProvider } from '../../../platform/auth/index.js'
 import { spacePlanningService } from '../dependencies.js'
 import { spaceExecutionService, type SpaceExecutionService } from '../../execution/index.js'
 import type { SpacePlanningService } from '../application/space.js'
-import { decodedUpload, sanitisedCover } from '../application/cover-photo.js'
+import type { RoutineCover } from '../domain/space.js'
 
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const UUID_V7 = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -197,78 +197,6 @@ export function spacePlanningRoutes(
         ...command,
       })
       return c.json(template, 200)
-    } catch (cause) {
-      return failure(c, cause)
-    }
-  })
-
-  /**
-   * `OP-PLN-031` — a photograph for a routine's cover.
-   *
-   * The body is base64 rather than multipart because that is what the baseline already
-   * specified for the meal photograph, and one shape for personal images is one shape to
-   * get right. Everything the sanitiser refuses answers the same way: nothing was
-   * written, and the person is told the image cannot be used.
-   */
-  routes.post('/session-templates/:templateId/cover-photo', async (c) => {
-    c.header('Cache-Control', 'no-store')
-    const token = await verified(c, verify)
-    if (!token) return fail(c, 'unauthenticated')
-
-    const templateId = c.req.param('templateId')
-    const body = await c.req.json().catch(() => undefined)
-    const command = commandContext(c, body)
-    if (!UUID_V7.test(templateId) || !command || !isUpload(body)) {
-      return fail(c, 'invalid-request')
-    }
-
-    let bytes: Buffer
-    try {
-      bytes = await sanitisedCover(decodedUpload(body.content))
-    } catch {
-      // Corrupt, a bomb, or a format nothing can read: all three mean the same to
-      // whoever is looking at the screen, and none of them wrote a byte.
-      return fail(c, 'validation-failed')
-    }
-
-    try {
-      const personId = await actors().personFor(token.subject)
-      const photo = await planning().storeMyCoverPhoto({
-        personId,
-        templateId,
-        bytes,
-        ...command,
-      })
-      return c.json(photo, 201)
-    } catch (cause) {
-      return failure(c, cause)
-    }
-  })
-
-  /**
-   * `OP-PLN-032` — the bytes, re-authorised on every request.
-   *
-   * Somebody else's photograph answers `404` and not `403`: the two are the same answer
-   * here on purpose, because telling them apart would let identifiers be walked.
-   */
-  routes.get('/routine-covers/:photoId', async (c) => {
-    c.header('Cache-Control', 'no-store')
-    const token = await verified(c, verify)
-    if (!token) return fail(c, 'unauthenticated')
-
-    const photoId = c.req.param('photoId')
-    if (!UUID_V7.test(photoId)) return fail(c, 'not-found')
-
-    try {
-      const personId = await actors().personFor(token.subject)
-      const photo = await planning().readMyCoverPhoto({
-        personId,
-        photoId,
-        requestId: c.req.header('x-request-id') ?? '',
-      })
-      if (!photo) return fail(c, 'not-found')
-      c.header('Content-Type', photo.content_type)
-      return c.body(new Uint8Array(photo.bytes), 200)
     } catch (cause) {
       return failure(c, cause)
     }
@@ -498,6 +426,35 @@ export function spacePlanningRoutes(
     }
   })
 
+  /**
+   * `OP-PLN-033` — cómo se ven las rutinas de un programa.
+   *
+   * Va antes que `/programs/mine/order` porque Hono resuelve por orden de registro y
+   * `:programId` se tragaría `mine` si estuviera delante.
+   */
+  routes.put('/programs/:programId/cover', async (c) => {
+    c.header('Cache-Control', 'no-store')
+
+    const token = await verified(c, verify)
+    if (!token) return fail(c, 'unauthenticated')
+
+    const programId = c.req.param('programId')
+    const body = await readJson(c)
+    const command = commandContext(c, body)
+    const cover = readCover(body)
+    if (!UUID_V7.test(programId) || !command || cover === undefined) {
+      return fail(c, 'invalid-request')
+    }
+
+    try {
+      const personId = await actors().personFor(token.subject)
+      const dressed = await planning().setMyProgramCover({ personId, programId, cover, ...command })
+      return c.json(dressed, 200)
+    } catch (cause) {
+      return failure(c, cause)
+    }
+  })
+
   routes.put('/programs/mine/order', async (c) => {
     c.header('Cache-Control', 'no-store')
 
@@ -578,6 +535,11 @@ function failure(c: Context, cause: unknown): Response {
     if (code === '42501') return fail(c, 'forbidden')
     if (code === '22023') return fail(c, 'invalid-request')
     if (code === '23505' || code === '40001') return fail(c, 'conflict')
+    // Una regla del dominio que mira el estado y dice que no: descartar la última
+    // rutina de un programa lo dejaría vacío, y un programa vacío no se puede publicar.
+    // Es un conflicto con lo que hay, no una caída — que es lo que decía antes al no
+    // estar mapeado, y mandaba a la gente a mirar su conexión.
+    if (code === '23514') return fail(c, 'conflict')
   }
   console.warn('[planning] space request failed', { detail: String(cause).slice(0, 160) })
   return fail(c, 'upstream-unavailable')
@@ -665,15 +627,23 @@ function readOrder(body: unknown): readonly string[] | undefined {
   return ids as readonly string[]
 }
 
-/** The upload's shape, checked before a single byte is decoded. */
-function isUpload(body: unknown): body is { content_type: string; content: string } {
-  if (typeof body !== 'object' || body === null) return false
-  const sent = body as Record<string, unknown>
-  return (
-    typeof sent.content === 'string' &&
-    typeof sent.content_type === 'string' &&
-    ['image/jpeg', 'image/png', 'image/webp'].includes(sent.content_type)
-  )
+/**
+ * La portada que el cuerpo declara, o `undefined` cuando no declara una válida.
+ *
+ * Null es una respuesta y no una ausencia: es quitar la portada. Por eso el «no se
+ * entiende» tiene que ser un tercer valor y no puede colarse como null, que borraría lo
+ * que hay porque el cuerpo venía mal escrito.
+ */
+function readCover(body: unknown): RoutineCover | null | undefined {
+  if (typeof body !== 'object' || body === null || !('cover' in body)) return undefined
+  const cover = (body as { cover: unknown }).cover
+  if (cover === null) return null
+  if (typeof cover !== 'object') return undefined
+  const kind = (cover as { kind?: unknown }).kind
+  const icon = (cover as { icon?: unknown }).icon
+  if (kind === 'muscles' || kind === 'photo') return icon === undefined ? { kind } : undefined
+  if (kind !== 'icon' || typeof icon !== 'string') return undefined
+  return { kind, icon } as RoutineCover
 }
 
 function commandContext(c: Context, body: unknown) {

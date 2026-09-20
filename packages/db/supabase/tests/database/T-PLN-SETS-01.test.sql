@@ -142,13 +142,19 @@ select is(
   null::jsonb,
   'T-PLN-SETS-13 and the neighbour reads nothing, the same answer as one that never existed');
 
--- Discarding a routine that has already been published would orphan programmes and
--- assignments that point at its version.
+-- Una rutina publicada **sí** se descarta: los programas propios que la usan se
+-- republican sin ella. Esta que no está en ninguno se archiva y ya.
 select set_config('app.actor_person_id', '019ec000-0000-7000-8000-000000000001', true);
 
-select throws_ok(
-  $$ select planning.discard_my_session_template('019ec000-0000-7000-8000-000000000001', (select id from planning.session_templates where owner_person_id = '019ec000-0000-7000-8000-000000000001'), '83111111-1111-4111-8111-111111111107', extensions.uuid_generate_v7(), decode(repeat('e7', 32), 'hex')) $$,
-  '23514', null, 'T-PLN-SETS-14 a routine with a published version is not discarded');
+select is(
+  (planning.discard_my_session_template(
+    '019ec000-0000-7000-8000-000000000001',
+    (select id from planning.session_templates
+     where owner_person_id = '019ec000-0000-7000-8000-000000000001'),
+    '83111111-1111-4111-8111-111111111107', extensions.uuid_generate_v7(),
+    decode(repeat('e7', 32), 'hex'))).template->>'status',
+  'archived',
+  'T-PLN-SETS-14 una rutina publicada que no está en ningún programa se descarta');
 
 select (planning.create_my_session_template(
   '019ec000-0000-7000-8000-000000000001', 'test_strength', 'Para tirar',

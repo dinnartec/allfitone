@@ -1,18 +1,18 @@
--- `IX-48` — the cover of a routine, and what it is allowed to be.
+-- `IX-48` — la portada la pone el programa, y qué se le permite ser.
 --
--- What has to hold: a cover is optional and nulls out cleanly; a muscle cover carries
--- nothing but the decision; an icon cover names one of the twelve the vocabulary has;
--- the two never mix; the choice survives publication; and changing only the cover is a
--- change, because the cover is inside the publication hash.
+-- Lo que tiene que valer: una rutina **no** puede declarar portada —la clave dejó de
+-- existir en su contenido y la lista blanca de forma la rechaza entera—; un programa sí,
+-- y cada clase lleva exactamente su carga; la rutina se viste del programa que la usa;
+-- una rutina suelta no lleva ninguna; y vestir un programa **no publica nada**, porque
+-- el estilo no describe lo que se entrena.
 --
--- The negatives were written first and watched succeeding against the old functions:
--- before `session_content_errors` learned the key, a draft carrying `cover` was
--- rejected whole as `invalid-content-shape`, and that is the assertion at the top —
--- kept, because the allow-list is the thing that makes every other key impossible.
+-- La negativa se escribió primero y se vio pasar contra las funciones viejas: mientras
+-- `session_content_errors` conoció la clave `cover`, un borrador que la llevara se
+-- aceptaba, y ésa es la aserción de arriba. La lista blanca es lo que hace imposible
+-- cualquier otra clave, así que se comprueba que la portada volvió a caer fuera de ella.
 --
--- The hash assertion is the one that matters most. A cover outside the hash would let
--- somebody change how their routine looks, press publish, and be told it was already
--- published — the change reaching nothing.
+-- La aserción que más importa es la del final del bloque del programa: si vestir acuñara
+-- una versión, cambiar de icono reescribiría lo que alguien está entrenando.
 
 begin;
 
@@ -35,9 +35,115 @@ values
   ('019ef000-0000-7000-8000-0000000000f1', '019ef000-0000-7000-8000-0000000000a1', true),
   ('019ef000-0000-7000-8000-0000000000f1', '019ef000-0000-7000-8000-0000000000a2', false);
 
+-- Una portada de catálogo contra la que elegir. Propia del test: `seed.sql` no carga la
+-- curaduría, así que las veinticuatro reales pueden no estar donde esto corra.
+insert into planning.programs (id, content_scope, status, cover_object_key)
+values ('019ef000-0000-7000-8000-0000000000c1', 'global', 'published',
+        'programs/019ef000-0000-7000-8000-0000000000c1/prueba.webp');
+
 set local role allfit_owner;
 select set_config('app.actor_kind', 'person', true);
 select set_config('app.actor_person_id', '019ef000-0000-7000-8000-000000000001', true);
+
+-- ---------------------------------------------------------------- la rutina no elige
+
+select is(
+  planning.session_content_errors(
+    '{"title":"Pierna","activity_type_id":null,"steps":[],"cover":{"kind":"muscles"}}'::jsonb,
+    null, 'test_strength', false),
+  array['invalid-content-shape'],
+  'IX-48 · a routine cannot declare a cover: the key is not part of its content');
+
+select is(
+  planning.session_content_errors(
+    '{"title":"Pierna","activity_type_id":null,"steps":[],"portada":"barra"}'::jsonb,
+    null, 'test_strength', false),
+  array['invalid-content-shape'],
+  'and the allow-list is what makes every other key impossible, which is why');
+
+select is(
+  planning.session_content_errors(
+    '{"title":"Pierna","activity_type_id":null,"steps":[]}'::jsonb,
+    null, 'test_strength', false),
+  array[]::text[],
+  'a routine with nothing but its own content is valid');
+
+select is(
+  planning.canonical_session_content(
+    '{"title":"Pierna","activity_type_id":"019c0000-0000-7000-8000-000000000011","steps":[],"cover":{"kind":"icon","icon":"strength"}}'::jsonb)
+    ? 'cover',
+  false,
+  'IX-48 · and it is outside the publication hash, because it is not the routine to give');
+
+-- ------------------------------------------------------------- el programa sí elige
+
+select (planning.create_my_program(
+  '019ef000-0000-7000-8000-000000000001', 'Mi plan',
+  '82cf2222-2222-4222-8222-000000000001', extensions.uuid_generate_v7(),
+  decode(repeat('a1', 32), 'hex'))).program as mine \gset
+select (:'mine'::jsonb->>'id') as program_id \gset
+
+select is(
+  (select routine_cover_kind::text from planning.programs where id = :'program_id'::uuid),
+  null,
+  'a programme starts saying nothing, and its routines are known by their names');
+
+select is(
+  planning.set_my_program_cover(
+    '019ef000-0000-7000-8000-000000000001', :'program_id'::uuid, 'icon', 'strength',
+    '82cf2222-2222-4222-8222-000000000002', extensions.uuid_generate_v7(),
+    decode(repeat('a2', 32), 'hex')),
+  jsonb_build_object('program_id', :'program_id', 'cover',
+                     '{"kind":"icon","icon":"strength"}'::jsonb),
+  'IX-48 · dressing it answers what its routines now wear');
+
+select is(
+  (select jsonb_build_object('kind', routine_cover_kind, 'icon', routine_cover_icon)
+   from planning.programs where id = :'program_id'::uuid),
+  '{"kind": "icon", "icon": "strength"}'::jsonb,
+  'and that is what the row holds');
+
+select throws_ok(
+  format($$select planning.set_my_program_cover(%L, %L, 'muscles', 'strength', %L, %L, %L)$$,
+         '019ef000-0000-7000-8000-000000000001', :'program_id',
+         '82cf2222-2222-4222-8222-000000000003', extensions.uuid_generate_v7(),
+         decode(repeat('a3', 32), 'hex')),
+  '22023', null,
+  'IX-48 · a muscle cover carrying an icon is two answers to one question');
+
+select throws_ok(
+  format($$select planning.set_my_program_cover(%L, %L, 'icon', null, %L, %L, %L)$$,
+         '019ef000-0000-7000-8000-000000000001', :'program_id',
+         '82cf2222-2222-4222-8222-000000000004', extensions.uuid_generate_v7(),
+         decode(repeat('a4', 32), 'hex')),
+  '22023', null,
+  'and an icon cover naming no icon is refused');
+
+select throws_ok(
+  format($$select planning.set_my_program_cover(%L, %L, 'barra', null, %L, %L, %L)$$,
+         '019ef000-0000-7000-8000-000000000001', :'program_id',
+         '82cf2222-2222-4222-8222-000000000005', extensions.uuid_generate_v7(),
+         decode(repeat('a5', 32), 'hex')),
+  '22023', null,
+  'and a name outside the vocabulary is not a cover');
+
+select throws_ok(
+  format($$select planning.set_my_program_cover(%L, %L, 'muscles', null, %L, %L, %L)$$,
+         '019ef000-0000-7000-8000-000000000001', '019ef000-0000-7000-8000-0000000000c1',
+         '82cf2222-2222-4222-8222-000000000006', extensions.uuid_generate_v7(),
+         decode(repeat('a6', 32), 'hex')),
+  'P0002', null,
+  'IX-48 · and a programme that is not theirs cannot be redressed at all');
+
+-- **Vestir no publica.** Si acuñara una versión, cambiar de icono reescribiría lo que
+-- alguien está entrenando.
+select is(
+  (select count(*)::integer from planning.program_versions
+   where program_id = :'program_id'::uuid),
+  0,
+  'IX-48 · dressing a programme mints no version: the style is not what is trained');
+
+-- ------------------------------------------------------- y la rutina se viste de él
 
 select (planning.create_my_session_template(
   '019ef000-0000-7000-8000-000000000001', 'test_strength', 'Pierna',
@@ -46,125 +152,17 @@ select (planning.create_my_session_template(
 select (:'created'::jsonb->>'id') as template_id,
        (:'created'::jsonb->'draft'->>'etag') as etag0 \gset
 
--- What the shape check has to keep refusing, with or without the cover.
-select is(
-  planning.session_content_errors(
-    '{"title":"Pierna","activity_type_id":null,"steps":[],"portada":"barra"}'::jsonb,
-    null, 'test_strength', false),
-  array['invalid-content-shape'],
-  'a key nobody declared still invalidates the whole draft');
-
-select is(
-  planning.session_content_errors(
-    '{"title":"Pierna","activity_type_id":null,"steps":[],"cover":{"kind":"muscles"}}'::jsonb,
-    null, 'test_strength', false),
-  array[]::text[],
-  'IX-48 · a muscle cover carries nothing but the decision');
-
-select is(
-  planning.session_content_errors(
-    '{"title":"Pierna","activity_type_id":null,"steps":[],"cover":null}'::jsonb,
-    null, 'test_strength', false),
-  array[]::text[],
-  'and null is a routine with no cover, which is allowed');
-
-select is(
-  planning.session_content_errors(
-    '{"title":"Pierna","activity_type_id":null,"steps":[],"cover":{"kind":"muscles","icon":"strength"}}'::jsonb,
-    null, 'test_strength', false),
-  array['cover'],
-  'IX-48 · a muscle cover carrying an icon is refused');
-
-select is(
-  planning.session_content_errors(
-    '{"title":"Pierna","activity_type_id":null,"steps":[],"cover":{"kind":"icon"}}'::jsonb,
-    null, 'test_strength', false),
-  array['cover'],
-  'IX-48 · and an icon cover naming no icon is refused');
-
-select is(
-  planning.session_content_errors(
-    '{"title":"Pierna","activity_type_id":null,"steps":[],"cover":{"kind":"icon","icon":"barra"}}'::jsonb,
-    null, 'test_strength', false),
-  array['cover'],
-  'IX-48 · a name outside the twelve is not an icon');
-
-select is(
-  planning.session_content_errors(
-    '{"title":"Pierna","activity_type_id":null,"steps":[],"cover":{"kind":"icon","icon":"strength"}}'::jsonb,
-    null, 'test_strength', false),
-  array[]::text[],
-  'IX-48 · one of the twelve is');
-
--- The routine itself, with a cover, published.
-select (planning.replace_my_session_template_draft(
-  '019ef000-0000-7000-8000-000000000001', :'template_id'::uuid, :'etag0',
-  '{"title":"Pierna","activity_type_id":"019c0000-0000-7000-8000-000000000011","cover":{"kind":"icon","icon":"strength"},"steps":[{"position":1,"movement_id":"019ef000-0000-7000-8000-0000000000f1","target":{"family":"strength","target_sets":3,"target_reps":10}}]}'::jsonb,
-  '82cf1111-1111-4111-8111-000000000002', extensions.uuid_generate_v7(),
-  decode(repeat('f2', 32), 'hex'))).draft as saved \gset
-select (:'saved'::jsonb->>'etag') as etag1 \gset
-
-select (planning.publish_my_session_template(
-  '019ef000-0000-7000-8000-000000000001', :'template_id'::uuid, :'etag1',
-  '82cf1111-1111-4111-8111-000000000003', extensions.uuid_generate_v7(),
-  decode(repeat('f3', 32), 'hex'))).version as published \gset
-select (:'published'::jsonb->>'id') as version_id \gset
-
-select is(
-  (select cover_kind::text from planning.session_template_versions where id = :'version_id'::uuid),
-  'icon',
-  'publishing carries the cover onto the version');
-
-select is(
-  (select cover_icon::text from planning.session_template_versions where id = :'version_id'::uuid),
-  'strength',
-  'and which icon it is');
-
-select is(
-  planning.session_version_projection(:'version_id'::uuid)->'cover',
-  '{"kind":"icon","icon":"strength"}'::jsonb,
-  'and the projection answers it as it was written');
-
--- The version is immutable, so nothing may bend its cover afterwards.
-select throws_ok(
-  format('update planning.session_template_versions set cover_kind = %L where id = %L',
-         'muscles', :'version_id'),
-  null,
-  'a published cover is as immutable as the rest of the version');
-
--- Changing only the cover: a different routine to look at, so a different version.
-select (planning.replace_my_session_template_draft(
-  '019ef000-0000-7000-8000-000000000001', :'template_id'::uuid, :'etag1',
-  '{"title":"Pierna","activity_type_id":"019c0000-0000-7000-8000-000000000011","cover":{"kind":"muscles"},"steps":[{"position":1,"movement_id":"019ef000-0000-7000-8000-0000000000f1","target":{"family":"strength","target_sets":3,"target_reps":10}}]}'::jsonb,
-  '82cf1111-1111-4111-8111-000000000004', extensions.uuid_generate_v7(),
-  decode(repeat('f4', 32), 'hex'))).draft as recovered \gset
-select (:'recovered'::jsonb->>'etag') as etag2 \gset
-
-select (planning.publish_my_session_template(
-  '019ef000-0000-7000-8000-000000000001', :'template_id'::uuid, :'etag2',
-  '82cf1111-1111-4111-8111-000000000005', extensions.uuid_generate_v7(),
-  decode(repeat('f5', 32), 'hex'))).version as republished \gset
-
-select is(
-  (select count(*)::integer from planning.session_template_versions
-   where template_id = :'template_id'::uuid),
-  2,
-  'changing only the cover is a change: the cover is inside the publication hash');
-
--- What the list needs to draw both kinds of cover.
 select is(
   (select mine.item->'cover' from jsonb_array_elements(
      planning.read_my_content('019ef000-0000-7000-8000-000000000001')) as mine(item)
    where mine.item->>'template_id' = :'template_id'),
-  '{"kind":"muscles"}'::jsonb,
-  'my list carries the cover I last chose');
+  'null'::jsonb,
+  'IX-48 · a routine no programme holds wears nothing, and its name does the work');
 
 select is(
-  (select mine.item->'muscles' from jsonb_array_elements(
-     planning.read_my_content('019ef000-0000-7000-8000-000000000001')) as mine(item)
-   where mine.item->>'template_id' = :'template_id'),
-  '["test_quads","test_glutes"]'::jsonb,
-  'and the muscles a muscle cover is drawn from, the ones it trains first');
+  planning.pick_routine_cover(:'template_id'::uuid, 'lower'),
+  planning.pick_routine_cover(:'template_id'::uuid, 'lower'),
+  'IX-48 · and within a photograph, the same routine always gets the same picture');
 
 select * from finish();
 

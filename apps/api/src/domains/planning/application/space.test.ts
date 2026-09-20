@@ -12,6 +12,8 @@ function routine(done: boolean, id: string) {
     title: 'Empuje',
     discipline_code: 'strength',
     status: done ? ('completed' as const) : ('scheduled' as const),
+    program_day: 1,
+    scheduled_at: '2026-08-31T10:00:00Z',
     exercise_count: 5,
     set_count: 16,
     done,
@@ -32,7 +34,10 @@ function plan(sessions: WeekPlan['sessions']): WeekPlan {
 
 /** Only the one read matters here; the rest would be noise. */
 function service(readWeekPlan: SpacePlanningDatabase['readWeekPlan']) {
-  return createSpacePlanningService({ readWeekPlan } as unknown as SpacePlanningDatabase)
+  return createSpacePlanningService(
+    { readWeekPlan } as unknown as SpacePlanningDatabase,
+    'https://media.test/catalog',
+  )
 }
 
 const input = { personId: 'p', timezone: 'America/Bogota', requestId: 'r' }
@@ -113,7 +118,11 @@ describe('publishAndRestate', () => {
         return {} as never
       },
     } as unknown as SpacePlanningDatabase
-    return { service: createSpacePlanningService(database), calls, taken }
+    return {
+      service: createSpacePlanningService(database, 'https://media.test/catalog'),
+      calls,
+      taken,
+    }
   }
 
   test('takes the programme when nothing was following it, so publishing is not invisible', async () => {
@@ -135,5 +144,102 @@ describe('publishAndRestate', () => {
     await again.service.publishAndRestate(command)
 
     expect(again.calls).toEqual(['publish', 'restate'])
+  })
+})
+
+describe('readMyPrograms', () => {
+  /**
+   * La clave direcciona nuestro almacenamiento y no sale nunca; lo que sale es dónde
+   * pedirla. Si el servicio no compusiera, el cliente tendría que saber dónde viven los
+   * objetos, que es justo lo que `ADR-031` mantiene fuera del dato.
+   */
+  const stored = {
+    assignment_id: 'a1',
+    program_version_id: 'pv1',
+    program_id: 'p1',
+    editable: false,
+    title: 'Fuerza básica',
+    weeks: 8,
+    days_per_week: 3,
+    starts_on: '2026-09-14',
+    sessions_done: 0,
+    sessions_planned: 24,
+  }
+
+  function withPrograms(coverKey: string | null) {
+    const database = {
+      readMyPrograms: async () => [{ ...stored, cover_object_key: coverKey }],
+    } as unknown as SpacePlanningDatabase
+    return createSpacePlanningService(database, 'https://media.test/catalog/')
+  }
+
+  test('composes the artwork address out of the stored key and the media origin', async () => {
+    const [program] = await withPrograms('programs/p1/abc.webp').readMyPrograms({
+      personId: 'p',
+      requestId: 'r',
+    })
+
+    expect(program?.cover_url).toBe('https://media.test/catalog/programs/p1/abc.webp')
+    // La barra de más del origen no se convierte en una doble en la dirección.
+    expect(program?.cover_url).not.toContain('//programs')
+  })
+
+  test('answers null for a programme with no artwork, which is what your own one is', async () => {
+    const [program] = await withPrograms(null).readMyPrograms({ personId: 'p', requestId: 'r' })
+
+    expect(program?.cover_url).toBeNull()
+  })
+
+  test('never lets the storage key reach the answer', async () => {
+    const [program] = await withPrograms('programs/p1/abc.webp').readMyPrograms({
+      personId: 'p',
+      requestId: 'r',
+    })
+
+    expect(Object.keys(program ?? {})).not.toContain('cover_object_key')
+  })
+})
+
+describe('readMyContent y el borrador', () => {
+  /**
+   * La misma regla que el programa, y por el mismo `ADR-031`: la fila guarda la clave y
+   * quien contesta compone la dirección. Si el cliente tuviera que componerla, sabría
+   * dónde viven los objetos, que es justo lo que la decisión mantiene fuera del dato.
+   */
+  const storedRoutine = {
+    template_id: 't1',
+    title: 'Empuje',
+    discipline_code: 'strength',
+    status: 'published',
+    template_version_id: 'v1',
+    cover: { kind: 'photo' as const },
+    muscles: ['chest'],
+    versions: ['v1'],
+    programs: [],
+    exercise_count: 3,
+    set_count: 13,
+    has_unpublished_changes: false,
+  }
+
+  function service(coverKey: string | null) {
+    const database = {
+      readMyContent: async () => [{ ...storedRoutine, cover_object_key: coverKey }],
+    } as unknown as SpacePlanningDatabase
+    return createSpacePlanningService(database, 'https://media.test/catalog')
+  }
+
+  const asking = { personId: 'p', requestId: 'r' }
+
+  test('a routine answers where to fetch its photograph, never the key', async () => {
+    const [routine] = await service('programs/p1/abc.webp').readMyContent(asking)
+
+    expect(routine?.cover_url).toBe('https://media.test/catalog/programs/p1/abc.webp')
+    expect(Object.keys(routine ?? {})).not.toContain('cover_object_key')
+  })
+
+  test('and null when nothing was picked, which is a routine with no exercises yet', async () => {
+    const [routine] = await service(null).readMyContent(asking)
+
+    expect(routine?.cover_url).toBeNull()
   })
 })

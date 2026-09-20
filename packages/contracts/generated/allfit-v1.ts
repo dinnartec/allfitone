@@ -1279,6 +1279,28 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/space/v1/programs/{programId}/cover': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    /**
+     * How this programme's routines show themselves
+     * @description Hoy opens with the week's routines side by side. Six routines each picking their own cover would put figures, icons and photographs in one row, so the choice belongs to whoever assembles the programme and sees the six together.
+     *     **It takes effect at once and mints no version.** The style does not describe what is trained, so publishing a version over an icon would be publishing a version that lies — the same reasoning that keeps `OP-PLN-024` from publishing anything when programmes are reordered.
+     *     Only a programme this person wrote. One taken from Allfit looks the way Allfit assembled it, and redressing it would be editing somebody else's content.
+     */
+    put: operations['setMyProgramCover']
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/space/v1/programs/mine/order': {
     parameters: {
       query?: never
@@ -1446,46 +1468,6 @@ export interface paths {
      * @description Leaving a named routine asks whether to keep it as a draft or throw it away, and this is the throwing away. **It is a state, not a deletion:** `allfit_api` has no `DELETE` on this resource and will not get one, because what a person wrote is not destroyed from the runtime and a discard has to be explicable afterwards. A routine with a published version is refused — programmes and assignments may reference it, and retiring a version from new uses is `OP-PLN-005`, which leaves the history alone.
      */
     post: operations['discardMySessionTemplate']
-    delete?: never
-    options?: never
-    head?: never
-    patch?: never
-    trace?: never
-  }
-  '/space/v1/session-templates/{templateId}/cover-photo': {
-    parameters: {
-      query?: never
-      header?: never
-      path?: never
-      cookie?: never
-    }
-    get?: never
-    put?: never
-    /**
-     * Upload a photograph for my routine's cover
-     * @description `ADR-031` keeps personal binaries in PostgreSQL rather than in a bucket, because the deletion of personal data has to propagate to the store and with the bytes inside the transaction the delete **is** that confirmation. The server never stores what it received: it decodes the image and re-encodes it to WebP within its own size limits, which removes EXIF and geolocation by construction, and **fails closed** — an image that will not decode, or that exceeds the pixel limit, is refused with nothing written. Uploading does not change the cover; saving a draft that names the returned id does.
-     */
-    post: operations['uploadMyRoutineCoverPhoto']
-    delete?: never
-    options?: never
-    head?: never
-    patch?: never
-    trace?: never
-  }
-  '/space/v1/routine-covers/{photoId}': {
-    parameters: {
-      query?: never
-      header?: never
-      path?: never
-      cookie?: never
-    }
-    /**
-     * The bytes of a routine cover photograph
-     * @description The *authenticated api proxy* mode of `x-allfit-media-url-policy`: authorization is re-evaluated on every request, the bytes are never redirected to a store and no response carries a storage reference. A photograph belonging to somebody else answers `404` and not `403`, so asking cannot reveal that it exists.
-     */
-    get: operations['readMyRoutineCoverPhoto']
-    put?: never
-    post?: never
     delete?: never
     options?: never
     head?: never
@@ -2449,6 +2431,13 @@ export interface components {
       title: string
       discipline_code: string
       status: string
+      /** @description The day the programme put this session on, 1 being Monday. Not the same as the day `scheduled_at` fell on: the first week is moved forward so a programme taken on a Thursday does not open with its Monday already missed. The screen names the programme's day, because that is the one the person wrote. */
+      program_day: number
+      /**
+       * Format: date-time
+       * @description When the week put this session. The reader has always answered it and the schema did not say so; the library names the day under each routine, and a day the client invented from the order would be a guess.
+       */
+      scheduled_at: string
       exercise_count: number
       set_count: number
       /** @description Whether it was ever closed. It marks, it does not bar: starting it again creates another attempt and the first one keeps what it earned. */
@@ -2538,9 +2527,36 @@ export interface components {
       status: string
       /** @description The published version a programme can point at. Null means the routine is still only a draft. */
       template_version_id: components['schemas']['UuidV7'] | null
+      /**
+       * @description **Derived, never declared.** A routine does not choose how it shows itself: the programme that uses it does, so that Hoy's carousel speaks one language. This answers the style of the first of the person's programmes that holds this routine, by the order they already chose for them.
+       *     Null is a routine that no programme holds. That is not an unfinished routine: it is recognised by its name, the way it always was.
+       */
       cover: components['schemas']['RoutineCover'] | null
+      /**
+       * Format: uri
+       * @description Where to fetch the photograph this routine gets under a `photo` cover, composed by the server out of the picked object key and the catalogue's media origin. Null only for a routine with no exercises yet — nothing has said what it works, so nothing can be picked. The key itself never leaves the database (`ADR-031`).
+       *     **It is answered whatever the programme currently wears.** The cover screen previews all three kinds before any of them is chosen, so answering only for a programme already wearing a photograph left that tab with an empty tile at exactly the moment somebody is deciding.
+       *     The style is the programme's and the image is this routine's: within `photo` each routine gets the cover matching what **it** works, or six cards would come out cloned and only the label would tell them apart.
+       */
+      cover_url: string | null
+      /**
+       * @description How the routine's sets fall across its muscles, heaviest first. Hoy's card draws this under the figure, and a client cannot work it out: it is told how many sets the routine has in total, not how they are spread.
+       *     **A set belongs to one muscle**, the exercise's primary. Sharing each set between every muscle the movement touches turns thirteen sets into thirty-one, and the number stops being the work done and becomes a count of mentions.
+       */
+      muscle_sets: {
+        code: string
+        name: string
+        sets: number
+      }[]
       /** @description Catalogue muscle codes the routine works, the ones it trains first. They are what a muscle cover is drawn from, and a list cannot compute them: only the reader knows which movements the routine holds. */
       muscles: string[]
+      /** @description Every published version of this routine, newest first. A programme's week stores the exact version it composed, and republishing the routine mints a new one — so a screen that matched only the newest would lose the routine from a week it is plainly in. Matching against this list is what lets a day name what it holds without resolving «latest», which `ADR-009` forbids for anything historical. */
+      versions: components['schemas']['UuidV7'][]
+      /** @description The person's programmes that use this routine, so a library row can say where it is used without a second request. A caller cannot work this out: `OP-PLN-026` answers programmes without their composition, and one taken from Allfit has no draft to open. Empty means the routine belongs to no programme of theirs — which is a legitimate state and not a problem. */
+      programs: {
+        program_id: components['schemas']['UuidV7']
+        title: string
+      }[]
       exercise_count: number
       set_count: number
       has_unpublished_changes: boolean
@@ -2557,6 +2573,14 @@ export interface components {
       days_per_week: number
       /** Format: date */
       starts_on: string
+      /** @description Where the programme's artwork is served from, composed by the API out of the stored object key and the media origin. Null for a programme somebody wrote here, which has no artwork of its own. The key never leaves the server: it addresses our storage and would tie a client to where it happens to live. */
+      cover_url: string | null
+      /**
+       * @description How this programme's routines show themselves, which is a decision of the programme and not of each routine: Hoy opens with the week's routines side by side, and six routines each picking their own would put figures, icons and photographs in one row — a sample book rather than a week.
+       *     The style is the programme's and the image is the routine's. `muscles` draws what each routine works and `photo` takes the catalogue cover matching what each routine works; only `icon` is the same for all of them, because an icon is chosen rather than computed.
+       *     Null is a programme that has not said, and its routines are recognised by their name.
+       */
+      routine_cover: components['schemas']['RoutineCover'] | null
       sessions_done: number
       sessions_planned: number
     }
@@ -3135,9 +3159,17 @@ export interface components {
       discipline_code: string
       title: string
     }
+    SpaceProgramCoverChoice: {
+      /** @description Null takes the cover off, and its routines go back to their names. */
+      cover: components['schemas']['RoutineCover'] | null
+    }
+    SpaceProgramCover: {
+      program_id: components['schemas']['UuidV7']
+      cover: components['schemas']['RoutineCover'] | null
+    }
     /**
-     * @description How a routine shows itself in a list. One variant per kind, so a muscle cover cannot also carry an icon. The database refuses that too; refusing it in the contract means it cannot be expressed.
-     *     Absent or null is a routine with no cover, which is not an incomplete routine: it is recognised by its name, the way it always was.
+     * @description How a programme's routines show themselves. One variant per kind, so a muscle cover cannot also carry an icon. The database refuses that too; refusing it in the contract means it cannot be expressed.
+     *     **It is declared on the programme and read on the routine.** A routine that no programme holds has none, and is recognised by its name, the way it always was.
      */
     RoutineCover:
       | components['schemas']['RoutineCoverMuscles']
@@ -3196,28 +3228,16 @@ export interface components {
         | 'light'
         | 'countdown'
     }
-    /** @description A photograph the person uploaded against this routine. The bytes belong to the routine they were uploaded for, which is a composite foreign key and not a convention: naming somebody else's photograph is refused where the person can see it, and could not reach a published version anyway. */
+    /**
+     * @description A photograph, and the routine does not say which: the second revision of `ADR-031` retired the personal upload, so this asks for one of the catalogue's covers and the dominant region of the muscles the routine works decides it. It carries nothing for the same reason the muscle cover carries nothing — the answer is already in the exercises, and copying it here would be a second truth.
+     *     Where to fetch it is `cover_url`, composed by the server. The key never leaves the database.
+     */
     RoutineCoverPhoto: {
       /**
        * @description discriminator enum property added by openapi-typescript
        * @enum {string}
        */
       kind: 'photo'
-      /** @description What `GET /space/v1/routine-covers/{photoId}` serves. It is the photograph's own identifier and never a storage reference: `ADR-031` keeps the bytes in the database and serves them through the API, so no response ever carries a path into an object store. */
-      photo_id: components['schemas']['Uuid']
-    }
-    RoutineCoverPhotoUpload: {
-      /**
-       * @description What is being sent. What gets stored is always `image/webp`.
-       * @enum {string}
-       */
-      content_type: 'image/jpeg' | 'image/png' | 'image/webp'
-      /** @description The image, base64 encoded, as `NutritionPhotoUpload` already specifies for the meal photograph. The server decodes it, re-encodes it and stores only the result: re-encoding removes EXIF and geolocation by construction rather than trying to trim them out, and an image that will not decode is refused with nothing written. */
-      content: string
-    }
-    /** @description Uploading is not choosing. The photograph exists from here, but the cover does not change until a draft names this id and is saved — so an upload that fails halfway never leaves a routine pointing at something that is not there. */
-    RoutineCoverPhotoStored: {
-      id: components['schemas']['Uuid']
     }
     SessionTemplateDraftContent: {
       title: string
@@ -3226,7 +3246,6 @@ export interface components {
        * @description Null is allowed only while the draft is incomplete.
        */
       activity_type_id: string | null
-      cover?: components['schemas']['RoutineCover'] | null
       steps: components['schemas']['PlannedStepContent'][]
     }
     PlannedStepContent: {
@@ -3344,7 +3363,6 @@ export interface components {
       /** Format: uuid */
       derived_from_version_id?: string | null
       title: string
-      cover?: components['schemas']['RoutineCover'] | null
       /** @enum {string} */
       status: 'published' | 'deprecated'
       /** Format: date-time */
@@ -7177,6 +7195,43 @@ export interface operations {
       422: components['responses']['ValidationFailed']
     }
   }
+  setMyProgramCover: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        programId: components['schemas']['UuidV7']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SpaceProgramCoverChoice']
+      }
+    }
+    responses: {
+      /** @description What the programme's routines now wear */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SpaceProgramCover']
+        }
+      }
+      401: components['responses']['Unauthenticated']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      422: components['responses']['ValidationFailed']
+    }
+  }
   reorderMyPrograms: {
     parameters: {
       query?: never
@@ -7483,69 +7538,6 @@ export interface operations {
       404: components['responses']['NotFound']
       409: components['responses']['Conflict']
       422: components['responses']['ValidationFailed']
-    }
-  }
-  uploadMyRoutineCoverPhoto: {
-    parameters: {
-      query?: never
-      header: {
-        /** @description UUIDv4 reused only for HTTP retries of this operation. */
-        'Idempotency-Key': components['parameters']['IdempotencyKey']
-        /** @description UUIDv7 durable identity generated when the user intention is created. */
-        'Command-Id': components['parameters']['CommandId']
-      }
-      path: {
-        templateId: components['parameters']['TemplateId']
-      }
-      cookie?: never
-    }
-    requestBody: {
-      content: {
-        'application/json': components['schemas']['RoutineCoverPhotoUpload']
-      }
-    }
-    responses: {
-      /** @description The photograph, sanitised and stored */
-      201: {
-        headers: {
-          'Cache-Control': components['headers']['NoStore']
-          'Idempotent-Replay': components['headers']['IdempotentReplay']
-          [name: string]: unknown
-        }
-        content: {
-          'application/json': components['schemas']['RoutineCoverPhotoStored']
-        }
-      }
-      401: components['responses']['Unauthenticated']
-      403: components['responses']['Forbidden']
-      404: components['responses']['NotFound']
-      409: components['responses']['Conflict']
-      422: components['responses']['ValidationFailed']
-    }
-  }
-  readMyRoutineCoverPhoto: {
-    parameters: {
-      query?: never
-      header?: never
-      path: {
-        photoId: components['schemas']['Uuid']
-      }
-      cookie?: never
-    }
-    requestBody?: never
-    responses: {
-      /** @description The image */
-      200: {
-        headers: {
-          'Cache-Control': components['headers']['NoStore']
-          [name: string]: unknown
-        }
-        content: {
-          'image/webp': string
-        }
-      }
-      401: components['responses']['Unauthenticated']
-      404: components['responses']['NotFound']
     }
   }
   publishMySessionTemplate: {

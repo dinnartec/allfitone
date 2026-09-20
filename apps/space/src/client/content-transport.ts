@@ -20,7 +20,6 @@ import {
   createContentFlow,
   type ContentFlow,
   type CatalogueTerm,
-  type CoverPhotoStored,
   type Movement,
   type MovementDetail,
   type MovementPage,
@@ -130,16 +129,6 @@ export function createSpaceContentFlow(): ContentFlow {
             token,
           ),
         ),
-      uploadCoverPhoto: (command, templateId, contentType, content) =>
-        authenticated((token) =>
-          authorizedPost<CoverPhotoStored>(
-            `/space/v1/session-templates/${templateId}/cover-photo`,
-            command,
-            { content_type: contentType, content },
-            token,
-          ),
-        ),
-
       discardTemplate: (command, templateId) =>
         authenticated((token) =>
           authorizedPost<SessionTemplate>(

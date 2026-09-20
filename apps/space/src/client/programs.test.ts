@@ -27,6 +27,7 @@ function harness(overrides?: Partial<ProgramTransport>) {
     readMyPrograms: async () => {
       throw new Error('not used in this test')
     },
+    setCover: async (_command, programId, cover) => ({ program_id: programId, cover }),
     reorder: async (command, assignmentIds) => {
       ordered.push({ key: command.idempotencyKey, ids: assignmentIds })
       return []

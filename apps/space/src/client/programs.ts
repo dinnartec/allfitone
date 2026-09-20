@@ -20,11 +20,18 @@ export type ProgramStep = AllfitV1Schemas['SpaceProgramStep']
 export type WeekPlan = AllfitV1Schemas['SpaceWeekPlan']
 export type WeekRoutine = AllfitV1Schemas['SpaceWeekRoutine']
 export type MyProgram = AllfitV1Schemas['SpaceMyProgram']
+export type ProgramCover = AllfitV1Schemas['SpaceProgramCover']
+type RoutineCover = AllfitV1Schemas['RoutineCover']
 
 export interface ProgramTransport {
   readWeekPlan(timezone: string): Promise<WeekPlan>
   readMyPrograms(): Promise<readonly MyProgram[]>
   reorder(command: CommandHeaders, assignmentIds: readonly string[]): Promise<readonly MyProgram[]>
+  setCover(
+    command: CommandHeaders,
+    programId: string,
+    cover: RoutineCover | null,
+  ): Promise<ProgramCover>
   readCatalogue(): Promise<ProgramCatalogue>
   readDetail(programVersionId: string): Promise<ProgramDetail>
   choose(command: CommandHeaders, choice: ProgramChoice): Promise<ProgramAssignment>
@@ -39,6 +46,8 @@ export interface ProgramFlow {
   readWeekPlan(timezone: string): Promise<WeekPlan>
   readMyPrograms(): Promise<readonly MyProgram[]>
   reorder(assignmentIds: readonly string[]): Promise<readonly MyProgram[]>
+  /** Cómo se ven las rutinas de este programa. Surte efecto al momento; no publica. */
+  setCover(programId: string, cover: RoutineCover | null): Promise<ProgramCover>
   readCatalogue(): Promise<ProgramCatalogue>
   readDetail(programVersionId: string): Promise<ProgramDetail>
   choose(choice: ProgramChoice): Promise<ProgramAssignment>
@@ -56,6 +65,9 @@ export function createProgramFlow(dependencies: ProgramFlowDependencies): Progra
     // the previous one.
     reorder: (assignmentIds) =>
       dependencies.transport.reorder(dependencies.newCommand(), assignmentIds),
+
+    setCover: (programId, cover) =>
+      dependencies.transport.setCover(dependencies.newCommand(), programId, cover),
     readCatalogue: () => dependencies.transport.readCatalogue(),
 
     readDetail: (programVersionId) => dependencies.transport.readDetail(programVersionId),

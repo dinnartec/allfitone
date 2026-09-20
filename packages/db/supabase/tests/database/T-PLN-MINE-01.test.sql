@@ -14,7 +14,7 @@
 -- made of personal routines could never be published.
 begin;
 
-select plan(24);
+select plan(29);
 
 insert into identity.people (id, given_name, family_name)
 values
@@ -107,6 +107,27 @@ select is(
   2,
   'T-PLN-MINE-06 a programme composed of my own routines publishes');
 
+-- Publicar le pone cara. La tarjeta de quien más trabajo puso era la única sin imagen.
+select isnt(
+  (select cover_object_key from planning.programs where id = :'program_id'::uuid),
+  null,
+  'T-PLN-MINE-6b publicar un programa propio le asigna una portada');
+
+select is(
+  (select count(*)::integer from planning.programs as lender
+   where lender.content_scope = 'global'
+     and lender.cover_object_key = (select cover_object_key from planning.programs
+                                    where id = :'program_id'::uuid)),
+  1,
+  'T-PLN-MINE-6c y esa portada es la de un programa del catálogo, no una inventada');
+
+-- La elección se queda quieta: una portada que cambiara al republicar sería una tarjeta
+-- distinta cada vez que alguien edita su programa.
+select is(
+  planning.pick_program_cover(:'program_id'::uuid),
+  planning.pick_program_cover(:'program_id'::uuid),
+  'T-PLN-MINE-6d y elegirla otra vez da la misma');
+
 select is(
   planning.self_assign_program(
     '019ea000-0000-7000-8000-000000000001', :'program_version_id'::uuid, 'America/Bogota',
@@ -121,6 +142,25 @@ select is(
     where owner_person_id = '019ea000-0000-7000-8000-000000000001'),
   1,
   'T-PLN-MINE-08 taking my own programme does not copy it again');
+
+-- La ranura y la fecha son dos cosas distintas, y la sesión tiene que recordar las dos.
+-- La materialización adelanta lo que caería antes del día en que se tomó el programa, así
+-- que la fecha depende de qué día corra esta prueba; el día del programa, no.
+select is(
+  (select array_agg(distinct session.program_day::integer order by session.program_day::integer)
+   from planning.planned_sessions as session
+   where session.person_id = '019ea000-0000-7000-8000-000000000001'),
+  (select array_agg(distinct composition.day order by composition.day)
+   from planning.program_version_sessions as composition
+   where composition.program_version_id = :'program_version_id'::uuid),
+  'T-PLN-MINE-8b cada sesión recuerda el día que el programa le puso');
+
+select is(
+  (select count(*)::integer from planning.planned_sessions as session
+   where session.person_id = '019ea000-0000-7000-8000-000000000001'
+     and session.program_day not between 1 and 7),
+  0,
+  'T-PLN-MINE-8c y ese día es siempre un día de la semana');
 
 select is(
   (select count(*)::integer from planning.planned_sessions

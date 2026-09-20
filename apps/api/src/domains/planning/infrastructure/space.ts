@@ -15,16 +15,15 @@ import type postgres from 'postgres'
 import { database } from '../../../platform/db/index.js'
 import { measureStudioRequestPhase } from '../../../platform/observability/index.js'
 import type {
-  CoverPhoto,
-  CoverPhotoStored,
   Program,
   ProgramDraft,
   ProgramVersion,
   SessionTemplate,
   SessionTemplateDraft,
   SessionTemplateVersion,
-  MyProgram,
-  MyRoutine,
+  StoredMyProgram,
+  ProgramCover,
+  StoredMyRoutine,
   WeekPlan,
   ProgramAssignment,
   ProgramDetail,
@@ -86,7 +85,7 @@ interface WeekPlanRow {
   sessions: WeekPlan['sessions']
 }
 
-interface MyProgramRow extends Omit<MyProgram, 'starts_on'> {
+interface MyProgramRow extends Omit<StoredMyProgram, 'starts_on'> {
   starts_on: Date | string
 }
 
@@ -171,7 +170,7 @@ export function createSpacePlanningDatabase(): SpacePlanningDatabase {
 
     readMyContent: (input) =>
       transact(sql, input.personId, input.requestId, async (transaction) => {
-        const [row] = await transaction<{ mine: readonly MyRoutine[] }[]>`
+        const [row] = await transaction<{ mine: readonly StoredMyRoutine[] }[]>`
           select planning.read_my_content(${input.personId}::uuid) as mine
         `
         return row?.mine ?? []
@@ -230,26 +229,6 @@ export function createSpacePlanningDatabase(): SpacePlanningDatabase {
           )
         `
         return answered(row?.template, 'discard the session template')
-      }),
-
-    storeMyCoverPhoto: (input) =>
-      command(sql, input.personId, async (transaction) => {
-        const [row] = await transaction<{ photo: CoverPhotoStored }[]>`
-          select photo from planning.upload_my_cover_photo(
-            ${input.personId}::uuid, ${input.templateId}::uuid, ${input.bytes},
-            ${input.idempotencyKey}::uuid, ${input.commandId}::uuid, ${input.requestHash}
-          )
-        `
-        return answered(row?.photo, 'store the cover photo')
-      }),
-
-    readMyCoverPhoto: (input) =>
-      transact(sql, input.personId, input.requestId, async (transaction) => {
-        const [row] = await transaction<CoverPhoto[]>`
-          select content_type, byte_size, bytes
-          from planning.read_my_cover_photo(${input.personId}::uuid, ${input.photoId}::uuid)
-        `
-        return row ?? null
       }),
 
     readMyUnpublishedProgram: (input) =>
@@ -329,6 +308,18 @@ export function createSpacePlanningDatabase(): SpacePlanningDatabase {
           )
         `
         return answered(row?.version, 'publish the program')
+      }),
+
+    setMyProgramCover: (input) =>
+      command(sql, input.personId, async (transaction) => {
+        const [row] = await transaction<{ cover: ProgramCover }[]>`
+          select planning.set_my_program_cover(
+            ${input.personId}::uuid, ${input.programId}::uuid,
+            ${input.cover?.kind ?? null}, ${input.cover?.kind === 'icon' ? input.cover.icon : null},
+            ${input.idempotencyKey}::uuid, ${input.commandId}::uuid, ${input.requestHash}
+          ) as cover
+        `
+        return answered(row?.cover, 'dress the program')
       }),
 
     reorderMyPrograms: (input) =>

@@ -40,10 +40,10 @@ insert into planning.program_assignments (
 ) values ('019e3000-0000-7000-8000-000000000301', '019e3000-0000-7000-8000-000000000001',
   '019e3000-0000-7000-8000-000000000202', 'personal', current_date, 'America/Bogota', 1);
 insert into planning.planned_sessions (
-  id, assignment_id, person_id, template_version_id, week_starts_on, scheduled_at, timezone
+  id, assignment_id, person_id, template_version_id, program_day, week_starts_on, scheduled_at, timezone
 ) values (
   '019e3000-0000-7000-8000-000000000401', '019e3000-0000-7000-8000-000000000301',
-  '019e3000-0000-7000-8000-000000000001', '019e3000-0000-7000-8000-000000000102',
+  '019e3000-0000-7000-8000-000000000001', '019e3000-0000-7000-8000-000000000102', 1,
   date_trunc('week', current_date::timestamp)::date, clock_timestamp(), 'America/Bogota'
 );
 
@@ -130,10 +130,10 @@ select is(
 -- Abandoning keeps what was recorded rather than deleting it, and the attempt can
 -- never be the primary one for its day.
 insert into planning.planned_sessions (
-  id, assignment_id, person_id, template_version_id, week_starts_on, scheduled_at, timezone
+  id, assignment_id, person_id, template_version_id, program_day, week_starts_on, scheduled_at, timezone
 ) values (
   '019e3000-0000-7000-8000-000000000402', '019e3000-0000-7000-8000-000000000301',
-  '019e3000-0000-7000-8000-000000000001', '019e3000-0000-7000-8000-000000000102',
+  '019e3000-0000-7000-8000-000000000001', '019e3000-0000-7000-8000-000000000102', 1,
   date_trunc('week', current_date::timestamp)::date, clock_timestamp(), 'America/Bogota'
 );
 select execution.start_planned_session_attempt(

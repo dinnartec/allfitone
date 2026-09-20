@@ -19,7 +19,7 @@
 import type { AllfitV1Schemas } from '@allfitone/contracts'
 import type { IconName } from '@allfitone/react-native/icons'
 
-import type { Movement, SessionTemplateDraftContent } from './content'
+import type { Movement } from './content'
 
 export type RoutineCover = AllfitV1Schemas['RoutineCover']
 export type CoverKind = RoutineCover['kind']
@@ -32,18 +32,12 @@ export function iconCover(icon: CoverIcon): RoutineCover {
   return { kind: 'icon', icon }
 }
 
-export function photoCover(photoId: string): RoutineCover {
-  return { kind: 'photo', photo_id: photoId }
-}
+/** Como la de músculos: la pide la persona y la elige el contenido. */
+export const PHOTO_COVER: RoutineCover = { kind: 'photo' }
 
 /** Which icon a cover names, and nothing for any other kind. */
 export function coverIcon(cover: RoutineCover | undefined): CoverIcon | undefined {
   return cover?.kind === 'icon' ? cover.icon : undefined
-}
-
-/** Which photograph a cover points at, and nothing for any other kind. */
-export function coverPhotoId(cover: RoutineCover | undefined): string | undefined {
-  return cover?.kind === 'photo' ? cover.photo_id : undefined
 }
 
 /**
@@ -109,7 +103,7 @@ export function glyphFor(icon: CoverIcon): IconName | undefined {
 export function sameCover(one: RoutineCover | undefined, other: RoutineCover | undefined): boolean {
   if (one === undefined || other === undefined) return one === other
   if (one.kind !== other.kind) return false
-  return coverIcon(one) === coverIcon(other) && coverPhotoId(one) === coverPhotoId(other)
+  return coverIcon(one) === coverIcon(other)
 }
 
 /**
@@ -137,27 +131,34 @@ export function musclesWorked(
 }
 
 /**
- * The same content, wearing this cover — or none, which drops the key.
+ * La portada que el servidor manda, si esta versión de la app sabe dibujarla.
  *
- * Composed onto `stepsToContent` rather than passed into it. The steps and the cover
- * have nothing to say to each other, and a fourth argument would make every call site
- * carry a decision that only one screen makes.
+ * Compatibilidad hacia adelante y no paranoia: el vocabulario de iconos vive en la base
+ * y se amplía por el final, así que una app vieja puede recibir un nombre que no conoce.
+ * Cuando pasa, la rutina se dibuja con su letra —que es un estado legítimo— en vez de
+ * quedarse con un azulejo vacío o romperse.
  */
-export function withCover(
-  content: SessionTemplateDraftContent,
-  cover: RoutineCover | undefined,
-): SessionTemplateDraftContent {
-  const { cover: _dropped, ...rest } = content
-  return cover === undefined ? rest : { ...rest, cover }
-}
-
-/** The cover a draft carries, if it carries one the app understands. */
-export function coverFromContent(content: SessionTemplateDraftContent): RoutineCover | undefined {
-  const cover = content.cover
+export function coverOrNothing(cover: RoutineCover | null | undefined): RoutineCover | undefined {
   if (cover === null || cover === undefined) return undefined
   if (cover.kind === 'muscles') return MUSCLE_COVER
-  if (cover.kind === 'photo') {
-    return typeof cover.photo_id === 'string' ? photoCover(cover.photo_id) : undefined
-  }
+  if (cover.kind === 'photo') return PHOTO_COVER
   return glyphFor(cover.icon) === undefined ? undefined : iconCover(cover.icon)
+}
+
+/**
+ * Si una portada tiene algo que dibujar, preguntado **antes** de construir el elemento.
+ *
+ * Es la trampa que `routine-cover-art` documenta y en la que se cayó igualmente: un
+ * componente que no pinta nada sigue siendo un objeto elemento, así que un `art ?? letra`
+ * nunca elegía la letra. En la pantalla de portada eso dejaba la pestaña «Foto» con un
+ * cuadrado vacío, que se lee como un control que no hizo nada.
+ */
+export function drawsSomething(
+  cover: RoutineCover | undefined,
+  coverUrl: string | number | null | undefined,
+): boolean {
+  if (cover === undefined) return false
+  if (cover.kind === 'photo') return Boolean(coverUrl)
+  if (cover.kind === 'icon') return glyphFor(cover.icon) !== undefined
+  return true
 }

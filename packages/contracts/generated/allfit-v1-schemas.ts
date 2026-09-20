@@ -3509,7 +3509,7 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
     description:
-      'How a routine shows itself in a list. One variant per kind, so a muscle cover cannot also carry an icon. The database refuses that too; refusing it in the contract means it cannot be expressed.\nAbsent or null is a routine with no cover, which is not an incomplete routine: it is recognised by its name, the way it always was.',
+      "How a programme's routines show themselves. One variant per kind, so a muscle cover cannot also carry an icon. The database refuses that too; refusing it in the contract means it cannot be expressed.\n**It is declared on the programme and read on the routine.** A routine that no programme holds has none, and is recognised by its name, the way it always was.",
   },
   RoutineCoverIcon: {
     type: 'object',
@@ -3579,51 +3579,15 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
   RoutineCoverPhoto: {
     type: 'object',
     additionalProperties: false,
-    required: ['kind', 'photo_id'],
+    required: ['kind'],
     properties: {
       kind: {
         type: 'string',
         enum: ['photo'],
       },
-      photo_id: {
-        $ref: '#/components/schemas/Uuid',
-        description:
-          "What `GET /space/v1/routine-covers/{photoId}` serves. It is the photograph's own identifier and never a storage reference: `ADR-031` keeps the bytes in the database and serves them through the API, so no response ever carries a path into an object store.",
-      },
     },
     description:
-      "A photograph the person uploaded against this routine. The bytes belong to the routine they were uploaded for, which is a composite foreign key and not a convention: naming somebody else's photograph is refused where the person can see it, and could not reach a published version anyway.",
-  },
-  RoutineCoverPhotoStored: {
-    type: 'object',
-    additionalProperties: false,
-    required: ['id'],
-    properties: {
-      id: {
-        $ref: '#/components/schemas/Uuid',
-      },
-    },
-    description:
-      'Uploading is not choosing. The photograph exists from here, but the cover does not change until a draft names this id and is saved — so an upload that fails halfway never leaves a routine pointing at something that is not there.',
-  },
-  RoutineCoverPhotoUpload: {
-    type: 'object',
-    additionalProperties: false,
-    required: ['content_type', 'content'],
-    properties: {
-      content_type: {
-        type: 'string',
-        enum: ['image/jpeg', 'image/png', 'image/webp'],
-        description: 'What is being sent. What gets stored is always `image/webp`.',
-      },
-      content: {
-        type: 'string',
-        contentEncoding: 'base64',
-        maxLength: 14000000,
-        description:
-          'The image, base64 encoded, as `NutritionPhotoUpload` already specifies for the meal photograph. The server decodes it, re-encodes it and stores only the result: re-encoding removes EXIF and geolocation by construction rather than trying to trim them out, and an image that will not decode is refused with nothing written.',
-      },
-    },
+      "A photograph, and the routine does not say which: the second revision of `ADR-031` retired the personal upload, so this asks for one of the catalogue's covers and the dominant region of the muscles the routine works decides it. It carries nothing for the same reason the muscle cover carries nothing — the answer is already in the exercises, and copying it here would be a second truth.\nWhere to fetch it is `cover_url`, composed by the server. The key never leaves the database.",
   },
   ScopeCode: {
     type: 'string',
@@ -3782,16 +3746,6 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         format: 'uuid',
         description: 'Null is allowed only while the draft is incomplete.',
       },
-      cover: {
-        oneOf: [
-          {
-            $ref: '#/components/schemas/RoutineCover',
-          },
-          {
-            type: 'null',
-          },
-        ],
-      },
       steps: {
         type: 'array',
         maxItems: 200,
@@ -3854,16 +3808,6 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
       title: {
         type: 'string',
-      },
-      cover: {
-        oneOf: [
-          {
-            $ref: '#/components/schemas/RoutineCover',
-          },
-          {
-            type: 'null',
-          },
-        ],
       },
       status: {
         type: 'string',
@@ -4305,6 +4249,8 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       'starts_on',
       'sessions_done',
       'sessions_planned',
+      'cover_url',
+      'routine_cover',
     ],
     properties: {
       assignment_id: {
@@ -4338,6 +4284,31 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         type: 'string',
         format: 'date',
       },
+      cover_url: {
+        oneOf: [
+          {
+            type: 'string',
+            format: 'uri',
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description:
+          "Where the programme's artwork is served from, composed by the API out of the stored object key and the media origin. Null for a programme somebody wrote here, which has no artwork of its own. The key never leaves the server: it addresses our storage and would tie a client to where it happens to live.",
+      },
+      routine_cover: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/RoutineCover',
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description:
+          "How this programme's routines show themselves, which is a decision of the programme and not of each routine: Hoy opens with the week's routines side by side, and six routines each picking their own would put figures, icons and photographs in one row — a sample book rather than a week.\nThe style is the programme's and the image is the routine's. `muscles` draws what each routine works and `photo` takes the catalogue cover matching what each routine works; only `icon` is the same for all of them, because an icon is chosen rather than computed.\nNull is a programme that has not said, and its routines are recognised by their name.",
+      },
       sessions_done: {
         type: 'integer',
         minimum: 0,
@@ -4358,7 +4329,11 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       'status',
       'template_version_id',
       'cover',
+      'cover_url',
       'muscles',
+      'muscle_sets',
+      'versions',
+      'programs',
       'exercise_count',
       'set_count',
       'has_unpublished_changes',
@@ -4398,6 +4373,36 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
             type: 'null',
           },
         ],
+        description:
+          "**Derived, never declared.** A routine does not choose how it shows itself: the programme that uses it does, so that Hoy's carousel speaks one language. This answers the style of the first of the person's programmes that holds this routine, by the order they already chose for them.\nNull is a routine that no programme holds. That is not an unfinished routine: it is recognised by its name, the way it always was.",
+      },
+      cover_url: {
+        type: ['string', 'null'],
+        format: 'uri',
+        description:
+          "Where to fetch the photograph this routine gets under a `photo` cover, composed by the server out of the picked object key and the catalogue's media origin. Null only for a routine with no exercises yet — nothing has said what it works, so nothing can be picked. The key itself never leaves the database (`ADR-031`).\n**It is answered whatever the programme currently wears.** The cover screen previews all three kinds before any of them is chosen, so answering only for a programme already wearing a photograph left that tab with an empty tile at exactly the moment somebody is deciding.\nThe style is the programme's and the image is this routine's: within `photo` each routine gets the cover matching what **it** works, or six cards would come out cloned and only the label would tell them apart.",
+      },
+      muscle_sets: {
+        type: 'array',
+        description:
+          "How the routine's sets fall across its muscles, heaviest first. Hoy's card draws this under the figure, and a client cannot work it out: it is told how many sets the routine has in total, not how they are spread.\n**A set belongs to one muscle**, the exercise's primary. Sharing each set between every muscle the movement touches turns thirteen sets into thirty-one, and the number stops being the work done and becomes a count of mentions.",
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['code', 'name', 'sets'],
+          properties: {
+            code: {
+              type: 'string',
+            },
+            name: {
+              type: 'string',
+            },
+            sets: {
+              type: 'integer',
+              minimum: 1,
+            },
+          },
+        },
       },
       muscles: {
         type: 'array',
@@ -4406,6 +4411,32 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         },
         description:
           'Catalogue muscle codes the routine works, the ones it trains first. They are what a muscle cover is drawn from, and a list cannot compute them: only the reader knows which movements the routine holds.',
+      },
+      versions: {
+        type: 'array',
+        description:
+          "Every published version of this routine, newest first. A programme's week stores the exact version it composed, and republishing the routine mints a new one — so a screen that matched only the newest would lose the routine from a week it is plainly in. Matching against this list is what lets a day name what it holds without resolving «latest», which `ADR-009` forbids for anything historical.",
+        items: {
+          $ref: '#/components/schemas/UuidV7',
+        },
+      },
+      programs: {
+        type: 'array',
+        description:
+          "The person's programmes that use this routine, so a library row can say where it is used without a second request. A caller cannot work this out: `OP-PLN-026` answers programmes without their composition, and one taken from Allfit has no draft to open. Empty means the routine belongs to no programme of theirs — which is a legitimate state and not a problem.",
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['program_id', 'title'],
+          properties: {
+            program_id: {
+              $ref: '#/components/schemas/UuidV7',
+            },
+            title: {
+              type: 'string',
+            },
+          },
+        },
       },
       exercise_count: {
         type: 'integer',
@@ -4822,6 +4853,44 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         maxLength: 64,
         description:
           'An IANA zone. The start date is **not** sent: it is always today in this zone, and a client-supplied date could backdate a plan into a history that never happened.',
+      },
+    },
+  },
+  SpaceProgramCover: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['program_id', 'cover'],
+    properties: {
+      program_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      cover: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/RoutineCover',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+    },
+  },
+  SpaceProgramCoverChoice: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['cover'],
+    properties: {
+      cover: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/RoutineCover',
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description: 'Null takes the cover off, and its routines go back to their names.',
       },
     },
   },
@@ -5511,6 +5580,8 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       'title',
       'discipline_code',
       'status',
+      'program_day',
+      'scheduled_at',
       'exercise_count',
       'set_count',
       'done',
@@ -5528,6 +5599,19 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
       status: {
         type: 'string',
+      },
+      program_day: {
+        type: 'integer',
+        minimum: 1,
+        maximum: 7,
+        description:
+          "The day the programme put this session on, 1 being Monday. Not the same as the day `scheduled_at` fell on: the first week is moved forward so a programme taken on a Thursday does not open with its Monday already missed. The screen names the programme's day, because that is the one the person wrote.",
+      },
+      scheduled_at: {
+        type: 'string',
+        format: 'date-time',
+        description:
+          'When the week put this session. The reader has always answered it and the schema did not say so; the library names the day under each routine, and a day the client invented from the order would be a guess.',
       },
       exercise_count: {
         type: 'integer',

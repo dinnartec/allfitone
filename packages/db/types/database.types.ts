@@ -2950,6 +2950,7 @@ export type Database = {
           assignment_id: string
           id: string
           person_id: string
+          program_day: number
           scheduled_at: string
           status: string
           template_version_id: string
@@ -2960,6 +2961,7 @@ export type Database = {
           assignment_id: string
           id?: string
           person_id: string
+          program_day: number
           scheduled_at: string
           status?: string
           template_version_id: string
@@ -2970,6 +2972,7 @@ export type Database = {
           assignment_id?: string
           id?: string
           person_id?: string
+          program_day?: number
           scheduled_at?: string
           status?: string
           template_version_id?: string
@@ -3310,72 +3313,43 @@ export type Database = {
         Row: {
           author_person_id: string | null
           content_scope: Database['catalog']['Enums']['content_scope']
+          cover_object_key: string | null
           created_at: string
           id: string
           owner_organization_id: string | null
           owner_person_id: string | null
+          routine_cover_icon: Database['planning']['Enums']['routine_cover_icon'] | null
+          routine_cover_kind: Database['planning']['Enums']['routine_cover'] | null
           status: Database['catalog']['Enums']['publication_status']
           updated_at: string
         }
         Insert: {
           author_person_id?: string | null
           content_scope: Database['catalog']['Enums']['content_scope']
+          cover_object_key?: string | null
           created_at?: string
           id?: string
           owner_organization_id?: string | null
           owner_person_id?: string | null
+          routine_cover_icon?: Database['planning']['Enums']['routine_cover_icon'] | null
+          routine_cover_kind?: Database['planning']['Enums']['routine_cover'] | null
           status?: Database['catalog']['Enums']['publication_status']
           updated_at?: string
         }
         Update: {
           author_person_id?: string | null
           content_scope?: Database['catalog']['Enums']['content_scope']
+          cover_object_key?: string | null
           created_at?: string
           id?: string
           owner_organization_id?: string | null
           owner_person_id?: string | null
+          routine_cover_icon?: Database['planning']['Enums']['routine_cover_icon'] | null
+          routine_cover_kind?: Database['planning']['Enums']['routine_cover'] | null
           status?: Database['catalog']['Enums']['publication_status']
           updated_at?: string
         }
         Relationships: []
-      }
-      session_template_cover_photos: {
-        Row: {
-          byte_size: number
-          bytes: string
-          checksum: string
-          content_type: string
-          created_at: string
-          id: string
-          template_id: string
-        }
-        Insert: {
-          byte_size: number
-          bytes: string
-          checksum: string
-          content_type: string
-          created_at?: string
-          id?: string
-          template_id: string
-        }
-        Update: {
-          byte_size?: number
-          bytes?: string
-          checksum?: string
-          content_type?: string
-          created_at?: string
-          id?: string
-          template_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: 'fk_session_template_cover_photos_template'
-            columns: ['template_id']
-            isOneToOne: false
-            referencedRelation: 'session_templates'
-            referencedColumns: ['id']
-          },
-        ]
       }
       session_template_drafts: {
         Row: {
@@ -3423,9 +3397,6 @@ export type Database = {
         Row: {
           activity_type_id: string
           content_hash: string
-          cover_icon: Database['planning']['Enums']['routine_cover_icon'] | null
-          cover_kind: Database['planning']['Enums']['routine_cover'] | null
-          cover_photo_id: string | null
           derived_from_version_id: string | null
           discipline_code: string
           id: string
@@ -3438,9 +3409,6 @@ export type Database = {
         Insert: {
           activity_type_id: string
           content_hash: string
-          cover_icon?: Database['planning']['Enums']['routine_cover_icon'] | null
-          cover_kind?: Database['planning']['Enums']['routine_cover'] | null
-          cover_photo_id?: string | null
           derived_from_version_id?: string | null
           discipline_code: string
           id?: string
@@ -3453,9 +3421,6 @@ export type Database = {
         Update: {
           activity_type_id?: string
           content_hash?: string
-          cover_icon?: Database['planning']['Enums']['routine_cover_icon'] | null
-          cover_kind?: Database['planning']['Enums']['routine_cover'] | null
-          cover_photo_id?: string | null
           derived_from_version_id?: string | null
           discipline_code?: string
           id?: string
@@ -3466,13 +3431,6 @@ export type Database = {
           version_number?: number
         }
         Relationships: [
-          {
-            foreignKeyName: 'fk_session_template_versions_cover_photo'
-            columns: ['cover_photo_id', 'template_id']
-            isOneToOne: false
-            referencedRelation: 'session_template_cover_photos'
-            referencedColumns: ['id', 'template_id']
-          },
           {
             foreignKeyName: 'fk_session_template_versions_derivation'
             columns: ['derived_from_version_id']
@@ -3587,10 +3545,6 @@ export type Database = {
       canonical_program_content: { Args: { p_content: Json }; Returns: Json }
       canonical_session_content: { Args: { p_content: Json }; Returns: Json }
       canonical_target: { Args: { p_target: Json }; Returns: Json }
-      collect_cover_photos: {
-        Args: { p_reason: string; p_template_id: string }
-        Returns: number
-      }
       content_etag: { Args: { p_content: Json }; Returns: string }
       create_my_program: {
         Args: {
@@ -3760,6 +3714,11 @@ export type Database = {
         Args: { p_step_id: string; p_target: Json }
         Returns: undefined
       }
+      pick_program_cover: { Args: { p_program_id: string }; Returns: string }
+      pick_routine_cover: {
+        Args: { p_region: string; p_template_id: string }
+        Returns: string
+      }
       planned_set_errors: { Args: { p_sets: Json }; Returns: string[] }
       program_content_errors: {
         Args: {
@@ -3771,6 +3730,7 @@ export type Database = {
       }
       program_draft_projection: { Args: { p_draft_id: string }; Returns: Json }
       program_projection: { Args: { p_program_id: string }; Returns: Json }
+      program_region: { Args: { p_program_id: string }; Returns: string }
       program_version_projection: {
         Args: { p_version_id: string }
         Returns: Json
@@ -3822,6 +3782,10 @@ export type Database = {
           version: Json
         }[]
       }
+      publish_program_content: {
+        Args: { p_content: Json; p_program_id: string }
+        Returns: string
+      }
       publish_program_version: {
         Args: {
           p_command_id: string
@@ -3864,14 +3828,6 @@ export type Database = {
         }[]
       }
       read_my_content: { Args: { p_person_id: string }; Returns: Json }
-      read_my_cover_photo: {
-        Args: { p_person_id: string; p_photo_id: string }
-        Returns: {
-          byte_size: number
-          bytes: string
-          content_type: string
-        }[]
-      }
       read_my_program_draft: {
         Args: { p_person_id: string; p_program_id: string }
         Returns: Json
@@ -3880,10 +3836,12 @@ export type Database = {
         Args: { p_person_id: string }
         Returns: {
           assignment_id: string
+          cover_object_key: string
           days_per_week: number
           editable: boolean
           program_id: string
           program_version_id: string
+          routine_cover: Json
           sessions_done: number
           sessions_planned: number
           starts_on: string
@@ -3971,6 +3929,7 @@ export type Database = {
           week_starts_on: string
         }[]
       }
+      region_of_content: { Args: { p_content: Json }; Returns: string }
       reorder_my_programs: {
         Args: {
           p_assignment_ids: string[]
@@ -4043,6 +4002,10 @@ export type Database = {
           result: Json
         }[]
       }
+      restate_assignment_onto: {
+        Args: { p_person_id: string; p_program_version_id: string }
+        Returns: string
+      }
       restate_my_program_assignment: {
         Args: {
           p_command_id: string
@@ -4082,19 +4045,17 @@ export type Database = {
         Args: { p_version_id: string }
         Returns: Json
       }
-      upload_my_cover_photo: {
+      set_my_program_cover: {
         Args: {
-          p_bytes: string
           p_command_id: string
+          p_icon: string
           p_idempotency_key: string
+          p_kind: string
           p_person_id: string
+          p_program_id: string
           p_request_hash: string
-          p_template_id: string
         }
-        Returns: {
-          photo: Json
-          replayed: boolean
-        }[]
+        Returns: Json
       }
     }
     Enums: {

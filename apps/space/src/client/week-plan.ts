@@ -55,35 +55,6 @@ export function cardsFor(plan: WeekPlan | undefined): readonly RoutineCard[] {
   }))
 }
 
-/** How much of the week is behind you, counted in routines rather than in attempts. */
-export function weekProgress(plan: WeekPlan | undefined): { done: number; planned: number } {
-  if (!plan) return { done: 0, planned: 0 }
-  return {
-    done: plan.sessions.filter((session) => session.done).length,
-    planned: plan.sessions.length,
-  }
-}
-
-/** True once nothing is left. What `H-E` draws instead of pulling next week forward. */
-export function weekIsDone(plan: WeekPlan | undefined): boolean {
-  const progress = weekProgress(plan)
-  return progress.planned > 0 && progress.done === progress.planned
-}
-
-/** "6 ejercicios · 18 series", or just the exercises when nothing is counted in sets. */
-export function routineCaption(routine: WeekRoutine): string {
-  const exercises = `${routine.exercise_count} ${routine.exercise_count === 1 ? 'ejercicio' : 'ejercicios'}`
-  if (routine.set_count <= 0) return exercises
-  return `${exercises} · ${routine.set_count} ${routine.set_count === 1 ? 'serie' : 'series'}`
-}
-
-/** What the button says, which is the whole difference between the three states. */
-export function actionLabel(state: RoutineState): string {
-  if (state === 'open') return 'Continuar'
-  if (state === 'done') return 'Repetir'
-  return 'Empezar'
-}
-
 export type WeekPlanFailure = 'expired' | 'unassigned' | 'failed'
 
 /**

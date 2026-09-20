@@ -1,106 +1,145 @@
 /**
- * E-2 · Entrenar · rutinas del programa — `HU-SP-040` y `HU-SP-089`.
+ * FIN-6 · Entrenar — la biblioteca de lo que puedes entrenar.
  *
- * Two taps from opening the app to training: Entrenar, then Empezar. That is the
- * whole point of this screen. Everything else on it exists to make those two taps
- * land on the right routine.
+ * **Esta pestaña dejó de ser la semana y pasó a ser la biblioteca.** Antes mostraba las
+ * rutinas de esta semana con un botón «Empezar» en cada fila; ahora muestra lo que la
+ * persona tiene —sus programas y sus rutinas— con el programa en curso abierto encima.
+ * El arranque no desapareció: lo hace el chevron de la fila, que es la misma distancia
+ * con una palabra menos.
  *
- * **The week is the unit and the day is a suggestion.** The list is this calendar
- * week's routines, all of them startable today, in the order the programme wrote
- * them. One is marked as the one to follow; marking is all it does.
+ * **La etiqueta «Sigue esta» se queda.** Es lo único que dice cuál toca de las tres que
+ * hay esta semana, y el botón que se fue no la llevaba: la llevaba la fila.
  *
- * **A routine already done keeps its place and offers to be done again.** Hiding it
- * would be telling somebody they cannot do what they are about to do anyway, and
- * the repeat is another attempt that leaves the first one's credit alone.
+ * **Un segmentado de verdad.** «Rutinas» era un enlace que llevaba a crear una rutina
+ * nueva —un control que prometía una vista y abría otra cosa—; ahora es la otra mitad de
+ * esta pantalla, con sus filtros y su dato: en qué programas está cada rutina, que
+ * `OP-PLN-025` responde porque el cliente no podía deducirlo.
  *
- * **Somebody with no programme sees the catalogue here.** This screen has nothing
- * honest to show them, and an empty state with a button to somewhere else is a worse
- * version of just going there.
- *
- * It is drawn, not navigated to. Sending them to `/programs` meant `router.replace`
- * from inside a tab, which replaces the tab navigator's own entry on the root stack:
- * the dock disappeared and `router.back()` reported no navigator would handle it,
- * because by then the stack held one screen. A tab must never navigate out of its
- * own navigator.
+ * **Sin programa no se dibuja un vacío.** La primera mitad se queda con las dos maneras
+ * de llenarla —tomar uno de Allfit o crear el tuyo—, que es lo que un estante vacío
+ * tiene que ofrecer. El catálogo entero sigue en su ruta y no se incrusta aquí.
  */
 
+import { Badge } from '@allfitone/react-native/badge'
 import { Button } from '@allfitone/react-native/button'
+import { Chip } from '@allfitone/react-native/chip'
+import { ContentRow } from '@allfitone/react-native/content-row'
+import { FoundationIcon } from '@allfitone/react-native/icons'
+import { InlineAlert } from '@allfitone/react-native/inline-alert'
 import { Screen } from '@allfitone/react-native/screen'
+import { SegmentedControl } from '@allfitone/react-native/segmented-control'
 import { Sheet } from '@allfitone/react-native/sheet'
 import { Text } from '@allfitone/react-native/text'
 import { useTheme } from '@allfitone/react-native/theme'
-import { FoundationIcon, type IconName } from '@allfitone/react-native/icons'
-import { InlineAlert } from '@allfitone/react-native/inline-alert'
+import { Image } from 'expo-image'
 import { useFocusEffect, useRouter } from 'expo-router'
 import { useCallback, useMemo, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
 
 import { ApiError } from '../../src/client'
+import { discardFailure } from '../../src/client/save-failure'
+import { createSpaceContentFlow } from '../../src/client/content-transport'
 import { createSpaceExecutionFlow } from '../../src/client/execution-transport'
 import { createSpaceProgramFlow } from '../../src/client/programs-transport'
+import { readExerciseLibrary, type ExerciseLibrary } from '../../src/client/exercise-library'
+import type { MyRoutine } from '../../src/client/content'
 import type { MyProgram, WeekPlan } from '../../src/client/programs'
 import {
-  actionLabel,
-  cardsFor,
-  routineCaption,
-  weekPlanFailure,
-  weekProgress,
-  type RoutineCard,
-} from '../../src/client/week-plan'
+  dayName,
+  discardWarning,
+  emptyReason,
+  filteredRoutines,
+  programCaption,
+  routineCounts,
+  routineFigures,
+  whereUsed,
+  type RoutineFilter,
+} from '../../src/client/library'
+import { cardsFor, weekPlanFailure, type RoutineCard } from '../../src/client/week-plan'
 import { deviceTimezone } from '../../src/client/timezone'
-import { ProgramCatalogue } from '../../src/components/program-catalogue'
+import { RoutineMark } from '../../src/components/routine-mark'
 import { DOCK_HEIGHT } from '../../src/components/tab-bar'
 
 const EXPIRED = 'Tu sesión venció. Vuelve a entrar para continuar.'
-const READ_FAILED = 'No pudimos cargar tu semana. Inténtalo otra vez.'
+const READ_FAILED = 'No pudimos cargar tu biblioteca. Inténtalo otra vez.'
 const START_FAILED = 'No pudimos empezar la sesión. Inténtalo otra vez.'
-const ORDER_FAILED = 'No pudimos guardar el orden. Inténtalo otra vez.'
+const ORDER_FAILED = 'No pudimos cambiar de programa. Inténtalo otra vez.'
 
-/** Tall enough for the name and the line under it, and the same for every row. */
-const PROGRAM_ROW = 62
+type Segment = 'programas' | 'rutinas'
+
+/** Lo que ocupa la fotografía de un programa. Alta para que la imagen se vea, no se intuya. */
+const HERO = 190
+
+const SEGMENTS = [
+  { value: 'programas' as const, label: 'Programas' },
+  { value: 'rutinas' as const, label: 'Rutinas' },
+]
+
+const FILTERS: readonly { value: RoutineFilter; label: string }[] = [
+  { value: 'todas', label: 'Todas' },
+  { value: 'en-programa', label: 'En programa' },
+  { value: 'sueltas', label: 'Sueltas' },
+]
 
 export default function Train() {
   const router = useRouter()
   const theme = useTheme()
   const programs = useMemo(() => createSpaceProgramFlow(), [])
+  const content = useMemo(() => createSpaceContentFlow(), [])
   const training = useMemo(() => createSpaceExecutionFlow(), [])
   const timezone = useMemo(() => deviceTimezone(), [])
 
+  const [segment, setSegment] = useState<Segment>('programas')
+  const [filter, setFilter] = useState<RoutineFilter>('todas')
   const [plan, setPlan] = useState<WeekPlan | undefined>(undefined)
-  const [unassigned, setUnassigned] = useState(false)
   const [mine, setMine] = useState<readonly MyProgram[]>([])
-  const [choosing, setChoosing] = useState(false)
+  const [routines, setRoutines] = useState<readonly MyRoutine[]>([])
+  const [library, setLibrary] = useState<ExerciseLibrary | undefined>(undefined)
+  // La rutina cuyo menú está abierto. Guardada entera y no por id: la hoja escribe su
+  // nombre, y buscarla otra vez en una lista que acaba de cambiar es cómo se pregunta
+  // «¿descartar undefined?».
+  const [menu, setMenu] = useState<MyRoutine | undefined>(undefined)
   const [starting, setStarting] = useState<string | undefined>(undefined)
   const [failure, setFailure] = useState<string | undefined>(undefined)
 
+  /**
+   * Todo de una vez, porque las dos mitades del segmentado se dibujan de lo mismo y
+   * cambiar de solapa no puede costar una espera.
+   *
+   * La semana falla con 404 cuando no hay programa, y eso no es un error: es el estante
+   * vacío. Se recoge aparte para que no apague el resto de la pantalla.
+   */
   const load = useCallback(() => {
     programs
       .readWeekPlan(timezone)
-      .then((week) => {
-        setPlan(week)
-        setUnassigned(false)
-        return programs.readMyPrograms()
-      })
-      .then(setMine)
+      .then(setPlan)
       .catch((cause: unknown) => {
         const meaning = weekPlanFailure(cause instanceof ApiError ? cause.failure : undefined)
-        // No programme is not an error state: it is the catalogue, drawn here.
-        if (meaning === 'unassigned') setUnassigned(true)
+        if (meaning === 'unassigned') setPlan(undefined)
         else setFailure(meaning === 'expired' ? EXPIRED : READ_FAILED)
       })
-  }, [programs, timezone])
+    Promise.all([programs.readMyPrograms(), content.readMyRoutines(), readExerciseLibrary(content)])
+      .then(([programmes, mineRoutines, read]) => {
+        setMine(programmes)
+        setRoutines(mineRoutines)
+        setLibrary(read)
+      })
+      .catch((cause: unknown) => {
+        setFailure(
+          cause instanceof ApiError && cause.failure === 'unauthenticated' ? EXPIRED : READ_FAILED,
+        )
+      })
+  }, [content, programs, timezone])
 
-  // On focus rather than on mount: the tab stays mounted, so mounting happens once
-  // and would never see a session finished or a programme taken somewhere else. The
-  // week already on screen stays drawn while the new one is fetched.
+  // En foco y no al montar: la pestaña se queda montada, así que montar ocurre una vez y
+  // no vería una rutina escrita ni una sesión cerrada en otro sitio.
   useFocusEffect(load)
 
   const cards = cardsFor(plan)
-  const progress = weekProgress(plan)
-
-  // Before any of the week's own state: with no programme there is no week, and the
-  // sections below would each draw their empty half of one.
-  if (unassigned) return <ProgramCatalogue embedded />
+  const current = mine.find((one) => one.program_version_id === plan?.program_version_id)
+  const others = mine.filter((one) => one.program_version_id !== plan?.program_version_id)
+  const counts = routineCounts(routines)
+  const shown = filteredRoutines(routines, filter)
 
   const start = (card: RoutineCard) => {
     const open = card.routine.open_execution_id
@@ -117,174 +156,259 @@ export default function Train() {
   }
 
   /**
-   * Choosing a programme, expressed as the order command that already exists.
+   * Cambiar de programa es ponerlo primero.
    *
-   * `OP-PLN-024` says the first assignment is the one this tab opens on, so selecting
-   * one is putting it in front and leaving the rest as they were. There is no separate
-   * "current programme" to write, and inventing one would be a second source of truth
-   * for a question the order already answers.
+   * `OP-PLN-024` dice que la pestaña abre en la primera asignación, así que elegir uno es
+   * adelantarlo y dejar el resto como estaba. No hay un «programa actual» aparte que
+   * escribir, e inventarlo sería una segunda fuente de verdad para algo que el orden ya
+   * responde.
    */
   const select = (assignmentId: string) => {
-    const chosen = mine.find((program) => program.assignment_id === assignmentId)
-    if (!chosen || chosen.assignment_id === mine[0]?.assignment_id) {
-      setChoosing(false)
-      return
-    }
-    reorder([
+    const order = [
       assignmentId,
       ...mine.filter((one) => one.assignment_id !== assignmentId).map((one) => one.assignment_id),
-    ])
-    setChoosing(false)
-  }
-
-  const reorder = (assignmentIds: readonly string[]) => {
-    // Shown in the new order at once, then written. Waiting for the round trip would
-    // make the row snap back under the finger that just chose it.
-    setMine((current) =>
-      assignmentIds
-        .map((id) => current.find((program) => program.assignment_id === id))
-        .filter((program): program is MyProgram => program !== undefined),
+    ]
+    setMine((held) =>
+      order
+        .map((id) => held.find((one) => one.assignment_id === id))
+        .filter((one): one is MyProgram => one !== undefined),
     )
     programs
-      .reorder(assignmentIds)
+      .reorder(order)
       .then((ordered) => {
         setMine(ordered)
-        // The tab opens on the first one, so the week has to follow the order.
         return programs.readWeekPlan(timezone)
       })
       .then(setPlan)
       .catch(() => setFailure(ORDER_FAILED))
   }
 
+  const discard = (routine: MyRoutine) => {
+    setMenu(undefined)
+    content
+      .discardTemplate(routine.template_id)
+      .then(() =>
+        setRoutines((held) => held.filter((one) => one.template_id !== routine.template_id)),
+      )
+      .catch((cause: unknown) => setFailure(discardFailure(cause, routine.programs)))
+  }
+
   return (
     <Screen edges={['top', 'bottom']}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.heading}>
-          <Text role="display" size="2xl" uppercase accessibilityRole="header">
+      {/* La cabecera no se va con el desplazamiento: es el sitio donde se cambia de
+          mitad, y una que se escapa obliga a subir para volver. */}
+      <View style={styles.frame}>
+        <View style={styles.header}>
+          <Text role="control" size="2xl" accessibilityRole="header">
             Entrenar
           </Text>
-          <Text role="body" size="sm" color="muted">
-            Elige la rutina de hoy. El orden es sugerencia.
-          </Text>
+          {/* Sin preguntar qué: el segmentado ya lo dijo. Una hoja que vuelve a
+              preguntar entre dos cosas, con una de ellas abierta delante, es un paso
+              que sólo existe porque la pantalla no se fía de lo que muestra. */}
+          <Button
+            label="Crear"
+            icon="create"
+            size="sm"
+            variant="secondary"
+            accessibilityLabel={segment === 'programas' ? 'Crear un programa' : 'Crear una rutina'}
+            onPress={() => router.push(segment === 'programas' ? '/programs/new' : '/routines/new')}
+          />
         </View>
-
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Cambiar de programa"
-          onPress={() => setChoosing(true)}
-          style={[
-            styles.selector,
-            {
-              backgroundColor: theme.color.background.surface,
-              borderColor: theme.color.border.subtle,
-            },
-          ]}
-        >
-          <View style={styles.selectorText}>
-            <Text role="eyebrow" size="2xs" color="muted">
-              PROGRAMA
-            </Text>
-            <Text role="display" size="lg" uppercase numberOfLines={1}>
-              {plan?.program_title ?? '—'}
-            </Text>
-          </View>
-          {plan ? (
-            <Text role="body" size="xs" color="muted">
-              {`semana ${plan.program_week}`}
-            </Text>
-          ) : null}
-          <FoundationIcon name="expand" size="xs" color={theme.color.icon.secondary} decorative />
-        </Pressable>
-
-        {progress.planned > 0 ? (
-          <View style={styles.section}>
-            <View style={styles.sectionHead}>
-              <Text role="eyebrow" size="xs" color="muted">
-                ESTA SEMANA
-              </Text>
-              <Text role="display" size="md">
-                {`${progress.done} de ${progress.planned}`}
-              </Text>
-            </View>
-            <View style={styles.bars}>
-              {cards.map((card) => (
-                <View
-                  key={card.routine.planned_session_id}
-                  style={[
-                    styles.bar,
-                    {
-                      backgroundColor: card.routine.done
-                        ? theme.color.action.primary
-                        : theme.color.background.surfaceMuted,
-                    },
-                  ]}
-                />
-              ))}
-            </View>
+        <SegmentedControl
+          items={SEGMENTS}
+          value={segment}
+          // Cambiar de mitad se lleva el aviso: hablaba de lo que estabas mirando, y
+          // dejarlo colgando sobre la otra lista lo convierte en un cartel sin dueño.
+          onChange={(next) => {
+            setFailure(undefined)
+            setSegment(next)
+          }}
+          accessibilityLabel="Qué parte de tu biblioteca ver"
+        />
+        {/* Los filtros son cabecera, no lista: filtran lo que hay debajo, y uno que se
+            va con el desplazamiento obliga a subir para cambiar de filtro. */}
+        {segment === 'rutinas' ? (
+          <View style={styles.filters}>
+            {FILTERS.map((one) => (
+              <Chip
+                key={one.value}
+                label={one.label}
+                count={counts[one.value]}
+                selected={filter === one.value}
+                onPress={() => setFilter(one.value)}
+              />
+            ))}
           </View>
         ) : null}
+      </View>
 
-        {failure ? <InlineAlert message={failure} /> : null}
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingBottom: DOCK_HEIGHT + 24 }]}
+        showsVerticalScrollIndicator={false}
+      >
+        {failure ? <InlineAlert message={failure} onDismiss={() => setFailure(undefined)} /> : null}
 
-        <View style={styles.section}>
-          <Text role="eyebrow" size="xs" color="muted">
-            RUTINAS DE ESTE PROGRAMA
-          </Text>
-          {cards.map((card) => (
-            <Routine
-              key={card.routine.planned_session_id}
-              card={card}
-              busy={starting === card.routine.planned_session_id}
-              onStart={() => start(card)}
+        {segment === 'programas' ? (
+          <>
+            {current && cards.length > 0 ? (
+              <CurrentProgram
+                program={current}
+                coverUrl={current.cover_url}
+                week={plan?.program_week}
+                cards={cards}
+                starting={starting}
+                onStart={start}
+                onOpen={() => {
+                  if (current.editable) router.push(`/programs/edit/${current.program_id}`)
+                }}
+              />
+            ) : null}
+
+            {others.length > 0 ? (
+              <View style={styles.section}>
+                <View style={styles.sectionHead}>
+                  <Text role="control" size="lg">
+                    Tus otros programas
+                  </Text>
+                  <Text role="control" size="sm" color="accent">
+                    {String(others.length)}
+                  </Text>
+                </View>
+                {others.map((program) => (
+                  <ContentRow
+                    key={program.assignment_id}
+                    name={program.title}
+                    caption={programCaption(program)}
+                    preview={
+                      program.cover_url === null ? (
+                        <FoundationIcon
+                          name="checklist"
+                          size="sm"
+                          color={theme.color.icon.secondary}
+                          decorative
+                        />
+                      ) : (
+                        <Image
+                          source={program.cover_url}
+                          style={styles.thumbnail}
+                          contentFit="cover"
+                          transition={200}
+                        />
+                      )
+                    }
+                    onPress={() => select(program.assignment_id)}
+                    accessibilityLabel={`Entrenar ${program.title}`}
+                    trailing={
+                      program.editable
+                        ? {
+                            kind: 'action',
+                            icon: 'edit',
+                            accessibilityLabel: `Editar ${program.title}`,
+                            onPress: () => router.push(`/programs/edit/${program.program_id}`),
+                          }
+                        : { kind: 'chevron' }
+                    }
+                  />
+                ))}
+              </View>
+            ) : null}
+
+            {/* Siempre, y no sólo cuando no hay nada: tomar otro programa es algo que se
+                hace con seis ya tomados, y esconderlo entonces es esconderlo justo
+                cuando alguien sabe lo que busca. */}
+            <ContentRow
+              name="Programas de Allfit"
+              caption="Planes armados por el equipo"
+              tone="plain"
+              preview={
+                <FoundationIcon
+                  name="checklist"
+                  size="sm"
+                  color={theme.color.icon.accent}
+                  decorative
+                />
+              }
+              trailing={{ kind: 'chevron', tone: 'accent' }}
+              onPress={() => router.push('/programs')}
             />
-          ))}
-        </View>
+          </>
+        ) : (
+          <>
+            {shown.map((routine) => {
+              const used = whereUsed(routine)
+              return (
+                <ContentRow
+                  key={routine.template_id}
+                  name={routine.title}
+                  caption={routineFigures(routine)}
+                  note={used.text}
+                  noteTone={used.loose ? 'quiet' : 'accent'}
+                  preview={<RoutineMark routine={routine} library={library} />}
+                  onPress={() => router.push(`/routines/${routine.template_id}`)}
+                  trailing={{
+                    kind: 'action',
+                    icon: 'more',
+                    accessibilityLabel: `Más opciones de ${routine.title}`,
+                    onPress: () => setMenu(routine),
+                  }}
+                />
+              )
+            })}
 
-        <View style={styles.section}>
-          <Text role="eyebrow" size="xs" color="muted">
-            O SI PREFIERES
-          </Text>
-          <Alternative
-            icon="checklist"
-            label="Ver los de Allfit"
-            caption="para tomar otro programa"
-            onPress={() => router.push('/programs')}
-          />
-        </View>
+            {shown.length === 0 ? (
+              <Text role="body" size="sm" color="muted" style={styles.empty}>
+                {emptyReason(filter)}
+              </Text>
+            ) : null}
+
+            <ContentRow
+              name="Crear rutina"
+              caption="Elige ejercicios, series y repeticiones"
+              tone="plain"
+              preview={
+                <FoundationIcon
+                  name="create"
+                  size="sm"
+                  color={theme.color.icon.accent}
+                  decorative
+                />
+              }
+              trailing={{ kind: 'chevron', tone: 'accent' }}
+              onPress={() => router.push('/routines/new')}
+            />
+          </>
+        )}
       </ScrollView>
 
-      <Sheet visible={choosing} onDismiss={() => setChoosing(false)} title="Tus programas">
-        <View style={styles.programs}>
-          <Text role="body" size="sm" color="muted">
-            Toca el que quieras entrenar. Esta pestaña se abre en el que elijas.
-          </Text>
-          {mine.map((program) => (
-            <MyProgramRow
-              key={program.assignment_id}
-              program={program}
-              active={program.program_version_id === plan?.program_version_id}
-              onPress={() => select(program.assignment_id)}
-              onEdit={() => {
-                setChoosing(false)
-                router.push(`/programs/edit/${program.program_id}`)
-              }}
-            />
-          ))}
+      <Sheet
+        visible={menu !== undefined}
+        onDismiss={() => setMenu(undefined)}
+        title={menu?.title ?? ''}
+      >
+        <View style={styles.sheetActions}>
           <Button
-            label="Crear un programa"
+            label="Editar"
             variant="secondary"
-            icon="create"
+            icon="edit"
             onPress={() => {
-              setChoosing(false)
-              router.push('/programs/new')
+              const chosen = menu
+              setMenu(undefined)
+              if (chosen) router.push(`/routines/${chosen.template_id}`)
             }}
           />
+          {/* Lo que se pierde, dicho antes de perderlo. Una rutina que está en un
+              programa se archiva igual, pero los programas que la usan se quedan con la
+              versión que congelaron, y eso hay que decirlo en vez de dejar que se
+              descubra. */}
+          <Text role="body" size="xs" color="muted">
+            {menu ? discardWarning(menu) : ''}
+          </Text>
           <Button
-            label="Ver los de Allfit"
+            label="Descartar"
             variant="ghost"
+            icon="remove"
             onPress={() => {
-              setChoosing(false)
-              router.push('/programs')
+              if (menu) discard(menu)
             }}
           />
         </View>
@@ -293,203 +417,189 @@ export default function Train() {
   )
 }
 
-/** One routine of the week, and the one button that is the point of this screen. */
-function Routine({
+/**
+ * El programa en curso, abierto.
+ *
+ * Es la única tarjeta de la pantalla que se despliega, y por eso no lleva chevron: lo
+ * que hay dentro ya está a la vista. Las filas de dentro sí lo llevan, porque cada una
+ * arranca su sesión.
+ */
+function CurrentProgram({
+  program,
+  coverUrl,
+  week,
+  cards,
+  starting,
+  onStart,
+  onOpen,
+}: {
+  readonly program: MyProgram
+  readonly coverUrl: string | null
+  readonly week: number | undefined
+  readonly cards: readonly RoutineCard[]
+  readonly starting: string | undefined
+  readonly onStart: (card: RoutineCard) => void
+  readonly onOpen: () => void
+}) {
+  const theme = useTheme()
+
+  return (
+    <View style={[styles.current, { backgroundColor: theme.color.background.surface }]}>
+      {/* La fotografía va debajo de todo y atenuada: es el fondo de un nombre, no una
+          imagen que mirar. El velo del sistema de diseño la lleva hasta el color de la
+          tarjeta, que es lo que deja el texto legible sin una caja detrás. */}
+      {/* Una banda de verdad, con el contenido anclado arriba y abajo. Antes la
+          fotografía iba detrás del texto y quedaba un filo asomando: se veía que había
+          una imagen sin llegar a verse cuál.
+          **Y sin velo propio**, que es lo que decía este comentario y llevaba uno igual:
+          el tratamiento —desaturar, enfriar, realzar y la caída al pie— ya viene horneado
+          en el archivo, así que un `Scrim` encima la ponía azul y la borraba. */}
+      <View style={[styles.hero, coverUrl === null ? null : styles.heroTall]}>
+        {coverUrl === null ? null : (
+          <>
+            <Image source={coverUrl} style={styles.heroPhoto} contentFit="cover" transition={200} />
+          </>
+        )}
+
+        <View style={styles.currentHead}>
+          <Badge label="En curso" tone="accent" variant="quiet" />
+          {program.editable ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Editar ${program.title}`}
+              onPress={onOpen}
+              hitSlop={8}
+              style={[styles.round, { backgroundColor: theme.color.background.surfaceMuted }]}
+            >
+              <FoundationIcon name="edit" size="xs" color={theme.color.icon.secondary} decorative />
+            </Pressable>
+          ) : null}
+        </View>
+
+        <View style={styles.currentText}>
+          <Text role="display" size="lg" uppercase numberOfLines={1}>
+            {program.title}
+          </Text>
+          <Text role="body" size="xs" color="muted">
+            {programCaption(program, week)}
+          </Text>
+        </View>
+      </View>
+
+      <View style={styles.week}>
+        {cards.map((card, index) => (
+          <View key={card.routine.planned_session_id}>
+            {index === 0 ? null : (
+              <View style={[styles.hairline, { backgroundColor: theme.color.border.subtle }]} />
+            )}
+            <WeekRow
+              card={card}
+              busy={starting === card.routine.planned_session_id}
+              onPress={() => onStart(card)}
+            />
+          </View>
+        ))}
+      </View>
+    </View>
+  )
+}
+
+/** Una sesión de la semana. El chevron es el botón que se fue. */
+function WeekRow({
   card,
   busy,
-  onStart,
+  onPress,
 }: {
   readonly card: RoutineCard
   readonly busy: boolean
-  readonly onStart: () => void
-}) {
-  const theme = useTheme()
-  const highlighted = card.state === 'suggested' || card.state === 'open'
-
-  return (
-    <View
-      style={[
-        styles.routine,
-        {
-          backgroundColor: theme.color.background.surface,
-          borderColor: highlighted ? theme.color.accent.tonalBorder : theme.color.border.subtle,
-          borderWidth: highlighted ? 1.5 : 1,
-        },
-      ]}
-    >
-      <View style={styles.routineText}>
-        <View style={styles.routineHead}>
-          <Text role="control" size="sm" numberOfLines={1} style={styles.routineTitle}>
-            {card.routine.title}
-          </Text>
-          {card.state === 'suggested' ? <Badge label="SIGUE ESTA" tone="accent" /> : null}
-          {card.state === 'open' ? <Badge label="A MEDIAS" tone="accent" /> : null}
-          {card.state === 'done' ? <Badge label="HECHA" tone="success" /> : null}
-        </View>
-        <Text role="body" size="xs" color="muted">
-          {routineCaption(card.routine)}
-        </Text>
-      </View>
-      <Button
-        label={actionLabel(card.state)}
-        variant={highlighted ? 'primary' : 'secondary'}
-        icon={card.state === 'done' ? 'history' : 'start'}
-        onPress={onStart}
-        loading={busy}
-        style={styles.routineAction}
-      />
-    </View>
-  )
-}
-
-function Badge({ label, tone }: { readonly label: string; readonly tone: 'accent' | 'success' }) {
-  const theme = useTheme()
-  const paint = tone === 'accent' ? theme.color.accent.tonal : theme.color.background.surfaceSubtle
-
-  return (
-    <View style={[styles.badge, { backgroundColor: paint }]}>
-      <Text role="eyebrow" size="2xs" color={tone === 'accent' ? 'accent' : 'success'}>
-        {label}
-      </Text>
-    </View>
-  )
-}
-
-function MyProgramRow({
-  program,
-  active,
-  onPress,
-  onEdit,
-}: {
-  readonly program: MyProgram
-  readonly active: boolean
-  readonly onPress: () => void
-  readonly onEdit: () => void
-}) {
-  const theme = useTheme()
-
-  return (
-    <Pressable
-      accessibilityRole="radio"
-      accessibilityState={{ selected: active }}
-      accessibilityLabel={`${program.title}, ${program.sessions_done} de ${program.sessions_planned} sesiones`}
-      onPress={onPress}
-      hitSlop={4}
-      style={[
-        styles.program,
-        {
-          backgroundColor: active ? theme.color.accent.tonal : theme.color.background.surfaceSubtle,
-          borderColor: active ? theme.color.accent.tonalBorder : theme.color.border.subtle,
-        },
-      ]}
-    >
-      <View style={styles.routineText}>
-        <Text role="display" size="md" uppercase numberOfLines={1}>
-          {program.title}
-        </Text>
-        <Text role="body" size="xs" color="muted">
-          {`${program.weeks} semanas · ${program.days_per_week} días · ${program.sessions_done} de ${program.sessions_planned}`}
-        </Text>
-      </View>
-      {active ? (
-        <FoundationIcon name="success" size="sm" color={theme.color.icon.accent} decorative />
-      ) : null}
-
-      {/* Only what this editor can open. A programme taken from Allfit was forked and
-          never given a draft, and one whose weeks differ cannot be said as a repeated
-          base week — offering to edit either would flatten it on the way back. */}
-      {program.editable ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Editar ${program.title}`}
-          onPress={onEdit}
-          hitSlop={12}
-          style={styles.edit}
-        >
-          <FoundationIcon name="edit" size="sm" color={theme.color.icon.secondary} decorative />
-        </Pressable>
-      ) : null}
-    </Pressable>
-  )
-}
-
-function Alternative({
-  icon,
-  label,
-  caption,
-  onPress,
-}: {
-  readonly icon: IconName
-  readonly label: string
-  readonly caption: string
   readonly onPress: () => void
 }) {
   const theme = useTheme()
+  const day = dayName(card.routine.program_day)
 
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={label}
+      accessibilityLabel={`${card.state === 'done' ? 'Repetir' : 'Empezar'} ${card.routine.title}`}
+      accessibilityHint={day}
+      disabled={busy}
       onPress={onPress}
-      style={[
-        styles.alternative,
-        { backgroundColor: theme.color.background.surface, borderColor: theme.color.border.subtle },
-      ]}
+      style={({ pressed }) => [styles.weekRow, { opacity: pressed || busy ? 0.7 : 1 }]}
     >
-      <FoundationIcon name={icon} size="sm" color={theme.color.icon.secondary} decorative />
-      <Text role="control" size="xs" numberOfLines={1}>
-        {label}
-      </Text>
-      <Text role="body" size="xs" color="muted">
-        {caption}
-      </Text>
+      <View style={[styles.letter, { backgroundColor: theme.color.background.surfaceMuted }]}>
+        <Text role="control" size="xs" color="accent">
+          {(card.routine.title.trim()[0] ?? '·').toUpperCase()}
+        </Text>
+      </View>
+
+      <View style={styles.weekText}>
+        <View style={styles.weekName}>
+          <Text role="control" size="sm" numberOfLines={1}>
+            {card.routine.title}
+          </Text>
+          {card.state === 'suggested' ? (
+            <Badge label="Sigue esta" tone="accent" variant="quiet" />
+          ) : null}
+          {card.state === 'open' ? <Badge label="A medias" tone="accent" variant="quiet" /> : null}
+        </View>
+        <Text role="body" size="xs" color="muted">
+          {routineFigures(card.routine)}
+        </Text>
+      </View>
+
+      {card.state === 'done' ? (
+        <FoundationIcon name="success" size="xs" color={theme.color.icon.accent} decorative />
+      ) : (
+        <Text role="control" size="xs" color="accent">
+          {day}
+        </Text>
+      )}
+      <FoundationIcon name="next" size="xs" color={theme.color.icon.secondary} decorative />
     </Pressable>
   )
 }
 
 const styles = StyleSheet.create({
-  // The dock floats over the scroll, so the last section has to clear it.
-  content: { gap: 18, paddingBottom: DOCK_HEIGHT + 40 },
-  heading: { gap: 4 },
-  selector: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    minHeight: 58,
-    borderRadius: 16,
-    borderWidth: 1,
-    paddingHorizontal: 14,
-  },
-  selectorText: { flex: 1, gap: 2 },
+  frame: { gap: 14, paddingBottom: 14 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  content: { gap: 14 },
   section: { gap: 10 },
   sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  bars: { flexDirection: 'row', gap: 6 },
-  bar: { flex: 1, height: 6, borderRadius: 3 },
-  routine: {
+  filters: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+  empty: { paddingVertical: 24, textAlign: 'center' },
+  sheetActions: { gap: 12 },
+
+  current: { borderRadius: 24, overflow: 'hidden' },
+  currentHead: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    minHeight: 72,
-    borderRadius: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    justifyContent: 'space-between',
+    padding: 14,
+    paddingBottom: 0,
   },
-  routineText: { flex: 1, gap: 3 },
-  routineHead: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  routineTitle: { flexShrink: 1 },
-  routineAction: { paddingHorizontal: 0, minWidth: 106 },
-  badge: { borderRadius: 8, paddingHorizontal: 7, paddingVertical: 2 },
-  programs: { gap: 10, paddingBottom: 8 },
-  program: {
-    minHeight: PROGRAM_ROW,
-    flexDirection: 'row',
+  currentText: { gap: 3, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14 },
+  hero: { justifyContent: 'space-between' },
+  heroTall: { height: HERO },
+  heroPhoto: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
+  round: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     alignItems: 'center',
-    gap: 10,
+    justifyContent: 'center',
+  },
+
+  week: { paddingHorizontal: 16, paddingBottom: 14 },
+  weekRow: { flexDirection: 'row', alignItems: 'center', gap: 11, paddingVertical: 8 },
+  weekText: { flex: 1, gap: 1 },
+  weekName: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  letter: {
+    width: 28,
+    height: 28,
     borderRadius: 14,
-    borderWidth: 1.5,
-    paddingHorizontal: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  // Its own target inside the row's, which is why it carries a generous hitSlop.
-  edit: { padding: 4 },
-  alternative: { gap: 3, minHeight: 70, borderRadius: 16, borderWidth: 1, padding: 14 },
+  hairline: { height: 1 },
+  thumbnail: { width: '100%', height: '100%' },
 })

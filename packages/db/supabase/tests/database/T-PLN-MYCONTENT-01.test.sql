@@ -26,7 +26,7 @@
 
 begin;
 
-select plan(10);
+select plan(15);
 
 insert into identity.people (id, given_name, family_name)
 values
@@ -141,6 +141,82 @@ select is(
    where mine.item->>'template_id' = :'published_template_id'),
   'true',
   'T-PLN-MYCONTENT-10 and editing the draft of a published routine is an unpublished change');
+
+-- Dónde se usa una rutina. La biblioteca de Entrenar lo pone bajo cada nombre, y el
+-- cliente no puede deducirlo: los programas se responden sin su composición.
+select is(
+  (select mine.item->'programs' from jsonb_array_elements(
+     planning.read_my_content('019ec000-0000-7000-8000-000000000001')) as mine(item)
+   where mine.item->>'template_id' = :'published_template_id'),
+  '[]'::jsonb,
+  'T-PLN-MYCONTENT-11 una rutina que no está en ningún programa responde una lista vacía');
+
+select (planning.create_my_program(
+  '019ec000-0000-7000-8000-000000000001', 'Fuerza básica',
+  '82c11111-1111-4111-8111-000000000010', extensions.uuid_generate_v7(),
+  decode(repeat('d1', 32), 'hex'))).program as program \gset
+select (:'program'::jsonb->>'id') as program_id,
+       (:'program'::jsonb->'draft'->>'etag') as petag0 \gset
+
+select (planning.replace_my_program_draft(
+  '019ec000-0000-7000-8000-000000000001', :'program_id'::uuid, :'petag0',
+  ('{"title":"Fuerza básica","notes":null,"sessions":[{"position":1,"week":1,"day":1,"template_version_id":"' || :'version_id' || '"}]}')::jsonb,
+  '82c11111-1111-4111-8111-000000000011', extensions.uuid_generate_v7(),
+  decode(repeat('d2', 32), 'hex'))).draft as pdraft \gset
+select (:'pdraft'::jsonb->>'etag') as petag1 \gset
+
+select (planning.publish_my_program(
+  '019ec000-0000-7000-8000-000000000001', :'program_id'::uuid, :'petag1',
+  '82c11111-1111-4111-8111-000000000012', extensions.uuid_generate_v7(),
+  decode(repeat('d3', 32), 'hex'))).version as pversion \gset
+select (:'pversion'::jsonb->>'id') as program_version_id \gset
+
+select planning.self_assign_program(
+  '019ec000-0000-7000-8000-000000000001', :'program_version_id'::uuid, 'America/Bogota',
+  '82c11111-1111-4111-8111-000000000013', extensions.uuid_generate_v7(),
+  decode(repeat('d4', 32), 'hex')) as assignment \gset
+
+select is(
+  (select mine.item->'programs'->0->>'title' from jsonb_array_elements(
+     planning.read_my_content('019ec000-0000-7000-8000-000000000001')) as mine(item)
+   where mine.item->>'template_id' = :'published_template_id'),
+  'Fuerza básica',
+  'T-PLN-MYCONTENT-12 y una que sí, lo nombra');
+
+-- La que importa. El borrador ya difiere de lo publicado, así que esto crea una versión
+-- nueva; el programa sigue congelado en la anterior y la rutina **sigue estando en él**.
+select (planning.publish_my_session_template(
+  '019ec000-0000-7000-8000-000000000001', :'published_template_id'::uuid,
+  planning.content_etag((select content from planning.session_template_drafts
+                         where template_id = :'published_template_id'::uuid)),
+  '82c11111-1111-4111-8111-000000000014', extensions.uuid_generate_v7(),
+  decode(repeat('d5', 32), 'hex'))).version as republished \gset
+
+select is(
+  (select mine.item->'programs'->0->>'title' from jsonb_array_elements(
+     planning.read_my_content('019ec000-0000-7000-8000-000000000001')) as mine(item)
+   where mine.item->>'template_id' = :'published_template_id'),
+  'Fuerza básica',
+  'T-PLN-MYCONTENT-13 publicarla otra vez no la saca del programa que congeló la anterior');
+
+-- Todas sus versiones, de la más nueva a la más vieja. Una semana guarda la versión
+-- exacta que compuso, y sin esta lista una rutina republicada desaparecía del programa en
+-- el que está puesta: el día resolvía contra «la última» y ya no coincidía con ninguna.
+select is(
+  (select jsonb_array_length(mine.item->'versions') from jsonb_array_elements(
+     planning.read_my_content('019ec000-0000-7000-8000-000000000001')) as mine(item)
+   where mine.item->>'template_id' = :'published_template_id'),
+  2,
+  'T-PLN-MYCONTENT-14 una rutina publicada dos veces lista sus dos versiones');
+
+select is(
+  (select mine.item->'versions'->>0 from jsonb_array_elements(
+     planning.read_my_content('019ec000-0000-7000-8000-000000000001')) as mine(item)
+   where mine.item->>'template_id' = :'published_template_id'),
+  (select mine.item->>'template_version_id' from jsonb_array_elements(
+     planning.read_my_content('019ec000-0000-7000-8000-000000000001')) as mine(item)
+   where mine.item->>'template_id' = :'published_template_id'),
+  'T-PLN-MYCONTENT-15 y la primera de la lista es la última publicada');
 
 select * from finish();
 rollback;

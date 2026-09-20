@@ -1,15 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 
-import {
-  actionLabel,
-  cardsFor,
-  routineCaption,
-  weekIsDone,
-  weekPlanFailure,
-  weekProgress,
-  type WeekPlan,
-  type WeekRoutine,
-} from './week-plan'
+import { cardsFor, weekPlanFailure, type WeekPlan, type WeekRoutine } from './week-plan'
 
 function routine(overrides: Partial<WeekRoutine> = {}): WeekRoutine {
   return {
@@ -17,6 +8,8 @@ function routine(overrides: Partial<WeekRoutine> = {}): WeekRoutine {
     title: 'Empuje',
     discipline_code: 'strength',
     status: 'scheduled',
+    program_day: 1,
+    scheduled_at: '2026-08-31T10:00:00Z',
     exercise_count: 5,
     set_count: 16,
     done: false,
@@ -67,36 +60,6 @@ describe('which routine the screen reaches for', () => {
 
     expect(cards).toHaveLength(2)
     expect(cards.every((card) => card.state === 'done')).toBe(true)
-    expect(actionLabel('done')).toBe('Repetir')
-  })
-
-  test('T-SPC-UNIT-73 counts the week in routines, not in attempts', () => {
-    const week = plan([routine({ done: true }), routine({ done: true }), routine()])
-
-    expect(weekProgress(week)).toEqual({ done: 2, planned: 3 })
-    expect(weekIsDone(week)).toBe(false)
-  })
-
-  test('T-SPC-UNIT-74 the week is done only when nothing is left', () => {
-    expect(weekIsDone(plan([routine({ done: true })]))).toBe(true)
-    // An empty week is not a finished week; it is a week with no programme in it.
-    expect(weekIsDone(plan([]))).toBe(false)
-    expect(weekIsDone(undefined)).toBe(false)
-  })
-
-  test('T-SPC-UNIT-75 says how much work a routine is, and drops what it cannot count', () => {
-    expect(routineCaption(routine())).toBe('5 ejercicios · 16 series')
-    expect(routineCaption(routine({ exercise_count: 1, set_count: 1 }))).toBe(
-      '1 ejercicio · 1 serie',
-    )
-    // A running session has no sets to count, and "· 0 series" would be noise.
-    expect(routineCaption(routine({ set_count: 0 }))).toBe('5 ejercicios')
-  })
-
-  test('T-SPC-UNIT-76 the button says which of the three things it does', () => {
-    expect(actionLabel('suggested')).toBe('Empezar')
-    expect(actionLabel('pending')).toBe('Empezar')
-    expect(actionLabel('open')).toBe('Continuar')
   })
 })
 

@@ -116,6 +116,8 @@ const weekPlan: WeekPlan = {
       title: 'Empuje',
       discipline_code: 'strength',
       status: 'completed',
+      program_day: 1,
+      scheduled_at: '2026-08-31T10:00:00Z',
       exercise_count: 5,
       set_count: 16,
       done: true,
@@ -133,14 +135,11 @@ const myProgram: MyProgram = {
   weeks: 10,
   days_per_week: 4,
   starts_on: '2026-08-31',
+  cover_url: null,
+  routine_cover: null,
   sessions_done: 1,
   sessions_planned: 40,
 }
-
-const PHOTO_ID = '019f9000-0000-7000-8000-0000000000c1'
-
-/** Not a real image: the handler serves what the database answered, whatever it is. */
-const STORED_PHOTO = Buffer.from('RIFF....WEBP')
 
 const myRoutine: MyRoutine = {
   template_id: TEMPLATE_ID,
@@ -149,7 +148,11 @@ const myRoutine: MyRoutine = {
   status: 'published',
   template_version_id: '019f9000-0000-7000-8000-000000000043',
   cover: { kind: 'icon', icon: 'strength' },
+  cover_url: null,
   muscles: ['chest', 'triceps'],
+  muscle_sets: [{ code: 'chest', name: 'Pecho', sets: 6 }],
+  versions: ['019f9000-0000-7000-8000-000000000043'],
+  programs: [{ program_id: '019f9000-0000-7000-8000-000000000044', title: 'Fuerza básica' }],
   exercise_count: 4,
   set_count: 11,
   has_unpublished_changes: false,
@@ -205,12 +208,6 @@ function harness(overrides?: {
     publishMySessionTemplate: async () => ({}) as never,
     readMySessionTemplateDraft: async () => templateDraft,
     discardMySessionTemplate: async () => template,
-    storeMyCoverPhoto: async () => ({ id: PHOTO_ID }),
-    readMyCoverPhoto: async () => ({
-      content_type: 'image/webp',
-      byte_size: STORED_PHOTO.length,
-      bytes: STORED_PHOTO,
-    }),
     discardMyProgram: async () => program,
     readMyUnpublishedProgram: async () => program,
     createMyProgram: async () => program,
@@ -222,6 +219,7 @@ function harness(overrides?: {
     readMyProgramDraft: async () => programDraft,
     publishAndRestate: async () => ({}) as never,
     readMyContent: async () => [myRoutine],
+    setMyProgramCover: async () => ({ program_id: PROGRAM_ID, cover: { kind: 'muscles' } }),
     reorderMyPrograms: async () => [myProgram],
     readTodaySession: async () => null,
     readProgram: async () => detail,
@@ -276,10 +274,9 @@ describe('the Space planning surface honours the contract', () => {
         operation.path.startsWith('/space/v1/programs') ||
         operation.path.startsWith('/space/v1/assignments') ||
         operation.path.startsWith('/space/v1/week-plan') ||
-        operation.path.startsWith('/space/v1/session-templates') ||
-        operation.path.startsWith('/space/v1/routine-covers'),
+        operation.path.startsWith('/space/v1/session-templates'),
     )
-    expect(declared).toHaveLength(19)
+    expect(declared).toHaveLength(18)
     expect(declared.map((operation) => operation.allfitOperation).sort()).toEqual([
       'OP-PLN-001',
       'OP-PLN-002',
@@ -308,10 +305,8 @@ describe('the Space planning surface honours the contract', () => {
       // Finding that programme again, which no other query could: every one of them
       // starts from an assignment, and an unpublished programme has none.
       'OP-PLN-030',
-      // A photograph for a routine's cover, sanitised before it is stored…
-      'OP-PLN-031',
-      // …and served back through the API, never from a store.
-      'OP-PLN-032',
+      // Cómo se ven las rutinas de un programa, que es del programa y no de cada una.
+      'OP-PLN-033',
     ])
   })
 })
@@ -369,90 +364,6 @@ describe('GET /space/v1/programs/{programVersionId}', () => {
       `/space/v1/programs/${VERSION_ID}`,
       { headers: authorized },
     )
-
-    expect(response.status).toBe(404)
-  })
-})
-
-describe('the cover photograph', () => {
-  const upload = {
-    method: 'POST',
-    headers: {
-      ...authorized,
-      'content-type': 'application/json',
-      'idempotency-key': '8d1f0a44-1111-4111-8111-000000000001',
-      'command-id': '019f9000-0000-7000-8000-0000000000d1',
-    },
-  }
-
-  const jpeg = async () =>
-    (await import('sharp'))
-      .default({
-        create: { width: 32, height: 32, channels: 3, background: { r: 10, g: 10, b: 10 } },
-      })
-      .jpeg()
-      .toBuffer()
-
-  test('T-PLN-API-137 an image is sanitised and stored, and answers its identifier', async () => {
-    const response = await harness().request(
-      `/space/v1/session-templates/${TEMPLATE_ID}/cover-photo`,
-      {
-        ...upload,
-        body: JSON.stringify({
-          content_type: 'image/jpeg',
-          content: (await jpeg()).toString('base64'),
-        }),
-      },
-    )
-
-    expect(response.status).toBe(201)
-    expect(await response.json()).toEqual({ id: PHOTO_ID })
-  })
-
-  test('T-PLN-API-138 something that is not an image is refused and stores nothing', async () => {
-    let stored = false
-    const watching = harness({
-      service: {
-        storeMyCoverPhoto: async () => {
-          stored = true
-          return { id: PHOTO_ID }
-        },
-      },
-    })
-    const response = await watching.request(
-      `/space/v1/session-templates/${TEMPLATE_ID}/cover-photo`,
-      {
-        ...upload,
-        body: JSON.stringify({
-          content_type: 'image/jpeg',
-          content: Buffer.from('no soy una foto').toString('base64'),
-        }),
-      },
-    )
-
-    expect(response.status).toBe(422)
-    // The point of the assertion: failing closed means the command never ran.
-    expect(stored).toBe(false)
-  })
-
-  test('T-PLN-API-139 the bytes come back as an image and are never cached', async () => {
-    const response = await harness().request(`/space/v1/routine-covers/${PHOTO_ID}`, {
-      headers: authorized,
-    })
-
-    expect(response.status).toBe(200)
-    expect(response.headers.get('content-type')).toBe('image/webp')
-    expect(response.headers.get('cache-control')).toBe('no-store')
-    expect(Buffer.from(await response.arrayBuffer())).toEqual(STORED_PHOTO)
-  })
-
-  test("T-PLN-API-140 and somebody else's photograph is not found rather than forbidden", async () => {
-    // The two are the same answer on purpose: telling them apart would let identifiers
-    // be walked until one of them existed.
-    const none = harness({ service: { readMyCoverPhoto: async () => null } })
-    const response = await none.request(`/space/v1/routine-covers/${PHOTO_ID}`, {
-      headers: authorized,
-    })
 
     expect(response.status).toBe(404)
   })
@@ -1019,6 +930,86 @@ describe('GET /space/v1/programs/unpublished', () => {
 
   test('T-PLN-API-126 requires a bearer token', async () => {
     const response = await harness().request('/space/v1/programs/unpublished')
+
+    expect(response.status).toBe(401)
+  })
+})
+
+describe('PUT /space/v1/programs/{programId}/cover', () => {
+  const dressing = {
+    method: 'PUT',
+    headers: {
+      ...authorized,
+      'content-type': 'application/json',
+      'idempotency-key': IDEMPOTENCY_KEY,
+      'command-id': COMMAND_ID,
+    },
+  }
+
+  test('T-PLN-API-141 dresses the programme and answers what it now wears', async () => {
+    const response = await harness().request(`/space/v1/programs/${PROGRAM_ID}/cover`, {
+      ...dressing,
+      body: JSON.stringify({ cover: { kind: 'muscles' } }),
+    })
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('cache-control')).toBe('no-store')
+    expect(await response.json()).toEqual({ program_id: PROGRAM_ID, cover: { kind: 'muscles' } })
+  })
+
+  test('T-PLN-API-142 null is an answer and not an absence: it takes the cover off', async () => {
+    // Si `null` se confundiera con «el cuerpo no lo dijo», quitar la portada sería
+    // imposible; y si un cuerpo mal escrito llegara como `null`, la borraría sin querer.
+    let asked: unknown = 'nothing'
+    const watching = harness({
+      service: {
+        setMyProgramCover: async (input) => {
+          asked = input.cover
+          return { program_id: PROGRAM_ID, cover: null }
+        },
+      },
+    })
+
+    const response = await watching.request(`/space/v1/programs/${PROGRAM_ID}/cover`, {
+      ...dressing,
+      body: JSON.stringify({ cover: null }),
+    })
+
+    expect(response.status).toBe(200)
+    expect(asked).toBeNull()
+  })
+
+  test('T-PLN-API-143 a cover the vocabulary cannot express is refused before it reaches the database', async () => {
+    let called = false
+    const watching = harness({
+      service: {
+        setMyProgramCover: async () => {
+          called = true
+          return { program_id: PROGRAM_ID, cover: null }
+        },
+      },
+    })
+
+    for (const cover of [
+      { kind: 'icon' },
+      { kind: 'muscles', icon: 'strength' },
+      { kind: 'nope' },
+    ]) {
+      const response = await watching.request(`/space/v1/programs/${PROGRAM_ID}/cover`, {
+        ...dressing,
+        body: JSON.stringify({ cover }),
+      })
+      expect(response.status).toBe(400)
+    }
+    expect(called).toBe(false)
+  })
+
+  test('T-PLN-API-144 refuses without a bearer token', async () => {
+    const response = await harness().request(`/space/v1/programs/${PROGRAM_ID}/cover`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ cover: null }),
+    })
 
     expect(response.status).toBe(401)
   })

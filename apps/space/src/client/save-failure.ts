@@ -19,31 +19,7 @@ export const SAVE_OFFLINE = 'No pudimos guardar. Revisa tu conexión.'
 export const SAVE_STALE = 'Se guardó desde otro sitio. Ciérralo y vuelve a abrirlo.'
 export const SAVE_REFUSED = 'El servidor rechazó el guardado. Es un fallo nuestro, no tuyo.'
 export const SAVE_GONE = 'Esto ya no existe. Puede que se haya descartado desde otro sitio.'
-export const PHOTO_UNUSABLE = 'No pudimos usar esa foto. Prueba con otra.'
-export const PHOTO_UNREACHABLE = 'No pudimos abrir tus fotos. Vuelve a intentarlo.'
-export const PHOTO_NO_PICKER = 'Esta versión de la app todavía no puede abrir tus fotos.'
-
-/**
- * Why a photograph did not become a cover.
- *
- * Two cases of its own. The server refuses an image it cannot decode, and telling
- * somebody to check their connection over a corrupt file sends them looking for a
- * problem that is not there.
- *
- * And **anything that is not an `ApiError` never reached the network at all**: every
- * request failure arrives wrapped as one, so what is left is the phone — the picker
- * refusing to open, or a build without it in. That used to read «revisa tu conexión»,
- * which is the one thing it is certainly not.
- */
-export function coverFailure(cause: unknown): string {
-  // Named rather than sniffed from a message: an older build without the picker is a
-  // different problem from a picker that opened and failed, and only one of the two is
-  // fixed by installing the app again.
-  if (cause instanceof Error && cause.name === 'PickerUnavailable') return PHOTO_NO_PICKER
-  if (!(cause instanceof ApiError)) return PHOTO_UNREACHABLE
-  if (cause.failure === 'validation-failed') return PHOTO_UNUSABLE
-  return saveFailure(cause)
-}
+export const DISCARD_FAILED = 'No pudimos descartar la rutina. Inténtalo otra vez.'
 
 export function saveFailure(cause: unknown): string {
   if (!(cause instanceof ApiError)) return SAVE_OFFLINE
@@ -53,4 +29,25 @@ export function saveFailure(cause: unknown): string {
   if (cause.failure === 'invalid-request') return SAVE_REFUSED
   if (cause.failure === 'validation-failed') return SAVE_REFUSED
   return SAVE_OFFLINE
+}
+
+/**
+ * Por qué una rutina no se descartó.
+ *
+ * **Un programa no puede quedarse sin rutinas**, así que descartar la única que le queda
+ * a alguno se rechaza. El texto lo dice y propone lo único que funciona: añadirle otra.
+ *
+ * Antes decía «quítala de ahí primero», que era un callejón sin salida — un programa
+ * publicado no se puede vaciar ni descartar, así que quien siguiera el consejo daba
+ * vueltas. Un mensaje que manda a hacer algo imposible es peor que uno genérico.
+ *
+ * Nombra el programa cuando la rutina está en uno solo, porque entonces no hay duda de
+ * cuál es. Con varios, el cliente no sabe cuál se quedaría vacío —eso depende de lo que
+ * haya dentro de cada uno— y decir un nombre al azar sería peor que no decir ninguno.
+ */
+export function discardFailure(cause: unknown, programs: readonly { title: string }[]): string {
+  if (!(cause instanceof ApiError) || cause.failure !== 'conflict') return DISCARD_FAILED
+  const only = programs.length === 1 ? programs[0]?.title : undefined
+  if (only) return `«${only}» no puede quedarse sin rutinas. Añádele otra antes de descartar esta.`
+  return 'Un programa no puede quedarse sin rutinas. Añade otra al que sólo tiene esta.'
 }

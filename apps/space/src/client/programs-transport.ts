@@ -16,6 +16,7 @@ import {
   createProgramFlow,
   type ProgramAssignment,
   type ProgramCatalogue,
+  type ProgramCover,
   type ProgramDetail,
   type ProgramFlow,
 } from './programs'
@@ -48,6 +49,15 @@ export function createSpaceProgramFlow(): ProgramFlow {
             '/space/v1/programs/mine/order',
             command,
             { assignment_ids: assignmentIds },
+            token,
+          ),
+        ),
+      setCover: (command, programId, cover) =>
+        authenticated((token) =>
+          authorizedPut<ProgramCover>(
+            `/space/v1/programs/${programId}/cover`,
+            command,
+            { cover },
             token,
           ),
         ),

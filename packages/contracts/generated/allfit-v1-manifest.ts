@@ -328,6 +328,13 @@ export const allfitV1ContractManifest = {
       responses: ['201', '400', '401', '403', '404', '409', '422'],
     },
     {
+      method: 'PUT',
+      path: '/space/v1/programs/{programId}/cover',
+      operationId: 'setMyProgramCover',
+      allfitOperation: 'OP-PLN-033',
+      responses: ['200', '401', '404', '409', '422'],
+    },
+    {
       method: 'POST',
       path: '/space/v1/programs/{programId}/discard',
       operationId: 'discardMyProgram',
@@ -384,25 +391,11 @@ export const allfitV1ContractManifest = {
       responses: ['200', '401', '403'],
     },
     {
-      method: 'GET',
-      path: '/space/v1/routine-covers/{photoId}',
-      operationId: 'readMyRoutineCoverPhoto',
-      allfitOperation: 'OP-PLN-032',
-      responses: ['200', '401', '404'],
-    },
-    {
       method: 'POST',
       path: '/space/v1/session-templates',
       operationId: 'createMySessionTemplate',
       allfitOperation: 'OP-PLN-001',
       responses: ['201', '400', '401', '403', '404', '409', '422'],
-    },
-    {
-      method: 'POST',
-      path: '/space/v1/session-templates/{templateId}/cover-photo',
-      operationId: 'uploadMyRoutineCoverPhoto',
-      allfitOperation: 'OP-PLN-031',
-      responses: ['201', '401', '403', '404', '409', '422'],
     },
     {
       method: 'POST',

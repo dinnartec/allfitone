@@ -10,15 +10,13 @@ import { describe, expect, test } from 'bun:test'
 
 import { ApiError } from './api-error'
 import {
-  coverFailure,
-  PHOTO_NO_PICKER,
-  PHOTO_UNREACHABLE,
-  PHOTO_UNUSABLE,
+  DISCARD_FAILED,
   SAVE_GONE,
   SAVE_OFFLINE,
   SAVE_REFUSED,
   SAVE_STALE,
   SESSION_EXPIRED,
+  discardFailure,
   saveFailure,
 } from './save-failure'
 
@@ -45,31 +43,24 @@ describe('why a save did not land', () => {
   })
 })
 
-describe('why a photograph did not become a cover', () => {
-  test('T-SP-SAVE-08 an image the server would not take says so, and does not blame the wifi', () => {
-    // The whole point of the separate reading: `validation-failed` on this route means
-    // the file, and «revisa tu conexión» would send somebody looking for a problem that
-    // is not there.
-    expect(coverFailure(new ApiError('validation-failed'))).toBe(PHOTO_UNUSABLE)
-  })
+describe('why a photograph did not become a cover', () => {})
 
-  test('T-SP-SAVE-09 anything that never reached the network blames the phone, not the wifi', () => {
-    // Every request failure arrives as an `ApiError`, so what is left is the picker —
-    // refusing to open, or missing from the build. «Revisa tu conexión» is the one
-    // thing it is certainly not, and that is what it used to say.
-    expect(coverFailure(new TypeError('cannot read property of undefined'))).toBe(PHOTO_UNREACHABLE)
-  })
-
-  test('T-SP-SAVE-11 a build without the picker says so, because installing it again is the fix', () => {
-    const missing = new Error('picker-unavailable')
-    missing.name = 'PickerUnavailable'
-    expect(coverFailure(missing)).toBe(PHOTO_NO_PICKER)
-  })
-
-  test('T-SP-SAVE-10 and the rest reads exactly as a save does', () => {
-    expect(coverFailure(new ApiError('unauthenticated'))).toBe(
-      saveFailure(new ApiError('unauthenticated')),
+describe('discardFailure', () => {
+  test('names the programme when the routine is only in one, and says what to do', () => {
+    // «Quítala de ahí primero» era un callejón: un programa publicado no se puede vaciar
+    // ni descartar, así que quien siguiera el consejo daba vueltas.
+    expect(discardFailure(new ApiError('conflict'), [{ title: 'Ini' }])).toBe(
+      '«Ini» no puede quedarse sin rutinas. Añádele otra antes de descartar esta.',
     )
-    expect(coverFailure(new ApiError('conflict'))).toBe(saveFailure(new ApiError('conflict')))
+  })
+
+  test('and stays general when it cannot know which one would be left empty', () => {
+    const several = discardFailure(new ApiError('conflict'), [{ title: 'A' }, { title: 'B' }])
+    expect(several).toContain('no puede quedarse sin rutinas')
+    expect(several).not.toContain('«A»')
+  })
+
+  test('anything else is the retry it actually is', () => {
+    expect(discardFailure(new Error('red'), [])).toBe(DISCARD_FAILED)
   })
 })

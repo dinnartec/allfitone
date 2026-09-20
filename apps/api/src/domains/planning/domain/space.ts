@@ -15,15 +15,26 @@ export type ProgramDetail = AllfitV1Schemas['SpaceProgramDetail']
 export type TodaySession = AllfitV1Schemas['SpaceTodaySession']
 export type WeekPlan = AllfitV1Schemas['SpaceWeekPlan']
 export type MyProgram = AllfitV1Schemas['SpaceMyProgram']
-export type MyRoutine = AllfitV1Schemas['SpaceMyRoutine']
-export type CoverPhotoStored = AllfitV1Schemas['RoutineCoverPhotoStored']
 
-/** What the proxy sends back. Never a storage reference: `ADR-031` has no store. */
-export interface CoverPhoto {
-  readonly content_type: string
-  readonly byte_size: number
-  readonly bytes: Buffer
+/**
+ * Lo que la base responde de un programa: dónde está su arte, no cómo se pide.
+ *
+ * La clave direcciona nuestro almacenamiento, así que se queda del lado del servidor —
+ * `ADR-031` y `catalog.movement_media` siguen la misma regla— y el servicio le antepone
+ * el origen de medios antes de que salga.
+ */
+export interface StoredMyProgram extends Omit<MyProgram, 'cover_url'> {
+  readonly cover_object_key: string | null
 }
+export type MyRoutine = AllfitV1Schemas['SpaceMyRoutine']
+export type RoutineCover = AllfitV1Schemas['RoutineCover']
+export type ProgramCover = AllfitV1Schemas['SpaceProgramCover']
+
+/** La misma regla que el programa: la base responde la clave, el servicio la dirección. */
+export interface StoredMyRoutine extends Omit<MyRoutine, 'cover_url'> {
+  readonly cover_object_key: string | null
+}
+
 export type ProgramOrder = AllfitV1Schemas['SpaceProgramOrder']
 
 /**
@@ -70,15 +81,26 @@ export interface SpacePlanningDatabase {
     timezone: string
     requestId: string
   }): Promise<WeekPlan | null>
-  readMyPrograms(input: { personId: string; requestId: string }): Promise<readonly MyProgram[]>
-  readMyContent(input: { personId: string; requestId: string }): Promise<readonly MyRoutine[]>
+  readMyPrograms(input: {
+    personId: string
+    requestId: string
+  }): Promise<readonly StoredMyProgram[]>
+  readMyContent(input: { personId: string; requestId: string }): Promise<readonly StoredMyRoutine[]>
+  /** Cómo se ven las rutinas de un programa. Surte efecto al momento y no publica nada. */
+  setMyProgramCover(
+    input: OwnContentCommand & {
+      personId: string
+      programId: string
+      cover: RoutineCover | null
+    },
+  ): Promise<ProgramCover>
   reorderMyPrograms(input: {
     personId: string
     assignmentIds: readonly string[]
     idempotencyKey: string
     commandId: string
     requestHash: Buffer
-  }): Promise<readonly MyProgram[]>
+  }): Promise<readonly StoredMyProgram[]>
   createMySessionTemplate(
     input: OwnContentCommand & { personId: string; disciplineCode: string; title: string },
   ): Promise<SessionTemplate>
@@ -115,21 +137,6 @@ export interface SpacePlanningDatabase {
   discardMySessionTemplate(
     input: OwnContentCommand & { personId: string; templateId: string },
   ): Promise<SessionTemplate>
-  /**
-   * Stores an already sanitised cover photograph and answers its identifier.
-   *
-   * The bytes that reach here are what the server produced, never what it received:
-   * `ADR-031` puts the re-encoding before this call and fails closed if it cannot.
-   */
-  storeMyCoverPhoto(
-    input: OwnContentCommand & { personId: string; templateId: string; bytes: Buffer },
-  ): Promise<CoverPhotoStored>
-  /** The bytes, or null — which is also what somebody else's photograph answers. */
-  readMyCoverPhoto(input: {
-    personId: string
-    photoId: string
-    requestId: string
-  }): Promise<CoverPhoto | null>
   /** The programme somebody started and never published, or null. */
   readMyUnpublishedProgram(input: { personId: string; requestId: string }): Promise<Program | null>
   /** Archived rather than deleted; refused when a version was ever published. */

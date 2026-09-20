@@ -40,7 +40,6 @@ function harness(overrides: Partial<ContentTransport> = {}) {
     readMuscles: async () => [],
     readMovement: async () => ({}) as never,
     readMyRoutines: async () => [],
-    uploadCoverPhoto: async () => ({ id: '019f9000-0000-7000-8000-0000000000c1' }),
     createTemplate: async (headers) => {
       sent.push({ command: headers.idempotencyKey })
       return { id: TEMPLATE_ID, draft: { etag: 'etag-1' } } as never

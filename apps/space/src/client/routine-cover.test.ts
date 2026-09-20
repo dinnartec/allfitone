@@ -9,17 +9,18 @@
 
 import { describe, expect, test } from 'bun:test'
 
-import type { Movement, SessionTemplateDraftContent } from './content'
+import type { Movement } from './content'
 import {
   COVER_ICONS,
-  coverFromContent,
   coverIcon,
   glyphFor,
   iconCover,
+  coverOrNothing,
   MUSCLE_COVER,
+  PHOTO_COVER,
   musclesWorked,
   sameCover,
-  withCover,
+  type RoutineCover,
 } from './routine-cover'
 
 const movements: readonly Movement[] = [
@@ -40,13 +41,6 @@ const movements: readonly Movement[] = [
     demo_url: null,
   },
 ]
-
-const content = (cover: SessionTemplateDraftContent['cover']): SessionTemplateDraftContent => ({
-  title: 'Empuje',
-  activity_type_id: null,
-  ...(cover === undefined ? {} : { cover }),
-  steps: [],
-})
 
 describe('the cover as a decision', () => {
   test('T-SP-COVER-01 an icon cover says which icon it is', () => {
@@ -93,30 +87,13 @@ describe('what a muscle cover draws', () => {
   })
 })
 
-describe('reading a draft back', () => {
+describe('reading what the server sends', () => {
   test('T-SP-COVER-09 absent, null and a kind all read as what they are', () => {
-    expect(coverFromContent(content(undefined))).toBeUndefined()
-    expect(coverFromContent(content(null))).toBeUndefined()
-    expect(coverFromContent(content({ kind: 'muscles' }))).toEqual(MUSCLE_COVER)
-    expect(coverFromContent(content({ kind: 'icon', icon: 'strength' }))).toEqual(
-      iconCover('strength'),
-    )
-  })
-})
-
-describe('writing it back into a draft', () => {
-  test('T-SP-COVER-10 no cover drops the key rather than sending null', () => {
-    // A `cover: null` in every draft would have changed the publication hash of every
-    // routine written before the key existed, and the next publish would have been a
-    // new version of a routine nobody touched.
-    expect(withCover(content({ kind: 'muscles' }), undefined)).toEqual(content(undefined))
-    expect('cover' in withCover(content({ kind: 'muscles' }), undefined)).toBe(false)
-  })
-
-  test('T-SP-COVER-11 and choosing one replaces whatever was there', () => {
-    expect(withCover(content({ kind: 'muscles' }), iconCover('strength'))).toEqual(
-      content({ kind: 'icon', icon: 'strength' }),
-    )
+    expect(coverOrNothing(undefined)).toBeUndefined()
+    expect(coverOrNothing(null)).toBeUndefined()
+    expect(coverOrNothing({ kind: 'muscles' })).toEqual(MUSCLE_COVER)
+    expect(coverOrNothing({ kind: 'photo' })).toEqual(PHOTO_COVER)
+    expect(coverOrNothing({ kind: 'icon', icon: 'strength' })).toEqual(iconCover('strength'))
   })
 })
 
@@ -138,10 +115,7 @@ describe('the twelve', () => {
   test('T-SP-COVER-13 a draft naming an icon this build lost is read as no cover', () => {
     // Forward compatibility, not paranoia: the vocabulary lives in the database and an
     // older app must draw the routine rather than crash on a word it does not know.
-    const unknown = {
-      kind: 'icon',
-      icon: 'yoga',
-    } as unknown as SessionTemplateDraftContent['cover']
-    expect(coverFromContent(content(unknown))).toBeUndefined()
+    const unknown = { kind: 'icon', icon: 'yoga' } as unknown as RoutineCover
+    expect(coverOrNothing(unknown)).toBeUndefined()
   })
 })

@@ -10,10 +10,11 @@
  * that had to know which kind it was holding would be a caller reimplementing this on
  * every screen.
  *
- * **The photograph carries a bearer token in its headers.** `ADR-031` keeps the bytes in
- * the database and serves them through the API, so there is no public url: `expo-image`
- * fetches them itself and has to be told who is asking. Without a token it draws nothing,
- * which is the right answer for a screen whose session has gone.
+ * **La fotografía es del catálogo y viene con su dirección hecha.** Desde la segunda
+ * revisión de `ADR-031` nadie sube una foto: la clase `foto` pide una de las portadas
+ * públicas y la región de los músculos que la rutina trabaja elige cuál. El servidor
+ * compone la dirección; aquí sólo se dibuja. Sin dirección no se dibuja nada, que es lo
+ * que le pasa a una rutina que todavía no dice qué trabaja.
  *
  * **The figure is scaled to the tile's height, not its width.** The library draws on a
  * 200×400 field, so a square tile fits a standing figure with room at the sides; fitting
@@ -31,12 +32,10 @@ import { useTheme } from '@allfitone/react-native/theme'
 import { Image } from 'expo-image'
 import { StyleSheet, View } from 'react-native'
 
-import { apiBaseUrl } from '../client'
-
 import type { MuscleTerm } from '../client/content'
 import { litSlugsFor } from '../client/exercise-catalogue'
 import { BODY_BASE_HEIGHT, INERT_SLUGS } from '../client/focus-form'
-import { glyphFor, type RoutineCover } from '../client/routine-cover'
+import { drawsSomething, glyphFor, type RoutineCover } from '../client/routine-cover'
 import { BodyFigure, faceShowing } from './body-figure'
 
 export interface CoverArtProps {
@@ -46,32 +45,39 @@ export interface CoverArtProps {
   readonly muscles: readonly MuscleTerm[]
   /** The side of the tile it has to fit inside. */
   readonly side: number
-  /** What a photograph needs to be fetched with. Absent means it cannot be drawn. */
-  readonly token?: string | undefined
+  /** Dónde está la fotografía, compuesta por el servidor. Nula: no hay ninguna que dibujar. */
+  readonly coverUrl?: string | number | null | undefined
 }
 
-/** The art, or nothing at all — which is what makes a tile read as empty. */
+/**
+ * The art, or nothing at all — which is what makes a tile read as empty.
+ *
+ * **Every reason to draw nothing is decided here, not inside.** The docblock above says
+ * why the factory exists, and then a photograph without an address slipped through it
+ * anyway: `<CoverArt>` returned `null` from inside, but the element object it was
+ * wrapped in is not `null`, so a caller asking «did this draw anything?» was told yes.
+ * On the cover screen that left the «Foto» tab showing an empty square, which reads as
+ * a control that did nothing.
+ */
 export function coverArt(props: CoverArtProps): React.ReactNode {
-  return props.cover === undefined ? null : <CoverArt {...props} />
+  return drawsSomething(props.cover, props.coverUrl) ? <CoverArt {...props} /> : null
 }
 
 /** Big enough to read on the tile, small enough to keep the square breathing. */
 const GLYPH_RATIO = 0.42
 
-function CoverArt({ cover, worked, muscles, side, token }: CoverArtProps) {
+function CoverArt({ cover, worked, muscles, side, coverUrl }: CoverArtProps) {
   const theme = useTheme()
   if (cover === undefined) return null
 
   if (cover.kind === 'photo') {
-    if (token === undefined) return null
+    if (!coverUrl) return null
     return (
       <Image
-        source={{
-          uri: `${apiBaseUrl()}/space/v1/routine-covers/${cover.photo_id}`,
-          headers: { Authorization: `Bearer ${token}` },
-        }}
+        source={coverUrl}
         style={{ width: side, height: side }}
         contentFit="cover"
+        transition={200}
       />
     )
   }

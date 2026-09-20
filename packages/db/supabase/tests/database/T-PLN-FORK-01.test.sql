@@ -10,7 +10,7 @@
 -- it, which is exactly the state this migration exists to leave behind.
 begin;
 
-select plan(20);
+select plan(25);
 
 insert into identity.people (id, given_name, family_name)
 values
@@ -33,21 +33,23 @@ values
 insert into planning.programs (id, content_scope, status)
 values ('019e6000-0000-7000-8000-000000000301', 'global', 'published');
 
--- One of the two routines has a cover. Taking the programme copies its versions, and a
--- copy that dropped the cover would quietly change how Allfit's routine looks the
--- moment it became somebody's own.
+-- El programa lleva puesto un estilo. Tomarlo lo copia: si la copia lo perdiera, seis
+-- tarjetas cambiarían de aspecto en el momento en que el programa pasa a ser tuyo, y
+-- eso es tomar otro programa.
+update planning.programs
+set routine_cover_kind = 'icon', routine_cover_icon = 'strength'
+where id = '019e6000-0000-7000-8000-000000000301';
 
 select set_config('app.planning_publication', 'true', true);
 insert into planning.session_template_versions (
-  id, template_id, version_number, discipline_code, activity_type_id, title,
-  cover_kind, cover_icon, content_hash
+  id, template_id, version_number, discipline_code, activity_type_id, title, content_hash
 ) values
   ('019e6000-0000-7000-8000-000000000211', '019e6000-0000-7000-8000-000000000201', 1,
    'test_strength', '019c0000-0000-7000-8000-000000000011', 'Empuje',
-   'icon', 'strength', decode(repeat('61', 32), 'hex')),
+   decode(repeat('61', 32), 'hex')),
   ('019e6000-0000-7000-8000-000000000212', '019e6000-0000-7000-8000-000000000202', 1,
    'test_strength', '019c0000-0000-7000-8000-000000000011', 'Tirón',
-   null, null, decode(repeat('62', 32), 'hex'));
+   decode(repeat('62', 32), 'hex'));
 
 insert into planning.planned_steps (id, template_version_id, position)
 values
@@ -124,6 +126,66 @@ select is(
    where owner.owner_person_id = '019e6000-0000-7000-8000-000000000001'),
   array['019e6000-0000-7000-8000-000000000211', '019e6000-0000-7000-8000-000000000212'],
   'T-PLN-FORK-3b and each copy says which version of Allfit it came from');
+
+-- Tomar es quedárselo, y una rutina que no se puede abrir para editar no es del todo
+-- tuya: sin borrador, abrirla respondía que no existe y la pantalla decía «no pudimos
+-- cargar», que además de inútil era falso.
+select is(
+  (select count(*)::integer
+   from planning.session_templates as copy
+   join planning.session_template_drafts as draft on draft.template_id = copy.id
+   where copy.owner_person_id = '019e6000-0000-7000-8000-000000000001'),
+  (select count(*)::integer from planning.session_templates
+   where owner_person_id = '019e6000-0000-7000-8000-000000000001'),
+  'T-PLN-FORK-3c cada rutina copiada trae su borrador, así que se puede abrir');
+
+select is(
+  (select count(*)::integer
+   from planning.session_template_drafts as draft
+   join planning.session_templates as copy on copy.id = draft.template_id
+   where copy.owner_person_id = '019e6000-0000-7000-8000-000000000001'
+     and draft.derived_from_version_id is null),
+  0,
+  'T-PLN-FORK-3d y cada borrador dice de qué versión salió');
+
+-- La que prueba que el render es fiel. Si el contenido del borrador no describiera
+-- exactamente la versión que se acaba de copiar, la rutina nacería anunciando cambios
+-- que nadie hizo.
+select is(
+  (select count(*)::integer
+   from planning.session_template_drafts as draft
+   join planning.session_templates as copy on copy.id = draft.template_id
+   join planning.session_template_versions as version on version.template_id = copy.id
+   where copy.owner_person_id = '019e6000-0000-7000-8000-000000000001'
+     and version.content_hash is distinct from extensions.digest(
+           convert_to(planning.canonical_session_content(draft.content)::text, 'UTF8'), 'sha256')),
+  0,
+  'T-PLN-FORK-3e y nace sin cambios pendientes, porque su hash describe lo que tiene');
+
+-- Y el programa igual: sin borrador, `read_my_programs` lo marca no editable y la
+-- tarjeta se queda sin el botón. Tomar es quedárselo.
+select is(
+  (select count(*)::integer
+   from planning.programs as copy
+   join planning.program_drafts as draft on draft.program_id = copy.id
+   where copy.owner_person_id = '019e6000-0000-7000-8000-000000000001'),
+  1,
+  'T-PLN-FORK-3f el programa copiado trae su borrador');
+
+-- La composición del borrador apunta a las plantillas de la persona. Si apuntara a las
+-- de Allfit, editarlo devolvería el programa al contenido que la bifurcación sacó.
+select is(
+  (select count(*)::integer
+   from planning.program_drafts as draft
+   join planning.programs as copy on copy.id = draft.program_id
+   join jsonb_array_elements(draft.content->'sessions') as session(value) on true
+   join planning.session_template_versions as version
+     on version.id = (session.value->>'template_version_id')::uuid
+   join planning.session_templates as template on template.id = version.template_id
+   where copy.owner_person_id = '019e6000-0000-7000-8000-000000000001'
+     and template.content_scope <> 'person'),
+  0,
+  'T-PLN-FORK-3g y ninguna de sus sesiones sigue apuntando al contenido de Allfit');
 
 select is(
   (select count(*)::integer from planning.planned_steps as step
@@ -223,19 +285,15 @@ select is(
   :'second_assignment'::uuid,
   'T-PLN-FORK-11 the programme just taken is the one the tab opens on');
 
--- `IX-48` · the fork is a copy, and a copy keeps what the person will see. Four rows
--- and not two because this programme was taken twice, and each take forks again.
+-- `IX-48` · la copia se lleva el estilo del original. Una sola respuesta aunque el
+-- programa se tomara dos veces: las dos copias tienen que vestir igual que él.
 select is(
-  (select jsonb_agg(copied.cover order by copied.cover->>'title')
-   from (
-     select distinct jsonb_build_object('title', mine.title, 'kind', mine.cover_kind,
-                                        'icon', mine.cover_icon) as cover
-     from planning.session_template_versions as mine
-     join planning.session_templates as owned on owned.id = mine.template_id
-     where owned.owner_person_id = '019e6000-0000-7000-8000-000000000001'
-   ) as copied),
-  '[{"kind": "icon", "icon": "strength", "title": "Empuje"}, {"kind": null, "icon": null, "title": "Tirón"}]'::jsonb,
-  'T-PLN-FORK-14 taking a programme copies each routine cover, and the absence of one');
+  (select distinct jsonb_build_object('kind', mine.routine_cover_kind,
+                                      'icon', mine.routine_cover_icon)
+   from planning.programs as mine
+   where mine.owner_person_id = '019e6000-0000-7000-8000-000000000001'),
+  '{"kind": "icon", "icon": "strength"}'::jsonb,
+  'T-PLN-FORK-14 taking a programme copies how its routines look');
 
 select is(
   planning.reorder_my_programs(

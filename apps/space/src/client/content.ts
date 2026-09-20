@@ -28,7 +28,6 @@ export type SessionTemplate = AllfitV1Schemas['SessionTemplate']
 export type SessionTemplateDraft = AllfitV1Schemas['SessionTemplateDraft']
 export type SessionTemplateDraftContent = AllfitV1Schemas['SessionTemplateDraftContent']
 export type SessionTemplateVersion = AllfitV1Schemas['SessionTemplateVersion']
-export type CoverPhotoStored = AllfitV1Schemas['RoutineCoverPhotoStored']
 export type Program = AllfitV1Schemas['Program']
 export type ProgramDraft = AllfitV1Schemas['ProgramDraft']
 export type ProgramDraftContent = AllfitV1Schemas['ProgramDraftContent']
@@ -69,12 +68,6 @@ export interface ContentTransport {
   ): Promise<SessionTemplateVersion>
   readTemplateDraft(templateId: string): Promise<SessionTemplateDraft>
   discardTemplate(command: CommandHeaders, templateId: string): Promise<SessionTemplate>
-  uploadCoverPhoto(
-    command: CommandHeaders,
-    templateId: string,
-    contentType: string,
-    content: string,
-  ): Promise<CoverPhotoStored>
   readProgramDraft(programId: string): Promise<ProgramDraft>
   readMyUnpublishedProgram(): Promise<Program | null>
   discardProgram(command: CommandHeaders, programId: string): Promise<Program>
@@ -103,17 +96,6 @@ export interface ContentFlow {
   openTemplate(templateId: string): Promise<SessionTemplateDraft>
   /** Archives it. A routine with a published version is refused by the server. */
   discardTemplate(templateId: string): Promise<SessionTemplate>
-  /**
-   * Stores a photograph against a routine and answers its identifier.
-   *
-   * **Uploading is not choosing.** The cover does not change until a draft names the id
-   * and is saved, so an upload that fails halfway leaves the routine as it was.
-   */
-  uploadCoverPhoto(
-    templateId: string,
-    contentType: string,
-    content: string,
-  ): Promise<CoverPhotoStored>
   searchMovements(
     discipline: string,
     query: string,
@@ -220,14 +202,6 @@ export function createContentFlow(dependencies: ContentFlowDependencies): Conten
       etags.delete(templateId)
       return template
     },
-
-    uploadCoverPhoto: (templateId, contentType, content) =>
-      dependencies.transport.uploadCoverPhoto(
-        dependencies.newCommand(),
-        templateId,
-        contentType,
-        content,
-      ),
 
     async createTemplate(disciplineCode, title) {
       const key = `template:${disciplineCode}:${title}`

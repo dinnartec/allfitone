@@ -40,7 +40,7 @@ select (:'created'::jsonb->>'id') as template_id,
 -- Sin portada: el contenido del que se sale y al que se vuelve.
 select (planning.replace_my_session_template_draft(
   '019ef000-0000-7000-8000-0000000000b1', :'template_id'::uuid, :'etag0',
-  '{"title":"Pierna","activity_type_id":"019c0000-0000-7000-8000-000000000011","cover":null,"steps":[{"position":1,"movement_id":"019ef000-0000-7000-8000-0000000000b2","target":{"family":"strength","target_sets":3,"target_reps":10}}]}'::jsonb,
+  '{"title":"Pierna","activity_type_id":"019c0000-0000-7000-8000-000000000011","steps":[{"position":1,"movement_id":"019ef000-0000-7000-8000-0000000000b2","target":{"family":"strength","target_sets":3,"target_reps":10}}]}'::jsonb,
   '82cf2222-2222-4222-8222-000000000002', extensions.uuid_generate_v7(),
   decode(repeat('a2', 32), 'hex'))).draft as bare \gset
 select (:'bare'::jsonb->>'etag') as etag_bare \gset
@@ -56,10 +56,10 @@ select is(
   1,
   'la primera publicación es la versión 1');
 
--- Se le pone portada: contenido distinto, versión distinta.
+-- Se le cambian las repeticiones: contenido distinto, versión distinta.
 select (planning.replace_my_session_template_draft(
   '019ef000-0000-7000-8000-0000000000b1', :'template_id'::uuid, :'etag_bare',
-  '{"title":"Pierna","activity_type_id":"019c0000-0000-7000-8000-000000000011","cover":{"kind":"muscles"},"steps":[{"position":1,"movement_id":"019ef000-0000-7000-8000-0000000000b2","target":{"family":"strength","target_sets":3,"target_reps":10}}]}'::jsonb,
+  '{"title":"Pierna","activity_type_id":"019c0000-0000-7000-8000-000000000011","steps":[{"position":1,"movement_id":"019ef000-0000-7000-8000-0000000000b2","target":{"family":"strength","target_sets":3,"target_reps":12}}]}'::jsonb,
   '82cf2222-2222-4222-8222-000000000004', extensions.uuid_generate_v7(),
   decode(repeat('a4', 32), 'hex'))).draft as covered \gset
 select (:'covered'::jsonb->>'etag') as etag_covered \gset
@@ -73,12 +73,12 @@ select (:'second'::jsonb->>'id') as v2 \gset
 select is(
   (select version_number from planning.session_template_versions where id = :'v2'::uuid),
   2,
-  'ponerle portada es la versión 2');
+  'cambiar las repeticiones es la versión 2');
 
--- Y se le quita: el contenido vuelve a ser el de la versión 1.
+-- Y se deshace: el contenido vuelve a ser exactamente el de la versión 1.
 select (planning.replace_my_session_template_draft(
   '019ef000-0000-7000-8000-0000000000b1', :'template_id'::uuid, :'etag_covered',
-  '{"title":"Pierna","activity_type_id":"019c0000-0000-7000-8000-000000000011","cover":null,"steps":[{"position":1,"movement_id":"019ef000-0000-7000-8000-0000000000b2","target":{"family":"strength","target_sets":3,"target_reps":10}}]}'::jsonb,
+  '{"title":"Pierna","activity_type_id":"019c0000-0000-7000-8000-000000000011","steps":[{"position":1,"movement_id":"019ef000-0000-7000-8000-0000000000b2","target":{"family":"strength","target_sets":3,"target_reps":10}}]}'::jsonb,
   '82cf2222-2222-4222-8222-000000000006', extensions.uuid_generate_v7(),
   decode(repeat('a6', 32), 'hex'))).draft as undone \gset
 select (:'undone'::jsonb->>'etag') as etag_undone \gset
@@ -91,7 +91,7 @@ select (:'third'::jsonb->>'id') as v3 \gset
 
 select isnt(
   :'v3'::uuid, :'v1'::uuid,
-  'quitar la portada no devuelve la versión que tenía ese mismo contenido');
+  'deshacer no devuelve la versión que tenía ese mismo contenido');
 
 select is(
   (select version_number from planning.session_template_versions where id = :'v3'::uuid),

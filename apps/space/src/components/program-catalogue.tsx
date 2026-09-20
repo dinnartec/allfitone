@@ -49,7 +49,6 @@ import {
   type TrainingProfile,
 } from '../client/program-catalogue'
 import { ProgramCard } from './program-card'
-import { DOCK_HEIGHT } from './tab-bar'
 
 const EXPIRED = 'Tu sesión venció. Vuelve a entrar para continuar.'
 const READ_FAILED = 'No pudimos cargar los programas. Inténtalo otra vez.'
@@ -65,7 +64,7 @@ const EMPTY_PROFILE: TrainingProfile = {
   focus_areas: [],
 }
 
-export function ProgramCatalogue({ embedded = false }: { readonly embedded?: boolean }) {
+export function ProgramCatalogue() {
   const router = useRouter()
   const theme = useTheme()
   const flow = useMemo(() => createSpaceProgramFlow(), [])
@@ -126,15 +125,13 @@ export function ProgramCatalogue({ embedded = false }: { readonly embedded?: boo
   return (
     <Screen edges={['top', 'bottom']}>
       <ScrollView
-        contentContainerStyle={[styles.content, embedded ? styles.embedded : styles.pushed]}
+        contentContainerStyle={[styles.content, styles.pushed]}
         showsVerticalScrollIndicator={false}
       >
         {/* No back arrow inside the tab: there is nothing behind it, and the dock is
             already the way out. */}
         <View style={styles.top}>
-          {embedded ? null : (
-            <IconButton icon="back" accessibilityLabel="Volver" onPress={() => router.back()} />
-          )}
+          {<IconButton icon="back" accessibilityLabel="Volver" onPress={() => router.back()} />}
           <View style={styles.heading}>
             <Text role="display" size="2xl" uppercase accessibilityRole="header">
               Los de Allfit
@@ -195,7 +192,7 @@ export function ProgramCatalogue({ embedded = false }: { readonly embedded?: boo
           </View>
         </View>
 
-        {failure ? <InlineAlert message={failure} /> : null}
+        {failure ? <InlineAlert message={failure} onDismiss={() => setFailure(undefined)} /> : null}
 
         <View style={styles.sectionHeader}>
           <Text role="eyebrow" size="2xs" color="muted">
@@ -245,14 +242,14 @@ export function ProgramCatalogue({ embedded = false }: { readonly embedded?: boo
             O SI PREFIERES
           </Text>
           <View style={styles.alternatives}>
-            {embedded ? null : (
+            {
               <Alternative
                 icon="checklist"
                 label="Ver las mías"
                 hint="tu biblioteca"
                 onPress={() => router.push('/train')}
               />
-            )}
+            }
             <Alternative
               icon="add"
               label="Crear el mío"
@@ -342,7 +339,6 @@ const styles = StyleSheet.create({
   content: { gap: 18 },
   pushed: { paddingBottom: 40 },
   // The dock floats over the scroll, so the last section has to clear it.
-  embedded: { paddingBottom: DOCK_HEIGHT + 40 },
   top: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
   heading: { flex: 1, gap: 4 },
   segmented: { flexDirection: 'row', borderRadius: 22, borderWidth: 1, padding: 3, gap: 3 },

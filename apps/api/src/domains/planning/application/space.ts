@@ -15,8 +15,10 @@
 import type { AllfitV1Schemas } from '@allfitone/contracts'
 
 import type {
+  MyProgram as ProgramAssignmentSummary,
   ProgramAssignment,
   ProgramDetail,
+  MyRoutine,
   ProgramVersion,
   SpacePlanningDatabase,
   TodaySession,
@@ -39,21 +41,29 @@ export interface SpacePlanningService {
   publishMySessionTemplate: SpacePlanningDatabase['publishMySessionTemplate']
   readMySessionTemplateDraft: SpacePlanningDatabase['readMySessionTemplateDraft']
   discardMySessionTemplate: SpacePlanningDatabase['discardMySessionTemplate']
-  storeMyCoverPhoto: SpacePlanningDatabase['storeMyCoverPhoto']
-  readMyCoverPhoto: SpacePlanningDatabase['readMyCoverPhoto']
   discardMyProgram: SpacePlanningDatabase['discardMyProgram']
   readMyUnpublishedProgram: SpacePlanningDatabase['readMyUnpublishedProgram']
   createMyProgram: SpacePlanningDatabase['createMyProgram']
   replaceMyProgramDraft: SpacePlanningDatabase['replaceMyProgramDraft']
   publishMyProgram: SpacePlanningDatabase['publishMyProgram']
   readWeekPlan: SpacePlanningDatabase['readWeekPlan']
-  readMyPrograms: SpacePlanningDatabase['readMyPrograms']
+  /** Los programas con su portada ya direccionada. */
+  readMyPrograms(input: {
+    personId: string
+    requestId: string
+  }): Promise<readonly ProgramAssignmentSummary[]>
   readMyProgramDraft: SpacePlanningDatabase['readMyProgramDraft']
   publishAndRestate(
     input: Parameters<SpacePlanningDatabase['publishMyProgram']>[0] & { timezone: string },
   ): Promise<ProgramVersion>
-  readMyContent: SpacePlanningDatabase['readMyContent']
-  reorderMyPrograms: SpacePlanningDatabase['reorderMyPrograms']
+  setMyProgramCover: SpacePlanningDatabase['setMyProgramCover']
+  readMyContent(
+    input: Parameters<SpacePlanningDatabase['readMyContent']>[0],
+  ): Promise<readonly MyRoutine[]>
+  /** El nuevo orden, con la portada ya direccionada como en la lectura. */
+  reorderMyPrograms(
+    input: Parameters<SpacePlanningDatabase['reorderMyPrograms']>[0],
+  ): Promise<readonly ProgramAssignmentSummary[]>
   readCatalogue(input: { personId: string; requestId: string }): Promise<ProgramCatalogue>
   readWeekProgress(input: {
     personId: string
@@ -80,7 +90,14 @@ export interface SpacePlanningService {
   }): Promise<ProgramAssignment>
 }
 
-export function createSpacePlanningService(database: SpacePlanningDatabase): SpacePlanningService {
+export function createSpacePlanningService(
+  database: SpacePlanningDatabase,
+  mediaBaseUrl: string,
+): SpacePlanningService {
+  const base = mediaBaseUrl.replace(/\/+$/, '')
+  const mediaAddress = (key: string | null): string | null =>
+    key === null ? null : `${base}/${key}`
+
   return {
     async readCatalogue({ personId, requestId }) {
       const [profile, programs, currentAssignment] = await Promise.all([
@@ -118,11 +135,15 @@ export function createSpacePlanningService(database: SpacePlanningDatabase): Spa
         sessions_completed: plan.sessions.filter((routine) => routine.done).length,
       }
     },
-    readMyPrograms: (input) => database.readMyPrograms(input),
+    async readMyPrograms(input) {
+      const held = await database.readMyPrograms(input)
+      return held.map(({ cover_object_key, ...rest }) => ({
+        ...rest,
+        cover_url: mediaAddress(cover_object_key),
+      }))
+    },
     readMySessionTemplateDraft: (input) => database.readMySessionTemplateDraft(input),
     discardMySessionTemplate: (input) => database.discardMySessionTemplate(input),
-    storeMyCoverPhoto: (input) => database.storeMyCoverPhoto(input),
-    readMyCoverPhoto: (input) => database.readMyCoverPhoto(input),
     discardMyProgram: (input) => database.discardMyProgram(input),
     readMyUnpublishedProgram: (input) => database.readMyUnpublishedProgram(input),
     readMyProgramDraft: (input) => database.readMyProgramDraft(input),
@@ -168,8 +189,21 @@ export function createSpacePlanningService(database: SpacePlanningDatabase): Spa
       }
       return version
     },
-    readMyContent: (input) => database.readMyContent(input),
-    reorderMyPrograms: (input) => database.reorderMyPrograms(input),
+    async readMyContent(input) {
+      const mine = await database.readMyContent(input)
+      return mine.map(({ cover_object_key, ...rest }) => ({
+        ...rest,
+        cover_url: mediaAddress(cover_object_key),
+      }))
+    },
+    setMyProgramCover: (input) => database.setMyProgramCover(input),
+    async reorderMyPrograms(input) {
+      const ordered = await database.reorderMyPrograms(input)
+      return ordered.map(({ cover_object_key, ...rest }) => ({
+        ...rest,
+        cover_url: mediaAddress(cover_object_key),
+      }))
+    },
     createMySessionTemplate: (input) => database.createMySessionTemplate(input),
     replaceMySessionTemplateDraft: (input) => database.replaceMySessionTemplateDraft(input),
     publishMySessionTemplate: (input) => database.publishMySessionTemplate(input),

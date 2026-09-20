@@ -24,14 +24,14 @@ import { Screen } from '@allfitone/react-native/screen'
 import { Sheet } from '@allfitone/react-native/sheet'
 import { Text } from '@allfitone/react-native/text'
 import { TextField } from '@allfitone/react-native/text-field'
-import { CoverTile } from '@allfitone/react-native/cover-tile'
-import { Monogram, markOf } from '@allfitone/react-native/monogram'
+import { Monogram } from '@allfitone/react-native/monogram'
 import { useTheme } from '@allfitone/react-native/theme'
 import { useFocusEffect, useRouter } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
 
 import { ApiError } from '../../src/client'
+import { RoutineMark } from './routine-mark'
 import { createSpaceContentFlow } from '../client/content-transport'
 import { forgetPublishedRoutine, takePublishedRoutine } from '../client/routine-handoff'
 import { createQueue } from '../client/queue'
@@ -47,10 +47,20 @@ import {
   type BaseWeekDay,
   type MyRoutine,
 } from '../client/content'
+import { routineFigures, routineOfVersion } from '../client/library'
+import { SAMPLE_ROUTINE } from '../client/home-preview'
+import sampleCover from '../../assets/images/today/today-hero.webp'
 import { ScreenHeader } from './screen-header'
-import { coverArt } from './routine-cover-art'
 import { readExerciseLibrary, type ExerciseLibrary } from '../client/exercise-library'
-import { readSession } from '../client/session'
+import { createSpaceProgramFlow } from '../client/programs-transport'
+import type { MyProgram } from '../client/programs'
+import { CoverSheetBody, type CoverPreview } from './cover-sheet'
+import { coverArt } from './routine-cover-art'
+import { coverOrNothing, type RoutineCover } from '../client/routine-cover'
+import { CoverTile } from '@allfitone/react-native/cover-tile'
+
+/** El lado del azulejo mediano del sistema de diseño. El arte dibuja dentro de él. */
+const COVER_MD = 72
 
 /** Monday first, because the week the plan lands on is the calendar week. */
 const DAYS = [
@@ -70,9 +80,6 @@ const DEFAULT_WEEKS = 8
 const MIN_WEEKS = 1
 const MAX_WEEKS = 52
 const SAVE_DELAY_MS = 700
-
-/** `CoverTile`'s own `sm`. The art draws inside it, so it has to be told. */
-const COVER_SM = 56
 
 const EXPIRED = 'Tu sesión venció. Vuelve a entrar para continuar.'
 const READ_FAILED = 'No pudimos cargar tus rutinas. Inténtalo otra vez.'
@@ -101,6 +108,7 @@ export function ProgramEditor({ programId }: { readonly programId?: string }) {
   const router = useRouter()
   const theme = useTheme()
   const flow = useMemo(() => createSpaceContentFlow(), [])
+  const programs = useMemo(() => createSpaceProgramFlow(), [])
   const saves = useMemo(() => createQueue(), [])
 
   const [title, setTitle] = useState('')
@@ -120,9 +128,17 @@ export function ProgramEditor({ programId }: { readonly programId?: string }) {
   const [library, setLibrary] = useState<ExerciseLibrary | undefined>(undefined)
   // A photograph cover is fetched by `expo-image`, so the rows have to hand it the
   // bearer header: the bytes come through the API and there is no public url.
-  const [token, setToken] = useState<string | undefined>(undefined)
   const [choosing, setChoosing] = useState<number | undefined>(undefined)
   const [discarding, setDiscarding] = useState(false)
+  /**
+   * Cómo se ven las rutinas de este programa.
+   *
+   * Es del programa y no de cada rutina: Hoy abre con la semana en un carrusel, y seis
+   * rutinas eligiendo cada una lo suyo mezclarían figuras, iconos y fotografías en la
+   * misma fila. Quien arma el programa es quien las ve juntas.
+   */
+  const [cover, setCover] = useState<RoutineCover | undefined>(undefined)
+  const [dressing, setDressing] = useState(false)
   const [leaving, setLeaving] = useState(false)
 
   /**
@@ -366,8 +382,12 @@ export function ProgramEditor({ programId }: { readonly programId?: string }) {
           if (!active) return
           setRoutines(found)
           setLibrary(read)
-          void readSession().then((stored) => {
-            if (active) setToken(stored?.accessToken)
+          // Lo que el programa ya lleva puesto. Viene con la lista y no con el
+          // borrador: el estilo no es contenido, así que no viaja en la publicación.
+          void programs.readMyPrograms().then((mine: readonly MyProgram[]) => {
+            if (!active) return
+            const held = mine.find((one) => one.program_id === identity.current)
+            setCover(coverOrNothing(held?.routine_cover))
           })
           fill()
         })
@@ -393,7 +413,7 @@ export function ProgramEditor({ programId }: { readonly programId?: string }) {
   const routineOn = (day: number) => {
     const filled = week.find((one) => one.day === day)
     if (!filled?.templateVersionId) return undefined
-    return published.find((one) => one.template_version_id === filled.templateVersionId)
+    return routineOfVersion(published, filled.templateVersionId)
   }
 
   /**
@@ -493,15 +513,48 @@ export function ProgramEditor({ programId }: { readonly programId?: string }) {
   // How many weeks a routine is used counts once per week, because the base week is
   // what repeats: saying "8×" would be counting the repetition twice.
   /** The days a routine falls on, named: «Lunes · Viernes». */
-  const daysOf = (templateVersionId: string) =>
+  const daysOf = (routine: MyRoutine) =>
     week
-      .filter((one) => one.templateVersionId === templateVersionId)
+      .filter(
+        (one) => one.templateVersionId !== null && routine.versions.includes(one.templateVersionId),
+      )
       .map((one) => named(DAYS.find((day) => day.day === one.day)?.name ?? ''))
       .join(' · ')
 
+  // Por plantilla y no por versión: una rutina republicada sigue siendo la que está en
+  // la semana, aunque la semana guarde la versión anterior.
   const included = published.filter((routine) =>
-    week.some((one) => one.templateVersionId === routine.template_version_id),
+    week.some(
+      (one) => one.templateVersionId !== null && routine.versions.includes(one.templateVersionId),
+    ),
   )
+
+  /**
+   * Vestir el programa, que surte efecto al momento.
+   *
+   * No pasa por el autoguardado ni por publicar: el estilo no describe lo que se
+   * entrena, así que acuñar una versión por cambiar de icono sería una versión que
+   * miente. El estado se mueve primero para que la hoja se cierre sobre lo elegido.
+   */
+  const dress = (next: RoutineCover | undefined) => {
+    const id = identity.current
+    setDressing(false)
+    if (!id) return
+    setCover(next)
+    programs.setCover(id, next ?? null).catch((cause: unknown) => {
+      setCover(cover)
+      setFailure(saveFailure(cause))
+    })
+  }
+
+  /**
+   * Con qué rutina se enseña la previa.
+   *
+   * La primera que el programa tenga asignada, porque es la que su Hoy va a abrir. Sin
+   * ninguna todavía, la tarjeta lleva el nombre del programa: enseña la forma y no
+   * miente sobre un contenido que aún no existe.
+   */
+  const dressed = previewOf(week, routines ?? [])
 
   const chosenDay = DAYS.find((one) => one.day === choosing)
 
@@ -519,15 +572,45 @@ export function ProgramEditor({ programId }: { readonly programId?: string }) {
           onClose={leave}
         />
 
-        {failure ? <InlineAlert message={failure} /> : null}
+        {failure ? <InlineAlert message={failure} onDismiss={() => setFailure(undefined)} /> : null}
 
-        <TextField
-          label="Ponle un nombre"
-          placeholder="Fuerza inicial, Mi plan…"
-          value={title}
-          onChangeText={rename}
-          autoCapitalize="sentences"
-        />
+        {/* La portada va junto al nombre porque son la misma pregunta hecha dos veces:
+            qué es este programa, y cómo voy a reconocer sus rutinas. */}
+        <View style={styles.naming}>
+          <CoverTile
+            size="md"
+            onPress={() => setDressing(true)}
+            accessibilityLabel={
+              cover === undefined ? 'Elegir la portada de sus rutinas' : 'Cambiar la portada'
+            }
+            hint={
+              <View style={styles.coverHint}>
+                <FoundationIcon name="camera" size="sm" color={theme.color.icon.secondary} />
+                <Text role="eyebrow" size="2xs" color="muted">
+                  PORTADA
+                </Text>
+              </View>
+            }
+          >
+            {coverArt({
+              cover: cover,
+              worked: dressed.worked,
+              muscles: library?.muscles ?? [],
+              side: COVER_MD,
+              coverUrl: dressed.coverUrl,
+            })}
+          </CoverTile>
+
+          <View style={styles.namingField}>
+            <TextField
+              label="Ponle un nombre"
+              placeholder="Fuerza inicial, Mi plan…"
+              value={title}
+              onChangeText={rename}
+              autoCapitalize="sentences"
+            />
+          </View>
+        </View>
 
         {/* What the programme amounts to, as one sentence rather than three figures in
             a case. The numbers are a consequence of the week below, not a control, and
@@ -668,7 +751,7 @@ export function ProgramEditor({ programId }: { readonly programId?: string }) {
                 key={routine.template_id}
                 accessibilityRole="button"
                 accessibilityLabel={`Abrir ${routine.title}`}
-                accessibilityHint={daysOf(routine.template_version_id ?? '')}
+                accessibilityHint={daysOf(routine)}
                 onPress={() => {
                   // Said before leaving, because on the way back the version it held is
                   // no longer anywhere: the new one has replaced it in the list.
@@ -687,7 +770,7 @@ export function ProgramEditor({ programId }: { readonly programId?: string }) {
                   },
                 ]}
               >
-                <RoutineMark routine={routine} library={library} token={token} />
+                <RoutineMark routine={routine} library={library} />
                 <View style={styles.rowText}>
                   <Text role="control" size="sm" numberOfLines={1}>
                     {routine.title}
@@ -695,7 +778,7 @@ export function ProgramEditor({ programId }: { readonly programId?: string }) {
                   {/* Which days, not how many times: «Lunes · Viernes» is the answer to
                       what somebody is looking at the list for, and «2×/sem» is not. */}
                   <Text role="body" size="xs" color="muted" numberOfLines={1}>
-                    {daysOf(routine.template_version_id ?? '')}
+                    {daysOf(routine)}
                   </Text>
                 </View>
                 <FoundationIcon
@@ -733,23 +816,28 @@ export function ProgramEditor({ programId }: { readonly programId?: string }) {
           still dismissing — which iOS refuses, leaving nothing on screen and an
           invisible layer eating every touch. */}
       <Sheet
-        visible={choosing !== undefined || discarding || leaving}
+        visible={choosing !== undefined || discarding || leaving || dressing}
         onDismiss={() => {
           setChoosing(undefined)
           setDiscarding(false)
           setLeaving(false)
+          setDressing(false)
         }}
         title={
-          discarding
-            ? '¿Descartar cambios?'
-            : leaving
-              ? '¿Guardas este programa?'
-              : chosenDay
-                ? `Qué toca el ${chosenDay.name}`
-                : 'Qué toca ese día'
+          dressing
+            ? 'Portada de sus rutinas'
+            : discarding
+              ? '¿Descartar cambios?'
+              : leaving
+                ? '¿Guardas este programa?'
+                : chosenDay
+                  ? `Qué toca el ${chosenDay.name}`
+                  : 'Qué toca ese día'
         }
       >
-        {leaving ? (
+        {dressing ? (
+          <CoverSheetBody cover={cover} preview={dressed} library={library} onChoose={dress} />
+        ) : leaving ? (
           <View style={styles.sheetBody}>
             <Text role="body" size="md" color="muted">
               Se está guardando como borrador según lo armas. Puedes dejarlo para después o tirarlo.
@@ -945,42 +1033,6 @@ export function ProgramEditor({ programId }: { readonly programId?: string }) {
   )
 }
 
-/**
- * What a card shows before its name: the cover, or the letter that stood in for one.
- *
- * Always the same square, whichever it is. A circle for some rows and a picture for
- * others would make the list change height depending on what each routine happens to
- * have chosen, which is the shape `CoverTile` exists to hold still.
- */
-function RoutineMark({
-  routine,
-  library,
-  token,
-}: {
-  readonly routine: MyRoutine
-  readonly library: ExerciseLibrary | undefined
-  readonly token: string | undefined
-}) {
-  return (
-    <CoverTile
-      size="sm"
-      hint={
-        <Text role="control" size="sm" color="accent">
-          {markOf(routine.title)}
-        </Text>
-      }
-    >
-      {coverArt({
-        cover: routine.cover ?? undefined,
-        worked: routine.muscles,
-        muscles: library?.muscles ?? [],
-        side: COVER_SM,
-        token: token,
-      })}
-    </CoverTile>
-  )
-}
-
 const styles = StyleSheet.create({
   // The part that stays and the part that moves.
   frame: { gap: 18, paddingBottom: 16 },
@@ -1025,6 +1077,10 @@ const styles = StyleSheet.create({
   notice: { flexDirection: 'row', gap: 10, borderRadius: 16, padding: 14 },
   noticeText: { flex: 1 },
   sheetBody: { gap: 12 },
+  // El azulejo es un cuadrado fijo y el nombre ocupa lo que quede.
+  naming: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
+  namingField: { flex: 1 },
+  coverHint: { alignItems: 'center', gap: 4 },
   sheetList: { maxHeight: 340 },
   option: {
     flexDirection: 'row',
@@ -1045,3 +1101,33 @@ const styles = StyleSheet.create({
   },
   footnote: { flexDirection: 'row', gap: 8, paddingTop: 6 },
 })
+
+/**
+ * Con qué rutina se enseña la previa.
+ *
+ * **Con una de verdad, siempre que exista alguna.** La primera que el programa tenga
+ * asignada, porque es la que su Hoy abre; y si el programa está recién creado y no tiene
+ * ninguna, cualquiera de las de la persona. Un programa vacío dibujaba «Tu programa ·
+ * Todavía sin rutinas», sin músculos encendidos y sin fotografía, y entonces las tres
+ * pestañas enseñaban lo mismo: nada. La previa existe para comparar tres maneras de
+ * verse, y para eso hace falta algo que ver.
+ *
+ * Sólo cuando la persona no tiene ni una rutina se cae a la de muestra, que es lo que
+ * el lienzo dibuja y lo que la nota de la hoja ya declara como cifras de muestra.
+ */
+function previewOf(week: readonly BaseWeekDay[], routines: readonly MyRoutine[]): CoverPreview {
+  const assigned = week.find((day) => day.templateVersionId !== null)
+  const routine =
+    routines.find((one) => one.versions.includes(assigned?.templateVersionId ?? '')) ?? routines[0]
+  // Sin ninguna rutina, la de muestra. Un programa recién creado dejaba la previa sin
+  // músculos, sin cifras y sin fotografía, y entonces las tres pestañas enseñaban lo
+  // mismo: nada. Elegir entre tres maneras de verse exige ver las tres.
+  if (!routine) return { ...SAMPLE_ROUTINE, coverUrl: sampleCover }
+  return {
+    title: routine.title,
+    figures: routineFigures(routine),
+    worked: routine.muscles,
+    load: routine.muscle_sets,
+    coverUrl: routine.cover_url,
+  }
+}
