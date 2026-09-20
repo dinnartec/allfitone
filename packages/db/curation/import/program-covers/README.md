@@ -56,3 +56,24 @@ Tres cosas a la vez, y las tres se veían:
    Eso era el azul que se comía la fotografía. El velo pasa también al de `FIN-2b`.
 3. **Seis fotografías cambiadas** porque no decían nada: árboles secos, nubes, un poste de
    madera, un campo vacío de noche. Se buscaron de nuevo con términos de entrenamiento.
+
+## Regeneradas otra vez el 20 de septiembre de 2026
+
+Dos cosas, y las dos se veían en la banda de Entrenar, que es donde la fotografía sale
+grande:
+
+1. **Dos fotografías retiradas por su encuadre.** «Fuerza básica» y «Torso y pierna» eran
+   la misma toma: una mujer de espaldas en la sentadilla, encuadrada en espalda y glúteos.
+   En una tarjeta cuadrada pasaba; en una banda de 1,9:1, que recorta la franja central,
+   no quedaba otra cosa. Ahora son una barra cargada y alguien entrenando en una sala.
+2. **El tratamiento pesaba demasiado.** «Desaturar» pasó a 0,55 y «Grado frío» de 0,34 a
+   **0,18**. El conjunto había quedado tan frío y tan oscuro que media docena de piezas no
+   se distinguían entre sí, que es el mismo defecto que la vez anterior con otro número.
+   Con esto vuelven los colores propios de cada fotografía —la pista roja, la camiseta
+   amarilla— y el velo sigue haciendo legible el rótulo.
+
+El despliegue de esta tanda **conserva también las veinticuatro direcciones anteriores**.
+La clave es el contenido, así que las nuevas son direcciones nuevas, y una base de datos
+que todavía no haya corrido `004_program_covers.sql` sigue pidiendo las viejas: retirarlas
+del sitio en el mismo despliegue que trae las nuevas habría dejado producción sin portadas
+hasta que alguien corriera el guion.
