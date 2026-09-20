@@ -19,6 +19,7 @@ import {
   routineFigures,
   routineOfVersion,
   routinesLostWith,
+  routinesNamed,
   showsOlderVersion,
   whereUsed,
   type RoutineFilter,
@@ -308,5 +309,31 @@ describe('eliminar un programa', () => {
     for (const held of [[], [inside('Empujar', [here])], [inside('Tirar', [here, elsewhere])]]) {
       expect(removalWarning(mine, held)).toContain('Lo que ya entrenaste se conserva.')
     }
+  })
+})
+
+describe('buscar una rutina por su nombre', () => {
+  const held = [
+    routine({ template_id: 't1', title: 'Tirón' }),
+    routine({ template_id: 't2', title: 'Empuje' }),
+    routine({ template_id: 't3', title: 'Pierna y core' }),
+  ]
+
+  test('sin nada tecleado están todas, porque buscar estrecha lo que ya hay', () => {
+    expect(routinesNamed(held, '')).toEqual(held)
+    expect(routinesNamed(held, '   ')).toEqual(held)
+  })
+
+  test('encuentra por un trozo del nombre, esté donde esté', () => {
+    expect(routinesNamed(held, 'core').map((one) => one.title)).toEqual(['Pierna y core'])
+  })
+
+  test('sin tilde encuentra lo que la lleva, que es como se teclea en un móvil', () => {
+    expect(routinesNamed(held, 'tiron').map((one) => one.title)).toEqual(['Tirón'])
+    expect(routinesNamed(held, 'TIRÓN').map((one) => one.title)).toEqual(['Tirón'])
+  })
+
+  test('y no inventa resultados cuando no hay ninguno', () => {
+    expect(routinesNamed(held, 'natación')).toEqual([])
   })
 })

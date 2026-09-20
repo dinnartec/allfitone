@@ -145,6 +145,29 @@ export function discardWarning(routine: MyRoutine): string {
 }
 
 /**
+ * Sin tildes y en minúscula, para comparar lo que alguien teclea con lo que escribió.
+ *
+ * Quien busca «tiron» quiere encontrar «Tirón», y en un teclado de móvil la tilde es un
+ * toque largo: exigirla es exigir que se escriba mejor que el nombre que se busca.
+ */
+function plainly(text: string): string {
+  return text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+}
+
+/**
+ * Las rutinas cuyo nombre contiene lo tecleado. Vacío devuelve todas: buscar estrecha
+ * algo que ya está, no rellena una pantalla vacía.
+ */
+export function routinesNamed(routines: readonly MyRoutine[], query: string): readonly MyRoutine[] {
+  const typed = plainly(query.trim())
+  if (typed === '') return routines
+  return routines.filter((routine) => plainly(routine.title).includes(typed))
+}
+
+/**
  * Qué rutinas se lleva un programa al eliminarse, y cuáles se quedan.
  *
  * **Sólo las que ningún otro programa usa.** Llevarse una compartida rompería el otro

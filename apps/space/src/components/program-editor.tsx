@@ -55,6 +55,7 @@ import { readExerciseLibrary, type ExerciseLibrary } from '../client/exercise-li
 import { createSpaceProgramFlow } from '../client/programs-transport'
 import type { MyProgram } from '../client/programs'
 import { CoverSheetBody, type CoverPreview } from './cover-sheet'
+import { DayRoutinesBody, FirstRoutineBody } from './program-sheets'
 import { coverArt } from './routine-cover-art'
 import { coverOrNothing, type RoutineCover } from '../client/routine-cover'
 import { CoverTile } from '@allfitone/react-native/cover-tile'
@@ -610,10 +611,13 @@ export function ProgramEditor({
             hint={
               <View style={styles.coverHint}>
                 <FoundationIcon name="camera" size="sm" color={theme.color.icon.secondary} />
-                {/* Dos palabras y dos líneas: «PORTADA» sola no dice de qué, y es de
-                    las rutinas del programa y no del programa. */}
-                <Text role="eyebrow" size="2xs" color="muted" align="center">
-                  {'PORTADA\nRUTINAS'}
+                {/* Dos palabras y dos líneas: «Portada» sola no dice de qué, y es de
+                    las rutinas del programa y no del programa.
+                    **`control` y no `eyebrow`**: el tracking de 0,2 em del rótulo
+                    separaba tanto las letras que dos palabras dentro de un azulejo de
+                    72 se leían como dos filas de letras sueltas. */}
+                <Text role="control" size="2xs" color="muted" align="center">
+                  {'Portada\nrutinas'}
                 </Text>
               </View>
             }
@@ -780,6 +784,8 @@ export function ProgramEditor({
           invisible layer eating every touch. */}
       <Sheet
         visible={choosing !== undefined || discarding || leaving || dressing}
+        // Los dos cuerpos del día lo llevan dentro, debajo del chip.
+        hideTitle={choosing !== undefined}
         onDismiss={() => {
           setChoosing(undefined)
           setDiscarding(false)
@@ -842,152 +848,20 @@ export function ProgramEditor({
           </View>
         ) : (
           <View style={styles.sheetBody}>
-            <Text role="body" size="xs" color="muted">
-              {published.length === 0
-                ? 'Todavía no tienes ninguna rutina que poner aquí.'
-                : chosenDay
-                  ? `Se repetirá todos los ${chosenDay.name} del programa.`
-                  : ''}
-            </Text>
-
             {published.length === 0 ? (
-              <View style={styles.emptySheet}>
-                <View
-                  style={[
-                    styles.emptyIcon,
-                    {
-                      borderColor: theme.color.border.subtle,
-                      backgroundColor: theme.color.background.surfaceSubtle,
-                    },
-                  ]}
-                >
-                  <FoundationIcon
-                    name="training"
-                    size="lg"
-                    color={theme.color.icon.secondary}
-                    decorative
-                  />
-                </View>
-                <Text role="display" size="lg" align="center">
-                  Crea tu primera rutina
-                </Text>
-                <Text role="body" size="sm" color="muted" style={styles.centered}>
-                  Una rutina es la sesión que se repite: sus ejercicios, sus series y sus pesos.
-                  Cuando tengas una, podrás ponerla en cualquier día del programa.
-                </Text>
-                <Button
-                  label="Crear una rutina"
-                  icon="add"
-                  onPress={() => leaveToWrite(choosing)}
-                />
-                <Button
-                  label="Ver los de Allfit"
-                  variant="secondary"
-                  icon="explore"
-                  onPress={() => {
-                    setChoosing(undefined)
-                    router.push('/programs')
-                  }}
-                />
-              </View>
+              <FirstRoutineBody day={chosenDay?.name} onCreate={() => leaveToWrite(choosing)} />
             ) : (
-              <ScrollView style={styles.sheetList} showsVerticalScrollIndicator={false}>
-                {published.map((routine) => {
-                  const chosen =
-                    week.find((one) => one.day === choosing)?.templateVersionId ===
-                    routine.template_version_id
-                  return (
-                    <Pressable
-                      key={routine.template_id}
-                      accessibilityRole="button"
-                      accessibilityLabel={routine.title}
-                      accessibilityState={{ selected: chosen }}
-                      onPress={() => put(choosing ?? 1, routine.template_version_id)}
-                      style={[
-                        styles.option,
-                        {
-                          backgroundColor: chosen
-                            ? theme.color.accent.tonal
-                            : theme.color.background.surfaceSubtle,
-                          borderColor: chosen
-                            ? theme.color.border.accent
-                            : theme.color.border.subtle,
-                          borderWidth: chosen ? 1.5 : 1,
-                        },
-                      ]}
-                    >
-                      <View style={styles.rowText}>
-                        <Text role="control" size="sm">
-                          {routine.title}
-                        </Text>
-                        <Text role="body" size="xs" color="muted">
-                          {`${routine.exercise_count} ejercicios · ${routine.set_count} series`}
-                        </Text>
-                      </View>
-                      {chosen ? (
-                        <FoundationIcon
-                          name="check"
-                          size="sm"
-                          color={theme.color.icon.accent}
-                          decorative
-                        />
-                      ) : null}
-                    </Pressable>
-                  )
-                })}
-
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={
-                    chosenDay ? `Dejar el ${chosenDay.name} libre` : 'Dejar el día libre'
-                  }
-                  onPress={() => put(choosing ?? 1, null)}
-                  style={[
-                    styles.option,
-                    {
-                      backgroundColor: theme.color.background.surfaceSubtle,
-                      borderColor: theme.color.border.subtle,
-                      borderWidth: 1,
-                    },
-                  ]}
-                >
-                  <FoundationIcon
-                    name="rest"
-                    size="sm"
-                    color={theme.color.icon.secondary}
-                    decorative
-                  />
-                  <View style={styles.rowText}>
-                    <Text role="control" size="sm">
-                      Día de descanso
-                    </Text>
-                    <Text role="body" size="xs" color="muted">
-                      {chosenDay ? `deja el ${chosenDay.name} libre` : 'deja el día libre'}
-                    </Text>
-                  </View>
-                </Pressable>
-
-                <Button
-                  label="Crear una rutina nueva"
-                  variant="secondary"
-                  icon="add"
-                  onPress={() => leaveToWrite(choosing)}
-                />
-
-                {(routines ?? []).some((routine) => routine.template_version_id === null) ? (
-                  <View style={styles.footnote}>
-                    <FoundationIcon
-                      name="locked"
-                      size="sm"
-                      color={theme.color.icon.secondary}
-                      decorative
-                    />
-                    <Text role="body" size="sm" color="muted" style={styles.noticeText}>
-                      Tienes rutinas en borrador. Publícalas para poder ponerlas en un día.
-                    </Text>
-                  </View>
-                ) : null}
-              </ScrollView>
+              <DayRoutinesBody
+                day={chosenDay?.name}
+                routines={published}
+                chosenVersionId={
+                  week.find((one) => one.day === choosing)?.templateVersionId ?? null
+                }
+                hasDrafts={(routines ?? []).some((one) => one.template_version_id === null)}
+                onChoose={(versionId) => put(choosing ?? 1, versionId)}
+                onRest={() => put(choosing ?? 1, null)}
+                onCreate={() => leaveToWrite(choosing)}
+              />
             )}
           </View>
         )}
@@ -1123,7 +997,6 @@ const styles = StyleSheet.create({
   scroller: { flex: 1 },
   content: { gap: 18, paddingBottom: 16 },
   section: { gap: 10 },
-  centered: { textAlign: 'center' },
   sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   days: { flexDirection: 'row', gap: 4 },
   // One pill per day holding its letter, its mark and its name. Three loose pieces
@@ -1165,28 +1038,14 @@ const styles = StyleSheet.create({
   noticeText: { flex: 1 },
   sheetBody: { gap: 12 },
   // El azulejo es un cuadrado fijo y el nombre ocupa lo que quede.
-  naming: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
+  //
+  // **Centrado y no alineado arriba.** El azulejo mide 72 y la columna de al lado —el
+  // rótulo, su hueco y el campo— mide 76: alineados por la cabeza, los pies quedaban a
+  // cinco puntos y se veía. Centrados, la diferencia se reparte y no se ve ninguna.
+  naming: { flexDirection: 'row', gap: 12, alignItems: 'center' },
   namingField: { flex: 1 },
   coverHint: { alignItems: 'center', gap: 4 },
-  sheetList: { maxHeight: 340 },
-  option: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 10,
-  },
-  emptySheet: { alignItems: 'center', gap: 12, paddingTop: 8 },
-  emptyIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  footnote: { flexDirection: 'row', gap: 8, paddingTop: 6 },
+  // `FIN-9`: el contexto, la pregunta, la explicación, la salida y la nota.
 })
 
 /**
