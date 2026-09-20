@@ -36,7 +36,8 @@ interface CatalogueRow {
   program_version_id: string
   program_id: string
   title: string
-  weeks: number
+  // Null is the version without an end date: no last week to count to.
+  weeks: number | null
   days_per_week: number
   sex_affinity: 'male' | 'female' | null
   goals: string[]
@@ -57,7 +58,8 @@ interface DetailRow {
   program_version_id: string
   title: string
   notes: string | null
-  weeks: number
+  // Null is the version without an end date: no last week to count to.
+  weeks: number | null
   days_per_week: number
   sex_affinity: 'male' | 'female' | null
   goals: string[]
@@ -248,6 +250,30 @@ export function createSpacePlanningDatabase(): SpacePlanningDatabase {
           )
         `
         return answered(row?.program, 'discard the program')
+      }),
+
+    removeMyProgram: (input) =>
+      command(sql, input.personId, async (transaction) => {
+        const [row] = await transaction<{ program: Program }[]>`
+          select program from planning.remove_my_program(
+            ${input.personId}::uuid, ${input.programId}::uuid, ${input.withRoutines},
+            ${input.idempotencyKey}::uuid, ${input.commandId}::uuid, ${input.requestHash}
+          )
+        `
+        return answered(row?.program, 'remove the program')
+      }),
+
+    // Contesta el programa **nuevo**. El original no se toca y no se acuña ninguna
+    // versión: la copia es un borrador hasta que alguien la publique.
+    duplicateMyProgram: (input) =>
+      command(sql, input.personId, async (transaction) => {
+        const [row] = await transaction<{ program: Program }[]>`
+          select program from planning.duplicate_my_program(
+            ${input.personId}::uuid, ${input.programId}::uuid,
+            ${input.idempotencyKey}::uuid, ${input.commandId}::uuid, ${input.requestHash}
+          )
+        `
+        return answered(row?.program, 'duplicate the program')
       }),
 
     createMyProgram: (input) =>

@@ -19,16 +19,22 @@ import { coverArt } from './routine-cover-art'
 /** El lado del azulejo pequeño del sistema de diseño. */
 export const COVER_SM = 56
 
+/** Y el del extrapequeño, para una fila cuya altura es la del azulejo. */
+export const COVER_XS = 44
+
 export function RoutineMark({
   routine,
   library,
+  size = 'sm',
 }: {
   readonly routine: MyRoutine
   readonly library: ExerciseLibrary | undefined
+  /** Lo alto que la fila puede permitirse. La marca es lo que la mide. */
+  readonly size?: 'xs' | 'sm'
 }) {
   return (
     <CoverTile
-      size="sm"
+      size={size}
       hint={
         <Text role="control" size="sm" color="accent">
           {markOf(routine.title)}
@@ -39,7 +45,7 @@ export function RoutineMark({
         cover: routine.cover ?? undefined,
         worked: routine.muscles,
         muscles: library?.muscles ?? [],
-        side: COVER_SM,
+        side: size === 'xs' ? COVER_XS : COVER_SM,
         coverUrl: routine.cover_url,
       })}
     </CoverTile>

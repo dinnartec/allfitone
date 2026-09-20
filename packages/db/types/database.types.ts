@@ -3272,6 +3272,7 @@ export type Database = {
           notes: string | null
           program_id: string
           published_at: string
+          repeats_forever: boolean
           sex_affinity: Database['identity']['Enums']['biological_sex'] | null
           status: Database['catalog']['Enums']['publication_status']
           title: string
@@ -3283,6 +3284,7 @@ export type Database = {
           notes?: string | null
           program_id: string
           published_at?: string
+          repeats_forever?: boolean
           sex_affinity?: Database['identity']['Enums']['biological_sex'] | null
           status?: Database['catalog']['Enums']['publication_status']
           title: string
@@ -3294,6 +3296,7 @@ export type Database = {
           notes?: string | null
           program_id?: string
           published_at?: string
+          repeats_forever?: boolean
           sex_affinity?: Database['identity']['Enums']['biological_sex'] | null
           status?: Database['catalog']['Enums']['publication_status']
           title?: string
@@ -3674,6 +3677,16 @@ export type Database = {
           template: Json
         }[]
       }
+      duplicate_my_program: {
+        Args: {
+          p_command_id: string
+          p_idempotency_key: string
+          p_person_id: string
+          p_program_id: string
+          p_request_hash: string
+        }
+        Returns: Json
+      }
       fork_program_version: {
         Args: { p_person_id: string; p_program_version_id: string }
         Returns: string
@@ -3720,6 +3733,10 @@ export type Database = {
         Returns: string
       }
       planned_set_errors: { Args: { p_sets: Json }; Returns: string[] }
+      plant_my_open_week: {
+        Args: { p_person_id: string; p_timezone: string }
+        Returns: undefined
+      }
       program_content_errors: {
         Args: {
           p_content: Json
@@ -3930,6 +3947,20 @@ export type Database = {
         }[]
       }
       region_of_content: { Args: { p_content: Json }; Returns: string }
+      remove_my_program: {
+        Args: {
+          p_command_id: string
+          p_idempotency_key: string
+          p_person_id: string
+          p_program_id: string
+          p_request_hash: string
+          p_with_routines: boolean
+        }
+        Returns: {
+          program: Json
+          replayed: boolean
+        }[]
+      }
       reorder_my_programs: {
         Args: {
           p_assignment_ids: string[]

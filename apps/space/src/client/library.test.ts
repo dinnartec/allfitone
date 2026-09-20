@@ -14,9 +14,11 @@ import {
   emptyReason,
   filteredRoutines,
   programCaption,
+  removalWarning,
   routineCounts,
   routineFigures,
   routineOfVersion,
+  routinesLostWith,
   showsOlderVersion,
   whereUsed,
   type RoutineFilter,
@@ -109,6 +111,20 @@ describe('programCaption', () => {
   test('the one in progress adds which week it is on', () => {
     expect(programCaption(program({ editable: false, weeks: 8, days_per_week: 3 }), 1)).toBe(
       'De Allfit · 8 semanas · 3 días · semana 1 de 8',
+    )
+  })
+
+  test('one with no end date says so instead of counting weeks', () => {
+    expect(programCaption(program({ weeks: null, days_per_week: 3 }))).toBe(
+      'Tuyo · sin fecha de fin · 3 días',
+    )
+  })
+
+  test('and tells you which week you are on without inventing a last one', () => {
+    // «semana 3 de null» es lo que salía, y un programa que no termina no tiene contra
+    // qué medirse: la semana sola es toda la verdad que hay.
+    expect(programCaption(program({ weeks: null, days_per_week: 3 }), 3)).toBe(
+      'Tuyo · sin fecha de fin · 3 días · semana 3',
     )
   })
 })
@@ -225,5 +241,72 @@ describe('routineOfVersion', () => {
   test('says when the day is holding a version that is no longer the newest', () => {
     expect(showsOlderVersion(empuje, 'v5')).toBe(true)
     expect(showsOlderVersion(empuje, 'v6')).toBe(false)
+  })
+})
+
+describe('eliminar un programa', () => {
+  const inside = (title: string, programs: { program_id: string; title: string }[]) =>
+    routine({ template_id: title, title, programs })
+
+  const mine = program({ program_id: 'p1', title: 'Torso y pierna' })
+  const here = { program_id: 'p1', title: 'Torso y pierna' }
+  const elsewhere = { program_id: 'p2', title: 'Fuerza' }
+
+  test('se lleva las rutinas que sólo están en él', () => {
+    const { going, staying } = routinesLostWith(mine, [
+      inside('Empujar', [here]),
+      inside('Tirar', [here]),
+    ])
+
+    expect(going.map((one) => one.title)).toEqual(['Empujar', 'Tirar'])
+    expect(staying).toEqual([])
+  })
+
+  test('y deja la que está en otro programa, que se rompería sin ella', () => {
+    const { going, staying } = routinesLostWith(mine, [
+      inside('Empujar', [here]),
+      inside('Tirar', [here, elsewhere]),
+    ])
+
+    expect(going.map((one) => one.title)).toEqual(['Empujar'])
+    expect(staying.map((one) => one.title)).toEqual(['Tirar'])
+  })
+
+  test('las rutinas de otro programa no entran en la cuenta', () => {
+    expect(routinesLostWith(mine, [inside('Sentadilla', [elsewhere])]).going).toEqual([])
+  })
+
+  test('sin rutinas propias dice lo que se va y lo que se queda', () => {
+    expect(removalWarning(mine, [])).toBe(
+      'Se va de tu biblioteca y de tu agenda. Lo que ya entrenaste se conserva.',
+    )
+  })
+
+  test('con una la nombra, porque una rutina con nombre no es una cifra', () => {
+    expect(removalWarning(mine, [inside('Empujar', [here])])).toBe(
+      'Se va de tu biblioteca y de tu agenda. Se elimina también «Empujar». Lo que ya entrenaste se conserva.',
+    )
+  })
+
+  test('con varias las cuenta', () => {
+    expect(removalWarning(mine, [inside('Empujar', [here]), inside('Tirar', [here])])).toBe(
+      'Se va de tu biblioteca y de tu agenda. Se eliminan también sus 2 rutinas. Lo que ya entrenaste se conserva.',
+    )
+  })
+
+  test('y dice cuál se queda y por qué', () => {
+    // Callarlo dejaría a alguien contando rutinas después de borrar, que es cuando ya
+    // no se puede preguntar.
+    expect(
+      removalWarning(mine, [inside('Empujar', [here]), inside('Tirar', [here, elsewhere])]),
+    ).toBe(
+      'Se va de tu biblioteca y de tu agenda. Se elimina también «Empujar». «Tirar» se queda, porque está en otro programa. Lo que ya entrenaste se conserva.',
+    )
+  })
+
+  test('lo entrenado se conserva, se diga lo que se diga de las rutinas', () => {
+    for (const held of [[], [inside('Empujar', [here])], [inside('Tirar', [here, elsewhere])]]) {
+      expect(removalWarning(mine, held)).toContain('Lo que ya entrenaste se conserva.')
+    }
   })
 })

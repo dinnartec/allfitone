@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 
 import { createSpacePlanningService } from './space.js'
-import type { SpacePlanningDatabase, WeekPlan } from '../domain/space.js'
+import type { Program, SpacePlanningDatabase, WeekPlan } from '../domain/space.js'
 
 const ASSIGNMENT_ID = '019f9000-0000-7000-8000-000000000011'
 const VERSION_ID = '019f3000-0000-7000-8000-000000000006'
@@ -147,6 +147,78 @@ describe('publishAndRestate', () => {
   })
 })
 
+describe('removeMyProgram y duplicateMyProgram', () => {
+  const command = {
+    personId: 'p',
+    programId: 'g',
+    idempotencyKey: 'key',
+    commandId: 'command',
+    requestHash: Buffer.from('hash'),
+  }
+
+  const draft = {
+    id: '019f9000-0000-7000-8000-000000000054',
+    program_id: 'g',
+    etag: `"sha256:${'A'.repeat(43)}"`,
+    content_schema_version: 1,
+    deprecated_template_version_ids: [],
+    updated_at: '2026-09-20T07:00:00.000Z',
+    content: { title: 'Torso y pierna', notes: null, sessions: [] },
+  } as Program['draft']
+
+  const archived = {
+    id: 'g',
+    organization_id: null,
+    status: 'archived',
+    author_person_id: 'p',
+    draft,
+    versions: [],
+  } as Program
+  const copy = { ...archived, id: 'copy', status: 'draft' } as Program
+
+  /** Sólo interesan las dos órdenes; lo demás sería ruido. */
+  function commands() {
+    const asked: unknown[] = []
+    const database = {
+      removeMyProgram: async (input: unknown) => {
+        asked.push(input)
+        return archived
+      },
+      duplicateMyProgram: async (input: unknown) => {
+        asked.push(input)
+        return copy
+      },
+    } as unknown as SpacePlanningDatabase
+    return { service: createSpacePlanningService(database, 'https://media.test/catalog'), asked }
+  }
+
+  test('la respuesta del que llama viaja entera, y `false` es una respuesta', async () => {
+    // Si el servicio pusiera un valor por defecto, eliminar un programa se llevaría
+    // rutinas que nadie aceptó perder. Quien decide es la persona, no esta capa.
+    const { service, asked } = commands()
+
+    await service.removeMyProgram({ ...command, withRoutines: false })
+
+    expect(asked[0]).toEqual({ ...command, withRoutines: false })
+  })
+
+  test('duplicar contesta el programa nuevo, que no es el copiado', async () => {
+    const { service } = commands()
+
+    await expect(service.duplicateMyProgram(command)).resolves.toEqual(copy)
+  })
+
+  test('ninguna de las dos toca la dirección de los medios: no contestan portadas', async () => {
+    // El servicio compone direcciones sólo donde la fila trae una clave guardada. Un
+    // programa no la trae, así que pasa tal cual y nada se le añade.
+    const { service } = commands()
+
+    await expect(service.removeMyProgram({ ...command, withRoutines: true })).resolves.toEqual(
+      archived,
+    )
+  })
+})
+
 describe('readMyPrograms', () => {
   /**
    * La clave direcciona nuestro almacenamiento y no sale nunca; lo que sale es dónde
@@ -188,6 +260,19 @@ describe('readMyPrograms', () => {
     const [program] = await withPrograms(null).readMyPrograms({ personId: 'p', requestId: 'r' })
 
     expect(program?.cover_url).toBeNull()
+  })
+
+  test('hands a programme with no end date through with its weeks still null', async () => {
+    // Null is the answer, not a missing number: defaulting it would invent a duration.
+    const database = {
+      readMyPrograms: async () => [{ ...stored, weeks: null, cover_object_key: null }],
+    } as unknown as SpacePlanningDatabase
+    const [program] = await createSpacePlanningService(
+      database,
+      'https://media.test/catalog/',
+    ).readMyPrograms({ personId: 'p', requestId: 'r' })
+
+    expect(program?.weeks).toBeNull()
   })
 
   test('never lets the storage key reach the answer', async () => {

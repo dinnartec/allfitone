@@ -52,9 +52,9 @@ export function ProgramCard({
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${program.title}. ${programCaption(program)}. ${program.weeks} semanas${
-        suggested ? '. Sugerido para ti' : ''
-      }`}
+      accessibilityLabel={`${program.title}. ${programCaption(program)}. ${
+        program.weeks === null ? 'Sin fecha de fin' : `${program.weeks} semanas`
+      }${suggested ? '. Sugerido para ti' : ''}`}
       accessibilityState={{ disabled, busy }}
       disabled={disabled}
       onPress={onPress}
@@ -108,8 +108,14 @@ export function ProgramCard({
         </View>
 
         <View style={styles.aside}>
-          <Text role="display" size="lg" color={busy ? 'muted' : 'primary'}>
-            {busy ? '…' : `${program.weeks} sem`}
+          {/* La cifra es el sitio de la duración, y un programa sin fecha de fin no
+              tiene ninguna: dice que no termina en vez de dejar el hueco. */}
+          <Text
+            role="display"
+            size={program.weeks === null ? 'md' : 'lg'}
+            color={busy ? 'muted' : 'primary'}
+          >
+            {busy ? '…' : program.weeks === null ? 'Sin fin' : `${program.weeks} sem`}
           </Text>
           <FoundationIcon name="next" size="sm" color={theme.color.icon.accent} decorative />
         </View>

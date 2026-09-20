@@ -336,6 +336,55 @@ export function spacePlanningRoutes(
     }
   })
 
+  // Eliminar un programa publicado, que es lo que el descarte rechaza. El cuerpo
+  // viaja al hash de idempotencia: reintentar con otra respuesta no es el mismo acto.
+  routes.post('/programs/:programId/remove', async (c) => {
+    c.header('Cache-Control', 'no-store')
+    const token = await verified(c, verify)
+    if (!token) return fail(c, 'unauthenticated')
+
+    const programId = c.req.param('programId')
+    const body = await readJson(c)
+    const withRoutines = readRemoval(body)
+    const command = commandContext(c, body)
+    if (!UUID_V7.test(programId) || withRoutines === undefined || !command) {
+      return fail(c, 'invalid-request')
+    }
+
+    try {
+      const personId = await actors().personFor(token.subject)
+      const program = await planning().removeMyProgram({
+        personId,
+        programId,
+        withRoutines,
+        ...command,
+      })
+      return c.json(program, 200)
+    } catch (cause) {
+      return failure(c, cause)
+    }
+  })
+
+  // Contesta el programa **nuevo**, no el copiado. Sin cuerpo: duplicar no admite
+  // opciones, y un cuerpo que no se lee sería una promesa que nadie cumple.
+  routes.post('/programs/:programId/duplicate', async (c) => {
+    c.header('Cache-Control', 'no-store')
+    const token = await verified(c, verify)
+    if (!token) return fail(c, 'unauthenticated')
+
+    const programId = c.req.param('programId')
+    const command = commandContext(c, undefined)
+    if (!UUID_V7.test(programId) || !command) return fail(c, 'invalid-request')
+
+    try {
+      const personId = await actors().personFor(token.subject)
+      const copy = await planning().duplicateMyProgram({ personId, programId, ...command })
+      return c.json(copy, 200)
+    } catch (cause) {
+      return failure(c, cause)
+    }
+  })
+
   routes.post('/programs/:programId/versions', async (c) => {
     c.header('Cache-Control', 'no-store')
     const token = await verified(c, verify)
@@ -540,6 +589,9 @@ function failure(c: Context, cause: unknown): Response {
     // Es un conflicto con lo que hay, no una caída — que es lo que decía antes al no
     // estar mapeado, y mandaba a la gente a mirar su conexión.
     if (code === '23514') return fail(c, 'conflict')
+    // `P0002` es el programa que no es de esta persona. Sin mapear caía en
+    // `upstream-unavailable`, y el 404 que estas operaciones documentan no salía nunca.
+    if (code === 'P0002') return fail(c, 'not-found')
   }
   console.warn('[planning] space request failed', { detail: String(cause).slice(0, 160) })
   return fail(c, 'upstream-unavailable')
@@ -604,6 +656,19 @@ function readTemplateCreate(body: unknown): { disciplineCode: string; title: str
   if (typeof discipline !== 'string' || !/^[a-z][a-z0-9_]{1,63}$/.test(discipline)) return undefined
   if (typeof title !== 'string' || title.trim() === '' || title.length > 160) return undefined
   return { disciplineCode: discipline, title: title.trim() }
+}
+
+/**
+ * Whether the programme's routines go with it, or `undefined` when the body does not
+ * say. Asked and never defaulted: choosing for the person would archive their library
+ * on their behalf, and `false` is a real answer rather than an absence.
+ */
+function readRemoval(body: unknown): boolean | undefined {
+  if (typeof body !== 'object' || body === null) return undefined
+  const keys = Object.keys(body)
+  if (keys.length !== 1 || keys[0] !== 'with_routines') return undefined
+  const withRoutines = (body as { with_routines: unknown }).with_routines
+  return typeof withRoutines === 'boolean' ? withRoutines : undefined
 }
 
 function readTitle(body: unknown): string | undefined {

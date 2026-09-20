@@ -71,6 +71,8 @@ export interface ContentTransport {
   readProgramDraft(programId: string): Promise<ProgramDraft>
   readMyUnpublishedProgram(): Promise<Program | null>
   discardProgram(command: CommandHeaders, programId: string): Promise<Program>
+  removeProgram(command: CommandHeaders, programId: string, withRoutines: boolean): Promise<Program>
+  duplicateProgram(command: CommandHeaders, programId: string): Promise<Program>
   createProgram(command: CommandHeaders, title: string): Promise<Program>
   saveProgramDraft(
     command: CommandHeaders,
@@ -123,6 +125,15 @@ export interface ContentFlow {
   readMyUnpublishedProgram(): Promise<Program | null>
   /** Archives it. A programme with a published version is refused by the server. */
   discardProgram(programId: string): Promise<Program>
+  /**
+   * Lo saca de la biblioteca y de la agenda, y con él las rutinas que sólo él usaba.
+   *
+   * No es `discardProgram` con otro nombre: aquél tira un borrador que nunca se publicó
+   * y no toca ninguna rutina. Éste es para uno que ya existe, y lo entrenado se conserva.
+   */
+  removeProgram(programId: string, withRoutines: boolean): Promise<Program>
+  /** Una copia en borrador, que no existe para nadie hasta que se publique. */
+  duplicateProgram(programId: string): Promise<Program>
   createProgram(title: string): Promise<Program>
   saveProgramDraft(programId: string, content: ProgramDraftContent): Promise<ProgramDraft>
   /** Publishing leaves the author following it; the server takes or restates, never both. */
@@ -245,6 +256,22 @@ export function createContentFlow(dependencies: ContentFlowDependencies): Conten
       return program
     },
 
+    async removeProgram(programId, withRoutines) {
+      const program = await dependencies.transport.removeProgram(
+        dependencies.newCommand(),
+        programId,
+        withRoutines,
+      )
+      etags.delete(programId)
+      return program
+    },
+
+    async duplicateProgram(programId) {
+      // Con un comando nuevo cada vez: duplicar dos veces son dos copias, y es lo que
+      // alguien que pulsa dos veces está pidiendo.
+      return dependencies.transport.duplicateProgram(dependencies.newCommand(), programId)
+    },
+
     async createProgram(title) {
       const key = `program:${title}`
       const program = await dependencies.transport.createProgram(once(key), title)
@@ -286,7 +313,7 @@ export function createContentFlow(dependencies: ContentFlowDependencies): Conten
  */
 export function expandBaseWeek(
   baseWeek: readonly BaseWeekDay[],
-  weeks: number,
+  weeks: number | null,
 ): ProgramDraftContent['sessions'] {
   const filled = [...baseWeek]
     .filter(
@@ -294,9 +321,12 @@ export function expandBaseWeek(
     )
     .sort((one, other) => one.day - other.day)
 
+  // Sin fecha de fin se compone una vuelta y nada más: es la que se repite, y
+  // enumerar semanas de un programa que no termina no acaba nunca.
+  const laps = weeks ?? 1
   const sessions: ProgramDraftContent['sessions'] = []
   let position = 1
-  for (let week = 1; week <= weeks; week += 1) {
+  for (let week = 1; week <= laps; week += 1) {
     for (const day of filled) {
       sessions.push({
         position,
@@ -324,9 +354,12 @@ const WEEKDAYS = [1, 2, 3, 4, 5, 6, 7] as const
  * Seven days always come back, empty ones included, because that is the shape the
  * editor draws and an absent Tuesday is not the same as an empty one.
  */
-export function collapseBaseWeek(sessions: ProgramDraftContent['sessions']): {
+export function collapseBaseWeek(
+  sessions: ProgramDraftContent['sessions'],
+  repeatsForever = false,
+): {
   baseWeek: readonly BaseWeekDay[]
-  weeks: number
+  weeks: number | null
 } {
   const firstWeek = new Map<number, string>()
   for (const session of sessions) {
@@ -335,14 +368,18 @@ export function collapseBaseWeek(sessions: ProgramDraftContent['sessions']): {
 
   return {
     baseWeek: WEEKDAYS.map((day) => ({ day, templateVersionId: firstWeek.get(day) ?? null })),
+    // Sin fin no hay duración que contar: la composición es una vuelta, y leer su
+    // `max(week)` devolvería «1 semana», que es justo lo contrario de lo que dice.
+    //
     // A programme with nothing in it still repeats for as long as it says it does, and
     // zero would put the stepper below its own minimum.
-    weeks: Math.max(1, ...sessions.map((session) => session.week)),
+    weeks: repeatsForever ? null : Math.max(1, ...sessions.map((session) => session.week)),
   }
 }
 
-/** «8 semanas», and «1 semana» when there is only one of them. */
-export function weeksLabel(weeks: number): string {
+/** «8 semanas», «1 semana» when there is only one, and the one with no end. */
+export function weeksLabel(weeks: number | null): string {
+  if (weeks === null) return 'Sin fecha de fin'
   return weeks === 1 ? '1 semana' : `${weeks} semanas`
 }
 
@@ -355,12 +392,15 @@ export function weeksLabel(weeks: number): string {
  * reporting zero sessions, which is a number nobody asked for.
  */
 export function programLoad(
-  weeks: number,
-  summary: { daysPerWeek: number; sessions: number },
+  weeks: number | null,
+  summary: { daysPerWeek: number; sessions: number | null },
 ): string {
   if (summary.daysPerWeek === 0) return `${weeksLabel(weeks)} · sin días puestos todavía`
   const perWeek =
     summary.daysPerWeek === 1 ? '1 día por semana' : `${summary.daysPerWeek} días por semana`
+  // Sin fecha de fin no hay un total de sesiones que decir, y decir el de una vuelta
+  // sería contar la primera semana como si fuera el programa entero.
+  if (summary.sessions === null) return `${weeksLabel(weeks)} · ${perWeek}`
   const sessions = summary.sessions === 1 ? '1 sesión' : `${summary.sessions} sesiones`
   return `${weeksLabel(weeks)} · ${perWeek} · ${sessions}`
 }
@@ -390,8 +430,8 @@ export function revisedWeek(
 
 export function summarizeBaseWeek(
   baseWeek: readonly BaseWeekDay[],
-  weeks: number,
-): { daysPerWeek: number; sessions: number } {
+  weeks: number | null,
+): { daysPerWeek: number; sessions: number | null } {
   const daysPerWeek = baseWeek.filter((day) => day.templateVersionId !== null).length
-  return { daysPerWeek, sessions: daysPerWeek * weeks }
+  return { daysPerWeek, sessions: weeks === null ? null : daysPerWeek * weeks }
 }

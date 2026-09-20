@@ -58,12 +58,24 @@ import {
 import { cardsFor, weekPlanFailure, type RoutineCard } from '../../src/client/week-plan'
 import { deviceTimezone } from '../../src/client/timezone'
 import { RoutineMark } from '../../src/components/routine-mark'
+import { ProgramMenuBody, ProgramRemovalBody } from '../../src/components/program-sheets'
 import { DOCK_HEIGHT } from '../../src/components/tab-bar'
 
 const EXPIRED = 'Tu sesión venció. Vuelve a entrar para continuar.'
 const READ_FAILED = 'No pudimos cargar tu biblioteca. Inténtalo otra vez.'
 const START_FAILED = 'No pudimos empezar la sesión. Inténtalo otra vez.'
 const ORDER_FAILED = 'No pudimos cambiar de programa. Inténtalo otra vez.'
+const REMOVE_FAILED = 'No pudimos eliminar el programa. Inténtalo otra vez.'
+const DUPLICATE_FAILED = 'No pudimos duplicar el programa. Inténtalo otra vez.'
+
+/**
+ * Lo que la hoja puede estar enseñando. Sólo uno a la vez, que es la regla que la
+ * convierte en una sola `Sheet`.
+ */
+type Sheeted =
+  | { kind: 'routine'; routine: MyRoutine }
+  | { kind: 'program'; program: MyProgram }
+  | { kind: 'removing'; program: MyProgram }
 
 type Segment = 'programas' | 'rutinas'
 
@@ -95,10 +107,18 @@ export default function Train() {
   const [mine, setMine] = useState<readonly MyProgram[]>([])
   const [routines, setRoutines] = useState<readonly MyRoutine[]>([])
   const [library, setLibrary] = useState<ExerciseLibrary | undefined>(undefined)
-  // La rutina cuyo menú está abierto. Guardada entera y no por id: la hoja escribe su
-  // nombre, y buscarla otra vez en una lista que acaba de cambiar es cómo se pregunta
-  // «¿descartar undefined?».
-  const [menu, setMenu] = useState<MyRoutine | undefined>(undefined)
+  /**
+   * Qué está enseñando la única hoja de esta pantalla.
+   *
+   * **Una unión y no tres banderas**, como la del editor de rutina: una `Sheet` es un
+   * `Modal` de verdad que sigue montado durante su propia salida, así que dos a la vez
+   * dejan la segunda sin presentar y una capa invisible comiéndose los toques.
+   *
+   * Cada caso guarda la cosa entera y no su id: la hoja escribe su nombre, y buscarla
+   * otra vez en una lista que acaba de cambiar es cómo se pregunta «¿eliminar undefined?».
+   */
+  const [sheet, setSheet] = useState<Sheeted | undefined>(undefined)
+  const [removing, setRemoving] = useState(false)
   const [starting, setStarting] = useState<string | undefined>(undefined)
   const [failure, setFailure] = useState<string | undefined>(undefined)
 
@@ -183,8 +203,45 @@ export default function Train() {
       .catch(() => setFailure(ORDER_FAILED))
   }
 
+  /**
+   * Eliminar, que es un estado y no un borrado.
+   *
+   * La fila se va de la lista al momento porque el servidor ya lo decidió: la asignación
+   * termina, y esta pantalla se dibuja de las asignaciones. Lo entrenado no se toca.
+   */
+  const remove = (program: MyProgram) => {
+    setRemoving(true)
+    content
+      .removeProgram(program.program_id, true)
+      .then(() => {
+        setSheet(undefined)
+        setMine((held) => held.filter((one) => one.program_id !== program.program_id))
+        return programs
+          .readWeekPlan(timezone)
+          .then(setPlan)
+          .catch(() => undefined)
+      })
+      .catch(() => setFailure(REMOVE_FAILED))
+      .finally(() => setRemoving(false))
+  }
+
+  /**
+   * Duplicar deja un borrador y abre el editor sobre él.
+   *
+   * **Por `draftId` y no por `programId`**: la copia no se ha publicado, así que se
+   * escribe —con autoguardado y con la hoja de «¿guardas esto?» al salir— en vez de
+   * editarse. Con el otro camino la X habría preguntado por unos cambios que nadie hizo.
+   */
+  const duplicate = (program: MyProgram) => {
+    setSheet(undefined)
+    content
+      .duplicateProgram(program.program_id)
+      .then((copy) => router.push(`/programs/new?programId=${copy.id}`))
+      .catch(() => setFailure(DUPLICATE_FAILED))
+  }
+
   const discard = (routine: MyRoutine) => {
-    setMenu(undefined)
+    setSheet(undefined)
     content
       .discardTemplate(routine.template_id)
       .then(() =>
@@ -258,9 +315,7 @@ export default function Train() {
                 cards={cards}
                 starting={starting}
                 onStart={start}
-                onOpen={() => {
-                  if (current.editable) router.push(`/programs/edit/${current.program_id}`)
-                }}
+                onMenu={() => setSheet({ kind: 'program', program: current })}
               />
             ) : null}
 
@@ -298,16 +353,14 @@ export default function Train() {
                     }
                     onPress={() => select(program.assignment_id)}
                     accessibilityLabel={`Entrenar ${program.title}`}
-                    trailing={
-                      program.editable
-                        ? {
-                            kind: 'action',
-                            icon: 'edit',
-                            accessibilityLabel: `Editar ${program.title}`,
-                            onPress: () => router.push(`/programs/edit/${program.program_id}`),
-                          }
-                        : { kind: 'chevron' }
-                    }
+                    /* Los tres puntos y no el lápiz: editar es una de las tres cosas
+                       que se pueden hacer, y las otras dos no tenían dónde vivir. */
+                    trailing={{
+                      kind: 'action',
+                      icon: 'more',
+                      accessibilityLabel: `Más opciones de ${program.title}`,
+                      onPress: () => setSheet({ kind: 'program', program }),
+                    }}
                   />
                 ))}
               </View>
@@ -349,7 +402,7 @@ export default function Train() {
                     kind: 'action',
                     icon: 'more',
                     accessibilityLabel: `Más opciones de ${routine.title}`,
-                    onPress: () => setMenu(routine),
+                    onPress: () => setSheet({ kind: 'routine', routine }),
                   }}
                 />
               )
@@ -381,37 +434,60 @@ export default function Train() {
       </ScrollView>
 
       <Sheet
-        visible={menu !== undefined}
-        onDismiss={() => setMenu(undefined)}
-        title={menu?.title ?? ''}
+        visible={sheet !== undefined}
+        onDismiss={() => setSheet(undefined)}
+        title={sheetTitle(sheet)}
       >
-        <View style={styles.sheetActions}>
-          <Button
-            label="Editar"
-            variant="secondary"
-            icon="edit"
-            onPress={() => {
-              const chosen = menu
-              setMenu(undefined)
-              if (chosen) router.push(`/routines/${chosen.template_id}`)
+        {sheet?.kind === 'routine' ? (
+          <View style={styles.sheetActions}>
+            <Button
+              label="Editar"
+              variant="secondary"
+              icon="edit"
+              onPress={() => {
+                const chosen = sheet.routine
+                setSheet(undefined)
+                router.push(`/routines/${chosen.template_id}`)
+              }}
+            />
+            {/* Lo que se pierde, dicho antes de perderlo. Una rutina que está en un
+                programa se archiva igual, pero los programas que la usan se quedan con la
+                versión que congelaron, y eso hay que decirlo en vez de dejar que se
+                descubra. */}
+            <Text role="body" size="xs" color="muted">
+              {discardWarning(sheet.routine)}
+            </Text>
+            <Button
+              label="Descartar"
+              variant="ghost"
+              icon="remove"
+              onPress={() => discard(sheet.routine)}
+            />
+          </View>
+        ) : null}
+
+        {sheet?.kind === 'program' ? (
+          <ProgramMenuBody
+            program={sheet.program}
+            onEdit={() => {
+              const chosen = sheet.program
+              setSheet(undefined)
+              router.push(`/programs/edit/${chosen.program_id}`)
             }}
+            onDuplicate={() => duplicate(sheet.program)}
+            onRemove={() => setSheet({ kind: 'removing', program: sheet.program })}
           />
-          {/* Lo que se pierde, dicho antes de perderlo. Una rutina que está en un
-              programa se archiva igual, pero los programas que la usan se quedan con la
-              versión que congelaron, y eso hay que decirlo en vez de dejar que se
-              descubra. */}
-          <Text role="body" size="xs" color="muted">
-            {menu ? discardWarning(menu) : ''}
-          </Text>
-          <Button
-            label="Descartar"
-            variant="ghost"
-            icon="remove"
-            onPress={() => {
-              if (menu) discard(menu)
-            }}
+        ) : null}
+
+        {sheet?.kind === 'removing' ? (
+          <ProgramRemovalBody
+            program={sheet.program}
+            routines={routines}
+            removing={removing}
+            onConfirm={() => remove(sheet.program)}
+            onCancel={() => setSheet({ kind: 'program', program: sheet.program })}
           />
-        </View>
+        ) : null}
       </Sheet>
     </Screen>
   )
@@ -424,6 +500,15 @@ export default function Train() {
  * que hay dentro ya está a la vista. Las filas de dentro sí lo llevan, porque cada una
  * arranca su sesión.
  */
+/**
+ * Qué dice la cabecera de la hoja. La confirmación pregunta; las otras dos nombran.
+ */
+function sheetTitle(sheet: Sheeted | undefined): string {
+  if (sheet === undefined) return ''
+  if (sheet.kind === 'removing') return `¿Eliminar «${sheet.program.title}»?`
+  return sheet.kind === 'routine' ? sheet.routine.title : sheet.program.title
+}
+
 function CurrentProgram({
   program,
   coverUrl,
@@ -431,7 +516,7 @@ function CurrentProgram({
   cards,
   starting,
   onStart,
-  onOpen,
+  onMenu,
 }: {
   readonly program: MyProgram
   readonly coverUrl: string | null
@@ -439,7 +524,7 @@ function CurrentProgram({
   readonly cards: readonly RoutineCard[]
   readonly starting: string | undefined
   readonly onStart: (card: RoutineCard) => void
-  readonly onOpen: () => void
+  readonly onMenu: () => void
 }) {
   const theme = useTheme()
 
@@ -457,23 +542,33 @@ function CurrentProgram({
       <View style={[styles.hero, coverUrl === null ? null : styles.heroTall]}>
         {coverUrl === null ? null : (
           <>
-            <Image source={coverUrl} style={styles.heroPhoto} contentFit="cover" transition={200} />
+            {/* Anclada arriba y no al centro. La banda es de 361 × 190 y la fotografía
+                es 4:3, así que centrarla enseñaba la franja del medio: de una persona
+                entrenando salía un torso sin cabeza. Arriba cae donde mira la foto. */}
+            <Image
+              source={coverUrl}
+              style={styles.heroPhoto}
+              contentFit="cover"
+              contentPosition="top"
+              transition={200}
+            />
           </>
         )}
 
         <View style={styles.currentHead}>
           <Badge label="En curso" tone="accent" variant="quiet" />
-          {program.editable ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Editar ${program.title}`}
-              onPress={onOpen}
-              hitSlop={8}
-              style={[styles.round, { backgroundColor: theme.color.background.surfaceMuted }]}
-            >
-              <FoundationIcon name="edit" size="xs" color={theme.color.icon.secondary} decorative />
-            </Pressable>
-          ) : null}
+          {/* Siempre, se pueda editar o no: el que estás entrenando también se duplica
+              y también se elimina, y esconderlo dejaba sin salida justo al que más
+              ocupa la pantalla. */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Más opciones de ${program.title}`}
+            onPress={onMenu}
+            hitSlop={8}
+            style={[styles.round, { backgroundColor: theme.color.background.surfaceMuted }]}
+          >
+            <FoundationIcon name="more" size="xs" color={theme.color.icon.secondary} decorative />
+          </Pressable>
         </View>
 
         <View style={styles.currentText}>

@@ -6,8 +6,14 @@
  * screens that should agree begin to drift.
  */
 
+import { useLocalSearchParams } from 'expo-router'
+
 import { ProgramEditor } from '../../src/components/program-editor'
 
 export default function NewProgram() {
-  return <ProgramEditor />
+  // Con `programId` viene de duplicar: el borrador ya existe en el servidor y esta
+  // pantalla lo continúa. Sin él, se empieza en blanco o se retoma el que hubiera.
+  const { programId } = useLocalSearchParams<{ programId?: string }>()
+
+  return programId === undefined ? <ProgramEditor /> : <ProgramEditor draftId={programId} />
 }

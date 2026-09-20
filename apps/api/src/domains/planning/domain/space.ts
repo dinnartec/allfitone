@@ -133,7 +133,10 @@ export interface SpacePlanningDatabase {
     templateId: string
     requestId: string
   }): Promise<SessionTemplateDraft | null>
-  /** Archived rather than deleted; refused when a version was ever published. */
+  /**
+   * Archived rather than deleted, whether or not it was ever published: the
+   * programmes holding it are republished without it, and its draft stays written.
+   */
   discardMySessionTemplate(
     input: OwnContentCommand & { personId: string; templateId: string },
   ): Promise<SessionTemplate>
@@ -141,6 +144,27 @@ export interface SpacePlanningDatabase {
   readMyUnpublishedProgram(input: { personId: string; requestId: string }): Promise<Program | null>
   /** Archived rather than deleted; refused when a version was ever published. */
   discardMyProgram(
+    input: OwnContentCommand & { personId: string; programId: string },
+  ): Promise<Program>
+  /**
+   * Eliminar un programa que ya se publicó, que es justo lo que el descarte rechaza.
+   *
+   * El estado sustituye al borrado: las versiones quedan obsoletas y no desaparecen,
+   * porque hay sesiones materializadas contra ellas. La agenda termina y se van sus
+   * sesiones sin cumplir; lo entrenado se queda. `withRoutines` lo decide quien llama,
+   * y sólo se archivan las rutinas que ningún otro programa suyo sigue usando.
+   */
+  removeMyProgram(
+    input: OwnContentCommand & { personId: string; programId: string; withRoutines: boolean },
+  ): Promise<Program>
+  /**
+   * The **new** programme, a draft of the person's own; the original is untouched.
+   *
+   * Nothing is minted and nothing is assigned: a copy nobody has read is not a plan
+   * anybody follows. The routines are not copied either — the sessions point at the
+   * same immutable versions, so renaming a programme does not double the library.
+   */
+  duplicateMyProgram(
     input: OwnContentCommand & { personId: string; programId: string },
   ): Promise<Program>
   /** Null when the programme is somebody else's, or was taken rather than written. */

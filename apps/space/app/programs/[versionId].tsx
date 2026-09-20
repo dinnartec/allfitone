@@ -148,7 +148,10 @@ export default function ProgramVersion() {
             </View>
 
             <View style={styles.meta}>
-              <Meta icon="calendar" label={`${detail.weeks} semanas`} />
+              <Meta
+                icon="calendar"
+                label={detail.weeks === null ? 'Sin fecha de fin' : `${detail.weeks} semanas`}
+              />
               <Meta icon="frequency" label={`${detail.days_per_week} días/semana`} />
               {level ? <Meta icon="level" label={LEVEL_LABEL[level]} /> : null}
             </View>

@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test'
-import { allfitV1ContractManifest } from '@allfitone/contracts'
+import { allfitV1ContractManifest, allfitV1ContractSchemas } from '@allfitone/contracts'
+import Ajv2020 from 'ajv/dist/2020'
+import addFormats from 'ajv-formats'
 import { Hono } from 'hono'
 
 import { SpaceActorError, type SpaceActorResolver } from '../../identity/index.js'
@@ -12,11 +14,28 @@ import type {
   ProgramAssignment,
   ProgramDetail,
   ProgramDraft,
+  ProgramSummary,
   SessionTemplate,
   SessionTemplateDraft,
   WeekPlan,
 } from '../domain/space.js'
 import { spacePlanningRoutes } from './space.js'
+
+// The DTOs only prove the handlers compile; the published schemas prove what the
+// wire accepts, which is the whole question for a programme with no end date.
+const validator = new Ajv2020({ strict: false, allErrors: true })
+addFormats(validator)
+validator.addSchema({ $id: 'allfit-v1', components: { schemas: allfitV1ContractSchemas } })
+
+function assertMatchesContract(schemaName: string, projection: unknown): void {
+  const validate = validator.getSchema(`allfit-v1#/components/schemas/${schemaName}`)
+  if (!validate) throw new Error(`The contract declares no schema named ${schemaName}`)
+  if (validate(projection)) return
+  const failures = (validate.errors ?? [])
+    .map((error) => `${error.instancePath || '/'} ${error.message ?? 'is invalid'}`)
+    .join('; ')
+  throw new Error(`${schemaName} violates the contract: ${failures}`)
+}
 
 const PERSON_ID = '019f9000-0000-7000-8000-000000000001'
 const VERSION_ID = '019f3000-0000-7000-8000-000000000006'
@@ -104,6 +123,28 @@ const program = {
   versions: [],
 } as Program
 
+/**
+ * What a removal answers: the same programme, archived.
+ *
+ * It keeps a draft because `Program` requires one — `draft` is neither optional nor
+ * nullable in the contract — which is worth knowing for the projection on the other
+ * side of this call.
+ */
+const removedProgram = { ...program, status: 'archived' } as Program
+
+// And what a duplicate answers: a **different** programme, a draft, named as a copy.
+const COPY_ID = '019f9000-0000-7000-8000-000000000053'
+const duplicatedProgram = {
+  ...program,
+  id: COPY_ID,
+  draft: {
+    ...programDraft,
+    id: '019f9000-0000-7000-8000-000000000054',
+    program_id: COPY_ID,
+    content: { ...programDraft.content, title: 'Mi programa - Copia' },
+  },
+} as Program
+
 const weekPlan: WeekPlan = {
   assignment_id: ASSIGNMENT_ID,
   program_version_id: VERSION_ID,
@@ -158,6 +199,18 @@ const myRoutine: MyRoutine = {
   has_unpublished_changes: false,
 }
 
+const catalogueProgram: ProgramSummary = {
+  program_version_id: VERSION_ID,
+  program_id: '019f3000-0000-7000-8000-000000000006',
+  title: 'Empuje · tirón · pierna',
+  weeks: 12,
+  days_per_week: 5,
+  sex_affinity: null,
+  goals: ['build_muscle'],
+  levels: ['some_practice', 'experienced'],
+  emphases: ['back', 'chest', 'legs'],
+}
+
 const catalogue: ProgramCatalogue = {
   profile: {
     given_name: 'Walberto',
@@ -166,21 +219,14 @@ const catalogue: ProgramCatalogue = {
     biological_sex: 'male',
     focus_areas: ['chest', 'back'],
   },
-  programs: [
-    {
-      program_version_id: VERSION_ID,
-      program_id: '019f3000-0000-7000-8000-000000000006',
-      title: 'Empuje · tirón · pierna',
-      weeks: 12,
-      days_per_week: 5,
-      sex_affinity: null,
-      goals: ['build_muscle'],
-      levels: ['some_practice', 'experienced'],
-      emphases: ['back', 'chest', 'legs'],
-    },
-  ],
+  programs: [catalogueProgram],
   current_assignment: null,
 }
+
+// A programme with no end date: its composition repeats, so there is no week to count to.
+const endlessCatalogueProgram: ProgramSummary = { ...catalogueProgram, weeks: null }
+const endlessDetail: ProgramDetail = { ...detail, weeks: null }
+const endlessMyProgram: MyProgram = { ...myProgram, weeks: null }
 
 /**
  * What Execution answers for the week. Its two session counts are person-wide — every
@@ -209,6 +255,8 @@ function harness(overrides?: {
     readMySessionTemplateDraft: async () => templateDraft,
     discardMySessionTemplate: async () => template,
     discardMyProgram: async () => program,
+    removeMyProgram: async () => removedProgram,
+    duplicateMyProgram: async () => duplicatedProgram,
     readMyUnpublishedProgram: async () => program,
     createMyProgram: async () => program,
     replaceMyProgramDraft: async () => programDraft,
@@ -276,7 +324,7 @@ describe('the Space planning surface honours the contract', () => {
         operation.path.startsWith('/space/v1/week-plan') ||
         operation.path.startsWith('/space/v1/session-templates'),
     )
-    expect(declared).toHaveLength(18)
+    expect(declared).toHaveLength(20)
     expect(declared.map((operation) => operation.allfitOperation).sort()).toEqual([
       'OP-PLN-001',
       'OP-PLN-002',
@@ -307,6 +355,12 @@ describe('the Space planning surface honours the contract', () => {
       'OP-PLN-030',
       // Cómo se ven las rutinas de un programa, que es del programa y no de cada una.
       'OP-PLN-033',
+      // Eliminar un programa ya publicado, que es exactamente lo que `OP-PLN-029`
+      // rechaza: la lista sólo enseña publicados, así que sin esto no se borra nada.
+      'OP-PLN-034',
+      // Y copiarlo, que además es la única salida para un programa tomado de Allfit:
+      // no tiene borrador y no se puede editar, y la copia sí.
+      'OP-PLN-035',
     ])
   })
 })
@@ -318,6 +372,20 @@ describe('GET /space/v1/programs', () => {
     expect(response.status).toBe(200)
     expect(response.headers.get('cache-control')).toBe('no-store')
     expect(await response.json()).toEqual(catalogue)
+  })
+
+  test('T-PLN-API-145 carries a programme with no end date, whose weeks are null', async () => {
+    const endless = harness({
+      service: {
+        readCatalogue: async () => ({ ...catalogue, programs: [endlessCatalogueProgram] }),
+      },
+    })
+    const response = await endless.request('/space/v1/programs', { headers: authorized })
+
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as ProgramCatalogue
+    expect(body.programs[0]?.weeks).toBeNull()
+    for (const program of body.programs) assertMatchesContract('SpaceProgramSummary', program)
   })
 
   test('T-PLN-API-052 refuses without a bearer token', async () => {
@@ -348,6 +416,18 @@ describe('GET /space/v1/programs/{programVersionId}', () => {
 
     expect(response.status).toBe(200)
     expect(await response.json()).toEqual(detail)
+  })
+
+  test('T-PLN-API-146 answers a version with no end date without inventing a duration', async () => {
+    const endless = harness({ service: { readProgram: async () => endlessDetail } })
+    const response = await endless.request(`/space/v1/programs/${VERSION_ID}`, {
+      headers: authorized,
+    })
+
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as ProgramDetail
+    expect(body.weeks).toBeNull()
+    assertMatchesContract('SpaceProgramDetail', body)
   })
 
   test('T-PLN-API-061 refuses an identifier that is not a version', async () => {
@@ -442,6 +522,16 @@ describe('GET /space/v1/programs/mine', () => {
 
     expect(response.status).toBe(200)
     expect(await response.json()).toEqual([myProgram])
+  })
+
+  test('T-PLN-API-147 answers a programme of mine that has no end date', async () => {
+    const endless = harness({ service: { readMyPrograms: async () => [endlessMyProgram] } })
+    const response = await endless.request('/space/v1/programs/mine', { headers: authorized })
+
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as MyProgram[]
+    expect(body[0]?.weeks).toBeNull()
+    for (const program of body) assertMatchesContract('SpaceMyProgram', program)
   })
 
   test('T-PLN-API-084 refuses an account that has not activated its Fitness ID', async () => {
@@ -905,6 +995,251 @@ describe('POST /space/v1/programs/{programId}/discard', () => {
     })
 
     expect(response.status).toBe(401)
+  })
+})
+
+describe('POST /space/v1/programs/{programId}/remove', () => {
+  const removing = { method: 'POST', headers: commanded }
+
+  test('T-PLN-API-148 answers the archived programme, in the shape the contract publishes', async () => {
+    const response = await harness().request(`/space/v1/programs/${PROGRAM_ID}/remove`, {
+      ...removing,
+      body: JSON.stringify({ with_routines: true }),
+    })
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('cache-control')).toBe('no-store')
+    const body = await response.json()
+    expect(body).toEqual(removedProgram)
+    // The DTOs only prove it compiles; the published schema proves what the wire says.
+    assertMatchesContract('Program', body)
+  })
+
+  test('T-PLN-API-149 carries the caller\u2019s answer through, and false is an answer', async () => {
+    // Only the person knows whether those routines were written for this programme.
+    // A default here would archive part of somebody\u2019s library on their behalf.
+    const asked: unknown[] = []
+    const watching = harness({
+      service: {
+        removeMyProgram: async (input) => {
+          asked.push(input.withRoutines)
+          return removedProgram
+        },
+      },
+    })
+
+    for (const withRoutines of [true, false]) {
+      const response = await watching.request(`/space/v1/programs/${PROGRAM_ID}/remove`, {
+        ...removing,
+        body: JSON.stringify({ with_routines: withRoutines }),
+      })
+      expect(response.status).toBe(200)
+    }
+    expect(asked).toEqual([true, false])
+  })
+
+  test('T-PLN-API-150 refuses a body that does not say whether the routines go', async () => {
+    // Required, not defaulted: an unreadable body must not be read as "keep them".
+    let called = false
+    const watching = harness({
+      service: {
+        removeMyProgram: async () => {
+          called = true
+          return removedProgram
+        },
+      },
+    })
+
+    const bodies = [
+      undefined,
+      '{}',
+      'not json',
+      JSON.stringify({ with_routines: 'yes' }),
+      JSON.stringify({ with_routines: null }),
+      JSON.stringify({ with_routines: true, and: 'something else' }),
+      JSON.stringify({ withRoutines: true }),
+    ]
+    for (const body of bodies) {
+      const response = await watching.request(`/space/v1/programs/${PROGRAM_ID}/remove`, {
+        ...removing,
+        body,
+      })
+      expect(response.status).toBe(400)
+    }
+    expect(called).toBe(false)
+  })
+
+  test('T-PLN-API-151 requires the command headers the discard requires', async () => {
+    // Removing converges on replay, which is what the two headers are for. Without
+    // them a retry after a timeout would be a second, unrelated removal.
+    const withoutCommand = [
+      authorized,
+      { ...authorized, 'idempotency-key': IDEMPOTENCY_KEY },
+      { ...authorized, 'command-id': COMMAND_ID },
+      // The shapes matter too: the key is a v4 and the command a v7, as everywhere.
+      { ...authorized, 'idempotency-key': COMMAND_ID, 'command-id': COMMAND_ID },
+      { ...authorized, 'idempotency-key': IDEMPOTENCY_KEY, 'command-id': IDEMPOTENCY_KEY },
+    ]
+    for (const headers of withoutCommand) {
+      const response = await harness().request(`/space/v1/programs/${PROGRAM_ID}/remove`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ with_routines: true }),
+      })
+      expect(response.status).toBe(400)
+    }
+  })
+
+  test('T-PLN-API-152 refuses an identifier that is not a UUIDv7', async () => {
+    const response = await harness().request('/space/v1/programs/not-a-uuid/remove', {
+      ...removing,
+      body: JSON.stringify({ with_routines: true }),
+    })
+
+    expect(response.status).toBe(400)
+  })
+
+  test('T-PLN-API-153 requires a bearer token', async () => {
+    const response = await harness().request(`/space/v1/programs/${PROGRAM_ID}/remove`, {
+      method: 'POST',
+      headers: { 'idempotency-key': IDEMPOTENCY_KEY, 'command-id': COMMAND_ID },
+      body: JSON.stringify({ with_routines: true }),
+    })
+
+    expect(response.status).toBe(401)
+  })
+})
+
+describe('POST /space/v1/programs/{programId}/duplicate', () => {
+  test('T-PLN-API-154 answers the new programme and never the one it was copied from', async () => {
+    const response = await harness().request(`/space/v1/programs/${PROGRAM_ID}/duplicate`, {
+      method: 'POST',
+      headers: commanded,
+    })
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('cache-control')).toBe('no-store')
+    const body = (await response.json()) as Program
+    expect(body.id).toBe(COPY_ID)
+    expect(body.id).not.toBe(PROGRAM_ID)
+    // A draft and nothing else: no version is minted and nothing is assigned.
+    expect(body.versions).toEqual([])
+    expect(body.status).toBe('draft')
+    assertMatchesContract('Program', body)
+  })
+
+  test('T-PLN-API-155 asks the database for the programme named in the path', async () => {
+    let asked = ''
+    const watching = harness({
+      service: {
+        duplicateMyProgram: async (input) => {
+          asked = input.programId
+          return duplicatedProgram
+        },
+      },
+    })
+
+    await watching.request(`/space/v1/programs/${PROGRAM_ID}/duplicate`, {
+      method: 'POST',
+      headers: commanded,
+    })
+
+    expect(asked).toBe(PROGRAM_ID)
+  })
+
+  test('T-PLN-API-156 requires the command headers the discard requires', async () => {
+    // Without them a retry after a timeout would leave the person two copies.
+    const withoutCommand = [
+      authorized,
+      { ...authorized, 'idempotency-key': IDEMPOTENCY_KEY },
+      { ...authorized, 'command-id': COMMAND_ID },
+      { ...authorized, 'idempotency-key': COMMAND_ID, 'command-id': COMMAND_ID },
+      { ...authorized, 'idempotency-key': IDEMPOTENCY_KEY, 'command-id': IDEMPOTENCY_KEY },
+    ]
+    for (const headers of withoutCommand) {
+      const response = await harness().request(`/space/v1/programs/${PROGRAM_ID}/duplicate`, {
+        method: 'POST',
+        headers,
+      })
+      expect(response.status).toBe(400)
+    }
+  })
+
+  test('T-PLN-API-157 refuses an identifier that is not a UUIDv7', async () => {
+    const response = await harness().request('/space/v1/programs/not-a-uuid/duplicate', {
+      method: 'POST',
+      headers: commanded,
+    })
+
+    expect(response.status).toBe(400)
+  })
+
+  test('T-PLN-API-158 requires a bearer token', async () => {
+    const response = await harness().request(`/space/v1/programs/${PROGRAM_ID}/duplicate`, {
+      method: 'POST',
+      headers: { 'idempotency-key': IDEMPOTENCY_KEY, 'command-id': COMMAND_ID },
+    })
+
+    expect(response.status).toBe(401)
+  })
+})
+
+describe('a programme the database cannot find', () => {
+  /** What the closed functions raise for a programme that is not this person's. */
+  const missing = Object.assign(new Error('program not found'), { code: 'P0002' })
+
+  test('T-PLN-API-159 answers the documented 404 rather than blaming the upstream', async () => {
+    // `P0002` was not mapped, so a programme that does not exist fell through to
+    // `upstream-unavailable` and sent people to look at their connection.
+    const gone = harness({
+      service: {
+        removeMyProgram: async () => {
+          throw missing
+        },
+        duplicateMyProgram: async () => {
+          throw missing
+        },
+        discardMyProgram: async () => {
+          throw missing
+        },
+      },
+    })
+
+    const removal = await gone.request(`/space/v1/programs/${PROGRAM_ID}/remove`, {
+      method: 'POST',
+      headers: commanded,
+      body: JSON.stringify({ with_routines: true }),
+    })
+    const copy = await gone.request(`/space/v1/programs/${PROGRAM_ID}/duplicate`, {
+      method: 'POST',
+      headers: commanded,
+    })
+    const discard = await gone.request(`/space/v1/programs/${PROGRAM_ID}/discard`, {
+      method: 'POST',
+      headers: commanded,
+    })
+
+    expect([removal.status, copy.status, discard.status]).toEqual([404, 404, 404])
+  })
+
+  test('T-PLN-API-160 keeps 503 for a failure that really is the database', async () => {
+    // The mapping must not swallow everything: an upstream that fell over is not a
+    // programme that does not exist, and the two screens are different.
+    const broken = harness({
+      service: {
+        removeMyProgram: async () => {
+          throw Object.assign(new Error('connection terminated'), { code: '08006' })
+        },
+      },
+    })
+
+    const response = await broken.request(`/space/v1/programs/${PROGRAM_ID}/remove`, {
+      method: 'POST',
+      headers: commanded,
+      body: JSON.stringify({ with_routines: true }),
+    })
+
+    expect(response.status).toBe(503)
   })
 })
 

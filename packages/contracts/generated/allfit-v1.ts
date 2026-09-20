@@ -1262,7 +1262,7 @@ export interface paths {
      *
      *     **Everything global, in one answer.** The catalogue is twenty-four programs and it is not paginated: the whole point of the screen is to pick a frequency for a goal, and a cursor over that would mean the app could not tell whether the five-day option exists without asking again.
      *
-     *     **Days per week and duration are derived, never stored.** They are facts about how a version is composed, and a stored copy would be a second truth about the number this screen is chosen on.
+     *     **Days per week and duration are derived, never stored.** They are facts about how a version is composed, and a stored copy would be a second truth about the number this screen is chosen on. A version that has no end date has no duration to derive: it returns a null `weeks`, because its composition repeats rather than running out.
      *
      *     The profile travels because the matching happens in the app, where it can be tested against every combination of goal, level and frequency rather than judged from a screenshot. It is the person's own answers coming back to them, not a new disclosure.
      */
@@ -1330,7 +1330,7 @@ export interface paths {
     }
     /**
      * Read everything a published program contains
-     * @description HU-SP-100. Somebody about to hand eight weeks of their life to a program deserves to see every session in it first: "8 semanas · 3 días" is a summary, not the content.
+     * @description HU-SP-100. Somebody about to hand weeks of their life to a program deserves to see every session in it first: "8 semanas · 3 días" is a summary, not the content — and so is "Sin fecha de fin · 3 días", which is what a program whose composition repeats says instead, having no total to quote.
      *
      *     Same access rule as `OP-PLN-011`, and for the same reason — a version reachable to assign is a version reachable to read. Global published content, or the person's own. Nothing else.
      *
@@ -1465,7 +1465,7 @@ export interface paths {
     put?: never
     /**
      * Discard a routine I never published
-     * @description Leaving a named routine asks whether to keep it as a draft or throw it away, and this is the throwing away. **It is a state, not a deletion:** `allfit_api` has no `DELETE` on this resource and will not get one, because what a person wrote is not destroyed from the runtime and a discard has to be explicable afterwards. A routine with a published version is refused — programmes and assignments may reference it, and retiring a version from new uses is `OP-PLN-005`, which leaves the history alone.
+     * @description Leaving a named routine asks whether to keep it as a draft or throw it away, and this is the throwing away. **It is a state, not a deletion:** `allfit_api` has no `DELETE` on this resource and will not get one, because what a person wrote is not destroyed from the runtime and a discard has to be explicable afterwards. A routine that was published is discarded just the same: the programmes holding it are republished without it, so nothing is left pointing at a routine its author threw away. Retiring one version from new uses without discarding the routine is still `OP-PLN-005`, which leaves the history alone.
      */
     post: operations['discardMySessionTemplate']
     delete?: never
@@ -1508,7 +1508,7 @@ export interface paths {
     get: operations['readMyProgramDraft']
     /**
      * Replace the content of my programme draft
-     * @description The base week expanded into one entry per week, which is what the stored shape asks for. The screen edits one week; the draft holds them all.
+     * @description The base week expanded into one entry per week, which is what the stored shape asks for. The screen edits one week; the draft holds them all, and `repeats_forever` says whether the last of them ends the programme or hands it back to the first.
      */
     put: operations['replaceMyProgramDraft']
     post?: never
@@ -1552,6 +1552,56 @@ export interface paths {
      * @description The twin of `OP-PLN-028` and for the same reasons. Leaving a named programme asks whether to keep it as a draft or throw it away, and this is the throwing away. **It is a state, not a deletion:** `allfit_api` has no `DELETE` on this resource. A programme with a published version is refused, because assignments reference that version and sessions have been materialised against it. Without this, a programme somebody starts and abandons is orphaned — it exists, it counts, and nobody can reach it.
      */
     post: operations['discardMyProgram']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/programs/{programId}/remove': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Remove a programme I have been training
+     * @description What `OP-PLN-029` deliberately cannot do. A discard only knows how to throw away a programme that was never published, and the list somebody removes from shows nothing but published ones — so what the list offers is precisely what the discard refuses. This is the operation for a programme that has already been trained.
+     *
+     *     **It is a state, not a deletion, and what was trained is kept.** `allfit_api` has no `DELETE` on this resource and will not get one. The published versions are deprecated rather than erased, because sessions were materialised against them and `ADR-009` freezes what a version said; the person's agenda on the programme ends and its unfulfilled sessions go with it, while every session already completed or executed stays exactly where it is. Removing a programme takes it out of the week ahead, never out of the past.
+     *
+     *     **`with_routines` is the caller's answer because only they know what those routines are for.** When it is true, only the routines no other programme of theirs still uses are archived: a routine a second programme holds stays, because taking it would leave that programme without a session it needs, and `OP-PLN-028` already refuses to leave a programme empty. Asking rather than assuming is what lets the confirmation name what is about to go.
+     */
+    post: operations['removeMyProgram']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/programs/{programId}/duplicate': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Start a programme of my own from one I already have
+     * @description A copy is how somebody keeps what a programme taught them while changing it. It answers the **new** programme, never the original, which is left untouched.
+     *
+     *     **The copy is a draft and nothing else.** No version is minted and no assignment is created, because a copy nobody has looked at yet is not a plan anybody is following: publishing it is the editor's tick and throwing it away is the editor's cross, exactly as for a programme written from nothing. Its content is the original's latest published version — or its draft, when it was never published — and it carries the original's name with a copy suffix so the two are told apart in a list at a glance.
+     *
+     *     **The routines are not copied.** The copy's sessions point at the same immutable routine versions the original pointed at, so renaming a programme does not silently double the person's library. Editing the copy's own sessions afterwards is the ordinary editor, and changes nothing the original says.
+     *
+     *     It is also the only way out of a dead end: a programme taken from Allfit has no draft and cannot be edited at all, and duplicating it gives the person a version of it that is theirs to change.
+     */
+    post: operations['duplicateMyProgram']
     delete?: never
     options?: never
     head?: never
@@ -2367,8 +2417,8 @@ export interface components {
       program_version_id: components['schemas']['UuidV7']
       program_id: components['schemas']['UuidV7']
       title: string
-      /** @description Derived from the composition, never stored. */
-      weeks: number
+      /** @description How long the version lasts, derived from the composition and never stored — when there is a length to derive. Null when the program has no end date: its composition repeats instead of running out, so there is no last week to count to. */
+      weeks: number | null
       /** @description Derived too, and the axis the three cards are chosen on: three, four and five days exist for every goal and every level. */
       days_per_week: number
       /** @description Which way the content leans, when it leans. It **orders and never filters**, so everybody sees the same catalogue and somebody who declined needs no rule of their own. Null on every curated program today. */
@@ -2444,6 +2494,11 @@ export interface components {
       done: boolean
       /** @description An attempt already open on this routine, which is what turns "empezar" into "continuar". */
       open_execution_id: components['schemas']['UuidV7'] | null
+    }
+    /** @description Whether the programme's own routines go with it. Asked and never defaulted: the person reads a warning that names what is about to go before confirming, and a value chosen here for them would archive part of their library on their behalf. */
+    SpaceProgramRemoval: {
+      /** @description True archives the routines only this programme used. A routine any other programme of theirs still uses stays, whatever this says. */
+      with_routines: boolean
     }
     /** @description Every one of the person's assignments, exactly once, in the order they want them. Anything less is refused rather than merged. */
     SpaceProgramOrder: {
@@ -2566,10 +2621,11 @@ export interface components {
       program_version_id: components['schemas']['UuidV7']
       /** @description Which programme this is, as opposed to which version of it was taken. The draft and the version are addressed by programme, so without this a row cannot offer to open the thing it is showing. */
       program_id: components['schemas']['UuidV7']
-      /** @description Whether this editor can open it. False for a programme taken from Allfit, which was forked and never given a draft, and false for one whose weeks are not all alike — a base week cannot say that, and republishing would flatten it silently. */
+      /** @description Whether this editor can open it. False for a programme taken from Allfit, which was forked and never given a draft, and false for one whose cycle — the composition that repeats — is not one week alike throughout: a base week cannot say that, and republishing would flatten it silently. The comparison is against the cycle and not against the declared duration, which a programme without an end date does not have. */
       editable: boolean
       title: string
-      weeks: number
+      /** @description How long the programme lasts. Null when it has no end date: its composition repeats instead of running out, so there is no week to count to and nothing to say "de M" against. */
+      weeks: number | null
       days_per_week: number
       /** Format: date */
       starts_on: string
@@ -2606,7 +2662,8 @@ export interface components {
       title: string
       /** @description What the program is, in the words somebody deciding needs. */
       notes: string | null
-      weeks: number
+      /** @description How long the program lasts. Null when it has no end date: its composition repeats instead of running out, and the days below are the week it repeats. */
+      weeks: number | null
       days_per_week: number
       sex_affinity: components['schemas']['BiologicalSex'] | null
       goals: components['schemas']['PrimaryTrainingGoal'][]
@@ -3395,6 +3452,8 @@ export interface components {
     ProgramDraftContent: {
       title: string
       notes?: string | null
+      /** @description Whether the composition starts over instead of ending. It belongs to the version and not to the programme, because it changes what gets trained: one that ends in eight weeks and one that never ends are two different programmes even off the same week. It therefore enters the content and the content hash. Absent means false. */
+      repeats_forever?: boolean
       sessions: components['schemas']['ProgramVersionSessionCreate'][]
     }
     ProgramDraft: {
@@ -7522,7 +7581,7 @@ export interface operations {
     }
     requestBody?: never
     responses: {
-      /** @description The template, now archived and without its draft */
+      /** @description The template, now archived; the draft it was written in stays where it is */
       200: {
         headers: {
           'Cache-Control': components['headers']['NoStore']
@@ -7687,6 +7746,79 @@ export interface operations {
     requestBody?: never
     responses: {
       /** @description The programme, now archived and without its draft */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Program']
+        }
+      }
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      422: components['responses']['ValidationFailed']
+    }
+  }
+  removeMyProgram: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        programId: components['parameters']['ProgramId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SpaceProgramRemoval']
+      }
+    }
+    responses: {
+      /** @description The programme, now archived, with its published versions deprecated */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Program']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      422: components['responses']['ValidationFailed']
+    }
+  }
+  duplicateMyProgram: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        programId: components['parameters']['ProgramId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The new programme and its draft, never the one it was copied from */
       200: {
         headers: {
           'Cache-Control': components['headers']['NoStore']

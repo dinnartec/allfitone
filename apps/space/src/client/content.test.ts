@@ -26,7 +26,13 @@ const PROGRAM_ID = '019f9000-0000-7000-8000-000000000051'
 const VERSION_ID = '019f9000-0000-7000-8000-000000000061'
 
 function harness(overrides: Partial<ContentTransport> = {}) {
-  const sent: { command: string; etag?: string; timezone?: string }[] = []
+  const sent: {
+    command: string
+    etag?: string
+    timezone?: string
+    programId?: string
+    withRoutines?: boolean
+  }[] = []
   let issued = 0
   const command = () => ({
     idempotencyKey: `key-${(issued += 1)}`,
@@ -55,6 +61,14 @@ function harness(overrides: Partial<ContentTransport> = {}) {
     readTemplateDraft: async () => ({}) as never,
     discardTemplate: async () => ({}) as never,
     discardProgram: async () => ({}) as never,
+    removeProgram: async (headers, programId, withRoutines) => {
+      sent.push({ command: headers.idempotencyKey, programId, withRoutines })
+      return {} as never
+    },
+    duplicateProgram: async (headers, programId) => {
+      sent.push({ command: headers.idempotencyKey, programId })
+      return { id: 'copy' } as never
+    },
     readMyUnpublishedProgram: async () => null,
     readProgramDraft: async (programId) =>
       ({ id: 'draft', program_id: programId, etag: 'opened-etag' }) as never,
@@ -194,6 +208,19 @@ describe('the base week becomes the sessions a version stores', () => {
   test('T-SP-CONTENT-11 the summary counts what is there, not the seven days', () => {
     expect(summarizeBaseWeek(week, 4)).toEqual({ daysPerWeek: 2, sessions: 8 })
   })
+
+  test('T-SP-CONTENT-11b with no end date it composes one lap, which is the one that repeats', () => {
+    // Enumerar semanas de un programa que no termina no acaba nunca: la vuelta es la
+    // composición, y el servidor es quien la repite.
+    expect(expandBaseWeek(week, null)).toEqual([
+      { position: 1, week: 1, day: 1, template_version_id: 'a' },
+      { position: 2, week: 1, day: 3, template_version_id: 'b' },
+    ])
+  })
+
+  test('T-SP-CONTENT-11c and it has no total of sessions, because there is no total', () => {
+    expect(summarizeBaseWeek(week, null)).toEqual({ daysPerWeek: 2, sessions: null })
+  })
 })
 
 describe('and the sessions become the base week again', () => {
@@ -227,6 +254,13 @@ describe('and the sessions become the base week again', () => {
   test('T-SP-CONTENT-14 the weeks are counted from the sessions, not assumed', () => {
     expect(collapseBaseWeek(expandBaseWeek(week, 1)).weeks).toBe(1)
     expect(collapseBaseWeek(expandBaseWeek(week, 52)).weeks).toBe(52)
+  })
+
+  test('T-SP-CONTENT-14b a programme with no end comes back with no duration, not with one week', () => {
+    // La composición de un programa sin fin es una vuelta, así que su `max(week)` es 1.
+    // Leerlo como «1 semana» convertía en semanal, al abrirlo, lo que no terminaba.
+    expect(collapseBaseWeek(expandBaseWeek(week, null), true).weeks).toBeNull()
+    expect(collapseBaseWeek(expandBaseWeek(week, null), true).baseWeek).toEqual(week)
   })
 
   test('T-SP-CONTENT-15 nothing at all is one empty week, not zero weeks', () => {
@@ -281,9 +315,54 @@ describe('what a programme amounts to', () => {
     )
   })
 
+  test('T-SP-PROGRAM-21b with no end it says so, and says nothing about a total', () => {
+    expect(programLoad(null, { daysPerWeek: 3, sessions: null })).toBe(
+      'Sin fecha de fin · 3 días por semana',
+    )
+    expect(programLoad(null, { daysPerWeek: 0, sessions: null })).toBe(
+      'Sin fecha de fin · sin días puestos todavía',
+    )
+  })
+
   test('T-SP-PROGRAM-22 the duration reads the same wherever it is drawn', () => {
     expect(weeksLabel(1)).toBe('1 semana')
     expect(weeksLabel(12)).toBe('12 semanas')
+    expect(weeksLabel(null)).toBe('Sin fecha de fin')
+  })
+})
+
+describe('eliminar y duplicar un programa', () => {
+  test('T-SP-PROGRAM-24 removing forgets its etag, like discarding does', () => {
+    const { flow } = harness()
+    flow.remember('program-1', '"sha256:kept"')
+
+    return flow.removeProgram('program-1', true).then(() => {
+      expect(flow.etagFor('program-1')).toBeUndefined()
+    })
+  })
+
+  test('T-SP-PROGRAM-25 and it says whether the routines go, never guessing', () => {
+    const { flow, sent } = harness()
+
+    return flow
+      .removeProgram('program-1', false)
+      .then(() =>
+        expect(sent.at(-1)).toMatchObject({ programId: 'program-1', withRoutines: false }),
+      )
+  })
+
+  test('T-SP-PROGRAM-26 duplicating twice makes two copies, which is what two presses ask for', () => {
+    // Sin llave repetida: duplicar no es un guardado que converge, es un acto que se
+    // repite. Compartir el comando devolvería la primera copia y perdería la segunda.
+    const { flow, sent } = harness()
+
+    return flow
+      .duplicateProgram('program-1')
+      .then(() => flow.duplicateProgram('program-1'))
+      .then(() => {
+        const commands = sent.slice(-2).map((one) => one.command)
+        expect(commands[0]).not.toBe(commands[1])
+      })
   })
 })
 

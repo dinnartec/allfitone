@@ -155,6 +155,24 @@ export function createSpaceContentFlow(): ContentFlow {
             token,
           ),
         ),
+      removeProgram: (command, programId, withRoutines) =>
+        authenticated((token) =>
+          authorizedPost<Program>(
+            `/space/v1/programs/${programId}/remove`,
+            command,
+            { with_routines: withRoutines },
+            token,
+          ),
+        ),
+      duplicateProgram: (command, programId) =>
+        authenticated((token) =>
+          authorizedPost<Program>(
+            `/space/v1/programs/${programId}/duplicate`,
+            command,
+            undefined,
+            token,
+          ),
+        ),
       createProgram: (command, title) =>
         authenticated((token) =>
           authorizedPost<Program>('/space/v1/programs', command, { title }, token),

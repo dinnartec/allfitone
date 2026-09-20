@@ -357,6 +357,20 @@ export const allfitV1ContractManifest = {
     },
     {
       method: 'POST',
+      path: '/space/v1/programs/{programId}/duplicate',
+      operationId: 'duplicateMyProgram',
+      allfitOperation: 'OP-PLN-035',
+      responses: ['200', '401', '403', '404', '409', '422'],
+    },
+    {
+      method: 'POST',
+      path: '/space/v1/programs/{programId}/remove',
+      operationId: 'removeMyProgram',
+      allfitOperation: 'OP-PLN-034',
+      responses: ['200', '400', '401', '403', '404', '409', '422'],
+    },
+    {
+      method: 'POST',
       path: '/space/v1/programs/{programId}/versions',
       operationId: 'publishMyProgram',
       allfitOperation: 'OP-PLN-008',

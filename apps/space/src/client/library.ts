@@ -40,10 +40,18 @@ export function programCaption(program: MyProgram, week?: number): string {
   const origin = program.editable ? 'Tuyo' : 'De Allfit'
   const parts = [
     origin,
-    `${String(program.weeks)} semanas`,
+    program.weeks === null ? 'sin fecha de fin' : `${String(program.weeks)} semanas`,
     `${String(program.days_per_week)} días`,
   ]
-  if (week !== undefined) parts.push(`semana ${String(week)} de ${String(program.weeks)}`)
+  // Sin fin se dice en qué semana vas y se calla el «de»: un programa que no termina no
+  // tiene una semana final contra la que medirse, y «semana 3 de null» es lo que salía.
+  if (week !== undefined) {
+    parts.push(
+      program.weeks === null
+        ? `semana ${String(week)}`
+        : `semana ${String(week)} de ${String(program.weeks)}`,
+    )
+  }
   return parts.join(' · ')
 }
 
@@ -134,6 +142,61 @@ export function discardWarning(routine: MyRoutine): string {
     return `Se va de tu biblioteca y de ${routine.programs[0]?.title ?? ''}, que se republica sin ella.`
   }
   return `Se va de tu biblioteca y de ${String(routine.programs.length)} programas, que se republican sin ella.`
+}
+
+/**
+ * Qué rutinas se lleva un programa al eliminarse, y cuáles se quedan.
+ *
+ * **Sólo las que ningún otro programa usa.** Llevarse una compartida rompería el otro
+ * programa, y `OP-PLN-028` ya se niega a dejar uno sin una sola sesión: sería pedirle al
+ * dominio justo lo que prohíbe. El cliente puede responderlo solo porque cada rutina ya
+ * viene diciendo en qué programas está.
+ */
+export function routinesLostWith(
+  program: MyProgram,
+  routines: readonly MyRoutine[],
+): { going: readonly MyRoutine[]; staying: readonly MyRoutine[] } {
+  const inside = routines.filter((routine) =>
+    routine.programs.some((one) => one.program_id === program.program_id),
+  )
+  return {
+    going: inside.filter((routine) => routine.programs.length === 1),
+    staying: inside.filter((routine) => routine.programs.length > 1),
+  }
+}
+
+/**
+ * Qué se pierde al eliminar un programa, dicho antes de perderlo.
+ *
+ * **Lo entrenado se conserva, y se dice siempre.** «Eliminar» es la palabra que la gente
+ * espera, pero lo que ocurre es que el programa sale de la biblioteca y de la agenda: las
+ * sesiones que ya hizo alguien son su historia y no se tocan. Prometer menos de lo que se
+ * cumple asusta; prometer más miente.
+ */
+export function removalWarning(program: MyProgram, routines: readonly MyRoutine[]): string {
+  const { going, staying } = routinesLostWith(program, routines)
+  const kept = 'Lo que ya entrenaste se conserva.'
+  const leaves = 'Se va de tu biblioteca y de tu agenda.'
+
+  if (going.length === 0 && staying.length === 0) return `${leaves} ${kept}`
+
+  const alsoGoing =
+    going.length === 0
+      ? ''
+      : going.length === 1
+        ? `Se elimina también «${going[0]?.title ?? ''}».`
+        : `Se eliminan también sus ${String(going.length)} rutinas.`
+
+  // Nombrar la que se queda, y por qué. Callarlo dejaría a alguien contando rutinas
+  // después de borrar, que es cuando ya no se puede preguntar.
+  const alsoStaying =
+    staying.length === 0
+      ? ''
+      : staying.length === 1
+        ? `«${staying[0]?.title ?? ''}» se queda, porque está en otro programa.`
+        : `${String(staying.length)} se quedan, porque están en otros programas.`
+
+  return [leaves, alsoGoing, alsoStaying, kept].filter((part) => part !== '').join(' ')
 }
 
 /**

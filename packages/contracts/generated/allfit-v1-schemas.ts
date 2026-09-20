@@ -3308,6 +3308,11 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         type: ['string', 'null'],
         maxLength: 2000,
       },
+      repeats_forever: {
+        type: 'boolean',
+        description:
+          'Whether the composition starts over instead of ending. It belongs to the version and not to the programme, because it changes what gets trained: one that ends in eight weeks and one that never ends are two different programmes even off the same week. It therefore enters the content and the content hash. Absent means false.',
+      },
       sessions: {
         type: 'array',
         maxItems: 730,
@@ -4267,14 +4272,23 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       editable: {
         type: 'boolean',
         description:
-          'Whether this editor can open it. False for a programme taken from Allfit, which was forked and never given a draft, and false for one whose weeks are not all alike — a base week cannot say that, and republishing would flatten it silently.',
+          'Whether this editor can open it. False for a programme taken from Allfit, which was forked and never given a draft, and false for one whose cycle — the composition that repeats — is not one week alike throughout: a base week cannot say that, and republishing would flatten it silently. The comparison is against the cycle and not against the declared duration, which a programme without an end date does not have.',
       },
       title: {
         type: 'string',
       },
       weeks: {
-        type: 'integer',
-        minimum: 1,
+        oneOf: [
+          {
+            type: 'integer',
+            minimum: 1,
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description:
+          'How long the programme lasts. Null when it has no end date: its composition repeats instead of running out, so there is no week to count to and nothing to say "de M" against.',
       },
       days_per_week: {
         type: 'integer',
@@ -4953,8 +4967,17 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         description: 'What the program is, in the words somebody deciding needs.',
       },
       weeks: {
-        type: 'integer',
-        minimum: 1,
+        oneOf: [
+          {
+            type: 'integer',
+            minimum: 1,
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description:
+          'How long the program lasts. Null when it has no end date: its composition repeats instead of running out, and the days below are the week it repeats.',
       },
       days_per_week: {
         type: 'integer',
@@ -5008,6 +5031,20 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         items: {
           $ref: '#/components/schemas/UuidV7',
         },
+      },
+    },
+  },
+  SpaceProgramRemoval: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['with_routines'],
+    description:
+      "Whether the programme's own routines go with it. Asked and never defaulted: the person reads a warning that names what is about to go before confirming, and a value chosen here for them would archive part of their library on their behalf.",
+    properties: {
+      with_routines: {
+        type: 'boolean',
+        description:
+          'True archives the routines only this programme used. A routine any other programme of theirs still uses stays, whatever this says.',
       },
     },
   },
@@ -5095,9 +5132,17 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         type: 'string',
       },
       weeks: {
-        type: 'integer',
-        minimum: 1,
-        description: 'Derived from the composition, never stored.',
+        oneOf: [
+          {
+            type: 'integer',
+            minimum: 1,
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description:
+          'How long the version lasts, derived from the composition and never stored — when there is a length to derive. Null when the program has no end date: its composition repeats instead of running out, so there is no last week to count to.',
       },
       days_per_week: {
         type: 'integer',

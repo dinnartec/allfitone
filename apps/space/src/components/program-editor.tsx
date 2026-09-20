@@ -76,7 +76,6 @@ const DAYS = [
 /** Keeps the button off the very bottom edge, the same amount as every other footer. */
 const FOOTER_LIFT = 16
 
-const DEFAULT_WEEKS = 8
 const MIN_WEEKS = 1
 const MAX_WEEKS = 52
 const SAVE_DELAY_MS = 700
@@ -95,7 +94,7 @@ function named(day: string): string {
 }
 
 const WHAT_A_PROGRAM_IS =
-  'Un programa es tu semana de entrenamiento, repetida. Eliges qué rutina toca cada día y cuántas semanas dura; al publicarlo, esas rutinas te aparecen en Entrenar, semana a semana.'
+  'Un programa es tu semana de entrenamiento, repetida. Eliges qué rutina toca cada día y, si quieres, cuántas semanas dura; al publicarlo, esas rutinas te aparecen en Entrenar, semana a semana.'
 
 /**
  * The base-week editor, for a programme being written and for one being reopened.
@@ -104,7 +103,19 @@ const WHAT_A_PROGRAM_IS =
  * first render, and the second copy is where they drift. Given a `programId` it opens
  * what is there; given none it starts empty and creates on the first save.
  */
-export function ProgramEditor({ programId }: { readonly programId?: string }) {
+export function ProgramEditor({
+  programId,
+  draftId,
+}: {
+  /** Uno **publicado** que se edita: la X pregunta por los cambios y no hay autoguardado. */
+  readonly programId?: string
+  /**
+   * Uno que todavía no se publicó y se sigue escribiendo, con autoguardado y con la hoja
+   * de «¿guardas esto?» al salir. Es lo que deja duplicar, y sin esta distinción la copia
+   * habría abierto en modo edición preguntando por unos cambios que nadie hizo.
+   */
+  readonly draftId?: string
+}) {
   const router = useRouter()
   const theme = useTheme()
   const flow = useMemo(() => createSpaceContentFlow(), [])
@@ -112,7 +123,14 @@ export function ProgramEditor({ programId }: { readonly programId?: string }) {
   const saves = useMemo(() => createQueue(), [])
 
   const [title, setTitle] = useState('')
-  const [weeks, setWeeks] = useState(DEFAULT_WEEKS)
+  /**
+   * Cuántas semanas dura, o ninguna.
+   *
+   * **Nace sin fecha de fin**, que es lo que hace casi todo el mundo: la semana se
+   * repite hasta que uno cambia de plan. Ocho semanas por defecto era una promesa que
+   * nadie había hecho, y al cabo de ocho la agenda se quedaba vacía sin avisar.
+   */
+  const [weeks, setWeeks] = useState<number | null>(null)
   // Carried but not drawn: it is not editable here, and hard-coding null on save
   // erased it on the way through and produced a version that changed only that.
   const [notes, setNotes] = useState<string | null>(null)
@@ -158,13 +176,13 @@ export function ProgramEditor({ programId }: { readonly programId?: string }) {
   const [failure, setFailure] = useState<string | undefined>(undefined)
 
   const pending = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-  const identity = useRef<string | undefined>(programId)
+  const identity = useRef<string | undefined>(programId ?? draftId)
 
   // Read through refs so the deferred assignment does not depend on them: naming a
   // programme is typing, and a dependency on the name would re-read the routines on
   // every keystroke.
   const titled = useRef(title)
-  const repeated = useRef(weeks)
+  const repeated = useRef<number | null>(weeks)
   useEffect(() => {
     titled.current = title
     repeated.current = weeks
@@ -187,7 +205,7 @@ export function ProgramEditor({ programId }: { readonly programId?: string }) {
       // Either the programme named in the route, or the one somebody left unpublished.
       // «Programa nuevo» used to mean «start empty», which is what made every saved
       // draft unreachable: it existed, it counted, and nothing could open it.
-      const id = programId ?? (await flow.readMyUnpublishedProgram())?.id
+      const id = programId ?? draftId ?? (await flow.readMyUnpublishedProgram())?.id
       if (!active || !id) return
       identity.current = id
       const draft = await flow.openProgram(id)
@@ -198,7 +216,10 @@ export function ProgramEditor({ programId }: { readonly programId?: string }) {
     resume()
       .then((draft) => {
         if (!active || !draft) return
-        const { baseWeek, weeks: repeats } = collapseBaseWeek(draft.content.sessions)
+        const { baseWeek, weeks: repeats } = collapseBaseWeek(
+          draft.content.sessions,
+          draft.content.repeats_forever ?? false,
+        )
         setTitle(draft.content.title)
         setNotes(draft.content.notes ?? null)
         setWeek(baseWeek)
@@ -223,7 +244,7 @@ export function ProgramEditor({ programId }: { readonly programId?: string }) {
     return () => {
       active = false
     }
-  }, [flow, programId])
+  }, [flow, programId, draftId])
 
   /**
    * Saves, and says whether it did. It reports a failure through `failure` as well,
@@ -234,7 +255,7 @@ export function ProgramEditor({ programId }: { readonly programId?: string }) {
     async (
       nextTitle: string,
       nextWeek: readonly BaseWeekDay[],
-      nextWeeks: number,
+      nextWeeks: number | null,
     ): Promise<boolean> => {
       const trimmed = nextTitle.trim()
       if (trimmed === '' || !openable) return false
@@ -253,6 +274,9 @@ export function ProgramEditor({ programId }: { readonly programId?: string }) {
             title: trimmed,
             notes,
             sessions: expandBaseWeek(nextWeek, nextWeeks),
+            // Sin fin la composición es una vuelta, así que es esta clave —y no el
+            // número de semanas compuestas— la que dice que no termina.
+            repeats_forever: nextWeeks === null,
           })
           setSaved(true)
           setFailure(undefined)
@@ -277,7 +301,7 @@ export function ProgramEditor({ programId }: { readonly programId?: string }) {
    * means leaving the screen leaves the edit behind, which is not what cancel means.
    */
   const schedule = useCallback(
-    (nextTitle: string, nextWeek: readonly BaseWeekDay[], nextWeeks: number) => {
+    (nextTitle: string, nextWeek: readonly BaseWeekDay[], nextWeeks: number | null) => {
       if (editing) return
       if (pending.current) clearTimeout(pending.current)
       pending.current = setTimeout(
@@ -445,7 +469,7 @@ export function ProgramEditor({ programId }: { readonly programId?: string }) {
     schedule(next, week, weeks)
   }
 
-  const repeat = (next: number) => {
+  const repeat = (next: number | null) => {
     setWeeks(next)
     setSaved(false)
     schedule(title, week, next)
@@ -586,8 +610,10 @@ export function ProgramEditor({ programId }: { readonly programId?: string }) {
             hint={
               <View style={styles.coverHint}>
                 <FoundationIcon name="camera" size="sm" color={theme.color.icon.secondary} />
-                <Text role="eyebrow" size="2xs" color="muted">
-                  PORTADA
+                {/* Dos palabras y dos líneas: «PORTADA» sola no dice de qué, y es de
+                    las rutinas del programa y no del programa. */}
+                <Text role="eyebrow" size="2xs" color="muted" align="center">
+                  {'PORTADA\nRUTINAS'}
                 </Text>
               </View>
             }
@@ -626,51 +652,14 @@ export function ProgramEditor({ programId }: { readonly programId?: string }) {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <View
-          style={[
-            styles.duration,
-            {
-              borderColor: theme.color.border.subtle,
-              backgroundColor: theme.color.background.surface,
-            },
-          ]}
-        >
-          <FoundationIcon name="frequency" size="sm" color={theme.color.icon.accent} decorative />
-          <View style={styles.rowText}>
-            <Text role="body" size="xs" color="muted">
-              Duración del programa
-            </Text>
-            <Text role="control" size="md">
-              {weeksLabel(weeks)}
-            </Text>
-          </View>
-          {/* Two buttons and no third number. A `Stepper` carries its own value, and
-              the card has already said «8 semanas» right there — the same figure twice
-              in one row is a row somebody has to read twice to be sure. */}
-          <View style={styles.tune}>
-            <IconButton
-              icon="subtract"
-              size="sm"
-              accessibilityLabel={`Quitar una semana. Ahora ${weeksLabel(weeks)}`}
-              disabled={weeks <= MIN_WEEKS}
-              onPress={() => repeat(weeks - 1)}
-            />
-            <IconButton
-              icon="add"
-              size="sm"
-              accessibilityLabel={`Añadir una semana. Ahora ${weeksLabel(weeks)}`}
-              disabled={weeks >= MAX_WEEKS}
-              onPress={() => repeat(weeks + 1)}
-            />
-          </View>
-        </View>
+        <DurationCard weeks={weeks} onChange={repeat} />
 
         <View style={styles.section}>
+          {/* Sin la frase que iba debajo: decía que la semana se repite, que es lo que
+              la tarjeta de duración dice justo encima, y que los días libres son
+              descanso, que es lo que pone en cada día libre. */}
           <Text role="control" size="sm" color="secondary">
             La semana base
-          </Text>
-          <Text role="body" size="sm" color="muted">
-            {`Se repite igual las ${weeksLabel(weeks)}. Los días libres son descanso.`}
           </Text>
 
           <View style={styles.days}>
@@ -747,11 +736,11 @@ export function ProgramEditor({ programId }: { readonly programId?: string }) {
             </Text>
           ) : (
             included.map((routine) => (
-              <Pressable
+              <IncludedRoutine
                 key={routine.template_id}
-                accessibilityRole="button"
-                accessibilityLabel={`Abrir ${routine.title}`}
-                accessibilityHint={daysOf(routine)}
+                routine={routine}
+                days={daysOf(routine)}
+                library={library}
                 onPress={() => {
                   // Said before leaving, because on the way back the version it held is
                   // no longer anywhere: the new one has replaced it in the list.
@@ -761,33 +750,7 @@ export function ProgramEditor({ programId }: { readonly programId?: string }) {
                   }
                   router.push(`/routines/${routine.template_id}`)
                 }}
-                style={({ pressed }) => [
-                  styles.included,
-                  {
-                    borderColor: theme.color.border.subtle,
-                    backgroundColor: theme.color.background.surface,
-                    opacity: pressed ? 0.7 : 1,
-                  },
-                ]}
-              >
-                <RoutineMark routine={routine} library={library} />
-                <View style={styles.rowText}>
-                  <Text role="control" size="sm" numberOfLines={1}>
-                    {routine.title}
-                  </Text>
-                  {/* Which days, not how many times: «Lunes · Viernes» is the answer to
-                      what somebody is looking at the list for, and «2×/sem» is not. */}
-                  <Text role="body" size="xs" color="muted" numberOfLines={1}>
-                    {daysOf(routine)}
-                  </Text>
-                </View>
-                <FoundationIcon
-                  name="next"
-                  size="sm"
-                  color={theme.color.icon.secondary}
-                  decorative
-                />
-              </Pressable>
+              />
             ))
           )}
         </View>
@@ -1033,6 +996,127 @@ export function ProgramEditor({ programId }: { readonly programId?: string }) {
   )
 }
 
+/**
+ * La duración, que es opcional.
+ *
+ * **Vive aparte porque tiene dos estados y los dos hay que poder mirar.** Un programa
+ * nace sin fecha de fin: la semana se repite hasta que uno cambia de plan.
+ *
+ * **Y es una fila, no dos.** Quitar el fin es el paso que hay por debajo de «1 semana»,
+ * así que lo hace el mismo pulsador que baja el número; un botón aparte para eso
+ * habría hecho crecer una tarjeta en una pantalla que ya pide sitio.
+ */
+export function DurationCard({
+  weeks,
+  onChange,
+}: {
+  readonly weeks: number | null
+  readonly onChange: (next: number | null) => void
+}) {
+  const theme = useTheme()
+
+  return (
+    <View
+      style={[
+        styles.duration,
+        {
+          borderColor: theme.color.border.subtle,
+          backgroundColor: theme.color.background.surface,
+        },
+      ]}
+    >
+      <FoundationIcon name="frequency" size="sm" color={theme.color.icon.accent} decorative />
+      <View style={styles.rowText}>
+        <Text role="body" size="xs" color="muted">
+          Duración del programa
+        </Text>
+        <Text role="control" size="md">
+          {weeksLabel(weeks)}
+        </Text>
+      </View>
+      {/* Two buttons and no third number. A `Stepper` carries its own value, and
+          the card has already said «8 semanas» right there — the same figure twice
+          in one row is a row somebody has to read twice to be sure. */}
+      <View style={styles.tune}>
+        <IconButton
+          icon="subtract"
+          size="sm"
+          accessibilityLabel={
+            weeks === MIN_WEEKS
+              ? 'Quitar la fecha de fin. Se repetirá hasta que la cambies'
+              : `Quitar una semana. Ahora ${weeksLabel(weeks)}`
+          }
+          disabled={weeks === null}
+          onPress={() => onChange(weeks === MIN_WEEKS ? null : (weeks ?? MIN_WEEKS) - 1)}
+        />
+        <IconButton
+          icon="add"
+          size="sm"
+          accessibilityLabel={
+            weeks === null
+              ? 'Ponerle una fecha de fin, de una semana'
+              : `Añadir una semana. Ahora ${weeksLabel(weeks)}`
+          }
+          disabled={weeks !== null && weeks >= MAX_WEEKS}
+          onPress={() => onChange(weeks === null ? MIN_WEEKS : weeks + 1)}
+        />
+      </View>
+    </View>
+  )
+}
+
+/**
+ * Una de las rutinas que el programa incluye.
+ *
+ * **La marca es lo que mide la fila**, y por eso va en el azulejo extrapequeño: con el
+ * pequeño la lista ocupaba más alto del que su contenido pedía y entraban dos rutinas
+ * donde caben tres.
+ */
+export function IncludedRoutine({
+  routine,
+  days,
+  library,
+  onPress,
+}: {
+  readonly routine: MyRoutine
+  /** Los días que le tocan, ya compuestos: «Lunes · Viernes». */
+  readonly days: string
+  readonly library: ExerciseLibrary | undefined
+  readonly onPress: () => void
+}) {
+  const theme = useTheme()
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Abrir ${routine.title}`}
+      accessibilityHint={days}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.included,
+        {
+          borderColor: theme.color.border.subtle,
+          backgroundColor: theme.color.background.surface,
+          opacity: pressed ? 0.7 : 1,
+        },
+      ]}
+    >
+      <RoutineMark routine={routine} library={library} size="xs" />
+      <View style={styles.rowText}>
+        <Text role="control" size="sm" numberOfLines={1}>
+          {routine.title}
+        </Text>
+        {/* Which days, not how many times: «Lunes · Viernes» is the answer to
+            what somebody is looking at the list for, and «2×/sem» is not. */}
+        <Text role="body" size="xs" color="muted" numberOfLines={1}>
+          {days}
+        </Text>
+      </View>
+      <FoundationIcon name="next" size="sm" color={theme.color.icon.secondary} decorative />
+    </Pressable>
+  )
+}
+
 const styles = StyleSheet.create({
   // The part that stays and the part that moves.
   frame: { gap: 18, paddingBottom: 16 },
@@ -1066,13 +1150,16 @@ const styles = StyleSheet.create({
   },
   anchor: { paddingTop: 12, paddingBottom: FOOTER_LIFT },
   rowText: { flex: 1, gap: 2 },
+  // La marca es lo que mide la fila, y con la extrapequeña cabe una rutina más en
+  // pantalla sin que el nombre ni los días pierdan sitio.
   included: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
     borderWidth: 1,
-    borderRadius: 16,
-    padding: 12,
+    borderRadius: 14,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
   },
   notice: { flexDirection: 'row', gap: 10, borderRadius: 16, padding: 14 },
   noticeText: { flex: 1 },
