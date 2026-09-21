@@ -5622,6 +5622,7 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
     additionalProperties: false,
     required: [
       'planned_session_id',
+      'template_version_id',
       'title',
       'discipline_code',
       'status',
@@ -5635,6 +5636,11 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
     properties: {
       planned_session_id: {
         $ref: '#/components/schemas/UuidV7',
+      },
+      template_version_id: {
+        $ref: '#/components/schemas/UuidV7',
+        description:
+          'The version of the routine this session plans. It is what lets the client match a session of the week to the routine `OP-PLN-025` answers, and so draw it with the cover its programme gave it. Matching by title would match a thing that repeats: two routines can carry the same name, and one routine changes its own from one version to the next.',
       },
       title: {
         type: 'string',

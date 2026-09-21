@@ -17,7 +17,7 @@
 -- decidir qué semana está enseñando, y mentirle sería probar otra cosa.
 begin;
 
-select plan(18);
+select plan(20);
 
 insert into identity.people (id, given_name, family_name)
 values
@@ -255,6 +255,29 @@ select is(
       and week_starts_on = date_trunc('week', (clock_timestamp() at time zone 'America/Bogota'))::date),
   2,
   'T-PLN-OPEN-12 y leerla dos veces la siembra una');
+
+-- Y lo que la semana enseña de cada sesión: de qué rutina es. El carrusel de Hoy la
+-- dibuja con la portada que sólo `read_my_content` sabe, y sin esto no hay con qué unir.
+select is(
+  (select count(*)::integer
+     from planning.read_week_plan(
+       '019eb000-0000-7000-8000-000000000001', 'America/Bogota') as week
+     cross join lateral jsonb_array_elements(week.sessions) as entry(routine)
+    where entry.routine->>'template_version_id' is null),
+  0,
+  'T-PLN-OPEN-19 cada entrada de la semana dice de qué versión de rutina es');
+
+-- Unida por el identificador de la sesión, no por el título: el título se repite.
+select is(
+  (select count(*)::integer
+     from planning.read_week_plan(
+       '019eb000-0000-7000-8000-000000000001', 'America/Bogota') as week
+     cross join lateral jsonb_array_elements(week.sessions) as entry(routine)
+     join planning.planned_sessions as session
+       on session.id = (entry.routine->>'planned_session_id')::uuid
+      and session.template_version_id = (entry.routine->>'template_version_id')::uuid),
+  2,
+  'T-PLN-OPEN-20 y es la versión que la sesión planificada apunta');
 
 -- Una vuelta más: la semana tres de un ciclo de dos vuelve a ser la primera.
 update planning.program_assignments

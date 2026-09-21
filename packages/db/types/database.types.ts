@@ -3685,7 +3685,10 @@ export type Database = {
           p_program_id: string
           p_request_hash: string
         }
-        Returns: Json
+        Returns: {
+          program: Json
+          replayed: boolean
+        }[]
       }
       fork_program_version: {
         Args: { p_person_id: string; p_program_version_id: string }

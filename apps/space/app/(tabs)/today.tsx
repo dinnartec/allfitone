@@ -29,14 +29,14 @@
 
 import { Button } from '@allfitone/react-native/button'
 import { GlassPanel } from '@allfitone/react-native/glass'
-import { Scrim } from '@allfitone/react-native/gradient'
 import { InlineAlert } from '@allfitone/react-native/inline-alert'
 import { Screen } from '@allfitone/react-native/screen'
 import { Text } from '@allfitone/react-native/text'
 import { useTheme } from '@allfitone/react-native/theme'
 import { useFocusEffect, useRouter } from 'expo-router'
 import { useCallback, useMemo, useState } from 'react'
-import { Image, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native'
+import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native'
+import Animated, { useAnimatedScrollHandler, useSharedValue } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { FoundationIcon, type IconName } from '@allfitone/react-native/icons'
 import { semanticSpacing } from '@allfitone/react-native/tokens'
@@ -53,7 +53,24 @@ import {
 } from '../../src/client/program-catalogue'
 import { longDateLabel, shortDayLabel, trainedLabel } from '../../src/client/week'
 import { deviceTimezone } from '../../src/client/timezone'
-import todayHero from '../../assets/images/today/today-hero.webp'
+import { createSpaceContentFlow } from '../../src/client/content-transport'
+import { readExerciseLibrary, type ExerciseLibrary } from '../../src/client/exercise-library'
+import type { MyRoutine } from '../../src/client/content'
+import type { WeekPlan } from '../../src/client/programs'
+import { routineFigures, routineOfVersion } from '../../src/client/library'
+import {
+  cardsFor as weekCards,
+  dayChip,
+  programDayOf,
+  startLabel,
+  weekDays,
+  type RoutineCard,
+  type WeekDay,
+} from '../../src/client/week-plan'
+import { HomeCard } from '../../src/components/home-card'
+import { OfferRow } from '../../src/components/offer-row'
+import { PHOTO_COVER } from '../../src/client/routine-cover'
+import { PageDots } from '@allfitone/react-native/page-dots'
 import { ProgramCard } from '../../src/components/program-card'
 import { DOCK_HEIGHT } from '../../src/components/tab-bar'
 
@@ -71,21 +88,43 @@ const PENDING: Record<string, string> = {
   history: 'El historial completo llega con su propia pantalla.',
 }
 
-const HERO_ASPECT = 390 / 468
+/** El margen de la pantalla cuando hay programa. El carrusel lo sangra para asomar. */
+const GUTTER = 24
+
+/**
+ * El margen del propio carrusel y lo que deja ver de la siguiente.
+ *
+ * Más estrecho que el de la pantalla: la tarjeta es lo que hay que mirar, y ganarle
+ * ocho puntos a cada lado se nota. Los treinta de la derecha son lo que dice que hay
+ * más semana; con menos, la tarjeta parece una sola y el carrusel se pierde.
+ */
+const DECK_GUTTER = 16
+const PEEK = 30
+
+/** Lo que separa una tarjeta de la siguiente. */
+const CARD_GAP = 12
+
+/** Y lo más ancha que se deja, para que en una tableta no se estire sin fin. */
+const CARD_MAX = 420
 
 export default function Today() {
   const router = useRouter()
-  const { width } = useWindowDimensions()
   const insets = useSafeAreaInsets()
   const programs = useMemo(() => createSpaceProgramFlow(), [])
+  const content = useMemo(() => createSpaceContentFlow(), [])
   const training = useMemo(() => createSpaceExecutionFlow(), [])
   const timezone = useMemo(() => deviceTimezone(), [])
 
   const [today, setToday] = useState<TodayPayload | undefined>(undefined)
   const [catalogue, setCatalogue] = useState<ProgramCatalogue | undefined>(undefined)
+  // La semana y la biblioteca, que es de donde sale el carrusel: la agenda dice qué
+  // sesiones hay y la biblioteca con qué portada se dibuja cada una.
+  const [plan, setPlan] = useState<WeekPlan | undefined>(undefined)
+  const [routines, setRoutines] = useState<readonly MyRoutine[]>([])
+  const [library, setLibrary] = useState<ExerciseLibrary | undefined>(undefined)
   const [pending, setPending] = useState<string | undefined>(undefined)
   const [sessionExpired, setSessionExpired] = useState(false)
-  const [starting, setStarting] = useState(false)
+  const [starting, setStarting] = useState<string | undefined>(undefined)
   const [failure, setFailure] = useState<string | undefined>(undefined)
 
   /**
@@ -111,6 +150,20 @@ export default function Today() {
           // The catalogue is only read when there is a choice to make: somebody with a
           // program does not need twenty-four of them fetched behind their session.
           if (current.current_assignment === null) return programs.readCatalogue()
+          // Con programa, lo que hace falta es la semana y la biblioteca. Van detrás y
+          // no delante: la pantalla ya tiene qué dibujar arriba mientras llegan.
+          void Promise.all([
+            programs.readWeekPlan(timezone),
+            content.readMyRoutines(),
+            readExerciseLibrary(content),
+          ])
+            .then(([week, mine, read]) => {
+              if (!active) return
+              setPlan(week)
+              setRoutines(mine)
+              setLibrary(read)
+            })
+            .catch(() => undefined)
           return undefined
         })
         .then((available) => {
@@ -129,7 +182,7 @@ export default function Today() {
       return () => {
         active = false
       }
-    }, [programs, training, timezone]),
+    }, [content, programs, training, timezone]),
   )
 
   const profile: TrainingProfile = today?.profile ??
@@ -144,52 +197,45 @@ export default function Today() {
     () => cardsFor(catalogue?.programs ?? [], profile),
     [catalogue?.programs, profile],
   )
-  const date = useMemo(() => longDateLabel(new Date()), [])
+  // Con mayúscula inicial: `longDateLabel` la escribe en minúscula porque en una frase
+  // va así, y aquí es una línea suelta debajo del saludo.
+  const date = useMemo(() => {
+    const written = longDateLabel(new Date())
+    return `${written.slice(0, 1).toUpperCase()}${written.slice(1)}`
+  }, [])
   const assigned = today?.current_assignment ?? null
-  const session = today?.session ?? null
-  // The week is done when the plan says so, not when today happens to be empty: a
-  // person who is simply ahead has finished something, and the screen should say it
-  // rather than pull next week forward.
-  const weekDone =
-    assigned !== null &&
-    session === null &&
-    (today?.week.sessions_planned ?? 0) > 0 &&
-    today?.week.sessions_completed === today?.week.sessions_planned
+  /**
+   * Las tarjetas del carrusel: la semana, cada una con la rutina que es.
+   *
+   * **Se emparejan por la versión y no por el nombre.** La agenda dice qué sesión hay y
+   * la biblioteca sabe con qué portada se dibuja; dos rutinas pueden llamarse igual, y
+   * emparejarlas por el rótulo dibujaría la portada de la otra.
+   */
+  const week = useMemo(() => weekCards(plan), [plan])
+  const todayIs = useMemo(() => programDayOf(new Date()), [])
+  const days = useMemo(() => weekDays(week, todayIs), [week, todayIs])
 
-  const train = () => {
-    if (!session) return
-    if (session.executed_session_id) {
-      router.push(`/session/${session.executed_session_id}`)
+  /** Empezar la rutina de una tarjeta, o volver a la que quedó abierta. */
+  const start = (card: RoutineCard) => {
+    const open = card.routine.open_execution_id
+    if (open) {
+      router.push(`/session/${open}`)
       return
     }
-    setStarting(true)
+    setStarting(card.routine.planned_session_id)
     training
-      .start(session.planned_session_id, timezone)
+      .start(card.routine.planned_session_id, timezone)
       .then((id) => router.push(`/session/${id}`))
       .catch(() => setFailure(START_FAILED))
-      .finally(() => setStarting(false))
+      .finally(() => setStarting(undefined))
   }
 
   return (
     <Screen edges={assigned ? [] : ['top', 'bottom']} style={assigned ? styles.bare : undefined}>
-      {assigned ? (
-        <Image
-          source={todayHero}
-          style={[styles.hero, { width, height: width / HERO_ASPECT }]}
-          resizeMode="cover"
-          accessible={false}
-        />
-      ) : null}
-      {/* The fade must complete above the photograph's bottom edge, or the last few
-          percent still shows image and leaves a seam across the screen. */}
-      {assigned ? (
-        <Scrim
-          height={(width / HERO_ASPECT) * 0.82}
-          coverage={0.58}
-          onset={0.24}
-          style={styles.veil}
-        />
-      ) : null}
+      {/* Sin la fotografía de fondo que llevaba antes. `FIN-2b` no la tiene, y con el
+          carrusel ya no hace falta: la imagen de esta pantalla es la portada de cada
+          rutina, que sí dice cuál es. Una encima de otra eran dos fotografías peleando
+          por el mismo texto. */}
 
       <ScrollView
         contentContainerStyle={[
@@ -204,78 +250,40 @@ export default function Today() {
       >
         <View style={styles.header}>
           <View style={styles.greeting}>
-            <Text role="display" size="2xl" uppercase accessibilityRole="header">
+            {/* En caja baja y en la cara de texto, no en la condensada en versalitas:
+                es un saludo, y `FIN-2b` lo escribe como se escribe un saludo. */}
+            <Text role="control" size="xl" accessibilityRole="header">
               {profile.given_name ? `Hola, ${profile.given_name}` : 'Hola'}
             </Text>
-            <Text role="eyebrow" size="xs" color="muted">
-              {date.toUpperCase()}
+            <Text role="body" size="sm" color="muted">
+              {date}
             </Text>
           </View>
           <Bell onPress={() => setPending(PENDING.notices)} />
         </View>
 
-        {assigned && session ? (
-          <View style={styles.session}>
-            <Text role="eyebrow" size="xs" color="accent">
-              {`HOY · ${assigned.title.toUpperCase()}`}
-            </Text>
-            <Text
-              role="display"
-              size="5xl"
-              uppercase
-              style={styles.sessionTitle}
-              accessibilityRole="header"
-            >
-              {session.session_title}
-            </Text>
-            <Text role="body" size="sm" color="secondary">
-              {`${session.exercise_count} ${session.exercise_count === 1 ? 'ejercicio' : 'ejercicios'}`}
-            </Text>
-            <Button
-              label={
-                session.executed_session_id ? 'Continuar entrenamiento' : 'Empezar entrenamiento'
-              }
-              icon="start"
-              onPress={train}
-              loading={starting}
-              style={styles.start}
-            />
-          </View>
+        {/* `FIN-2b`. El carrusel es la semana: una tarjeta por sesión, con la portada
+            que su programa le puso, y la de hoy marcada. Sustituye al titular único de
+            la sesión de hoy, que dejaba el resto de la semana sin enseñar. */}
+        {assigned && week.length > 0 ? (
+          <Carousel
+            week={week}
+            routines={routines}
+            library={library}
+            today={todayIs}
+            starting={starting}
+            onOpen={(templateId) => router.push(`/routines/${templateId}`)}
+            onStart={start}
+          />
         ) : null}
 
-        {assigned && !session ? (
-          <View style={styles.session}>
-            <Text role="eyebrow" size="xs" color={weekDone ? 'success' : 'accent'}>
-              {`ESTA SEMANA · ${assigned.title.toUpperCase()}`}
-            </Text>
-            <Text
-              role="display"
-              size="5xl"
-              uppercase
-              style={styles.sessionTitle}
-              accessibilityRole="header"
-            >
-              {weekDone ? 'Semana cumplida' : 'Día de descanso'}
+        {assigned && plan !== undefined && week.length === 0 ? (
+          <View style={styles.heading}>
+            <Text role="display" size="2xl" uppercase accessibilityRole="header">
+              Semana libre
             </Text>
             <Text role="body" size="sm" color="secondary">
-              {weekDone
-                ? `${today?.week.sessions_completed} de ${today?.week.sessions_planned} sesiones · ${trainedLabel(today?.week.trained_seconds ?? 0)}`
-                : 'Tu programa no pide nada hoy. Descansar también es entrenar.'}
-            </Text>
-            {/* Free training rather than next week's session: finishing early is
-                finishing, and pulling the next week forward would quietly turn a
-                good week into a longer one. */}
-            <Button
-              label="Entrenar libre"
-              variant="secondary"
-              icon="freestyle"
-              onPress={() => setPending(PENDING.free)}
-              style={styles.start}
-            />
-            <Text role="body" size="sm" color="muted">
-              {weekDone
-                ? 'La semana que viene empieza limpia. Lo de esta no se arrastra.'
-                : 'Puedes adelantar cualquier rutina de la semana desde Entrenar.'}
+              Tu programa no pide nada esta semana.
             </Text>
           </View>
         ) : null}
@@ -321,7 +329,7 @@ export default function Today() {
           </Text>
         ) : null}
 
-        {assigned && today ? <Week week={today.week} /> : null}
+        {assigned && today ? <Week week={today.week} days={days} /> : null}
 
         {!assigned ? (
           <View style={styles.section}>
@@ -343,31 +351,24 @@ export default function Today() {
           </View>
         ) : null}
 
-        <View style={styles.section}>
-          <Text role="eyebrow" size="xs" color="muted">
-            ACCESOS RÁPIDOS
-          </Text>
-          <View style={styles.shortcuts}>
-            <Shortcut icon="freestyle" label="Libre" onPress={() => setPending(PENDING.free)} />
-            <Shortcut
-              icon="checklist"
-              label="Rutinas"
-              onPress={() => setPending(PENDING.routines)}
-            />
-            <Shortcut icon="nutrition" label="Comida" onPress={() => setPending(PENDING.food)} />
-            <Shortcut
-              icon="progress"
-              label="Progreso"
-              onPress={() => setPending(PENDING.progress)}
-            />
-          </View>
-        </View>
+        {/* En lugar de los cuatro accesos rápidos, de los que ninguno llevaba a
+            ninguna parte. Entrenar libre es lo único de aquellos cuatro que es un acto
+            y no una pestaña, así que se queda, con su sitio propio encima del
+            historial. */}
+        {assigned ? (
+          <OfferRow
+            icon="freestyle"
+            label="Entrenamiento libre"
+            caption="Entrena algo que no está en tu programa"
+            onPress={() => setPending(PENDING.free)}
+          />
+        ) : null}
 
         {assigned && today ? (
           <View style={styles.section}>
             <View style={styles.sectionHead}>
-              <Text role="eyebrow" size="xs" color="muted">
-                HISTORIAL DE ENTRENAMIENTO
+              <Text role="control" size="md">
+                Historial
               </Text>
               {today.week.history.length > 0 ? (
                 <Pressable
@@ -376,20 +377,25 @@ export default function Today() {
                   onPress={() => setPending(PENDING.history)}
                 >
                   <Text role="control" size="xs" color="accent">
-                    Ver todos ›
+                    Ver todo
                   </Text>
                 </Pressable>
               ) : null}
             </View>
             {today.week.history.length > 0 ? (
-              today.week.history.map((trained) => (
-                <TrainedRow
-                  key={trained.executed_session_id}
-                  day={shortDayLabel(trained.trained_on)}
-                  title={trained.title ?? 'Sesión'}
-                  detail={`${trained.sets_recorded} ${trained.sets_recorded === 1 ? 'serie' : 'series'}`}
-                />
-              ))
+              // Un panel y no filas sueltas: lo que hay debajo del rótulo es una cosa
+              // —lo entrenado— y el filete entre sesiones es lo que las separa.
+              <Panel>
+                {today.week.history.map((trained, index) => (
+                  <TrainedRow
+                    key={trained.executed_session_id}
+                    first={index === 0}
+                    day={shortDayLabel(trained.trained_on)}
+                    title={trained.title ?? 'Sesión'}
+                    detail={`${trained.sets_recorded} ${trained.sets_recorded === 1 ? 'serie' : 'series'}`}
+                  />
+                ))}
+              </Panel>
             ) : (
               // The section stays rather than disappearing: an absent section reads as
               // a screen that is still loading, and "nothing yet" is an answer.
@@ -420,52 +426,187 @@ function open(router: ReturnType<typeof useRouter>, program: ProgramSummary) {
  * One bar per planned session, not per day: the week is the unit and the day is a
  * suggestion, so seven bars would be counting something nobody is trying to fill.
  */
-function Week({ week }: { readonly week: TodayPayload['week'] }) {
+/**
+ * La semana: cuántas van, en qué días, y lo que se llevan medido.
+ *
+ * **Siete tramos y no uno por sesión.** Una barra por sesión decía cuántas van de
+ * cuántas, que es justo lo que la cifra de al lado ya dice; siete dicen además **cuándo**,
+ * que es lo que deja ver la forma de la semana — dónde entrena y dónde descansa.
+ */
+/**
+ * El carrusel de la semana: una tarjeta por sesión, la de hoy marcada.
+ *
+ * **Se desliza por posiciones y no por páginas.** La tarjeta mide menos que la pantalla
+ * porque la siguiente tiene que asomar —es lo que dice que hay más semana a la derecha—,
+ * y `pagingEnabled` pagina por el ancho de la vista: con una tarjeta más estrecha se
+ * desalinea un poco más en cada deslizamiento. `snapToInterval` engancha donde toca.
+ *
+ * **Y sangra hasta el borde.** La pantalla tiene su margen, pero un carrusel que se
+ * detuviera en él escondería la tarjeta siguiente justo cuando hace falta verla.
+ */
+function Carousel({
+  week,
+  routines,
+  library,
+  today,
+  starting,
+  onOpen,
+  onStart,
+}: {
+  readonly week: readonly RoutineCard[]
+  readonly routines: readonly MyRoutine[]
+  readonly library: ExerciseLibrary | undefined
+  readonly today: number
+  readonly starting: string | undefined
+  readonly onOpen: (templateId: string) => void
+  readonly onStart: (card: RoutineCard) => void
+}) {
+  const theme = useTheme()
+  const { width } = useWindowDimensions()
+  const card = Math.min(CARD_MAX, width - DECK_GUTTER - PEEK)
+  const step = card + CARD_GAP
+
+  /**
+   * Dónde va el carrusel, en tarjetas y con decimales.
+   *
+   * **Vive en el hilo de la interfaz y no en el estado de React.** Los puntos siguen al
+   * dedo, así que el valor cambia en cada fotograma; guardarlo con `useState` sería un
+   * render por cuadro justo mientras se arrastra, que es de donde venía la latencia.
+   */
+  const at = useSharedValue(0)
+  const follow = useAnimatedScrollHandler((event) => {
+    at.set(event.contentOffset.x / step)
+  })
+
+  // Cuál va delante, que sólo hace falta saber al parar: es lo que enciende su filo y
+  // lo que se lee en voz alta. Un estado por fotograma para eso sería un render por
+  // fotograma para algo que no cambia mientras el dedo se mueve.
+  const [leadingIndex, setLeadingIndex] = useState(0)
+
+  return (
+    <View style={styles.carousel}>
+      <Animated.ScrollView
+        style={styles.bleed}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        snapToInterval={step}
+        decelerationRate="fast"
+        contentContainerStyle={{ paddingHorizontal: DECK_GUTTER, gap: CARD_GAP }}
+        onScroll={follow}
+        onMomentumScrollEnd={(event) =>
+          setLeadingIndex(
+            Math.max(
+              0,
+              Math.min(week.length - 1, Math.round(event.nativeEvent.contentOffset.x / step)),
+            ),
+          )
+        }
+        scrollEventThrottle={16}
+      >
+        {week.map((one) => {
+          const routine = routineOfVersion(routines, one.routine.template_version_id)
+          return (
+            <HomeCard
+              key={one.routine.planned_session_id}
+              width={card}
+              title={one.routine.title}
+              figures={routineFigures({
+                exercise_count: one.routine.exercise_count,
+                set_count: one.routine.set_count,
+              })}
+              chip={dayChip(one.routine.program_day, today)}
+              load={routine?.muscle_sets}
+              // Sin estilo elegido, la fotografía: es la que llena la tarjeta y la que
+              // hace que una rutina se reconozca antes de leer su nombre. El servidor
+              // responde su dirección para toda rutina que diga qué trabaja; si no la
+              // hay, la tarjeta cae sola en la letra. Elegir otra es del programa.
+              cover={routine?.cover ?? PHOTO_COVER}
+              coverUrl={routine?.cover_url}
+              worked={routine?.muscles ?? []}
+              library={library}
+              actions={{
+                onOpen: () => routine && onOpen(routine.template_id),
+                onStart: () => onStart(one),
+                startLabel: startLabel(one.state),
+                starting: starting === one.routine.planned_session_id,
+              }}
+            />
+          )
+        })}
+      </Animated.ScrollView>
+
+      {week.length > 1 ? (
+        <PageDots
+          count={week.length}
+          active={leadingIndex}
+          at={at}
+          color={theme.color.icon.accent}
+          accessibilityLabel={`Rutina ${String(leadingIndex + 1)} de ${String(week.length)}`}
+        />
+      ) : null}
+    </View>
+  )
+}
+
+function Week({
+  week,
+  days,
+}: {
+  readonly week: TodayPayload['week']
+  readonly days: readonly WeekDay[]
+}) {
   const theme = useTheme()
   const planned = Math.max(week.sessions_planned, 1)
   const done = Math.min(week.sessions_completed, planned)
+  // Las series de la semana salen del propio historial: es lo que se registró, no una
+  // estimación de nada.
+  const sets = week.history.reduce((total, trained) => total + trained.sets_recorded, 0)
 
   return (
     <View style={styles.section}>
       <View style={styles.sectionHead}>
-        <Text role="eyebrow" size="xs" color="muted">
-          ESTA SEMANA
+        <Text role="control" size="md">
+          Esta semana
         </Text>
         <Text
-          role="display"
-          size="md"
-          color={week.sessions_planned > 0 && done === planned ? 'success' : 'primary'}
+          role="control"
+          size="xs"
+          color={week.sessions_planned > 0 && done === planned ? 'success' : 'muted'}
         >
           {`${week.sessions_completed} de ${week.sessions_planned}`}
         </Text>
       </View>
       <View style={styles.bars}>
-        {Array.from({ length: planned }, (_unused, index) => (
+        {days.map((day) => (
           <View
-            key={index}
+            key={day.day}
             style={[
               styles.bar,
               {
-                backgroundColor:
-                  index < done ? theme.color.action.primary : theme.color.background.surfaceMuted,
+                backgroundColor: day.done
+                  ? theme.color.icon.accent
+                  : theme.color.background.surfaceMuted,
               },
+              // El de hoy se reconoce por su filo, no por su color: el color ya está
+              // diciendo si se cumplió, y un tercer tono haría de la barra un acertijo.
+              day.today ? { borderWidth: 1, borderColor: theme.color.border.accent } : null,
             ]}
           />
         ))}
       </View>
+      {/* Tres tarjetas y no tres renglones: el lienzo las dibuja como cifras que se
+          miran de un vistazo, y en una fila de texto la unidad se lee como parte del
+          número de al lado. */}
       <View style={styles.figures}>
-        <Figure
-          icon="time"
-          tint={theme.color.status.success}
-          value={trainedLabel(week.trained_seconds)}
-        />
-        {/* Zero, and honestly zero: nutrition has no tables, so nothing has been
-            logged and nothing is being estimated. */}
-        <Figure icon="nutrition" tint={theme.color.status.warning} value="0 kcal" />
+        <Figure icon="time" value={trainedLabel(week.trained_seconds)} unit="Entrenando" />
+        {/* Las series de verdad en lugar de las calorías que el lienzo dibuja: no hay
+            tablas de nutrición, así que aquello sólo podía ser un cero o una
+            estimación, y esto es lo que la semana registró. */}
+        <Figure icon="checklist" value={String(sets)} unit={sets === 1 ? 'Serie' : 'Series'} />
         <Figure
           icon="weight"
-          tint={theme.color.status.info}
           value={week.latest_weight ? weightLabel(week.latest_weight) : '—'}
+          unit="Peso"
         />
       </View>
     </View>
@@ -477,30 +618,69 @@ function weightLabel(measure: NonNullable<TodayPayload['week']['latest_weight']>
   return `${String(measure.value).replace('.', ',')} ${measure.unit}`
 }
 
+/** Una cifra de la semana: el glifo arriba, el número, y de qué es. */
 function Figure({
   icon,
-  tint,
   value,
+  unit,
 }: {
   readonly icon: IconName
-  readonly tint: string
   readonly value: string
+  readonly unit: string
 }) {
+  const theme = useTheme()
+
   return (
-    <View style={styles.figure}>
-      <FoundationIcon name={icon} size="xs" color={tint} decorative />
-      <Text role="control" size="xs" color="secondary">
+    <View
+      style={[
+        styles.figure,
+        {
+          backgroundColor: theme.color.background.surface,
+          borderColor: theme.color.border.subtle,
+        },
+      ]}
+    >
+      <FoundationIcon name={icon} size="sm" color={theme.color.icon.accent} decorative />
+      {/* En la cara de texto y no en la condensada: «0m» y «67 kg» en condensada salen
+          con las letras encima unas de otras, y una cifra que hay que descifrar no es
+          una cifra de un vistazo. */}
+      <Text role="control" size="xl" numberOfLines={1}>
         {value}
+      </Text>
+      <Text role="body" size="xs" color="muted" numberOfLines={1}>
+        {unit}
       </Text>
     </View>
   )
 }
 
+/** La caja donde van las sesiones entrenadas, con su filo y su fondo. */
+function Panel({ children }: { readonly children: React.ReactNode }) {
+  const theme = useTheme()
+
+  return (
+    <View
+      style={[
+        styles.panel,
+        {
+          backgroundColor: theme.color.background.surface,
+          borderColor: theme.color.border.subtle,
+        },
+      ]}
+    >
+      {children}
+    </View>
+  )
+}
+
 function TrainedRow({
+  first,
   day,
   title,
   detail,
 }: {
+  /** La primera no lleva filete: un filete arriba del todo es el borde del panel. */
+  readonly first: boolean
   readonly day: string
   readonly title: string
   readonly detail: string
@@ -508,8 +688,13 @@ function TrainedRow({
   const theme = useTheme()
 
   return (
-    <View style={[styles.trained, { borderColor: theme.color.border.subtle }]}>
-      <Text role="eyebrow" size="2xs" color="muted" style={styles.trainedDay}>
+    <View
+      style={[
+        styles.trained,
+        { borderColor: theme.color.border.subtle, borderTopWidth: first ? 0 : 1 },
+      ]}
+    >
+      <Text role="control" size="xs" color="muted" style={styles.trainedDay}>
         {day}
       </Text>
       <View style={styles.trainedBody}>
@@ -525,6 +710,7 @@ function TrainedRow({
   )
 }
 
+/** Glass, not a solid chip: it sits on a photograph, where a solid one reads as a sticker. */
 /** One of the two ways out that are not a program. */
 function Alternative({
   icon,
@@ -560,36 +746,6 @@ function Alternative({
   )
 }
 
-function Shortcut({
-  icon,
-  label,
-  onPress,
-}: {
-  readonly icon: IconName
-  readonly label: string
-  readonly onPress: () => void
-}) {
-  const theme = useTheme()
-
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      onPress={onPress}
-      style={[
-        styles.shortcut,
-        { backgroundColor: theme.color.background.surface, borderColor: theme.color.border.subtle },
-      ]}
-    >
-      <FoundationIcon name={icon} size="md" color={theme.color.icon.accent} decorative />
-      <Text role="control" size="xs">
-        {label}
-      </Text>
-    </Pressable>
-  )
-}
-
-/** Glass, not a solid chip: it sits on a photograph, where a solid one reads as a sticker. */
 function Bell({ onPress }: { readonly onPress: () => void }) {
   const theme = useTheme()
 
@@ -608,8 +764,11 @@ const styles = StyleSheet.create({
   // The photograph runs to the top edge, so the screen keeps no inset of its own and
   // the scroll pays for the status bar instead.
   bare: { paddingHorizontal: 0 },
-  hero: { position: 'absolute', top: 0, left: 0 },
-  veil: { top: 100 },
+  carousel: { gap: 14, alignItems: 'center' },
+  // Sangra el margen de la pantalla: el carrusel empieza en el suyo, más estrecho.
+  bleed: { marginHorizontal: -GUTTER, alignSelf: 'stretch' },
+  // Sangra el margen de la pantalla y lo devuelve por dentro: así la primera tarjeta
+  // queda alineada con el texto y la última no se pega al borde.
   // The dock floats over the scroll, so the last section has to clear it.
   content: { gap: 20, paddingBottom: DOCK_HEIGHT + 40 },
   header: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
@@ -625,15 +784,10 @@ const styles = StyleSheet.create({
   sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   bars: { flexDirection: 'row', gap: 6 },
   bar: { flex: 1, height: 7, borderRadius: 3.5 },
-  figures: { flexDirection: 'row', gap: 18, flexWrap: 'wrap' },
-  figure: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  trained: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 9,
-    borderTopWidth: 1,
-  },
+  figures: { flexDirection: 'row', gap: 10 },
+  figure: { flex: 1, gap: 6, borderWidth: 1, borderRadius: 20, padding: 12 },
+  panel: { borderWidth: 1, borderRadius: 22, paddingHorizontal: 14 },
+  trained: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 9 },
   trainedDay: { width: 52 },
   trainedBody: { flex: 1, gap: 1 },
   alternatives: { flexDirection: 'row', gap: 8 },
@@ -649,15 +803,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-  },
-  shortcuts: { flexDirection: 'row', gap: 10 },
-  shortcut: {
-    flex: 1,
-    height: 62,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 5,
   },
 })

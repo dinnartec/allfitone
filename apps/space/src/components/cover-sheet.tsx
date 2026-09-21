@@ -28,7 +28,7 @@ import { Text } from '@allfitone/react-native/text'
 import { useState } from 'react'
 import { ScrollView, StyleSheet, View } from 'react-native'
 
-import type { MuscleLoad } from '../client/home-preview'
+import { EXAMPLE_HISTORY, type MuscleLoad } from '../client/home-preview'
 import type { ExerciseLibrary } from '../client/exercise-library'
 import { coverForTab, openingCover, openingTab } from '../client/cover-choice'
 import {
@@ -38,7 +38,7 @@ import {
   type CoverKind,
   type RoutineCover,
 } from '../client/routine-cover'
-import { HomePreview } from './home-preview'
+import { HomeCard } from './home-card'
 import { coverArt } from './routine-cover-art'
 import { COVER_SM } from './routine-mark'
 
@@ -88,14 +88,18 @@ export function CoverSheetBody({
         Así se verá tu Home. Las cifras de la tarjeta son de muestra.
       </Text>
 
-      <HomePreview
+      {/* Apagada y con cifras de muestra: aquí se compara cómo se ve, no se entrena.
+          La nota de arriba es la que declara que esas cifras no son de nadie. */}
+      <HomeCard
         title={preview.title}
         figures={preview.figures}
+        chip="Hoy"
         load={preview.load}
         cover={pending}
         coverUrl={preview.coverUrl}
         worked={preview.worked}
         library={library}
+        history={EXAMPLE_HISTORY}
       />
 
       <SegmentedControl

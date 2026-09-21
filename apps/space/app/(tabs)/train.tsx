@@ -26,6 +26,7 @@ import { Chip } from '@allfitone/react-native/chip'
 import { ContentRow } from '@allfitone/react-native/content-row'
 import { FoundationIcon } from '@allfitone/react-native/icons'
 import { InlineAlert } from '@allfitone/react-native/inline-alert'
+import { Scrim } from '@allfitone/react-native/gradient'
 import { Screen } from '@allfitone/react-native/screen'
 import { SegmentedControl } from '@allfitone/react-native/segmented-control'
 import { Sheet } from '@allfitone/react-native/sheet'
@@ -552,6 +553,10 @@ function CurrentProgram({
               contentPosition="top"
               transition={200}
             />
+            {/* El velo vuelve porque la portada dejó de traerlo horneado: el archivo es
+                ahora la fotografía y nada más, y quien la enseña con texto encima es
+                quien tiene que hacerla legible. */}
+            <Scrim height={HERO} coverage={0.999} onset={0.42} />
           </>
         )}
 

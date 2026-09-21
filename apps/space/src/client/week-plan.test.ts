@@ -1,10 +1,20 @@
 import { describe, expect, test } from 'bun:test'
 
-import { cardsFor, weekPlanFailure, type WeekPlan, type WeekRoutine } from './week-plan'
+import {
+  cardsFor,
+  dayChip,
+  programDayOf,
+  startLabel,
+  weekDays,
+  weekPlanFailure,
+  type WeekPlan,
+  type WeekRoutine,
+} from './week-plan'
 
 function routine(overrides: Partial<WeekRoutine> = {}): WeekRoutine {
   return {
     planned_session_id: '019e4000-0000-7000-8000-000000000401',
+    template_version_id: '019e4000-0000-7000-8000-000000000501',
     title: 'Empuje',
     discipline_code: 'strength',
     status: 'scheduled',
@@ -75,5 +85,46 @@ describe('what a failed week read means', () => {
   test('T-SP-WEEK-22 anything else is a failure the person can retry', () => {
     expect(weekPlanFailure('server-error')).toBe('failed')
     expect(weekPlanFailure(undefined)).toBe('failed')
+  })
+})
+
+describe('el carrusel de Hoy', () => {
+  test('T-SPC-UNIT-80 el programa cuenta desde el lunes y JavaScript desde el domingo', () => {
+    // Un día de diferencia es «HOY» en la tarjeta equivocada.
+    expect(programDayOf(new Date('2026-08-31T12:00:00'))).toBe(1)
+    expect(programDayOf(new Date('2026-09-06T12:00:00'))).toBe(7)
+  })
+
+  test('T-SPC-UNIT-81 el chip dice el día, y «HOY» cuando toca hoy', () => {
+    expect(dayChip(3, 1)).toBe('MIÉRCOLES')
+    expect(dayChip(1, 1)).toBe('HOY')
+  })
+
+  test('T-SPC-UNIT-82 la semana son siete días, y se ve dónde están los libres', () => {
+    const days = weekDays(
+      cardsFor(plan([routine({ program_day: 1, done: true }), routine({ program_day: 4 })])),
+      4,
+    )
+
+    expect(days).toHaveLength(7)
+    expect(days.map((one) => one.planned)).toEqual([true, false, false, true, false, false, false])
+    expect(days[0]?.done).toBe(true)
+    expect(days[3]).toMatchObject({ planned: true, done: false, today: true })
+  })
+
+  test('T-SPC-UNIT-83 un día con una sesión a medias no está cumplido', () => {
+    const days = weekDays(
+      cardsFor(plan([routine({ program_day: 2, done: true }), routine({ program_day: 2 })])),
+      1,
+    )
+
+    expect(days[1]).toMatchObject({ planned: true, done: false })
+  })
+
+  test('T-SPC-UNIT-84 el botón no promete empezar lo que ya está empezado', () => {
+    expect(startLabel('open')).toBe('Continuar')
+    expect(startLabel('done')).toBe('Repetir')
+    expect(startLabel('suggested')).toBe('Empezar')
+    expect(startLabel('pending')).toBe('Empezar')
   })
 })

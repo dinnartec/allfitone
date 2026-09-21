@@ -5,10 +5,12 @@ import type { Program, SpacePlanningDatabase, WeekPlan } from '../domain/space.j
 
 const ASSIGNMENT_ID = '019f9000-0000-7000-8000-000000000011'
 const VERSION_ID = '019f3000-0000-7000-8000-000000000006'
+const TEMPLATE_VERSION_ID = '019f9000-0000-7000-8000-000000000043'
 
 function routine(done: boolean, id: string) {
   return {
     planned_session_id: id,
+    template_version_id: TEMPLATE_VERSION_ID,
     title: 'Empuje',
     discipline_code: 'strength',
     status: done ? ('completed' as const) : ('scheduled' as const),
@@ -85,6 +87,23 @@ describe('readWeekProgress', () => {
       sessions_planned: 0,
       sessions_completed: 0,
     })
+  })
+})
+
+describe('readWeekPlan', () => {
+  test('hands the week through with the routine version on every session', async () => {
+    // The service counts the week for Hoy and hands the same week to the carousel, which
+    // draws each session with the cover of the routine `OP-PLN-025` answers. Dropping
+    // the version id here would leave the client matching by title, which repeats.
+    const week = plan([routine(false, 'a'), routine(true, 'b')])
+    const passed = service(async () => week)
+
+    await expect(passed.readWeekPlan(input)).resolves.toEqual(week)
+    const read = await passed.readWeekPlan(input)
+    expect(read?.sessions.map((session) => session.template_version_id)).toEqual([
+      TEMPLATE_VERSION_ID,
+      TEMPLATE_VERSION_ID,
+    ])
   })
 })
 

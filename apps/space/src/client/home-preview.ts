@@ -113,6 +113,13 @@ export interface PreviewFigure {
   readonly delta?: string
 }
 
+/** Lo que la tarjeta dibuja de la última vez, cuando alguien puede responderlo. */
+export interface PreviewHistory {
+  readonly when: string
+  readonly session: string
+  readonly figures: readonly PreviewFigure[]
+}
+
 export const EXAMPLE_HISTORY: {
   readonly when: string
   readonly session: string

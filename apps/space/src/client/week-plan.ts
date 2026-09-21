@@ -70,3 +70,67 @@ export function weekPlanFailure(failure: string | undefined): WeekPlanFailure {
   if (failure === 'not-found') return 'unassigned'
   return 'failed'
 }
+
+/** De lunes a domingo, como los cuenta el programa: 1 es lunes y 7 domingo. */
+const DAY_NAMES = ['', 'LUNES', 'MARTES', 'MIÉRCOLES', 'JUEVES', 'VIERNES', 'SÁBADO', 'DOMINGO']
+
+/**
+ * Qué día es hoy en el mismo sistema que usa el programa.
+ *
+ * `Date.getDay()` cuenta desde el domingo y el programa desde el lunes, y esa diferencia
+ * de un día es la que pondría «HOY» en la tarjeta equivocada.
+ */
+export function programDayOf(date: Date): number {
+  const sundayFirst = date.getDay()
+  return sundayFirst === 0 ? 7 : sundayFirst
+}
+
+/**
+ * El rótulo del chip de una tarjeta: su día, o «HOY» cuando toca hoy.
+ *
+ * El día y no la fecha: el carrusel enseña la semana entera y lo que distingue una
+ * tarjeta de otra es el día que el programa le puso, no cuándo cae en el calendario.
+ */
+export function dayChip(programDay: number, today: number): string {
+  if (programDay === today) return 'HOY'
+  return DAY_NAMES[programDay] ?? ''
+}
+
+export interface WeekDay {
+  readonly day: number
+  /** El programa pide algo ese día. */
+  readonly planned: boolean
+  readonly done: boolean
+  readonly today: boolean
+}
+
+/**
+ * La semana como siete días y no como tres barras.
+ *
+ * **Siete tramos, uno por día**, que es lo que el diseño dibuja y lo que deja ver la
+ * forma de la semana: dónde están los días de entrenar y dónde los libres. Una barra por
+ * sesión decía cuántas van de cuántas —eso ya lo dice la marcha de al lado— pero no
+ * cuándo.
+ */
+export function weekDays(cards: readonly RoutineCard[], today: number): readonly WeekDay[] {
+  return [1, 2, 3, 4, 5, 6, 7].map((day) => {
+    const planned = cards.filter((card) => card.routine.program_day === day)
+    return {
+      day,
+      planned: planned.length > 0,
+      done: planned.length > 0 && planned.every((card) => card.routine.done),
+      today: day === today,
+    }
+  })
+}
+
+/**
+ * Qué dice el botón de empezar, que no siempre empieza.
+ *
+ * Un intento abierto se continúa y una sesión cerrada se repite: prometer «empezar» sobre
+ * algo a medias es lo que hace que alguien pierda lo que llevaba.
+ */
+export function startLabel(state: RoutineState): string {
+  if (state === 'open') return 'Continuar'
+  return state === 'done' ? 'Repetir' : 'Empezar'
+}

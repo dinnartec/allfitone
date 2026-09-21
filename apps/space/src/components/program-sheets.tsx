@@ -14,7 +14,6 @@
 
 import { Badge } from '@allfitone/react-native/badge'
 import { Button } from '@allfitone/react-native/button'
-import { SignalBlock } from '@allfitone/react-native/gradient'
 import { FoundationIcon } from '@allfitone/react-native/icons'
 import { Text } from '@allfitone/react-native/text'
 import { TextField } from '@allfitone/react-native/text-field'
@@ -25,6 +24,7 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import type { MyRoutine } from '../client/content'
 import type { MyProgram } from '../client/programs'
 import { removalWarning, routinesNamed } from '../client/library'
+import { OfferRow } from './offer-row'
 
 /**
  * El día y la pregunta, en una línea.
@@ -140,8 +140,6 @@ export function FirstRoutineBody({
   readonly day: string | undefined
   readonly onCreate: () => void
 }) {
-  const theme = useTheme()
-
   return (
     <View style={styles.first}>
       <DayHeading
@@ -149,28 +147,12 @@ export function FirstRoutineBody({
         line="Todavía está libre. Una rutina es la sesión que se repite: sus ejercicios, sus series y sus pesos."
       />
 
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Crear una rutina"
-        accessibilityHint="Eliges ejercicios, series y pesos"
+      <OfferRow
+        icon="add"
+        label="Crear una rutina"
+        caption="Eliges ejercicios, series y pesos"
         onPress={onCreate}
-        style={({ pressed }) => [styles.offer, { opacity: pressed ? 0.7 : 1 }]}
-      >
-        <SignalBlock variant="surfaceDeep" style={styles.offerBlock}>
-          <View style={[styles.offerIcon, { backgroundColor: theme.color.icon.accent }]}>
-            <FoundationIcon name="add" size="sm" color={theme.color.accent.onAccent} decorative />
-          </View>
-          <View style={styles.offerText}>
-            <Text role="control" size="sm">
-              Crear una rutina
-            </Text>
-            <Text role="body" size="2xs" color="muted">
-              Eliges ejercicios, series y pesos
-            </Text>
-          </View>
-          <FoundationIcon name="next" size="sm" color={theme.color.icon.secondary} decorative />
-        </SignalBlock>
-      </Pressable>
+      />
 
       <Text role="body" size="xs" color="muted">
         Cuando tengas una, podrás ponerla en cualquier día del programa.
@@ -317,23 +299,6 @@ const styles = StyleSheet.create({
   actions: { gap: 12 },
   first: { gap: 12 },
   context: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  offer: { borderRadius: 22 },
-  offerBlock: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    borderRadius: 22,
-    paddingHorizontal: 14,
-    height: 74,
-  },
-  offerIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  offerText: { flex: 1, gap: 2 },
   // La lista se desplaza y el botón de abajo no: el tope la deja alta sin empujarlo
   // fuera de la hoja.
   day: { gap: 12 },

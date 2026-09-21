@@ -81,6 +81,7 @@ const detail: ProgramDetail = {
 
 const SESSION_ID = '019f9000-0000-7000-8000-000000000031'
 const TEMPLATE_ID = '019f9000-0000-7000-8000-000000000041'
+const TEMPLATE_VERSION_ID = '019f9000-0000-7000-8000-000000000043'
 const PROGRAM_ID = '019f9000-0000-7000-8000-000000000051'
 const ETAG = `"sha256:${'A'.repeat(43)}"`
 
@@ -154,6 +155,7 @@ const weekPlan: WeekPlan = {
   sessions: [
     {
       planned_session_id: SESSION_ID,
+      template_version_id: TEMPLATE_VERSION_ID,
       title: 'Empuje',
       discipline_code: 'strength',
       status: 'completed',
@@ -497,6 +499,21 @@ describe('GET /space/v1/week-plan', () => {
 
     expect(response.status).toBe(200)
     expect(await response.json()).toEqual(weekPlan)
+  })
+
+  test('T-PLN-API-161 names the routine version each session plans', async () => {
+    // The cover the Hoy carousel draws lives on the routine `OP-PLN-025` answers, and
+    // the title is not a key: it repeats across routines and changes between versions.
+    const response = await harness().request('/space/v1/week-plan?timezone=America/Bogota', {
+      headers: authorized,
+    })
+
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as WeekPlan
+    expect(body.sessions.map((routine) => routine.template_version_id)).toEqual([
+      TEMPLATE_VERSION_ID,
+    ])
+    assertMatchesContract('SpaceWeekPlan', body)
   })
 
   test('T-PLN-API-081 refuses without a zone, because a week is a local question', async () => {
