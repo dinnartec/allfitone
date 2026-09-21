@@ -39,11 +39,21 @@
 import { Badge } from '@allfitone/react-native/badge'
 import { Button } from '@allfitone/react-native/button'
 import { Scrim, SignalBlock } from '@allfitone/react-native/gradient'
+import { IconButton } from '@allfitone/react-native/icon-button'
 import { markOf } from '@allfitone/react-native/monogram'
 import { Text } from '@allfitone/react-native/text'
 import { useTheme } from '@allfitone/react-native/theme'
 import { Image } from 'expo-image'
+import * as Haptics from 'expo-haptics'
+import { useState } from 'react'
 import { StyleSheet, View } from 'react-native'
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated'
 
 import { litSlugsFor } from '../client/exercise-catalogue'
 import type { ExerciseLibrary } from '../client/exercise-library'
@@ -56,6 +66,7 @@ import {
   type PreviewHistory,
 } from '../client/home-preview'
 import { drawsSomething, type RoutineCover } from '../client/routine-cover'
+import type { LastTimeShown } from '../client/week-plan'
 import { BodyFigure, faceShowing } from './body-figure'
 import { coverArt } from './routine-cover-art'
 
@@ -108,6 +119,43 @@ const TILE_ALONE = 104
 const COLUMN_BESIDE_FIGURE = 66
 const COLUMN_GAP_BESIDE_FIGURE = 4
 
+/**
+ * Cuánto tarda el giro y con qué curva.
+ *
+ * Trescientos veinte porque por debajo de trescientos el volteo se lee como un corte
+ * entre dos pantallas y deja de ser la misma tarjeta; la curva es la del movimiento en
+ * pantalla, que entra y sale despacio porque el objeto pesa.
+ */
+const TURN_MS = 320
+const TURN_EASE = Easing.bezier(0.77, 0, 0.175, 1)
+
+/** Las medidas del reverso, del lienzo de `FIN-2i` sobre una tarjeta de 330. */
+const BARS = 152
+const BAR_TRACK = 3
+/**
+ * La ventana del reverso es más baja que la del frente.
+ *
+ * Con los ciento cincuenta de la otra la figura pasaba por debajo del filete y se
+ * metía entre las cifras de la última vez, que es lo único de esa mitad que hay que
+ * poder leer de un vistazo. Y no más ancha que el frente: los ciento catorce del
+ * lienzo dejaban asomar por los bordes dos jirones de brazo sueltos.
+ */
+/**
+ * El alto de la columna que le queda a la figura en el reverso.
+ *
+ * Es el hueco entre el nombre y el filete, y no un tamaño de figura: el recorte se
+ * calcula del grupo para llenarlo, así que cambiar este número cambia el tamaño de lo
+ * que se dibuja sin volver a partir a nadie.
+ */
+const BACK_FIGURE_COLUMN = 130
+/**
+ * Cuánto baja el bloque de músculos cuando no hay pasado que contar.
+ *
+ * Sin la mitad de abajo, dejarlo donde estaba deja un tercio de tarjeta en blanco al
+ * pie. Se centra en lo que hay, en vez de anunciar el hueco de lo que falta.
+ */
+const BACK_DROP = 44
+
 /** La ventana por la que se ve la figura, y a qué tamaño se dibuja detrás. */
 const WINDOW = { width: 96, height: 150 }
 const FIGURE_HEIGHT = 340
@@ -132,6 +180,7 @@ export function HomeCard({
   worked,
   library,
   history,
+  lastTime,
   actions,
 }: {
   readonly title: string
@@ -150,6 +199,11 @@ export function HomeCard({
   readonly library: ExerciseLibrary | undefined
   /** Las cifras de la última vez. Sin ellas la tarjeta no las finge. */
   readonly history?: PreviewHistory | undefined
+  /**
+   * Cómo fue la última vez, para el reverso. Su presencia es lo que hace que la tarjeta
+   * se pueda girar: sin nada detrás, el botón daría la vuelta a una cara vacía.
+   */
+  readonly lastTime?: LastTimeShown | undefined
   /** Sin acciones la tarjeta es una imagen y no se puede tocar. */
   readonly actions?: CardActions | undefined
 }) {
@@ -157,6 +211,43 @@ export function HomeCard({
   const name = previewTitle(title)
   const photographed = cover?.kind === 'photo' && Boolean(coverUrl)
   const still = actions === undefined
+
+  // Se gira lo que tiene dos caras. Una rutina sin músculos curados y sin pasado no
+  // tiene reverso, y ofrecer el botón sería prometer algo que al girar no está.
+  const shown = (load ?? []).slice(0, MUSCLES_SHOWN)
+  const turnable = !still && photographed && (shown.length > 0 || lastTime !== undefined)
+
+  const [turned, setTurned] = useState(false)
+  const reduced = useReducedMotion()
+  const spin = useSharedValue(0)
+
+  const turn = () => {
+    const next = !turned
+    setTurned(next)
+    // Tiempo y no muelle: ningún dedo trae velocidad hasta aquí, y el rebote en algo
+    // que nadie lanzó se lee como un fallo y no como peso.
+    spin.set(withTiming(next ? 1 : 0, { duration: TURN_MS, easing: TURN_EASE }))
+    void Haptics.selectionAsync()
+  }
+
+  // La opacidad conmuta en la mitad además de `backfaceVisibility`, que algunos
+  // Android ignoran y dejan las dos caras una encima de la otra.
+  const frontFace = useAnimatedStyle(() =>
+    reduced
+      ? { opacity: 1 - spin.get() }
+      : {
+          opacity: spin.get() < 0.5 ? 1 : 0,
+          transform: [{ perspective: 900 }, { rotateY: `${spin.get() * 180}deg` }],
+        },
+  )
+  const backFace = useAnimatedStyle(() =>
+    reduced
+      ? { opacity: spin.get() }
+      : {
+          opacity: spin.get() < 0.5 ? 0 : 1,
+          transform: [{ perspective: 900 }, { rotateY: `${spin.get() * 180 - 180}deg` }],
+        },
+  )
 
   return (
     // Alto fijo y el mismo para las tres: ni la hoja puede crecer y encoger bajo el pulgar
@@ -177,7 +268,9 @@ export function HomeCard({
           styles.card,
           {
             width: width ?? CARD,
-            height: photographed ? TALL : SHORT,
+            // Girable es siempre alta: una tarjeta que cambia de estatura a mitad de
+            // giro deja de leerse como la misma tarjeta dándose la vuelta.
+            height: photographed || turnable ? TALL : SHORT,
             // El mismo filo en todas, y tenue. El de acento encendía la tarjeta entera
             // y se comía la fotografía, que es lo que la tarjeta tiene que enseñar.
             borderColor: theme.color.border.subtle,
@@ -185,13 +278,20 @@ export function HomeCard({
         ]}
       >
         {photographed && coverUrl ? (
-          <Photographed
-            name={name}
-            figures={figures}
-            chip={chip}
-            coverUrl={coverUrl}
-            actions={actions}
-          />
+          <Animated.View
+            style={[StyleSheet.absoluteFill, turnable ? [styles.face, frontFace] : null]}
+            pointerEvents={turned ? 'none' : 'auto'}
+            importantForAccessibility={turned ? 'no-hide-descendants' : 'auto'}
+          >
+            <Photographed
+              name={name}
+              figures={figures}
+              chip={chip}
+              coverUrl={coverUrl}
+              actions={actions}
+            />
+            {turnable ? <Turn onPress={turn} showing="front" /> : null}
+          </Animated.View>
         ) : (
           <Figured
             name={name}
@@ -206,6 +306,25 @@ export function HomeCard({
             actions={actions}
           />
         )}
+
+        {turnable ? (
+          <Animated.View
+            style={[StyleSheet.absoluteFill, styles.face, styles.back, backFace]}
+            pointerEvents={turned ? 'auto' : 'none'}
+            importantForAccessibility={turned ? 'auto' : 'no-hide-descendants'}
+          >
+            <Reverse
+              name={name}
+              figures={figures}
+              chip={chip}
+              load={shown}
+              worked={worked}
+              library={library}
+              lastTime={lastTime}
+            />
+            <Turn onPress={turn} showing="back" />
+          </Animated.View>
+        ) : null}
       </SignalBlock>
     </View>
   )
@@ -361,6 +480,152 @@ function Figured({
   )
 }
 
+/**
+ * El botón que da la vuelta a la tarjeta.
+ *
+ * Un botón y no un gesto: la tarjeta vive dentro de un carrusel horizontal, y un
+ * deslizamiento que volteara competiría con el que cambia de rutina. El lienzo ya lo
+ * resuelve así.
+ *
+ * Cuadrado redondeado y no redondo, que es la forma que lo hace parte de la tarjeta en
+ * vez de una burbuja encima.
+ */
+function Turn({
+  onPress,
+  showing,
+}: {
+  readonly onPress: () => void
+  readonly showing: 'front' | 'back'
+}) {
+  return (
+    <View style={styles.turn}>
+      <IconButton
+        icon="flip"
+        shape="squircle"
+        size="sm"
+        // Dice a dónde lleva, no qué hace: «girar» no cuenta qué aparece al girar.
+        accessibilityLabel={showing === 'front' ? 'Ver el detalle' : 'Volver a la portada'}
+        onPress={onPress}
+      />
+    </View>
+  )
+}
+
+/**
+ * `FIN-2i` — el reverso, que cuenta lo que la portada calla.
+ *
+ * Las dos secciones van **apiladas** y no alternadas como en `Figured`: ahí la tarjeta
+ * tiene una sola cara y hay que elegir entre los músculos y las cifras; aquí la cara
+ * existe para contarlo todo, y elegir dejaría media tarjeta vacía.
+ *
+ * Lo que no hay no se dibuja. Una rutina sin pasado se queda con los músculos y sin
+ * filete: una línea sobre un hueco es una sección anunciándose vacía.
+ */
+function Reverse({
+  name,
+  figures,
+  chip,
+  load,
+  worked,
+  library,
+  lastTime,
+}: {
+  readonly name: string
+  readonly figures: string
+  readonly chip: string
+  readonly load: readonly MuscleLoad[]
+  readonly worked: readonly string[]
+  readonly library: ExerciseLibrary | undefined
+  readonly lastTime: LastTimeShown | undefined
+}) {
+  const theme = useTheme()
+  // Proporcional al músculo que más trabaja y no a un máximo inventado: la barra dice
+  // cómo se reparte el trabajo de esta rutina, no cuánto es mucho en general.
+  const most = load.reduce((top, one) => Math.max(top, one.sets), 0)
+  const drop = lastTime === undefined ? BACK_DROP : 0
+
+  return (
+    <>
+      <View style={styles.backWhen}>
+        <Badge label={chip} tone="accent" variant="quiet" />
+      </View>
+
+      <View style={styles.backNaming}>
+        <Text role="display" size="3xl" uppercase numberOfLines={1}>
+          {name}
+        </Text>
+        <Text role="body" size="sm" color="secondary">
+          {figures}
+        </Text>
+      </View>
+
+      {load.length === 0 ? null : (
+        <>
+          <View style={[styles.backMusclesLabel, { top: 120 + drop }]}>
+            <Text role="eyebrow" size="xs" color="muted">
+              SERIES POR MÚSCULO
+            </Text>
+          </View>
+
+          <View style={[styles.backMuscles, { top: 146 + drop }]}>
+            {load.map((muscle) => (
+              <View key={muscle.code} style={styles.muscleRow}>
+                <View style={styles.muscleHead}>
+                  {/* La cara de texto y en caja baja: el músculo es un nombre, no un
+                      rótulo, y la condensada aprieta las letras hasta volverlo etiqueta.
+                      `control` es la de texto con el interlineado compacto que la fila
+                      necesita para no empujar al filete. */}
+                  <Text role="control" size="sm" color="secondary" numberOfLines={1}>
+                    {muscle.name}
+                  </Text>
+                  {/* `data` y no `display`: es la cifra condensada con números
+                      tabulares, que es lo que el sistema reserva para una métrica. */}
+                  <Text role="data" size="md">
+                    {String(muscle.sets)}
+                  </Text>
+                </View>
+                <View style={[styles.track, { backgroundColor: theme.color.border.subtle }]}>
+                  <View
+                    style={[
+                      styles.fill,
+                      {
+                        backgroundColor: theme.color.icon.accent,
+                        width: `${most === 0 ? 0 : (muscle.sets / most) * 100}%`,
+                      },
+                    ]}
+                  />
+                </View>
+              </View>
+            ))}
+          </View>
+
+          <View style={[styles.backFigure, { top: 112 + drop }]}>
+            <Torso worked={worked} library={library} height={BACK_FIGURE_COLUMN} fit="region" />
+          </View>
+        </>
+      )}
+
+      {lastTime === undefined ? null : (
+        <>
+          <View style={[styles.backRule, { backgroundColor: theme.color.border.subtle }]} />
+          <View style={styles.backSince}>
+            <Text role="eyebrow" size="xs" color="muted" numberOfLines={1}>
+              {lastTime.when}
+            </Text>
+          </View>
+          <View style={styles.backFigures}>
+            {lastTime.figures.map((figure) => (
+              <View key={figure.unit} style={styles.backFigureColumn}>
+                <Figure value={figure.value} unit={figure.unit} />
+              </View>
+            ))}
+          </View>
+        </>
+      )}
+    </>
+  )
+}
+
 /** El dorsal de la sesión, casi apagado: es textura de la tarjeta, no un dato que leer. */
 function Session({ number }: { readonly number: string }) {
   return (
@@ -511,27 +776,60 @@ function Art({
 function Torso({
   worked,
   library,
+  window: given = WINDOW,
+  height = FIGURE_HEIGHT,
+  fit = 'window',
 }: {
   readonly worked: readonly string[]
   readonly library: ExerciseLibrary | undefined
+  /** Por dónde se recorta, cuando la recorta quien la pide. */
+  readonly window?: { readonly width: number; readonly height: number }
+  /** A qué tamaño se dibuja la figura detrás de la ventana. */
+  readonly height?: number
+  /**
+   * **`region` recorta al grupo, no a un cuadro.**
+   *
+   * Un par de piernas es alto y estrecho y un torso es ancho y bajo, así que una sola
+   * ventana para los dos o parte las piernas o corta los brazos. Peor: una ventana más
+   * ancha que las caderas pesca las manos que cuelgan al costado y las deja flotando
+   * al lado de las piernas, que es lo que se veía.
+   *
+   * Las proporciones salen de la figura, que se dibuja en un rectángulo de dos a uno:
+   * la cadera cae a la mitad, las piernas ocupan poco más de un cuarto del ancho y el
+   * torso con los brazos abiertos casi la mitad.
+   */
+  readonly fit?: 'region' | 'window'
 }) {
   const lit = litSlugsFor(library?.muscles ?? [], worked)
   const lower = dominantRegion(worked, library?.muscles ?? []) === 'lower'
 
+  // `region` recibe el alto de la columna y deduce a qué tamaño hay que dibujar la
+  // figura para que el grupo quepa justo: las piernas son la mitad de la figura y el
+  // tronco con la cadera algo más, así que no es el mismo tamaño para los dos.
+  const span = lower ? 0.5 : 0.54
+  const drawn = fit === 'window' ? height : height / span
+  const width = drawn / 2
+  const frame = fit === 'window' ? given : { width: drawn * (lower ? 0.26 : 0.44), height }
+  const top =
+    fit === 'window'
+      ? lower
+        ? -height * 0.47
+        : -height * 0.03
+      : lower
+        ? -drawn * 0.5
+        : -drawn * 0.04
+
   return (
-    <View style={styles.window}>
+    <View style={[styles.window, { width: frame.width, height: frame.height }]}>
       <View
-        style={[
-          styles.figureBox,
-          { left: -(FIGURE_WIDTH - WINDOW.width) / 2, top: lower ? -160 : -10 },
-        ]}
+        style={[styles.figureBox, { width, height: drawn, left: -(width - frame.width) / 2, top }]}
       >
         <BodyFigure
           // La cara que dibuja algo, de frente primero. Una rutina de espalda vista de
           // frente es una figura sin nada encendido, y eso se lee como un fallo.
           side={faceShowing('male', lit)}
           gender="male"
-          scale={FIGURE_WIDTH / 200}
+          scale={width / 200}
           lit={lit}
           inert={INERT_SLUGS}
           onPressSlug={() => undefined}
@@ -578,6 +876,37 @@ const styles = StyleSheet.create({
   actions: { position: 'absolute', left: PAD, right: PAD, bottom: 12 },
   row: { flexDirection: 'row', gap: 10 },
   action: { flex: 1 },
+
+  face: { backfaceVisibility: 'hidden' },
+  // El degradado del lienzo, que es lo que distingue el reverso de la cara del frente
+  // sin que deje de ser la misma tarjeta.
+  back: { backgroundColor: '#071822' },
+  turn: { position: 'absolute', top: 14, right: 14 },
+
+  backWhen: { position: 'absolute', top: 16, left: PAD },
+  // Ocho puntos más abajo que el lienzo: la condensada en versalitas sube por encima
+  // de su propia caja y el nombre se pegaba al badge del día.
+  backNaming: { position: 'absolute', top: 54, left: PAD, right: 72 },
+  backMusclesLabel: { position: 'absolute', top: 120, left: PAD },
+  // Con la versalita a doce, tres filas y sus aires miden ochenta y nueve: el sitio
+  // que hay entre el rótulo y el filete, y ni un punto más.
+  backMuscles: { position: 'absolute', top: 146, left: PAD, width: BARS + 12, gap: 7 },
+  muscleRow: { gap: 6 },
+  muscleHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  track: { height: BAR_TRACK, borderRadius: 2, overflow: 'hidden' },
+  fill: { height: BAR_TRACK, borderRadius: 2 },
+  backFigure: { position: 'absolute', top: 112, right: 14, alignItems: 'flex-end' },
+  backRule: { position: 'absolute', left: PAD, right: PAD, bottom: 88, height: 1 },
+  backSince: { position: 'absolute', left: PAD, bottom: 72 },
+  backFigures: {
+    position: 'absolute',
+    left: PAD,
+    right: PAD,
+    bottom: 14,
+    flexDirection: 'row',
+    gap: 8,
+  },
+  backFigureColumn: { flex: 1 },
 
   floating: { position: 'absolute', top: 14, left: 14 },
   // Separada de los botones lo que el diseño separa el nombre del par de acciones.
