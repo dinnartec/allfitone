@@ -95,3 +95,30 @@ del catálogo se resuelven en cinta y en remo, porque el producto hoy es gimnasi
 prefirió no decirlo ve una mezcla: no hay un tercer juego, porque «mixto» no es una
 fotografía, es lo que se ve cuando el carrusel alterna. La dirección lleva la audiencia:
 `programs/<program_id>/<audience>/<sha256>.webp`.
+
+## Reencuadradas el 20 de septiembre de 2026, y el marco pasa a 1:1
+
+**El marco del lienzo no tenía la proporción de la tarjeta, y por eso lo que se
+aprobaba no era lo que se veía.** El marco era 350 × 262 —4:3— y la tarjeta de Hoy es
+344 × 340, casi cuadrada. Con ajuste `cover` eso recorta un 24 % del ancho **en la
+app**, así que cualquier encuadre juzgado en una captura del lienzo llegaba a la
+pantalla más cerrado de lo que se había visto. Se revisó el lienzo y se dio por bueno;
+en el teléfono aparecían caras sin cabeza y planos demasiado cortos.
+
+El marco pasa a **350 × 346**, que es la proporción de la tarjeta. Ahora una captura del
+lienzo predice la pantalla, y las piezas salen a 1050 × 1038. La banda de Entrenar, que
+es más ancha, recorta alto: es la superficie secundaria y se acepta.
+
+**La regla que faltaba: se valida en el simulador, no en el lienzo.** El lienzo sirve
+para triar; lo que decide es la tarjeta dibujada por la app con la dirección real
+servida por el origen.
+
+**Siete piezas venían de un original vertical** (768 × 1376) y perdían la cabeza al
+recortar por el centro: «Diez kilómetros», «Empieza a moverte», «En forma en cinco»,
+«Fuerza básica», «Fuerza inicial en cuatro», «Movimiento diario» y «Rodaje diario». Se
+anclan por arriba —el rectángulo de la foto crece a su alto completo y el marco recorta
+desde el borde superior— en vez de por el centro. Las de origen apaisado no tienen ese
+problema: el recorte se lleva ancho, nunca alto.
+
+«Diez kilómetros» hubo que **regenerarla**: en su original la coronilla tocaba el borde
+de la imagen, así que no había encuadre que la recuperara.
