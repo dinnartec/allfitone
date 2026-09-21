@@ -3122,6 +3122,47 @@ export type Database = {
           },
         ]
       }
+      program_cover_photos: {
+        Row: {
+          audience: Database['identity']['Enums']['biological_sex']
+          byte_size: number | null
+          checksum: string | null
+          content_type: string | null
+          height: number | null
+          object_key: string
+          program_id: string
+          width: number | null
+        }
+        Insert: {
+          audience: Database['identity']['Enums']['biological_sex']
+          byte_size?: number | null
+          checksum?: string | null
+          content_type?: string | null
+          height?: number | null
+          object_key: string
+          program_id: string
+          width?: number | null
+        }
+        Update: {
+          audience?: Database['identity']['Enums']['biological_sex']
+          byte_size?: number | null
+          checksum?: string | null
+          content_type?: string | null
+          height?: number | null
+          object_key?: string
+          program_id?: string
+          width?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_program_cover_photos_program'
+            columns: ['program_id']
+            isOneToOne: false
+            referencedRelation: 'programs'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       program_drafts: {
         Row: {
           content: Json
@@ -3316,7 +3357,7 @@ export type Database = {
         Row: {
           author_person_id: string | null
           content_scope: Database['catalog']['Enums']['content_scope']
-          cover_object_key: string | null
+          cover_from_program_id: string | null
           created_at: string
           id: string
           owner_organization_id: string | null
@@ -3329,7 +3370,7 @@ export type Database = {
         Insert: {
           author_person_id?: string | null
           content_scope: Database['catalog']['Enums']['content_scope']
-          cover_object_key?: string | null
+          cover_from_program_id?: string | null
           created_at?: string
           id?: string
           owner_organization_id?: string | null
@@ -3342,7 +3383,7 @@ export type Database = {
         Update: {
           author_person_id?: string | null
           content_scope?: Database['catalog']['Enums']['content_scope']
-          cover_object_key?: string | null
+          cover_from_program_id?: string | null
           created_at?: string
           id?: string
           owner_organization_id?: string | null
@@ -3352,7 +3393,15 @@ export type Database = {
           status?: Database['catalog']['Enums']['publication_status']
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: 'fk_programs_cover_from_program'
+            columns: ['cover_from_program_id']
+            isOneToOne: false
+            referencedRelation: 'programs'
+            referencedColumns: ['id']
+          },
+        ]
       }
       session_template_drafts: {
         Row: {
@@ -3549,6 +3598,10 @@ export type Database = {
       canonical_session_content: { Args: { p_content: Json }; Returns: Json }
       canonical_target: { Args: { p_target: Json }; Returns: Json }
       content_etag: { Args: { p_content: Json }; Returns: string }
+      cover_for: {
+        Args: { p_person_id: string; p_program_id: string }
+        Returns: string
+      }
       create_my_program: {
         Args: {
           p_command_id: string
@@ -3732,7 +3785,7 @@ export type Database = {
       }
       pick_program_cover: { Args: { p_program_id: string }; Returns: string }
       pick_routine_cover: {
-        Args: { p_region: string; p_template_id: string }
+        Args: { p_person_id: string; p_region: string; p_template_id: string }
         Returns: string
       }
       planned_set_errors: { Args: { p_sets: Json }; Returns: string[] }

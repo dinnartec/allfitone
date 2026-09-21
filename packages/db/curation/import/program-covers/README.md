@@ -77,3 +77,21 @@ La clave es el contenido, así que las nuevas son direcciones nuevas, y una base
 que todavía no haya corrido `004_program_covers.sql` sigue pidiendo las viejas: retirarlas
 del sitio en el mismo despliegue que trae las nuevas habría dejado producción sin portadas
 hasta que alguien corriera el guion.
+
+## Rehechas enteras el 20 de septiembre de 2026, y ahora son dos juegos
+
+**Generadas, no de banco.** Veinticuatro fotografías de banco no se parecen entre sí por
+mucho que se busquen bien: cada una trae su luz, su encuadre y su color. El carrusel de
+Hoy las enseña en fila, y ahí la diferencia se ve. Se generan con un solo enunciado de
+estilo —el de `FIN-2b · VF`: luz baja y lateral fría, sombras que caen a negro, paleta
+desaturada, brillo especular en la piel, poca profundidad de campo con el gimnasio
+detrás, encuadre cerrado sobre el gesto— y lo único que cambia entre una y otra es el
+gesto que se está haciendo.
+
+**Todas en un gimnasio.** Para pierna, alguien haciendo pierna. Los programas de carrera
+del catálogo se resuelven en cinta y en remo, porque el producto hoy es gimnasio.
+
+**Y son dos juegos**, `male` y `female`, que es lo que la persona pudo declarar. Quien
+prefirió no decirlo ve una mezcla: no hay un tercer juego, porque «mixto» no es una
+fotografía, es lo que se ve cuando el carrusel alterna. La dirección lleva la audiencia:
+`programs/<program_id>/<audience>/<sha256>.webp`.

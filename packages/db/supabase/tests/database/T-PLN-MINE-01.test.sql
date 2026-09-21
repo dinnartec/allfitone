@@ -109,15 +109,15 @@ select is(
 
 -- Publicar le pone cara. La tarjeta de quien más trabajo puso era la única sin imagen.
 select isnt(
-  (select cover_object_key from planning.programs where id = :'program_id'::uuid),
+  (select cover_from_program_id from planning.programs where id = :'program_id'::uuid),
   null,
   'T-PLN-MINE-6b publicar un programa propio le asigna una portada');
 
 select is(
   (select count(*)::integer from planning.programs as lender
    where lender.content_scope = 'global'
-     and lender.cover_object_key = (select cover_object_key from planning.programs
-                                    where id = :'program_id'::uuid)),
+     and lender.id = (select cover_from_program_id from planning.programs
+                      where id = :'program_id'::uuid)),
   1,
   'T-PLN-MINE-6c y esa portada es la de un programa del catálogo, no una inventada');
 

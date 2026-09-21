@@ -35,11 +35,18 @@ values
   ('019ef000-0000-7000-8000-0000000000f1', '019ef000-0000-7000-8000-0000000000a1', true),
   ('019ef000-0000-7000-8000-0000000000f1', '019ef000-0000-7000-8000-0000000000a2', false);
 
--- Una portada de catálogo contra la que elegir. Propia del test: `seed.sql` no carga la
--- curaduría, así que las veinticuatro reales pueden no estar donde esto corra.
-insert into planning.programs (id, content_scope, status, cover_object_key)
-values ('019ef000-0000-7000-8000-0000000000c1', 'global', 'published',
-        'programs/019ef000-0000-7000-8000-0000000000c1/prueba.webp');
+-- Una portada de catálogo contra la que elegir, con sus dos juegos. Propia del test:
+-- `seed.sql` no carga la curaduría, así que las veinticuatro reales pueden no estar
+-- donde esto corra.
+insert into planning.programs (id, content_scope, status)
+values ('019ef000-0000-7000-8000-0000000000c1', 'global', 'published');
+
+insert into planning.program_cover_photos (program_id, audience, object_key)
+values
+  ('019ef000-0000-7000-8000-0000000000c1', 'male',
+   'programs/019ef000-0000-7000-8000-0000000000c1/male/prueba.webp'),
+  ('019ef000-0000-7000-8000-0000000000c1', 'female',
+   'programs/019ef000-0000-7000-8000-0000000000c1/female/prueba.webp');
 
 set local role allfit_owner;
 select set_config('app.actor_kind', 'person', true);
@@ -160,8 +167,10 @@ select is(
   'IX-48 · a routine no programme holds wears nothing, and its name does the work');
 
 select is(
-  planning.pick_routine_cover(:'template_id'::uuid, 'lower'),
-  planning.pick_routine_cover(:'template_id'::uuid, 'lower'),
+  planning.pick_routine_cover(:'template_id'::uuid, 'lower',
+                              '019ef000-0000-7000-8000-000000000001'),
+  planning.pick_routine_cover(:'template_id'::uuid, 'lower',
+                              '019ef000-0000-7000-8000-000000000001'),
   'IX-48 · and within a photograph, the same routine always gets the same picture');
 
 select * from finish();
