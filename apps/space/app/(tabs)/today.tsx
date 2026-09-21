@@ -359,7 +359,8 @@ export default function Today() {
           <OfferRow
             icon="freestyle"
             label="Entrenamiento libre"
-            caption="Entrena algo que no está en tu programa"
+            caption="Sin programa, registras sobre la marcha"
+            tone="quiet"
             onPress={() => setPending(PENDING.free)}
           />
         ) : null}
