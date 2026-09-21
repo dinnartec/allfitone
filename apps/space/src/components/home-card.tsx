@@ -181,6 +181,7 @@ export function HomeCard({
   library,
   history,
   lastTime,
+  leading,
   actions,
 }: {
   readonly title: string
@@ -204,6 +205,14 @@ export function HomeCard({
    * se pueda girar: sin nada detrás, el botón daría la vuelta a una cara vacía.
    */
   readonly lastTime?: LastTimeShown | undefined
+  /**
+   * La que va delante en el carrusel, que es la única con el filo de acento.
+   *
+   * `FIN-2b` lo pide así: el azul marca cuál es la de ahora y las demás quedan con el
+   * filo tenue. Encenderlas todas devolvería el problema que el acento tiene en
+   * `Ink & Signal` —una señal por pantalla— y dejaría de señalar nada.
+   */
+  readonly leading?: boolean | undefined
   /** Sin acciones la tarjeta es una imagen y no se puede tocar. */
   readonly actions?: CardActions | undefined
 }) {
@@ -271,9 +280,11 @@ export function HomeCard({
             // Girable es siempre alta: una tarjeta que cambia de estatura a mitad de
             // giro deja de leerse como la misma tarjeta dándose la vuelta.
             height: photographed || turnable ? TALL : SHORT,
-            // El mismo filo en todas, y tenue. El de acento encendía la tarjeta entera
-            // y se comía la fotografía, que es lo que la tarjeta tiene que enseñar.
-            borderColor: theme.color.border.subtle,
+            // **Azul sólo la de delante.** En un tema oscuro la sombra no levanta nada
+            // —el lienzo es casi negro y la sombra del sistema es más oscura todavía—,
+            // así que lo que separa la tarjeta del fondo es su filo. El de acento dice
+            // además cuál es la de ahora, y las demás se quedan con el tenue.
+            borderColor: leading ? theme.color.border.accent : theme.color.border.subtle,
           },
         ]}
       >

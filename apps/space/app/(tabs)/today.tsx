@@ -36,7 +36,12 @@ import { useTheme } from '@allfitone/react-native/theme'
 import { useFocusEffect, useRouter } from 'expo-router'
 import { useCallback, useMemo, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native'
-import Animated, { useAnimatedScrollHandler, useSharedValue } from 'react-native-reanimated'
+import Animated, {
+  useAnimatedReaction,
+  useAnimatedScrollHandler,
+  useSharedValue,
+} from 'react-native-reanimated'
+import { scheduleOnRN } from 'react-native-worklets'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { FoundationIcon, type IconName } from '@allfitone/react-native/icons'
 import { semanticSpacing } from '@allfitone/react-native/tokens'
@@ -487,10 +492,24 @@ function Carousel({
     at.set(event.contentOffset.x / step)
   })
 
-  // Cuál va delante, que sólo hace falta saber al parar: es lo que enciende su filo y
-  // lo que se lee en voz alta. Un estado por fotograma para eso sería un render por
-  // fotograma para algo que no cambia mientras el dedo se mueve.
+  /**
+   * Cuál va delante: enciende su filo y es lo que se lee en voz alta.
+   *
+   * **Cambia al cruzar la mitad, no cuando el carrusel se para.** Estaba atado a
+   * `onMomentumScrollEnd`, que no dispara hasta que la inercia termina del todo, así
+   * que el azul llegaba segundos después de que la tarjeta ya estuviera en su sitio.
+   *
+   * Y sigue sin ser un render por fotograma: la reacción vive en el hilo de la
+   * interfaz y sólo cruza al de React cuando el número redondeado cambia, que son dos
+   * o tres veces por gesto.
+   */
   const [leadingIndex, setLeadingIndex] = useState(0)
+  useAnimatedReaction(
+    () => Math.round(at.get()),
+    (now, before) => {
+      if (now !== before) scheduleOnRN(setLeadingIndex, now)
+    },
+  )
 
   return (
     <View style={styles.carousel}>
@@ -502,17 +521,9 @@ function Carousel({
         decelerationRate="fast"
         contentContainerStyle={{ paddingHorizontal: DECK_GUTTER, gap: CARD_GAP }}
         onScroll={follow}
-        onMomentumScrollEnd={(event) =>
-          setLeadingIndex(
-            Math.max(
-              0,
-              Math.min(week.length - 1, Math.round(event.nativeEvent.contentOffset.x / step)),
-            ),
-          )
-        }
         scrollEventThrottle={16}
       >
-        {week.map((one) => {
+        {week.map((one, index) => {
           const routine = routineOfVersion(routines, one.routine.template_version_id)
           return (
             <HomeCard
@@ -536,6 +547,7 @@ function Carousel({
               // El reverso. Lo que no se respondió no viaja, y la tarjeta que se queda
               // sin las dos cosas tampoco ofrece el botón de girar.
               lastTime={lastTimeShown(one.routine.last_time, new Date())}
+              leading={index === leadingIndex}
               actions={{
                 onOpen: () => routine && onOpen(routine.template_id),
                 onStart: () => onStart(one),
