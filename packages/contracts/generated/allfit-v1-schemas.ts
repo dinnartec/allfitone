@@ -5239,6 +5239,50 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  SpaceRoutineLastTime: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['trained_on', 'seconds', 'sets', 'tonnage_kg'],
+    description:
+      'The last finished execution of this routine, which is what the flipped card reports. **Counted per routine, not per version**: a routine takes a new version every time it is published, and matching by version would erase its past the moment somebody edits it.\n**Only what finished counts.** An annulled execution and an attempt still open are both left out: the last time is a time that ended.',
+    properties: {
+      trained_on: {
+        type: 'string',
+        format: 'date',
+        description:
+          "The day it was trained, in the person's zone. The screen words the distance from today.",
+      },
+      seconds: {
+        oneOf: [
+          {
+            type: 'integer',
+            minimum: 0,
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description: 'How long it lasted. Null for an execution that was never closed with an end.',
+      },
+      sets: {
+        type: 'integer',
+        minimum: 0,
+      },
+      tonnage_kg: {
+        oneOf: [
+          {
+            type: 'number',
+            minimum: 0,
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description:
+          "Load moved, always in kilograms. **The database converts**, joining `load_unit_code` to the catalogue's canonical factor, so a session logged in pounds and one logged in kilos add up. Null for a routine that is not strength work: there is no tonnage to report, and zero would invent one.",
+      },
+    },
+  },
   SpaceSessionRefreshCreate: {
     type: 'object',
     additionalProperties: false,
@@ -5632,6 +5676,7 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       'set_count',
       'done',
       'open_execution_id',
+      'last_time',
     ],
     properties: {
       planned_session_id: {
@@ -5688,6 +5733,18 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         ],
         description:
           'An attempt already open on this routine, which is what turns "empezar" into "continuar".',
+      },
+      last_time: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/SpaceRoutineLastTime',
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description:
+          "How the last time went. Null when this routine was never trained: the card's reverse then shows the muscles and says nothing else, because a zero would claim a session in which no work was done.",
       },
     },
   },

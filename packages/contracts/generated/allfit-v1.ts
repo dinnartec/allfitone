@@ -2496,6 +2496,24 @@ export interface components {
       done: boolean
       /** @description An attempt already open on this routine, which is what turns "empezar" into "continuar". */
       open_execution_id: components['schemas']['UuidV7'] | null
+      /** @description How the last time went. Null when this routine was never trained: the card's reverse then shows the muscles and says nothing else, because a zero would claim a session in which no work was done. */
+      last_time: components['schemas']['SpaceRoutineLastTime'] | null
+    }
+    /**
+     * @description The last finished execution of this routine, which is what the flipped card reports. **Counted per routine, not per version**: a routine takes a new version every time it is published, and matching by version would erase its past the moment somebody edits it.
+     *     **Only what finished counts.** An annulled execution and an attempt still open are both left out: the last time is a time that ended.
+     */
+    SpaceRoutineLastTime: {
+      /**
+       * Format: date
+       * @description The day it was trained, in the person's zone. The screen words the distance from today.
+       */
+      trained_on: string
+      /** @description How long it lasted. Null for an execution that was never closed with an end. */
+      seconds: number | null
+      sets: number
+      /** @description Load moved, always in kilograms. **The database converts**, joining `load_unit_code` to the catalogue's canonical factor, so a session logged in pounds and one logged in kilos add up. Null for a routine that is not strength work: there is no tonnage to report, and zero would invent one. */
+      tonnage_kg: number | null
     }
     /** @description Whether the programme's own routines go with it. Asked and never defaulted: the person reads a warning that names what is about to go before confirming, and a value chosen here for them would archive part of their library on their behalf. */
     SpaceProgramRemoval: {

@@ -82,6 +82,8 @@ const detail: ProgramDetail = {
 const SESSION_ID = '019f9000-0000-7000-8000-000000000031'
 const TEMPLATE_ID = '019f9000-0000-7000-8000-000000000041'
 const TEMPLATE_VERSION_ID = '019f9000-0000-7000-8000-000000000043'
+const SECOND_SESSION_ID = '019f9000-0000-7000-8000-000000000032'
+const SECOND_TEMPLATE_VERSION_ID = '019f9000-0000-7000-8000-000000000044'
 const PROGRAM_ID = '019f9000-0000-7000-8000-000000000051'
 const ETAG = `"sha256:${'A'.repeat(43)}"`
 
@@ -165,6 +167,26 @@ const weekPlan: WeekPlan = {
       set_count: 16,
       done: true,
       open_execution_id: null,
+      last_time: {
+        trained_on: '2026-08-24',
+        seconds: 3240,
+        sets: 16,
+        tonnage_kg: 5120.5,
+      },
+    },
+    {
+      planned_session_id: SECOND_SESSION_ID,
+      template_version_id: SECOND_TEMPLATE_VERSION_ID,
+      title: 'Pierna',
+      discipline_code: 'strength',
+      status: 'planned',
+      program_day: 3,
+      scheduled_at: '2026-09-02T10:00:00Z',
+      exercise_count: 4,
+      set_count: 12,
+      done: false,
+      open_execution_id: null,
+      last_time: null,
     },
   ],
 }
@@ -512,7 +534,27 @@ describe('GET /space/v1/week-plan', () => {
     const body = (await response.json()) as WeekPlan
     expect(body.sessions.map((routine) => routine.template_version_id)).toEqual([
       TEMPLATE_VERSION_ID,
+      SECOND_TEMPLATE_VERSION_ID,
     ])
+    assertMatchesContract('SpaceWeekPlan', body)
+  })
+
+  test('T-PLN-API-162 tells how the last time went, and says nothing when there was none', async () => {
+    // The flipped card draws these. A routine nobody trained answers null rather than
+    // zeroes, because a zero claims a session in which no work was done.
+    const response = await harness().request('/space/v1/week-plan?timezone=America/Bogota', {
+      headers: authorized,
+    })
+
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as WeekPlan
+    expect(body.sessions[0]?.last_time).toEqual({
+      trained_on: '2026-08-24',
+      seconds: 3240,
+      sets: 16,
+      tonnage_kg: 5120.5,
+    })
+    expect(body.sessions[1]?.last_time).toBeNull()
     assertMatchesContract('SpaceWeekPlan', body)
   })
 

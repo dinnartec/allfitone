@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test'
 import {
   cardsFor,
   dayChip,
+  lastTimeShown,
   programDayOf,
   startLabel,
   weekDays,
@@ -24,6 +25,7 @@ function routine(overrides: Partial<WeekRoutine> = {}): WeekRoutine {
     set_count: 16,
     done: false,
     open_execution_id: null,
+    last_time: null,
     ...overrides,
   }
 }
@@ -126,5 +128,57 @@ describe('el carrusel de Hoy', () => {
     expect(startLabel('done')).toBe('Repetir')
     expect(startLabel('suggested')).toBe('Empezar')
     expect(startLabel('pending')).toBe('Empezar')
+  })
+})
+
+describe('lastTimeShown', () => {
+  const today = new Date('2026-09-20T15:00:00Z')
+
+  test('T-SPC-UNIT-85 una rutina sin pasado no dibuja la franja', () => {
+    expect(lastTimeShown(null, today)).toBeUndefined()
+  })
+
+  test('T-SPC-UNIT-86 dice a cuántos días quedó, y nombra el ayer y el hoy', () => {
+    const when = (trained_on: string) =>
+      lastTimeShown({ trained_on, seconds: 600, sets: 4, tonnage_kg: null }, today)?.when
+
+    expect(when('2026-09-20')).toBe('LA ÚLTIMA VEZ, HOY')
+    expect(when('2026-09-19')).toBe('LA ÚLTIMA VEZ, AYER')
+    expect(when('2026-09-14')).toBe('LA ÚLTIMA VEZ, HACE 6 DÍAS')
+  })
+
+  test('T-SPC-UNIT-87 las tres cifras van en el orden del diseño', () => {
+    const shown = lastTimeShown(
+      { trained_on: '2026-09-14', seconds: 3240, sets: 16, tonnage_kg: 5120.5 },
+      today,
+    )
+
+    expect(shown?.figures).toEqual([
+      { value: '5,1', unit: 'TONELADAS' },
+      { value: '54', unit: 'MINUTOS' },
+      { value: '16', unit: 'SERIES' },
+    ])
+  })
+
+  test('T-SPC-UNIT-88 debajo de una tonelada se cuenta en kilos, no en «0,5 toneladas»', () => {
+    const shown = lastTimeShown(
+      { trained_on: '2026-09-19', seconds: 60, sets: 1, tonnage_kg: 512.4 },
+      today,
+    )
+
+    expect(shown?.figures).toEqual([
+      { value: '512', unit: 'KILOS' },
+      { value: '1', unit: 'MINUTO' },
+      { value: '1', unit: 'SERIE' },
+    ])
+  })
+
+  test('T-SPC-UNIT-89 lo que no se respondió no se dibuja, y no se dibuja como cero', () => {
+    const shown = lastTimeShown(
+      { trained_on: '2026-09-19', seconds: null, sets: 9, tonnage_kg: null },
+      today,
+    )
+
+    expect(shown?.figures).toEqual([{ value: '9', unit: 'SERIES' }])
   })
 })
