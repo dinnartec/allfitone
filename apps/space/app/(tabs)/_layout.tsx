@@ -22,9 +22,9 @@
  * `TabTrigger` created inside `TabBar` would never be seen. The bar is a shell now;
  * this file says where each destination leads.
  *
- * Historial has no route to lead to, so it is a plain `Tab` among the triggers —
- * the parser skips anything that is not a trigger, and it answers with what it is
- * waiting on instead of navigating into an empty screen.
+ * Progreso and Comida have no route to lead to, so they are plain `Tab`s among the
+ * triggers — the parser skips anything that is not a trigger, and they answer with
+ * what they are waiting on instead of navigating into an empty screen.
  */
 
 import { Text } from '@allfitone/react-native/text'
@@ -53,18 +53,26 @@ export default function TabsLayout() {
       ) : null}
 
       <TabList asChild>
-        <TabBar onPending={setPending}>
+        <TabBar>
           <TabTrigger name="today" href="/today" asChild>
             <Tab icon="home" label="Hoy" active={path === '/today'} />
           </TabTrigger>
           <TabTrigger name="train" href="/train" asChild>
-            <Tab icon="training" label="Entrenar" active={path === '/train'} />
+            <Tab icon="training" label="Entrenamiento" active={path === '/train'} />
           </TabTrigger>
           <Tab
-            icon="history"
-            label="Historial"
+            icon="progress"
+            label="Progreso"
             active={false}
-            onPress={() => setPending(PENDING.history)}
+            onPress={() => setPending(PENDING.progress)}
+          />
+          {/* Cubiertos y no una cámara: Comida es dónde vive lo que registraste, y un
+              obturador prometía una foto que no es lo que abre. */}
+          <Tab
+            icon="nutrition"
+            label="Comida"
+            active={false}
+            onPress={() => setPending(PENDING.food)}
           />
           <TabTrigger name="profile" href="/profile" asChild>
             <Tab icon="person" label="Perfil" active={path === '/profile'} />

@@ -1,10 +1,11 @@
 /**
- * The five destinations, as the canvas's split-glass variant.
+ * The five destinations, in one bar.
  *
- * Two floating objects rather than one bar: a glass pill holding the four places you
- * go, and the camera on its own beside it. Registering a meal is not a destination —
- * it is the action you take from wherever you are — and putting it inside the bar as
- * a fifth tab made it look like one.
+ * It used to be two floating objects: a glass pill with four places and the camera
+ * on its own beside it, on the reading that registering a meal is an action rather
+ * than a destination. **Comida is a destination now** — it is where the food you
+ * logged lives, not a shutter — so it joins the pill and the camera goes. A control
+ * that looks like a shutter promises a photo, and that promise was the wrong one.
  *
  * The glass is `GlassPanel` from the Design System, which reserves this material for
  * floating chrome and costs a real backdrop blur: one panel per screen is the budget,
@@ -16,14 +17,13 @@
  * and one `asChild` level, and nothing else — a trigger created inside this file, or
  * nested under the glass panel, would never be found and the tab would not exist.
  *
- * **Only Hoy, Entrenar and Perfil lead anywhere today.** The rest answer with the
- * screen they are waiting on rather than navigating into nothing: a dead end that
- * explains itself is not the empty screen `HU-SP-090` criterion 3 forbids, and a
- * blank one would be.
+ * **Only Hoy, Entrenamiento and Perfil lead anywhere today.** The rest answer with
+ * the screen they are waiting on rather than navigating into nothing: a dead end
+ * that explains itself is not the empty screen `HU-SP-090` criterion 3 forbids, and
+ * a blank one would be.
  */
 
 import { GlassPanel } from '@allfitone/react-native/glass'
-import { resolveShadowStyle } from '@allfitone/react-native/shadow-style'
 import { FoundationIcon, type IconName } from '@allfitone/react-native/icons'
 import { Text } from '@allfitone/react-native/text'
 import { useTheme } from '@allfitone/react-native/theme'
@@ -33,24 +33,24 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 /** The canvas's floating bar, and the room the content has to leave under it. */
 export const DOCK_HEIGHT = 70
-const DOCK_INSET = 16
+// Más pegada a los bordes que cuando la cámara le robaba setenta puntos: con cinco
+// destinos cada columna necesita todo el ancho que la pantalla pueda dar.
+const DOCK_INSET = 8
 
-export type TabKey = 'today' | 'train' | 'history' | 'profile'
+export type TabKey = 'today' | 'train' | 'progress' | 'food' | 'profile'
 
 /** What a destination that does not exist yet answers instead of navigating. */
-export const PENDING: Record<'history' | 'food', string> = {
-  history: 'Tu historial llega con las sesiones registradas.',
+export const PENDING: Record<'progress' | 'food', string> = {
+  progress: 'Tu progreso llega con las sesiones registradas.',
   food: 'Comida llega con el registro de nutrición.',
 }
 
 export interface TabBarProps {
   /** The destinations, already wrapped in whatever the router needs. */
   readonly children: ReactNode
-  readonly onPending: (message: string) => void
 }
 
-export function TabBar({ children, onPending }: TabBarProps) {
-  const theme = useTheme()
+export function TabBar({ children }: TabBarProps) {
   const insets = useSafeAreaInsets()
 
   return (
@@ -58,22 +58,6 @@ export function TabBar({ children, onPending }: TabBarProps) {
       <GlassPanel radius="action" style={styles.glass}>
         {children}
       </GlassPanel>
-
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Registrar una comida"
-        onPress={() => onPending(PENDING.food)}
-        style={[
-          styles.capture,
-          resolveShadowStyle('floating'),
-          { backgroundColor: theme.color.action.primary },
-        ]}
-      >
-        <FoundationIcon name="camera" size="md" color={theme.color.action.onPrimary} decorative />
-        <Text role="control" size="2xs" style={{ color: theme.color.action.onPrimary }}>
-          Comida
-        </Text>
-      </Pressable>
     </View>
   )
 }
@@ -107,10 +91,13 @@ export function Tab({
     >
       <FoundationIcon
         name={icon}
-        size="md"
+        size="lg"
         color={active ? theme.color.icon.accent : theme.color.icon.secondary}
         decorative
       />
+      {/* Las cinco al mismo cuerpo, sin que ninguna se encoja por su cuenta: dos
+          etiquetas de tamaños distintos en la misma barra se leen como un fallo, no
+          como jerarquía. Cabe porque cada columna mide su palabra, no un quinto. */}
       <Text role="control" size="2xs" color={active ? 'accent' : 'muted'} numberOfLines={1}>
         {label}
       </Text>
@@ -133,16 +120,12 @@ const styles = StyleSheet.create({
     height: DOCK_HEIGHT,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 6,
+    paddingHorizontal: 2,
   },
-  tab: { flex: 1, alignItems: 'center', gap: 4, minHeight: 44, justifyContent: 'center' },
-  // Square, so the pill and the camera are the same object at two widths.
-  capture: {
-    width: DOCK_HEIGHT,
-    height: DOCK_HEIGHT,
-    borderRadius: DOCK_HEIGHT / 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 2,
-  },
+  // **Columnas iguales.** Se probó dejando que cada una midiera su palabra, para que
+  // «Entrenamiento» cupiera entero: caber cabía, pero los iconos perdían el ritmo
+  // —ciento noventa y tres puntos entre dos y ciento cincuenta y tres entre otros
+  // dos— y una barra cuyos iconos no están a la misma distancia se lee rota. El
+  // ritmo del icono manda sobre el largo de la palabra.
+  tab: { flex: 1, alignItems: 'center', gap: 3, minHeight: 44, justifyContent: 'center' },
 })
