@@ -122,3 +122,16 @@ problema: el recorte se lleva ancho, nunca alto.
 
 «Diez kilómetros» hubo que **regenerarla**: en su original la coronilla tocaba el borde
 de la imagen, así que no había encuadre que la recuperara.
+
+## El tercio de abajo no se ve
+
+La tarjeta de Hoy y la banda de Entrenar escriben el nombre, las cifras y dos botones
+sobre el pie de la fotografía, con un velo que los hace legibles. **Eso tapa el tercio
+inferior de la imagen**, así que el área útil no es la pieza entera: es lo que queda
+por encima del bloque de texto.
+
+Se descubrió con un remo con barra cuya barra caía al borde inferior del cuadro: estaba
+en el archivo, se veía al abrirlo, y en la tarjeta no aparecía porque quedaba detrás de
+«Empezar». El enunciado ahora pide que **el equipo esté en la mitad superior**, y los
+gestos se eligen en consecuencia —jalón, press, remo a la altura del pecho— antes que
+los que trabajan a ras de suelo.

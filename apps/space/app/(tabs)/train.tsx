@@ -258,7 +258,7 @@ export default function Train() {
       <View style={styles.frame}>
         <View style={styles.header}>
           <Text role="control" size="2xl" accessibilityRole="header">
-            Entrenar
+            Entrenamiento
           </Text>
           {/* Sin preguntar qué: el segmentado ya lo dijo. Una hoja que vuelve a
               preguntar entre dos cosas, con una de ellas abierta delante, es un paso
@@ -578,10 +578,10 @@ function CurrentProgram({
         </View>
 
         <View style={styles.currentText}>
-          <Text role="display" size="lg" uppercase numberOfLines={1}>
+          <Text role="display" size="2xl" uppercase numberOfLines={1}>
             {program.title}
           </Text>
-          <Text role="body" size="xs" color="muted">
+          <Text role="body" size="sm" color="muted">
             {programCaption(program, week)}
           </Text>
         </View>
