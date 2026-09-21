@@ -77,6 +77,7 @@ function CoverArt({ cover, worked, muscles, side, coverUrl }: CoverArtProps) {
         source={coverUrl}
         style={{ width: side, height: side }}
         contentFit="cover"
+        contentPosition="top"
         transition={200}
       />
     )

@@ -78,7 +78,7 @@ import { coverArt } from './routine-cover-art'
  * una tarjeta que Hoy no dibuja en ningún teléfono.
  */
 const CARD = 344
-const TALL = 340
+const TALL = 372
 // Veinte puntos más alta que los 216 del lienzo. El nombre va en Barlow Condensed con
 // un interlineado de 0,82, así que sus mayúsculas suben por encima de su propia caja y
 // se pegaban al chip; el diseño lo resuelve con un cuerpo menor, y aquí es más honesto
@@ -353,10 +353,18 @@ function Photographed({
 }) {
   return (
     <>
+      {/* **Anclada arriba, como la banda de Entrenar.** La tarjeta no tiene una sola
+          proporción: el ancho es `min(420, pantalla − 46)` y el alto es fijo, así que
+          su relación cambia con el aparato, y cambiará otra vez si el alto cambia.
+          Mientras la tarjeta sea más estrecha que la fotografía el recorte se lleva
+          ancho y el alto entra entero; en cuanto sea más ancha, se llevará alto — y
+          anclar arriba decide que se lo lleve de los pies y no de la cabeza. Eso es lo
+          que permite mover el alto sin volver a tocar esto. */}
       <Image
         source={coverUrl}
         style={StyleSheet.absoluteFill}
         contentFit="cover"
+        contentPosition="top"
         transition={200}
       />
       {/* **El velo lo pone la tarjeta, no el archivo.** Las portadas del catálogo salen

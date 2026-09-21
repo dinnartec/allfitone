@@ -348,6 +348,7 @@ export default function Train() {
                           source={program.cover_url}
                           style={styles.thumbnail}
                           contentFit="cover"
+                          contentPosition="top"
                           transition={200}
                         />
                       )
