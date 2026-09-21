@@ -61,6 +61,7 @@ import { routineFigures, routineOfVersion } from '../../src/client/library'
 import {
   cardsFor as weekCards,
   dayChip,
+  lastTimeShown,
   programDayOf,
   startLabel,
   weekDays,
@@ -237,31 +238,38 @@ export default function Today() {
           rutina, que sí dice cuál es. Una encima de otra eran dos fotografías peleando
           por el mismo texto. */}
 
-      <ScrollView
-        contentContainerStyle={[
-          styles.content,
-          // The photograph runs under the status bar, so this screen pays for the safe
-          // area itself. Measured, rather than a guess at where a notch ends.
+      {/* **El saludo no se va con el scroll.** Es quién eres y qué día es: lo único de
+          la pantalla que sigue siendo verdad mientras miras cualquier otra cosa, y lo
+          que dice de quién es la aplicación cuando la abres. Vive fuera del `ScrollView`
+          y por eso paga él mismo el área segura. */}
+      <View
+        style={[
+          styles.header,
           assigned
             ? { paddingHorizontal: 24, paddingTop: insets.top + semanticSpacing.screenTop }
             : null,
         ]}
+      >
+        <View style={styles.greeting}>
+          {/* En caja baja y en la cara de texto, no en la condensada en versalitas:
+              es un saludo, y `FIN-2b` lo escribe como se escribe un saludo. */}
+          <Text role="control" size="xl" accessibilityRole="header">
+            {profile.given_name ? `Hola, ${profile.given_name}` : 'Hola'}
+          </Text>
+          <Text role="body" size="sm" color="muted">
+            {date}
+          </Text>
+        </View>
+        <Bell onPress={() => setPending(PENDING.notices)} />
+      </View>
+
+      <ScrollView
+        contentContainerStyle={[
+          styles.content,
+          assigned ? { paddingHorizontal: 24, paddingTop: 20 } : null,
+        ]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.header}>
-          <View style={styles.greeting}>
-            {/* En caja baja y en la cara de texto, no en la condensada en versalitas:
-                es un saludo, y `FIN-2b` lo escribe como se escribe un saludo. */}
-            <Text role="control" size="xl" accessibilityRole="header">
-              {profile.given_name ? `Hola, ${profile.given_name}` : 'Hola'}
-            </Text>
-            <Text role="body" size="sm" color="muted">
-              {date}
-            </Text>
-          </View>
-          <Bell onPress={() => setPending(PENDING.notices)} />
-        </View>
-
         {/* `FIN-2b`. El carrusel es la semana: una tarjeta por sesión, con la portada
             que su programa le puso, y la de hoy marcada. Sustituye al titular único de
             la sesión de hoy, que dejaba el resto de la semana sin enseñar. */}
@@ -525,6 +533,9 @@ function Carousel({
               coverUrl={routine?.cover_url}
               worked={routine?.muscles ?? []}
               library={library}
+              // El reverso. Lo que no se respondió no viaja, y la tarjeta que se queda
+              // sin las dos cosas tampoco ofrece el botón de girar.
+              lastTime={lastTimeShown(one.routine.last_time, new Date())}
               actions={{
                 onOpen: () => routine && onOpen(routine.template_id),
                 onStart: () => onStart(one),
