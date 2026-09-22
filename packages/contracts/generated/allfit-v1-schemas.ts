@@ -4911,7 +4911,7 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
   SpaceProgramDay: {
     type: 'object',
     additionalProperties: false,
-    required: ['day', 'title', 'discipline_code', 'steps'],
+    required: ['day', 'title', 'discipline_code', 'steps', 'cover_url'],
     description: 'One training day of the split, with everything it asks for.',
     properties: {
       day: {
@@ -4931,6 +4931,19 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
           $ref: '#/components/schemas/SpaceProgramStep',
         },
       },
+      cover_url: {
+        oneOf: [
+          {
+            type: 'string',
+            format: 'uri',
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description:
+          "The photograph this day's routine wears, picked by `planning.pick_routine_cover` from the region it trains and the set of whoever is asking — the same picture the routine will show on Hoy once the programme is taken. Null where nothing can be picked, which is a day whose exercises say nothing about what they work, not an error.",
+      },
     },
   },
   SpaceProgramDetail: {
@@ -4947,6 +4960,7 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       'levels',
       'emphases',
       'days',
+      'cover_url',
     ],
     properties: {
       program_version_id: {
@@ -5014,6 +5028,19 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         items: {
           $ref: '#/components/schemas/SpaceProgramDay',
         },
+      },
+      cover_url: {
+        oneOf: [
+          {
+            type: 'string',
+            format: 'uri',
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description:
+          "The same photograph the catalogue listed this programme with, so opening it is not meeting a different programme. It is the set of whoever is asking, resolved by `planning.cover_for`, which is why the answer is cacheable per set and never per version: the version is frozen, the cover hangs off the programme, and a cache keyed only by version id would serve one person the other's picture. Null for a programme with no artwork.",
       },
     },
   },

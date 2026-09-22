@@ -2699,6 +2699,8 @@ export interface components {
       levels: components['schemas']['TrainingExperience'][]
       emphases: components['schemas']['FocusAreaSet']
       days: components['schemas']['SpaceProgramDay'][]
+      /** @description The same photograph the catalogue listed this programme with, so opening it is not meeting a different programme. It is the set of whoever is asking, resolved by `planning.cover_for`, which is why the answer is cacheable per set and never per version: the version is frozen, the cover hangs off the programme, and a cache keyed only by version id would serve one person the other's picture. Null for a programme with no artwork. */
+      cover_url: string | null
     }
     /** @description One training day of the split, with everything it asks for. */
     SpaceProgramDay: {
@@ -2706,6 +2708,8 @@ export interface components {
       title: string
       discipline_code: string
       steps: components['schemas']['SpaceProgramStep'][]
+      /** @description The photograph this day's routine wears, picked by `planning.pick_routine_cover` from the region it trains and the set of whoever is asking — the same picture the routine will show on Hoy once the programme is taken. Null where nothing can be picked, which is a day whose exercises say nothing about what they work, not an error. */
+      cover_url: string | null
     }
     SpaceProgramStep: {
       position: number

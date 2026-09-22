@@ -26,8 +26,8 @@ import type {
   StoredMyRoutine,
   WeekPlan,
   ProgramAssignment,
-  ProgramDetail,
   SpacePlanningDatabase,
+  StoredProgramDetail,
   StoredProgramSummary,
   TrainingProfile,
 } from '../domain/space.js'
@@ -67,7 +67,8 @@ interface DetailRow {
   goals: string[]
   levels: string[]
   emphases: string[]
-  days: ProgramDetail['days']
+  days: StoredProgramDetail['days']
+  cover_object_key: string | null
 }
 
 interface TodayRow {
@@ -433,7 +434,7 @@ function assignment(row: AssignmentRow): ProgramAssignment {
   }
 }
 
-function detail(row: DetailRow): ProgramDetail {
+function detail(row: DetailRow): StoredProgramDetail {
   return {
     program_version_id: row.program_version_id,
     title: row.title,
@@ -441,10 +442,11 @@ function detail(row: DetailRow): ProgramDetail {
     weeks: row.weeks,
     days_per_week: row.days_per_week,
     sex_affinity: row.sex_affinity,
-    goals: row.goals as ProgramDetail['goals'],
-    levels: row.levels as ProgramDetail['levels'],
-    emphases: row.emphases as ProgramDetail['emphases'],
+    goals: row.goals as StoredProgramDetail['goals'],
+    levels: row.levels as StoredProgramDetail['levels'],
+    emphases: row.emphases as StoredProgramDetail['emphases'],
     days: row.days,
+    cover_object_key: row.cover_object_key,
   }
 }
 

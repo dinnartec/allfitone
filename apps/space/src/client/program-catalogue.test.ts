@@ -6,8 +6,11 @@ import {
   targetLabel,
   cardsFor,
   catalogueList,
+  dayFigures,
   filtersFor,
   posterCaption,
+  sessionMinutes,
+  totalExercises,
   programCaption,
   rankCatalogue,
   scoreProgram,
@@ -51,6 +54,22 @@ function band(prefix: string, overrides: Partial<ProgramSummary> = {}): ProgramS
       ...overrides,
     }),
   )
+}
+
+/** Un día del reparto, con los objetivos que se le pasen. */
+function aDay(steps: Array<Record<string, unknown>>, title = 'Día') {
+  return {
+    day: 1,
+    title,
+    discipline_code: 'strength',
+    cover_url: null,
+    steps: steps.map((target, index) => ({
+      position: index + 1,
+      movement_id: null,
+      movement: null,
+      target,
+    })),
+  }
 }
 
 describe('scoreProgram', () => {
@@ -294,17 +313,7 @@ describe('targetLabel', () => {
 })
 
 describe('estimatedMinutes', () => {
-  const day = (steps: Array<Record<string, unknown>>) => ({
-    day: 1,
-    title: 'Día',
-    discipline_code: 'strength',
-    steps: steps.map((target, index) => ({
-      position: index + 1,
-      movement_id: null,
-      movement: null,
-      target,
-    })),
-  })
+  const day = (steps: Array<Record<string, unknown>>) => aDay(steps)
 
   test('adds up the sets at three minutes each, rounded to five', () => {
     expect(
@@ -402,5 +411,43 @@ describe('catalogueList', () => {
 
   test('an empty catalogue hides nothing, which is not the same as hiding everything', () => {
     expect(catalogueList([], EMPTY_PROFILE, false)).toEqual({ cards: [], hidden: 0 })
+  })
+})
+
+describe('sessionMinutes', () => {
+  const strength = (sets: number) => aDay([{ family: 'strength', target_sets: sets }])
+
+  test('averages the days rather than adding them up', () => {
+    // Lo que se decide es cuánto cuesta una tarde, no cuántas horas suma el plan.
+    expect(sessionMinutes([strength(10), strength(20)])).toBe(45)
+  })
+
+  test('leaves a day that estimates nothing out instead of counting it as zero', () => {
+    expect(sessionMinutes([strength(10), aDay([])])).toBe(30)
+  })
+
+  test('answers zero when no day can be estimated, so nothing is shown', () => {
+    expect(sessionMinutes([aDay([]), aDay([])])).toBe(0)
+    expect(sessionMinutes([])).toBe(0)
+  })
+})
+
+describe('totalExercises', () => {
+  test('counts the whole split, which is what says if it is dense or light', () => {
+    expect(totalExercises([aDay([{}, {}]), aDay([{}])])).toBe(3)
+  })
+
+  test('answers zero for a split with nothing in it', () => {
+    expect(totalExercises([])).toBe(0)
+  })
+})
+
+describe('dayFigures', () => {
+  test('says the exercises and the estimate', () => {
+    expect(dayFigures(aDay([{ family: 'strength', target_sets: 10 }]))).toBe('1 ej · ~30 min')
+  })
+
+  test('drops the estimate rather than writing a zero nobody can use', () => {
+    expect(dayFigures(aDay([{ family: 'nonsense' }]))).toBe('1 ej')
   })
 })

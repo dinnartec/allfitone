@@ -224,7 +224,21 @@ export function createSpacePlanningService(
     replaceMyProgramDraft: (input) => database.replaceMyProgramDraft(input),
     publishMyProgram: (input) => database.publishMyProgram(input),
 
-    readProgram: (input) => database.readProgramVersion(input),
+    async readProgram(input) {
+      const version = await database.readProgramVersion(input)
+      if (!version) return null
+      // Dos claves y dos direcciones, compuestas donde se sabe dónde viven los objetos:
+      // la del programa y la de la rutina de cada día.
+      const { cover_object_key, days, ...rest } = version
+      return {
+        ...rest,
+        cover_url: mediaAddress(cover_object_key),
+        days: days.map(({ cover_object_key: dayKey, ...day }) => ({
+          ...day,
+          cover_url: mediaAddress(dayKey),
+        })),
+      }
+    },
 
     chooseProgram: (input) => database.selfAssignProgram(input),
   }

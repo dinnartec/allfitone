@@ -297,6 +297,81 @@ describe('readCatalogue', () => {
   })
 })
 
+describe('readProgram', () => {
+  /**
+   * Dos claves y dos dueños: la del programa cuelga del programa, la del día de su
+   * rutina. Ninguna de las dos sale como clave — componer la dirección es trabajo de
+   * aquí, que es donde se sabe dónde viven los objetos.
+   */
+  const stored = {
+    program_version_id: 'pv1',
+    title: 'Fuerza básica',
+    notes: null,
+    weeks: 8,
+    days_per_week: 3,
+    sex_affinity: null,
+    goals: ['build_muscle'],
+    levels: ['starting'],
+    emphases: ['chest'],
+    cover_object_key: 'programs/p1/male/abc.webp',
+    days: [
+      {
+        day: 1,
+        title: 'Empuje',
+        discipline_code: 'strength',
+        cover_object_key: 'programs/p9/male/dia.webp',
+        steps: [],
+      },
+      { day: 2, title: 'Tirón', discipline_code: 'strength', cover_object_key: null, steps: [] },
+    ],
+  }
+
+  function withDetail(detail: unknown) {
+    const database = {
+      readProgramVersion: async () => detail,
+    } as unknown as SpacePlanningDatabase
+    return createSpacePlanningService(database, 'https://media.test/catalog/')
+  }
+
+  test('composes the programme cover and every day cover', async () => {
+    const detail = await withDetail(stored).readProgram({
+      personId: 'p',
+      programVersionId: 'pv1',
+      requestId: 'r',
+    })
+
+    expect(detail?.cover_url).toBe('https://media.test/catalog/programs/p1/male/abc.webp')
+    expect(detail?.days[0]?.cover_url).toBe('https://media.test/catalog/programs/p9/male/dia.webp')
+  })
+
+  test('answers null for a day with nothing to borrow, and keeps the day', async () => {
+    const detail = await withDetail(stored).readProgram({
+      personId: 'p',
+      programVersionId: 'pv1',
+      requestId: 'r',
+    })
+
+    expect(detail?.days).toHaveLength(2)
+    expect(detail?.days[1]?.cover_url).toBeNull()
+  })
+
+  test('never lets a storage key reach the answer', async () => {
+    const detail = await withDetail(stored).readProgram({
+      personId: 'p',
+      programVersionId: 'pv1',
+      requestId: 'r',
+    })
+
+    expect(JSON.stringify(detail)).not.toContain('cover_object_key')
+  })
+
+  test('hands a missing programme through as null rather than an empty one', async () => {
+    expect(
+      await withDetail(null).readProgram({ personId: 'p', programVersionId: 'x', requestId: 'r' }),
+    ).toBeNull()
+  })
+})
+
 describe('readMyPrograms', () => {
   /**
    * La clave direcciona nuestro almacenamiento y no sale nunca; lo que sale es dónde

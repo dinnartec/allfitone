@@ -31,6 +31,23 @@ export interface StoredMyProgram extends Omit<MyProgram, 'cover_url'> {
 export interface StoredProgramSummary extends Omit<ProgramSummary, 'cover_url'> {
   readonly cover_object_key: string | null
 }
+
+/**
+ * Y en el detalle, dos veces: el programa y cada día del reparto responden una clave, y
+ * quien las sirve les antepone el origen. La demostración del ejercicio no está aquí —
+ * vive en el catálogo de movimientos, y el paso es una forma que comparten el reparto y
+ * la sesión, que no la pide.
+ */
+export type ProgramDay = AllfitV1Schemas['SpaceProgramDay']
+
+export interface StoredProgramDay extends Omit<ProgramDay, 'cover_url'> {
+  readonly cover_object_key: string | null
+}
+
+export interface StoredProgramDetail extends Omit<ProgramDetail, 'cover_url' | 'days'> {
+  readonly cover_object_key: string | null
+  readonly days: readonly StoredProgramDay[]
+}
 export type MyRoutine = AllfitV1Schemas['SpaceMyRoutine']
 export type RoutineCover = AllfitV1Schemas['RoutineCover']
 export type ProgramCover = AllfitV1Schemas['SpaceProgramCover']
@@ -76,7 +93,7 @@ export interface SpacePlanningDatabase {
     personId: string
     programVersionId: string
     requestId: string
-  }): Promise<ProgramDetail | null>
+  }): Promise<StoredProgramDetail | null>
   /** Null on a day the program does not ask for anything. A rest day is an answer. */
   readTodaySession(input: {
     personId: string

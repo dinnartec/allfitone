@@ -221,6 +221,36 @@ function suggestedFirst(cards: readonly ProgramCard[]): readonly ProgramCard[] {
   return marked.length === 0 ? cards : [...marked, ...cards.filter((card) => !card.suggested)]
 }
 
+/**
+ * Los minutos que el encabezado del detalle anuncia por sesión.
+ *
+ * **El promedio de los días y no el total del programa.** Lo que alguien está decidiendo
+ * es cuánto le va a costar una tarde, no cuántas horas suma el plan entero; sumarlos
+ * daría una cifra grande y sin uso. Se redondea a los cinco más cercanos porque es una
+ * estimación y escribirla al minuto la haría parecer medida.
+ *
+ * Los días que no estiman nada —ninguno de sus pasos dice cuánto dura— no entran en el
+ * promedio en vez de contar como cero, que lo hundiría.
+ */
+export function sessionMinutes(days: readonly ProgramDay[]): number {
+  const estimates = days.map(estimatedMinutes).filter((minutes) => minutes > 0)
+  if (estimates.length === 0) return 0
+  const average = estimates.reduce((total, minutes) => total + minutes, 0) / estimates.length
+  return Math.max(5, Math.round(average / 5) * 5)
+}
+
+/** Cuántos ejercicios tiene el reparto entero, que es lo que dice si es denso o ligero. */
+export function totalExercises(days: readonly ProgramDay[]): number {
+  return days.reduce((total, day) => total + day.steps.length, 0)
+}
+
+/** Lo que la tarjeta de un día escribe bajo su nombre: «5 ej · ~50 min». */
+export function dayFigures(day: ProgramDay): string {
+  const exercises = `${day.steps.length} ej`
+  const minutes = estimatedMinutes(day)
+  return minutes > 0 ? `${exercises} · ~${minutes} min` : exercises
+}
+
 export interface CatalogueFilter {
   readonly key: string
   readonly label: string

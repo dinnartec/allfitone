@@ -67,6 +67,7 @@ const detail: ProgramDetail = {
       day: 1,
       title: 'Empuje',
       discipline_code: 'strength',
+      cover_url: 'https://media.test/catalog/programs/p6/male/dia.webp',
       steps: [
         {
           position: 1,
@@ -77,6 +78,7 @@ const detail: ProgramDetail = {
       ],
     },
   ],
+  cover_url: 'https://media.test/catalog/programs/p6/male/abc.webp',
 }
 
 const SESSION_ID = '019f9000-0000-7000-8000-000000000031'
@@ -461,6 +463,37 @@ describe('GET /space/v1/programs', () => {
 })
 
 describe('GET /space/v1/programs/{programVersionId}', () => {
+  test('T-PLN-API-166 gives the detail the same face the list gave it', async () => {
+    // Abrir un programa no puede ser encontrarse con otro: la portada del detalle es
+    // la de la lista, y cada día lleva la de su rutina.
+    const response = await harness().request(`/space/v1/programs/${VERSION_ID}`, {
+      headers: authorized,
+    })
+
+    const body = (await response.json()) as ProgramDetail
+    expect(body.cover_url).toBe('https://media.test/catalog/programs/p6/male/abc.webp')
+    expect(body.days[0]?.cover_url).toBe('https://media.test/catalog/programs/p6/male/dia.webp')
+    assertMatchesContract('SpaceProgramDetail', body)
+  })
+
+  test('T-PLN-API-167 draws a programme with no artwork rather than refusing it', async () => {
+    const bare = harness({
+      service: {
+        readProgram: async () => ({
+          ...detail,
+          cover_url: null,
+          days: detail.days.map((day) => ({ ...day, cover_url: null })),
+        }),
+      },
+    })
+    const response = await bare.request(`/space/v1/programs/${VERSION_ID}`, { headers: authorized })
+
+    const body = (await response.json()) as ProgramDetail
+    expect(body.cover_url).toBeNull()
+    expect(body.days).toHaveLength(1)
+    assertMatchesContract('SpaceProgramDetail', body)
+  })
+
   test('T-PLN-API-060 answers the whole content of the version', async () => {
     const response = await harness().request(`/space/v1/programs/${VERSION_ID}`, {
       headers: authorized,

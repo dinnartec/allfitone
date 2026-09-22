@@ -3948,6 +3948,7 @@ export type Database = {
       read_program_version: {
         Args: { p_person_id: string; p_program_version_id: string }
         Returns: {
+          cover_object_key: string
           days: Json
           days_per_week: number
           emphases: string[]
@@ -4004,6 +4005,10 @@ export type Database = {
         }[]
       }
       region_of_content: { Args: { p_content: Json }; Returns: string }
+      region_of_version: {
+        Args: { p_template_version_id: string }
+        Returns: string
+      }
       remove_my_program: {
         Args: {
           p_command_id: string
