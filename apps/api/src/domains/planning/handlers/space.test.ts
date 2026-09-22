@@ -262,7 +262,7 @@ const weekSummary = {
   trained_seconds: 2700,
   sessions_completed: 3,
   sessions_planned: 5,
-  latest_weight: null,
+  tonnage_kg: 5120.5,
   history: [],
 }
 
@@ -883,6 +883,19 @@ describe('GET /space/v1/today', () => {
     expect(body.week.sessions_completed).toBe(0)
     // And what Execution does own still comes through.
     expect(body.week.trained_seconds).toBe(2700)
+  })
+
+  test('T-PLN-API-163 the week weighs what was lifted, not what the person weighs', async () => {
+    // Body weight used to sit in this slot. It is a measurement of the body, not
+    // something done during the week, and it has its own home in body progress.
+    const response = await harness().request('/space/v1/today?timezone=America/Bogota', {
+      headers: authorized,
+    })
+
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as { week: { tonnage_kg: number | null } }
+    expect(body.week.tonnage_kg).toBe(5120.5)
+    assertMatchesContract('SpaceToday', body)
   })
 
   test('T-PLN-API-104 refuses a request with no timezone, because today is local', async () => {

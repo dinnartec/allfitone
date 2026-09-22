@@ -74,7 +74,7 @@ function harness(overrides?: Partial<SpaceExecutionService>, actorFails = false)
       trained_seconds: 0,
       sessions_completed: 0,
       sessions_planned: 0,
-      latest_weight: null,
+      tonnage_kg: 5120.5,
       history: [],
     }),
     ...overrides,

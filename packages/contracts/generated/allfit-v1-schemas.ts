@@ -5755,7 +5755,7 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       'trained_seconds',
       'sessions_completed',
       'sessions_planned',
-      'latest_weight',
+      'tonnage_kg',
       'history',
     ],
     description:
@@ -5777,15 +5777,18 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         description:
           "How many the selected programme's week asks for. Equal to `sessions_completed` means the week is done. Zero with no programme at all, which is a different screen rather than an error.",
       },
-      latest_weight: {
+      tonnage_kg: {
         oneOf: [
           {
-            $ref: '#/components/schemas/SpaceBodyMeasure',
+            type: 'number',
+            minimum: 0,
           },
           {
             type: 'null',
           },
         ],
+        description:
+          "Load moved this week, always in kilograms. **The weight the person lifted, not the weight the person is**: the screen summarises what was done, and a body measurement is not something you do — it lives in body progress.\n**The database converts**, joining `load_unit_code` to the catalogue's canonical factor, so a session logged in pounds and one logged in kilos add up. Null when no load was recorded at all, because a zero would say somebody trained and moved nothing.",
       },
       history: {
         type: 'array',

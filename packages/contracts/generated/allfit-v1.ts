@@ -2452,7 +2452,11 @@ export interface components {
       sessions_completed: number
       /** @description How many the selected programme's week asks for. Equal to `sessions_completed` means the week is done. Zero with no programme at all, which is a different screen rather than an error. */
       sessions_planned: number
-      latest_weight: components['schemas']['SpaceBodyMeasure'] | null
+      /**
+       * @description Load moved this week, always in kilograms. **The weight the person lifted, not the weight the person is**: the screen summarises what was done, and a body measurement is not something you do — it lives in body progress.
+       *     **The database converts**, joining `load_unit_code` to the catalogue's canonical factor, so a session logged in pounds and one logged in kilos add up. Null when no load was recorded at all, because a zero would say somebody trained and moved nothing.
+       */
+      tonnage_kg: number | null
       history: components['schemas']['SpaceTrainedSession'][]
     }
     SpaceTrainedSession: {

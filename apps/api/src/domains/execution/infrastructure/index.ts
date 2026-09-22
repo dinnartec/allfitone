@@ -71,8 +71,7 @@ interface WeekRow {
   trained_seconds: string | number | null
   sessions_completed: number | null
   sessions_planned: number | null
-  latest_weight_value: string | number | null
-  latest_weight_unit: string | null
+  tonnage_kg: string | number | null
   history: WeekSummary['history']
 }
 
@@ -243,7 +242,7 @@ function week(row: WeekRow | undefined): WeekSummary {
       trained_seconds: 0,
       sessions_completed: 0,
       sessions_planned: 0,
-      latest_weight: null,
+      tonnage_kg: null,
       history: [],
     }
   }
@@ -251,14 +250,9 @@ function week(row: WeekRow | undefined): WeekSummary {
     trained_seconds: Number(row.trained_seconds ?? 0),
     sessions_completed: row.sessions_completed ?? 0,
     sessions_planned: row.sessions_planned ?? 0,
-    latest_weight:
-      row.latest_weight_value === null || row.latest_weight_unit === null
-        ? null
-        : {
-            value: Number(row.latest_weight_value),
-            unit: row.latest_weight_unit,
-            original_unit: null,
-          },
+    // Nulo se conserva: no es lo mismo no haber registrado carga que haber movido cero,
+    // y `Number(null)` sería cero.
+    tonnage_kg: row.tonnage_kg === null ? null : Number(row.tonnage_kg),
     history: row.history ?? [],
   }
 }

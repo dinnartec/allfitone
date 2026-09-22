@@ -627,19 +627,25 @@ function Week({
             tablas de nutrición, así que aquello sólo podía ser un cero o una
             estimación, y esto es lo que la semana registró. */}
         <Figure icon="checklist" value={String(sets)} unit={sets === 1 ? 'Serie' : 'Series'} />
-        <Figure
-          icon="weight"
-          value={week.latest_weight ? weightLabel(week.latest_weight) : '—'}
-          unit="Peso"
-        />
+        {/* El peso que levantaste, no el que pesas. Lo segundo es una medida del
+            cuerpo y vive en tu progreso; esta fila resume lo que hiciste. */}
+        <Figure icon="weight" value={liftedLabel(week.tonnage_kg)} unit="Levantado" />
       </View>
     </View>
   )
 }
 
-/** "70,2 kg", with the comma this market writes and no locale to trust. */
-function weightLabel(measure: NonNullable<TodayPayload['week']['latest_weight']>): string {
-  return `${String(measure.value).replace('.', ',')} ${measure.unit}`
+/**
+ * Lo levantado en la semana, en la unidad que no obligue a contar ceros.
+ *
+ * Por encima de la tonelada se cuenta en toneladas con un decimal: «5.120 kg» son cinco
+ * cifras que hay que leer despacio para saber si fue mucho. Nulo es que no se registró
+ * carga, y eso es una raya y no un cero: cero diría que se entrenó sin mover nada.
+ */
+function liftedLabel(kilos: number | null): string {
+  if (kilos === null || kilos <= 0) return '—'
+  if (kilos >= 1000) return `${(kilos / 1000).toFixed(1).replace('.', ',')} t`
+  return `${String(Math.round(kilos))} kg`
 }
 
 /** Una cifra de la semana: el glifo arriba, el número, y de qué es. */
