@@ -251,45 +251,6 @@ export function dayFigures(day: ProgramDay): string {
   return minutes > 0 ? `${exercises} · ~${minutes} min` : exercises
 }
 
-export interface CatalogueFilter {
-  readonly key: string
-  readonly label: string
-}
-
-/**
- * The filters the "ver todos" screen offers, derived from the catalogue rather than
- * hardcoded: a frequency nobody publishes must not be offerable, and one that appears
- * later must appear here without anybody remembering to add it.
- *
- * `suggested` comes first because it is the only one that knows who is asking.
- */
-export function filtersFor(programs: readonly ProgramSummary[]): readonly CatalogueFilter[] {
-  const frequencies = [...new Set(programs.map((program) => program.days_per_week))].sort(
-    (left, right) => left - right,
-  )
-  return [
-    { key: 'suggested', label: 'Sugeridos' },
-    { key: 'all', label: 'Todos' },
-    ...frequencies.map((days) => ({ key: `days:${days}`, label: `${days} días` })),
-  ]
-}
-
-/**
- * What a filter shows. `suggested` is the same three frequencies the first screen
- * offers, so the two screens cannot disagree about what "for you" means.
- */
-export function applyFilter(
-  key: string,
-  programs: readonly ProgramSummary[],
-  profile: TrainingProfile,
-): readonly ProgramSummary[] {
-  if (key === 'suggested') return cardsFor(programs, profile).map((card) => card.program)
-  const ranked = rankCatalogue(programs, profile)
-  const days = key.startsWith('days:') ? Number(key.slice('days:'.length)) : undefined
-  if (days === undefined || Number.isNaN(days)) return ranked
-  return ranked.filter((program) => program.days_per_week === days)
-}
-
 /**
  * How a target reads on screen: "4 × 8", "5 km", "30 min", "8 × 40s".
  *

@@ -1,13 +1,11 @@
 import { describe, expect, test } from 'bun:test'
 
 import {
-  applyFilter,
   estimatedMinutes,
   targetLabel,
   cardsFor,
   catalogueList,
   dayFigures,
-  filtersFor,
   posterCaption,
   sessionMinutes,
   totalExercises,
@@ -216,63 +214,6 @@ describe('programCaption', () => {
 
   test('says the days alone when no level is declared', () => {
     expect(programCaption(program({ id: 'a', days_per_week: 4, levels: [] }))).toBe('4 días')
-  })
-})
-
-describe('filtersFor', () => {
-  test('offers only the frequencies the catalogue actually publishes', () => {
-    const filters = filtersFor([
-      program({ id: 'a', days_per_week: 3 }),
-      program({ id: 'b', days_per_week: 5 }),
-      program({ id: 'c', days_per_week: 3 }),
-    ])
-
-    expect(filters.map((filter) => filter.key)).toEqual(['suggested', 'all', 'days:3', 'days:5'])
-    expect(filters.map((filter) => filter.label)).toEqual([
-      'Sugeridos',
-      'Todos',
-      '3 días',
-      '5 días',
-    ])
-  })
-
-  test('still offers the two that need no catalogue', () => {
-    expect(filtersFor([]).map((filter) => filter.key)).toEqual(['suggested', 'all'])
-  })
-})
-
-describe('applyFilter', () => {
-  const catalogue = [
-    ...band('musculo', { goals: ['build_muscle'], levels: ['some_practice'] }),
-    ...band('correr', { goals: ['run_a_race'], levels: ['starting'] }),
-  ]
-  const profile: TrainingProfile = {
-    ...EMPTY_PROFILE,
-    primary_training_goal: 'build_muscle',
-    training_experience: 'some_practice',
-  }
-
-  test('suggested is exactly what the first screen offers, so the two cannot disagree', () => {
-    expect(
-      applyFilter('suggested', catalogue, profile).map((entry) => entry.program_version_id),
-    ).toEqual(cardsFor(catalogue, profile).map((card) => card.program.program_version_id))
-  })
-
-  test('all shows the whole catalogue, best match first', () => {
-    const all = applyFilter('all', catalogue, profile)
-
-    expect(all).toHaveLength(catalogue.length)
-    expect(all[0]?.program_version_id.startsWith('musculo')).toBe(true)
-  })
-
-  test('a frequency keeps only that frequency, across every band', () => {
-    const five = applyFilter('days:5', catalogue, profile)
-
-    expect(five.map((entry) => entry.days_per_week)).toEqual([5, 5])
-  })
-
-  test('an unknown filter shows everything rather than nothing', () => {
-    expect(applyFilter('days:nonsense', catalogue, profile)).toHaveLength(catalogue.length)
   })
 })
 
