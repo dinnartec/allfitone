@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test'
 import {
   cardsFor,
   dayChip,
+  LAST_TIME_LABEL,
   lastTimeShown,
   programDayOf,
   startLabel,
@@ -138,11 +139,13 @@ describe('lastTimeShown', () => {
     expect(lastTimeShown(null, today)).toBeUndefined()
   })
 
-  test('T-SPC-UNIT-86 dice a cuántos días quedó, y nombra el ayer y el hoy', () => {
+  test('T-SPC-UNIT-86 dice a cuántos días quedó, y nombra el ayer', () => {
     const when = (trained_on: string) =>
       lastTimeShown({ trained_on, seconds: 600, sets: 4, tonnage_kg: null }, today)?.when
 
-    expect(when('2026-09-20')).toBe('LA ÚLTIMA VEZ, HOY')
+    // Hoy no se nombra: «la última vez, hoy» es una contradicción, y el rótulo solo
+    // dice lo mismo sin ella.
+    expect(when('2026-09-20')).toBe(LAST_TIME_LABEL)
     expect(when('2026-09-19')).toBe('LA ÚLTIMA VEZ, AYER')
     expect(when('2026-09-14')).toBe('LA ÚLTIMA VEZ, HACE 6 DÍAS')
   })

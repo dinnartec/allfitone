@@ -164,6 +164,18 @@ function daysBetween(trainedOn: string, today: Date): number {
  * El tonelaje baja a kilos por debajo de la tonelada: «0,5 TONELADAS» es una cifra que
  * hay que traducir mentalmente para saber si fue mucho o poco.
  */
+/** El rótulo del bloque, que está siempre aunque no haya nada debajo. */
+export const LAST_TIME_LABEL = 'LA ÚLTIMA VEZ'
+
+/**
+ * Lo que va donde irían las cifras cuando nunca se entrenó.
+ *
+ * El bloque no desaparece: un hueco que a veces está y a veces no hace que la tarjeta
+ * cambie de forma según la rutina, y quien la gira no sabe si le falta algo o si es que
+ * no hay nada. Decirlo ocupa el mismo sitio y contesta la pregunta.
+ */
+export const LAST_TIME_NONE = 'Sin sesiones registradas'
+
 export function lastTimeShown(
   last: RoutineLastTime | null | undefined,
   today: Date,
@@ -171,12 +183,14 @@ export function lastTimeShown(
   if (!last) return undefined
 
   const days = daysBetween(last.trained_on, today)
+  // Sin «HOY»: si fue hoy, no es «la última vez, hoy» — es hoy, y el rótulo solo ya lo
+  // dice. Ayer y los días que hayan pasado sí añaden algo que el rótulo no tiene.
   const when =
     days <= 0
-      ? 'LA ÚLTIMA VEZ, HOY'
+      ? LAST_TIME_LABEL
       : days === 1
-        ? 'LA ÚLTIMA VEZ, AYER'
-        : `LA ÚLTIMA VEZ, HACE ${days} DÍAS`
+        ? `${LAST_TIME_LABEL}, AYER`
+        : `${LAST_TIME_LABEL}, HACE ${days} DÍAS`
 
   const figures: PreviewFigure[] = []
 

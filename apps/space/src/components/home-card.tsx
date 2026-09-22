@@ -66,7 +66,7 @@ import {
   type PreviewHistory,
 } from '../client/home-preview'
 import { drawsSomething, type RoutineCover } from '../client/routine-cover'
-import type { LastTimeShown } from '../client/week-plan'
+import { LAST_TIME_LABEL, LAST_TIME_NONE, type LastTimeShown } from '../client/week-plan'
 import { BodyFigure, faceShowing } from './body-figure'
 import { coverArt } from './routine-cover-art'
 
@@ -154,19 +154,26 @@ const BAR_TRACK = 3
  * Es el hueco entre el nombre y el filete, y no un tamaño de figura: el recorte se
  * calcula del grupo para llenarlo, así que cambiar este número cambia el tamaño de lo
  * que se dibuja sin volver a partir a nadie.
- */
-const BACK_FIGURE_COLUMN = 130
-/**
- * Cuánto baja el bloque de músculos cuando no hay pasado que contar.
  *
- * Sin la mitad de abajo, dejarlo donde estaba deja un tercio de tarjeta en blanco al
- * pie. Se centra en lo que hay, en vez de anunciar el hueco de lo que falta.
+ * Ocupa casi todo lo que hay entre el nombre y el bloque de la última vez. Con ciento
+ * treinta la figura se leía como una miniatura al costado y no como lo que la rutina
+ * trabaja, que es para lo que está.
  */
-const BACK_DROP = 44
+const BACK_FIGURE_COLUMN = 280
 
 /** La ventana por la que se ve la figura, y a qué tamaño se dibuja detrás. */
 const WINDOW = { width: 96, height: 150 }
 const FIGURE_HEIGHT = 340
+// Cuánto del ancho de la caja llega a ocupar el cuerpo: las manos, que cuelgan a la
+// altura de la cadera, son lo más ancho que tiene y miden ochenta y ocho centésimas.
+// Lo que se recorta es sólo el fondo que sobra a los lados, nunca una mano.
+const WHOLE_WIDTH = 0.94
+// Dónde caen la coronilla y las plantas dentro de la caja de la figura. La caja trae
+// aire propio arriba y abajo —la sexta parte del alto—, y ese aire es el que sobra.
+const WHOLE_CROWN = 0.0845
+const WHOLE_SOLES = 0.924
+// El aire que sí se deja, dentro de la columna y por los dos lados.
+const WHOLE_INSET = 14
 const FIGURE_WIDTH = FIGURE_HEIGHT / 2
 
 export interface CardActions {
@@ -569,7 +576,6 @@ function Reverse({
   // Proporcional al músculo que más trabaja y no a un máximo inventado: la barra dice
   // cómo se reparte el trabajo de esta rutina, no cuánto es mucho en general.
   const most = load.reduce((top, one) => Math.max(top, one.sets), 0)
-  const drop = lastTime === undefined ? BACK_DROP : 0
 
   return (
     <>
@@ -588,13 +594,13 @@ function Reverse({
 
       {load.length === 0 ? null : (
         <>
-          <View style={[styles.backMusclesLabel, { top: 120 + drop }]}>
+          <View style={[styles.backMusclesLabel, { top: 120 }]}>
             <Text role="eyebrow" size="xs" color="muted">
               SERIES POR MÚSCULO
             </Text>
           </View>
 
-          <View style={[styles.backMuscles, { top: 146 + drop }]}>
+          <View style={[styles.backMuscles, { top: 146 }]}>
             {load.map((muscle) => (
               <View key={muscle.code} style={styles.muscleRow}>
                 <View style={styles.muscleHead}>
@@ -626,28 +632,35 @@ function Reverse({
             ))}
           </View>
 
-          <View style={[styles.backFigure, { top: 112 + drop }]}>
-            <Torso worked={worked} library={library} height={BACK_FIGURE_COLUMN} fit="region" />
+          <View style={styles.backFigure}>
+            <Torso worked={worked} library={library} height={BACK_FIGURE_COLUMN} fit="whole" />
           </View>
         </>
       )}
 
-      {lastTime === undefined ? null : (
-        <>
-          <View style={[styles.backRule, { backgroundColor: theme.color.border.subtle }]} />
-          <View style={styles.backSince}>
-            <Text role="eyebrow" size="xs" color="muted" numberOfLines={1}>
-              {lastTime.when}
-            </Text>
-          </View>
-          <View style={styles.backFigures}>
-            {lastTime.figures.map((figure) => (
-              <View key={figure.unit} style={styles.backFigureColumn}>
-                <Figure value={figure.value} unit={figure.unit} />
-              </View>
-            ))}
-          </View>
-        </>
+      {/* **El bloque está siempre, haya pasado o no.** Uno que aparece y desaparece
+          hace que la tarjeta cambie de forma según la rutina, y quien la gira no sabe si
+          le falta algo o si es que no hay nada. Decirlo ocupa el mismo sitio. */}
+      <View style={[styles.backRule, { backgroundColor: theme.color.border.subtle }]} />
+      <View style={styles.backSince}>
+        <Text role="eyebrow" size="xs" color="muted" numberOfLines={1}>
+          {lastTime?.when ?? LAST_TIME_LABEL}
+        </Text>
+      </View>
+      {lastTime === undefined ? (
+        <View style={styles.backEmpty}>
+          <Text role="body" size="sm" color="muted">
+            {LAST_TIME_NONE}
+          </Text>
+        </View>
+      ) : (
+        <View style={styles.backFigures}>
+          {lastTime.figures.map((figure) => (
+            <View key={figure.unit} style={styles.backFigureColumn}>
+              <Figure value={figure.value} unit={figure.unit} />
+            </View>
+          ))}
+        </View>
       )}
     </>
   )
@@ -684,7 +697,10 @@ function Figure({
     // Ancho fijo: los números bailarían si cada columna midiese su propia palabra.
     <View style={width === undefined ? undefined : { width }}>
       <View style={styles.value}>
-        <Text role="display" size="3xl">
+        {/* La misma cara de siempre, sólo que abierta. `display` trae −0,055 em de
+            interletrado y eso apelmazaba «120» hasta leerse como una mancha; a cero se
+            separa sin cambiar de tipografía, que es lo único que había que arreglar. */}
+        <Text role="display" size="3xl" style={styles.numeral}>
           {value}
         </Text>
         {delta === undefined ? null : (
@@ -695,7 +711,7 @@ function Figure({
           </View>
         )}
       </View>
-      <Text role="eyebrow" size="2xs" color="muted" numberOfLines={1}>
+      <Text role="eyebrow" size="2xs" color="muted" numberOfLines={1} style={styles.unit}>
         {unit.toUpperCase()}
       </Text>
     </View>
@@ -814,37 +830,39 @@ function Torso({
   /** A qué tamaño se dibuja la figura detrás de la ventana. */
   readonly height?: number
   /**
-   * **`region` recorta al grupo, no a un cuadro.**
+   * **`whole` enseña la figura completa, y `window` la recorta a un cuadro fijo.**
    *
-   * Un par de piernas es alto y estrecho y un torso es ancho y bajo, así que una sola
-   * ventana para los dos o parte las piernas o corta los brazos. Peor: una ventana más
-   * ancha que las caderas pesca las manos que cuelgan al costado y las deja flotando
-   * al lado de las piernas, que es lo que se veía.
+   * Hubo un tercer modo que recortaba al grupo trabajado, y se quitó: piernas y torso
+   * pedían escalas, anchos y alturas distintos, de modo que el cuerpo cambiaba de
+   * tamaño y de sitio al pasar de una tarjeta a la siguiente. Y una ventana estrecha
+   * corta por el lado las manos que cuelgan, que quedan como esquirlas sueltas.
    *
-   * Las proporciones salen de la figura, que se dibuja en un rectángulo de dos a uno:
-   * la cadera cae a la mitad, las piernas ocupan poco más de un cuarto del ancho y el
-   * torso con los brazos abiertos casi la mitad.
+   * Entera es más pequeña y se lee peor el músculo encendido. Se acepta: las barras
+   * de al lado ya nombran el músculo, y lo que la figura aporta es la persona.
    */
-  readonly fit?: 'region' | 'window'
+  readonly fit?: 'whole' | 'window'
 }) {
   const lit = litSlugsFor(library?.muscles ?? [], worked)
   const lower = dominantRegion(worked, library?.muscles ?? []) === 'lower'
 
-  // `region` recibe el alto de la columna y deduce a qué tamaño hay que dibujar la
-  // figura para que el grupo quepa justo: las piernas son la mitad de la figura y el
-  // tronco con la cadera algo más, así que no es el mismo tamaño para los dos.
-  const span = lower ? 0.5 : 0.54
-  const drawn = fit === 'window' ? height : height / span
+  // Entera se dibuja al alto que le den y no se recorta por arriba ni por abajo: sin
+  // fracciones por región no hay nada que pueda descuadrar una tarjeta contra otra.
+  // Lo único que se quita es aire, y a los dos lados por igual: la figura vive en un
+  // rectángulo de dos a uno y el cuerpo con los brazos caídos no llega a la mitad de
+  // ese ancho, así que el resto es fondo. Sesenta y dos centésimas dejan las manos
+  // dentro con holgura —los brazos acaban sobre las cuarenta y cuatro— y es esa
+  // holgura la que evita que el borde recto de la ventana las rebane.
+  // Entera se pide por la columna que ha de llenar, no por el tamaño al que se dibuja:
+  // se despeja cuánto hay que dibujarla para que la coronilla y las plantas caigan
+  // donde toca, y el aire que la caja trae de fábrica se queda fuera de la ventana.
+  // No hay fracción que dependa de la rutina, así que ninguna tarjeta puede quedar a
+  // distinta altura ni a distinto tamaño que otra.
+  const body = height - WHOLE_INSET * 2
+  const drawn = fit === 'window' ? height : body / (WHOLE_SOLES - WHOLE_CROWN)
   const width = drawn / 2
-  const frame = fit === 'window' ? given : { width: drawn * (lower ? 0.26 : 0.44), height }
+  const frame = fit === 'window' ? given : { width: width * WHOLE_WIDTH, height }
   const top =
-    fit === 'window'
-      ? lower
-        ? -height * 0.47
-        : -height * 0.03
-      : lower
-        ? -drawn * 0.5
-        : -drawn * 0.04
+    fit === 'window' ? (lower ? -height * 0.47 : -height * 0.03) : WHOLE_INSET - drawn * WHOLE_CROWN
 
   return (
     <View style={[styles.window, { width: frame.width, height: frame.height }]}>
@@ -878,6 +896,10 @@ const styles = StyleSheet.create({
   caption: { position: 'absolute', top: 109, left: PAD },
   figures: { position: 'absolute', top: 124, left: PAD, flexDirection: 'row', gap: 8 },
   value: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  // La condensada de la cifra se sienta sobre su propia caja, así que sin esto el
+  // rótulo queda pegado al número y los dos se leen como una sola mancha.
+  unit: { marginTop: 3 },
+  numeral: { letterSpacing: 0 },
   delta: { borderRadius: 8, paddingHorizontal: 5, paddingVertical: 1 },
 
   art: { position: 'absolute', top: 16, right: 12, alignItems: 'flex-end' },
@@ -913,7 +935,9 @@ const styles = StyleSheet.create({
   backWhen: { position: 'absolute', top: 16, left: PAD },
   // Ocho puntos más abajo que el lienzo: la condensada en versalitas sube por encima
   // de su propia caja y el nombre se pegaba al badge del día.
-  backNaming: { position: 'absolute', top: 54, left: PAD, right: 72 },
+  // Termina antes de los hombros. La figura es ancha a la altura del nombre, así que
+  // el corte no lo marca la caja sino el punto donde el cuerpo se ensancha.
+  backNaming: { position: 'absolute', top: 54, left: PAD, right: 140 },
   backMusclesLabel: { position: 'absolute', top: 120, left: PAD },
   // Con la versalita a doce, tres filas y sus aires miden ochenta y nueve: el sitio
   // que hay entre el rótulo y el filete, y ni un punto más.
@@ -922,16 +946,26 @@ const styles = StyleSheet.create({
   muscleHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   track: { height: BAR_TRACK, borderRadius: 2, overflow: 'hidden' },
   fill: { height: BAR_TRACK, borderRadius: 2 },
-  backFigure: { position: 'absolute', top: 112, right: 14, alignItems: 'flex-end' },
-  backRule: { position: 'absolute', left: PAD, right: PAD, bottom: 88, height: 1 },
-  backSince: { position: 'absolute', left: PAD, bottom: 72 },
+  // Arrimada a la izquierda lo justo para que la cabeza pase al lado del botón de
+  // girar y no por debajo: es lo que deja empezar la figura arriba del todo.
+  // Pegada al borde. No hace falta esquivar el botón de girar corriéndola entera:
+  // el botón está a la altura del cuello, donde la figura es estrecha, y las manos
+  // quedan doscientos puntos más abajo.
+  backFigure: { position: 'absolute', top: 0, right: 16, alignItems: 'flex-end' },
+  // A la altura de la franja que ocuparían las cifras, no pegado al borde: el hueco
+  // debe leerse como la misma sección vacía, no como otra cosa más abajo.
+  backEmpty: { position: 'absolute', left: PAD, right: PAD, bottom: 30 },
+  // Lo que separa el filete del rótulo que lleva debajo. Con ochenta y ocho el
+  // rótulo se sentaba encima de la línea y los dos se leían como una sola cosa.
+  backRule: { position: 'absolute', left: PAD, right: PAD, bottom: 92, height: 1 },
+  backSince: { position: 'absolute', left: PAD, bottom: 68 },
   backFigures: {
     position: 'absolute',
     left: PAD,
     right: PAD,
-    bottom: 14,
+    bottom: 12,
     flexDirection: 'row',
-    gap: 8,
+    gap: 14,
   },
   backFigureColumn: { flex: 1 },
 
