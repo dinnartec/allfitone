@@ -2,7 +2,7 @@
  * Las dos caras del menú de un programa: lo que se puede hacer, y la pregunta antes de
  * lo irreversible.
  *
- * **Viven aquí y no dentro de la pantalla**, por lo mismo que `CoverSheetBody`: son
+ * **Viven aquí y no dentro de la pantalla**: son
  * cuerpos y no `Sheet`s. Cada pantalla tiene una sola hoja —dos `Modal` en iOS dejan la
  * segunda sin presentar, con una capa invisible comiéndose los toques—, así que quien la
  * abre decide, y esto sólo dibuja.
