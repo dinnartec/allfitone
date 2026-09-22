@@ -119,6 +119,7 @@ export function stepsToContent(
                 target_load_value: one.load,
                 target_load_unit_code: step.loadUnit ?? OPENING_UNIT,
               }),
+          ...(one.rpe === undefined ? {} : { target_rpe: one.rpe }),
         })),
         ...(step.restSeconds === undefined ? {} : { target_rest_seconds: step.restSeconds }),
       },
@@ -184,6 +185,7 @@ export function stepsFromContent(
               kind: (typeof one.kind === 'string' ? one.kind : 'normal') as WorkingSet['kind'],
               ...(typeof one.target_reps === 'number' ? { reps: one.target_reps } : {}),
               ...(typeof one.target_load_value === 'number' ? { load: one.target_load_value } : {}),
+              ...(typeof one.target_rpe === 'number' ? { rpe: one.target_rpe } : {}),
             }))
           : // An older draft says how many and how hard, and meant that many identical
             // sets. Publication does the same thing on its side.

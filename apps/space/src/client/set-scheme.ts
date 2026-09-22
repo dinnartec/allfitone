@@ -33,6 +33,15 @@ export interface WorkingSet {
   readonly reps?: number
   /** Absent until somebody says it: nothing invents a weight for another person. */
   readonly load?: number
+  /**
+   * El esfuerzo que se pide, de 0 a 10, y **ausente mientras nadie lo diga**.
+   *
+   * Va por serie y no por ejercicio, como las repeticiones y el peso, porque es donde
+   * la base lo guarda y porque un calentamiento y una serie al fallo no se piden con el
+   * mismo esfuerzo: un valor por ejercicio tendría que escribirle a la de calentamiento
+   * un número que es falso.
+   */
+  readonly rpe?: number
 }
 
 const NORMAL = (reps: number): WorkingSet => ({ kind: 'normal', reps })
@@ -81,9 +90,10 @@ export function withKind(set: WorkingSet, kind: SetKind): WorkingSet {
 }
 
 /**
- * Reps and load, set or cleared. Both take `undefined` and drop the key rather than
- * carrying it: an absent weight and a weight of `undefined` are the same fact, and
- * only one of them is a shape `stepsToContent` can decide about.
+ * Reps, load and effort, set or cleared. Los tres toman `undefined` y quitan la clave en
+ * vez de llevarla:
+ * un peso ausente y un peso `undefined` son el mismo hecho, y sólo uno de los dos es una
+ * forma sobre la que `stepsToContent` pueda decidir.
  */
 export function withReps(set: WorkingSet, reps: number | undefined): WorkingSet {
   const { reps: _was, ...rest } = set
@@ -93,6 +103,11 @@ export function withReps(set: WorkingSet, reps: number | undefined): WorkingSet 
 export function withLoad(set: WorkingSet, load: number | undefined): WorkingSet {
   const { load: _was, ...rest } = set
   return load === undefined ? rest : { ...rest, load }
+}
+
+export function withRpe(set: WorkingSet, rpe: number | undefined): WorkingSet {
+  const { rpe: _was, ...rest } = set
+  return rpe === undefined ? rest : { ...rest, rpe }
 }
 
 /** What the weight column shows. A set nobody has loaded says so, not «0». */
