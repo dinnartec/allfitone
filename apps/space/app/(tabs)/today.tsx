@@ -269,10 +269,17 @@ export default function Today() {
             {profile.given_name ? `Hola, ${profile.given_name}` : 'Hola'}
           </Text>
           {/* La fecha cuando hay algo que hacer hoy, y qué toca hacer cuando no lo hay:
-              el primer día la fecha no dice nada y la frase sí. */}
-          <Text role="body" size="sm" color="muted">
-            {assigned ? date : 'Empecemos por elegir tu plan'}
-          </Text>
+              el primer día la fecha no dice nada y la frase sí. Y a un cuerpo mayor,
+              porque una fecha se comprueba de reojo y una instrucción se lee. */}
+          {assigned ? (
+            <Text role="body" size="sm" color="muted">
+              {date}
+            </Text>
+          ) : (
+            <Text role="body" size="md" color="secondary">
+              Empecemos por elegir tu plan
+            </Text>
+          )}
         </View>
         <Bell onPress={() => setPending(PENDING.notices)} />
       </View>
@@ -315,7 +322,7 @@ export default function Today() {
         {!assigned && catalogue ? (
           <View style={styles.heading}>
             <View style={styles.sectionHead}>
-              <Text role="display" size="2xl" uppercase accessibilityRole="header">
+              <Text role="display" size="3xl" uppercase accessibilityRole="header">
                 Elige tu programa
               </Text>
               {expanded || offered.hidden > 0 ? (
@@ -370,20 +377,18 @@ export default function Today() {
         {assigned && today ? <Week week={today.week} days={days} /> : null}
 
         {/* Sin «Ver catálogo completo»: el catálogo ya está aquí y lo abre «Ver todos».
-            Queda la otra salida, que es la que no cabe en ninguna lista de Allfit. */}
+            Queda la otra salida, que es la que no cabe en ninguna lista de Allfit, y
+            lleva la misma forma que «Entrenamiento libre» en la pantalla con programa:
+            las dos son lo mismo —algo que se puede hacer ahora, con sitio para decir
+            qué pasa si se hace— y dos formas distintas serían dos promesas distintas. */}
         {!assigned ? (
-          <View style={styles.section}>
-            <Text role="eyebrow" size="xs" color="muted">
-              O SI PREFIERES
-            </Text>
-            <View style={styles.alternatives}>
-              <Alternative
-                icon="create"
-                label="Crear el mío"
-                onPress={() => router.push('/programs/new')}
-              />
-            </View>
-          </View>
+          <OfferRow
+            icon="create"
+            label="Crear el mío"
+            caption="Arma tu propio programa, día por día"
+            tone="quiet"
+            onPress={() => router.push('/programs/new')}
+          />
         ) : null}
 
         {/* En lugar de los cuatro accesos rápidos, de los que ninguno llevaba a
@@ -763,41 +768,6 @@ function TrainedRow({
 }
 
 /** Glass, not a solid chip: it sits on a photograph, where a solid one reads as a sticker. */
-/** One of the two ways out that are not a program. */
-function Alternative({
-  icon,
-  label,
-  onPress,
-}: {
-  readonly icon: IconName
-  readonly label: string
-  readonly onPress: () => void
-}) {
-  const theme = useTheme()
-
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      onPress={onPress}
-      style={[
-        styles.alternative,
-        {
-          backgroundColor: theme.color.background.surface,
-          borderColor: theme.color.border.default,
-        },
-      ]}
-    >
-      <FoundationIcon name={icon} size="sm" color={theme.color.icon.accent} decorative />
-      {/* Two lines rather than an ellipsis: "Ver catálogo completo" does not fit a
-          half-width pill on one, and a truncated label is a label nobody can read. */}
-      <Text role="control" size="xs" numberOfLines={2} style={styles.alternativeLabel}>
-        {label}
-      </Text>
-    </Pressable>
-  )
-}
-
 function Bell({ onPress }: { readonly onPress: () => void }) {
   const theme = useTheme()
 
@@ -843,18 +813,4 @@ const styles = StyleSheet.create({
   trained: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 9 },
   trainedDay: { width: 52 },
   trainedBody: { flex: 1, gap: 1 },
-  alternatives: { flexDirection: 'row', gap: 8 },
-  alternativeLabel: { flexShrink: 1 },
-  alternative: {
-    flex: 1,
-    minHeight: 48,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 999,
-    borderWidth: 1.5,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
 })

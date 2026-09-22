@@ -373,6 +373,22 @@ describe('catalogueList', () => {
     expect(hidden).toBe(0)
   })
 
+  test('puts the suggested one first, folded and open', () => {
+    // Lo que se recomienda se lee primero: en orden de frecuencia podía quedar
+    // segunda o tercera, y había que buscarla.
+    for (const expanded of [false, true]) {
+      const { cards } = catalogueList(catalogue, EMPTY_PROFILE, expanded)
+      expect(cards[0]?.suggested).toBe(true)
+      expect(cards.filter((card) => card.suggested)).toHaveLength(1)
+    }
+  })
+
+  test('leaves the order alone when nothing is marked', () => {
+    const { cards } = catalogueList([], EMPTY_PROFILE, true)
+
+    expect(cards).toEqual([])
+  })
+
   test('keeps the same programme marked when the list grows', () => {
     // Extenderla no puede parecer haber cambiado de recomendación.
     const folded = catalogueList(catalogue, EMPTY_PROFILE, false)

@@ -184,6 +184,11 @@ export interface CatalogueList {
  * nunca hizo. **Extendido es el catálogo entero ordenado por correspondencia**, en la
  * misma pantalla y sin perder la marca: el programa sugerido sigue siéndolo cuando la
  * lista crece, o extenderla parecería haber cambiado de recomendación.
+ *
+ * **Y el sugerido va primero en las dos.** Las frecuencias salían en orden ascendente,
+ * así que la recomendación podía quedar segunda o tercera y había que buscarla; y en el
+ * catálogo entero, ordenar por correspondencia la deja arriba casi siempre, que no es lo
+ * mismo que siempre. Lo que se recomienda se lee primero.
  */
 export function catalogueList(
   programs: readonly ProgramSummary[],
@@ -191,16 +196,29 @@ export function catalogueList(
   expanded: boolean,
 ): CatalogueList {
   const folded = cardsFor(programs, profile)
-  if (!expanded) return { cards: folded, hidden: Math.max(0, programs.length - folded.length) }
-
   const marked = folded.find((card) => card.suggested)?.program.program_version_id
+  if (!expanded) {
+    return {
+      cards: suggestedFirst(folded),
+      hidden: Math.max(0, programs.length - folded.length),
+    }
+  }
+
   return {
-    cards: rankCatalogue(programs, profile).map((program) => ({
-      program,
-      suggested: program.program_version_id === marked,
-    })),
+    cards: suggestedFirst(
+      rankCatalogue(programs, profile).map((program) => ({
+        program,
+        suggested: program.program_version_id === marked,
+      })),
+    ),
     hidden: 0,
   }
+}
+
+/** El sugerido delante y el resto en el orden en que venían. */
+function suggestedFirst(cards: readonly ProgramCard[]): readonly ProgramCard[] {
+  const marked = cards.filter((card) => card.suggested)
+  return marked.length === 0 ? cards : [...marked, ...cards.filter((card) => !card.suggested)]
 }
 
 export interface CatalogueFilter {

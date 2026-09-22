@@ -107,22 +107,14 @@ export function ProgramPoster({
       ) : null}
 
       <View style={styles.naming}>
+        {/* **La píldora opaca y no la teñida.** El acento translúcido que llevaban se
+            perdía sobre una fotografía clara; la variante apagada del sistema pinta el
+            lienzo entero detrás del rótulo, que es lo que la hace legible sobre
+            cualquier cosa. Y en neutro, no en acento: son datos, y el acento de esta
+            tarjeta ya lo gasta la chapa de sugerido. */}
         <View style={styles.zones}>
           {zones.map((zone) => (
-            <View
-              key={zone}
-              style={[
-                styles.zone,
-                {
-                  backgroundColor: theme.color.accent.tonal,
-                  borderColor: theme.color.accent.tonalBorder,
-                },
-              ]}
-            >
-              <Text role="control" size="2xs" color="accent">
-                {ZONE_LABEL[zone] ?? zone}
-              </Text>
-            </View>
+            <Badge key={zone} label={ZONE_LABEL[zone] ?? zone} variant="quiet" />
           ))}
           {rest > 0 ? (
             <Text role="control" size="2xs" color="muted">
@@ -171,7 +163,6 @@ const styles = StyleSheet.create({
   chip: { position: 'absolute', top: 14, left: 14 },
   // Anclado abajo y no arriba: el velo cae ahí, así que es donde el texto se lee.
   naming: { position: 'absolute', left: PAD, right: PAD, bottom: 74, gap: 2 },
-  zones: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 4, marginBottom: 6 },
-  zone: { borderRadius: 999, borderWidth: 1, paddingHorizontal: 7, paddingVertical: 2 },
+  zones: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginBottom: 8 },
   action: { position: 'absolute', left: PAD, right: PAD, bottom: 12 },
 })
