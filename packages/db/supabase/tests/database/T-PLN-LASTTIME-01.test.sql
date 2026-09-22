@@ -124,8 +124,11 @@ select is(
    from planning.read_week_plan('019ec000-0000-7000-8000-000000000001', 'America/Bogota') as plan,
         lateral jsonb_array_elements(plan.sessions) as entry
    where (entry->>'planned_session_id')::uuid = :'planned_id'::uuid),
-  (clock_timestamp() at time zone 'America/Bogota')::date,
-  'T-PLN-LASTTIME-03 cerrada la ejecución, la última vez es hoy en la zona de la persona');
+  -- **El mismo instante en que empezó, no «ahora».** La sesión arranca cincuenta
+  -- minutos atrás, y en la franja entre la medianoche de Bogotá y las 00:50 los dos
+  -- caen en días distintos: la aserción pasaba diecinueve horas al día y fallaba cinco.
+  ((clock_timestamp() - interval '50 minutes') at time zone 'America/Bogota')::date,
+  'T-PLN-LASTTIME-03 cerrada la ejecución, la última vez es el día en que se entrenó');
 
 select is(
   (select (entry->'last_time'->>'sets')::integer
