@@ -1,22 +1,30 @@
 /**
  * How much have you trained — HU-SP-012, criterion 2.
  *
- * Three levels, and the bars are the only thing that says which is which. The words
- * deliberately avoid `principiante`, `intermedio`, `avanzado`: HU-SP-012 asks for
- * simple terms, and the reason is behavioural rather than stylistic — "advanced"
- * makes people underrate themselves, pick below their real level, and get a plan
- * that bores them until they leave. So the scale is drawn and never named.
+ * **Una sola escala, de pie.** Tres paradas en un recorrido vertical, de menos a más.
+ * Antes eran tres tarjetas con una barra de rango en cada una, y tres escalas dibujadas
+ * una dentro de otra dicen peor lo que una sola dice entera.
  *
- * The chosen card says **what changes in the plan**. A card that only highlights
- * itself asks somebody to guess what they are choosing; naming the consequence is
- * what lets them answer honestly instead of modestly, which is the entire point of
- * the level. It reveals in place, like the goal screen's card, so nothing below it
- * jumps away from the finger that just tapped.
+ * **La línea no se llena.** Se probó llenándola hasta la parada marcada —un nivel
+ * contiene a los de abajo— y se leía como si la línea se moviera al elegir, que es lo
+ * que una lista de opciones no puede hacer. Lo único que cambia al marcar es su círculo.
  *
- * The notice under the cards is **fixed, not revealed**. Someone afraid of being
- * mislabelled has to read that the loads move from the first week *before* they
- * answer; showing it only after a selection would be showing it once it no longer
- * helps them choose.
+ * Las palabras siguen sin llevar rango. `HU-SP-012` pide términos simples y la razón es
+ * de comportamiento y no de estilo: «avanzado» hace que la gente se subestime, elija por
+ * debajo y acabe con un plan que la aburre. La escala se dibuja y no se nombra, y ahora
+ * se dibuja mejor.
+ *
+ * **La parada marcada dice qué cambia en el plan.** Una que sólo se encienda obliga a
+ * adivinar qué se está eligiendo; nombrar la consecuencia es lo que deja contestar con
+ * honestidad en vez de con modestia, que es el sentido entero de la pregunta.
+ *
+ * La consecuencia **no se despliega**: está en su sitio desde el principio y sólo
+ * aparece la de la parada marcada. Nada cambia de alto al tocar, así que la lista no se
+ * mueve bajo el dedo — que es lo que costaba el cajón animado que había aquí.
+ *
+ * El aviso de debajo es **fijo, no revelado**. Quien teme que lo etiqueten tiene que
+ * leer que las cargas se mueven desde la primera semana **antes** de contestar;
+ * enseñarlo después es enseñarlo cuando ya no le sirve para elegir.
  *
  * Re-tapping the chosen level leaves it chosen. "No level" is not an answer this
  * question offers — unlike the biological sex, where declining means something. But
@@ -43,48 +51,32 @@ import { Text } from '@allfitone/react-native/text'
 import { useTheme } from '@allfitone/react-native/theme'
 import { useRouter } from 'expo-router'
 import { useEffect, useMemo, useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
-import Animated, {
-  Easing,
-  FadeInDown,
-  interpolateColor,
-  useAnimatedStyle,
-  useReducedMotion,
-  useSharedValue,
-  withSpring,
-} from 'react-native-reanimated'
+import { ScrollView, StyleSheet, View } from 'react-native'
+import Animated, { Easing, FadeInDown, useReducedMotion } from 'react-native-reanimated'
 
 import { OnboardingHeader } from '../../src/components/onboarding-header'
 import {
-  cssDuration,
   durationFor,
   easingFor,
   liftFor,
-  PRESS_DURATION,
-  PRESS_SCALE,
   shouldPlayEntrance,
-  SPRING,
   staggerDelays,
 } from '../../src/client/motion'
 import { ApiError } from '../../src/client'
 import { createSpaceOnboardingFlow } from '../../src/client/onboarding-transport'
 import { guardStep, nextRouteAfter } from '../../src/client/onboarding-steps'
 import {
-  barsFor,
   canSubmitExperience,
   chooseLevel,
   EXPERIENCE_LEVELS,
+  experienceStops,
   NOT_A_LABEL_BODY,
   NOT_A_LABEL_TITLE,
+  PICK_A_LEVEL,
   readLevel,
   type TrainingExperience,
 } from '../../src/client/experience-form'
-
-const PRESS_TRANSITION = {
-  transitionProperty: 'transform',
-  transitionDuration: cssDuration(PRESS_DURATION, false),
-  transitionTimingFunction: 'ease-out',
-} as const
+import { LevelStopRow } from '../../src/components/level-stop'
 
 /** Keeps the button off the very bottom edge, the same amount on every step. */
 const FOOTER_LIFT = 16
@@ -97,6 +89,7 @@ export default function OnboardingExperience() {
   const router = useRouter()
   const flow = useMemo(() => createSpaceOnboardingFlow(), [])
 
+  const theme = useTheme()
   const [level, setLevel] = useState<TrainingExperience | undefined>(undefined)
   const [submitting, setSubmitting] = useState(false)
   const [sessionExpired, setSessionExpired] = useState(false)
@@ -187,29 +180,33 @@ export default function OnboardingExperience() {
             ¿Cuánto has{'\n'}entrenado?
           </Text>
           <Text role="body" size="md" color="secondary" style={styles.lede}>
-            Para no tratarte como principiante si no lo eres, ni al revés.
+            {PICK_A_LEVEL}
           </Text>
         </Animated.View>
 
-        {EXPERIENCE_LEVELS.map((entry, index) => (
-          <ExperienceCard
-            key={entry.level}
-            entry={entry}
-            chosen={entry.level === level}
-            pressable={pressable}
-            reduceMotion={reduceMotion}
-            onPress={() => setLevel((current) => chooseLevel(current, entry.level))}
-            {...(entering && entrances[index + 1] ? { entering: entrances[index + 1] } : {})}
-          />
-        ))}
+        {/* El recorrido entero, frío, desde el primer fotograma. Si apareciera al
+            elegir, la escala sólo la vería quien ya decidió. */}
+        <View style={styles.track}>
+          {experienceStops(level).map((stop, index) => (
+            <LevelStopRow
+              key={stop.entry.level}
+              stop={stop}
+              pressable={pressable}
+              onPress={() => setLevel((current) => chooseLevel(current, stop.entry.level))}
+              {...(entering && entrances[index + 1] ? { entering: entrances[index + 1] } : {})}
+            />
+          ))}
+        </View>
 
         {/* Fixed rather than revealed: it is what someone worried about being
-            labelled needs before answering, not after. */}
+            labelled needs before answering, not after. Con filete a la izquierda: deja
+            de ser letra pequeña al pie y pasa a ser una frase sostenida por algo, que
+            es lo que hace que se lea antes de contestar y no después. */}
         <Animated.View
           {...(entering && entrances[EXPERIENCE_LEVELS.length + 1]
             ? { entering: entrances[EXPERIENCE_LEVELS.length + 1] }
             : {})}
-          style={styles.notice}
+          style={[styles.notice, { borderLeftColor: theme.color.accent.tonalBorder }]}
         >
           <Text role="body" size="xs" color="muted">
             <Text role="body" size="xs" color="secondary">
@@ -246,196 +243,19 @@ export default function OnboardingExperience() {
   )
 }
 
-/**
- * One level, chosen or not, and every state in between.
- *
- * The same shape as the session screen's `Exercise` and for the same reason: the
- * consequence used to be `chosen ? <View/> : null`, so it appeared and vanished in a
- * frame while a `LinearTransition` slid the cards below it. Now it never unmounts —
- * a clipping drawer animates between zero and the height the content reports, and
- * everything else the selection changes rides the same spring.
- *
- * The name is two copies stacked rather than one whose colour animates: the Design
- * System's `Text` is a plain function component, so wrapping it in an animated one
- * has no ref to drive on the UI thread. Both copies carry the same word in the same
- * place, so the cross-fade is invisible — which is exactly what is wanted here, and
- * the opposite of the goal screen, where the two faces sit apart and the handover
- * had to be staged.
- */
-function ExperienceCard({
-  entry,
-  chosen,
-  pressable,
-  reduceMotion,
-  onPress,
-  entering,
-}: {
-  readonly entry: (typeof EXPERIENCE_LEVELS)[number]
-  readonly chosen: boolean
-  readonly pressable: boolean
-  readonly reduceMotion: boolean
-  readonly onPress: () => void
-  readonly entering?: FadeInDown
-}) {
-  const theme = useTheme()
-  const progress = useSharedValue(chosen ? 1 : 0)
-  const outcomeHeight = useSharedValue(0)
-  const [pressing, setPressing] = useState(false)
-
-  useEffect(() => {
-    // Reduced motion keeps the change and drops the travel: which level is chosen is
-    // state the card exists to report, so the consequence still opens — it just does
-    // not slide.
-    const target = chosen ? 1 : 0
-    progress.value = reduceMotion ? target : withSpring(target, SPRING)
-  }, [chosen, progress, reduceMotion])
-
-  const subtle = theme.color.border.subtle
-  const accent = theme.color.border.accent
-  const resting = theme.color.background.surfaceSubtle
-  const tonal = theme.color.accent.tonal
-
-  const shell = useAnimatedStyle(() => ({
-    borderColor: interpolateColor(progress.value, [0, 1], [subtle, accent]),
-    backgroundColor: interpolateColor(progress.value, [0, 1], [resting, tonal]),
-  }))
-
-  const quiet = useAnimatedStyle(() => ({ opacity: 1 - progress.value }))
-  const loud = useAnimatedStyle(() => ({ opacity: progress.value }))
-
-  const drawer = useAnimatedStyle(() => ({
-    // Always a number. Falling back to `undefined` while the height is unknown lets a
-    // shut drawer take its natural height for a frame.
-    height: outcomeHeight.value * progress.value,
-  }))
-
-  // The consequence slides out from under the description on the same spring that
-  // opens the clip, so it reads as a drawer rather than as a box being resized.
-  const contents = useAnimatedStyle(() => ({
-    opacity: progress.value,
-    transform: [{ translateY: (progress.value - 1) * outcomeHeight.value }],
-  }))
-
-  return (
-    <Animated.View style={styles.slot} {...(entering ? { entering } : {})}>
-      <Pressable
-        accessibilityRole="radio"
-        accessibilityState={{ selected: chosen, disabled: !pressable }}
-        // The consequence is part of the answer, so a screen reader hears it on the
-        // card that carries it rather than only seeing it.
-        accessibilityLabel={
-          chosen
-            ? `${entry.name}. ${entry.description} ${entry.outcome.before}${entry.outcome.emphasis}${entry.outcome.after}`
-            : `${entry.name}. ${entry.description}`
-        }
-        disabled={!pressable}
-        onPress={onPress}
-        onPressIn={() => setPressing(true)}
-        onPressOut={() => setPressing(false)}
-        hitSlop={8}
-        pressRetentionOffset={16}
-      >
-        <Animated.View
-          style={[
-            styles.card,
-            shell,
-            PRESS_TRANSITION,
-            { transform: [{ scale: pressing ? PRESS_SCALE : 1 }] },
-          ]}
-        >
-          <View style={styles.head}>
-            <View>
-              <Animated.View style={quiet}>
-                <Text role="display" size="lg" uppercase>
-                  {entry.name}
-                </Text>
-              </Animated.View>
-              <Animated.View style={[styles.nameOver, loud]} pointerEvents="none">
-                <Text role="display" size="lg" uppercase color="accent">
-                  {entry.name}
-                </Text>
-              </Animated.View>
-            </View>
-
-            {/* Never colour alone: the bars carry the rank, the border and the tonal
-                fill carry the selection, and the state is announced. That is DT-010
-                and it is what the other steps do. */}
-            <View
-              style={styles.bars}
-              accessibilityElementsHidden
-              importantForAccessibility="no-hide-descendants"
-            >
-              {barsFor(entry.level).map((filled, bar) => (
-                <View
-                  key={bar}
-                  style={[
-                    styles.bar,
-                    { backgroundColor: filled ? accent : theme.color.border.default },
-                  ]}
-                />
-              ))}
-            </View>
-          </View>
-
-          <Text role="body" size="xs" color="muted" style={styles.description}>
-            {entry.description}
-          </Text>
-
-          <Animated.View style={[styles.drawer, drawer]}>
-            {/* Out of flow, so it can never add its height to the card it is
-                measuring. In flow it did, and a shut card briefly claimed the space
-                it would take if it were open. */}
-            <Animated.View
-              style={[styles.measure, contents]}
-              accessibilityElementsHidden
-              importantForAccessibility="no-hide-descendants"
-              onLayout={(event) => {
-                const measured = event.nativeEvent.layout.height
-                if (measured > 0) outcomeHeight.value = measured
-              }}
-            >
-              <View style={[styles.outcome, { borderTopColor: subtle }]}>
-                <Text role="body" size="sm" color="secondary">
-                  {entry.outcome.before}
-                  <Text role="body" size="sm" color="accent">
-                    {entry.outcome.emphasis}
-                  </Text>
-                  {entry.outcome.after}
-                </Text>
-              </View>
-            </Animated.View>
-          </Animated.View>
-        </Animated.View>
-      </Pressable>
-    </Animated.View>
-  )
-}
-
 const styles = StyleSheet.create({
   scroll: { flex: 1 },
-  scrollContent: { paddingBottom: 4 },
-  lede: { marginTop: 9, marginBottom: 16 },
-  // Clips, so the consequence reveals from the card's own edge rather than the
-  // middle. The same container wraps every card, chosen or not, so the reflow does
-  // not depend on which one opened.
-  slot: { overflow: 'hidden' },
-  card: {
-    padding: 14,
-    borderWidth: 1.5,
-    borderRadius: 16,
-    marginBottom: 9,
+  // Crece para llenar la pantalla cuando el contenido es corto, y se desplaza
+  // cuando el texto del sistema lo estira. Sin esto el recorrido no se reparte.
+  scrollContent: { paddingBottom: 4, flexGrow: 1 },
+  lede: { marginTop: 9, marginBottom: 18 },
+  // Crece con lo que lleva dentro, y no al revés: ver `stopSlot` en `level-stop`.
+  track: { flexGrow: 1, marginBottom: 4 },
+  notice: {
+    marginTop: 2,
+    paddingLeft: 12,
+    borderLeftWidth: 2,
   },
-  head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-  bars: { flexDirection: 'row', alignItems: 'flex-end', gap: 3 },
-  bar: { width: 14, height: 6, borderRadius: 3 },
-  description: { marginTop: 7 },
-  // The name in the accent, laid exactly over the resting one so the cross-fade has
-  // nowhere to drift to.
-  nameOver: { position: 'absolute', left: 0, top: 0 },
-  drawer: { overflow: 'hidden' },
-  measure: { position: 'absolute', left: 0, right: 0, top: 0 },
-  outcome: { marginTop: 11, paddingTop: 10, borderTopWidth: 1 },
-  notice: { marginTop: 5 },
   footer: { paddingTop: 4, paddingBottom: FOOTER_LIFT },
   alert: { marginTop: 12 },
   cta: { marginTop: 10 },

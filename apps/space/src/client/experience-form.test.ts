@@ -1,14 +1,14 @@
 import { describe, expect, test } from 'bun:test'
 
 import {
-  BAR_COUNT,
-  barsFor,
   canSubmitExperience,
   chooseLevel,
   EXPERIENCE_LEVELS,
+  experienceStops,
   levelDefinition,
   NOT_A_LABEL_BODY,
   NOT_A_LABEL_TITLE,
+  PICK_A_LEVEL,
   readLevel,
   TRAINING_EXPERIENCE,
   type TrainingExperience,
@@ -17,12 +17,12 @@ import {
 describe('EXPERIENCE_LEVELS', () => {
   test('offers the three simple terms the story names', () => {
     expect(TRAINING_EXPERIENCE).toEqual(['starting', 'some_practice', 'experienced'])
-    expect(EXPERIENCE_LEVELS).toHaveLength(BAR_COUNT)
+    expect(EXPERIENCE_LEVELS).toHaveLength(3)
   })
 
   test('never uses the gym vocabulary', () => {
     // "Advanced" makes people underrate themselves and pick below their level, and
-    // then the plan bores them. The words carry no rank; the bars do.
+    // then the plan bores them. The words carry no rank; el recorrido lo lleva.
     const words = EXPERIENCE_LEVELS.map((entry) => entry.name.toLowerCase()).join(' ')
 
     for (const banned of ['principiante', 'intermedio', 'avanzado']) {
@@ -30,8 +30,8 @@ describe('EXPERIENCE_LEVELS', () => {
     }
   })
 
-  test('is the only place order is stated, and it rises one bar at a time', () => {
-    expect(EXPERIENCE_LEVELS.map((entry) => entry.bars)).toEqual([1, 2, 3])
+  test('is the only place order is stated, least to most', () => {
+    expect(EXPERIENCE_LEVELS.map((entry) => entry.level)).toEqual([...TRAINING_EXPERIENCE])
   })
 
   test('every level says what changes in the plan, and each says something different', () => {
@@ -49,11 +49,17 @@ describe('EXPERIENCE_LEVELS', () => {
     expect(NOT_A_LABEL_TITLE).toContain('etiqueta')
     expect(NOT_A_LABEL_BODY).toContain('primera semana')
   })
+
+  test('the lede asks for an answer before it explains why', () => {
+    // Sin el «marca» delante, tres círculos huecos se leen como una explicación.
+    expect(PICK_A_LEVEL.startsWith('Marca')).toBe(true)
+    expect(PICK_A_LEVEL).toContain('principiante')
+  })
 })
 
 describe('levelDefinition', () => {
   test('answers the definition of a level', () => {
-    expect(levelDefinition('some_practice')?.bars).toBe(2)
+    expect(levelDefinition('some_practice')?.name).toBe('Tengo algo de práctica')
   })
 
   test('answers nothing for a code it cannot draw rather than throwing', () => {
@@ -77,21 +83,31 @@ describe('chooseLevel', () => {
   })
 })
 
-describe('barsFor', () => {
-  test('fills as many bars as the level declares', () => {
-    expect(barsFor('starting')).toEqual([true, false, false])
-    expect(barsFor('some_practice')).toEqual([true, true, false])
-    expect(barsFor('experienced')).toEqual([true, true, true])
+describe('experienceStops', () => {
+  test('marks the chosen stop and only the chosen stop', () => {
+    // La línea no cuenta nada: lo único que cambia al marcar es su círculo.
+    expect(experienceStops('some_practice').map((stop) => stop.chosen)).toEqual([
+      false,
+      true,
+      false,
+    ])
   })
 
-  test('fills none when nothing is chosen, and still returns every bar', () => {
-    // The scale has to be visible before answering, or the bars would only appear
-    // once they no longer inform the choice.
-    expect(barsFor(undefined)).toEqual([false, false, false])
+  test('draws the whole track cold while nothing is chosen, rather than hiding it', () => {
+    // La escala tiene que verse antes de contestar: si apareciera al elegir, sólo la
+    // vería quien ya decidió.
+    const stops = experienceStops(undefined)
+
+    expect(stops).toHaveLength(3)
+    expect(stops.some((stop) => stop.chosen)).toBe(false)
   })
 
-  test('fills none for a level it cannot draw', () => {
-    expect(barsFor('advanced' as never)).toEqual([false, false, false])
+  test('marks only the last stop as last, so one thread never dangles', () => {
+    expect(experienceStops('experienced').map((stop) => stop.last)).toEqual([false, false, true])
+  })
+
+  test('answers a cold track for a code it cannot draw rather than throwing', () => {
+    expect(experienceStops('advanced' as never).every((stop) => !stop.chosen)).toBe(true)
   })
 })
 

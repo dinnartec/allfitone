@@ -9,9 +9,15 @@
  * **Three levels, and never `beginner`, `intermediate`, `advanced`.** HU-SP-012 asks
  * for simple terms, and the reason is behavioural rather than stylistic: "advanced"
  * makes people underrate themselves, pick below their real level, and get a plan that
- * bores them until they leave. So the words carry no rank and the bars carry all of
- * it — one, two or three — which says there is a scale without hanging a gym label on
- * the person.
+ * bores them until they leave. So the words carry no rank and **el recorrido** carries
+ * all of it: una escala vertical de tres paradas, de menos a más. Dice que hay una
+ * escala sin colgarle a nadie una etiqueta de gimnasio.
+ *
+ * **El recorrido no se llena hasta la parada marcada.** Se probó —un nivel contiene a
+ * los de abajo, así que encender el tramo recorrido parecía decir algo verdadero— y en
+ * pantalla se leía como si la línea se moviera al elegir, que es exactamente lo que una
+ * lista de opciones no debe hacer. Lo único que cambia al marcar es su círculo. El orden
+ * vertical sigue siendo la escala, y eso no necesita que nada se pinte.
  *
  * **The chosen card says what changes.** A level that only highlights itself asks
  * someone to guess what they are choosing; naming the consequence is what lets them
@@ -24,11 +30,15 @@
  * own meaning. Nothing arrives selected, though: a default would write a declaration
  * nobody made, which is the rule `sex-form.ts` states in full.
  *
- * The consequence copy and the time cuts are **not validated**. "Medium volume" and
- * "progressions from the first week" describe what the plan will do, and nothing in
- * `planning` consumes an experience level today, so they are an intention rather than
- * a description. Recorded as pending confirmation in `allfitone-docs`, where a product
- * claim belongs, rather than left to look settled because it is written in code.
+ * **La consecuencia dice el volumen y nada más.** Decía también cuánta explicación
+ * llevaría cada ejercicio y que habría progresiones desde la primera semana, y ninguna
+ * de las dos cosas está automatizada: eran promesas que el producto todavía no cumple,
+ * escritas donde alguien las lee para decidir. Se quitaron el 22 de septiembre de 2026.
+ *
+ * El volumen que queda —poco, medio, alto— y los cortes de tiempo **tampoco están
+ * validados** por nadie que programe entrenamiento, y ninguna pieza de `planning`
+ * consume todavía el nivel. Están anotados como pendientes de confirmar en
+ * `allfitone-docs`, que es donde vive una afirmación de producto.
  */
 
 /** The three simple terms of HU-SP-012 criterion 2, least to most. */
@@ -36,12 +46,14 @@ export const TRAINING_EXPERIENCE = ['starting', 'some_practice', 'experienced'] 
 
 export type TrainingExperience = (typeof TRAINING_EXPERIENCE)[number]
 
-/** How many bars the scale has, which is also the number of levels. */
-export const BAR_COUNT = 3
-
 /**
  * What the chosen card promises. Split into three parts so the screen can emphasise
  * the part that carries the information without parsing a string in the view.
+ *
+ * **En infinitivo y no en primera persona del plural.** «Empezaremos» es una promesa
+ * que hace alguien, y aquí no hay nadie prometiendo: es la etiqueta de lo que esa
+ * parada significa, leída mientras se compara con las otras dos. «Empezar con volumen
+ * medio» se lee como lo que es —una opción— y no como una frase que ya te incluye.
  */
 export interface LevelOutcome {
   readonly before: string
@@ -52,8 +64,6 @@ export interface LevelOutcome {
 export interface LevelDefinition {
   readonly level: TrainingExperience
   readonly name: string
-  /** Filled bars, 1 to `BAR_COUNT`. The only indicator of order on the screen. */
-  readonly bars: number
   readonly description: string
   readonly outcome: LevelOutcome
 }
@@ -62,34 +72,31 @@ export const EXPERIENCE_LEVELS: readonly LevelDefinition[] = [
   {
     level: 'starting',
     name: 'Estoy empezando',
-    bars: 1,
     description: 'Nunca he entrenado con constancia, o llevo menos de seis meses.',
     outcome: {
-      before: 'Empezaremos con ',
+      before: 'Empezar con ',
       emphasis: 'poco volumen',
-      after: ' y más explicación en cada ejercicio.',
+      after: '.',
     },
   },
   {
     level: 'some_practice',
     name: 'Tengo algo de práctica',
-    bars: 2,
     description: 'Entreno hace más de seis meses y conozco los ejercicios básicos.',
     outcome: {
-      before: 'Empezaremos con ',
+      before: 'Empezar con ',
       emphasis: 'volumen medio',
-      after: ' y sin explicarte lo básico.',
+      after: '.',
     },
   },
   {
     level: 'experienced',
     name: 'Tengo experiencia',
-    bars: 3,
     description: 'Años entrenando. Sé de series, cargas y progresiones.',
     outcome: {
-      before: 'Empezaremos con ',
+      before: 'Empezar con ',
       emphasis: 'volumen alto',
-      after: ' y progresiones desde la primera semana.',
+      after: '.',
     },
   },
 ]
@@ -99,6 +106,14 @@ export const EXPERIENCE_LEVELS: readonly LevelDefinition[] = [
  * afraid of being mislabelled has to read this before answering, so it cannot wait
  * for a selection to appear.
  */
+/**
+ * La bajada de la pantalla. **Dice qué hacer antes de decir por qué**: sin el «marca»
+ * delante, tres paradas con un círculo hueco se leen como una explicación y no como una
+ * pregunta, y nadie sabe que tiene que tocar algo.
+ */
+export const PICK_A_LEVEL =
+  'Marca tu punto de partida, para no tratarte como principiante si no lo eres, ni al revés.'
+
 export const NOT_A_LABEL_TITLE = 'No es una etiqueta fija.'
 export const NOT_A_LABEL_BODY =
   ' Tus propias sesiones ajustan las cargas desde la primera semana. Esto solo define el punto de partida.'
@@ -120,10 +135,20 @@ export function chooseLevel(
   return level === current ? current : level
 }
 
-/** Which bars are filled for a level, as booleans the screen can map over. */
-export function barsFor(level: TrainingExperience | undefined): readonly boolean[] {
-  const filled = level ? (levelDefinition(level)?.bars ?? 0) : 0
-  return Array.from({ length: BAR_COUNT }, (_, index) => index < filled)
+/** Una parada del recorrido, con todo lo que la pantalla necesita para dibujarla. */
+export interface LevelStop {
+  readonly entry: LevelDefinition
+  readonly chosen: boolean
+  /** La última no tiene tramo: un hilo que sale de ella no llevaría a ninguna parte. */
+  readonly last: boolean
+}
+
+export function experienceStops(chosen: TrainingExperience | undefined): readonly LevelStop[] {
+  return EXPERIENCE_LEVELS.map((entry, index) => ({
+    entry,
+    chosen: entry.level === chosen,
+    last: index === EXPERIENCE_LEVELS.length - 1,
+  }))
 }
 
 /** Whether the answer read back from the server is one this version can draw. */

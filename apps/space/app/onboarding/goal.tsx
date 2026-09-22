@@ -1,10 +1,17 @@
 /**
  * What do you want to achieve — HU-SP-010.
  *
- * The chosen goal is the one shown large, with the two bodies; the rest stay as
- * rows. That is the whole interaction: tapping a row promotes it to the card, so
- * the selection is the layout rather than a mark added on top of it. There is no
- * separate radio, and there is no chevron: nothing here navigates anywhere.
+ * **Un escenario que espera, y una lista que no se mueve.** Antes la fila elegida se
+ * convertía en tarjeta en su propio sitio: no reordenaba nada, pero cada toque cambiaba
+ * el alto de una fila y empujaba las de abajo, así que lo que acababas de tocar se iba
+ * de debajo del dedo. Ahora el escenario está arriba desde el primer fotograma —con la
+ * figura neutra, sin cian y con una frase que dice qué va a pasar— y elegir sólo cambia
+ * lo que hay dentro de él. Las cinco filas se quedan donde están.
+ *
+ * **La figura neutra es la de «Mantenerme».** No es una casualidad ni un atajo: el
+ * cuerpo que no cambia es exactamente lo que ese objetivo promete, así que la misma
+ * pieza sirve de cuerpo sin objetivo. Es también lo que hace el lienzo aprobado, y
+ * evita una figura más que habría que mantener por sexo declarado.
  *
  * Photographs rather than illustration, because the goal is about a body and the
  * app's identity is already photographic. Which body depends on what was declared
@@ -15,10 +22,8 @@
  * point of it is that the body stays as it is, and a pair would promise a change
  * the goal explicitly does not make.
  *
- * The card geometry is measured from the laid-out row rather than derived from the
- * window. `Screen` already applies `panelInset` on each side, and computing from
- * the window double-counts it — the mistake that cut the second card off the sex
- * screen. See `goal-form.ts`, where the arithmetic and the reasoning live.
+ * El alto del escenario sale de la pantalla y no de una proporción: ceder alto en un
+ * aparato bajo es mejor que empujar el botón fuera. La aritmética vive en `goal-form.ts`.
  *
  * Nothing arrives preselected. A default here would be an opinion about someone's
  * training dressed as a convenience, and the person has to actually choose.
@@ -26,49 +31,20 @@
 
 import { AmbientBackdrop } from '@allfitone/react-native/backdrop'
 import { Button } from '@allfitone/react-native/button'
-import { FoundationIcon } from '@allfitone/react-native/icons'
 import { InlineAlert } from '@allfitone/react-native/inline-alert'
 import { Screen } from '@allfitone/react-native/screen'
 import { Text } from '@allfitone/react-native/text'
-import { useTheme } from '@allfitone/react-native/theme'
 import { useRouter } from 'expo-router'
 import { useEffect, useMemo, useState } from 'react'
-import { Image, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native'
-import Animated, {
-  Easing,
-  FadeInDown,
-  Extrapolation,
-  interpolate,
-  interpolateColor,
-  useAnimatedStyle,
-  useReducedMotion,
-  useSharedValue,
-  withSpring,
-} from 'react-native-reanimated'
-
-/**
- * A height with no width makes React Native fall back to the file's intrinsic
- * width, and the box then spreads left across the whole card — which is exactly
- * how the copy ended up sitting on top of the bodies. The aspect comes from the
- * asset itself rather than a baked constant, so re-exporting the artwork at a
- * different size cannot silently break the layout.
- */
-function figureAspect(source: number): number {
-  const asset = Image.resolveAssetSource(source)
-  if (!asset?.width || !asset?.height) return 0
-  return asset.width / asset.height
-}
+import { ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native'
+import Animated, { Easing, FadeInDown, useReducedMotion } from 'react-native-reanimated'
 
 import { OnboardingHeader } from '../../src/components/onboarding-header'
 import {
-  cssDuration,
   durationFor,
   easingFor,
   liftFor,
-  PRESS_DURATION,
-  PRESS_SCALE,
   shouldPlayEntrance,
-  SPRING,
   staggerDelays,
 } from '../../src/client/motion'
 import { ApiError } from '../../src/client'
@@ -80,12 +56,11 @@ import {
   bodyVariant,
   canSubmitGoal,
   CARD_GAP,
-  goalSlots,
-  heroGeometry,
-  pairHeight,
+  stageHeight,
   TRAINING_GOALS,
   type TrainingGoal,
 } from '../../src/client/goal-form'
+import { GoalRow, GoalStage } from '../../src/components/goal-stage'
 
 import loseWeightMaleBefore from '../../assets/images/goal/goal-lose-weight-male-before.webp'
 import loseWeightMaleAfter from '../../assets/images/goal/goal-lose-weight-male-after.webp'
@@ -105,43 +80,6 @@ import runARaceFemaleBefore from '../../assets/images/goal/goal-run-a-race-femal
 import runARaceFemaleAfter from '../../assets/images/goal/goal-run-a-race-female-after.webp'
 import maintainMaleSingle from '../../assets/images/goal/goal-maintain-male-single.webp'
 import maintainFemaleSingle from '../../assets/images/goal/goal-maintain-female-single.webp'
-import halo from '../../assets/images/goal/goal-halo.webp'
-
-/** How far the front figure sits from the card edge, and how much of the one
- *  behind it hides. Both were tuned against the approved prototype. */
-const EDGE = 10
-const OVERLAP = 0.55
-
-/**
- * How far the glow spreads past the figures. Kept modest and faint: at 1.7 and
- * 40 % it read as a cyan blob beside the bodies rather than as light behind them,
- * and DT-009 reserves cyan for action and focus — it never decorates.
- */
-const HALO_SCALE = 1.25
-
-/**
- * How far the figures rise into place as the card opens. Short: they are arriving
- * inside a box that is already growing, and a long throw fights that growth.
- */
-const FIGURE_RISE = 14
-
-/**
- * The press transition, passed in the style rather than through
- * `StyleSheet.create`, which rejects these properties. 3 % and 120 ms is the
- * ceiling for something touched as often as a row in this list.
- *
- * `ease-out` by name, not the parametrised curve: the style types accept only the
- * predefined keywords, and the stronger bezier is reachable only through
- * `css.create`, whose generic collides with this project's
- * `exactOptionalPropertyTypes`. Over 120 ms and 3 % the difference between the
- * two is not perceptible — where the curve does matter, the entrance below, it
- * gets the strong one.
- */
-const PRESS_TRANSITION = {
-  transitionProperty: 'transform',
-  transitionDuration: cssDuration(PRESS_DURATION, false),
-  transitionTimingFunction: 'ease-out',
-} as const
 
 /** Keeps the button off the very bottom edge, the same amount on every step. */
 const FOOTER_LIFT = 16
@@ -219,10 +157,24 @@ export default function OnboardingTrainingGoal() {
   // offering a race — and that is why it is asked one step earlier.
   const offered = useMemo(() => goalsFor(discipline, TRAINING_GOALS), [discipline])
 
+  /**
+   * Las figuras de todos los objetivos que se ofrecen, para que el escenario las tenga
+   * montadas antes de que alguien elija. Sustituye a la precarga invisible que había
+   * aquí: decodificaba lo mismo y no servía, porque al cambiar se montaba otra copia.
+   */
+  const gallery = useMemo(
+    () =>
+      offered.map((option) => ({
+        key: option,
+        bodies: GOALS[option][bodyVariant(declaredSex, option)],
+      })),
+    [offered, declaredSex],
+  )
+
   // Built outside the JSX: an inline chain rebuilds the builder on every render,
   // and a per-index delay cannot live at module scope.
   const entrances = useMemo(() => {
-    const delays = staggerDelays(TRAINING_GOALS.length + 1, reduceMotion)
+    const delays = staggerDelays(TRAINING_GOALS.length + 2, reduceMotion)
     return delays.map((delay) =>
       FadeInDown.duration(durationFor('fast', reduceMotion))
         .delay(delay)
@@ -231,7 +183,7 @@ export default function OnboardingTrainingGoal() {
     )
   }, [reduceMotion])
 
-  const { cardWidth, cardHeight } = heroGeometry(rowWidth, height)
+  const stage = { width: Math.max(0, rowWidth), height: stageHeight(height) }
 
   useEffect(() => {
     let active = true
@@ -310,46 +262,36 @@ export default function OnboardingTrainingGoal() {
           </Text>
         </Animated.View>
 
-        {/* Decoded on mount, not when a card opens. What made the photograph
-            arrive late was the first render of the asset, and neither prefetch nor
-            downloadAsync touches that — only having it already mounted does. Zero
-            height so it costs nothing in layout, and never read by a screen
-            reader. */}
-        <View
-          style={styles.preload}
-          accessibilityElementsHidden
-          importantForAccessibility="no-hide-descendants"
-        >
-          {offered.flatMap((option) => {
-            const art = GOALS[option][bodyVariant(declaredSex, option)]
-            return [art.before, art.after]
-              .filter(Boolean)
-              .map((source, index) => (
-                <Image
-                  key={`${option}-${index}`}
-                  source={source as number}
-                  style={{ height: cardHeight, width: undefined, aspectRatio: 1 }}
-                  accessible={false}
-                />
-              ))
-          })}
-        </View>
-
         <View onLayout={(event) => setRowWidth(event.nativeEvent.layout.width)}>
-          {goalSlots(goal, offered).map((slot, index) => (
-            <GoalCard
-              key={slot.goal}
-              entry={GOALS[slot.goal]}
-              selected={slot.expanded}
-              cardWidth={cardWidth}
-              cardHeight={cardHeight}
-              bodies={GOALS[slot.goal][bodyVariant(declaredSex, slot.goal)]}
-              pressable={pressable}
+          <Animated.View {...(entering && entrances[1] ? { entering: entrances[1] } : {})}>
+            <GoalStage
+              width={stage.width}
+              height={stage.height}
+              entry={goal ? GOALS[goal] : undefined}
+              showing={goal}
+              gallery={gallery}
+              neutral={GOALS.maintain[bodyVariant(declaredSex, 'maintain')].before}
               reduceMotion={reduceMotion}
-              onPress={() => setGoal(slot.goal)}
-              {...(entering && entrances[index + 1] ? { entering: entrances[index + 1] } : {})}
             />
-          ))}
+          </Animated.View>
+
+          {/* Las cinco se quedan donde están. La elegida no sube a ninguna parte:
+              lo que cambia al tocar es el escenario, no la lista que se está
+              leyendo con el dedo encima. */}
+          <View style={styles.list}>
+            {offered.map((option, index) => (
+              <GoalRow
+                key={option}
+                name={GOALS[option].name}
+                why={GOALS[option].why}
+                chosen={option === goal}
+                first={index === 0}
+                pressable={pressable}
+                onPress={() => setGoal(option)}
+                {...(entering && entrances[index + 2] ? { entering: entrances[index + 2] } : {})}
+              />
+            ))}
+          </View>
         </View>
       </ScrollView>
 
@@ -380,291 +322,12 @@ export default function OnboardingTrainingGoal() {
   )
 }
 
-/**
- * One goal, chosen or not, and every state in between.
- *
- * A single component rather than two, for the reason the session screen's `Exercise`
- * gives: two trees meant nothing could interpolate across the swap, so the icon and
- * the row's words vanished in one frame and the figures appeared in the next. Here
- * neither face ever unmounts. What changes is the shell's height and edge, which face
- * is lit, and where the figures sit — all off the same spring.
- *
- * Both faces are out of flow so neither drives the height: the collapsed one reports
- * its natural height through `onLayout`, and the shell animates between that and the
- * `cardHeight` the geometry already knows.
- */
-function GoalCard({
-  entry,
-  bodies,
-  selected,
-  cardWidth,
-  cardHeight,
-  pressable,
-  reduceMotion,
-  onPress,
-  entering,
-}: {
-  readonly entry: (typeof GOALS)[TrainingGoal]
-  readonly bodies: { before: number; after: number | null }
-  readonly selected: boolean
-  readonly cardWidth: number
-  readonly cardHeight: number
-  readonly pressable: boolean
-  readonly reduceMotion: boolean
-  readonly onPress: () => void
-  readonly entering?: FadeInDown
-}) {
-  const theme = useTheme()
-  const progress = useSharedValue(selected ? 1 : 0)
-  const rowHeight = useSharedValue(0)
-  const [pressing, setPressing] = useState(false)
-
-  useEffect(() => {
-    // Reduced motion keeps the change and drops the travel: which goal is chosen is
-    // state the card exists to report, so it still opens — it just does not fly.
-    const target = selected ? 1 : 0
-    progress.value = reduceMotion ? target : withSpring(target, SPRING)
-  }, [selected, progress, reduceMotion])
-
-  const subtle = theme.color.border.subtle
-  const accent = theme.color.border.accent
-
-  const shell = useAnimatedStyle(() => ({
-    // Falls back to the row while the card geometry is still unknown, so the first
-    // frame is a row rather than a box of height zero.
-    height:
-      cardHeight > 0
-        ? rowHeight.value + (cardHeight - rowHeight.value) * progress.value
-        : rowHeight.value,
-    borderColor: interpolateColor(progress.value, [0, 1], [subtle, accent]),
-    borderWidth: 1.5 + 0.5 * progress.value,
-    borderRadius: 14 + 6 * progress.value,
-  }))
-
-  // Staged rather than a plain cross-fade. The two faces do not sit in the same place
-  // — the row's words are beside its icon, the card's are along its bottom — so fading
-  // one out as the other comes in showed both at half strength, and the name could be
-  // read twice at once. One leaves before the other arrives.
-  const quiet = useAnimatedStyle(() => ({
-    opacity: interpolate(progress.value, [0, 0.45], [1, 0], Extrapolation.CLAMP),
-  }))
-  const loud = useAnimatedStyle(() => ({
-    opacity: interpolate(progress.value, [0.55, 1], [0, 1], Extrapolation.CLAMP),
-  }))
-
-  // The figures rise into place rather than appearing where they land, which is what
-  // separates a card opening from a picture being switched on. They ride the same
-  // handover as the words, so a card is never pictures with nothing written on it.
-  const figures = useAnimatedStyle(() => ({
-    opacity: interpolate(progress.value, [0.4, 1], [0, 1], Extrapolation.CLAMP),
-    transform: [{ translateY: (1 - progress.value) * FIGURE_RISE }],
-  }))
-
-  const beforeAspect = figureAspect(bodies.before)
-  const afterAspect = bodies.after ? figureAspect(bodies.after) : 0
-  const figureHeight = bodies.after
-    ? pairHeight(cardWidth, cardHeight, beforeAspect, afterAspect, OVERLAP, EDGE)
-    : Math.min(cardHeight, (cardWidth * 0.34) / (beforeAspect || 1))
-  const afterWidth = figureHeight * afterAspect
-  const beforeWidth = figureHeight * beforeAspect
-
-  return (
-    <Animated.View style={styles.slot} {...(entering ? { entering } : {})}>
-      <Pressable
-        accessibilityRole="radio"
-        accessibilityState={{ selected, disabled: !pressable }}
-        accessibilityLabel={`${entry.name}. ${entry.why}`}
-        disabled={!pressable || selected}
-        onPress={onPress}
-        onPressIn={() => setPressing(true)}
-        onPressOut={() => setPressing(false)}
-        hitSlop={8}
-        pressRetentionOffset={16}
-      >
-        <Animated.View
-          style={[
-            styles.shell,
-            { backgroundColor: theme.color.background.surfaceSubtle },
-            shell,
-            PRESS_TRANSITION,
-            { transform: [{ scale: pressing ? PRESS_SCALE : 1 }] },
-          ]}
-        >
-          {cardHeight > 0 ? (
-            <Animated.View pointerEvents="none" style={figures}>
-              {/* No radial gradient exists in React Native, so the glow is an asset
-                  tinted with the accent token — the cyan differs between themes and
-                  a baked one would be wrong on light. */}
-              <Image
-                source={halo}
-                style={[
-                  styles.halo,
-                  {
-                    width: figureHeight * HALO_SCALE,
-                    height: figureHeight * HALO_SCALE,
-                    // Centred on the pair as a whole, by arithmetic: a percentage
-                    // offset with a translate centres nothing in React Native.
-                    top: cardHeight - figureHeight / 2 - (figureHeight * HALO_SCALE) / 2,
-                    right:
-                      EDGE +
-                      (afterWidth * OVERLAP + beforeWidth) / 2 -
-                      (figureHeight * HALO_SCALE) / 2,
-                    tintColor: accent,
-                  },
-                ]}
-                resizeMode="contain"
-                accessible={false}
-              />
-
-              {bodies.after ? (
-                <>
-                  {/* Already softened in the artwork: React Native has no blur
-                      filter, and opacity alone read as nothing. */}
-                  <Image
-                    source={bodies.before}
-                    style={[
-                      styles.figure,
-                      styles.behind,
-                      {
-                        height: figureHeight,
-                        width: beforeWidth,
-                        right: EDGE + afterWidth * OVERLAP,
-                        top: cardHeight - figureHeight,
-                      },
-                    ]}
-                    resizeMode="cover"
-                    accessible={false}
-                  />
-                  <Image
-                    source={bodies.after}
-                    style={[
-                      styles.figure,
-                      {
-                        height: figureHeight,
-                        width: afterWidth,
-                        right: EDGE,
-                        top: cardHeight - figureHeight,
-                      },
-                    ]}
-                    resizeMode="cover"
-                    accessible={false}
-                  />
-                </>
-              ) : (
-                <Image
-                  source={bodies.before}
-                  style={[
-                    styles.figure,
-                    {
-                      height: figureHeight,
-                      width: beforeWidth,
-                      right: EDGE * 4,
-                      top: cardHeight - figureHeight,
-                    },
-                  ]}
-                  resizeMode="cover"
-                  accessible={false}
-                />
-              )}
-            </Animated.View>
-          ) : null}
-
-          {/* Out of flow so it cannot add its height to the shell it is measuring,
-              and measured because the row's height depends on how the words wrap. */}
-          <Animated.View
-            style={[styles.rowFace, quiet]}
-            onLayout={(event) => {
-              const measured = event.nativeEvent.layout.height
-              if (measured > 0) rowHeight.value = measured
-            }}
-          >
-            <View style={[styles.icon, { backgroundColor: theme.color.accent.tonal }]}>
-              <FoundationIcon name={entry.icon} size="sm" color={accent} decorative />
-            </View>
-            <View style={styles.rowText}>
-              <Text role="display" size="lg" uppercase>
-                {entry.name}
-              </Text>
-              <Text role="body" size="xs" color="muted" style={styles.why}>
-                {entry.why}
-              </Text>
-            </View>
-          </Animated.View>
-
-          <Animated.View style={[styles.copy, loud]} pointerEvents="none">
-            <Text role="display" size="xl" uppercase>
-              {entry.name}
-            </Text>
-            <Text role="body" size="xs" color="secondary" style={styles.why}>
-              {entry.why}
-            </Text>
-          </Animated.View>
-
-          <Animated.View
-            style={[styles.check, { backgroundColor: accent }, loud]}
-            pointerEvents="none"
-          >
-            <FoundationIcon
-              name="check"
-              customSize={12}
-              strokeScale="compact"
-              color={theme.color.accent.onAccent}
-              decorative
-            />
-          </Animated.View>
-        </Animated.View>
-      </Pressable>
-    </Animated.View>
-  )
-}
-
 const styles = StyleSheet.create({
   lede: { marginTop: 9, marginBottom: 16 },
-  // Both branches hang off an identical container so the reflow is the same
-  // wherever the card opens. It clips, which is what makes the card reveal from
-  // its top edge instead of the middle.
-  slot: { overflow: 'hidden' },
-  // Off-screen rather than zero-sized: the decoded bitmap is cached per size, so
-  // mounting these at 2×2 would cache a 2×2 and decode again at the real size.
-  preload: { position: 'absolute', left: -10000, top: 0, opacity: 0 },
   scroll: { flex: 1 },
   scrollContent: { paddingBottom: 4 },
   footer: { paddingTop: 4, paddingBottom: FOOTER_LIFT },
-  // One box for both states. Its height, edge and radius are animated, so the
-  // numbers that used to live here are in `GoalCard` where the spring can reach them.
-  shell: { overflow: 'hidden', marginBottom: CARD_GAP },
-  // Behind the figures and off to their side, so the glow reads as light on them
-  // rather than as a shape of its own.
-  halo: { position: 'absolute', opacity: 0.14 },
-  // Anchored right in pixels, so the copy keeps the left of the card to itself.
-  figure: { position: 'absolute' },
-  behind: { opacity: 0.75 },
-  copy: { position: 'absolute', left: 16, bottom: 14, width: '42%' },
-  why: { marginTop: 5 },
-  check: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  // Out of flow, like the session screen's measured drawer: in flow it set the
-  // shell's height and the card could never grow past a row.
-  rowFace: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 11,
-    padding: 10,
-  },
-  icon: { width: 40, height: 40, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
-  rowText: { flex: 1, minWidth: 0 },
+  list: { marginTop: CARD_GAP },
   alert: { marginTop: 12 },
   cta: { marginTop: 10 },
   signIn: { marginTop: 10 },

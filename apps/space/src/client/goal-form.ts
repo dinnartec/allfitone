@@ -30,35 +30,29 @@ export const TRAINING_GOALS = [
 
 export type TrainingGoal = (typeof TRAINING_GOALS)[number]
 
-/** The gap between the hero card and the rows below it. */
-export const CARD_GAP = 8
+/** Lo que separa el escenario de la lista que hay debajo. */
+export const CARD_GAP = 14
 
 /**
- * The hero band is flatter than a portrait: the bodies are cropped to the torso,
- * so height buys nothing and every point of it comes off the five rows.
+ * El escenario, que existe desde el primer fotograma.
+ *
+ * **Alto fijo y no una tarjeta que crece.** La pantalla anterior promovía la fila
+ * elegida a tarjeta en su propio sitio, y aunque no reordenaba nada, cada toque movía
+ * las cuatro filas de debajo. Con el escenario arriba la lista no se mueve nunca: lo
+ * único que cambia al elegir es lo que hay dentro del escenario.
+ *
+ * Doscientos cuarenta y seis es la medida del lienzo. `STAGE_CHROME` es todo lo demás
+ * del marco —cabecera, título, bajada, las cinco filas, el botón y los aires—, medido
+ * y no estimado, y en un aparato bajo el escenario cede alto antes que empujar el
+ * botón fuera de la pantalla.
  */
-export const HERO_ASPECT = 16 / 6.9
+export const STAGE_MAX = 246
+export const STAGE_MIN = 168
+export const STAGE_CHROME = 615
 
-/**
- * Everything in the frame that is not the hero card: header, title, lede, the five
- * rows, the button and the vertical padding. Measured, not guessed.
- */
-export const CHROME_HEIGHT = 512
-
-export interface HeroGeometry {
-  cardWidth: number
-  cardHeight: number
-}
-
-/**
- * The card fills the measured row and its height follows the aspect, unless the
- * screen is too short to afford it — a small device gives up card height rather
- * than pushing the button off the bottom.
- */
-export function heroGeometry(rowWidth: number, screenHeight: number): HeroGeometry {
-  const cardWidth = Math.max(0, rowWidth)
-  const affordable = Math.max(0, screenHeight - CHROME_HEIGHT)
-  return { cardWidth, cardHeight: Math.min(cardWidth / HERO_ASPECT, affordable) }
+export function stageHeight(screenHeight: number): number {
+  const affordable = screenHeight - STAGE_CHROME
+  return Math.max(STAGE_MIN, Math.min(STAGE_MAX, affordable))
 }
 
 /**
@@ -122,23 +116,4 @@ export function pairHeight(
   if (perUnitOfHeight <= 0) return 0
   const affordable = (cardWidth * STRIP_SHARE - edge) / perUnitOfHeight
   return Math.max(0, Math.min(cardHeight, affordable))
-}
-
-export interface GoalSlot {
-  goal: TrainingGoal
-  /** True for the one shown as the card, in its own place in the list. */
-  expanded: boolean
-}
-
-/**
- * The list in its declared order, marking which entry opens as the card. The card
- * expands **in place** rather than at the top: pinning it to the top moved every
- * other row on every tap, so the thing you just chose jumped away from your
- * finger and the list had to be re-read to find out what happened.
- */
-export function goalSlots(
-  chosen: TrainingGoal | undefined,
-  offered: readonly TrainingGoal[] = TRAINING_GOALS,
-): readonly GoalSlot[] {
-  return offered.map((goal) => ({ goal, expanded: goal === chosen }))
 }
