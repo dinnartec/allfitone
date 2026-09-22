@@ -52,7 +52,7 @@ import type { Today as TodayPayload } from '../../src/client/execution'
 import { createSpaceProgramFlow } from '../../src/client/programs-transport'
 import type { ProgramCatalogue } from '../../src/client/programs'
 import {
-  cardsFor,
+  catalogueList,
   type ProgramSummary,
   type TrainingProfile,
 } from '../../src/client/program-catalogue'
@@ -77,7 +77,7 @@ import { HomeCard } from '../../src/components/home-card'
 import { OfferRow } from '../../src/components/offer-row'
 import { PHOTO_COVER } from '../../src/client/routine-cover'
 import { PageDots } from '@allfitone/react-native/page-dots'
-import { ProgramCard } from '../../src/components/program-card'
+import { ProgramPoster } from '../../src/components/program-poster'
 import { DOCK_HEIGHT } from '../../src/components/tab-bar'
 
 const EXPIRED = 'Tu sesión venció. Vuelve a entrar para continuar.'
@@ -132,6 +132,13 @@ export default function Today() {
   const [sessionExpired, setSessionExpired] = useState(false)
   const [starting, setStarting] = useState<string | undefined>(undefined)
   const [failure, setFailure] = useState<string | undefined>(undefined)
+  /**
+   * Si el catálogo está plegado o extendido, que es lo único que «Ver todos» cambia.
+   *
+   * Vive aquí y no en otra ruta: llevarse la elección a otra pantalla era hacer empezar
+   * de nuevo a quien sólo quería ver dos más.
+   */
+  const [expanded, setExpanded] = useState(false)
 
   /**
    * Re-read every time this tab is looked at, and **never clear what is on screen
@@ -199,9 +206,9 @@ export default function Today() {
       biological_sex: null,
       focus_areas: [],
     }
-  const cards = useMemo(
-    () => cardsFor(catalogue?.programs ?? [], profile),
-    [catalogue?.programs, profile],
+  const offered = useMemo(
+    () => catalogueList(catalogue?.programs ?? [], profile, expanded),
+    [catalogue?.programs, profile, expanded],
   )
   // Con mayúscula inicial: `longDateLabel` la escribe en minúscula porque en una frase
   // va así, y aquí es una línea suelta debajo del saludo.
@@ -261,8 +268,10 @@ export default function Today() {
           <Text role="control" size="xl" accessibilityRole="header">
             {profile.given_name ? `Hola, ${profile.given_name}` : 'Hola'}
           </Text>
+          {/* La fecha cuando hay algo que hacer hoy, y qué toca hacer cuando no lo hay:
+              el primer día la fecha no dice nada y la frase sí. */}
           <Text role="body" size="sm" color="muted">
-            {date}
+            {assigned ? date : 'Empecemos por elegir tu plan'}
           </Text>
         </View>
         <Bell onPress={() => setPending(PENDING.notices)} />
@@ -301,30 +310,46 @@ export default function Today() {
           </View>
         ) : null}
 
-        {!assigned ? (
+        {/* El rótulo y «Ver todos» en la misma línea, que es lo que dice que la lista
+            de abajo es lo que se extiende: no hay otra pantalla detrás del enlace. */}
+        {!assigned && catalogue ? (
           <View style={styles.heading}>
-            <Text role="eyebrow" size="xs" color="accent">
-              EMPIEZA POR AQUÍ
-            </Text>
-            <Text role="display" size="4xl" uppercase accessibilityRole="header">
-              Elige tu programa
-            </Text>
+            <View style={styles.sectionHead}>
+              <Text role="display" size="2xl" uppercase accessibilityRole="header">
+                Elige tu programa
+              </Text>
+              {expanded || offered.hidden > 0 ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    expanded ? 'Ver solo los sugeridos' : 'Ver todos los programas de Allfit'
+                  }
+                  hitSlop={8}
+                  onPress={() => setExpanded(!expanded)}
+                >
+                  <Text role="control" size="sm" color="accent">
+                    {expanded ? 'Ver menos' : 'Ver todos'}
+                  </Text>
+                </Pressable>
+              ) : null}
+            </View>
             <Text role="body" size="sm" color="secondary">
-              Todavía no tienes ninguno. Estos tres encajan con lo que nos contaste.
+              {expanded
+                ? 'El catálogo completo, los que mejor encajan contigo primero.'
+                : 'Todavía no tienes ninguno. Estos encajan con lo que nos contaste.'}
             </Text>
           </View>
         ) : null}
 
         {failure ? <InlineAlert message={failure} /> : null}
 
-        {!assigned && cards.length > 0 ? (
-          <View style={styles.cards}>
-            {cards.map((card) => (
-              <ProgramCard
+        {!assigned && offered.cards.length > 0 ? (
+          <View style={styles.posters}>
+            {offered.cards.map((card) => (
+              <ProgramPoster
                 key={card.program.program_version_id}
                 program={card.program}
                 suggested={card.suggested}
-                busy={false}
                 disabled={sessionExpired}
                 onPress={() => open(router, card.program)}
               />
@@ -344,17 +369,14 @@ export default function Today() {
 
         {assigned && today ? <Week week={today.week} days={days} /> : null}
 
+        {/* Sin «Ver catálogo completo»: el catálogo ya está aquí y lo abre «Ver todos».
+            Queda la otra salida, que es la que no cabe en ninguna lista de Allfit. */}
         {!assigned ? (
           <View style={styles.section}>
             <Text role="eyebrow" size="xs" color="muted">
               O SI PREFIERES
             </Text>
             <View style={styles.alternatives}>
-              <Alternative
-                icon="checklist"
-                label="Ver catálogo completo"
-                onPress={() => router.push('/train')}
-              />
               <Alternative
                 icon="create"
                 label="Crear el mío"
@@ -809,7 +831,8 @@ const styles = StyleSheet.create({
   session: { gap: 8, paddingTop: 124 },
   sessionTitle: { lineHeight: 44 },
   start: { marginTop: 12, height: 50 },
-  cards: { gap: 12 },
+  // Lo mismo que separa una tarjeta de otra en el carrusel, sólo que en vertical.
+  posters: { gap: CARD_GAP },
   section: { gap: 10 },
   sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   bars: { flexDirection: 'row', gap: 6 },

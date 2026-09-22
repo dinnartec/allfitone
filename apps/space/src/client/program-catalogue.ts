@@ -152,6 +152,57 @@ export function programCaption(program: ProgramSummary): string {
   return level ? `${days} · ${LEVEL_LABEL[level]}` : days
 }
 
+/**
+ * Lo que la tarjeta del catálogo escribe debajo del nombre.
+ *
+ * Las tres cosas que `HU-SP-100` criterio 4 pide que se vean antes de elegir y que caben
+ * en una línea: cuántos días, cuánto dura y para qué nivel es. Las zonas son la cuarta y
+ * no van aquí —son fichas, no palabras—, porque siete zonas en una línea son un párrafo.
+ *
+ * **«Sin fin» y no un hueco**: un programa que se repite hasta que alguien lo cambie no
+ * tiene un número que dar, y dejar el sitio vacío se lee como un dato que falta.
+ */
+export function posterCaption(program: ProgramSummary): string {
+  const days = `${program.days_per_week} días`
+  const lasting = program.weeks === null ? 'Sin fin' : `${program.weeks} semanas`
+  const level = (['starting', 'some_practice', 'experienced'] as const).find((candidate) =>
+    program.levels.includes(candidate),
+  )
+  return level ? `${days} · ${lasting} · ${LEVEL_LABEL[level]}` : `${days} · ${lasting}`
+}
+
+/** La lista que el primer día enseña, y cuántos programas quedan sin enseñar. */
+export interface CatalogueList {
+  readonly cards: readonly ProgramCard[]
+  readonly hidden: number
+}
+
+/**
+ * Lo que se lista en el primer día, plegado o extendido.
+ *
+ * **Plegado son las tres frecuencias** —`cardsFor`—, que es la pregunta que el onboarding
+ * nunca hizo. **Extendido es el catálogo entero ordenado por correspondencia**, en la
+ * misma pantalla y sin perder la marca: el programa sugerido sigue siéndolo cuando la
+ * lista crece, o extenderla parecería haber cambiado de recomendación.
+ */
+export function catalogueList(
+  programs: readonly ProgramSummary[],
+  profile: TrainingProfile,
+  expanded: boolean,
+): CatalogueList {
+  const folded = cardsFor(programs, profile)
+  if (!expanded) return { cards: folded, hidden: Math.max(0, programs.length - folded.length) }
+
+  const marked = folded.find((card) => card.suggested)?.program.program_version_id
+  return {
+    cards: rankCatalogue(programs, profile).map((program) => ({
+      program,
+      suggested: program.program_version_id === marked,
+    })),
+    hidden: 0,
+  }
+}
+
 export interface CatalogueFilter {
   readonly key: string
   readonly label: string

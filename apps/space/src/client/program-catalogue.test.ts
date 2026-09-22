@@ -5,7 +5,9 @@ import {
   estimatedMinutes,
   targetLabel,
   cardsFor,
+  catalogueList,
   filtersFor,
+  posterCaption,
   programCaption,
   rankCatalogue,
   scoreProgram,
@@ -34,6 +36,7 @@ function program(overrides: Partial<ProgramSummary> & { id: string }): ProgramSu
     goals: ['build_muscle'],
     levels: ['some_practice'],
     emphases: [],
+    cover_url: null,
     ...rest,
   }
 }
@@ -333,5 +336,55 @@ describe('estimatedMinutes', () => {
   test('answers zero for a day with nothing measurable, so nothing is shown', () => {
     expect(estimatedMinutes(day([{ family: 'nonsense' }]))).toBe(0)
     expect(estimatedMinutes(day([]))).toBe(0)
+  })
+})
+
+describe('posterCaption', () => {
+  test('says the days, the length and the level, which is what the card has to show', () => {
+    expect(posterCaption(program({ id: 'a', days_per_week: 3, weeks: 8 }))).toBe(
+      '3 días · 8 semanas · con práctica',
+    )
+  })
+
+  test('says «Sin fin» for a programme that repeats, instead of leaving the slot empty', () => {
+    // Un hueco se lee como un dato que falta; «Sin fin» es la respuesta.
+    expect(posterCaption(program({ id: 'a', weeks: null }))).toBe('3 días · Sin fin · con práctica')
+  })
+
+  test('drops the level rather than inventing one when the version declares none', () => {
+    expect(posterCaption(program({ id: 'a', levels: [] }))).toBe('3 días · 8 semanas')
+  })
+})
+
+describe('catalogueList', () => {
+  const catalogue = [...band('fuerza'), ...band('salud', { goals: ['get_fit'] })]
+
+  test('folded, it is the three frequencies and says how many are left', () => {
+    const { cards, hidden } = catalogueList(catalogue, EMPTY_PROFILE, false)
+
+    expect(cards).toHaveLength(3)
+    expect(hidden).toBe(3)
+  })
+
+  test('expanded, it is the whole catalogue in this very screen', () => {
+    const { cards, hidden } = catalogueList(catalogue, EMPTY_PROFILE, true)
+
+    expect(cards).toHaveLength(6)
+    expect(hidden).toBe(0)
+  })
+
+  test('keeps the same programme marked when the list grows', () => {
+    // Extenderla no puede parecer haber cambiado de recomendación.
+    const folded = catalogueList(catalogue, EMPTY_PROFILE, false)
+    const opened = catalogueList(catalogue, EMPTY_PROFILE, true)
+
+    const before = folded.cards.find((card) => card.suggested)?.program.program_version_id
+    const after = opened.cards.filter((card) => card.suggested)
+    expect(after).toHaveLength(1)
+    expect(after[0]?.program.program_version_id).toBe(before)
+  })
+
+  test('an empty catalogue hides nothing, which is not the same as hiding everything', () => {
+    expect(catalogueList([], EMPTY_PROFILE, false)).toEqual({ cards: [], hidden: 0 })
   })
 })

@@ -78,7 +78,15 @@ import { coverArt } from './routine-cover-art'
  * una tarjeta que Hoy no dibuja en ningún teléfono.
  */
 const CARD = 344
-const TALL = 372
+/**
+ * Y el alto, que sale de aquí para el catálogo también.
+ *
+ * Exportado a propósito: el primer día lista programas con esta misma tarjeta, y dos
+ * constantes iguales en dos archivos son dos tarjetas que empiezan idénticas y acaban
+ * distintas la primera vez que alguien toca una de las dos.
+ */
+export const CARD_TALL = 372
+const TALL = CARD_TALL
 // Veinte puntos más alta que los 216 del lienzo. El nombre va en Barlow Condensed con
 // un interlineado de 0,82, así que sus mayúsculas suben por encima de su propia caja y
 // se pegaban al chip; el diseño lo resuelve con un cuerpo menor, y aquí es más honesto
