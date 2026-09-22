@@ -26,6 +26,11 @@ export type MyProgram = AllfitV1Schemas['SpaceMyProgram']
 export interface StoredMyProgram extends Omit<MyProgram, 'cover_url'> {
   readonly cover_object_key: string | null
 }
+
+/** La misma regla en el catálogo: la portada se elige en la base, se compone fuera. */
+export interface StoredProgramSummary extends Omit<ProgramSummary, 'cover_url'> {
+  readonly cover_object_key: string | null
+}
 export type MyRoutine = AllfitV1Schemas['SpaceMyRoutine']
 export type RoutineCover = AllfitV1Schemas['RoutineCover']
 export type ProgramCover = AllfitV1Schemas['SpaceProgramCover']
@@ -57,7 +62,10 @@ export interface OwnContentCommand {
 }
 
 export interface SpacePlanningDatabase {
-  readProgramCatalogue(input: { personId: string; requestId: string }): Promise<ProgramSummary[]>
+  readProgramCatalogue(input: {
+    personId: string
+    requestId: string
+  }): Promise<StoredProgramSummary[]>
   readCurrentAssignment(input: {
     personId: string
     requestId: string

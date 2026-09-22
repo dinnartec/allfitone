@@ -239,6 +239,64 @@ describe('removeMyProgram y duplicateMyProgram', () => {
   })
 })
 
+describe('readCatalogue', () => {
+  /**
+   * La misma regla que un programa ya tomado, y a propósito: el catálogo es donde
+   * alguien decide, y decidir sobre un hueco es no decidir. La clave se queda dentro.
+   */
+  const stored = {
+    program_version_id: 'pv1',
+    program_id: 'p1',
+    title: 'Fuerza básica',
+    weeks: 8,
+    days_per_week: 3,
+    sex_affinity: null,
+    goals: ['build_muscle'],
+    levels: ['starting'],
+    emphases: ['chest'],
+  }
+
+  function withCatalogue(coverKey: string | null) {
+    const database = {
+      readTrainingProfile: async () => ({
+        given_name: 'Quien',
+        primary_training_goal: null,
+        training_experience: null,
+        biological_sex: null,
+        focus_areas: [],
+      }),
+      readProgramCatalogue: async () => [{ ...stored, cover_object_key: coverKey }],
+      readCurrentAssignment: async () => null,
+    } as unknown as SpacePlanningDatabase
+    return createSpacePlanningService(database, 'https://media.test/catalog/')
+  }
+
+  test('composes each catalogue cover the same way a taken programme composes its own', async () => {
+    const { programs } = await withCatalogue('programs/p1/male/abc.webp').readCatalogue({
+      personId: 'p',
+      requestId: 'r',
+    })
+
+    expect(programs[0]?.cover_url).toBe('https://media.test/catalog/programs/p1/male/abc.webp')
+  })
+
+  test('answers null for a programme with no artwork instead of dropping it', async () => {
+    const { programs } = await withCatalogue(null).readCatalogue({ personId: 'p', requestId: 'r' })
+
+    expect(programs).toHaveLength(1)
+    expect(programs[0]?.cover_url).toBeNull()
+  })
+
+  test('never lets the storage key reach the answer', async () => {
+    const { programs } = await withCatalogue('programs/p1/male/abc.webp').readCatalogue({
+      personId: 'p',
+      requestId: 'r',
+    })
+
+    expect(JSON.stringify(programs)).not.toContain('cover_object_key')
+  })
+})
+
 describe('readMyPrograms', () => {
   /**
    * La clave direcciona nuestro almacenamiento y no sale nunca; lo que sale es dónde

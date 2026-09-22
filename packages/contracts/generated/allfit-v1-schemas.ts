@@ -5118,6 +5118,7 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       'goals',
       'levels',
       'emphases',
+      'cover_url',
     ],
     description:
       'A published version of a global program, with the segmentation it was published with. The segmentation is part of the version and immutable with it: re-aiming a program means publishing another version.',
@@ -5177,6 +5178,19 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
       emphases: {
         $ref: '#/components/schemas/FocusAreaSet',
+      },
+      cover_url: {
+        oneOf: [
+          {
+            type: 'string',
+            format: 'uri',
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description:
+          "The programme's photograph, composed by the API out of the stored object key and the media origin. It is the same address the programme answers once it has been taken (`SpaceMyProgram.cover_url`), so choosing it and living with it show the same picture — the catalogue is where somebody decides, and deciding on a placeholder is deciding on nothing.\n**It is the set of whoever is asking**, resolved by `planning.cover_for` from the sex they declared; somebody who preferred not to say gets a stable mix, deterministic per programme, and never a default set. Null for a programme with no artwork. The key never leaves the server (`ADR-031`).",
       },
     },
   },

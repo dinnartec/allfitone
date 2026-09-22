@@ -27,8 +27,8 @@ import type {
   WeekPlan,
   ProgramAssignment,
   ProgramDetail,
-  ProgramSummary,
   SpacePlanningDatabase,
+  StoredProgramSummary,
   TrainingProfile,
 } from '../domain/space.js'
 
@@ -43,6 +43,8 @@ interface CatalogueRow {
   goals: string[]
   levels: string[]
   emphases: string[]
+  // La clave y no la dirección: componerla es trabajo de la superficie.
+  cover_object_key: string | null
 }
 
 interface AssignmentRow {
@@ -403,7 +405,7 @@ export function createSpacePlanningDatabase(): SpacePlanningDatabase {
   }
 }
 
-function summary(row: CatalogueRow): ProgramSummary {
+function summary(row: CatalogueRow): StoredProgramSummary {
   return {
     program_version_id: row.program_version_id,
     program_id: row.program_id,
@@ -411,9 +413,10 @@ function summary(row: CatalogueRow): ProgramSummary {
     weeks: row.weeks,
     days_per_week: row.days_per_week,
     sex_affinity: row.sex_affinity,
-    goals: row.goals as ProgramSummary['goals'],
-    levels: row.levels as ProgramSummary['levels'],
-    emphases: row.emphases as ProgramSummary['emphases'],
+    goals: row.goals as StoredProgramSummary['goals'],
+    levels: row.levels as StoredProgramSummary['levels'],
+    emphases: row.emphases as StoredProgramSummary['emphases'],
+    cover_object_key: row.cover_object_key,
   }
 }
 

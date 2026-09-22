@@ -233,6 +233,7 @@ const catalogueProgram: ProgramSummary = {
   goals: ['build_muscle'],
   levels: ['some_practice', 'experienced'],
   emphases: ['back', 'chest', 'legs'],
+  cover_url: 'https://media.test/catalog/programs/p6/male/abc.webp',
 }
 
 const catalogue: ProgramCatalogue = {
@@ -409,6 +410,33 @@ describe('GET /space/v1/programs', () => {
     expect(response.status).toBe(200)
     const body = (await response.json()) as ProgramCatalogue
     expect(body.programs[0]?.weeks).toBeNull()
+    for (const program of body.programs) assertMatchesContract('SpaceProgramSummary', program)
+  })
+
+  test('T-PLN-API-164 gives every catalogue programme the face it will have', async () => {
+    // Elegir entre tres fichas de texto y descubrir la fotografía después de tomarlo es
+    // decidir sobre otra cosa: `OP-PLN-020` pide la portada aquí, no sólo en la agenda.
+    const response = await harness().request('/space/v1/programs', { headers: authorized })
+
+    const body = (await response.json()) as ProgramCatalogue
+    expect(body.programs[0]?.cover_url).toBe('https://media.test/catalog/programs/p6/male/abc.webp')
+    for (const program of body.programs) assertMatchesContract('SpaceProgramSummary', program)
+  })
+
+  test('T-PLN-API-165 lets a programme with no artwork through with a null cover', async () => {
+    const bare = harness({
+      service: {
+        readCatalogue: async () => ({
+          ...catalogue,
+          programs: [{ ...catalogueProgram, cover_url: null }],
+        }),
+      },
+    })
+    const response = await bare.request('/space/v1/programs', { headers: authorized })
+
+    const body = (await response.json()) as ProgramCatalogue
+    expect(body.programs).toHaveLength(1)
+    expect(body.programs[0]?.cover_url).toBeNull()
     for (const program of body.programs) assertMatchesContract('SpaceProgramSummary', program)
   })
 

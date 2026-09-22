@@ -2426,6 +2426,11 @@ export interface components {
       goals: components['schemas']['PrimaryTrainingGoal'][]
       levels: components['schemas']['TrainingExperience'][]
       emphases: components['schemas']['FocusAreaSet']
+      /**
+       * @description The programme's photograph, composed by the API out of the stored object key and the media origin. It is the same address the programme answers once it has been taken (`SpaceMyProgram.cover_url`), so choosing it and living with it show the same picture — the catalogue is where somebody decides, and deciding on a placeholder is deciding on nothing.
+       *     **It is the set of whoever is asking**, resolved by `planning.cover_for` from the sex they declared; somebody who preferred not to say gets a stable mix, deterministic per programme, and never a default set. Null for a programme with no artwork. The key never leaves the server (`ADR-031`).
+       */
+      cover_url: string | null
     }
     SpaceToday: {
       profile: components['schemas']['SpaceTrainingProfile']

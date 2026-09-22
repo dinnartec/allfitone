@@ -107,7 +107,16 @@ export function createSpacePlanningService(
         database.readProgramCatalogue({ personId, requestId }),
         database.readCurrentAssignment({ personId, requestId }),
       ])
-      return { profile, programs, current_assignment: currentAssignment }
+      return {
+        profile,
+        // La misma dirección que responde un programa ya tomado, compuesta en el mismo
+        // sitio: elegirlo y vivirlo enseñan la misma fotografía.
+        programs: programs.map(({ cover_object_key, ...rest }) => ({
+          ...rest,
+          cover_url: mediaAddress(cover_object_key),
+        })),
+        current_assignment: currentAssignment,
+      }
     },
 
     readTodaySession: (input) => database.readTodaySession(input),

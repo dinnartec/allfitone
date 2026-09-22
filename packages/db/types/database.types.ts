@@ -3933,6 +3933,7 @@ export type Database = {
       read_program_catalogue: {
         Args: { p_person_id: string }
         Returns: {
+          cover_object_key: string
           days_per_week: number
           emphases: string[]
           goals: string[]
