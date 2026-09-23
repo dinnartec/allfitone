@@ -2566,6 +2566,55 @@ paths:
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
 
+  /backoffice/v1/erasure-requests:
+    get:
+      tags: [Backoffice Privacy]
+      operationId: listBackofficeErasureRequests
+      x-allfit-operation: OP-PRV-021
+      x-allfit-cache: no-store
+      summary: Follow the erasure requests people have made
+      description: >-
+        What each person asked the platform to erase, what is still owed to them
+        and what the resolution was, category by category.
+
+        It lists **requests**: a disposition a retention policy opened runs under
+        the same rules, but nobody asked for it and nobody is waiting on an
+        answer. `due_at` is thirty days after the request arrived and is an
+        instant, not a countdown, so the screen decides in the reader's own zone
+        whether it is late.
+
+        The projection is minimised to what the disposition needs: the person is
+        named by identifier, and nothing that was erased travels here.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/ErasureRequestState'
+        - $ref: '#/components/parameters/ErasureRequestCursorAt'
+        - $ref: '#/components/parameters/ErasureRequestCursorId'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: >-
+            Open requests oldest first, resolved ones newest first
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErasureRequestPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
   /backoffice/v1/scope-definitions:
     get:
       tags: [Backoffice Privacy]
@@ -6933,6 +6982,30 @@ components:
       schema:
         type: string
         format: date
+    ErasureRequestState:
+      name: status
+      in: query
+      required: false
+      description: Which half of the panel to read. Defaults to what is still owed.
+      schema:
+        $ref: '#/components/schemas/ErasureRequestState'
+    ErasureRequestCursorAt:
+      name: cursor_at
+      in: query
+      required: false
+      description: >-
+        Continue after this instant, in the order the chosen half is read:
+        `opened_at` for open requests, `closed_at` for resolved ones.
+      schema:
+        type: string
+        format: date-time
+    ErasureRequestCursorId:
+      name: cursor_id
+      in: query
+      required: false
+      description: The request the page continues after. Travels with cursor_at.
+      schema:
+        $ref: '#/components/schemas/Uuid'
     Limit:
       name: limit
       in: query
@@ -8065,6 +8138,111 @@ components:
             How many records matching these filters were removed because this
             auditor requested or approved the break-glass window they belong to.
             Reported separately from the list so that it survives an empty one.
+    ErasureRequestState:
+      type: string
+      enum: [open, closed]
+    DataClassificationCode:
+      type: string
+      enum: [operational, audit, identity_pii, training, body, nutrition, health]
+    DispositionOrigin:
+      type: string
+      enum: [request, retention, closure, disconnection, expiry]
+    DispositionAction:
+      type: string
+      enum: [delete, anonymize, retain_restricted]
+    DispositionItemStatus:
+      type: string
+      enum: [pending, executed, suspended]
+    DispositionResult:
+      type: string
+      enum: [deleted, anonymized, retained, failed]
+    ErasureRequestCategory:
+      type: object
+      additionalProperties: false
+      description: >-
+        One line per category, action and state. Deleting forty meals is one line
+        that says so: the identifiers of forty erased rows are the data the
+        erasure removed.
+      required: [data_classification_code, action, status, items, result, executed_at,
+        retained_until]
+      properties:
+        data_classification_code:
+          $ref: '#/components/schemas/DataClassificationCode'
+        action:
+          $ref: '#/components/schemas/DispositionAction'
+        status:
+          $ref: '#/components/schemas/DispositionItemStatus'
+        items:
+          type: integer
+          minimum: 1
+        result:
+          oneOf:
+            - $ref: '#/components/schemas/DispositionResult'
+            - type: 'null'
+          description: What the disposition recorded. Absent until it runs.
+        executed_at:
+          type: [string, 'null']
+          format: date-time
+        retained_until:
+          type: [string, 'null']
+          format: date-time
+          description: >-
+            Only where something was kept, and taken from the policy that decided
+            to keep it.
+    ErasureRequest:
+      type: object
+      additionalProperties: false
+      description: >-
+        A person's erasure request and how far it got. The person is named by
+        identifier: this screen tracks the request, it does not open the file.
+      required: [id, subject_person_id, origin, status, opened_at, closed_at, due_at,
+        pending_items, suspended_items, resolved_items, categories]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        subject_person_id:
+          $ref: '#/components/schemas/Uuid'
+        origin:
+          $ref: '#/components/schemas/DispositionOrigin'
+        status:
+          $ref: '#/components/schemas/ErasureRequestState'
+        opened_at:
+          type: string
+          format: date-time
+        closed_at:
+          type: [string, 'null']
+          format: date-time
+        due_at:
+          type: string
+          format: date-time
+          description: Thirty days after the request arrived.
+        pending_items:
+          type: integer
+          minimum: 0
+        suspended_items:
+          type: integer
+          minimum: 0
+          description: Held by a legal obligation rather than waiting its turn.
+        resolved_items:
+          type: integer
+          minimum: 0
+        categories:
+          type: array
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/ErasureRequestCategory'
+    ErasureRequestPage:
+      type: object
+      additionalProperties: false
+      required: [items, has_more]
+      properties:
+        items:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/ErasureRequest'
+        has_more:
+          type: boolean
     BreakGlassApproval:
       type: object
       additionalProperties: false

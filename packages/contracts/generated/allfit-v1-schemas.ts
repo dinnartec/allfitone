@@ -2502,6 +2502,26 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       'What a verifier may record. There is no default, and `unverifiable` is the answer whenever the evidence does not reach.',
     enum: ['verified', 'rejected', 'unverifiable'],
   },
+  DataClassificationCode: {
+    type: 'string',
+    enum: ['operational', 'audit', 'identity_pii', 'training', 'body', 'nutrition', 'health'],
+  },
+  DispositionAction: {
+    type: 'string',
+    enum: ['delete', 'anonymize', 'retain_restricted'],
+  },
+  DispositionItemStatus: {
+    type: 'string',
+    enum: ['pending', 'executed', 'suspended'],
+  },
+  DispositionOrigin: {
+    type: 'string',
+    enum: ['request', 'retention', 'closure', 'disconnection', 'expiry'],
+  },
+  DispositionResult: {
+    type: 'string',
+    enum: ['deleted', 'anonymized', 'retained', 'failed'],
+  },
   Distance: {
     type: 'object',
     additionalProperties: false,
@@ -2597,6 +2617,144 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         type: ['string', 'null'],
       },
     },
+  },
+  ErasureRequest: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      "A person's erasure request and how far it got. The person is named by identifier: this screen tracks the request, it does not open the file.",
+    required: [
+      'id',
+      'subject_person_id',
+      'origin',
+      'status',
+      'opened_at',
+      'closed_at',
+      'due_at',
+      'pending_items',
+      'suspended_items',
+      'resolved_items',
+      'categories',
+    ],
+    properties: {
+      id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      subject_person_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      origin: {
+        $ref: '#/components/schemas/DispositionOrigin',
+      },
+      status: {
+        $ref: '#/components/schemas/ErasureRequestState',
+      },
+      opened_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      closed_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      due_at: {
+        type: 'string',
+        format: 'date-time',
+        description: 'Thirty days after the request arrived.',
+      },
+      pending_items: {
+        type: 'integer',
+        minimum: 0,
+      },
+      suspended_items: {
+        type: 'integer',
+        minimum: 0,
+        description: 'Held by a legal obligation rather than waiting its turn.',
+      },
+      resolved_items: {
+        type: 'integer',
+        minimum: 0,
+      },
+      categories: {
+        type: 'array',
+        maxItems: 50,
+        items: {
+          $ref: '#/components/schemas/ErasureRequestCategory',
+        },
+      },
+    },
+  },
+  ErasureRequestCategory: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      'One line per category, action and state. Deleting forty meals is one line that says so: the identifiers of forty erased rows are the data the erasure removed.',
+    required: [
+      'data_classification_code',
+      'action',
+      'status',
+      'items',
+      'result',
+      'executed_at',
+      'retained_until',
+    ],
+    properties: {
+      data_classification_code: {
+        $ref: '#/components/schemas/DataClassificationCode',
+      },
+      action: {
+        $ref: '#/components/schemas/DispositionAction',
+      },
+      status: {
+        $ref: '#/components/schemas/DispositionItemStatus',
+      },
+      items: {
+        type: 'integer',
+        minimum: 1,
+      },
+      result: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/DispositionResult',
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description: 'What the disposition recorded. Absent until it runs.',
+      },
+      executed_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      retained_until: {
+        type: ['string', 'null'],
+        format: 'date-time',
+        description:
+          'Only where something was kept, and taken from the policy that decided to keep it.',
+      },
+    },
+  },
+  ErasureRequestPage: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['items', 'has_more'],
+    properties: {
+      items: {
+        type: 'array',
+        maxItems: 100,
+        items: {
+          $ref: '#/components/schemas/ErasureRequest',
+        },
+      },
+      has_more: {
+        type: 'boolean',
+      },
+    },
+  },
+  ErasureRequestState: {
+    type: 'string',
+    enum: ['open', 'closed'],
   },
   ExecutionDetail: {
     type: 'object',

@@ -995,6 +995,28 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/backoffice/v1/erasure-requests': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Follow the erasure requests people have made
+     * @description What each person asked the platform to erase, what is still owed to them and what the resolution was, category by category.
+     *     It lists **requests**: a disposition a retention policy opened runs under the same rules, but nobody asked for it and nobody is waiting on an answer. `due_at` is thirty days after the request arrived and is an instant, not a countdown, so the screen decides in the reader's own zone whether it is late.
+     *     The projection is minimised to what the disposition needs: the person is named by identifier, and nothing that was erased travels here.
+     */
+    get: operations['listBackofficeErasureRequests']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/backoffice/v1/scope-definitions': {
     parameters: {
       query?: never
@@ -2887,6 +2909,60 @@ export interface components {
       items: components['schemas']['AccessEvent'][]
       /** @description How many records matching these filters were removed because this auditor requested or approved the break-glass window they belong to. Reported separately from the list so that it survives an empty one. */
       withheld_from_you: number
+    }
+    /** @enum {string} */
+    ErasureRequestState: 'open' | 'closed'
+    /** @enum {string} */
+    DataClassificationCode:
+      'operational' | 'audit' | 'identity_pii' | 'training' | 'body' | 'nutrition' | 'health'
+    /** @enum {string} */
+    DispositionOrigin: 'request' | 'retention' | 'closure' | 'disconnection' | 'expiry'
+    /** @enum {string} */
+    DispositionAction: 'delete' | 'anonymize' | 'retain_restricted'
+    /** @enum {string} */
+    DispositionItemStatus: 'pending' | 'executed' | 'suspended'
+    /** @enum {string} */
+    DispositionResult: 'deleted' | 'anonymized' | 'retained' | 'failed'
+    /** @description One line per category, action and state. Deleting forty meals is one line that says so: the identifiers of forty erased rows are the data the erasure removed. */
+    ErasureRequestCategory: {
+      data_classification_code: components['schemas']['DataClassificationCode']
+      action: components['schemas']['DispositionAction']
+      status: components['schemas']['DispositionItemStatus']
+      items: number
+      /** @description What the disposition recorded. Absent until it runs. */
+      result: components['schemas']['DispositionResult'] | null
+      /** Format: date-time */
+      executed_at: string | null
+      /**
+       * Format: date-time
+       * @description Only where something was kept, and taken from the policy that decided to keep it.
+       */
+      retained_until: string | null
+    }
+    /** @description A person's erasure request and how far it got. The person is named by identifier: this screen tracks the request, it does not open the file. */
+    ErasureRequest: {
+      id: components['schemas']['Uuid']
+      subject_person_id: components['schemas']['Uuid']
+      origin: components['schemas']['DispositionOrigin']
+      status: components['schemas']['ErasureRequestState']
+      /** Format: date-time */
+      opened_at: string
+      /** Format: date-time */
+      closed_at: string | null
+      /**
+       * Format: date-time
+       * @description Thirty days after the request arrived.
+       */
+      due_at: string
+      pending_items: number
+      /** @description Held by a legal obligation rather than waiting its turn. */
+      suspended_items: number
+      resolved_items: number
+      categories: components['schemas']['ErasureRequestCategory'][]
+    }
+    ErasureRequestPage: {
+      items: components['schemas']['ErasureRequest'][]
+      has_more: boolean
     }
     BreakGlassApproval: {
       approver_person_id: components['schemas']['Uuid']
@@ -5829,6 +5905,12 @@ export interface components {
     FromDate: string
     /** @description Inclusive date; range from..to must not exceed 31 days. */
     ToDate: string
+    /** @description Which half of the panel to read. Defaults to what is still owed. */
+    ErasureRequestState: components['schemas']['ErasureRequestState']
+    /** @description Continue after this instant, in the order the chosen half is read: `opened_at` for open requests, `closed_at` for resolved ones. */
+    ErasureRequestCursorAt: string
+    /** @description The request the page continues after. Travels with cursor_at. */
+    ErasureRequestCursorId: components['schemas']['Uuid']
     Limit: number
     Cursor: string
   }
@@ -7776,6 +7858,42 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['AccessEventPage']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listBackofficeErasureRequests: {
+    parameters: {
+      query?: {
+        /** @description Which half of the panel to read. Defaults to what is still owed. */
+        status?: components['parameters']['ErasureRequestState']
+        /** @description Continue after this instant, in the order the chosen half is read: `opened_at` for open requests, `closed_at` for resolved ones. */
+        cursor_at?: components['parameters']['ErasureRequestCursorAt']
+        /** @description The request the page continues after. Travels with cursor_at. */
+        cursor_id?: components['parameters']['ErasureRequestCursorId']
+        limit?: components['parameters']['Limit']
+      }
+      header: {
+        Origin: components['parameters']['Origin']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Open requests oldest first, resolved ones newest first */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ErasureRequestPage']
         }
       }
       400: components['responses']['BadRequest']

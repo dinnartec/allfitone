@@ -133,6 +133,13 @@ export const allfitV1ContractManifest = {
     },
     {
       method: 'GET',
+      path: '/backoffice/v1/erasure-requests',
+      operationId: 'listBackofficeErasureRequests',
+      allfitOperation: 'OP-PRV-021',
+      responses: ['200', '400', '401', '403', '422', '503'],
+    },
+    {
+      method: 'GET',
       path: '/backoffice/v1/organizations',
       operationId: 'listBackofficeOrganizations',
       allfitOperation: 'NEW-SUP-ORG-SEARCH',
