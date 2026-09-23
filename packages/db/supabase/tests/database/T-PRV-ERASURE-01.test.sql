@@ -24,7 +24,7 @@
 
 begin;
 
-select plan(28);
+select plan(29);
 
 -- ---------------------------------------------------------------------------
 -- People, sessions and roles
@@ -240,12 +240,19 @@ create temporary table open_list on commit drop as
 select * from privacy.list_erasure_requests(
   '019ac000-0000-7000-8000-000000000003', '019ac000-0000-7000-8000-000000000023',
   'open', 50, null, null
-);
+) as listed
+where true
+  and subject_person_id in (
+    '019ac000-0000-7000-8000-000000000005', '019ac000-0000-7000-8000-000000000006'
+  );
 
 select is(
   (select count(*)::int from privacy.access_events
     where actor_person_id = '019ac000-0000-7000-8000-000000000003'
-      and resource = 'privacy.disposition_cases'),
+      and resource = 'privacy.disposition_cases'
+      and subject_person_id in (
+        '019ac000-0000-7000-8000-000000000005', '019ac000-0000-7000-8000-000000000006'
+      )),
   2,
   'every request revealed is recorded before the officer sees it'
 );
@@ -256,7 +263,10 @@ select is(
       and resource = 'privacy.disposition_cases'
       and purpose = 'privacy_request_tracking'
       and access_mode = 'support_metadata'
-      and result = 'allowed'),
+      and result = 'allowed'
+      and subject_person_id in (
+        '019ac000-0000-7000-8000-000000000005', '019ac000-0000-7000-8000-000000000006'
+      )),
   2,
   'the record says it was a minimised support read, allowed'
 );
@@ -379,7 +389,11 @@ create temporary table closed_list on commit drop as
 select * from privacy.list_erasure_requests(
   '019ac000-0000-7000-8000-000000000003', '019ac000-0000-7000-8000-000000000023',
   'closed', 50, null, null
-);
+) as listed
+where true
+  and subject_person_id in (
+    '019ac000-0000-7000-8000-000000000005', '019ac000-0000-7000-8000-000000000006'
+  );
 
 select is(
   (select count(*)::int from closed_list),
@@ -420,7 +434,11 @@ select is(
     select id, row_number() over () as rank from privacy.list_erasure_requests(
       '019ac000-0000-7000-8000-000000000003', '019ac000-0000-7000-8000-000000000023',
       'open', 50, null, null
-    )
+    ) as listed
+    where true
+  and subject_person_id in (
+    '019ac000-0000-7000-8000-000000000005', '019ac000-0000-7000-8000-000000000006'
+  )
   ) as ordered),
   array[
     '019ac000-0000-7000-8000-000000000502'::uuid,
@@ -435,18 +453,25 @@ select is(
     'open', 50,
     (select opened_at from open_list where id = '019ac000-0000-7000-8000-000000000502'),
     '019ac000-0000-7000-8000-000000000502'
+  ) as listed
+  where true
+  and subject_person_id in (
+    '019ac000-0000-7000-8000-000000000005', '019ac000-0000-7000-8000-000000000006'
   )),
   1,
   'the page continues after the request it was given'
 );
 
 select is(
-  (select count(*)::int from privacy.list_erasure_requests(
+  (select id from privacy.list_erasure_requests(
     '019ac000-0000-7000-8000-000000000003', '019ac000-0000-7000-8000-000000000023',
-    'open', 1, null, null
+    'open', 1,
+    (select opened_at - interval '1 second' from open_list
+      where id = '019ac000-0000-7000-8000-000000000502'),
+    '00000000-0000-0000-0000-000000000000'
   )),
-  1,
-  'and never returns more than it was asked for'
+  '019ac000-0000-7000-8000-000000000502'::uuid,
+  'a page of one carries the request that has waited longest'
 );
 
 select throws_ok(
@@ -457,6 +482,18 @@ select throws_ok(
   '22023',
   null,
   'a state the panel does not have is refused instead of ignored'
+);
+
+-- Half a cursor would page from the start, which on this screen reads as
+-- "nothing else is owed".
+select throws_ok(
+  $$ select * from privacy.list_erasure_requests(
+    '019ac000-0000-7000-8000-000000000003', '019ac000-0000-7000-8000-000000000023',
+    'open', 50, clock_timestamp(), null
+  ) $$,
+  '22023',
+  null,
+  'a cursor without the request it continues after is refused'
 );
 
 select * from finish();
