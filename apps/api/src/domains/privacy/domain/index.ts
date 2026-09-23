@@ -21,6 +21,9 @@ export type ScopeCode = AllfitV1Schemas['ScopeCode']
 export type AccessLevel = AllfitV1Schemas['AccessLevel']
 export type AccessEvent = AllfitV1Schemas['AccessEvent']
 export type AccessEventPage = AllfitV1Schemas['AccessEventPage']
+export type ErasureRequest = AllfitV1Schemas['ErasureRequest']
+export type ErasureRequestPage = AllfitV1Schemas['ErasureRequestPage']
+export type ErasureRequestState = AllfitV1Schemas['ErasureRequestState']
 
 export const SCOPE_CODES: readonly ScopeCode[] = [
   'relationship_training',
@@ -73,6 +76,28 @@ export interface AccessEventFilters {
   from?: string | undefined
   to?: string | undefined
   limit?: number | undefined
+}
+
+export const ERASURE_REQUEST_STATES: readonly ErasureRequestState[] = ['open', 'closed']
+
+export const MAX_ERASURE_PAGE = 100
+export const DEFAULT_ERASURE_PAGE = 25
+
+export interface ErasureRequestCursor {
+  at: string
+  id: string
+}
+
+export interface ErasureRequestFilters {
+  status: ErasureRequestState
+  limit: number
+  cursor?: ErasureRequestCursor | undefined
+}
+
+export interface ErasureRequestDatabase {
+  list(
+    input: PrivacyCurator & { requestId: string } & ErasureRequestFilters,
+  ): Promise<ErasureRequestPage>
 }
 
 export interface AccessLogDatabase {

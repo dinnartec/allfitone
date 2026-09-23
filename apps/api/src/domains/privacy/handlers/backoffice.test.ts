@@ -8,7 +8,11 @@ import {
   type BackofficeAuthenticationService,
 } from '../../identity/index.js'
 import { mountSurfaces } from '../../../surfaces.js'
-import type { AccessLogService, ScopeDefinitionService } from '../application/index.js'
+import type {
+  AccessLogService,
+  ErasureRequestService,
+  ScopeDefinitionService,
+} from '../application/index.js'
 import { backofficePrivacyRoutes } from './backoffice.js'
 
 const ORIGIN = 'https://backoffice.example.test'
@@ -99,6 +103,54 @@ function logService(overrides: Partial<AccessLogService> = {}): AccessLogService
   }
 }
 
+const erasurePage: AllfitV1Schemas['ErasureRequestPage'] = {
+  items: [
+    {
+      id: '019a7000-0000-7000-8000-000000000501',
+      subject_person_id: '019a7000-0000-7000-8000-000000000005',
+      origin: 'request',
+      status: 'open',
+      opened_at: '2026-08-28T12:00:00.000Z',
+      closed_at: null,
+      due_at: '2026-09-27T12:00:00.000Z',
+      pending_items: 1,
+      suspended_items: 0,
+      resolved_items: 2,
+      categories: [
+        {
+          data_classification_code: 'body',
+          action: 'delete',
+          status: 'executed',
+          items: 2,
+          result: 'deleted',
+          executed_at: '2026-08-28T12:00:05.000Z',
+          retained_until: null,
+        },
+        {
+          data_classification_code: 'health',
+          action: 'delete',
+          status: 'pending',
+          items: 1,
+          result: null,
+          executed_at: null,
+          retained_until: null,
+        },
+      ],
+    },
+  ],
+  has_more: false,
+}
+
+function erasureService(overrides: Partial<ErasureRequestService> = {}): ErasureRequestService {
+  return {
+    list: (_officer, input) => {
+      captured.push(input)
+      return Promise.resolve(erasurePage)
+    },
+    ...overrides,
+  }
+}
+
 function sessionService(
   overrides: Partial<BackofficeAuthenticationService> = {},
 ): BackofficeAuthenticationService {
@@ -112,8 +164,9 @@ function routes(
   scopes: ScopeDefinitionService = scopeService(),
   sessions: BackofficeAuthenticationService = sessionService(),
   log: AccessLogService = logService(),
+  erasure: ErasureRequestService = erasureService(),
 ): Hono {
-  return new Hono().route('/backoffice/v1', backofficePrivacyRoutes(scopes, sessions, log))
+  return new Hono().route('/backoffice/v1', backofficePrivacyRoutes(scopes, sessions, log, erasure))
 }
 
 function post(
@@ -152,6 +205,14 @@ function auditGet(query = '', init: { cookie?: boolean } = {}): Request {
   return new Request(`https://api.example.test/backoffice/v1/access-events${query}`, { headers })
 }
 
+function erasureGet(query = '', init: { cookie?: boolean } = {}): Request {
+  const headers = new Headers({ origin: ORIGIN })
+  if (init.cookie !== false) headers.set('cookie', `${BACKOFFICE_SESSION_COOKIE}=session-secret`)
+  return new Request(`https://api.example.test/backoffice/v1/erasure-requests${query}`, {
+    headers,
+  })
+}
+
 function colonPath(path: string): string {
   return path.replace(/\{([A-Za-z0-9_]+)\}/g, ':$1')
 }
@@ -166,7 +227,9 @@ beforeEach(() => {
 describe('Backoffice privacy API contract', () => {
   test('T-PRV-API-01 mounts every operation this router serves, with its contract method', () => {
     const contract = allfitV1ContractManifest.operations
-      .filter((operation) => ['OP-PRV-011', 'OP-SUP-009'].includes(operation.allfitOperation ?? ''))
+      .filter((operation) =>
+        ['OP-PRV-011', 'OP-PRV-021', 'OP-SUP-009'].includes(operation.allfitOperation ?? ''),
+      )
       .map((operation) => `${operation.method} ${colonPath(operation.path)}`)
       .sort()
     const mounted = backofficePrivacyRoutes()
@@ -174,7 +237,7 @@ describe('Backoffice privacy API contract', () => {
       .map((route) => `${route.method} /backoffice/v1${route.path}`)
       .sort()
 
-    expect(contract).toHaveLength(3)
+    expect(contract).toHaveLength(4)
     expect(mounted).toEqual(contract)
   })
 
@@ -439,6 +502,103 @@ describe('Backoffice privacy API contract', () => {
           Promise.reject(new BackofficeAuthenticationError('unauthenticated')),
       }),
     ).fetch(auditGet())
+
+    expect([missing.status, ended.status]).toEqual([401, 401])
+    expect(captured).toEqual([])
+  })
+
+  test('T-ERA-API-01 mounts the erasure panel where the contract puts it', () => {
+    const contract = allfitV1ContractManifest.operations
+      .filter((operation) => operation.allfitOperation === 'OP-PRV-021')
+      .map((operation) => `${operation.method} ${colonPath(operation.path)}`)
+    const app = new Hono()
+    mountSurfaces(app)
+    const mounted = app.routes
+      .filter((route) => route.method !== 'ALL')
+      .map((route) => `${route.method} ${route.path}`)
+
+    expect(contract).toEqual(['GET /backoffice/v1/erasure-requests'])
+    expect(mounted).toContain('GET /backoffice/v1/erasure-requests')
+  })
+
+  test('T-ERA-API-02 reads what is still owed unless another half is asked for', async () => {
+    const byDefault = await routes().fetch(erasureGet())
+    const closed = await routes().fetch(erasureGet('?status=closed&limit=50'))
+
+    expect([byDefault.status, closed.status]).toEqual([200, 200])
+    expect(byDefault.headers.get('cache-control')).toBe('no-store')
+    await expect(byDefault.json()).resolves.toEqual(erasurePage)
+    expect(captured[0]).toMatchObject({ status: 'open', limit: 25 })
+    expect(captured[1]).toMatchObject({ status: 'closed', limit: 50 })
+  })
+
+  test('T-ERA-API-03 continues a page only when the cursor names both halves', async () => {
+    const whole = await routes().fetch(
+      erasureGet(
+        '?cursor_at=2026-08-28T12:00:00.000Z&cursor_id=019a7000-0000-7000-8000-000000000501',
+      ),
+    )
+    const half = await routes().fetch(erasureGet('?cursor_at=2026-08-28T12:00:00.000Z'))
+    const other = await routes().fetch(
+      erasureGet('?cursor_id=019a7000-0000-7000-8000-000000000501'),
+    )
+
+    expect(whole.status).toBe(200)
+    expect(captured[0]).toMatchObject({
+      cursor: { at: '2026-08-28T12:00:00.000Z', id: '019a7000-0000-7000-8000-000000000501' },
+    })
+    expect([half.status, other.status]).toEqual([400, 400])
+    expect(captured).toHaveLength(1)
+  })
+
+  test('T-ERA-API-04 refuses a query the panel does not have', async () => {
+    const answers = await Promise.all(
+      [
+        '?status=everything',
+        '?status=',
+        '?limit=0',
+        '?limit=101',
+        '?limit=ten',
+        '?subject_person_id=019a7000-0000-7000-8000-000000000005',
+        '?cursor_at=yesterday&cursor_id=019a7000-0000-7000-8000-000000000501',
+        '?cursor_at=2026-08-28T12:00:00.000Z&cursor_id=not-a-uuid',
+      ].map((query) => routes().fetch(erasureGet(query))),
+    )
+
+    expect(answers.map((response) => response.status)).toEqual([
+      400, 400, 400, 400, 400, 400, 400, 400,
+    ])
+    expect(captured).toEqual([])
+  })
+
+  test('T-ERA-API-05 answers the database verdict, and never the panel by default', async () => {
+    const refused = await routes(
+      scopeService(),
+      sessionService(),
+      logService(),
+      erasureService({
+        list: () => Promise.reject(Object.assign(new Error('no duty'), { code: '42501' })),
+      }),
+    ).fetch(erasureGet())
+    const broken = await routes(
+      scopeService(),
+      sessionService(),
+      logService(),
+      erasureService({ list: () => Promise.reject(new Error('database unavailable')) }),
+    ).fetch(erasureGet())
+
+    expect([refused.status, broken.status]).toEqual([403, 503])
+  })
+
+  test('T-ERA-API-06 never reaches the panel without a session', async () => {
+    const missing = await routes().fetch(erasureGet('', { cookie: false }))
+    const ended = await routes(
+      scopeService(),
+      sessionService({
+        resolveActor: async () =>
+          Promise.reject(new BackofficeAuthenticationError('unauthenticated')),
+      }),
+    ).fetch(erasureGet())
 
     expect([missing.status, ended.status]).toEqual([401, 401])
     expect(captured).toEqual([])

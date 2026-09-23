@@ -1,7 +1,7 @@
 /**
- * Backoffice privacy routes: `OP-PRV-011` and `OP-SUP-009`.
+ * Backoffice privacy routes: `OP-PRV-011`, `OP-PRV-021` and `OP-SUP-009`.
  *
- * `HU-BO-024` and `HU-BO-030`. The handler shapes and rejects; it decides
+ * `HU-BO-024`, `HU-BO-030` and `HU-BO-032`. The handler shapes and rejects; it decides
  * nothing. The duty each operation needs — `curate_global_catalog` to publish,
  * `audit_platform_access` to read the log — and AAL2 are resolved inside the
  * transaction, against the tables.
@@ -10,6 +10,12 @@
  * field for one — so two curators publishing at once produce two versions rather
  * than a race. And a version whose rules are all exclusions is refused before it
  * travels, because it would grant nothing while looking like a permission.
+ *
+ * The erasure panel reads the same disposition tables a person's own deletion
+ * writes, so it lives here too. It reports what is owed and never what was erased:
+ * the projection has no field for content, and the thirty days arrive as a target
+ * date, because a countdown computed on the server is a countdown in the server's
+ * zone.
  *
  * The access log lives here rather than in `support` because the closed queries
  * and the table are the privacy schema's, even though the operation is numbered
@@ -32,14 +38,23 @@ import {
   type BackofficeAuthenticationService,
 } from '../../identity/index.js'
 import { problem, type ApiErrorCode } from '../../../platform/http/index.js'
-import type { AccessLogService, ScopeDefinitionService } from '../application/index.js'
-import { accessLogService, scopeDefinitionService } from '../dependencies.js'
+import type {
+  AccessLogService,
+  ErasureRequestService,
+  ScopeDefinitionService,
+} from '../application/index.js'
+import { accessLogService, erasureRequestService, scopeDefinitionService } from '../dependencies.js'
 import {
   ACCESS_LEVELS,
   DATA_CLASSIFICATIONS,
+  DEFAULT_ERASURE_PAGE,
+  ERASURE_REQUEST_STATES,
+  MAX_ERASURE_PAGE,
   SCOPE_CODES,
   type AccessEventFilters,
   type AccessLevel,
+  type ErasureRequestFilters,
+  type ErasureRequestState,
   type ScopeCode,
   type ScopeDefinitionPublication,
   type ScopeResourceRule,
@@ -55,11 +70,13 @@ export function backofficePrivacyRoutes(
   injectedScopes?: ScopeDefinitionService,
   injectedSessions?: BackofficeAuthenticationService,
   injectedLog?: AccessLogService,
+  injectedErasure?: ErasureRequestService,
 ): Hono {
   const origin = new URL(trustedBackofficeWebUrl()).origin
   const scopes = () => injectedScopes ?? scopeDefinitionService()
   const sessions = () => injectedSessions ?? backofficeAuthenticationService()
   const log = () => injectedLog ?? accessLogService()
+  const erasure = () => injectedErasure ?? erasureRequestService()
   const routes = new Hono()
 
   routes.use(
@@ -102,6 +119,23 @@ export function backofficePrivacyRoutes(
       if (actor instanceof Response) return actor
       return c.json(
         await log().read(
+          { actorPersonId: actor.personId, actorSessionId: actor.sessionId },
+          { requestId: randomUUID(), ...filters },
+        ),
+      )
+    } catch (error) {
+      return operationFailure(c, error)
+    }
+  })
+
+  routes.get('/erasure-requests', async (c) => {
+    const filters = erasureRequestFilters(c)
+    if (!filters) return problem(c, 'invalid-request')
+    try {
+      const actor = await backofficeActor(c, sessions())
+      if (actor instanceof Response) return actor
+      return c.json(
+        await erasure().list(
           { actorPersonId: actor.personId, actorSessionId: actor.sessionId },
           { requestId: randomUUID(), ...filters },
         ),
@@ -235,6 +269,40 @@ const UUID_ANY = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
  * would widen the query: an auditor who mistyped a person identifier would be
  * shown the whole log instead of nothing, and would have no way to tell.
  */
+function erasureRequestFilters(c: Context): ErasureRequestFilters | undefined {
+  const allowed = new Set(['status', 'limit', 'cursor_at', 'cursor_id'])
+  const query = c.req.query()
+  if (Object.keys(query).some((key) => !allowed.has(key))) return undefined
+
+  const status = query['status'] ?? 'open'
+  if (!ERASURE_REQUEST_STATES.includes(status as ErasureRequestState)) return undefined
+
+  let limit = DEFAULT_ERASURE_PAGE
+  const asked = query['limit']
+  if (asked !== undefined) {
+    if (!/^[0-9]{1,3}$/.test(asked)) return undefined
+    limit = Number(asked)
+    if (limit < 1 || limit > MAX_ERASURE_PAGE) return undefined
+  }
+
+  const at = query['cursor_at']
+  const id = query['cursor_id']
+  // Half a cursor would silently page from the start, which reads as "nothing else
+  // is owed" on a screen whose whole job is to say what still is.
+  if ((at === undefined) !== (id === undefined)) return undefined
+  if (at === undefined || id === undefined) {
+    return { status: status as ErasureRequestState, limit }
+  }
+  const instant = Date.parse(at)
+  if (Number.isNaN(instant) || !UUID_V7.test(id)) return undefined
+
+  return {
+    status: status as ErasureRequestState,
+    limit,
+    cursor: { at: new Date(instant).toISOString(), id },
+  }
+}
+
 function accessEventFilters(c: Context): AccessEventFilters | undefined {
   const allowed = new Set(['actor_person_id', 'subject_person_id', 'from', 'to', 'limit'])
   const query = c.req.query()

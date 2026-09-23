@@ -14,6 +14,8 @@ import type {
   AccessEvent,
   AccessEventPage,
   AccessLogDatabase,
+  ErasureRequest,
+  ErasureRequestDatabase,
   ScopeCommandResult,
   ScopeDefinition,
   ScopeDefinitionDatabase,
@@ -55,6 +57,29 @@ export function createAccessLogDatabase(): AccessLogDatabase {
           items,
           withheld_from_you: withheld.count_withheld_access_events,
         } satisfies AccessEventPage
+      }),
+  }
+}
+
+/**
+ * One row more than the page is asked for, so "is there another page" is answered
+ * by the same query rather than by a second count over a moving table.
+ */
+export function createErasureRequestDatabase(): ErasureRequestDatabase {
+  const sql = database()
+
+  return {
+    list: (input) =>
+      inTransaction(sql, input.actorPersonId, input.requestId, async (transaction) => {
+        const rows = await transaction<ErasureRequest[]>`
+          select * from privacy.list_erasure_requests(
+            ${input.actorPersonId}::uuid, ${input.actorSessionId}::uuid,
+            ${input.status}, ${input.limit + 1}::integer,
+            ${input.cursor?.at ?? null}::timestamptz, ${input.cursor?.id ?? null}::uuid
+          )
+        `
+        const hasMore = rows.length > input.limit
+        return { items: hasMore ? rows.slice(0, input.limit) : rows, has_more: hasMore }
       }),
   }
 }

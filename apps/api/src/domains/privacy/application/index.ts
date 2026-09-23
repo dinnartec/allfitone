@@ -10,6 +10,9 @@ import type {
   AccessEventFilters,
   AccessEventPage,
   AccessLogDatabase,
+  ErasureRequestDatabase,
+  ErasureRequestFilters,
+  ErasureRequestPage,
   PrivacyCurator,
   ScopeCommandContext,
   ScopeCommandResult,
@@ -31,6 +34,21 @@ export interface AccessLogService {
     auditor: PrivacyCurator,
     input: { requestId: string } & AccessEventFilters,
   ): Promise<AccessEventPage>
+}
+
+export interface ErasureRequestService {
+  list(
+    officer: PrivacyCurator,
+    input: { requestId: string } & ErasureRequestFilters,
+  ): Promise<ErasureRequestPage>
+}
+
+export function createErasureRequestService(
+  database: ErasureRequestDatabase,
+): ErasureRequestService {
+  return {
+    list: (officer, input) => database.list({ ...officer, ...input }),
+  }
 }
 
 export function createAccessLogService(database: AccessLogDatabase): AccessLogService {
