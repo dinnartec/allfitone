@@ -17,6 +17,7 @@ export interface BackofficeFixture {
   diagnosis?: DiagnosisFixture
   scopes?: ScopeFixture
   accessLog?: AccessLogFixture
+  erasureRequests?: ErasureRequestFixture
   organizationDirectory?: OrganizationDirectoryFixture
   organizationHandover?: OrganizationHandoverFixture
   organizationFiles?: OrganizationFileFixture
@@ -116,6 +117,33 @@ export interface BreakGlassFixture {
   /** What the subject has trained. Only a prior_training_history read returns it. */
   sessions?: BreakGlassSessionFixture[]
   files: BreakGlassFileFixture[]
+}
+
+export interface ErasureRequestFixture {
+  refusal?: { status: number; code: string }
+  requests: ErasureRequestEntryFixture[]
+}
+
+export interface ErasureRequestEntryFixture {
+  id: string
+  subject_person_id: string
+  origin: string
+  status: string
+  opened_at: string
+  closed_at: string | null
+  due_at: string
+  pending_items: number
+  suspended_items: number
+  resolved_items: number
+  categories: {
+    data_classification_code: string
+    action: string
+    status: string
+    items: number
+    result: string | null
+    executed_at: string | null
+    retained_until: string | null
+  }[]
 }
 
 export interface BreakGlassMealFixture {
@@ -1280,6 +1308,10 @@ export async function mockBackofficeApi(
       await routeVerification(route, request, fixture)
       return
     }
+    if (request.path === '/backoffice/v1/erasure-requests') {
+      await routeErasureRequests(route, request, fixture)
+      return
+    }
     if (request.path === '/backoffice/v1/access-events') {
       await routeAccessLog(route, request, fixture)
       return
@@ -1845,6 +1877,31 @@ async function routeBreakGlass(
   }
 
   await fulfillProblem(route, 404, 'not-found')
+}
+
+async function routeErasureRequests(
+  route: Route,
+  request: MockRequest,
+  fixture: BackofficeFixture,
+): Promise<void> {
+  const panel = fixture.erasureRequests ?? { requests: [] }
+  fixture.erasureRequests = panel
+  if (panel.refusal) {
+    await fulfillProblem(route, panel.refusal.status, panel.refusal.code)
+    return
+  }
+
+  const status = new URLSearchParams(request.query).get('status') ?? 'open'
+  const matching = panel.requests.filter((entry) => entry.status === status)
+  // Open requests oldest first; a resolved one is read newest first.
+  const ordered = [...matching].sort((left, right) =>
+    status === 'open'
+      ? Date.parse(left.opened_at) - Date.parse(right.opened_at)
+      : Date.parse(right.closed_at ?? right.opened_at) -
+        Date.parse(left.closed_at ?? left.opened_at),
+  )
+
+  await fulfill(route, 200, { items: ordered, has_more: false })
 }
 
 async function routeAccessLog(

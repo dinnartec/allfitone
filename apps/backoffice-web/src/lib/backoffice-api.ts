@@ -21,6 +21,7 @@ export type CatalogDiscipline = AllfitV1Schemas['CatalogDiscipline']
 export type CatalogActivityType = AllfitV1Schemas['CatalogActivityType']
 export type ActivityTypeResultContract = AllfitV1Schemas['ActivityTypeResultContract']
 export type AccessEventPage = AllfitV1Schemas['AccessEventPage']
+export type ErasureRequestPage = AllfitV1Schemas['ErasureRequestPage']
 export type BackofficeOrganizationSummary = AllfitV1Schemas['BackofficeOrganizationSummary']
 export type BackofficeOrganizationPage = AllfitV1Schemas['BackofficeOrganizationPage']
 export type OrganizationHandover = AllfitV1Schemas['OrganizationHandover']
@@ -418,6 +419,19 @@ export const backofficeApi = {
       headers: commandHeaders(command),
       body: JSON.stringify({ credential_id: credentialId }),
     }),
+
+  erasureRequests: (
+    filters: {
+      status?: string | undefined
+      cursor_at?: string | undefined
+      cursor_id?: string | undefined
+    } = {},
+    signal?: AbortSignal,
+  ) =>
+    requestJson<ErasureRequestPage>(
+      `/backoffice/v1/erasure-requests${query(filters)}`,
+      signal ? { signal } : {},
+    ),
 
   accessEvents: (
     filters: {

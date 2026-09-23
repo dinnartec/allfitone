@@ -349,6 +349,35 @@
   white-space: normal;
 }
 
+/* The two halves read as one control, and wrap before they shrink. */
+[data-erasure-halves] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-2, 0.5rem);
+}
+
+[data-erasure-subject] {
+  max-width: 18rem;
+  overflow-wrap: anywhere;
+}
+
+[data-erasure-missing] {
+  min-width: 10rem;
+  max-width: 14rem;
+  white-space: normal;
+}
+
+[data-erasure-resolution] ul {
+  margin: 0;
+  padding-inline-start: var(--spacing-4, 1rem);
+}
+
+[data-erasure-resolution] {
+  min-width: 12rem;
+  max-width: 18rem;
+  white-space: normal;
+}
+
 [data-access-log-filters] {
   display: grid;
   gap: 12px;
