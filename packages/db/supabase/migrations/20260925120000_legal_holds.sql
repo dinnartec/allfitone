@@ -13,6 +13,11 @@
 -- nothing to record, because nothing was read. Seeing that person's file still
 -- needs a break-glass window.
 --
+-- The separation refusal answers `AF403` and not a plain `42501`. Both are 403 to
+-- the client, but "you are not allowed" and "you specifically, because you asked to
+-- read this person's file" are different facts, and the screen has to say the second
+-- one in those words.
+--
 -- **Whoever asked to look cannot decide to keep.** An officer who requested or
 -- approved a break-glass window over a person is refused a hold over that person's
 -- dispositions. Concentrating "let me see it" and "nobody may delete it" in one
@@ -242,7 +247,7 @@ begin
   loop
     if privacy.asked_to_read_this_person(p_actor_person_id, subject) then
       raise exception 'whoever requested an exceptional read of this person cannot hold their data'
-        using errcode = '42501';
+        using errcode = 'AF403';
     end if;
   end loop;
 
@@ -344,7 +349,7 @@ begin
   loop
     if privacy.asked_to_read_this_person(p_actor_person_id, subject) then
       raise exception 'whoever requested an exceptional read of this person cannot release their hold'
-        using errcode = '42501';
+        using errcode = 'AF403';
     end if;
   end loop;
 
@@ -398,6 +403,88 @@ begin
 
   return query select response, false;
 end
+$function$;
+
+-- ---------------------------------------------------------------------------
+-- What the erasure panel now has to show
+-- ---------------------------------------------------------------------------
+
+-- Two things the panel could not answer before holds existed: which dispositions a
+-- category is made of — so an officer can hold exactly those and nothing else — and,
+-- where one is held, under what reason and until when.
+create or replace function privacy.erasure_request_categories(p_case_id uuid)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = pg_catalog
+as $function$
+  select coalesce(
+    jsonb_agg(
+      jsonb_build_object(
+        'data_classification_code', grouped.data_classification_code,
+        'action', grouped.action,
+        'status', grouped.status,
+        'items', grouped.items,
+        'item_ids', grouped.item_ids,
+        'result', grouped.result,
+        'executed_at', grouped.executed_at,
+        'retained_until', grouped.retained_until,
+        'hold', grouped.hold
+      )
+      order by grouped.data_classification_code, grouped.action, grouped.status
+    ),
+    '[]'::jsonb
+  )
+  from (
+    select
+      item.data_classification_code as data_classification_code,
+      item.action::text as action,
+      item.status::text as status,
+      count(*)::int as items,
+      jsonb_agg(item.id order by item.id) as item_ids,
+      max(item.executed_at) as executed_at,
+      max(
+        case
+          when item.action = 'retain_restricted' and item.executed_at is not null
+            then item.executed_at + policy.retention_period
+        end
+      ) as retained_until,
+      (array_remove(array_agg(latest.result order by latest.executed_at desc), null))[1]
+        as result,
+      (
+        array_remove(
+          array_agg(
+            case
+              when held.id is not null then jsonb_build_object(
+                'id', held.id,
+                'reason_code', held.reason_code,
+                'valid_to', held.valid_to
+              )
+            end
+          ),
+          null
+        )
+      )[1] as hold
+    from privacy.disposition_items as item
+    join privacy.retention_policies as policy on policy.id = item.retention_policy_id
+    left join lateral (
+      select event.result, event.executed_at
+      from privacy.disposition_events as event
+      where event.disposition_item_id = item.id
+      order by event.executed_at desc
+      limit 1
+    ) as latest on true
+    left join lateral (
+      select hold.id, hold.reason_code, hold.valid_to
+      from privacy.hold_applications as application
+      join privacy.legal_holds as hold on hold.id = application.legal_hold_id
+      where application.disposition_item_id = item.id and application.status = 'active'
+      limit 1
+    ) as held on true
+    where item.disposition_case_id = p_case_id
+    group by item.data_classification_code, item.action, item.status
+  ) as grouped
 $function$;
 
 -- ---------------------------------------------------------------------------

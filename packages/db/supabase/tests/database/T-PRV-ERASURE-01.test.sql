@@ -24,7 +24,7 @@
 
 begin;
 
-select plan(29);
+select plan(30);
 
 -- ---------------------------------------------------------------------------
 -- People, sessions and roles
@@ -371,6 +371,16 @@ select is(
       and category->>'data_classification_code' = 'health'),
   date_trunc('day', clock_timestamp() + interval '345 days'),
   'what is kept says until when, from its own policy'
+);
+
+-- A hold names the dispositions it stops, so the panel has to carry them.
+select is(
+  (select jsonb_array_length(category->'item_ids') from open_list,
+    jsonb_array_elements(categories) as category
+    where id = '019ac000-0000-7000-8000-000000000501'
+      and category->>'data_classification_code' = 'body'),
+  1,
+  'each line carries the dispositions it is made of'
 );
 
 select ok(

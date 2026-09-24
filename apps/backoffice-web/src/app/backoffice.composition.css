@@ -372,6 +372,28 @@
   padding-inline-start: var(--spacing-4, 1rem);
 }
 
+/* The actions sit under the lines they act on, and wrap before they shrink. */
+[data-erasure-actions],
+[data-erasure-confirm-actions],
+[data-erasure-hold-actions] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-2, 0.5rem);
+  margin-block-start: var(--spacing-2, 0.5rem);
+}
+
+[data-erasure-hold-categories] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2, 0.5rem);
+}
+
+[data-erasure-hold-categories] label {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2, 0.5rem);
+}
+
 [data-erasure-resolution] {
   min-width: 12rem;
   max-width: 18rem;

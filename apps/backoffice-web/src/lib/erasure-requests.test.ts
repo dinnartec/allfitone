@@ -4,11 +4,16 @@ import {
   categoryLine,
   emptyMessage,
   erasureMessage,
+  holdIssue,
+  holdIssueMessage,
+  holdReasonLabel,
+  holdableCategories,
   panelSummary,
   requestRows,
   urgencyOf,
   type ErasureRequest,
   type ErasureRequestPage,
+  type HoldDraft,
 } from './erasure-requests'
 
 const NOW = Date.parse('2026-09-23T12:00:00.000Z')
@@ -31,18 +36,22 @@ function request(overrides: Partial<ErasureRequest> = {}): ErasureRequest {
         action: 'delete',
         status: 'executed',
         items: 2,
+        item_ids: ['019ae000-0000-7000-8000-000000000601', '019ae000-0000-7000-8000-000000000602'],
         result: 'deleted',
         executed_at: '2026-08-28T12:00:05.000Z',
         retained_until: null,
+        hold: null,
       },
       {
         data_classification_code: 'health',
         action: 'delete',
         status: 'pending',
         items: 1,
+        item_ids: ['019ae000-0000-7000-8000-000000000603'],
         result: null,
         executed_at: null,
         retained_until: null,
+        hold: null,
       },
     ],
     ...overrides,
@@ -119,9 +128,11 @@ describe('erasure request presentation rules', () => {
         action: 'delete',
         status: 'executed',
         items: 2,
+        item_ids: ['019ae000-0000-7000-8000-000000000601'],
         result: 'deleted',
         executed_at: '2026-08-28T12:00:05.000Z',
         retained_until: null,
+        hold: null,
       }),
     ).toBe('Cuerpo · eliminado (2)')
 
@@ -131,9 +142,11 @@ describe('erasure request presentation rules', () => {
         action: 'delete',
         status: 'pending',
         items: 1,
+        item_ids: ['019ae000-0000-7000-8000-000000000603'],
         result: null,
         executed_at: null,
         retained_until: null,
+        hold: null,
       }),
     ).toBe('Salud · pendiente de eliminar (1)')
 
@@ -142,9 +155,11 @@ describe('erasure request presentation rules', () => {
       action: 'retain_restricted',
       status: 'executed',
       items: 1,
+      item_ids: ['019ae000-0000-7000-8000-000000000604'],
       result: 'retained',
       executed_at: '2026-08-28T12:00:05.000Z',
       retained_until: '2027-08-28T12:00:05.000Z',
+      hold: null,
     })
     expect(kept).toContain('Salud · conservado hasta')
     expect(kept).toContain('2027')
@@ -155,11 +170,17 @@ describe('erasure request presentation rules', () => {
         action: 'anonymize',
         status: 'suspended',
         items: 4,
+        item_ids: ['019ae000-0000-7000-8000-000000000605'],
         result: null,
         executed_at: null,
         retained_until: null,
+        hold: {
+          id: '019ae000-0000-7000-8000-000000000701',
+          reason_code: 'judicial_order',
+          valid_to: '2026-12-22T12:00:00.000Z',
+        },
       }),
-    ).toBe('Nutrición · en espera por una obligación legal (4)')
+    ).toContain('Nutrición · en espera por una obligación legal')
   })
 
   test('the panel states what it is showing, including when it is late', () => {
@@ -184,5 +205,106 @@ describe('erasure request presentation rules', () => {
     expect(erasureMessage('forbidden')).toContain('manage_privacy_requests')
     expect(erasureMessage('network-unavailable')).toContain('conexión')
     expect(erasureMessage('anything-else')).toBe('No se pudo leer el seguimiento.')
+  })
+
+  test('a held category says on what ground and until when, without opening the hold', () => {
+    const line = categoryLine({
+      data_classification_code: 'body',
+      action: 'delete',
+      status: 'suspended',
+      items: 2,
+      item_ids: ['019ae000-0000-7000-8000-000000000601'],
+      result: null,
+      executed_at: null,
+      retained_until: null,
+      hold: {
+        id: '019ae000-0000-7000-8000-000000000701',
+        reason_code: 'judicial_order',
+        valid_to: '2026-12-22T12:00:00.000Z',
+      },
+    })
+
+    expect(line).toContain('en espera por una obligación legal')
+    expect(line).toContain('orden judicial')
+    expect(line).toContain('2026')
+    expect(holdReasonLabel('tax_or_accounting_obligation')).toBe('obligación contable o tributaria')
+  })
+
+  test('only what is still waiting can be suspended', () => {
+    const request_ = request({
+      categories: [
+        {
+          data_classification_code: 'body',
+          action: 'delete',
+          status: 'pending',
+          items: 2,
+          item_ids: ['a', 'b'],
+          result: null,
+          executed_at: null,
+          retained_until: null,
+          hold: null,
+        },
+        {
+          data_classification_code: 'health',
+          action: 'delete',
+          status: 'executed',
+          items: 1,
+          item_ids: ['c'],
+          result: 'deleted',
+          executed_at: '2026-08-28T12:00:05.000Z',
+          retained_until: null,
+          hold: null,
+        },
+        {
+          data_classification_code: 'nutrition',
+          action: 'delete',
+          status: 'suspended',
+          items: 1,
+          item_ids: ['d'],
+          result: null,
+          executed_at: null,
+          retained_until: null,
+          hold: {
+            id: '019ae000-0000-7000-8000-000000000701',
+            reason_code: 'judicial_order',
+            valid_to: '2026-12-22T12:00:00.000Z',
+          },
+        },
+      ],
+    })
+
+    // What is already erased cannot be held, and what is held is released, not held again.
+    expect(
+      holdableCategories(request_).map((category) => category.data_classification_code),
+    ).toEqual(['body'])
+  })
+
+  test('the form refuses an open-ended hold, and says which field is missing', () => {
+    const complete: HoldDraft = {
+      scopeDescription: 'Mediciones de la persona en el expediente 2026-114',
+      reasonCode: 'judicial_order',
+      caseReference: 'JUZGADO-2026-114',
+      validTo: '2026-12-22',
+      itemIds: ['019ae000-0000-7000-8000-000000000601'],
+    }
+
+    expect(holdIssue(complete, Date.parse('2026-09-23T12:00:00.000Z'))).toBeUndefined()
+    expect(holdIssue({ ...complete, validTo: '' }, Date.parse('2026-09-23T12:00:00.000Z'))).toBe(
+      'vigency',
+    )
+    expect(
+      holdIssue({ ...complete, validTo: '2026-09-01' }, Date.parse('2026-09-23T12:00:00.000Z')),
+    ).toBe('vigency')
+    expect(holdIssue({ ...complete, scopeDescription: ' ' }, Date.now())).toBe('scope')
+    expect(holdIssue({ ...complete, caseReference: '' }, Date.now())).toBe('case')
+    expect(holdIssue({ ...complete, itemIds: [] }, Date.now())).toBe('categories')
+    expect(holdIssueMessage('vigency')).toContain('hasta cuándo')
+    expect(holdIssueMessage('categories')).toContain('categoría')
+  })
+
+  test('a separation conflict is explained as itself, not as a refusal', () => {
+    expect(erasureMessage('separation-of-duties')).toContain('acceso excepcional')
+    expect(erasureMessage('separation-of-duties')).not.toBe(erasureMessage('forbidden'))
+    expect(erasureMessage('conflict')).toContain('otra suspensión')
   })
 })

@@ -22,7 +22,7 @@
 
 begin;
 
-select plan(35);
+select plan(38);
 
 -- ---------------------------------------------------------------------------
 -- People, sessions, roles and duties
@@ -309,6 +309,34 @@ select is(
 );
 
 -- ---------------------------------------------------------------------------
+-- What the panel says about a held disposition
+-- ---------------------------------------------------------------------------
+
+create temporary table held_panel on commit drop as
+select category
+from privacy.erasure_request_categories('019ae000-0000-7000-8000-000000000501') as categories,
+  jsonb_array_elements(categories) as category
+where category->>'status' = 'suspended';
+
+select is(
+  (select (category->>'items')::int from held_panel),
+  2,
+  'the panel reports the held categories as suspended, not as pending work'
+);
+
+select is(
+  (select category->'hold'->>'reason_code' from held_panel),
+  'judicial_order',
+  'and says on what ground they are held'
+);
+
+select is(
+  (select date_trunc('day', (category->'hold'->>'valid_to')::timestamptz) from held_panel),
+  date_trunc('day', clock_timestamp() + interval '90 days'),
+  'and until when, so nobody has to open the hold to find out'
+);
+
+-- ---------------------------------------------------------------------------
 -- What a second hold cannot do
 -- ---------------------------------------------------------------------------
 
@@ -440,7 +468,7 @@ select throws_ok(
     '019ae000-0000-4000-8000-00000000090a', '019ae000-0000-7000-8000-000000000a0a',
     decode(repeat('8a', 32), 'hex')
   ) $$,
-  '42501',
+  'AF403',
   null,
   'whoever asked for an exceptional read of that person cannot hold their data'
 );
@@ -469,7 +497,7 @@ select throws_ok(
     '019ae000-0000-4000-8000-00000000090c', '019ae000-0000-7000-8000-000000000a0c',
     decode(repeat('8c', 32), 'hex')
   ) $$,
-  '42501',
+  'AF403',
   null,
   'whoever asked for an exceptional read cannot release the hold either'
 );

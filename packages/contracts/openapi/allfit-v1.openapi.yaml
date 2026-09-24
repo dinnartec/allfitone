@@ -7219,11 +7219,21 @@ components:
         application/problem+json:
           schema:
             $ref: '#/components/schemas/Problem'
-          example:
-            type: https://errors.allfit.invalid/forbidden
-            title: The actor cannot execute this operation
-            status: 403
-            request_id: 01JEXAMPLE0000000000000000
+          examples:
+            forbidden:
+              summary: The duty this operation needs is not in force
+              value:
+                type: https://errors.allfit.invalid/forbidden
+                title: The actor cannot execute this operation
+                status: 403
+                request_id: 01JEXAMPLE0000000000000000
+            separationOfDuties:
+              summary: Allowed in general, refused here
+              value:
+                type: https://errors.allfit.invalid/separation-of-duties
+                title: This actor already asked to read this person
+                status: 403
+                request_id: 01JEXAMPLE0000000000000000
     AccountClosed:
       description: The person linked to the authenticated account is closed
       headers:
@@ -8338,8 +8348,8 @@ components:
         One line per category, action and state. Deleting forty meals is one line
         that says so: the identifiers of forty erased rows are the data the
         erasure removed.
-      required: [data_classification_code, action, status, items, result, executed_at,
-        retained_until]
+      required: [data_classification_code, action, status, items, item_ids, result,
+        executed_at, retained_until, hold]
       properties:
         data_classification_code:
           $ref: '#/components/schemas/DataClassificationCode'
@@ -8350,6 +8360,15 @@ components:
         items:
           type: integer
           minimum: 1
+        item_ids:
+          type: array
+          minItems: 1
+          maxItems: 500
+          description: >-
+            The dispositions this line is made of, so a legal hold can name exactly
+            these and nothing else.
+          items:
+            $ref: '#/components/schemas/Uuid'
         result:
           oneOf:
             - $ref: '#/components/schemas/DispositionResult'
@@ -8364,6 +8383,24 @@ components:
           description: >-
             Only where something was kept, and taken from the policy that decided
             to keep it.
+        hold:
+          oneOf:
+            - $ref: '#/components/schemas/ErasureRequestHold'
+            - type: 'null'
+          description: The legal hold stopping this line, when one is.
+    ErasureRequestHold:
+      type: object
+      additionalProperties: false
+      description: Why this line is stopped and until when, without leaving the panel.
+      required: [id, reason_code, valid_to]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        reason_code:
+          $ref: '#/components/schemas/LegalHoldReason'
+        valid_to:
+          type: string
+          format: date-time
     ErasureRequest:
       type: object
       additionalProperties: false

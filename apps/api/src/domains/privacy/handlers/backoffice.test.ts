@@ -123,18 +123,29 @@ const erasurePage: AllfitV1Schemas['ErasureRequestPage'] = {
           action: 'delete',
           status: 'executed',
           items: 2,
+          item_ids: [
+            '019ae000-0000-7000-8000-000000000601',
+            '019ae000-0000-7000-8000-000000000602',
+          ],
           result: 'deleted',
           executed_at: '2026-08-28T12:00:05.000Z',
           retained_until: null,
+          hold: null,
         },
         {
           data_classification_code: 'health',
           action: 'delete',
-          status: 'pending',
+          status: 'suspended',
           items: 1,
+          item_ids: ['019ae000-0000-7000-8000-000000000603'],
           result: null,
           executed_at: null,
           retained_until: null,
+          hold: {
+            id: '019ae000-0000-7000-8000-000000000701',
+            reason_code: 'judicial_order',
+            valid_to: '2026-12-22T12:00:00.000Z',
+          },
         },
       ],
     },
@@ -755,6 +766,7 @@ describe('Backoffice privacy API contract', () => {
   test('T-HOLD-API-06 answers the database verdict, and says nothing else', async () => {
     const verdicts: [string, number][] = [
       ['42501', 403],
+      ['AF403', 403],
       ['P0002', 404],
       ['23505', 409],
       ['55000', 409],
@@ -785,6 +797,13 @@ describe('Backoffice privacy API contract', () => {
     ).fetch(holdPost('/legal-holds', { body: application }))
 
     expect(answers.map((response) => response.status)).toEqual(verdicts.map(([, code]) => code))
+    // Both are 403, and the screen has to be able to tell them apart.
+    await expect(answers[0]?.json()).resolves.toMatchObject({
+      type: 'https://errors.allfit.invalid/forbidden',
+    })
+    await expect(answers[1]?.json()).resolves.toMatchObject({
+      type: 'https://errors.allfit.invalid/separation-of-duties',
+    })
     expect(broken.status).toBe(503)
   })
 

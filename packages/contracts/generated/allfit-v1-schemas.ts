@@ -2694,9 +2694,11 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       'action',
       'status',
       'items',
+      'item_ids',
       'result',
       'executed_at',
       'retained_until',
+      'hold',
     ],
     properties: {
       data_classification_code: {
@@ -2711,6 +2713,16 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       items: {
         type: 'integer',
         minimum: 1,
+      },
+      item_ids: {
+        type: 'array',
+        minItems: 1,
+        maxItems: 500,
+        description:
+          'The dispositions this line is made of, so a legal hold can name exactly these and nothing else.',
+        items: {
+          $ref: '#/components/schemas/Uuid',
+        },
       },
       result: {
         oneOf: [
@@ -2732,6 +2744,35 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         format: 'date-time',
         description:
           'Only where something was kept, and taken from the policy that decided to keep it.',
+      },
+      hold: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/ErasureRequestHold',
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description: 'The legal hold stopping this line, when one is.',
+      },
+    },
+  },
+  ErasureRequestHold: {
+    type: 'object',
+    additionalProperties: false,
+    description: 'Why this line is stopped and until when, without leaving the panel.',
+    required: ['id', 'reason_code', 'valid_to'],
+    properties: {
+      id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      reason_code: {
+        $ref: '#/components/schemas/LegalHoldReason',
+      },
+      valid_to: {
+        type: 'string',
+        format: 'date-time',
       },
     },
   },

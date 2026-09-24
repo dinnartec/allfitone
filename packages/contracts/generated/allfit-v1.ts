@@ -3012,6 +3012,8 @@ export interface components {
       action: components['schemas']['DispositionAction']
       status: components['schemas']['DispositionItemStatus']
       items: number
+      /** @description The dispositions this line is made of, so a legal hold can name exactly these and nothing else. */
+      item_ids: components['schemas']['Uuid'][]
       /** @description What the disposition recorded. Absent until it runs. */
       result: components['schemas']['DispositionResult'] | null
       /** Format: date-time */
@@ -3021,6 +3023,15 @@ export interface components {
        * @description Only where something was kept, and taken from the policy that decided to keep it.
        */
       retained_until: string | null
+      /** @description The legal hold stopping this line, when one is. */
+      hold: components['schemas']['ErasureRequestHold'] | null
+    }
+    /** @description Why this line is stopped and until when, without leaving the panel. */
+    ErasureRequestHold: {
+      id: components['schemas']['Uuid']
+      reason_code: components['schemas']['LegalHoldReason']
+      /** Format: date-time */
+      valid_to: string
     }
     /** @description A person's erasure request and how far it got. The person is named by identifier: this screen tracks the request, it does not open the file. */
     ErasureRequest: {
@@ -5638,14 +5649,6 @@ export interface components {
         [name: string]: unknown
       }
       content: {
-        /**
-         * @example {
-         *       "type": "https://errors.allfit.invalid/forbidden",
-         *       "title": "The actor cannot execute this operation",
-         *       "status": 403,
-         *       "request_id": "01JEXAMPLE0000000000000000"
-         *     }
-         */
         'application/problem+json': components['schemas']['Problem']
       }
     }

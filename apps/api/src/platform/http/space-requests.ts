@@ -145,6 +145,9 @@ function databaseErrorCode(error: unknown): ApiErrorCode | undefined {
   }
   if (sqlState === '23505' || sqlState === '55000' || sqlState === '23514') return 'conflict'
   if (sqlState === '40001') return 'idempotency-in-progress'
+  // Allfit-defined: allowed in general, refused here, and the difference matters to
+  // whoever reads the screen.
+  if (sqlState === 'AF403') return 'separation-of-duties'
   // Allfit-defined: the device worked on a revision the aggregate has already moved past.
   if (sqlState === 'AF409') return 'stale-draft'
   // Allfit-defined: the command ran, and what it created has been deleted since.

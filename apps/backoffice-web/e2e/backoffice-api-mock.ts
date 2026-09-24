@@ -121,6 +121,8 @@ export interface BreakGlassFixture {
 
 export interface ErasureRequestFixture {
   refusal?: { status: number; code: string }
+  /** The answer the next hold command gets, consumed once. */
+  nextHoldRefusal?: { status: number; code: string } | undefined
   requests: ErasureRequestEntryFixture[]
 }
 
@@ -140,9 +142,11 @@ export interface ErasureRequestEntryFixture {
     action: string
     status: string
     items: number
+    item_ids: string[]
     result: string | null
     executed_at: string | null
     retained_until: string | null
+    hold: { id: string; reason_code: string; valid_to: string } | null
   }[]
 }
 
@@ -1308,6 +1312,13 @@ export async function mockBackofficeApi(
       await routeVerification(route, request, fixture)
       return
     }
+    if (
+      request.path === '/backoffice/v1/legal-holds' ||
+      /^\/backoffice\/v1\/legal-holds\/[^/]+\/release$/.test(request.path)
+    ) {
+      await routeLegalHolds(route, request, fixture)
+      return
+    }
     if (request.path === '/backoffice/v1/erasure-requests') {
       await routeErasureRequests(route, request, fixture)
       return
@@ -1877,6 +1888,63 @@ async function routeBreakGlass(
   }
 
   await fulfillProblem(route, 404, 'not-found')
+}
+
+async function routeLegalHolds(
+  route: Route,
+  request: MockRequest,
+  fixture: BackofficeFixture,
+): Promise<void> {
+  const panel = fixture.erasureRequests ?? { requests: [] }
+  fixture.erasureRequests = panel
+  const refusal = panel.nextHoldRefusal
+  panel.nextHoldRefusal = undefined
+  if (refusal) {
+    await fulfillProblem(route, refusal.status, refusal.code)
+    return
+  }
+
+  const release = /^\/backoffice\/v1\/legal-holds\/([^/]+)\/release$/.exec(request.path)
+  const holdId = release?.[1] ?? nextAssignmentId()
+  const body = request.body as
+    { reason_code?: string; valid_to?: string; disposition_item_ids?: string[] } | undefined
+
+  // The panel is what the officer sees next, so the fixture moves with the command.
+  for (const entry of panel.requests) {
+    for (const category of entry.categories) {
+      if (release && category.hold?.id === holdId) {
+        category.status = 'pending'
+        category.hold = null
+        entry.pending_items += category.items
+        entry.suspended_items = Math.max(0, entry.suspended_items - category.items)
+      }
+      if (!release && category.item_ids.some((id) => body?.disposition_item_ids?.includes(id))) {
+        category.status = 'suspended'
+        category.hold = {
+          id: holdId,
+          reason_code: body?.reason_code ?? 'judicial_order',
+          valid_to: body?.valid_to ?? new Date().toISOString(),
+        }
+        entry.pending_items = Math.max(0, entry.pending_items - category.items)
+        entry.suspended_items += category.items
+      }
+    }
+  }
+
+  await fulfill(route, release ? 200 : 201, {
+    id: holdId,
+    scope_description: 'Alcance declarado',
+    reason_code: body?.reason_code ?? 'judicial_order',
+    case_reference: 'JUZGADO-2026-114',
+    valid_from: new Date().toISOString(),
+    valid_to: body?.valid_to ?? new Date().toISOString(),
+    status: release ? 'released' : 'active',
+    applied_by_person_id: SUPPORT_SUBJECT_ID,
+    released_at: release ? new Date().toISOString() : null,
+    released_by_person_id: release ? SUPPORT_SUBJECT_ID : null,
+    suspended_items: release ? 0 : (body?.disposition_item_ids?.length ?? 0),
+    items: body?.disposition_item_ids?.length ?? 1,
+  })
 }
 
 async function routeErasureRequests(

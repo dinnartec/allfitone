@@ -47,6 +47,7 @@ export type ApiErrorCode =
   | 'rate-limited'
   /** The command already ran, and what it created has been deleted since. */
   | 'command-effect-disposed'
+  | 'separation-of-duties'
 
 const STATUS: Record<ApiErrorCode, ContentfulStatusCode> = {
   unauthenticated: 401,
@@ -67,6 +68,7 @@ const STATUS: Record<ApiErrorCode, ContentfulStatusCode> = {
   'validation-failed': 422,
   'rate-limited': 429,
   'command-effect-disposed': 410,
+  'separation-of-duties': 403,
 }
 
 const TITLE: Record<ApiErrorCode, string> = {
@@ -88,6 +90,7 @@ const TITLE: Record<ApiErrorCode, string> = {
   'validation-failed': 'The request does not satisfy the contract',
   'rate-limited': 'Too many requests',
   'command-effect-disposed': 'The command effect was disposed',
+  'separation-of-duties': 'This actor already asked to read this person',
 }
 
 /**

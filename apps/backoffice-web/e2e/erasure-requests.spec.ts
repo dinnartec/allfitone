@@ -33,18 +33,22 @@ function openRequest(
         action: 'delete',
         status: 'executed',
         items: 2,
+        item_ids: ['019ae000-0000-7000-8000-000000000601', '019ae000-0000-7000-8000-000000000602'],
         result: 'deleted',
         executed_at: day(-27),
         retained_until: null,
+        hold: null,
       },
       {
         data_classification_code: 'health',
         action: 'delete',
         status: 'pending',
         items: 1,
+        item_ids: ['019ae000-0000-7000-8000-000000000603'],
         result: null,
         executed_at: null,
         retained_until: null,
+        hold: null,
       },
     ],
     ...overrides,
@@ -74,9 +78,15 @@ test('shows what is still owed, with the ones past the thirty days called out', 
               action: 'delete',
               status: 'suspended',
               items: 4,
+              item_ids: ['019ae000-0000-7000-8000-000000000604'],
               result: null,
               executed_at: null,
               retained_until: null,
+              hold: {
+                id: '019ae000-0000-7000-8000-000000000701',
+                reason_code: 'judicial_order',
+                valid_to: day(60),
+              },
             },
           ],
         }),
@@ -135,9 +145,11 @@ test('reads the resolved half only when it is asked for', async ({ context, page
               action: 'delete',
               status: 'executed',
               items: 3,
+              item_ids: ['019ae000-0000-7000-8000-000000000605'],
               result: 'deleted',
               executed_at: day(-12),
               retained_until: null,
+              hold: null,
             },
           ],
         }),
@@ -162,6 +174,132 @@ test('reads the resolved half only when it is asked for', async ({ context, page
     request.path.startsWith('/backoffice/v1/erasure-requests'),
   )
   expect(reads.at(-1)?.query).toContain('status=closed')
+})
+
+test('suspends a category by an obligation, and the panel then says so', async ({
+  context,
+  page,
+}) => {
+  const fixture = createBackofficeFixture({
+    session: activeSession(),
+    erasureRequests: { requests: [openRequest()] },
+  })
+  await mockBackofficeApi(context, fixture)
+  await page.setViewportSize({ width: 1280, height: 900 })
+
+  await page.goto(PATH)
+  await page.getByRole('button', { name: 'Suspender', exact: true }).first().click()
+
+  const form = page.locator('[data-erasure-hold-form]')
+  await expect(form).toContainText('No da acceso a nada')
+
+  // The form will not let a hold leave without an end date.
+  await form.getByRole('button', { name: 'Suspender', exact: true }).click()
+  await expect(form).toContainText('Describe qué cubre la suspensión')
+  expect(
+    fixture.requests.filter((request) => request.path === '/backoffice/v1/legal-holds'),
+  ).toHaveLength(0)
+
+  await form.getByLabel('Alcance').fill('Mediciones del expediente 2026-114')
+  await form.getByLabel('Referencia del requerimiento').fill('JUZGADO-2026-114')
+  await form.getByRole('button', { name: 'Suspender', exact: true }).click()
+  await expect(form).toContainText('No existen suspensiones indefinidas')
+
+  await form.getByLabel('Vigente hasta').fill(day(60).slice(0, 10))
+  await form.getByRole('checkbox').first().check()
+  await form.getByRole('button', { name: 'Suspender', exact: true }).click()
+
+  const table = page.getByRole('table', { name: 'Solicitudes de eliminación' })
+  await expect(table.locator('[data-erasure-row]')).toContainText('orden judicial')
+  await expect(table.locator('[data-erasure-row]')).toContainText(
+    'en espera por una obligación legal',
+  )
+
+  const applied = fixture.requests.filter(
+    (request) => request.path === '/backoffice/v1/legal-holds',
+  )
+  expect(applied).toHaveLength(1)
+  expect(applied[0]?.body).toMatchObject({
+    reason_code: 'judicial_order',
+    case_reference: 'JUZGADO-2026-114',
+    disposition_item_ids: ['019ae000-0000-7000-8000-000000000603'],
+  })
+})
+
+test('says what releasing will do before it does it', async ({ context, page }) => {
+  const fixture = createBackofficeFixture({
+    session: activeSession(),
+    erasureRequests: {
+      requests: [
+        openRequest({
+          pending_items: 0,
+          suspended_items: 1,
+          categories: [
+            {
+              data_classification_code: 'health',
+              action: 'delete',
+              status: 'suspended',
+              items: 1,
+              item_ids: ['019ae000-0000-7000-8000-000000000603'],
+              result: null,
+              executed_at: null,
+              retained_until: null,
+              hold: {
+                id: '019ae000-0000-7000-8000-000000000701',
+                reason_code: 'regulatory_request',
+                valid_to: day(30),
+              },
+            },
+          ],
+        }),
+      ],
+    },
+  })
+  await mockBackofficeApi(context, fixture)
+  await page.setViewportSize({ width: 1280, height: 900 })
+
+  await page.goto(PATH)
+  await page.locator('[data-erasure-release]').first().click()
+
+  const confirm = page.locator('[data-erasure-release-confirm]')
+  await expect(confirm).toContainText('la eliminación sigue su curso')
+  expect(fixture.requests.filter((request) => request.path.includes('/release'))).toHaveLength(0)
+
+  await confirm.getByRole('button', { name: 'Confirmar liberación' }).click()
+
+  await expect(page.getByRole('table', { name: 'Solicitudes de eliminación' })).toContainText(
+    'pendiente de eliminar',
+  )
+  expect(fixture.requests.filter((request) => request.path.includes('/release'))).toHaveLength(1)
+})
+
+test('a separation conflict is explained as itself, not as a refusal', async ({
+  context,
+  page,
+}) => {
+  const fixture = createBackofficeFixture({
+    session: activeSession(),
+    erasureRequests: {
+      requests: [openRequest()],
+      nextHoldRefusal: { status: 403, code: 'separation-of-duties' },
+    },
+  })
+  await mockBackofficeApi(context, fixture)
+  await page.setViewportSize({ width: 1280, height: 900 })
+
+  await page.goto(PATH)
+  await page.getByRole('button', { name: 'Suspender', exact: true }).first().click()
+
+  const form = page.locator('[data-erasure-hold-form]')
+  await form.getByLabel('Alcance').fill('Mediciones del expediente 2026-114')
+  await form.getByLabel('Referencia del requerimiento').fill('JUZGADO-2026-114')
+  await form.getByLabel('Vigente hasta').fill(day(60).slice(0, 10))
+  await form.getByRole('checkbox').first().check()
+  await form.getByRole('button', { name: 'Suspender', exact: true }).click()
+
+  const failure = page.locator('[data-erasure-failure]')
+  await expect(failure).toContainText('acceso excepcional')
+  await expect(failure).not.toContainText('manage_privacy_requests')
 })
 
 test('explains a refused read as the duty it needs, not as a failure', async ({

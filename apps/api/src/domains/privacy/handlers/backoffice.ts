@@ -532,6 +532,9 @@ function databaseErrorCode(error: unknown): ApiErrorCode | undefined {
   const sqlState = typeof error.code === 'string' ? error.code : undefined
   if (sqlState === 'P0002') return 'not-found'
   if (sqlState === '42501') return 'forbidden'
+  // Allowed in general, refused here: whoever asked to read this person cannot hold
+  // their data. The screen says which of the two 403s it is.
+  if (sqlState === 'AF403') return 'separation-of-duties'
   if (sqlState === '22023' || sqlState === '23503') return 'validation-failed'
   // 55000 is the immutability guard: correcting means publishing the next version.
   if (sqlState === '23514' || sqlState === '23505' || sqlState === '55000') return 'conflict'
