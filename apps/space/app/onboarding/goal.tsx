@@ -29,7 +29,6 @@
  * training dressed as a convenience, and the person has to actually choose.
  */
 
-import { AmbientBackdrop } from '@allfitone/react-native/backdrop'
 import { Button } from '@allfitone/react-native/button'
 import { InlineAlert } from '@allfitone/react-native/inline-alert'
 import { Screen } from '@allfitone/react-native/screen'
@@ -244,8 +243,7 @@ export default function OnboardingTrainingGoal() {
   }
 
   return (
-    <Screen edges={['top', 'bottom']}>
-      <AmbientBackdrop />
+    <Screen edges={['top', 'bottom']} dots>
       <OnboardingHeader step="/onboarding/goal" />
 
       <ScrollView

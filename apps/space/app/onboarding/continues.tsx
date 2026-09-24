@@ -149,7 +149,7 @@ export default function OnboardingContinues() {
   const canvas = theme.color.background.canvas
 
   return (
-    <Screen edges={['bottom']} padded={false}>
+    <Screen edges={['bottom']} dots padded={false}>
       <Image
         source={welcomeVariant(sex) === 'female' ? welcomeFemale : welcomeMale}
         style={[styles.photo, { height: height * PHOTO_SHARE }]}

@@ -37,7 +37,6 @@
  * conflict on submit and lands on the field itself.
  */
 
-import { AmbientBackdrop } from '@allfitone/react-native/backdrop'
 import { Button } from '@allfitone/react-native/button'
 import { InlineAlert } from '@allfitone/react-native/inline-alert'
 import { Screen } from '@allfitone/react-native/screen'
@@ -160,9 +159,7 @@ export default function OnboardingIdentity() {
   }
 
   return (
-    <Screen edges={['top', 'bottom']}>
-      <AmbientBackdrop />
-
+    <Screen edges={['top', 'bottom']} dots>
       <OnboardingHeader step="/onboarding/identity" />
 
       {/* The keyboard moves the scroll inset, not the container. Without this the

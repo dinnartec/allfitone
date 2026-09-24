@@ -70,7 +70,7 @@ export default function Welcome() {
       />
       <Scrim height={scrimHeight} coverage={SCRIM_COVERAGE} />
 
-      <Screen edges={['top', 'bottom']} style={styles.screen}>
+      <Screen edges={['top', 'bottom']} dots style={styles.screen}>
         {/* The product lockup, not the ecosystem one: DT-001 reserves "Allfit
             One" for the ecosystem and this is a Space surface. Always the
             dark-surface variant, because it sits on imagery where a

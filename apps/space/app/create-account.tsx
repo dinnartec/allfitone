@@ -20,7 +20,6 @@
  * few minutes verification takes, which is a contract change.
  */
 
-import { AmbientBackdrop } from '@allfitone/react-native/backdrop'
 import { Button } from '@allfitone/react-native/button'
 import { FoundationIcon } from '@allfitone/react-native/icons'
 import { InlineAlert } from '@allfitone/react-native/inline-alert'
@@ -89,9 +88,7 @@ export default function CreateAccount() {
   }
 
   return (
-    <Screen edges={['top', 'bottom']}>
-      <AmbientBackdrop />
-
+    <Screen edges={['top', 'bottom']} dots>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Volver"

@@ -30,7 +30,6 @@
  * `src/client/onboarding`, where they can be tested without launching the app.
  */
 
-import { AmbientBackdrop } from '@allfitone/react-native/backdrop'
 import { Button } from '@allfitone/react-native/button'
 import { Checkbox } from '@allfitone/react-native/checkbox'
 import { InlineAlert } from '@allfitone/react-native/inline-alert'
@@ -81,9 +80,7 @@ export default function AdultDeclaration() {
   }
 
   return (
-    <Screen edges={['top', 'bottom']}>
-      <AmbientBackdrop />
-
+    <Screen edges={['top', 'bottom']} dots>
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.content}

@@ -43,7 +43,6 @@
  * in code.
  */
 
-import { AmbientBackdrop } from '@allfitone/react-native/backdrop'
 import { Button } from '@allfitone/react-native/button'
 import { InlineAlert } from '@allfitone/react-native/inline-alert'
 import { Screen } from '@allfitone/react-native/screen'
@@ -166,8 +165,7 @@ export default function OnboardingExperience() {
   }
 
   return (
-    <Screen edges={['top', 'bottom']}>
-      <AmbientBackdrop />
+    <Screen edges={['top', 'bottom']} dots>
       <OnboardingHeader step="/onboarding/experience" />
 
       <ScrollView

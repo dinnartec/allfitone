@@ -23,7 +23,6 @@
  * why the alternative did not survive contact with the provider.
  */
 
-import { AmbientBackdrop } from '@allfitone/react-native/backdrop'
 import { Button } from '@allfitone/react-native/button'
 import { CodeField } from '@allfitone/react-native/code-field'
 import { FoundationIcon } from '@allfitone/react-native/icons'
@@ -93,9 +92,7 @@ export default function VerifyEmail() {
   }
 
   return (
-    <Screen edges={['top', 'bottom']}>
-      <AmbientBackdrop />
-
+    <Screen edges={['top', 'bottom']} dots>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Volver"

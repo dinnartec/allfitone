@@ -30,7 +30,6 @@
  * replays it.
  */
 
-import { AmbientBackdrop } from '@allfitone/react-native/backdrop'
 import { Button } from '@allfitone/react-native/button'
 import { FoundationIcon } from '@allfitone/react-native/icons'
 import { InlineAlert } from '@allfitone/react-native/inline-alert'
@@ -223,8 +222,7 @@ export default function OnboardingMeasures() {
   const heightRun = useMemo(() => runFor(lengthUnit), [lengthUnit])
 
   return (
-    <Screen edges={['top', 'bottom']}>
-      <AmbientBackdrop />
+    <Screen edges={['top', 'bottom']} dots>
       <OnboardingHeader step="/onboarding/measures" />
 
       <ScrollView

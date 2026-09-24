@@ -34,7 +34,6 @@
  * does not accept colour as the only carrier of state.
  */
 
-import { AmbientBackdrop } from '@allfitone/react-native/backdrop'
 import { Button } from '@allfitone/react-native/button'
 import { FoundationIcon } from '@allfitone/react-native/icons'
 import { InlineAlert } from '@allfitone/react-native/inline-alert'
@@ -168,9 +167,7 @@ export default function OnboardingBiologicalSex() {
   const declined = answer === null
 
   return (
-    <Screen edges={['top', 'bottom']}>
-      <AmbientBackdrop />
-
+    <Screen edges={['top', 'bottom']} dots>
       <OnboardingHeader step="/onboarding/sex" />
 
       <ScrollView

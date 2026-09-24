@@ -21,7 +21,6 @@
  * where telling somebody their password is wrong would be a lie.
  */
 
-import { AmbientBackdrop } from '@allfitone/react-native/backdrop'
 import { Button } from '@allfitone/react-native/button'
 import { FoundationIcon } from '@allfitone/react-native/icons'
 import { InlineAlert } from '@allfitone/react-native/inline-alert'
@@ -73,8 +72,7 @@ export default function SignIn() {
   }
 
   return (
-    <Screen edges={['top', 'bottom']}>
-      <AmbientBackdrop />
+    <Screen edges={['top', 'bottom']} dots>
       {/* Outside the scroll view: the content below is centred, and a back
           control that drifts to the middle of the screen with it is unfindable. */}
       <Pressable

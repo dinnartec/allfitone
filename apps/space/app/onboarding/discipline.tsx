@@ -19,7 +19,6 @@
  * six cards in one accent would say they are the same thing six times.
  */
 
-import { AmbientBackdrop } from '@allfitone/react-native/backdrop'
 import { Button } from '@allfitone/react-native/button'
 import { InlineAlert } from '@allfitone/react-native/inline-alert'
 import { PageDots } from '@allfitone/react-native/page-dots'
@@ -181,8 +180,7 @@ export default function OnboardingDiscipline() {
   const tintOf = (entry: DisciplineCard) => theme.color.discipline[TINT[entry.code] ?? 'strength']
 
   return (
-    <Screen edges={['top', 'bottom']}>
-      <AmbientBackdrop />
+    <Screen edges={['top', 'bottom']} dots>
       <OnboardingHeader step="/onboarding/discipline" />
 
       {/* The same header every step of the onboarding wears: `4xl` question, `md` lede.
