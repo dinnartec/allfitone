@@ -20,7 +20,6 @@
  * few minutes verification takes, which is a contract change.
  */
 
-import { AmbientBackdrop } from '@allfitone/react-native/backdrop'
 import { Button } from '@allfitone/react-native/button'
 import { FoundationIcon } from '@allfitone/react-native/icons'
 import { InlineAlert } from '@allfitone/react-native/inline-alert'
@@ -48,7 +47,7 @@ const PASSWORD_RULE = 'Al menos 8 caracteres, con una mayúscula, una minúscula
 function messageFor(cause: unknown): string {
   if (!(cause instanceof ApiError)) return 'Algo salió mal. Inténtalo otra vez.'
   switch (cause.failure) {
-    case 'weak-password':
+    case 'validation-failed':
       // Reached only when the password passed our rules and the provider still
       // refused it, which now means it resembles something already breached
       // rather than that it is short.
@@ -89,9 +88,7 @@ export default function CreateAccount() {
   }
 
   return (
-    <Screen edges={['top', 'bottom']}>
-      <AmbientBackdrop />
-
+    <Screen edges={['top', 'bottom']} dots>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Volver"
@@ -163,7 +160,7 @@ export default function CreateAccount() {
             style={styles.submit}
           />
 
-          <Text role="body" size="xs" color="muted" align="center" style={styles.legal}>
+          <Text role="body" size="sm" color="muted" align="center" style={styles.legal}>
             Al continuar aceptas los términos y la política de tratamiento de datos.
           </Text>
         </View>

@@ -45,6 +45,7 @@ import {
 } from 'jose'
 
 import type {
+  AuthenticatedIdentity,
   AuthProvider,
   AuthProviderEvent,
   AuthorizationRequest,
@@ -455,6 +456,22 @@ export function createWorkOSAuthProvider(config: WorkOSConfig): AuthProvider {
         c.userManagement.authenticateWithRefreshToken({ refreshToken, clientId }),
       )
       return result.tokens
+    },
+
+    async identityFor(subject: ExternalSubject): Promise<AuthenticatedIdentity> {
+      // Not surface-scoped, like updateEmail: it asks about the person, not about
+      // a session, and any Application's credentials reach the same directory.
+      const c = requireClient(ADMIN_SURFACE)
+      try {
+        const user = await c.userManagement.getUser(subject)
+        return {
+          givenName: normalizedName(user.firstName),
+          familyName: normalizedName(user.lastName),
+          verifiedEmail: user.emailVerified ? user.email.trim().toLowerCase() : null,
+        }
+      } catch (cause) {
+        throw translate(cause)
+      }
     },
 
     async updateEmail(subject: ExternalSubject, email: string): Promise<void> {

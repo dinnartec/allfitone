@@ -21,18 +21,24 @@
  * belong here.
  */
 
-import type { VerifiedToken } from '@allfitone/auth-provider'
+import type { AuthenticatedIdentity, VerifiedToken } from '@allfitone/auth-provider'
 import { hashInvitationToken } from '@allfitone/notifications'
 
 import type {
   AccessAccount,
   AccountActor,
   AdultEligibilityEvidence,
+  BiologicalSex,
+  BodyProgressDeclaration,
+  BodyProgressRecord,
   CommandContext,
   CurrentOnboardingAttempt,
+  FocusArea,
   IdentityOnboardingDatabase,
   OnboardingAttempt,
   PendingFitnessId,
+  ProfileClaim,
+  ProfileClaimDeclaration,
 } from '../domain/index.js'
 
 export interface OnboardingService {
@@ -46,8 +52,32 @@ export interface OnboardingService {
   ): Promise<AdultEligibilityEvidence>
   createFitnessId(
     actor: AccountActor,
-    input: CommandContext & { attemptId: string } & PendingFitnessId,
+    input: CommandContext & {
+      attemptId: string
+      givenName: string
+      familyName: string
+      username: string
+      contactEmail: string
+      contactEmailVerified: boolean
+    },
   ): Promise<PendingFitnessId>
+  declareBiologicalSex(
+    actor: AccountActor,
+    input: CommandContext & { attemptId: string; biologicalSex: BiologicalSex | null },
+  ): Promise<BiologicalSex | null>
+  declareProfileClaim(
+    actor: AccountActor,
+    input: CommandContext & ProfileClaimDeclaration,
+  ): Promise<ProfileClaim>
+  declareFocusAreas(
+    actor: AccountActor,
+    input: CommandContext & { areas: readonly FocusArea[] },
+  ): Promise<readonly FocusArea[]>
+  recordBodyProgress(
+    actor: AccountActor,
+    input: CommandContext & BodyProgressDeclaration,
+  ): Promise<BodyProgressRecord>
+  skipStep(actor: AccountActor, input: { attemptId: string; stepCode: string }): Promise<void>
   readCurrentAttempt(actor: AccountActor): Promise<CurrentOnboardingAttempt>
   complete(
     actor: AccountActor,
@@ -69,9 +99,38 @@ export function createOnboardingService(database: IdentityOnboardingDatabase): O
       database.recordAdultEligibility({ accountId: actor.accountId, ...input }),
     createFitnessId: (actor, input) =>
       database.createPendingPerson({ accountId: actor.accountId, ...input }),
+    declareBiologicalSex: (actor, input) =>
+      database.declareBiologicalSex({ accountId: actor.accountId, ...input }),
+    declareProfileClaim: (actor, input) =>
+      database.declareProfileClaim({ accountId: actor.accountId, ...input }),
+    declareFocusAreas: (actor, input) =>
+      database.declareFocusAreas({ accountId: actor.accountId, ...input }),
+    recordBodyProgress: (actor, input) =>
+      database.recordBodyProgress({ accountId: actor.accountId, ...input }),
+    skipStep: (actor, input) =>
+      database.skipOnboardingStep({ accountId: actor.accountId, ...input }),
     readCurrentAttempt: (actor) => database.readCurrentAttempt(actor.accountId),
     complete: (actor, input) => database.activatePerson({ accountId: actor.accountId, ...input }),
   }
+}
+
+/**
+ * Refusing a Fitness ID because the credential's address is not verified.
+ *
+ * The contact email is the same datum as the sign-in email (DT-016), and a
+ * contact we cannot prove must never be recorded as verified — nothing would
+ * satisfy the "verified contact" filter every notification depends on.
+ */
+export class OnboardingPreconditionError extends Error {
+  constructor(readonly code: 'forbidden') {
+    super(code)
+    this.name = 'OnboardingPreconditionError'
+  }
+}
+
+/** Only what the Space path needs from the identity provider. */
+export interface ProviderIdentityReader {
+  identityFor(subject: string): Promise<AuthenticatedIdentity>
 }
 
 /** Only what the Space path needs from the session database. */
@@ -87,14 +146,45 @@ export interface SpaceOnboardingService {
   ): Promise<AdultEligibilityEvidence>
   createFitnessId(
     token: VerifiedToken,
-    input: CommandContext & { attemptId: string } & PendingFitnessId,
+    input: CommandContext & {
+      attemptId: string
+      givenName: string
+      familyName: string
+      username: string
+    },
   ): Promise<PendingFitnessId>
+  declareBiologicalSex(
+    token: VerifiedToken,
+    input: CommandContext & { attemptId: string; biologicalSex: BiologicalSex | null },
+  ): Promise<BiologicalSex | null>
+  declareProfileClaim(
+    token: VerifiedToken,
+    input: CommandContext & ProfileClaimDeclaration,
+  ): Promise<ProfileClaim>
+  declareFocusAreas(
+    token: VerifiedToken,
+    input: CommandContext & { areas: readonly FocusArea[] },
+  ): Promise<readonly FocusArea[]>
+  recordBodyProgress(
+    token: VerifiedToken,
+    input: CommandContext & BodyProgressDeclaration,
+  ): Promise<BodyProgressRecord>
+  skipStep(token: VerifiedToken, input: { attemptId: string; stepCode: string }): Promise<void>
+  /**
+   * The only path that takes a Fitness ID to `active`. It does not create the person:
+   * the row has existed in `pending_activation` since the name was given.
+   */
+  complete(
+    token: VerifiedToken,
+    input: Omit<Parameters<OnboardingService['complete']>[1], never>,
+  ): Promise<string>
   readCurrentAttempt(token: VerifiedToken): Promise<CurrentOnboardingAttempt>
 }
 
 export interface SpaceOnboardingDependencies {
   accounts: AccountResolver
   onboarding: OnboardingService
+  provider: ProviderIdentityReader
   issuer: string
 }
 
@@ -120,7 +210,39 @@ export function createSpaceOnboardingService(
       return dependencies.onboarding.recordAdultEligibility(await actorFor(token), input)
     },
     async createFitnessId(token, input) {
-      return dependencies.onboarding.createFitnessId(await actorFor(token), input)
+      // The address is the provider's fact, never the client's: a client-supplied
+      // one recorded as verified would be a contact nobody proved.
+      const identity = await dependencies.provider.identityFor(token.subject)
+      if (!identity.verifiedEmail) throw new OnboardingPreconditionError('forbidden')
+
+      return dependencies.onboarding.createFitnessId(await actorFor(token), {
+        ...input,
+        contactEmail: identity.verifiedEmail,
+        contactEmailVerified: true,
+      })
+    },
+    async declareProfileClaim(token, input) {
+      return dependencies.onboarding.declareProfileClaim(await actorFor(token), input)
+    },
+
+    async declareFocusAreas(token, input) {
+      return dependencies.onboarding.declareFocusAreas(await actorFor(token), input)
+    },
+
+    async recordBodyProgress(token, input) {
+      return dependencies.onboarding.recordBodyProgress(await actorFor(token), input)
+    },
+
+    async skipStep(token, input) {
+      return dependencies.onboarding.skipStep(await actorFor(token), input)
+    },
+
+    async complete(token, input) {
+      return dependencies.onboarding.complete(await actorFor(token), input)
+    },
+
+    async declareBiologicalSex(token, input) {
+      return dependencies.onboarding.declareBiologicalSex(await actorFor(token), input)
     },
     async readCurrentAttempt(token) {
       return dependencies.onboarding.readCurrentAttempt(await actorFor(token))

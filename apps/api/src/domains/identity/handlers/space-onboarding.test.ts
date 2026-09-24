@@ -13,8 +13,38 @@
 import { describe, expect, test } from 'bun:test'
 import { Hono } from 'hono'
 
-import type { SpaceOnboardingService } from '../application/onboarding.js'
+import {
+  OnboardingPreconditionError,
+  type SpaceOnboardingService,
+} from '../application/onboarding.js'
 import { spaceOnboardingRoutes } from './space-onboarding.js'
+import type { ProfileClaim, ProfileClaimDeclaration } from '../domain/index.js'
+
+/**
+ * Echoes a declaration back as the claim it would become, keeping the attribute
+ * paired with its value. The whole declaration is spread rather than its two fields:
+ * naming them separately loses that pairing, because destructuring a discriminated
+ * union drops the correlation between its members.
+ */
+function echoClaim(
+  input: ProfileClaimDeclaration,
+  supersededClaimId: string | null = null,
+): ProfileClaim {
+  return { ...input, supersededClaimId }
+}
+
+/** The empty shape, repeated in enough doubles to be worth naming once. */
+function emptyAnswers() {
+  return {
+    identity: { answered: false as boolean, value: null },
+    biologicalSex: { answered: false as boolean, value: null },
+    trainingDiscipline: { answered: false as boolean, value: null },
+    primaryTrainingGoal: { answered: false as boolean, value: null },
+    trainingExperience: { answered: false as boolean, value: null },
+    focusAreas: { answered: false as boolean, value: [] },
+    bodyMeasures: { answered: false, value: null },
+  }
+}
 
 const IDEMPOTENCY_KEY = '52222222-2222-4222-8222-222222222221'
 const COMMAND_ID = '0198e200-0000-7000-8000-000000000002'
@@ -45,7 +75,31 @@ function appWith(overrides: Partial<SpaceOnboardingService> = {}): Hono {
       familyName: input.familyName,
       username: input.username,
     }),
-    readCurrentAttempt: async () => ({ attempt: ATTEMPT, identity: null }),
+    declareBiologicalSex: async (_token, input) => input.biologicalSex,
+    declareProfileClaim: async (_token, input) => echoClaim(input),
+    declareFocusAreas: async (_token, input) => input.areas,
+    recordBodyProgress: async (_actor, input) => ({
+      id: '019fe000-0000-7000-8000-000000000001',
+      metricCode: input.metricCode,
+      value: input.value,
+      unit: input.unit,
+      originalValue: null,
+      originalUnit: null,
+    }),
+    skipStep: async () => undefined,
+    complete: async () => '019ff100-0000-7000-8000-000000000001',
+    readCurrentAttempt: async () => ({
+      attempt: ATTEMPT,
+      answers: {
+        identity: { answered: false, value: null },
+        biologicalSex: { answered: false, value: null },
+        trainingDiscipline: { answered: false, value: null },
+        primaryTrainingGoal: { answered: false, value: null },
+        trainingExperience: { answered: false, value: null },
+        focusAreas: { answered: false, value: [] },
+        bodyMeasures: { answered: false, value: null },
+      },
+    }),
     ...overrides,
   }
   const app = new Hono()
@@ -100,7 +154,20 @@ describe('POST /space/v1/onboarding-attempts', () => {
             familyName: input.familyName,
             username: input.username,
           }),
-          readCurrentAttempt: async () => ({ attempt: ATTEMPT, identity: null }),
+          declareBiologicalSex: async (_token, input) => input.biologicalSex,
+          declareProfileClaim: async (_token, input) => echoClaim(input),
+          declareFocusAreas: async (_token, input) => input.areas,
+          recordBodyProgress: async (_actor, input) => ({
+            id: '019fe000-0000-7000-8000-000000000001',
+            metricCode: input.metricCode,
+            value: input.value,
+            unit: input.unit,
+            originalValue: null,
+            originalUnit: null,
+          }),
+          skipStep: async () => undefined,
+          complete: async () => '019ff100-0000-7000-8000-000000000001',
+          readCurrentAttempt: async () => ({ attempt: ATTEMPT, answers: emptyAnswers() }),
         },
         async () => {
           throw new Error('token rejected')
@@ -269,12 +336,22 @@ describe('POST /space/v1/onboarding-attempts/{id}/fitness-id', () => {
   test('answers conflict when the handle is already reserved', async () => {
     const app = appWith({
       createFitnessId: async () => {
-        // What PostgreSQL raises on the primary key of identity.usernames.
+        // What PostgreSQL raises on uidx_people_username.
         throw Object.assign(new Error('duplicate key'), { code: '23505' })
       },
     })
 
     expect((await post(app, path, { body: IDENTITY })).status).toBe(409)
+  })
+
+  test('answers forbidden when the credential address is not verified', async () => {
+    const app = appWith({
+      createFitnessId: async () => {
+        throw new OnboardingPreconditionError('forbidden')
+      },
+    })
+
+    expect((await post(app, path, { body: IDENTITY })).status).toBe(403)
   })
 
   test('refuses a request with no bearer token', async () => {
@@ -322,6 +399,101 @@ describe('POST /space/v1/onboarding-attempts/{id}/fitness-id', () => {
   })
 })
 
+describe('POST /space/v1/onboarding-attempts/{id}/biological-sex', () => {
+  const path = `/space/v1/onboarding-attempts/${ATTEMPT_ID}/biological-sex`
+
+  test('records the declaration and returns what the person now has', async () => {
+    const response = await post(appWith(), path, { body: { biological_sex: 'female' } })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ biological_sex: 'female' })
+  })
+
+  test('refuses anything that is not exactly one of the two values', async () => {
+    let called = false
+    const app = appWith({
+      declareBiologicalSex: async () => {
+        called = true
+        return 'male'
+      },
+    })
+
+    // Null is absent from this list on purpose: it is the refusal and it is valid.
+    // 'unknown' is refused because a sentinel would have to be told apart from
+    // "never asked" by every later reader.
+    const bodies = [
+      {},
+      { biological_sex: 'other' },
+      { biological_sex: 'unknown' },
+      { biological_sex: 'Male' },
+      { biological_sex: '' },
+      { biological_sex: false },
+      { biological_sex: 'female', extra: true },
+    ]
+    for (const body of bodies) {
+      expect((await post(app, path, { body })).status).toBe(400)
+    }
+    expect(called).toBe(false)
+  })
+
+  test('accepts null as the refusal, which is what lets the flow advance', async () => {
+    const seen: Array<string | null> = []
+    const app = appWith({
+      declareBiologicalSex: async (_token, input) => {
+        seen.push(input.biologicalSex)
+        return input.biologicalSex
+      },
+    })
+
+    const response = await post(app, path, { body: { biological_sex: null } })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ biological_sex: null })
+    expect(seen).toEqual([null])
+  })
+
+  test('answers conflict when a different value was already declared', async () => {
+    const app = appWith({
+      declareBiologicalSex: async () => {
+        // What PostgreSQL raises rather than overwriting the first declaration.
+        throw Object.assign(new Error('already declared'), { code: '23505' })
+      },
+    })
+
+    expect((await post(app, path, { body: { biological_sex: 'male' } })).status).toBe(409)
+  })
+
+  test('answers forbidden when the account owns no person yet', async () => {
+    const app = appWith({
+      declareBiologicalSex: async () => {
+        throw Object.assign(new Error('no person'), { code: '42501' })
+      },
+    })
+
+    expect((await post(app, path, { body: { biological_sex: 'male' } })).status).toBe(403)
+  })
+
+  test('refuses a request with no bearer token', async () => {
+    const app = new Hono()
+    app.route(
+      '/space/v1',
+      spaceOnboardingRoutes(undefined, async () => {
+        throw new Error('token rejected')
+      }),
+    )
+
+    expect((await post(app, path, { body: { biological_sex: 'male' } })).status).toBe(401)
+  })
+
+  test('rejects an attempt id that is not a UUIDv7', async () => {
+    const response = await post(appWith(), '/space/v1/onboarding-attempts/nope/biological-sex', {
+      body: { biological_sex: 'male' },
+    })
+
+    expect(response.status).toBe(400)
+  })
+})
+
 describe('GET /space/v1/onboarding-attempts/current', () => {
   const path = '/space/v1/onboarding-attempts/current'
 
@@ -334,9 +506,30 @@ describe('GET /space/v1/onboarding-attempts/current', () => {
 
   test('returns the open attempt and whatever identity was already declared', async () => {
     const app = appWith({
+      recordBodyProgress: async (_actor, input) => ({
+        id: '019fe000-0000-7000-8000-000000000001',
+        metricCode: input.metricCode,
+        value: input.value,
+        unit: input.unit,
+        originalValue: null,
+        originalUnit: null,
+      }),
+      skipStep: async () => undefined,
+      complete: async () => '019ff100-0000-7000-8000-000000000001',
       readCurrentAttempt: async () => ({
         attempt: ATTEMPT,
-        identity: { givenName: 'Ada', familyName: 'Lovelace', username: 'ada_lovelace' },
+        answers: {
+          identity: {
+            answered: true,
+            value: { givenName: 'Ada', familyName: 'Lovelace', username: 'ada_lovelace' },
+          },
+          biologicalSex: { answered: true, value: 'female' as const },
+          trainingDiscipline: { answered: true, value: 'strength' as const },
+          primaryTrainingGoal: { answered: true, value: 'build_muscle' as const },
+          trainingExperience: { answered: true, value: 'experienced' as const },
+          focusAreas: { answered: true, value: ['chest', 'arms'] as const },
+          bodyMeasures: { answered: false, value: null },
+        },
       }),
     })
 
@@ -350,25 +543,61 @@ describe('GET /space/v1/onboarding-attempts/current', () => {
         eligibility_status: 'pending',
         expires_at: EXPIRES_AT.toISOString(),
       },
-      identity: { given_name: 'Ada', family_name: 'Lovelace', username: 'ada_lovelace' },
+      answers: {
+        identity: {
+          answered: true,
+          value: { given_name: 'Ada', family_name: 'Lovelace', username: 'ada_lovelace' },
+        },
+        biological_sex: { answered: true, value: 'female' },
+        training_discipline: { answered: true, value: 'strength' },
+        primary_training_goal: { answered: true, value: 'build_muscle' },
+        training_experience: { answered: true, value: 'experienced' },
+        focus_areas: { answered: true, value: ['chest', 'arms'] },
+        body_measures: { answered: false, value: null },
+      },
     })
   })
 
   test('answers nulls rather than an error when nothing was started', async () => {
     const app = appWith({
-      readCurrentAttempt: async () => ({ attempt: null, identity: null }),
+      recordBodyProgress: async (_actor, input) => ({
+        id: '019fe000-0000-7000-8000-000000000001',
+        metricCode: input.metricCode,
+        value: input.value,
+        unit: input.unit,
+        originalValue: null,
+        originalUnit: null,
+      }),
+      skipStep: async () => undefined,
+      complete: async () => '019ff100-0000-7000-8000-000000000001',
+      readCurrentAttempt: async () => ({ attempt: null, answers: emptyAnswers() }),
     })
 
     const response = await get(app)
 
     expect(response.status).toBe(200)
-    expect(await response.json()).toEqual({ attempt: null, identity: null })
+    expect(await response.json()).toEqual({
+      attempt: null,
+      answers: {
+        identity: { answered: false, value: null },
+        biological_sex: { answered: false, value: null },
+        training_discipline: { answered: false, value: null },
+        primary_training_goal: { answered: false, value: null },
+        training_experience: { answered: false, value: null },
+        focus_areas: { answered: false, value: [] },
+        body_measures: { answered: false, value: null },
+      },
+    })
   })
 
-  test('reports a declared attempt with no name yet as identity null', async () => {
+  test('reports a declared attempt with no name yet as unanswered', async () => {
     const response = await get(appWith())
 
-    expect(await response.json()).toMatchObject({ identity: null })
+    // Unanswered is reported, not omitted: the app must not have to tell a
+    // skipped step from a field that did not travel.
+    expect(await response.json()).toMatchObject({
+      answers: { identity: { answered: false, value: null } },
+    })
   })
 
   test('refuses a request with no bearer token', async () => {
@@ -385,5 +614,650 @@ describe('GET /space/v1/onboarding-attempts/current', () => {
 
   test('is never cached', async () => {
     expect((await get(appWith())).headers.get('Cache-Control')).toBe('no-store')
+  })
+})
+
+describe('POST /space/v1/profile/claims', () => {
+  const claims = (path = '/space/v1/profile/claims') => path
+
+  test('records the goal the person chose and reports what it displaced', async () => {
+    const app = appWith({
+      declareProfileClaim: async (_token, input) =>
+        echoClaim(input, '0198d000-0000-7000-8000-0000000000aa'),
+    })
+
+    const response = await post(app, claims(), {
+      body: { attribute_code: 'primary_training_goal', value_text: 'build_muscle' },
+    })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({
+      attribute_code: 'primary_training_goal',
+      value_text: 'build_muscle',
+      superseded_claim_id: '0198d000-0000-7000-8000-0000000000aa',
+    })
+  })
+
+  test('refuses improve_performance, which is deferred out of the initial V1 launch', async () => {
+    let called = false
+    const app = appWith({
+      declareProfileClaim: async (_token, input) => {
+        called = true
+        return echoClaim(input)
+      },
+    })
+
+    const response = await post(app, claims(), {
+      body: { attribute_code: 'primary_training_goal', value_text: 'improve_performance' },
+    })
+
+    expect(response.status).toBe(400)
+    // The database would accept it: the refusal has to happen here or "not in V1"
+    // is only an omission in the screen.
+    expect(called).toBe(false)
+  })
+
+  test('refuses anything outside the shape, without reaching the service', async () => {
+    let called = false
+    const app = appWith({
+      declareProfileClaim: async (_token, input) => {
+        called = true
+        return echoClaim(input)
+      },
+    })
+
+    const bodies: unknown[] = [
+      {},
+      { attribute_code: 'primary_training_goal' },
+      { value_text: 'build_muscle' },
+      { attribute_code: 'body_weight', value_text: 'build_muscle' },
+      { attribute_code: 'primary_training_goal', value_text: 'become_immortal' },
+      { attribute_code: 'primary_training_goal', value_text: 'Build_Muscle' },
+      { attribute_code: 'primary_training_goal', value_text: null },
+      { attribute_code: 'primary_training_goal', value_text: 'build_muscle', extra: 1 },
+    ]
+
+    for (const body of bodies) {
+      expect((await post(app, claims(), { body })).status).toBe(400)
+    }
+    expect(called).toBe(false)
+  })
+
+  test('refuses malformed command headers', async () => {
+    const app = appWith()
+    const body = { attribute_code: 'primary_training_goal', value_text: 'get_fit' }
+
+    const cases: Array<Record<string, string>> = [
+      { 'idempotency-key': 'not-a-uuid' },
+      { 'command-id': 'not-a-uuid' },
+      // A v7 in the idempotency slot is the mistake worth catching: both are
+      // UUIDs, and only the version tells the durable id from the retry key.
+      { 'idempotency-key': COMMAND_ID },
+    ]
+
+    for (const headers of cases) {
+      expect((await post(app, claims(), { headers, body })).status).toBe(400)
+    }
+  })
+
+  test('maps a forbidden actor to 403', async () => {
+    const app = appWith({
+      declareProfileClaim: async () => {
+        throw { code: '42501' }
+      },
+    })
+
+    const response = await post(app, claims(), {
+      body: { attribute_code: 'primary_training_goal', value_text: 'maintain' },
+    })
+
+    expect(response.status).toBe(403)
+  })
+
+  test('maps a value the database rejects to 400', async () => {
+    const app = appWith({
+      declareProfileClaim: async () => {
+        throw { code: '23514' }
+      },
+    })
+
+    const response = await post(app, claims(), {
+      body: { attribute_code: 'primary_training_goal', value_text: 'lose_weight' },
+    })
+
+    expect(response.status).toBe(400)
+  })
+
+  test('refuses without a valid token', async () => {
+    const app = new Hono()
+    app.route(
+      '/space/v1',
+      spaceOnboardingRoutes(undefined, async () => {
+        throw new Error('token rejected')
+      }),
+    )
+
+    const response = await post(app, claims(), {
+      body: { attribute_code: 'primary_training_goal', value_text: 'get_fit' },
+    })
+
+    expect(response.status).toBe(401)
+  })
+
+  test('is never cached', async () => {
+    const response = await post(appWith(), claims(), {
+      body: { attribute_code: 'primary_training_goal', value_text: 'get_fit' },
+    })
+
+    expect(response.headers.get('Cache-Control')).toBe('no-store')
+  })
+})
+
+describe('POST /space/v1/profile/claims — the training discipline variant', () => {
+  const claims = () => '/space/v1/profile/claims'
+
+  test('records the discipline and reports what it displaced', async () => {
+    const app = appWith({
+      declareProfileClaim: async (_token, input) =>
+        echoClaim(input, '0198d000-0000-7000-8000-0000000000cc'),
+    })
+
+    const response = await post(app, claims(), {
+      body: { attribute_code: 'training_discipline', value_text: 'strength' },
+    })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({
+      attribute_code: 'training_discipline',
+      value_text: 'strength',
+      superseded_claim_id: '0198d000-0000-7000-8000-0000000000cc',
+    })
+  })
+
+  test('refuses the five the catalogue holds but the launch does not offer', async () => {
+    // They are drawn in the onboarding and cannot be chosen, so refusing them here is
+    // the honest answer rather than a gap. The database would take them.
+    let called = false
+    const app = appWith({
+      declareProfileClaim: async (_token, input) => {
+        called = true
+        return echoClaim(input)
+      },
+    })
+
+    for (const discipline of [
+      'high_intensity',
+      'endurance_cardio',
+      'combat_sports',
+      'wellbeing_control',
+      'rhythm_classes',
+    ]) {
+      const response = await post(app, claims(), {
+        body: { attribute_code: 'training_discipline', value_text: discipline },
+      })
+      expect(response.status).toBe(400)
+    }
+    expect(called).toBe(false)
+  })
+
+  test('refuses a discipline that is in no catalogue at all', async () => {
+    const response = await post(appWith(), claims(), {
+      body: { attribute_code: 'training_discipline', value_text: 'quidditch' },
+    })
+
+    expect(response.status).toBe(400)
+  })
+
+  test('refuses a discipline code carrying an experience value', async () => {
+    // The pairing is checked, not assumed: this is a 400 rather than a constraint
+    // violation coming back from PostgreSQL.
+    const response = await post(appWith(), claims(), {
+      body: { attribute_code: 'training_discipline', value_text: 'experienced' },
+    })
+
+    expect(response.status).toBe(400)
+  })
+})
+
+describe('POST /space/v1/profile/claims — the training experience variant', () => {
+  const claims = () => '/space/v1/profile/claims'
+
+  test('records the level and reports what it displaced', async () => {
+    const app = appWith({
+      declareProfileClaim: async (_token, input) =>
+        echoClaim(input, '0198d000-0000-7000-8000-0000000000bb'),
+    })
+
+    const response = await post(app, claims(), {
+      body: { attribute_code: 'training_experience', value_text: 'some_practice' },
+    })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({
+      attribute_code: 'training_experience',
+      value_text: 'some_practice',
+      superseded_claim_id: '0198d000-0000-7000-8000-0000000000bb',
+    })
+  })
+
+  test('takes all three levels', async () => {
+    const app = appWith({ declareProfileClaim: async (_token, input) => echoClaim(input) })
+
+    for (const level of ['starting', 'some_practice', 'experienced']) {
+      const response = await post(app, claims(), {
+        body: { attribute_code: 'training_experience', value_text: level },
+      })
+      expect(response.status).toBe(200)
+    }
+  })
+
+  test('refuses the gym vocabulary, which is not in the catalogue', async () => {
+    let called = false
+    const app = appWith({
+      declareProfileClaim: async (_token, input) => {
+        called = true
+        return echoClaim(input)
+      },
+    })
+
+    for (const level of ['beginner', 'intermediate', 'advanced']) {
+      const response = await post(app, claims(), {
+        body: { attribute_code: 'training_experience', value_text: level },
+      })
+      expect(response.status).toBe(400)
+    }
+    expect(called).toBe(false)
+  })
+
+  test('refuses a level paired with the wrong attribute, and the reverse', async () => {
+    let called = false
+    const app = appWith({
+      declareProfileClaim: async (_token, input) => {
+        called = true
+        return echoClaim(input)
+      },
+    })
+
+    const bodies: unknown[] = [
+      // Crossing the two variants is the mistake the union exists to stop: the
+      // database would refuse it too, and refusing here makes it a 400.
+      { attribute_code: 'training_experience', value_text: 'build_muscle' },
+      { attribute_code: 'primary_training_goal', value_text: 'some_practice' },
+      { attribute_code: 'training_experience', value_text: 'Some_Practice' },
+      { attribute_code: 'training_experience', value_text: null },
+      { attribute_code: 'training_experience' },
+      { attribute_code: 'training_experience', value_text: 'starting', extra: 1 },
+    ]
+
+    for (const body of bodies) {
+      expect((await post(app, claims(), { body })).status).toBe(400)
+    }
+    expect(called).toBe(false)
+  })
+
+  test('maps a level the database rejects to 400', async () => {
+    const app = appWith({
+      declareProfileClaim: async () => {
+        throw { code: '23514' }
+      },
+    })
+
+    const response = await post(app, claims(), {
+      body: { attribute_code: 'training_experience', value_text: 'starting' },
+    })
+
+    expect(response.status).toBe(400)
+  })
+})
+
+describe('POST /space/v1/body-progress', () => {
+  const route = () => '/space/v1/body-progress'
+  const measured = '2026-08-24'
+
+  test('records a weight and answers what the server computed', async () => {
+    const app = appWith({
+      recordBodyProgress: async (_token, input) => ({
+        id: '019fe000-0000-7000-8000-0000000000aa',
+        metricCode: input.metricCode,
+        value: 73.93555631,
+        unit: 'kg',
+        originalValue: input.value,
+        originalUnit: input.unit,
+      }),
+    })
+
+    const response = await post(app, route(), {
+      body: { metric_code: 'body_weight', value: 163, unit: 'lb', measured_on: measured },
+    })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({
+      id: '019fe000-0000-7000-8000-0000000000aa',
+      metric_code: 'body_weight',
+      value: 73.93555631,
+      unit: 'kg',
+      original_value: 163,
+      original_unit: 'lb',
+    })
+  })
+
+  test('takes both metrics in either of their units', async () => {
+    const app = appWith()
+    const bodies = [
+      { metric_code: 'body_weight', value: 74, unit: 'kg', measured_on: measured },
+      { metric_code: 'body_weight', value: 163, unit: 'lb', measured_on: measured },
+      { metric_code: 'body_height', value: 170, unit: 'cm', measured_on: measured },
+      { metric_code: 'body_height', value: 67, unit: 'in', measured_on: measured },
+    ]
+
+    for (const body of bodies) {
+      expect((await post(app, route(), { body })).status).toBe(200)
+    }
+  })
+
+  test('refuses a unit from the other dimension, without reaching the service', async () => {
+    let called = false
+    const app = appWith({
+      recordBodyProgress: async (_token, input) => {
+        called = true
+        return {
+          id: '019fe000-0000-7000-8000-0000000000ab',
+          metricCode: input.metricCode,
+          value: input.value,
+          unit: input.unit,
+          originalValue: null,
+          originalUnit: null,
+        }
+      },
+    })
+
+    const bodies: unknown[] = [
+      // A weight in centimetres is the mistake the union exists to stop.
+      { metric_code: 'body_weight', value: 170, unit: 'cm', measured_on: measured },
+      { metric_code: 'body_height', value: 74, unit: 'kg', measured_on: measured },
+      { metric_code: 'body_fat', value: 18, unit: 'kg', measured_on: measured },
+      { metric_code: 'body_weight', value: 0, unit: 'kg', measured_on: measured },
+      { metric_code: 'body_weight', value: -74, unit: 'kg', measured_on: measured },
+      { metric_code: 'body_weight', value: '74', unit: 'kg', measured_on: measured },
+      { metric_code: 'body_weight', value: 74, unit: 'kg', measured_on: '24-08-2026' },
+      { metric_code: 'body_weight', value: 74, unit: 'kg' },
+      { metric_code: 'body_weight', value: 74, unit: 'kg', measured_on: measured, extra: 1 },
+    ]
+
+    for (const body of bodies) {
+      expect((await post(app, route(), { body })).status).toBe(400)
+    }
+    expect(called).toBe(false)
+  })
+
+  test('maps a measurement the database rejects to 400, and a foreign actor to 403', async () => {
+    const refused = appWith({
+      recordBodyProgress: async () => {
+        throw { code: '23514' }
+      },
+    })
+    const forbidden = appWith({
+      recordBodyProgress: async () => {
+        throw { code: '42501' }
+      },
+    })
+    const body = { metric_code: 'body_weight', value: 74, unit: 'kg', measured_on: measured }
+
+    expect((await post(refused, route(), { body })).status).toBe(400)
+    expect((await post(forbidden, route(), { body })).status).toBe(403)
+  })
+
+  test('is never cached', async () => {
+    const response = await post(appWith(), route(), {
+      body: { metric_code: 'body_weight', value: 74, unit: 'kg', measured_on: measured },
+    })
+
+    expect(response.headers.get('Cache-Control')).toBe('no-store')
+  })
+})
+
+describe('POST /space/v1/onboarding-attempts/{id}/completion', () => {
+  const route = () => `/space/v1/onboarding-attempts/${ATTEMPT.id}/completion`
+  const body = {
+    given_name: 'Ada',
+    family_name: 'Lovelace',
+    terms_accepted: true,
+    privacy_notice_accepted: true,
+  }
+
+  test('answers the Fitness ID it activated', async () => {
+    const app = appWith({ complete: async () => '019ff100-0000-7000-8000-0000000000aa' })
+
+    const response = await post(app, route(), { body })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ person_id: '019ff100-0000-7000-8000-0000000000aa' })
+  })
+
+  test('refuses an acceptance that is not true, without reaching the service', async () => {
+    let called = false
+    const app = appWith({
+      complete: async () => {
+        called = true
+        return '019ff100-0000-7000-8000-0000000000ab'
+      },
+    })
+
+    const bodies: unknown[] = [
+      // `false` is not a way to decline here: declining happens at the terms step, by
+      // not going on. Here it is an attempt to activate without accepting.
+      { ...body, terms_accepted: false },
+      { ...body, privacy_notice_accepted: false },
+      { ...body, terms_accepted: 'true' },
+      { ...body, given_name: '  ' },
+      { ...body, family_name: '' },
+      { given_name: 'Ada', family_name: 'Lovelace', terms_accepted: true },
+      { ...body, extra: 1 },
+    ]
+
+    for (const invalid of bodies) {
+      expect((await post(app, route(), { body: invalid })).status).toBe(400)
+    }
+    expect(called).toBe(false)
+  })
+
+  test('refuses an attempt id that is not a v7 uuid', async () => {
+    const response = await post(appWith(), '/space/v1/onboarding-attempts/not-a-uuid/completion', {
+      body,
+    })
+
+    expect(response.status).toBe(400)
+  })
+
+  test('maps a foreign actor to 403 and a refused activation to 400', async () => {
+    const forbidden = appWith({
+      complete: async () => {
+        throw { code: '42501' }
+      },
+    })
+    const refused = appWith({
+      complete: async () => {
+        throw { code: '23514' }
+      },
+    })
+
+    expect((await post(forbidden, route(), { body })).status).toBe(403)
+    expect((await post(refused, route(), { body })).status).toBe(400)
+  })
+
+  test('is never cached', async () => {
+    const response = await post(appWith(), route(), { body })
+
+    expect(response.headers.get('Cache-Control')).toBe('no-store')
+  })
+})
+
+describe('POST /space/v1/onboarding-attempts/{id}/skips', () => {
+  const route = () => `/space/v1/onboarding-attempts/${ATTEMPT.id}/skips`
+
+  test('records the skip and answers no content', async () => {
+    let skipped: { attemptId: string; stepCode: string } | undefined
+    const app = appWith({
+      skipStep: async (_token, input) => {
+        skipped = input
+      },
+    })
+
+    const response = await post(app, route(), { body: { step_code: 'body_measures' } })
+
+    expect(response.status).toBe(204)
+    expect(skipped).toEqual({ attemptId: ATTEMPT.id, stepCode: 'body_measures' })
+  })
+
+  test('refuses a step that is not skippable, without reaching the service', async () => {
+    let called = false
+    const app = appWith({
+      skipStep: async () => {
+        called = true
+      },
+    })
+
+    const bodies: unknown[] = [
+      // The age, the name and the terms are the condition for a person to exist at
+      // all, so they can never join the skippable list.
+      { step_code: 'identity' },
+      { step_code: 'age' },
+      { step_code: 'invented' },
+      { step_code: 'body_measures', extra: 1 },
+      { step_code: null },
+      {},
+    ]
+
+    for (const body of bodies) {
+      expect((await post(app, route(), { body })).status).toBe(400)
+    }
+    expect(called).toBe(false)
+  })
+
+  test('refuses an attempt id that is not a v7 uuid', async () => {
+    const response = await post(appWith(), '/space/v1/onboarding-attempts/not-a-uuid/skips', {
+      body: { step_code: 'body_measures' },
+    })
+
+    expect(response.status).toBe(400)
+  })
+
+  test('refuses without a valid token', async () => {
+    const app = new Hono()
+    app.route(
+      '/space/v1',
+      spaceOnboardingRoutes(undefined, async () => {
+        throw new Error('token rejected')
+      }),
+    )
+
+    const response = await post(app, route(), { body: { step_code: 'body_measures' } })
+
+    expect(response.status).toBe(401)
+  })
+})
+
+describe('POST /space/v1/profile/focus-areas', () => {
+  const focus = () => '/space/v1/profile/focus-areas'
+
+  test('records the whole set and answers the emphasis in force', async () => {
+    const app = appWith({ declareFocusAreas: async (_token, input) => input.areas })
+
+    const response = await post(app, focus(), { body: { areas: ['chest', 'arms', 'abs'] } })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ areas: ['chest', 'arms', 'abs'] })
+  })
+
+  test('takes whole body on its own, which is how someone says no emphasis', async () => {
+    const app = appWith({ declareFocusAreas: async (_token, input) => input.areas })
+
+    const response = await post(app, focus(), { body: { areas: ['whole_body'] } })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ areas: ['whole_body'] })
+  })
+
+  test('refuses anything outside the shape, without reaching the service', async () => {
+    let called = false
+    const app = appWith({
+      declareFocusAreas: async (_token, input) => {
+        called = true
+        return input.areas
+      },
+    })
+
+    const bodies: unknown[] = [
+      {},
+      { areas: [] },
+      { areas: 'chest' },
+      { areas: ['chest', 'chest'] },
+      { areas: ['left_eyebrow'] },
+      { areas: ['Chest'] },
+      { areas: [null] },
+      // Whole body means no emphasis, so naming a zone alongside it records
+      // nothing coherent. The database refuses it too; refusing here is what
+      // makes it a 400 instead of a constraint violation.
+      { areas: ['whole_body', 'chest'] },
+      { areas: ['chest'], extra: 1 },
+    ]
+
+    for (const body of bodies) {
+      expect((await post(app, focus(), { body })).status).toBe(400)
+    }
+    expect(called).toBe(false)
+  })
+
+  test('refuses malformed command headers', async () => {
+    const app = appWith()
+    const body = { areas: ['legs'] }
+
+    const cases: Array<Record<string, string>> = [
+      { 'idempotency-key': 'not-a-uuid' },
+      { 'command-id': 'not-a-uuid' },
+      { 'idempotency-key': COMMAND_ID },
+    ]
+
+    for (const headers of cases) {
+      expect((await post(app, focus(), { headers, body })).status).toBe(400)
+    }
+  })
+
+  test('maps a forbidden actor to 403', async () => {
+    const app = appWith({
+      declareFocusAreas: async () => {
+        throw { code: '42501' }
+      },
+    })
+
+    expect((await post(app, focus(), { body: { areas: ['glutes'] } })).status).toBe(403)
+  })
+
+  test('maps a set the database rejects to 400', async () => {
+    const app = appWith({
+      declareFocusAreas: async () => {
+        throw { code: '23514' }
+      },
+    })
+
+    expect((await post(app, focus(), { body: { areas: ['back'] } })).status).toBe(400)
+  })
+
+  test('refuses without a valid token', async () => {
+    const app = new Hono()
+    app.route(
+      '/space/v1',
+      spaceOnboardingRoutes(undefined, async () => {
+        throw new Error('token rejected')
+      }),
+    )
+
+    expect((await post(app, focus(), { body: { areas: ['abs'] } })).status).toBe(401)
+  })
+
+  test('is never cached', async () => {
+    const response = await post(appWith(), focus(), { body: { areas: ['shoulders'] } })
+
+    expect(response.headers.get('Cache-Control')).toBe('no-store')
   })
 })

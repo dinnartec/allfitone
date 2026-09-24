@@ -196,6 +196,16 @@ export interface AuthProvider {
   /** Code exchange for the hosted flow. Used by Studio and Backoffice. */
   authenticateWithCode(code: string, surface: Surface): Promise<AuthResult>
 
+  /**
+   * The account holder's identity as the provider knows it, by subject.
+   *
+   * Needed because the contact email is the credential's address and the person
+   * row has to carry it: DT-016 makes them the same datum. It is fetched rather
+   * than accepted from the client, because a client-supplied address must never
+   * be recorded as verified.
+   */
+  identityFor(subject: ExternalSubject): Promise<AuthenticatedIdentity>
+
   /** Refresh tokens rotate: the previous one is invalid once used. */
   refresh(refreshToken: string, surface: Surface): Promise<SessionTokens>
 

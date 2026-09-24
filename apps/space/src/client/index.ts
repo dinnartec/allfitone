@@ -39,24 +39,8 @@ export type RegistrationAccepted = AllfitV1Schemas['SpaceRegistrationAccepted']
 export type SessionTokens = AllfitV1Schemas['SpaceSessionTokens']
 export type SessionRefreshed = AllfitV1Schemas['SpaceSessionRefreshed']
 
-export type ApiFailure =
-  /** The request was malformed. Only reachable if client validation drifts. */
-  | 'invalid-request'
-  /** Wrong code, wrong password, unknown address — one answer, by design. */
-  | 'unauthenticated'
-  /** Too short for the provider's floor, or known to be breached. */
-  | 'weak-password'
-  /** Something else already holds what was asked for. Only a username, today. */
-  | 'conflict'
-  /** The API or the provider did not answer. Retryable; nothing else is. */
-  | 'unavailable'
-
-export class ApiError extends Error {
-  constructor(readonly failure: ApiFailure) {
-    super(failure)
-    this.name = 'ApiError'
-  }
-}
+export { ApiError, type ApiFailure } from './api-error'
+import { ApiError, type ApiFailure } from './api-error'
 
 /** The port the API listens on. Only the host varies between simulator and device. */
 const API_PORT = 8080
@@ -77,6 +61,17 @@ function resolveBaseUrl(): string {
 }
 
 const BASE_URL = resolveBaseUrl()
+
+/**
+ * Where the API is, for the one thing that is fetched by the platform and not by us.
+ *
+ * `expo-image` loads its own bytes, so a cover photograph cannot go through the helpers
+ * below: the screen hands it a uri and the bearer header instead. `ADR-031` serves the
+ * bytes through the API, so there is no public url to point at.
+ */
+export function apiBaseUrl(): string {
+  return BASE_URL
+}
 
 /** Long enough for a cold provider call, short enough to not feel hung. */
 const TIMEOUT_MS = 15_000
@@ -128,8 +123,9 @@ async function post<T>(
 function failureFor(status: number): ApiFailure {
   if (status === 400) return 'invalid-request'
   if (status === 401) return 'unauthenticated'
+  if (status === 404) return 'not-found'
   if (status === 409) return 'conflict'
-  if (status === 422) return 'weak-password'
+  if (status === 422) return 'validation-failed'
   return 'unavailable'
 }
 
@@ -208,14 +204,20 @@ export function refreshSession(refreshToken: string): Promise<SessionRefreshed> 
 }
 
 /**
- * Authenticated POST. Command headers travel here because every authenticated
+ * Authenticated POST. Command headers travel here because almost every authenticated
  * command in this contract carries them.
+ *
+ * `undefined` is for the ones that do not, and there is exactly one: skipping an
+ * onboarding step, whose idempotency is the primary key of the record rather than a
+ * durable receipt. Sending headers the route does not read would be noise on the
+ * wire pretending to be a guarantee.
  */
 export async function authorizedPost<T>(
   path: string,
-  command: { idempotencyKey: string; commandId: string },
+  command: { idempotencyKey: string; commandId: string } | undefined,
   body: unknown,
   token?: string,
+  ifMatch?: string,
 ): Promise<T> {
   const { signal, done } = timeoutSignal(TIMEOUT_MS)
   let response: Response | undefined
@@ -224,8 +226,12 @@ export async function authorizedPost<T>(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Idempotency-Key': command.idempotencyKey,
-        'Command-Id': command.commandId,
+        ...(command
+          ? { 'Idempotency-Key': command.idempotencyKey, 'Command-Id': command.commandId }
+          : {}),
+        // Publishing is a precondition on the draft, not on a revision: an etag is
+        // what says which draft this press meant.
+        ...(ifMatch === undefined ? {} : { 'If-Match': ifMatch }),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
@@ -243,9 +249,73 @@ export async function authorizedPost<T>(
 }
 
 /**
+ * Authenticated PUT, optionally with a precondition.
+ *
+ * `If-Match` carries the revision the client believes it is editing, for the
+ * resources that have one. It is a precondition on the resource, not a field of the
+ * body: in the body a client could send one number and mean another, and the server
+ * would have no way to tell.
+ *
+ * It is omitted where there is no revision to carry — reordering a list has no
+ * optimistic lock because the whole list is the write, and sending a made-up number
+ * would be worse than sending none.
+ */
+export async function authorizedPut<T>(
+  path: string,
+  command: { idempotencyKey: string; commandId: string },
+  body: unknown,
+  token: string | undefined,
+  ifMatch?: number | string,
+): Promise<T> {
+  const { signal, done } = timeoutSignal(TIMEOUT_MS)
+  let response: Response | undefined
+  try {
+    response = await fetch(`${BASE_URL}${path}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Idempotency-Key': command.idempotencyKey,
+        'Command-Id': command.commandId,
+        ...(ifMatch === undefined ? {} : { 'If-Match': String(ifMatch) }),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(body),
+      signal,
+    })
+  } catch {
+    throw new ApiError('unavailable')
+  } finally {
+    done()
+  }
+
+  if (!response.ok) throw new ApiError(failureFor(response.status))
+
+  return (await readJsonBody<T>(response)) as T
+}
+
+/**
  * Authenticated GET. No command headers: a read is not a command, and sending
  * them would claim an idempotency key for something that changes nothing.
  */
+/**
+ * `OP-IDN-048`. Resolves whatever happens, because the operation has no rejection and
+ * the device erases regardless — see `sign-out.ts`.
+ */
+export async function revokeSpaceSession(token: string | undefined): Promise<void> {
+  const { signal, done } = timeoutSignal(TIMEOUT_MS)
+  try {
+    await fetch(`${BASE_URL}/space/v1/auth/sessions`, {
+      method: 'DELETE',
+      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      signal,
+    })
+  } catch {
+    // Deliberate. A phone with no network still has to be able to sign out.
+  } finally {
+    done()
+  }
+}
+
 export async function authorizedGet<T>(path: string, token?: string): Promise<T> {
   const { signal, done } = timeoutSignal(TIMEOUT_MS)
   let response: Response | undefined

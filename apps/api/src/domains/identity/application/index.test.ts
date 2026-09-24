@@ -43,6 +43,7 @@ function provider(overrides: Partial<AuthProvider> = {}): AuthProvider {
       throw new Error('not used')
     },
     updateEmail: async () => undefined,
+    identityFor: async () => ({ givenName: null, familyName: null, verifiedEmail: null }),
     enrollTotp: async () => {
       throw new Error('not used')
     },

@@ -825,7 +825,15 @@ export interface paths {
      *     Rate limiting is mandatory here for the same reason it is on verification.
      */
     post: operations['signInToSpace']
-    delete?: never
+    /**
+     * Sign out of this phone
+     * @description `HU-SP-003`. Revokes the provider session behind the bearer token so the refresh dies with it; the access token already issued keeps verifying until it expires, which is why the device's own erasure is the half that cannot fail.
+     *
+     *     **This operation has no rejection.** A missing, malformed or expired token answers `204` like any other: refusing would leave somebody inside with no way out, and there is nothing left to protect once the phone has erased what it held. The client erases regardless of what this answers.
+     *
+     *     Nothing is written in PostgreSQL. Space is stateless bearer — `identity.access_sessions` projects Studio's cookie sessions and no Space request consults it — so there is no local row to revoke.
+     */
+    delete: operations['signOutOfSpace']
     options?: never
     head?: never
     patch?: never
@@ -958,11 +966,161 @@ export interface paths {
      *
      *     Adult eligibility is still required first. Creating the row earlier does not move any control earlier.
      *
+     *     Called again by an account that already has one, it **corrects** the name, surname and handle on the same person rather than refusing. Adult eligibility is still required: a correction does not get to skip a control.
+     *
      *     There is deliberately no way to ask whether a username is free. A collision comes back as `409` from this command and nothing else: an availability query would reveal that somebody exists, which is the guarantee the whole registration flow is built on. What makes the collision itself tolerable is that a handle, unlike an email address, is not an identifier that exists outside the platform.
      *
      *     The email is not accepted as input. It belongs to the credential, and changing it is `OP-IDN-021` with its own verification.
      */
     post: operations['createSpacePendingFitnessId']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/onboarding-attempts/{attemptId}/biological-sex': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Declare the account holder's biological sex
+     * @description HU-SP-096. Written straight onto `identity.people`, not into the profile claims catalogue. That catalogue exists for data that changes and that several sources observe, each with its own provenance and validity window; biological sex is a single stable fact with one possible source, so all of that machinery would sit unused.
+     *
+     *     Declining is an answer, and the client does not call this operation for it: it simply moves on. The absence of a value is what records the refusal, because a sentinel such as `unknown` would force every later reader to tell "declined" apart from "never asked", and nothing needs that distinction.
+     *
+     *     A second declaration with a different value **corrects** it. A person may go back and change what they answered, and declining after having declared clears the value. What does not move is the mark on the attempt: the question was answered either way, and that is what stops the flow asking again.
+     */
+    post: operations['declareSpaceBiologicalSex']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/profile/claims': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Declare an attribute of the account holder's fitness profile
+     * @description HU-SP-010 and the experience level of HU-SP-012 criterion 2, with the remaining attributes of HU-SP-013 and HU-SP-021 joining as their screens get built. The body is a discriminated union on `attribute_code`. The route is not under the onboarding attempt on purpose: a profile claim outlives the attempt, and the person edits it from their profile long after onboarding closed.
+     *
+     *     Declaring the same attribute again **corrects** it. Nothing is edited: the previous claim is sealed with its end of validity and the new one records who superseded it, so what someone signed up with stays readable forever. That is also why the claim carries the device's `Command-Id` as its own identity — the primary key itself refuses a second claim from the same command.
+     *
+     *     `improve_performance` exists in the attribute catalogue but is **not offered in the initial V1 launch**, so it is absent from the enum here and the operation refuses it. Keeping the value in the catalogue is what lets it arrive later without a migration.
+     */
+    post: operations['declareSpaceProfileClaim']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/profile/focus-areas': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Declare which body zones the account holder wants emphasised
+     * @description HU-SP-097. Separate from `OP-IDN-004` because the emphasis is the first profile attribute that holds **several values at once**, and that operation cannot write it: it seals the live claim of the same attribute before inserting, so three zones would leave one.
+     *
+     *     The body carries the **whole set**, not one member. Declaring seals the zones that left, inserts the ones that arrived, and leaves the ones that stayed untouched — a zone still chosen keeps the moment it was first chosen. A withdrawn zone is closed rather than deleted, and carries no superseding claim, because nothing replaced it.
+     *
+     *     `whole_body` is a member of the catalogue rather than an empty set: it is how someone says "no emphasis, let my goal decide". It is exclusive with every zone, and the empty array is refused — otherwise "I did not answer" and "I want no emphasis" would be the same request.
+     *
+     *     Unlike `OP-IDN-004`, the `Command-Id` is not the identity of a stored row, because one command writes several. Idempotency rests on the durable receipt, and a replay answers the set in force.
+     */
+    post: operations['declareSpaceFocusAreas']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/onboarding-attempts/{attemptId}/completion': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Close the onboarding and activate the account holder's Fitness ID
+     * @description HU-SP-099, and the guarantees are HU-SP-008's. This is the **only** path that takes a Fitness ID to `active`, and it no longer creates the person: the row has existed in `pending_activation` since the name was given, so everything answered after that was already written on it. Nothing moves here.
+     *
+     *     A retry on an already activated attempt answers the same person and never seals `activated_at` twice, which is what makes "exactly one Fitness ID" (criterion 1) hold under a lost response rather than only under a good one.
+     *
+     *     The name and the legal acceptances travel in the body because the database function refuses without them — it is the same entry point Studio uses, where the person does not exist yet. On this surface they are a restatement of what was already given, not a second chance to change it.
+     */
+    post: operations['completeSpaceOnboarding']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/body-progress': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Record one body measurement for the account holder
+     * @description HU-SP-011. The only onboarding answer that is **not** a profile claim: weight and height are a time series, and criterion 2 asks for exactly that — "they stay as my first progress record".
+     *
+     *     **One measurement per call.** `OP-IDN-006` fixes the record's id as the device's `Command-Id`, so weight and height are two commands with two keys. They are independent: later somebody updates their weight without touching their height, and if the second call fails the first stays saved.
+     *
+     *     The body carries **what the person chose**, not the canonical value. The server converts with the factor in the unit catalogue, and stores both — the canonical figure and what she read. Converting in the client would put the factor in two places, and keeping only what was displayed makes 74 kg → 163 lb → 73.9 kg, so somebody's weight moves on its own for changing units and back.
+     *
+     *     Body progress is its own privacy category: a gym allowed to see training loads is **not** thereby allowed to see body weight.
+     */
+    post: operations['recordSpaceBodyProgress']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/onboarding-attempts/{attemptId}/skips': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Record that the account holder skipped a step of the onboarding
+     * @description HU-SP-015, first exercised by `HU-SP-011` criterion 3. Without recording it, the step stays unanswered and the person falls into it again on every cold start — the same trap the declined biological sex had.
+     *
+     *     **Skipping is not declining.** Declining the biological sex is an answer to that question and leaves a mark with an absent value; skipping is not answering. They agree that the step stops being asked, and differ in that a skip asserts nothing about the person.
+     *
+     *     Idempotent by construction rather than by receipt: the record's primary key is `(attempt, step)`, so skipping twice writes one row and there is no body a replay could contradict.
+     */
+    post: operations['skipSpaceOnboardingStep']
     delete?: never
     options?: never
     head?: never
@@ -1558,7 +1716,11 @@ export interface paths {
       path?: never
       cookie?: never
     }
-    get?: never
+    /**
+     * Read a routine draft in the shape it is edited in
+     * @description The counterpart of the `PUT`, answering the same projection so an editor reads what it writes, and carrying the ETag the next save has to send. A draft outside the caller's organization answers the same as one that never existed.
+     */
+    get: operations['readSessionTemplateDraft']
     /** Replace the editable content of a session-template draft */
     put: operations['replaceOrganizationSessionTemplateDraft']
     post?: never
@@ -1740,6 +1902,126 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/space/v1/programs': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Read the program catalogue and what the person already chose
+     * @description HU-SP-100. The catalogue Allfit publishes, plus the two things the screen needs to make sense of it: what the person declared in the onboarding, and whether they already have a program.
+     *
+     *     **Everything global, in one answer.** The catalogue is twenty-four programs and it is not paginated: the whole point of the screen is to pick a frequency for a goal, and a cursor over that would mean the app could not tell whether the five-day option exists without asking again.
+     *
+     *     **Days per week and duration are derived, never stored.** They are facts about how a version is composed, and a stored copy would be a second truth about the number this screen is chosen on. A version that has no end date has no duration to derive: it returns a null `weeks`, because its composition repeats rather than running out.
+     *
+     *     The profile travels because the matching happens in the app, where it can be tested against every combination of goal, level and frequency rather than judged from a screenshot. It is the person's own answers coming back to them, not a new disclosure.
+     */
+    get: operations['listSpacePrograms']
+    put?: never
+    /**
+     * Create a programme of my own
+     * @description Same as a routine: the identity comes first so the base week has somewhere to be saved while it is being built. Owned by the person, not by any organization. The same operation and the same content shape as Studio's: one definition of what a routine is, so a hash means the same thing everywhere.
+     */
+    post: operations['createMyProgram']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/programs/{programId}/cover': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    /**
+     * How this programme's routines show themselves
+     * @description Hoy opens with the week's routines side by side. Six routines each picking their own cover would put figures, icons and photographs in one row, so the choice belongs to whoever assembles the programme and sees the six together.
+     *     **It takes effect at once and mints no version.** The style does not describe what is trained, so publishing a version over an icon would be publishing a version that lies — the same reasoning that keeps `OP-PLN-024` from publishing anything when programmes are reordered.
+     *     Only a programme this person wrote. One taken from Allfit looks the way Allfit assembled it, and redressing it would be editing somebody else's content.
+     */
+    put: operations['setMyProgramCover']
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/programs/mine/order': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    /**
+     * Put my programmes in the order I want them
+     * @description The first one is the programme the training tab opens on, so the order lives here rather than on a device: reinstalling the app must not change which programme somebody trains. Sent whole, like replacing session results — a partial order would leave whatever was omitted wherever it happened to be.
+     */
+    put: operations['reorderMyPrograms']
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/programs/{programVersionId}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Read everything a published program contains
+     * @description HU-SP-100. Somebody about to hand weeks of their life to a program deserves to see every session in it first: "8 semanas · 3 días" is a summary, not the content — and so is "Sin fecha de fin · 3 días", which is what a program whose composition repeats says instead, having no total to quote.
+     *
+     *     Same access rule as `OP-PLN-011`, and for the same reason — a version reachable to assign is a version reachable to read. Global published content, or the person's own. Nothing else.
+     *
+     *     **One entry per distinct day of the first week, not per session.** A twelve-week program composes sixty rows out of five templates, and returning sixty would be returning the calendar. The split is what is being chosen.
+     */
+    get: operations['getSpaceProgramVersion']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/assignments': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Choose a program and put its sessions on the calendar
+     * @description HU-SP-100 criterion 6. Choosing is not an intention: the calendar is materialised in the same transaction, so the person leaves this screen with sessions rather than with a preference.
+     *
+     *     **Only the timezone travels, never the start date.** It is always today in the person's own zone, and taking the date from a client would let a plan be backdated into a history that never happened.
+     *
+     *     A personal assignment has no manager. `OP-PLN-011` says so in as many words — no origin relationship, no management period — and no organization sees it unless a grant names it explicitly.
+     */
+    post: operations['selfAssignSpaceProgram']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/space/v1/agenda': {
     parameters: {
       query?: never
@@ -1749,6 +2031,420 @@ export interface paths {
     }
     /** List the authenticated person's agenda */
     get: operations['listMyAgenda']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/today': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Read today — what is scheduled, what is open, and the week behind it
+     * @description `HU-SP-089`, and the operation its traceability row had marked as missing.
+     *
+     *     **Composed, not centralised.** Planning answers for what is scheduled today, Execution for what has been trained this week and for the history, Identity for the weight in force. The surface joins them because the screen cannot draw any of them without the others, and no domain reads another's tables.
+     *
+     *     Calories are absent on purpose. The canvas shows them beside the hours trained and the body weight; those two are derivable and nutrition has no tables, so a number here would be a number somebody trusts.
+     */
+    get: operations['getMyToday']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/session-templates': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Create a routine of my own
+     * @description The identity exists before anything is published, so the screen has somewhere to save a draft from the first keystroke. Owned by the person, not by any organization. The same operation and the same content shape as Studio's: one definition of what a routine is, so a hash means the same thing everywhere.
+     */
+    post: operations['createMySessionTemplate']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/session-templates/{templateId}/draft': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Read my routine in the shape I edit it in
+     * @description The counterpart of the `PUT`, answering the same projection so the editor reads what it writes. Without it a saved draft is an unreachable draft: it exists, it counts against my content, and nothing can open it again. Whoever edits **loads before writing** — an editor that opens empty over an existing draft and autosaves replaces the work with what it does not know yet. A draft belonging to somebody else and a draft that never existed answer the same, so the answer does not say which.
+     */
+    get: operations['readMySessionTemplateDraft']
+    /**
+     * Replace the content of my routine draft
+     * @description Saved as the person types, so the ETag is the only thing standing between two devices editing the same draft. An incomplete draft is legitimate; it just cannot be published.
+     */
+    put: operations['replaceMySessionTemplateDraft']
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/session-templates/{templateId}/discard': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Discard a routine I never published
+     * @description Leaving a named routine asks whether to keep it as a draft or throw it away, and this is the throwing away. **It is a state, not a deletion:** `allfit_api` has no `DELETE` on this resource and will not get one, because what a person wrote is not destroyed from the runtime and a discard has to be explicable afterwards. A routine that was published is discarded just the same: the programmes holding it are republished without it, so nothing is left pointing at a routine its author threw away. Retiring one version from new uses without discarding the routine is still `OP-PLN-005`, which leaves the history alone.
+     */
+    post: operations['discardMySessionTemplate']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/session-templates/{templateId}/versions': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Publish a version of my routine
+     * @description A published version is fixed forever; correcting means publishing another. Publishing the same content twice answers the version that already exists rather than making a second one that says the same thing.
+     */
+    post: operations['publishMySessionTemplate']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/programs/{programId}/draft': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Read my programme in the shape I edit it in
+     * @description The counterpart of the `PUT`, answering the same projection so the editor reads what it writes. Nothing else returns which routine version each day trains: the published read names the day and not the routine behind it, so a programme could be created and never reopened. A programme with no draft is one taken from Allfit rather than written here \u2014 forking copies the versions and never the draft \u2014 and answers 404, which is also what a programme belonging to somebody else answers.
+     */
+    get: operations['readMyProgramDraft']
+    /**
+     * Replace the content of my programme draft
+     * @description The base week expanded into one entry per week, which is what the stored shape asks for. The screen edits one week; the draft holds them all, and `repeats_forever` says whether the last of them ends the programme or hands it back to the first.
+     */
+    put: operations['replaceMyProgramDraft']
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/programs/unpublished': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * The programme I started and never published
+     * @description **Without this a programme draft cannot be resumed at all.** `OP-PLN-022` lists the programmes a person follows and it starts from assignments, so one that was never published has no version and no assignment and appears in no query — it exists, it counts, and nobody can get back to it. The same hole `OP-PLN-023` closed for routines, except that a routine at least appeared in the person's own list and a programme appears nowhere. Answers the most recently touched one, or nothing.
+     */
+    get: operations['readMyUnpublishedProgram']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/programs/{programId}/discard': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Discard a programme I never published
+     * @description The twin of `OP-PLN-028` and for the same reasons. Leaving a named programme asks whether to keep it as a draft or throw it away, and this is the throwing away. **It is a state, not a deletion:** `allfit_api` has no `DELETE` on this resource. A programme with a published version is refused, because assignments reference that version and sessions have been materialised against it. Without this, a programme somebody starts and abandons is orphaned — it exists, it counts, and nobody can reach it.
+     */
+    post: operations['discardMyProgram']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/programs/{programId}/remove': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Remove a programme I have been training
+     * @description What `OP-PLN-029` deliberately cannot do. A discard only knows how to throw away a programme that was never published, and the list somebody removes from shows nothing but published ones — so what the list offers is precisely what the discard refuses. This is the operation for a programme that has already been trained.
+     *
+     *     **It is a state, not a deletion, and what was trained is kept.** `allfit_api` has no `DELETE` on this resource and will not get one. The published versions are deprecated rather than erased, because sessions were materialised against them and `ADR-009` freezes what a version said; the person's agenda on the programme ends and its unfulfilled sessions go with it, while every session already completed or executed stays exactly where it is. Removing a programme takes it out of the week ahead, never out of the past.
+     *
+     *     **`with_routines` is the caller's answer because only they know what those routines are for.** When it is true, only the routines no other programme of theirs still uses are archived: a routine a second programme holds stays, because taking it would leave that programme without a session it needs, and `OP-PLN-028` already refuses to leave a programme empty. Asking rather than assuming is what lets the confirmation name what is about to go.
+     */
+    post: operations['removeMyProgram']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/programs/{programId}/duplicate': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Start a programme of my own from one I already have
+     * @description A copy is how somebody keeps what a programme taught them while changing it. It answers the **new** programme, never the original, which is left untouched.
+     *
+     *     **The copy is a draft and nothing else.** No version is minted and no assignment is created, because a copy nobody has looked at yet is not a plan anybody is following: publishing it is the editor's tick and throwing it away is the editor's cross, exactly as for a programme written from nothing. Its content is the original's latest published version — or its draft, when it was never published — and it carries the original's name with a copy suffix so the two are told apart in a list at a glance.
+     *
+     *     **The routines are not copied.** The copy's sessions point at the same immutable routine versions the original pointed at, so renaming a programme does not silently double the person's library. Editing the copy's own sessions afterwards is the ordinary editor, and changes nothing the original says.
+     *
+     *     It is also the only way out of a dead end: a programme taken from Allfit has no draft and cannot be edited at all, and duplicating it gives the person a version of it that is theirs to change.
+     */
+    post: operations['duplicateMyProgram']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/programs/{programId}/versions': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Publish a version of my programme
+     * @description Its sessions point at the person\u2019s own routines. Publishing a new version does not change anybody who already took the programme: they keep the plan they took.
+     *
+     *     **Publishing leaves the author following what they published, and only once.** If they already follow this programme, the agenda they are on moves onto the new version (`OP-PLN-027`): the week number does not restart and what was trained keeps its credit. If they do not follow it yet \u2014 the first publication of a programme just written \u2014 it is taken from today (`OP-PLN-011`). The server decides which, because a client that guesses creates a second assignment that nothing can remove.
+     */
+    post: operations['publishMyProgram']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/week-plan': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * The programme in force and the routines of this week
+     * @description What `E-2` draws. The week is the calendar week, Monday to Sunday, and the day inside it is a suggestion: every routine listed here can be started today, in any order. A routine already done stays in the list with its state, because doing it again is legitimate and the history should say so.
+     */
+    get: operations['getMyWeekPlan']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/programs/mine': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * The programmes this person owns
+     * @description In the order the person chose, which is the order the selector opens on and the order the Entrenar tab follows: the first one is the programme being trained. The order lives in `display_order`, is written by OP-PLN-024, and a newly taken programme enters in front — so taking one is choosing it, without a second step. Ties fall back to when it was taken.
+     */
+    get: operations['listMyPrograms']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/catalog/v1/movements': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Search the exercise library
+     * @description What `S-1` calls while somebody types. The library is curated content: it is read here and it is never written here. Only the published global subset is visible, which is what the operations matrix already says this operation answers.
+     *
+     *     Paged by cursor, which the operations matrix always declared. The cap alone was enough while the library was a few dozen movements and became a trap the moment it grew: a full page and no way to ask for the next one looks exactly like the whole catalogue. A client that wants it all — Space caches it for offline — walks the cursor once.
+     */
+    get: operations['searchMovements']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/catalog/v1/movements/{movementId}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Read one movement, whole
+     * @description Everything the detail screen draws, in one call: other names it goes by, what it works and what it merely uses, what it needs, how it is done, and what to do instead. Five calls would mean a screen that draws itself five times.
+     *
+     *     **A movement nobody can see answers the same as one that does not exist.** Telling them apart would let identifiers be walked to learn what exists.
+     */
+    get: operations['readMovement']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/catalog/v1/equipment': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * List the equipment vocabulary
+     * @description The chips the exercise picker filters by. Asked once when the screen opens and not again as somebody types: a filter whose chips come and go cannot be used.
+     *
+     *     Equipment describes **compatibility**, never inventory, availability or booking. `HU-SP-066` says so in as many words.
+     */
+    get: operations['listEquipment']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/catalog/v1/muscles': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * List the muscle vocabulary
+     * @description One global vocabulary, with no organization scope: two gyms cannot disagree about what a quadriceps is.
+     *
+     *     A muscle here describes a **movement**, never a person. Body composition is health data and lives in `identity`; nothing in this answer is personal.
+     */
+    get: operations['listMuscles']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/my-content': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * The routines this person has made
+     * @description Drafts and published together, newest first. `template_version_id` is what separates them: a programme points at a version, so a routine with none is a routine that exists and cannot yet go in a programme. The counts describe the published version, never the draft somebody is still typing into.
+     */
+    get: operations['listMyContent']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/executions/{executionId}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Read one of my own executions, planned content and all
+     * @description What `X-1` reads when a session is opened or resumed: the session, what it was planned to be, and what has been recorded so far.
+     *
+     *     The revision number travels because it is the optimistic lock the next write has to carry. Two phones cannot both win.
+     */
+    get: operations['getMyExecution']
     put?: never
     post?: never
     delete?: never
@@ -1785,6 +2481,26 @@ export interface paths {
     /** Replace working results under optimistic concurrency */
     put: operations['replaceExecutionResults']
     post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/executions/{executionId}/abandonment': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Close an attempt as abandoned, keeping what it recorded
+     * @description Leaving a session is not the same as never having trained. The attempt closes as abandoned and stays in the history with whatever it reached; it is never the primary attempt for its day and does not count towards adherence, and the day itself goes back to being scheduled.
+     */
+    post: operations['abandonExecution']
     delete?: never
     options?: never
     head?: never
@@ -2932,13 +3648,602 @@ export interface components {
       family_name: string
       username: components['schemas']['Username']
     }
+    /** @description Null declines. It is a value the request must carry explicitly, not an omission, because the server records that the question was answered even when no sex was given — otherwise a screen that skips itself once answered would ask a decliner again on every cold start. */
+    SpaceBiologicalSexDeclaration: {
+      /** @description Null is the refusal, and it is required rather than omitted. */
+      biological_sex: components['schemas']['BiologicalSex'] | null
+    }
+    /** @description What the person now has recorded. No person identifier travels here: the API resolves it from the token on every call. */
+    SpaceBiologicalSex: {
+      biological_sex: components['schemas']['BiologicalSex'] | null
+    }
+    /**
+     * @description Biological sex, used to calibrate energy expenditure estimates and reference ranges. Classified as training data. Absent means the person declined or has not been asked.
+     * @enum {string}
+     */
+    BiologicalSex: 'male' | 'female'
     /** @description Enough to resume the onboarding and nothing more. Absent answers are null rather than omitted, so the app never has to guess whether a step was skipped or the field simply did not travel. */
     SpaceCurrentOnboardingAttempt: {
       /** @description Null when the account has no open attempt, which is also what an already activated person sees. */
       attempt: components['schemas']['SpaceOnboardingAttempt'] | null
-      /** @description Null until the Fitness ID exists. Non-null is how the app knows that step is behind it. */
-      identity: components['schemas']['SpacePendingFitnessId'] | null
+      answers: components['schemas']['SpaceOnboardingAnswers']
     }
+    /** @description One entry per step, all the same shape. This is what keeps a step from widening the reader's signature: a new step adds an entry here, and the database function that builds it changes its body rather than its return type. Every answer is derived on read from the data itself — the person's name, the mark on the attempt, the claim in force — because storing a progress pointer would be a second truth that drifts, and a pointer cannot survive people going back to correct what they already answered. */
+    SpaceOnboardingAnswers: {
+      /** @description The Fitness ID. Here `answered` and a non-null value say the same thing, and the shape stays uniform anyway so the app never special cases a step. */
+      identity: {
+        answered: boolean
+        value: components['schemas']['SpacePendingFitnessId'] | null
+      }
+      /** @description `answered` is what tells the screen to skip itself; the value alone cannot, because declining is recorded as the absence of a value and is deliberately indistinguishable from never having been asked. */
+      biological_sex: {
+        answered: boolean
+        value: components['schemas']['BiologicalSex'] | null
+      }
+      /** @description The claim in force. A superseded claim never appears here: correcting the answer writes another one and this reads the current one. */
+      primary_training_goal: {
+        answered: boolean
+        value: components['schemas']['PrimaryTrainingGoal'] | null
+      }
+      /** @description The set in force, and the one entry whose value is a set rather than a single value. `answered` is not redundant with emptiness for the app's purposes but it is derived from it: an unanswered step has no members, and saying "no emphasis" is answering with `whole_body`. */
+      focus_areas: {
+        answered: boolean
+        value: components['schemas']['FocusAreaSet']
+      }
+      /** @description The discipline in force, read before the goal so the goal screen knows which goals to offer. */
+      training_discipline: {
+        answered: boolean
+        value: components['schemas']['TrainingDiscipline'] | null
+      }
+      /** @description The level in force. A superseded level never appears here: requalifying writes another claim and this reads the current one. */
+      training_experience: {
+        answered: boolean
+        value: components['schemas']['TrainingExperience'] | null
+      }
+      /** @description The latest measurement of each metric. `answered` is true when **both** were recorded or the step was skipped — a half-finished pair leaves the step owed, and the value still comes back so the ruler reopens where she left it. Answered with a null value is a skip, exactly as it is for the declined biological sex. */
+      body_measures: {
+        answered: boolean
+        value: components['schemas']['SpaceBodyMeasures'] | null
+      }
+    }
+    /**
+     * @description The five goals offered in the initial V1 launch. The attribute catalogue in the database also holds `improve_performance`, deferred rather than deleted, and this operation refuses it: it is the only one of the six whose progress does not show on the body, so the screen cannot show what it promises.
+     * @enum {string}
+     */
+    PrimaryTrainingGoal: 'lose_weight' | 'build_muscle' | 'get_fit' | 'run_a_race' | 'maintain'
+    /**
+     * @description The seven zones of HU-SP-097 criterion 1, plus `whole_body`. A zone is a group of muscles rather than one, because the story asks about zones and because a person points at a region, not at a head of the triceps.
+     *
+     *     `whole_body` is a member and not the absence of an answer. It means "no emphasis, my main goal decides", and keeping it in the catalogue is what makes that distinguishable from never having answered.
+     * @enum {string}
+     */
+    FocusArea: 'chest' | 'back' | 'shoulders' | 'arms' | 'abs' | 'glutes' | 'legs' | 'whole_body'
+    /** @description Always ordered by code so two reads of the same emphasis compare equal without the client sorting first. */
+    FocusAreaSet: components['schemas']['FocusArea'][]
+    /** @description Declaring replaces the set. It is not additive, so the client sends what the person has selected rather than a difference. */
+    SpaceFocusAreasDeclaration: {
+      /** @description The whole set, not one member: what is absent here is withdrawn. At least one member, because the empty array would be indistinguishable from not having answered; `whole_body` is how to say "no emphasis", and it travels alone. */
+      areas: components['schemas']['FocusAreaSet'] & unknown
+    }
+    /** @description The emphasis in force after the command, which on a replay is simply the emphasis in force. */
+    SpaceFocusAreas: {
+      areas: components['schemas']['FocusAreaSet']
+    }
+    /** @description The acceptances are `true` and nothing else: a `false` is not a way to decline here, it is an attempt to activate without accepting, and the database refuses it. Declining happens at the terms step, by not going on. */
+    SpaceOnboardingCompletion: {
+      given_name: string
+      family_name: string
+      /** @constant */
+      terms_accepted: true
+      /** @constant */
+      privacy_notice_accepted: true
+    }
+    /** @description The Fitness ID, the same one on every retry. */
+    SpaceActivatedPerson: {
+      person_id: components['schemas']['UuidV7']
+    }
+    /**
+     * @description The two metrics V1 records. The `body_` prefix is not decoration: `metric_code` also names execution results, where `weight` is the load on the bar rather than the weight of the person.
+     * @enum {string}
+     */
+    BodyMetric: 'body_weight' | 'body_height'
+    /**
+     * @description Kilograms are canonical; a pound is 0.45359237 of one.
+     * @enum {string}
+     */
+    MassUnit: 'kg' | 'lb'
+    /**
+     * @description Centimetres are canonical. Feet and inches are sent as **total inches**, an integer like any other, and only the label renders them as `5' 10"` — so no control has to hold two fields that can disagree.
+     * @enum {string}
+     */
+    LengthUnit: 'cm' | 'in'
+    /** @description One variant per metric, so a weight cannot be sent in centimetres. The database refuses that too; refusing it in the contract means it cannot be expressed. */
+    SpaceBodyProgressDeclaration:
+      | components['schemas']['SpaceBodyWeightDeclaration']
+      | components['schemas']['SpaceBodyHeightDeclaration']
+    SpaceBodyWeightDeclaration: {
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      metric_code: 'body_weight'
+      /** @description What the person read on the ruler, in the unit below. */
+      value: number
+      unit: components['schemas']['MassUnit']
+      /** Format: date */
+      measured_on: string
+    }
+    SpaceBodyHeightDeclaration: {
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      metric_code: 'body_height'
+      value: number
+      unit: components['schemas']['LengthUnit']
+      /** Format: date */
+      measured_on: string
+    }
+    /** @description Everything the first-day screen needs in one answer: what Allfit publishes, what the person told us, and whether they already chose. */
+    SpaceProgramCatalogue: {
+      profile: components['schemas']['SpaceTrainingProfile']
+      programs: components['schemas']['SpaceProgramSummary'][]
+      /** @description Null is what makes this the first day. A person who already chose is not asked to choose again. */
+      current_assignment: components['schemas']['SpaceProgramAssignment'] | null
+    }
+    /** @description The onboarding answers the catalogue is matched against, and the name the screen greets somebody by — their own, which is what makes the first screen after signing up feel addressed to them rather than to anybody. Every one of them can be absent: somebody may have declined their sex, and the steps that record the rest can be revisited, so nothing here may be assumed present. */
+    SpaceTrainingProfile: {
+      given_name: string
+      primary_training_goal: components['schemas']['PrimaryTrainingGoal'] | null
+      training_experience: components['schemas']['TrainingExperience'] | null
+      biological_sex: components['schemas']['BiologicalSex'] | null
+      focus_areas: components['schemas']['FocusAreaSet']
+    }
+    /** @description A published version of a global program, with the segmentation it was published with. The segmentation is part of the version and immutable with it: re-aiming a program means publishing another version. */
+    SpaceProgramSummary: {
+      program_version_id: components['schemas']['UuidV7']
+      program_id: components['schemas']['UuidV7']
+      title: string
+      /** @description How long the version lasts, derived from the composition and never stored — when there is a length to derive. Null when the program has no end date: its composition repeats instead of running out, so there is no last week to count to. */
+      weeks: number | null
+      /** @description Derived too, and the axis the three cards are chosen on: three, four and five days exist for every goal and every level. */
+      days_per_week: number
+      /** @description Which way the content leans, when it leans. It **orders and never filters**, so everybody sees the same catalogue and somebody who declined needs no rule of their own. Null on every curated program today. */
+      sex_affinity: components['schemas']['BiologicalSex'] | null
+      goals: components['schemas']['PrimaryTrainingGoal'][]
+      levels: components['schemas']['TrainingExperience'][]
+      emphases: components['schemas']['FocusAreaSet']
+      /**
+       * @description The programme's photograph, composed by the API out of the stored object key and the media origin. It is the same address the programme answers once it has been taken (`SpaceMyProgram.cover_url`), so choosing it and living with it show the same picture — the catalogue is where somebody decides, and deciding on a placeholder is deciding on nothing.
+       *     **It is the set of whoever is asking**, resolved by `planning.cover_for` from the sex they declared; somebody who preferred not to say gets a stable mix, deterministic per programme, and never a default set. Null for a programme with no artwork. The key never leaves the server (`ADR-031`).
+       */
+      cover_url: string | null
+    }
+    SpaceToday: {
+      profile: components['schemas']['SpaceTrainingProfile']
+      current_assignment: components['schemas']['SpaceProgramAssignment'] | null
+      /** @description Null on a day the program does not ask for anything. A rest day is an answer, not an absence. */
+      session: components['schemas']['SpaceTodaySession'] | null
+      week: components['schemas']['SpaceWeekSummary']
+    }
+    SpaceTodaySession: {
+      planned_session_id: components['schemas']['UuidV7']
+      /** @description How many exercises the day asks for, which is what the screen promises. */
+      exercise_count: number
+      program_title: string
+      session_title: string
+      discipline_code: string
+      status: string
+      /** @description The attempt already open on today's session, if there is one. It is what turns "Empezar" into "Continuar" and what stops a second attempt being started by accident. */
+      executed_session_id: components['schemas']['UuidV7'] | null
+    }
+    /** @description The calendar week in progress, Monday to Sunday, in the person's zone. The week is the unit and the day inside it is a suggestion, so what counts is how much of the week is done — and what is left undone does not carry over. */
+    SpaceWeekSummary: {
+      trained_seconds: number
+      /** @description Planned sessions of this week that were closed, not executions. A repeat is a second execution of the same session and must not move the number. **Of the selected programme only** — the one this screen names. Somebody following two programmes has two weeks in progress, and a count spanning both would not match the name above it. */
+      sessions_completed: number
+      /** @description How many the selected programme's week asks for. Equal to `sessions_completed` means the week is done. Zero with no programme at all, which is a different screen rather than an error. */
+      sessions_planned: number
+      /**
+       * @description Load moved this week, always in kilograms. **The weight the person lifted, not the weight the person is**: the screen summarises what was done, and a body measurement is not something you do — it lives in body progress.
+       *     **The database converts**, joining `load_unit_code` to the catalogue's canonical factor, so a session logged in pounds and one logged in kilos add up. Null when no load was recorded at all, because a zero would say somebody trained and moved nothing.
+       */
+      tonnage_kg: number | null
+      history: components['schemas']['SpaceTrainedSession'][]
+    }
+    SpaceTrainedSession: {
+      executed_session_id: components['schemas']['UuidV7']
+      /** Format: date */
+      trained_on: string
+      title: string | null
+      sets_recorded: number
+    }
+    /** @description Null-free by construction: a person with no programme gets a 404 rather than an object full of nulls the screen would have to interpret. */
+    SpaceWeekPlan: {
+      assignment_id: components['schemas']['UuidV7']
+      program_version_id: components['schemas']['UuidV7']
+      program_title: string
+      /** @description The programme's own week number, which is what its content is written against. */
+      program_week: number
+      /**
+       * Format: date
+       * @description The Monday of the calendar week in progress.
+       */
+      week_starts_on: string
+      sessions: components['schemas']['SpaceWeekRoutine'][]
+    }
+    SpaceWeekRoutine: {
+      planned_session_id: components['schemas']['UuidV7']
+      /** @description The version of the routine this session plans. It is what lets the client match a session of the week to the routine `OP-PLN-025` answers, and so draw it with the cover its programme gave it. Matching by title would match a thing that repeats: two routines can carry the same name, and one routine changes its own from one version to the next. */
+      template_version_id: components['schemas']['UuidV7']
+      title: string
+      discipline_code: string
+      status: string
+      /** @description The day the programme put this session on, 1 being Monday. Not the same as the day `scheduled_at` fell on: the first week is moved forward so a programme taken on a Thursday does not open with its Monday already missed. The screen names the programme's day, because that is the one the person wrote. */
+      program_day: number
+      /**
+       * Format: date-time
+       * @description When the week put this session. The reader has always answered it and the schema did not say so; the library names the day under each routine, and a day the client invented from the order would be a guess.
+       */
+      scheduled_at: string
+      exercise_count: number
+      set_count: number
+      /** @description Whether it was ever closed. It marks, it does not bar: starting it again creates another attempt and the first one keeps what it earned. */
+      done: boolean
+      /** @description An attempt already open on this routine, which is what turns "empezar" into "continuar". */
+      open_execution_id: components['schemas']['UuidV7'] | null
+      /** @description How the last time went. Null when this routine was never trained: the card's reverse then shows the muscles and says nothing else, because a zero would claim a session in which no work was done. */
+      last_time: components['schemas']['SpaceRoutineLastTime'] | null
+    }
+    /**
+     * @description The last finished execution of this routine, which is what the flipped card reports. **Counted per routine, not per version**: a routine takes a new version every time it is published, and matching by version would erase its past the moment somebody edits it.
+     *     **Only what finished counts.** An annulled execution and an attempt still open are both left out: the last time is a time that ended.
+     */
+    SpaceRoutineLastTime: {
+      /**
+       * Format: date
+       * @description The day it was trained, in the person's zone. The screen words the distance from today.
+       */
+      trained_on: string
+      /** @description How long it lasted. Null for an execution that was never closed with an end. */
+      seconds: number | null
+      sets: number
+      /** @description Load moved, always in kilograms. **The database converts**, joining `load_unit_code` to the catalogue's canonical factor, so a session logged in pounds and one logged in kilos add up. Null for a routine that is not strength work: there is no tonnage to report, and zero would invent one. */
+      tonnage_kg: number | null
+    }
+    /** @description Whether the programme's own routines go with it. Asked and never defaulted: the person reads a warning that names what is about to go before confirming, and a value chosen here for them would archive part of their library on their behalf. */
+    SpaceProgramRemoval: {
+      /** @description True archives the routines only this programme used. A routine any other programme of theirs still uses stays, whatever this says. */
+      with_routines: boolean
+    }
+    /** @description Every one of the person's assignments, exactly once, in the order they want them. Anything less is refused rather than merged. */
+    SpaceProgramOrder: {
+      assignment_ids: components['schemas']['UuidV7'][]
+    }
+    Movement: {
+      /** Format: uuid */
+      id: string
+      discipline_code: string
+      name: string
+      /** @description The muscle codes this movement trains, the primary one first. Always present, empty when nothing has been curated: a row that offers an exercise is the row that has to explain it. */
+      muscles: string[]
+      /** @description The equipment codes this movement is compatible with, the required one first. Compatibility, never inventory or availability. */
+      equipment: string[]
+      /**
+       * Format: uri
+       * @description The animated demonstration, or null where none has been curated yet — the normal state of a catalogue that grows, not an error. Immutable and identical for everyone, so it is served straight from cache rather than through this API; the address is composed from configuration at read time and never stored, which is what keeps the origin replaceable.
+       */
+      demo_url: string | null
+    }
+    MovementPage: {
+      data: components['schemas']['Movement'][]
+      page: components['schemas']['Page']
+    }
+    MovementDetail: {
+      /** Format: uuid */
+      id: string
+      discipline_code: string
+      name: string
+      /** @description Other names the same movement goes by, including the English one, which is how a lot of people search. Only the locale being read. */
+      aliases: string[]
+      /** @description What it works, the primary ones first. */
+      muscles: {
+        code: string
+        name: string
+        /** @description What the movement trains, as opposed to what it merely uses. A squat is quadriceps and glutes before it is lower back. */
+        primary: boolean
+      }[]
+      equipment: string[]
+      /** @description How it is done, in the order it is done. Curated content reviewed before it ships: a badly written step is an injury, not a typo. */
+      instructions: {
+        position: number
+        text: string
+      }[]
+      /** @description What to do instead, and why it is worth doing instead. */
+      variants: {
+        /** Format: uuid */
+        id: string
+        name: string
+        /** @enum {string} */
+        relation: 'variant' | 'regression' | 'progression'
+        /** @description Said for the person reading — «more upper chest» — not the name of the relation, which is what `relation` is for. */
+        note: string | null
+      }[]
+      /**
+       * Format: uri
+       * @description The animated demonstration, or null where none has been curated yet — the normal state of a catalogue that grows, not an error. Immutable and identical for everyone, so it is served straight from cache rather than through this API; the address is composed from configuration at read time and never stored, which is what keeps the origin replaceable.
+       */
+      demo_url: string | null
+    }
+    CatalogueTerm: {
+      code: string
+      name: string
+    }
+    MuscleTerm: {
+      code: string
+      name: string
+      /**
+       * @description Groups the chips into blocks; nineteen in one row is a wall.
+       * @enum {string}
+       */
+      region: 'upper' | 'lower' | 'general'
+      /** @description The part the body figure in Space's onboarding already draws, when there is one, so the filter and the figure speak one vocabulary. Null for what is not a drawable part. */
+      body_slug: string | null
+    }
+    SpaceMyRoutine: {
+      /** Format: uuid */
+      template_id: string
+      title: string
+      discipline_code: string
+      status: string
+      /** @description The published version a programme can point at. Null means the routine is still only a draft. */
+      template_version_id: components['schemas']['UuidV7'] | null
+      /**
+       * @description **Derived, never declared.** A routine does not choose how it shows itself: the programme that uses it does, so that Hoy's carousel speaks one language. This answers the style of the first of the person's programmes that holds this routine, by the order they already chose for them.
+       *     Null is a routine that no programme holds. That is not an unfinished routine: it is recognised by its name, the way it always was.
+       */
+      cover: components['schemas']['RoutineCover'] | null
+      /**
+       * Format: uri
+       * @description Where to fetch the photograph this routine gets under a `photo` cover, composed by the server out of the picked object key and the catalogue's media origin. Null only for a routine with no exercises yet — nothing has said what it works, so nothing can be picked. The key itself never leaves the database (`ADR-031`).
+       *     **It is answered whatever the programme currently wears.** The cover screen previews all three kinds before any of them is chosen, so answering only for a programme already wearing a photograph left that tab with an empty tile at exactly the moment somebody is deciding.
+       *     The style is the programme's and the image is this routine's: within `photo` each routine gets the cover matching what **it** works, or six cards would come out cloned and only the label would tell them apart.
+       */
+      cover_url: string | null
+      /**
+       * @description How the routine's sets fall across its muscles, heaviest first. Hoy's card draws this under the figure, and a client cannot work it out: it is told how many sets the routine has in total, not how they are spread.
+       *     **A set belongs to one muscle**, the exercise's primary. Sharing each set between every muscle the movement touches turns thirteen sets into thirty-one, and the number stops being the work done and becomes a count of mentions.
+       */
+      muscle_sets: {
+        code: string
+        name: string
+        sets: number
+      }[]
+      /** @description Catalogue muscle codes the routine works, the ones it trains first. They are what a muscle cover is drawn from, and a list cannot compute them: only the reader knows which movements the routine holds. */
+      muscles: string[]
+      /** @description Every published version of this routine, newest first. A programme's week stores the exact version it composed, and republishing the routine mints a new one — so a screen that matched only the newest would lose the routine from a week it is plainly in. Matching against this list is what lets a day name what it holds without resolving «latest», which `ADR-009` forbids for anything historical. */
+      versions: components['schemas']['UuidV7'][]
+      /** @description The person's programmes that use this routine, so a library row can say where it is used without a second request. A caller cannot work this out: `OP-PLN-026` answers programmes without their composition, and one taken from Allfit has no draft to open. Empty means the routine belongs to no programme of theirs — which is a legitimate state and not a problem. */
+      programs: {
+        program_id: components['schemas']['UuidV7']
+        title: string
+      }[]
+      exercise_count: number
+      set_count: number
+      has_unpublished_changes: boolean
+    }
+    SpaceMyProgram: {
+      assignment_id: components['schemas']['UuidV7']
+      program_version_id: components['schemas']['UuidV7']
+      /** @description Which programme this is, as opposed to which version of it was taken. The draft and the version are addressed by programme, so without this a row cannot offer to open the thing it is showing. */
+      program_id: components['schemas']['UuidV7']
+      /** @description Whether this editor can open it. False for a programme taken from Allfit, which was forked and never given a draft, and false for one whose cycle — the composition that repeats — is not one week alike throughout: a base week cannot say that, and republishing would flatten it silently. The comparison is against the cycle and not against the declared duration, which a programme without an end date does not have. */
+      editable: boolean
+      title: string
+      /** @description How long the programme lasts. Null when it has no end date: its composition repeats instead of running out, so there is no week to count to and nothing to say "de M" against. */
+      weeks: number | null
+      days_per_week: number
+      /** Format: date */
+      starts_on: string
+      /** @description Where the programme's artwork is served from, composed by the API out of the stored object key and the media origin. Null for a programme somebody wrote here, which has no artwork of its own. The key never leaves the server: it addresses our storage and would tie a client to where it happens to live. */
+      cover_url: string | null
+      /**
+       * @description How this programme's routines show themselves, which is a decision of the programme and not of each routine: Hoy opens with the week's routines side by side, and six routines each picking their own would put figures, icons and photographs in one row — a sample book rather than a week.
+       *     The style is the programme's and the image is the routine's. `muscles` draws what each routine works and `photo` takes the catalogue cover matching what each routine works; only `icon` is the same for all of them, because an icon is chosen rather than computed.
+       *     Null is a programme that has not said, and its routines are recognised by their name.
+       */
+      routine_cover: components['schemas']['RoutineCover'] | null
+      sessions_done: number
+      sessions_planned: number
+    }
+    SpaceExecution: {
+      executed_session_id: components['schemas']['UuidV7']
+      execution_status: components['schemas']['ExecutionStatus']
+      /** Format: date-time */
+      started_at: string
+      /** @description The optimistic lock the next write has to carry. */
+      revision_number: number
+      title: string | null
+      discipline_code: string | null
+      program_title: string | null
+      /** @description Derived from the assignment's start date, not stored: the same number kept in two places is one of them wrong. */
+      week: number | null
+      planned: components['schemas']['SpaceProgramStep'][]
+      results: {
+        [key: string]: unknown
+      }[]
+    }
+    SpaceProgramDetail: {
+      program_version_id: components['schemas']['UuidV7']
+      title: string
+      /** @description What the program is, in the words somebody deciding needs. */
+      notes: string | null
+      /** @description How long the program lasts. Null when it has no end date: its composition repeats instead of running out, and the days below are the week it repeats. */
+      weeks: number | null
+      days_per_week: number
+      sex_affinity: components['schemas']['BiologicalSex'] | null
+      goals: components['schemas']['PrimaryTrainingGoal'][]
+      levels: components['schemas']['TrainingExperience'][]
+      emphases: components['schemas']['FocusAreaSet']
+      days: components['schemas']['SpaceProgramDay'][]
+      /** @description The same photograph the catalogue listed this programme with, so opening it is not meeting a different programme. It is the set of whoever is asking, resolved by `planning.cover_for`, which is why the answer is cacheable per set and never per version: the version is frozen, the cover hangs off the programme, and a cache keyed only by version id would serve one person the other's picture. Null for a programme with no artwork. */
+      cover_url: string | null
+    }
+    /** @description One training day of the split, with everything it asks for. */
+    SpaceProgramDay: {
+      day: number
+      title: string
+      discipline_code: string
+      steps: components['schemas']['SpaceProgramStep'][]
+      /** @description The photograph this day's routine wears, picked by `planning.pick_routine_cover` from the region it trains and the set of whoever is asking — the same picture the routine will show on Hoy once the programme is taken. Null where nothing can be picked, which is a day whose exercises say nothing about what they work, not an error. */
+      cover_url: string | null
+    }
+    SpaceProgramStep: {
+      position: number
+      /** @description What a recorded set points back at. The name alone would leave the app guessing which movement it just logged, and a set that names no movement is a set nobody can read later. */
+      movement_id: components['schemas']['UuidV7'] | null
+      movement: string | null
+      /** @description The target as the planning domain stores it, discriminated by `family`. It travels structured rather than as a formatted string so the app can render "4 × 8" or "5 km" in its own words and test that it does. */
+      target: {
+        [key: string]: unknown
+      }
+      /** @description What this movement weighed last time, set by set, from the most recent session that finished. Absent when there is nothing to look back at — and on the program detail, where there is no session to look back from. */
+      previous?: {
+        load_value: number | null
+        achieved_reps: number | null
+      }[]
+    }
+    SpaceProgramChoice: {
+      program_version_id: components['schemas']['UuidV7']
+      /** @description An IANA zone. The start date is **not** sent: it is always today in this zone, and a client-supplied date could backdate a plan into a history that never happened. */
+      timezone: string
+    }
+    /** @description The program in force, and the same one on every retry. */
+    SpaceProgramAssignment: {
+      assignment_id: components['schemas']['UuidV7']
+      program_version_id: components['schemas']['UuidV7']
+      title: string
+      /** Format: date */
+      starts_on: string
+      timezone: string
+      /** @description How many sessions the choice actually put on the calendar. It is the evidence that choosing produced a plan and not a preference. */
+      sessions_planned: number
+    }
+    SpaceBodyProgressRecord: {
+      id: components['schemas']['UuidV7']
+      metric_code: components['schemas']['BodyMetric']
+      /** @description The canonical figure, computed by the server from the unit catalogue. */
+      value: number
+      /** @description The canonical unit of the metric's dimension. */
+      unit: string
+      original_value: number | null
+      /** @description What she actually read, and null when she was already using the canonical unit — so a non-null original means exactly "she read it in another unit". */
+      original_unit: string | null
+    }
+    SpaceBodyMeasure: {
+      value: number
+      unit: string
+      /** @description The unit she chose last time, so the screen reopens in it. */
+      original_unit: string | null
+    }
+    /** @description The latest of each. Either can be null on its own, which is what a half-finished pair looks like and why `answered` is not derived from presence alone. */
+    SpaceBodyMeasures: {
+      weight: components['schemas']['SpaceBodyMeasure'] | null
+      height: components['schemas']['SpaceBodyMeasure'] | null
+    }
+    SpaceOnboardingSkip: {
+      /**
+       * @description Closed on purpose, and it grows as screens become skippable. `HU-SP-015` never allows skipping the age, the name or the terms: those are the condition for a person to exist at all, so they can never join this list.
+       * @enum {string}
+       */
+      step_code: 'body_measures'
+    }
+    /**
+     * @description The three simple terms of HU-SP-012 criterion 2, least to most.
+     *
+     *     Deliberately not `beginner`, `intermediate`, `advanced`. The story asks for simple terms and the reason is behavioural rather than stylistic: "advanced" makes people underrate themselves and pick below their real level, and then the plan bores them. Rank is communicated by the screen, which draws one, two or three bars; the vocabulary carries none.
+     *
+     *     One global level, not one per discipline. Criterion 2 read "in each one" and was amended on 24 August 2026: the discipline catalogue is not readable by the runtime role and holds no production rows, so there is nothing to hang a per-discipline level on. Were that to change, a per-discipline level would be a new attribute — a member carrying its own value — not a widening of this one.
+     * @enum {string}
+     */
+    TrainingExperience: 'starting' | 'some_practice' | 'experienced'
+    /**
+     * @description The discipline somebody trains, asked before the goal because the goal's list depends on it: with strength there is no point offering "run a race".
+     *
+     *     One value, and the enum says so. `identity.profile_attributes` holds all six — strength, high intensity, endurance and cardio, combat sports, wellbeing and control, rhythm and classes — because the catalogue is the vocabulary of the concept and its own constraint refuses an enum with fewer than two members. What a person may answer today is a launch decision, and the contract is where that decision belongs. `PrimaryTrainingGoal` already works this way, offering five of the six the catalogue holds.
+     *
+     *     The other five are shown in the onboarding, deliberately, so somebody can see what Allfit is going to cover — and they cannot be chosen. No interest is recorded and no notification is offered, so nothing there is a promise.
+     *
+     *     Not `catalog.disciplines`: that holds the four activity families that type a target, one level below this.
+     * @enum {string}
+     */
+    TrainingDiscipline: 'strength'
+    /** @description One member of the attribute catalogue per variant. This was a single object while only the goal existed; the second member is what earns the union, and it is what keeps a goal code from being sent with an experience value. */
+    SpaceProfileClaimDeclaration:
+      | components['schemas']['SpaceTrainingGoalDeclaration']
+      | components['schemas']['SpaceTrainingExperienceDeclaration']
+      | components['schemas']['SpaceTrainingDisciplineDeclaration']
+    /** @description Only one goal is principal, so declaring a second time replaces which one that is rather than adding to a set. */
+    SpaceTrainingGoalDeclaration: {
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      attribute_code: 'primary_training_goal'
+      value_text: components['schemas']['PrimaryTrainingGoal']
+    }
+    /** @description A single level, exclusive. Declaring again is a requalification: the previous claim is sealed rather than edited, so the level someone signed up with stays readable. */
+    SpaceTrainingExperienceDeclaration: {
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      attribute_code: 'training_experience'
+      value_text: components['schemas']['TrainingExperience']
+    }
+    /** @description One principal discipline, exclusive. Declaring again seals the previous claim rather than editing it, so what somebody started out training stays readable. */
+    SpaceTrainingDisciplineDeclaration: {
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      attribute_code: 'training_discipline'
+      value_text: components['schemas']['TrainingDiscipline']
+    }
+    /** @description The claim as recorded, in the variant matching what was declared. */
+    SpaceProfileClaim:
+      | components['schemas']['SpaceTrainingGoalClaim']
+      | components['schemas']['SpaceTrainingExperienceClaim']
+      | components['schemas']['SpaceTrainingDisciplineClaim']
+    SpaceTrainingGoalClaim: {
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      attribute_code: 'primary_training_goal'
+      value_text: components['schemas']['PrimaryTrainingGoal']
+      superseded_claim_id: components['schemas']['SupersededClaimId']
+    }
+    SpaceTrainingExperienceClaim: {
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      attribute_code: 'training_experience'
+      value_text: components['schemas']['TrainingExperience']
+      superseded_claim_id: components['schemas']['SupersededClaimId']
+    }
+    SpaceTrainingDisciplineClaim: {
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      attribute_code: 'training_discipline'
+      value_text: components['schemas']['TrainingDiscipline']
+      superseded_claim_id: components['schemas']['SupersededClaimId']
+    }
+    /** @description The claim this one replaced, or null on a first declaration. Returned because it is the app's proof that a correction was recorded as a correction and not as an edit. */
+    SupersededClaimId: components['schemas']['UuidV7'] | null
     AdultEligibilityPolicy: {
       /** @constant */
       code: 'adult_eligibility'
@@ -3369,6 +4674,86 @@ export interface components {
       discipline_code: string
       title: string
     }
+    SpaceProgramCoverChoice: {
+      /** @description Null takes the cover off, and its routines go back to their names. */
+      cover: components['schemas']['RoutineCover'] | null
+    }
+    SpaceProgramCover: {
+      program_id: components['schemas']['UuidV7']
+      cover: components['schemas']['RoutineCover'] | null
+    }
+    /**
+     * @description How a programme's routines show themselves. One variant per kind, so a muscle cover cannot also carry an icon. The database refuses that too; refusing it in the contract means it cannot be expressed.
+     *     **It is declared on the programme and read on the routine.** A routine that no programme holds has none, and is recognised by its name, the way it always was.
+     */
+    RoutineCover:
+      | components['schemas']['RoutineCoverMuscles']
+      | components['schemas']['RoutineCoverIcon']
+      | components['schemas']['RoutineCoverPhoto']
+    /** @description Drawn from the exercises the routine already has, so it stores nothing else. Copying the muscles here would be a second truth that ages the moment somebody edits the routine. */
+    RoutineCoverMuscles: {
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      kind: 'muscles'
+    }
+    /** @description A choice nothing else can reconstruct, so it is stored. The vocabulary lives in the database rather than in the catalogue: nobody searches or filters by it, they declare it. */
+    RoutineCoverIcon: {
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      kind: 'icon'
+      /**
+       * @description What the routine is about, not what it is done with. Closed, and appended to rather than reordered: an identifier is never reused, so a routine saved with one keeps drawing the same thing. Which order the grid uses is the app's.
+       * @enum {string}
+       */
+      icon:
+        | 'strength'
+        | 'run'
+        | 'cycling'
+        | 'interval'
+        | 'cardio'
+        | 'burn'
+        | 'power'
+        | 'challenge'
+        | 'mountain'
+        | 'time'
+        | 'mobility'
+        | 'swim'
+        | 'arms'
+        | 'weights'
+        | 'technique'
+        | 'endurance'
+        | 'pace'
+        | 'energy'
+        | 'focus'
+        | 'recovery'
+        | 'morning'
+        | 'evening'
+        | 'night'
+        | 'cold'
+        | 'outdoor'
+        | 'route'
+        | 'pool'
+        | 'team'
+        | 'record'
+        | 'favourite'
+        | 'light'
+        | 'countdown'
+    }
+    /**
+     * @description A photograph, and the routine does not say which: the second revision of `ADR-031` retired the personal upload, so this asks for one of the catalogue's covers and the dominant region of the muscles the routine works decides it. It carries nothing for the same reason the muscle cover carries nothing — the answer is already in the exercises, and copying it here would be a second truth.
+     *     Where to fetch it is `cover_url`, composed by the server. The key never leaves the database.
+     */
+    RoutineCoverPhoto: {
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      kind: 'photo'
+    }
     SessionTemplateDraftContent: {
       title: string
       /**
@@ -3388,20 +4773,39 @@ export interface components {
        */
       activity_type_id?: string | null
       notes?: string | null
+      /** @description Steps sharing a group are performed back to back. Only neighbouring steps may share one, and `IX-46` refuses a group whose positions are not consecutive: a chain that skips an exercise describes an order nobody can execute. The rest of a chain is the one on its last step, because the rest happens when the chain ends. */
+      superset_group?: number | null
       target:
         | components['schemas']['StrengthTarget']
         | components['schemas']['EnduranceTarget']
         | components['schemas']['IntervalTarget']
         | components['schemas']['MobilityTarget']
     }
-    StrengthTarget: {
-      /** @constant */
-      family: 'strength'
-      target_sets: number
+    /** @description One set of a strength step. A set to failure declares no reps, because the count is whatever comes out: "until you cannot" and "until eight" are different instructions, so the contract refuses the contradiction rather than leaving it to a screen. */
+    PlannedSetContent: {
+      set_order: number
+      /** @enum {string} */
+      kind: 'normal' | 'warmup' | 'to_failure' | 'drop'
       target_reps?: number | null
       target_load_value?: number | null
       target_load_unit_code?: string | null
       target_rpe?: number | null
+    }
+    /** @description A strength target declares its sets one by one, or the aggregate an older draft carries — `planning.session_content_errors` refuses one with neither. That rule is not written here as `anyOf` on purpose: the generator turns such a union into `unknown`, which would cost every consumer its type to restate a constraint the database enforces anyway, and two guards that can disagree are worse than one. */
+    StrengthTarget: {
+      /** @constant */
+      family: 'strength'
+      /** @description Every set, one by one. This is the truth of a strength prescription since `ADR-030`; `target_sets` and `target_reps` are the summary computed from it at publication, kept so that today's session, the week and the whole execution side keep reading what they always read. A draft written by the current editor carries `sets`; an older one carries only the aggregate, and publication synthesises the rows from it. */
+      sets?: components['schemas']['PlannedSetContent'][]
+      /** @description Derived from `sets` at publication. `IX-47` stops any runtime role authoring it. */
+      target_sets?: number
+      /** @description Derived, and present only when every set agrees. */
+      target_reps?: number | null
+      target_load_value?: number | null
+      target_load_unit_code?: string | null
+      target_rpe?: number | null
+      /** @description Prescription, not measurement: the rest the step asks for between sets. Nullable because a step may say nothing about it, and a zero would mean "no rest", which is a different instruction from "nobody said". */
+      target_rest_seconds?: number | null
     }
     EnduranceTarget: {
       /** @constant */
@@ -3482,7 +4886,8 @@ export interface components {
     }
     SessionTemplate: {
       id: components['schemas']['Uuid']
-      organization_id: components['schemas']['Uuid']
+      /** @description Null when the content belongs to a person rather than to an organization. Ownership is exactly one of the two and never both, so the projection says which by leaving this empty. */
+      organization_id: components['schemas']['Uuid'] | null
       discipline_code: string
       status: components['schemas']['PublicationStatus']
       author_person_id: components['schemas']['Uuid']
@@ -3505,6 +4910,8 @@ export interface components {
     ProgramDraftContent: {
       title: string
       notes?: string | null
+      /** @description Whether the composition starts over instead of ending. It belongs to the version and not to the programme, because it changes what gets trained: one that ends in eight weeks and one that never ends are two different programmes even off the same week. It therefore enters the content and the content hash. Absent means false. */
+      repeats_forever?: boolean
       sessions: components['schemas']['ProgramVersionSessionCreate'][]
     }
     ProgramDraft: {
@@ -3520,7 +4927,8 @@ export interface components {
     }
     Program: {
       id: components['schemas']['Uuid']
-      organization_id: components['schemas']['Uuid']
+      /** @description Null when the content belongs to a person rather than to an organization. Ownership is exactly one of the two and never both, so the projection says which by leaving this empty. */
+      organization_id: components['schemas']['Uuid'] | null
       status: components['schemas']['PublicationStatus']
       author_person_id: components['schemas']['Uuid']
       draft: components['schemas']['ProgramDraft']
@@ -3706,7 +5114,34 @@ export interface components {
       version: number
       requested_level: components['schemas']['CompletenessLevel']
     }
+    EnduranceLapReplace: {
+      lap_number: number
+      distance_value: number
+      distance_unit_code: string
+      duration_seconds: number
+    }
+    IntervalResultReplace: {
+      interval_number: number
+      work_duration_seconds: number
+      rest_duration_seconds?: number
+      achieved_repetitions?: number
+      completed?: boolean
+    }
+    /** @description At least one of the two measures, because a held nothing is not a result. */
+    MobilityResultReplace: {
+      sequence_position: number
+      movement_id?: components['schemas']['UuidV7']
+      /** @enum {string} */
+      side?: 'left' | 'right' | 'bilateral' | 'not_applicable'
+      hold_duration_seconds?: number
+      completed_repetitions?: number
+    }
     /**
+     * @description The working state, whole. `OP-EXE-005` is a replace and not a patch: somebody editing the set they logged four sets ago sends the session as it now stands, so there is never a half-applied session and never a merge to reason about.
+     *
+     *     The four families each have their own array. `strength_sets` is required and may be empty — a running session records no sets and must still be able to say so — while the other three are omitted when the session has none of them.
+     *
+     *     `segments` is optional, and Space omits it. The session's activity type is frozen onto the execution when the attempt starts, from the template it came from; a client restating it could only contradict what was already frozen.
      * @example {
      *       "segments": [
      *         {
@@ -3731,7 +5166,10 @@ export interface components {
      *     }
      */
     ExecutionResultsReplace: {
-      segments: components['schemas']['ExecutionSegment'][]
+      segments?: components['schemas']['ExecutionSegment'][]
+      endurance_laps?: components['schemas']['EnduranceLapReplace'][]
+      interval_results?: components['schemas']['IntervalResultReplace'][]
+      mobility_results?: components['schemas']['MobilityResultReplace'][]
       strength_sets: components['schemas']['StrengthSet'][]
     }
     ExecutionSegment: {
@@ -3739,7 +5177,8 @@ export interface components {
       activity_type_code: string
     }
     StrengthSet: {
-      segment_position: number
+      /** @description Which segment the set belongs to. Omitted when the session declares none, which is every Space session today: a position pointing at a segment that was never sent would name something that does not exist. */
+      segment_position?: number
       order: number
       /** Format: uuid */
       movement_id?: string | null
@@ -3768,7 +5207,9 @@ export interface components {
       /** @enum {string} */
       status: 'in_progress' | 'paused'
       revision_number: number
+      /** @description Zero while a session declares no segmentation, which is every Space session today. It is a count of what is stored, not of what was sent. */
       segment_count: number
+      /** @description Zero on a session somebody has opened and not yet recorded into. */
       result_count: number
     }
     /**
@@ -3779,6 +5220,14 @@ export interface components {
     ExecutionFinalize: {
       /** Format: date-time */
       ended_at: string
+    }
+    ExecutionAbandoned: {
+      id: components['schemas']['UuidV7']
+      /** @constant */
+      status: 'abandoned'
+      revision_number: number
+      /** @description What the attempt keeps. Abandoning does not delete training that happened; it says the session was not finished. */
+      result_count: number
     }
     /**
      * @example {
@@ -6397,6 +7846,25 @@ export interface operations {
       503: components['responses']['UpstreamUnavailable']
     }
   }
+  signOutOfSpace: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The session is closed, whether or not it existed */
+      204: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content?: never
+      }
+    }
+  }
   refreshSpaceSession: {
     parameters: {
       query?: never
@@ -6584,6 +8052,214 @@ export interface operations {
       401: components['responses']['Unauthenticated']
       403: components['responses']['Forbidden']
       409: components['responses']['Conflict']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  declareSpaceBiologicalSex: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        attemptId: components['parameters']['OnboardingAttemptId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SpaceBiologicalSexDeclaration']
+      }
+    }
+    responses: {
+      /** @description The declared value */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SpaceBiologicalSex']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      409: components['responses']['Conflict']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  declareSpaceProfileClaim: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SpaceProfileClaimDeclaration']
+      }
+    }
+    responses: {
+      /** @description The claim as recorded */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SpaceProfileClaim']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      409: components['responses']['Conflict']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  declareSpaceFocusAreas: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SpaceFocusAreasDeclaration']
+      }
+    }
+    responses: {
+      /** @description The emphasis in force after the command */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SpaceFocusAreas']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      409: components['responses']['Conflict']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  completeSpaceOnboarding: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        attemptId: components['parameters']['OnboardingAttemptId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SpaceOnboardingCompletion']
+      }
+    }
+    responses: {
+      /** @description The Fitness ID, now active */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SpaceActivatedPerson']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      409: components['responses']['Conflict']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  recordSpaceBodyProgress: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SpaceBodyProgressDeclaration']
+      }
+    }
+    responses: {
+      /** @description The measurement as recorded, in canonical units */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SpaceBodyProgressRecord']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      409: components['responses']['Conflict']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  skipSpaceOnboardingStep: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        attemptId: components['parameters']['OnboardingAttemptId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SpaceOnboardingSkip']
+      }
+    }
+    responses: {
+      /** @description The skip is recorded, or was already */
+      204: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
       503: components['responses']['UpstreamUnavailable']
     }
   }
@@ -7790,6 +9466,34 @@ export interface operations {
       503: components['responses']['UpstreamUnavailable']
     }
   }
+  readSessionTemplateDraft: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+        templateId: components['parameters']['TemplateId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The draft, with the ETag the next save has to send */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          ETag: components['headers']['ETag']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SessionTemplateDraft']
+        }
+      }
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+    }
+  }
   replaceOrganizationSessionTemplateDraft: {
     parameters: {
       query?: never
@@ -8231,6 +9935,202 @@ export interface operations {
       422: components['responses']['ValidationFailed']
     }
   }
+  listSpacePrograms: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The catalogue, the person's answers, and their current program */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SpaceProgramCatalogue']
+        }
+      }
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  createMyProgram: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ProgramCreate']
+      }
+    }
+    responses: {
+      /** @description Stable programme identity and editable draft */
+      201: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          ETag: components['headers']['ETag']
+          Location: components['headers']['Location']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Program']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      422: components['responses']['ValidationFailed']
+    }
+  }
+  setMyProgramCover: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        programId: components['schemas']['UuidV7']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SpaceProgramCoverChoice']
+      }
+    }
+    responses: {
+      /** @description What the programme's routines now wear */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SpaceProgramCover']
+        }
+      }
+      401: components['responses']['Unauthenticated']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      422: components['responses']['ValidationFailed']
+    }
+  }
+  reorderMyPrograms: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SpaceProgramOrder']
+      }
+    }
+    responses: {
+      /** @description The order as it now stands */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SpaceMyProgram'][]
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+    }
+  }
+  getSpaceProgramVersion: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        programVersionId: components['schemas']['UuidV7']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The version, its segmentation and its whole content */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SpaceProgramDetail']
+        }
+      }
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  selfAssignSpaceProgram: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SpaceProgramChoice']
+      }
+    }
+    responses: {
+      /** @description The assignment, the same one on every retry */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SpaceProgramAssignment']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      409: components['responses']['Conflict']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
   listMyAgenda: {
     parameters: {
       query: {
@@ -8271,6 +10171,668 @@ export interface operations {
       400: components['responses']['BadRequest']
       401: components['responses']['Unauthenticated']
       422: components['responses']['ValidationFailed']
+    }
+  }
+  getMyToday: {
+    parameters: {
+      query: {
+        /** @description The device's zone. "Today" is a local question and the server must not answer it in UTC, or somebody in Bogotá loses their session at seven in the evening. */
+        timezone: components['schemas']['IanaTimeZone']
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Today, and the week behind it */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SpaceToday']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  createMySessionTemplate: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SessionTemplateCreate']
+      }
+    }
+    responses: {
+      /** @description Stable template identity and editable draft */
+      201: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          ETag: components['headers']['ETag']
+          Location: components['headers']['Location']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SessionTemplate']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      422: components['responses']['ValidationFailed']
+    }
+  }
+  readMySessionTemplateDraft: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        templateId: components['parameters']['TemplateId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The draft, with the ETag the next save has to send */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          ETag: components['headers']['ETag']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SessionTemplateDraft']
+        }
+      }
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+    }
+  }
+  replaceMySessionTemplateDraft: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description Strong content ETag returned with the current editable draft. */
+        'If-Match': components['parameters']['PlanningDraftIfMatch']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        templateId: components['parameters']['TemplateId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SessionTemplateDraftContent']
+      }
+    }
+    responses: {
+      /** @description Current draft; unchanged replacements preserve its ETag */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          ETag: components['headers']['ETag']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SessionTemplateDraft']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      422: components['responses']['ValidationFailed']
+    }
+  }
+  discardMySessionTemplate: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        templateId: components['parameters']['TemplateId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The template, now archived; the draft it was written in stays where it is */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SessionTemplate']
+        }
+      }
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      422: components['responses']['ValidationFailed']
+    }
+  }
+  publishMySessionTemplate: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description Strong content ETag returned with the current editable draft. */
+        'If-Match': components['parameters']['PlanningDraftIfMatch']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        templateId: components['parameters']['TemplateId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The published version */
+      201: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          ETag: components['headers']['ETag']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SessionTemplateVersion']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      422: components['responses']['ValidationFailed']
+    }
+  }
+  readMyProgramDraft: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        programId: components['parameters']['ProgramId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The draft, with the ETag the next save has to send */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          ETag: components['headers']['ETag']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ProgramDraft']
+        }
+      }
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+    }
+  }
+  replaceMyProgramDraft: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description Strong content ETag returned with the current editable draft. */
+        'If-Match': components['parameters']['PlanningDraftIfMatch']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        programId: components['parameters']['ProgramId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ProgramDraftContent']
+      }
+    }
+    responses: {
+      /** @description Current draft; unchanged replacements preserve its ETag */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          ETag: components['headers']['ETag']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ProgramDraft']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      422: components['responses']['ValidationFailed']
+    }
+  }
+  readMyUnpublishedProgram: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The programme and its draft, or null when there is none */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Program'] | null
+        }
+      }
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+    }
+  }
+  discardMyProgram: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        programId: components['parameters']['ProgramId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The programme, now archived and without its draft */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Program']
+        }
+      }
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      422: components['responses']['ValidationFailed']
+    }
+  }
+  removeMyProgram: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        programId: components['parameters']['ProgramId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SpaceProgramRemoval']
+      }
+    }
+    responses: {
+      /** @description The programme, now archived, with its published versions deprecated */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Program']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      422: components['responses']['ValidationFailed']
+    }
+  }
+  duplicateMyProgram: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        programId: components['parameters']['ProgramId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The new programme and its draft, never the one it was copied from */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Program']
+        }
+      }
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      422: components['responses']['ValidationFailed']
+    }
+  }
+  publishMyProgram: {
+    parameters: {
+      query: {
+        /** @description The device's zone, for the assignment this may have to start. Only the zone travels, never the date: taking a start date from a client would let a plan be backdated into a history that never happened. */
+        timezone: components['schemas']['IanaTimeZone']
+      }
+      header: {
+        /** @description Strong content ETag returned with the current editable draft. */
+        'If-Match': components['parameters']['PlanningDraftIfMatch']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        programId: components['parameters']['ProgramId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The published version */
+      201: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          ETag: components['headers']['ETag']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ProgramVersion']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      422: components['responses']['ValidationFailed']
+    }
+  }
+  getMyWeekPlan: {
+    parameters: {
+      query: {
+        /** @description The device's zone. Which calendar week is in progress is a local question and the server must not answer it in UTC. */
+        timezone: components['schemas']['IanaTimeZone']
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The week as its owner sees it */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SpaceWeekPlan']
+        }
+      }
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listMyPrograms: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The person's own programmes */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SpaceMyProgram'][]
+        }
+      }
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  searchMovements: {
+    parameters: {
+      query?: {
+        /** @description Limit to the discipline the routine is written in. */
+        discipline?: string
+        /** @description Matched anywhere in the name, case-insensitively. Accents are not folded. */
+        q?: string
+        /** @description Repeatable. Several values of this filter are `or` — picking a second muscle widens — while combining it with `equipment` is `and`, because that is how a filter reads. */
+        muscle?: string[]
+        /** @description Repeatable, with the same semantics as `muscle`. */
+        equipment?: string[]
+        limit?: number
+        cursor?: components['parameters']['Cursor']
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The movements that match */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['MovementPage']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  readMovement: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        movementId: components['schemas']['Uuid']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The movement */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['MovementDetail']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listEquipment: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The published global equipment */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CatalogueTerm'][]
+        }
+      }
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listMuscles: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The published muscles */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['MuscleTerm'][]
+        }
+      }
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listMyContent: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The person's own routines */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SpaceMyRoutine'][]
+        }
+      }
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  getMyExecution: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        executionId: components['parameters']['ExecutionId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The execution as its owner sees it */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SpaceExecution']
+        }
+      }
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      503: components['responses']['UpstreamUnavailable']
     }
   }
   startPlannedSessionAttempt: {
@@ -8354,6 +10916,44 @@ export interface operations {
       409: components['responses']['StaleDraft']
       422: components['responses']['ContractValidationFailed']
       428: components['responses']['PreconditionRequired']
+    }
+  }
+  abandonExecution: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        executionId: components['parameters']['ExecutionId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ExecutionFinalize']
+      }
+    }
+    responses: {
+      /** @description Attempt abandoned */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ExecutionAbandoned']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
     }
   }
   finalizeExecution: {

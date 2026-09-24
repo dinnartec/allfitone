@@ -1,0 +1,437 @@
+/**
+ * Making a routine and a programme of my own: the decisions, kept loadable by the
+ * test runner.
+ *
+ * Two things here are not obvious from a screenshot and are the reason this file
+ * exists apart from the screens.
+ *
+ * **The etag is a conversation, not a value.** Every save answers with the draft's new
+ * etag, and the next save must carry it. The flow holds the latest one so a screen
+ * never has to, because a screen that forgets it turns a save into a `409`.
+ *
+ * **A base week is not what the server stores.** `PR-1` draws seven days and a number
+ * of weeks; a programme version stores one entry per session with its own week, day
+ * and position. Expanding one into the other is arithmetic, and arithmetic in a screen
+ * is arithmetic nobody tests — so it lives in `expandBaseWeek` with its own cases.
+ */
+
+import type { AllfitV1Schemas } from '@allfitone/contracts'
+import type { CommandHeaders } from '@allfitone/contracts/commands'
+
+export type Movement = AllfitV1Schemas['Movement']
+export type CatalogueTerm = AllfitV1Schemas['CatalogueTerm']
+export type MuscleTerm = AllfitV1Schemas['MuscleTerm']
+export type MovementDetail = AllfitV1Schemas['MovementDetail']
+export type MovementPage = AllfitV1Schemas['MovementPage']
+export type MyRoutine = AllfitV1Schemas['SpaceMyRoutine']
+export type SessionTemplate = AllfitV1Schemas['SessionTemplate']
+export type SessionTemplateDraft = AllfitV1Schemas['SessionTemplateDraft']
+export type SessionTemplateDraftContent = AllfitV1Schemas['SessionTemplateDraftContent']
+export type SessionTemplateVersion = AllfitV1Schemas['SessionTemplateVersion']
+export type Program = AllfitV1Schemas['Program']
+export type ProgramDraft = AllfitV1Schemas['ProgramDraft']
+export type ProgramDraftContent = AllfitV1Schemas['ProgramDraftContent']
+export type ProgramVersion = AllfitV1Schemas['ProgramVersion']
+
+/** One day of `PR-1`'s base week: a weekday, and the routine on it or nothing. */
+export interface BaseWeekDay {
+  readonly day: number
+  readonly templateVersionId: string | null
+}
+
+export interface ContentTransport {
+  searchMovements(
+    discipline: string,
+    query: string,
+    muscles: readonly string[],
+    equipment: readonly string[],
+  ): Promise<readonly Movement[]>
+  readEquipment(): Promise<readonly CatalogueTerm[]>
+  readMuscles(): Promise<readonly MuscleTerm[]>
+  readMovement(movementId: string): Promise<MovementDetail>
+  readMyRoutines(): Promise<readonly MyRoutine[]>
+  createTemplate(
+    command: CommandHeaders,
+    disciplineCode: string,
+    title: string,
+  ): Promise<SessionTemplate>
+  saveTemplateDraft(
+    command: CommandHeaders,
+    templateId: string,
+    etag: string,
+    content: SessionTemplateDraftContent,
+  ): Promise<SessionTemplateDraft>
+  publishTemplate(
+    command: CommandHeaders,
+    templateId: string,
+    etag: string,
+  ): Promise<SessionTemplateVersion>
+  readTemplateDraft(templateId: string): Promise<SessionTemplateDraft>
+  discardTemplate(command: CommandHeaders, templateId: string): Promise<SessionTemplate>
+  readProgramDraft(programId: string): Promise<ProgramDraft>
+  readMyUnpublishedProgram(): Promise<Program | null>
+  discardProgram(command: CommandHeaders, programId: string): Promise<Program>
+  removeProgram(command: CommandHeaders, programId: string, withRoutines: boolean): Promise<Program>
+  duplicateProgram(command: CommandHeaders, programId: string): Promise<Program>
+  createProgram(command: CommandHeaders, title: string): Promise<Program>
+  saveProgramDraft(
+    command: CommandHeaders,
+    programId: string,
+    etag: string,
+    content: ProgramDraftContent,
+  ): Promise<ProgramDraft>
+  publishProgram(
+    command: CommandHeaders,
+    programId: string,
+    etag: string,
+    timezone: string,
+  ): Promise<ProgramVersion>
+}
+
+export interface ContentFlowDependencies {
+  transport: ContentTransport
+  newCommand: () => CommandHeaders
+}
+
+export interface ContentFlow {
+  /** The routine as it is edited. Remembers the etag the next save has to send. */
+  openTemplate(templateId: string): Promise<SessionTemplateDraft>
+  /** Archives it. A routine with a published version is refused by the server. */
+  discardTemplate(templateId: string): Promise<SessionTemplate>
+  searchMovements(
+    discipline: string,
+    query: string,
+    muscles: readonly string[],
+    equipment: readonly string[],
+  ): Promise<readonly Movement[]>
+  readEquipment(): Promise<readonly CatalogueTerm[]>
+  readMuscles(): Promise<readonly MuscleTerm[]>
+  readMovement(movementId: string): Promise<MovementDetail>
+  readMyRoutines(): Promise<readonly MyRoutine[]>
+  createTemplate(disciplineCode: string, title: string): Promise<SessionTemplate>
+  saveTemplateDraft(
+    templateId: string,
+    content: SessionTemplateDraftContent,
+  ): Promise<SessionTemplateDraft>
+  publishTemplate(templateId: string): Promise<SessionTemplateVersion>
+  /** Opens a programme that already exists, and remembers the etag its next save needs. */
+  openProgram(programId: string): Promise<ProgramDraft>
+  /**
+   * The programme somebody started and never published, or nothing.
+   *
+   * No other query can answer it: every one of them starts from an assignment, and an
+   * unpublished programme has none. Without it a saved draft is unreachable.
+   */
+  readMyUnpublishedProgram(): Promise<Program | null>
+  /** Archives it. A programme with a published version is refused by the server. */
+  discardProgram(programId: string): Promise<Program>
+  /**
+   * Lo saca de la biblioteca y de la agenda, y con él las rutinas que sólo él usaba.
+   *
+   * No es `discardProgram` con otro nombre: aquél tira un borrador que nunca se publicó
+   * y no toca ninguna rutina. Éste es para uno que ya existe, y lo entrenado se conserva.
+   */
+  removeProgram(programId: string, withRoutines: boolean): Promise<Program>
+  /** Una copia en borrador, que no existe para nadie hasta que se publique. */
+  duplicateProgram(programId: string): Promise<Program>
+  createProgram(title: string): Promise<Program>
+  saveProgramDraft(programId: string, content: ProgramDraftContent): Promise<ProgramDraft>
+  /** Publishing leaves the author following it; the server takes or restates, never both. */
+  publishProgram(programId: string, timezone: string): Promise<ProgramVersion>
+  /** What the flow will send as `If-Match`, for a screen that needs to say so. */
+  etagFor(id: string): string | undefined
+  remember(id: string, etag: string): void
+}
+
+export class MissingEtagError extends Error {
+  constructor(readonly id: string) {
+    super('missing-etag')
+    this.name = 'MissingEtagError'
+  }
+}
+
+export function createContentFlow(dependencies: ContentFlowDependencies): ContentFlow {
+  const etags = new Map<string, string>()
+  // Per aggregate: creating a routine and then a programme are two intentions, while
+  // a retried creation of the same thing is one.
+  const creating = new Map<string, CommandHeaders>()
+
+  const etagOf = (id: string) => {
+    const etag = etags.get(id)
+    if (!etag) throw new MissingEtagError(id)
+    return etag
+  }
+
+  const once = (key: string) => {
+    let command = creating.get(key)
+    if (!command) {
+      command = dependencies.newCommand()
+      creating.set(key, command)
+    }
+    return command
+  }
+
+  return {
+    searchMovements: (discipline, query, muscles, equipment) =>
+      dependencies.transport.searchMovements(discipline, query, muscles, equipment),
+    readEquipment: () => dependencies.transport.readEquipment(),
+    readMuscles: () => dependencies.transport.readMuscles(),
+    readMovement: (movementId) => dependencies.transport.readMovement(movementId),
+    readMyRoutines: () => dependencies.transport.readMyRoutines(),
+
+    etagFor: (id) => etags.get(id),
+    remember: (id, etag) => {
+      etags.set(id, etag)
+    },
+
+    /**
+     * The etag is remembered here rather than left to the screen, because forgetting
+     * it is not a visible mistake: the first save after opening would throw for a
+     * missing etag, long after the person typed the thing they are about to lose.
+     */
+    async openProgram(programId) {
+      const draft = await dependencies.transport.readProgramDraft(programId)
+      etags.set(programId, draft.etag)
+      return draft
+    },
+
+    /**
+     * The etag is remembered here for the same reason as a programme's: a screen that
+     * forgets it saves nothing and says so far too late.
+     */
+    async openTemplate(templateId) {
+      const draft = await dependencies.transport.readTemplateDraft(templateId)
+      etags.set(templateId, draft.etag)
+      return draft
+    },
+
+    async discardTemplate(templateId) {
+      const template = await dependencies.transport.discardTemplate(
+        dependencies.newCommand(),
+        templateId,
+      )
+      etags.delete(templateId)
+      return template
+    },
+
+    async createTemplate(disciplineCode, title) {
+      const key = `template:${disciplineCode}:${title}`
+      const template = await dependencies.transport.createTemplate(once(key), disciplineCode, title)
+      creating.delete(key)
+      if (template.draft) etags.set(template.id, template.draft.etag)
+      return template
+    },
+
+    // A new command every time: this is the draft as it now stands, not a retry.
+    async saveTemplateDraft(templateId, content) {
+      const draft = await dependencies.transport.saveTemplateDraft(
+        dependencies.newCommand(),
+        templateId,
+        etagOf(templateId),
+        content,
+      )
+      etags.set(templateId, draft.etag)
+      return draft
+    },
+
+    async publishTemplate(templateId) {
+      const key = `publish-template:${templateId}:${etagOf(templateId)}`
+      const version = await dependencies.transport.publishTemplate(
+        once(key),
+        templateId,
+        etagOf(templateId),
+      )
+      creating.delete(key)
+      return version
+    },
+
+    readMyUnpublishedProgram: () => dependencies.transport.readMyUnpublishedProgram(),
+
+    async discardProgram(programId) {
+      const program = await dependencies.transport.discardProgram(
+        dependencies.newCommand(),
+        programId,
+      )
+      etags.delete(programId)
+      return program
+    },
+
+    async removeProgram(programId, withRoutines) {
+      const program = await dependencies.transport.removeProgram(
+        dependencies.newCommand(),
+        programId,
+        withRoutines,
+      )
+      etags.delete(programId)
+      return program
+    },
+
+    async duplicateProgram(programId) {
+      // Con un comando nuevo cada vez: duplicar dos veces son dos copias, y es lo que
+      // alguien que pulsa dos veces está pidiendo.
+      return dependencies.transport.duplicateProgram(dependencies.newCommand(), programId)
+    },
+
+    async createProgram(title) {
+      const key = `program:${title}`
+      const program = await dependencies.transport.createProgram(once(key), title)
+      creating.delete(key)
+      if (program.draft) etags.set(program.id, program.draft.etag)
+      return program
+    },
+
+    async saveProgramDraft(programId, content) {
+      const draft = await dependencies.transport.saveProgramDraft(
+        dependencies.newCommand(),
+        programId,
+        etagOf(programId),
+        content,
+      )
+      etags.set(programId, draft.etag)
+      return draft
+    },
+
+    async publishProgram(programId, timezone) {
+      const key = `publish-program:${programId}:${etagOf(programId)}`
+      const version = await dependencies.transport.publishProgram(
+        once(key),
+        programId,
+        etagOf(programId),
+        timezone,
+      )
+      creating.delete(key)
+      return version
+    },
+  }
+}
+
+/**
+ * `PR-1`'s base week, repeated, as the sessions a programme version stores.
+ *
+ * Position is continuous across the whole programme and not restarted each week: it is
+ * what orders the calendar, and `read_week_plan` reads the week from `week`.
+ */
+export function expandBaseWeek(
+  baseWeek: readonly BaseWeekDay[],
+  weeks: number | null,
+): ProgramDraftContent['sessions'] {
+  const filled = [...baseWeek]
+    .filter(
+      (day): day is BaseWeekDay & { templateVersionId: string } => day.templateVersionId !== null,
+    )
+    .sort((one, other) => one.day - other.day)
+
+  // Sin fecha de fin se compone una vuelta y nada más: es la que se repite, y
+  // enumerar semanas de un programa que no termina no acaba nunca.
+  const laps = weeks ?? 1
+  const sessions: ProgramDraftContent['sessions'] = []
+  let position = 1
+  for (let week = 1; week <= laps; week += 1) {
+    for (const day of filled) {
+      sessions.push({
+        position,
+        week,
+        day: day.day,
+        template_version_id: day.templateVersionId,
+      })
+      position += 1
+    }
+  }
+  return sessions
+}
+
+/** The seven days a base week always has, empty until something fills them. */
+const WEEKDAYS = [1, 2, 3, 4, 5, 6, 7] as const
+
+/**
+ * The inverse of `expandBaseWeek`, for opening a programme that already exists.
+ *
+ * Only week one is read: the rest are its repeats, and reading them would count a day
+ * twice. A programme whose weeks are not all alike cannot be said in a base week at
+ * all, and is refused before it reaches this — flattening it here would silently
+ * rewrite somebody's programme the moment they renamed it.
+ *
+ * Seven days always come back, empty ones included, because that is the shape the
+ * editor draws and an absent Tuesday is not the same as an empty one.
+ */
+export function collapseBaseWeek(
+  sessions: ProgramDraftContent['sessions'],
+  repeatsForever = false,
+): {
+  baseWeek: readonly BaseWeekDay[]
+  weeks: number | null
+} {
+  const firstWeek = new Map<number, string>()
+  for (const session of sessions) {
+    if (session.week === 1) firstWeek.set(session.day, session.template_version_id)
+  }
+
+  return {
+    baseWeek: WEEKDAYS.map((day) => ({ day, templateVersionId: firstWeek.get(day) ?? null })),
+    // Sin fin no hay duración que contar: la composición es una vuelta, y leer su
+    // `max(week)` devolvería «1 semana», que es justo lo contrario de lo que dice.
+    //
+    // A programme with nothing in it still repeats for as long as it says it does, and
+    // zero would put the stepper below its own minimum.
+    weeks: repeatsForever ? null : Math.max(1, ...sessions.map((session) => session.week)),
+  }
+}
+
+/** «8 semanas», «1 semana» when there is only one, and the one with no end. */
+export function weeksLabel(weeks: number | null): string {
+  if (weeks === null) return 'Sin fecha de fin'
+  return weeks === 1 ? '1 semana' : `${weeks} semanas`
+}
+
+/**
+ * What a programme amounts to, in one line.
+ *
+ * Three figures in a case read as something to act on, and these are a consequence of
+ * the week rather than a control: the only number anybody sets on that screen is the
+ * duration, and it has a card of its own. A week with nothing in it says so instead of
+ * reporting zero sessions, which is a number nobody asked for.
+ */
+export function programLoad(
+  weeks: number | null,
+  summary: { daysPerWeek: number; sessions: number | null },
+): string {
+  if (summary.daysPerWeek === 0) return `${weeksLabel(weeks)} · sin días puestos todavía`
+  const perWeek =
+    summary.daysPerWeek === 1 ? '1 día por semana' : `${summary.daysPerWeek} días por semana`
+  // Sin fecha de fin no hay un total de sesiones que decir, y decir el de una vuelta
+  // sería contar la primera semana como si fuera el programa entero.
+  if (summary.sessions === null) return `${weeksLabel(weeks)} · ${perWeek}`
+  const sessions = summary.sessions === 1 ? '1 sesión' : `${summary.sessions} sesiones`
+  return `${weeksLabel(weeks)} · ${perWeek} · ${sessions}`
+}
+
+/** What `PR-1` shows under the week: how much of it there actually is. */
+/**
+ * The same week, with a republished routine keeping every day it was on.
+ *
+ * **The week points at versions, and publishing mints a new one.** A routine already on
+ * a Monday came back from its editor as a version the week had never heard of: it matched
+ * no day and no row, so it disappeared from the programme somebody was in the middle of
+ * building. This is the swap that keeps it there.
+ *
+ * Publishing content that did not change answers the version that already exists, so the
+ * two ids being equal is the ordinary case and leaves the week untouched.
+ */
+export function revisedWeek(
+  week: readonly BaseWeekDay[],
+  replaced: string,
+  published: string,
+): readonly BaseWeekDay[] {
+  if (replaced === published || replaced === '') return week
+  return week.map((day) =>
+    day.templateVersionId === replaced ? { ...day, templateVersionId: published } : day,
+  )
+}
+
+export function summarizeBaseWeek(
+  baseWeek: readonly BaseWeekDay[],
+  weeks: number | null,
+): { daysPerWeek: number; sessions: number | null } {
+  const daysPerWeek = baseWeek.filter((day) => day.templateVersionId !== null).length
+  return { daysPerWeek, sessions: weeks === null ? null : daysPerWeek * weeks }
+}

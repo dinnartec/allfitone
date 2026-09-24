@@ -9,7 +9,13 @@
     "allowJs": true,
     "types": ["expo/types"],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      // One React Native for the whole program. The Design System is read from its
+      // own repository while it is being written, and that repository has its own
+      // copy — so its .d.ts described a different ViewStyle than this app's, and
+      // passing a shadow to a Pressable stopped compiling. Goes when the link goes.
+      "react-native": ["../../node_modules/react-native"],
+      "react-native/*": ["../../node_modules/react-native/*"]
     }
   },
   "include": [

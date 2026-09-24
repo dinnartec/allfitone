@@ -111,6 +111,13 @@ export interface PlanningDatabase {
     limit: number
     cursor?: { updatedAt: string; id: string }
   }): Promise<PlanningPage<Program>>
+  /** Null when the draft is outside the caller's organization, discarded, or gone. */
+  readSessionTemplateDraft(input: {
+    personId: string
+    organizationId: string
+    templateId: string
+    requestId: string
+  }): Promise<SessionTemplateDraft | null>
   readSessionTemplateVersion(input: {
     personId: string
     organizationId: string

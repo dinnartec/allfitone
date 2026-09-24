@@ -10,7 +10,10 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.dinnartec.allfitspace"
+      "bundleIdentifier": "com.dinnartec.allfitspace",
+      "infoPlist": {
+        "CADisableMinimumFrameDurationOnPhone": true
+      }
     },
     "android": {
       "package": "com.dinnartec.allfitspace",
@@ -21,7 +24,7 @@
       },
       "softwareKeyboardLayoutMode": "pan"
     },
-    "plugins": ["expo-router", "expo-secure-store"],
+    "plugins": ["expo-router", "expo-secure-store", "expo-image"],
     "experiments": {
       "typedRoutes": true
     },

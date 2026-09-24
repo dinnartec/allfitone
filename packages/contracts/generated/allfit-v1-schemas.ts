@@ -1246,6 +1246,18 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  BiologicalSex: {
+    type: 'string',
+    enum: ['male', 'female'],
+    description:
+      'Biological sex, used to calibrate energy expenditure estimates and reference ranges. Classified as training data. Absent means the person declined or has not been asked.',
+  },
+  BodyMetric: {
+    type: 'string',
+    enum: ['body_weight', 'body_height'],
+    description:
+      'The two metrics V1 records. The `body_` prefix is not decoration: `metric_code` also names execution results, where `weight` is the load on the bar rather than the weight of the person.',
+  },
   BreakGlassApproval: {
     type: 'object',
     additionalProperties: false,
@@ -1587,6 +1599,19 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         items: {
           $ref: '#/components/schemas/CatalogDiscipline',
         },
+      },
+    },
+  },
+  CatalogueTerm: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['code', 'name'],
+    properties: {
+      code: {
+        type: 'string',
+      },
+      name: {
+        type: 'string',
       },
     },
   },
@@ -1959,6 +1984,28 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       'What a verifier may record. There is no default, and `unverifiable` is the answer whenever the evidence does not reach.',
     enum: ['verified', 'rejected', 'unverifiable'],
   },
+  EnduranceLapReplace: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['lap_number', 'distance_value', 'distance_unit_code', 'duration_seconds'],
+    properties: {
+      lap_number: {
+        type: 'integer',
+        minimum: 1,
+      },
+      distance_value: {
+        type: 'number',
+        exclusiveMinimum: 0,
+      },
+      distance_unit_code: {
+        type: 'string',
+      },
+      duration_seconds: {
+        type: 'number',
+        exclusiveMinimum: 0,
+      },
+    },
+  },
   EnduranceTarget: {
     type: 'object',
     additionalProperties: false,
@@ -2012,6 +2059,30 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
       target_pace_unit_code: {
         type: ['string', 'null'],
+      },
+    },
+  },
+  ExecutionAbandoned: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['id', 'status', 'revision_number', 'result_count'],
+    properties: {
+      id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      status: {
+        type: 'string',
+        const: 'abandoned',
+      },
+      revision_number: {
+        type: 'integer',
+        minimum: 1,
+      },
+      result_count: {
+        type: 'integer',
+        minimum: 0,
+        description:
+          'What the attempt keeps. Abandoning does not delete training that happened; it says the session was not finished.',
       },
     },
   },
@@ -2083,7 +2154,9 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
   ExecutionResultsReplace: {
     type: 'object',
     additionalProperties: false,
-    required: ['segments', 'strength_sets'],
+    required: ['strength_sets'],
+    description:
+      "The working state, whole. `OP-EXE-005` is a replace and not a patch: somebody editing the set they logged four sets ago sends the session as it now stands, so there is never a half-applied session and never a merge to reason about.\n\nThe four families each have their own array. `strength_sets` is required and may be empty — a running session records no sets and must still be able to say so — while the other three are omitted when the session has none of them.\n\n`segments` is optional, and Space omits it. The session's activity type is frozen onto the execution when the attempt starts, from the template it came from; a client restating it could only contradict what was already frozen.",
     example: {
       segments: [
         {
@@ -2109,15 +2182,31 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
     properties: {
       segments: {
         type: 'array',
-        minItems: 1,
         maxItems: 100,
         items: {
           $ref: '#/components/schemas/ExecutionSegment',
         },
       },
+      endurance_laps: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/EnduranceLapReplace',
+        },
+      },
+      interval_results: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/IntervalResultReplace',
+        },
+      },
+      mobility_results: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/MobilityResultReplace',
+        },
+      },
       strength_sets: {
         type: 'array',
-        minItems: 1,
         maxItems: 1000,
         items: {
           $ref: '#/components/schemas/StrengthSet',
@@ -2150,11 +2239,14 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
       segment_count: {
         type: 'integer',
-        minimum: 1,
+        minimum: 0,
+        description:
+          'Zero while a session declares no segmentation, which is every Space session today. It is a count of what is stored, not of what was sent.',
       },
       result_count: {
         type: 'integer',
-        minimum: 1,
+        minimum: 0,
+        description: 'Zero on a session somebody has opened and not yet recorded into.',
       },
     },
   },
@@ -2184,6 +2276,22 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       'A role never grants fitness data by itself. Coach still requires an active relationship, assignment, compatible grant, membership, role, and credentials.',
     enum: ['not_granted_by_role', 'requires_relationship_assignment_and_grant'],
   },
+  FocusArea: {
+    type: 'string',
+    enum: ['chest', 'back', 'shoulders', 'arms', 'abs', 'glutes', 'legs', 'whole_body'],
+    description:
+      'The seven zones of HU-SP-097 criterion 1, plus `whole_body`. A zone is a group of muscles rather than one, because the story asks about zones and because a person points at a region, not at a head of the triceps.\n\n`whole_body` is a member and not the absence of an answer. It means "no emphasis, my main goal decides", and keeping it in the catalogue is what makes that distinguishable from never having answered.',
+  },
+  FocusAreaSet: {
+    type: 'array',
+    uniqueItems: true,
+    maxItems: 8,
+    items: {
+      $ref: '#/components/schemas/FocusArea',
+    },
+    description:
+      'Always ordered by code so two reads of the same emphasis compare equal without the client sorting first.',
+  },
   FrozenContractRef: {
     type: 'object',
     additionalProperties: false,
@@ -2210,6 +2318,32 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         pattern: '^[A-Za-z_]+(?:/[A-Za-z0-9_+\\-]+)+$',
       },
     ],
+  },
+  IntervalResultReplace: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['interval_number', 'work_duration_seconds'],
+    properties: {
+      interval_number: {
+        type: 'integer',
+        minimum: 1,
+      },
+      work_duration_seconds: {
+        type: 'number',
+        exclusiveMinimum: 0,
+      },
+      rest_duration_seconds: {
+        type: 'number',
+        minimum: 0,
+      },
+      achieved_repetitions: {
+        type: 'integer',
+        minimum: 1,
+      },
+      completed: {
+        type: 'boolean',
+      },
+    },
   },
   IntervalTarget: {
     type: 'object',
@@ -2240,6 +2374,12 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  LengthUnit: {
+    type: 'string',
+    enum: ['cm', 'in'],
+    description:
+      'Centimetres are canonical. Feet and inches are sent as **total inches**, an integer like any other, and only the label renders them as `5\' 10"` — so no control has to hold two fields that can disagree.',
+  },
   Load: {
     type: 'object',
     additionalProperties: false,
@@ -2254,6 +2394,11 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         enum: ['kg', 'lb'],
       },
     },
+  },
+  MassUnit: {
+    type: 'string',
+    enum: ['kg', 'lb'],
+    description: 'Kilograms are canonical; a pound is 0.45359237 of one.',
   },
   MealType: {
     type: 'string',
@@ -2271,6 +2416,33 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         type: 'string',
         minLength: 1,
         maxLength: 16,
+      },
+    },
+  },
+  MobilityResultReplace: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['sequence_position'],
+    description: 'At least one of the two measures, because a held nothing is not a result.',
+    properties: {
+      sequence_position: {
+        type: 'integer',
+        minimum: 1,
+      },
+      movement_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      side: {
+        type: 'string',
+        enum: ['left', 'right', 'bilateral', 'not_applicable'],
+      },
+      hold_duration_seconds: {
+        type: 'number',
+        exclusiveMinimum: 0,
+      },
+      completed_repetitions: {
+        type: 'integer',
+        minimum: 1,
       },
     },
   },
@@ -2333,6 +2505,201 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
     description:
       '`not_modelled` means the platform has no table for this yet. It is a fact about Allfit, never about the organization or the person.',
     enum: ['not_modelled'],
+  },
+  Movement: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['id', 'discipline_code', 'name', 'muscles', 'equipment', 'demo_url'],
+    properties: {
+      id: {
+        type: 'string',
+        format: 'uuid',
+      },
+      discipline_code: {
+        type: 'string',
+      },
+      name: {
+        type: 'string',
+      },
+      muscles: {
+        type: 'array',
+        description:
+          'The muscle codes this movement trains, the primary one first. Always present, empty when nothing has been curated: a row that offers an exercise is the row that has to explain it.',
+        items: {
+          type: 'string',
+        },
+      },
+      equipment: {
+        type: 'array',
+        description:
+          'The equipment codes this movement is compatible with, the required one first. Compatibility, never inventory or availability.',
+        items: {
+          type: 'string',
+        },
+      },
+      demo_url: {
+        type: ['string', 'null'],
+        format: 'uri',
+        description:
+          'The animated demonstration, or null where none has been curated yet — the normal state of a catalogue that grows, not an error. Immutable and identical for everyone, so it is served straight from cache rather than through this API; the address is composed from configuration at read time and never stored, which is what keeps the origin replaceable.',
+        maxLength: 2048,
+      },
+    },
+  },
+  MovementDetail: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'id',
+      'discipline_code',
+      'name',
+      'aliases',
+      'muscles',
+      'equipment',
+      'instructions',
+      'variants',
+      'demo_url',
+    ],
+    properties: {
+      id: {
+        type: 'string',
+        format: 'uuid',
+      },
+      discipline_code: {
+        type: 'string',
+      },
+      name: {
+        type: 'string',
+      },
+      aliases: {
+        type: 'array',
+        description:
+          'Other names the same movement goes by, including the English one, which is how a lot of people search. Only the locale being read.',
+        items: {
+          type: 'string',
+        },
+      },
+      muscles: {
+        type: 'array',
+        description: 'What it works, the primary ones first.',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['code', 'name', 'primary'],
+          properties: {
+            code: {
+              type: 'string',
+            },
+            name: {
+              type: 'string',
+            },
+            primary: {
+              type: 'boolean',
+              description:
+                'What the movement trains, as opposed to what it merely uses. A squat is quadriceps and glutes before it is lower back.',
+            },
+          },
+        },
+      },
+      equipment: {
+        type: 'array',
+        items: {
+          type: 'string',
+        },
+      },
+      instructions: {
+        type: 'array',
+        description:
+          'How it is done, in the order it is done. Curated content reviewed before it ships: a badly written step is an injury, not a typo.',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['position', 'text'],
+          properties: {
+            position: {
+              type: 'integer',
+              minimum: 1,
+            },
+            text: {
+              type: 'string',
+            },
+          },
+        },
+      },
+      variants: {
+        type: 'array',
+        description: 'What to do instead, and why it is worth doing instead.',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['id', 'name', 'relation', 'note'],
+          properties: {
+            id: {
+              type: 'string',
+              format: 'uuid',
+            },
+            name: {
+              type: 'string',
+            },
+            relation: {
+              type: 'string',
+              enum: ['variant', 'regression', 'progression'],
+            },
+            note: {
+              type: ['string', 'null'],
+              description:
+                'Said for the person reading — «more upper chest» — not the name of the relation, which is what `relation` is for.',
+            },
+          },
+        },
+      },
+      demo_url: {
+        type: ['string', 'null'],
+        format: 'uri',
+        description:
+          'The animated demonstration, or null where none has been curated yet — the normal state of a catalogue that grows, not an error. Immutable and identical for everyone, so it is served straight from cache rather than through this API; the address is composed from configuration at read time and never stored, which is what keeps the origin replaceable.',
+        maxLength: 2048,
+      },
+    },
+  },
+  MovementPage: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['data', 'page'],
+    properties: {
+      data: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/Movement',
+        },
+      },
+      page: {
+        $ref: '#/components/schemas/Page',
+      },
+    },
+  },
+  MuscleTerm: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['code', 'name', 'region', 'body_slug'],
+    properties: {
+      code: {
+        type: 'string',
+      },
+      name: {
+        type: 'string',
+      },
+      region: {
+        type: 'string',
+        enum: ['upper', 'lower', 'general'],
+        description: 'Groups the chips into blocks; nineteen in one row is a wall.',
+      },
+      body_slug: {
+        type: ['string', 'null'],
+        description:
+          "The part the body figure in Space's onboarding already draws, when there is one, so the filter and the figure speak one vocabulary. Null for what is not a drawable part.",
+      },
+    },
   },
   NutrientCode: {
     type: 'string',
@@ -3828,6 +4195,60 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  PlannedSetContent: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['set_order', 'kind'],
+    properties: {
+      set_order: {
+        type: 'integer',
+        minimum: 1,
+        maximum: 200,
+      },
+      kind: {
+        type: 'string',
+        enum: ['normal', 'warmup', 'to_failure', 'drop'],
+      },
+      target_reps: {
+        type: ['integer', 'null'],
+        minimum: 1,
+        maximum: 2147483647,
+      },
+      target_load_value: {
+        type: ['number', 'null'],
+        minimum: 0,
+      },
+      target_load_unit_code: {
+        type: ['string', 'null'],
+      },
+      target_rpe: {
+        type: ['number', 'null'],
+        minimum: 0,
+        maximum: 10,
+      },
+    },
+    dependentSchemas: {
+      kind: {
+        if: {
+          properties: {
+            kind: {
+              const: 'to_failure',
+            },
+          },
+          required: ['kind'],
+        },
+        then: {
+          properties: {
+            target_reps: {
+              type: 'null',
+            },
+          },
+        },
+      },
+    },
+    description:
+      'One set of a strength step. A set to failure declares no reps, because the count is whatever comes out: "until you cannot" and "until eight" are different instructions, so the contract refuses the contradiction rather than leaving it to a screen.',
+  },
   PlannedStepContent: {
     type: 'object',
     additionalProperties: false,
@@ -3850,6 +4271,13 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       notes: {
         type: ['string', 'null'],
         maxLength: 2000,
+      },
+      superset_group: {
+        type: ['integer', 'null'],
+        minimum: 1,
+        maximum: 200,
+        description:
+          'Steps sharing a group are performed back to back. Only neighbouring steps may share one, and `IX-46` refuses a group whose positions are not consecutive: a chain that skips an exercise describes an order nobody can execute. The rest of a chain is the one on its last step, because the rest happens when the chain ends.',
       },
       target: {
         oneOf: [
@@ -4122,6 +4550,12 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         enum: ['allfit_admin'],
       },
     },
+  },
+  PrimaryTrainingGoal: {
+    type: 'string',
+    enum: ['lose_weight', 'build_muscle', 'get_fit', 'run_a_race', 'maintain'],
+    description:
+      'The five goals offered in the initial V1 launch. The attribute catalogue in the database also holds `improve_performance`, deferred rather than deleted, and this operation refuses it: it is the only one of the six whose progress does not show on the body, so the screen cannot show what it promises.',
   },
   Problem: {
     type: 'object',
@@ -4504,7 +4938,16 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         $ref: '#/components/schemas/Uuid',
       },
       organization_id: {
-        $ref: '#/components/schemas/Uuid',
+        oneOf: [
+          {
+            $ref: '#/components/schemas/Uuid',
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description:
+          'Null when the content belongs to a person rather than to an organization. Ownership is exactly one of the two and never both, so the projection says which by leaving this empty.',
       },
       status: {
         $ref: '#/components/schemas/PublicationStatus',
@@ -4651,6 +5094,11 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       notes: {
         type: ['string', 'null'],
         maxLength: 2000,
+      },
+      repeats_forever: {
+        type: 'boolean',
+        description:
+          'Whether the composition starts over instead of ending. It belongs to the version and not to the programme, because it changes what gets trained: one that ends in eight weeks and one that never ends are two different programmes even off the same week. It therefore enters the content and the content hash. Absent means false.',
       },
       sessions: {
         type: 'array',
@@ -4969,6 +5417,107 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  RoutineCover: {
+    oneOf: [
+      {
+        $ref: '#/components/schemas/RoutineCoverMuscles',
+      },
+      {
+        $ref: '#/components/schemas/RoutineCoverIcon',
+      },
+      {
+        $ref: '#/components/schemas/RoutineCoverPhoto',
+      },
+    ],
+    discriminator: {
+      propertyName: 'kind',
+      mapping: {
+        muscles: '#/components/schemas/RoutineCoverMuscles',
+        icon: '#/components/schemas/RoutineCoverIcon',
+        photo: '#/components/schemas/RoutineCoverPhoto',
+      },
+    },
+    description:
+      "How a programme's routines show themselves. One variant per kind, so a muscle cover cannot also carry an icon. The database refuses that too; refusing it in the contract means it cannot be expressed.\n**It is declared on the programme and read on the routine.** A routine that no programme holds has none, and is recognised by its name, the way it always was.",
+  },
+  RoutineCoverIcon: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['kind', 'icon'],
+    properties: {
+      kind: {
+        type: 'string',
+        enum: ['icon'],
+      },
+      icon: {
+        type: 'string',
+        enum: [
+          'strength',
+          'run',
+          'cycling',
+          'interval',
+          'cardio',
+          'burn',
+          'power',
+          'challenge',
+          'mountain',
+          'time',
+          'mobility',
+          'swim',
+          'arms',
+          'weights',
+          'technique',
+          'endurance',
+          'pace',
+          'energy',
+          'focus',
+          'recovery',
+          'morning',
+          'evening',
+          'night',
+          'cold',
+          'outdoor',
+          'route',
+          'pool',
+          'team',
+          'record',
+          'favourite',
+          'light',
+          'countdown',
+        ],
+        description:
+          "What the routine is about, not what it is done with. Closed, and appended to rather than reordered: an identifier is never reused, so a routine saved with one keeps drawing the same thing. Which order the grid uses is the app's.",
+      },
+    },
+    description:
+      'A choice nothing else can reconstruct, so it is stored. The vocabulary lives in the database rather than in the catalogue: nobody searches or filters by it, they declare it.',
+  },
+  RoutineCoverMuscles: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['kind'],
+    properties: {
+      kind: {
+        type: 'string',
+        enum: ['muscles'],
+      },
+    },
+    description:
+      'Drawn from the exercises the routine already has, so it stores nothing else. Copying the muscles here would be a second truth that ages the moment somebody edits the routine.',
+  },
+  RoutineCoverPhoto: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['kind'],
+    properties: {
+      kind: {
+        type: 'string',
+        enum: ['photo'],
+      },
+    },
+    description:
+      "A photograph, and the routine does not say which: the second revision of `ADR-031` retired the personal upload, so this asks for one of the catalogue's covers and the dominant region of the muscles the routine works decides it. It carries nothing for the same reason the muscle cover carries nothing — the answer is already in the exercises, and copying it here would be a second truth.\nWhere to fetch it is `cover_url`, composed by the server. The key never leaves the database.",
+  },
   ScopeCode: {
     type: 'string',
     enum: [
@@ -5129,7 +5678,16 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         $ref: '#/components/schemas/Uuid',
       },
       organization_id: {
-        $ref: '#/components/schemas/Uuid',
+        oneOf: [
+          {
+            $ref: '#/components/schemas/Uuid',
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description:
+          'Null when the content belongs to a person rather than to an organization. Ownership is exactly one of the two and never both, so the projection says which by leaving this empty.',
       },
       discipline_code: {
         type: 'string',
@@ -5347,10 +5905,220 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  SpaceActivatedPerson: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['person_id'],
+    properties: {
+      person_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+    },
+    description: 'The Fitness ID, the same one on every retry.',
+  },
+  SpaceBiologicalSex: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['biological_sex'],
+    properties: {
+      biological_sex: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/BiologicalSex',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+    },
+    description:
+      'What the person now has recorded. No person identifier travels here: the API resolves it from the token on every call.',
+  },
+  SpaceBiologicalSexDeclaration: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['biological_sex'],
+    properties: {
+      biological_sex: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/BiologicalSex',
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description: 'Null is the refusal, and it is required rather than omitted.',
+      },
+    },
+    description:
+      'Null declines. It is a value the request must carry explicitly, not an omission, because the server records that the question was answered even when no sex was given — otherwise a screen that skips itself once answered would ask a decliner again on every cold start.',
+  },
+  SpaceBodyHeightDeclaration: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['metric_code', 'value', 'unit', 'measured_on'],
+    properties: {
+      metric_code: {
+        type: 'string',
+        const: 'body_height',
+      },
+      value: {
+        type: 'number',
+        exclusiveMinimum: 0,
+      },
+      unit: {
+        $ref: '#/components/schemas/LengthUnit',
+      },
+      measured_on: {
+        type: 'string',
+        format: 'date',
+      },
+    },
+  },
+  SpaceBodyMeasure: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['value', 'unit', 'original_unit'],
+    properties: {
+      value: {
+        type: 'number',
+      },
+      unit: {
+        type: 'string',
+      },
+      original_unit: {
+        oneOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description: 'The unit she chose last time, so the screen reopens in it.',
+      },
+    },
+  },
+  SpaceBodyMeasures: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['weight', 'height'],
+    properties: {
+      weight: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/SpaceBodyMeasure',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      height: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/SpaceBodyMeasure',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+    },
+    description:
+      'The latest of each. Either can be null on its own, which is what a half-finished pair looks like and why `answered` is not derived from presence alone.',
+  },
+  SpaceBodyProgressDeclaration: {
+    oneOf: [
+      {
+        $ref: '#/components/schemas/SpaceBodyWeightDeclaration',
+      },
+      {
+        $ref: '#/components/schemas/SpaceBodyHeightDeclaration',
+      },
+    ],
+    discriminator: {
+      propertyName: 'metric_code',
+      mapping: {
+        body_weight: '#/components/schemas/SpaceBodyWeightDeclaration',
+        body_height: '#/components/schemas/SpaceBodyHeightDeclaration',
+      },
+    },
+    description:
+      'One variant per metric, so a weight cannot be sent in centimetres. The database refuses that too; refusing it in the contract means it cannot be expressed.',
+  },
+  SpaceBodyProgressRecord: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['id', 'metric_code', 'value', 'unit', 'original_value', 'original_unit'],
+    properties: {
+      id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      metric_code: {
+        $ref: '#/components/schemas/BodyMetric',
+      },
+      value: {
+        type: 'number',
+        description: 'The canonical figure, computed by the server from the unit catalogue.',
+      },
+      unit: {
+        type: 'string',
+        description: "The canonical unit of the metric's dimension.",
+      },
+      original_value: {
+        oneOf: [
+          {
+            type: 'number',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      original_unit: {
+        oneOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description:
+          'What she actually read, and null when she was already using the canonical unit — so a non-null original means exactly "she read it in another unit".',
+      },
+    },
+  },
+  SpaceBodyWeightDeclaration: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['metric_code', 'value', 'unit', 'measured_on'],
+    properties: {
+      metric_code: {
+        type: 'string',
+        const: 'body_weight',
+      },
+      value: {
+        type: 'number',
+        exclusiveMinimum: 0,
+        description: 'What the person read on the ruler, in the unit below.',
+      },
+      unit: {
+        $ref: '#/components/schemas/MassUnit',
+      },
+      measured_on: {
+        type: 'string',
+        format: 'date',
+      },
+    },
+  },
   SpaceCurrentOnboardingAttempt: {
     type: 'object',
     additionalProperties: false,
-    required: ['attempt', 'identity'],
+    required: ['attempt', 'answers'],
     properties: {
       attempt: {
         oneOf: [
@@ -5364,21 +6132,523 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         description:
           'Null when the account has no open attempt, which is also what an already activated person sees.',
       },
-      identity: {
+      answers: {
+        $ref: '#/components/schemas/SpaceOnboardingAnswers',
+      },
+    },
+    description:
+      'Enough to resume the onboarding and nothing more. Absent answers are null rather than omitted, so the app never has to guess whether a step was skipped or the field simply did not travel.',
+  },
+  SpaceExecution: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'executed_session_id',
+      'execution_status',
+      'started_at',
+      'revision_number',
+      'title',
+      'discipline_code',
+      'program_title',
+      'week',
+      'planned',
+      'results',
+    ],
+    properties: {
+      executed_session_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      execution_status: {
+        $ref: '#/components/schemas/ExecutionStatus',
+      },
+      started_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      revision_number: {
+        type: 'integer',
+        minimum: 0,
+        description: 'The optimistic lock the next write has to carry.',
+      },
+      title: {
         oneOf: [
           {
-            $ref: '#/components/schemas/SpacePendingFitnessId',
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      discipline_code: {
+        oneOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      program_title: {
+        oneOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      week: {
+        oneOf: [
+          {
+            type: 'integer',
+            minimum: 1,
           },
           {
             type: 'null',
           },
         ],
         description:
-          'Null until the Fitness ID exists. Non-null is how the app knows that step is behind it.',
+          "Derived from the assignment's start date, not stored: the same number kept in two places is one of them wrong.",
+      },
+      planned: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/SpaceProgramStep',
+        },
+      },
+      results: {
+        type: 'array',
+        items: {
+          type: 'object',
+          additionalProperties: true,
+          description:
+            'A recorded result, discriminated by `family`, in the shape the replace command accepts. It travels structured so the app can render and edit it without a second endpoint.',
+        },
+      },
+    },
+  },
+  SpaceFocusAreas: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['areas'],
+    properties: {
+      areas: {
+        $ref: '#/components/schemas/FocusAreaSet',
       },
     },
     description:
-      'Enough to resume the onboarding and nothing more. Absent answers are null rather than omitted, so the app never has to guess whether a step was skipped or the field simply did not travel.',
+      'The emphasis in force after the command, which on a replay is simply the emphasis in force.',
+  },
+  SpaceFocusAreasDeclaration: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['areas'],
+    properties: {
+      areas: {
+        allOf: [
+          {
+            $ref: '#/components/schemas/FocusAreaSet',
+          },
+          {
+            minItems: 1,
+          },
+        ],
+        description:
+          'The whole set, not one member: what is absent here is withdrawn. At least one member, because the empty array would be indistinguishable from not having answered; `whole_body` is how to say "no emphasis", and it travels alone.',
+      },
+    },
+    description:
+      'Declaring replaces the set. It is not additive, so the client sends what the person has selected rather than a difference.',
+  },
+  SpaceMyProgram: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'assignment_id',
+      'program_version_id',
+      'program_id',
+      'editable',
+      'title',
+      'weeks',
+      'days_per_week',
+      'starts_on',
+      'sessions_done',
+      'sessions_planned',
+      'cover_url',
+      'routine_cover',
+    ],
+    properties: {
+      assignment_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      program_version_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      program_id: {
+        $ref: '#/components/schemas/UuidV7',
+        description:
+          'Which programme this is, as opposed to which version of it was taken. The draft and the version are addressed by programme, so without this a row cannot offer to open the thing it is showing.',
+      },
+      editable: {
+        type: 'boolean',
+        description:
+          'Whether this editor can open it. False for a programme taken from Allfit, which was forked and never given a draft, and false for one whose cycle — the composition that repeats — is not one week alike throughout: a base week cannot say that, and republishing would flatten it silently. The comparison is against the cycle and not against the declared duration, which a programme without an end date does not have.',
+      },
+      title: {
+        type: 'string',
+      },
+      weeks: {
+        oneOf: [
+          {
+            type: 'integer',
+            minimum: 1,
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description:
+          'How long the programme lasts. Null when it has no end date: its composition repeats instead of running out, so there is no week to count to and nothing to say "de M" against.',
+      },
+      days_per_week: {
+        type: 'integer',
+        minimum: 1,
+      },
+      starts_on: {
+        type: 'string',
+        format: 'date',
+      },
+      cover_url: {
+        oneOf: [
+          {
+            type: 'string',
+            format: 'uri',
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description:
+          "Where the programme's artwork is served from, composed by the API out of the stored object key and the media origin. Null for a programme somebody wrote here, which has no artwork of its own. The key never leaves the server: it addresses our storage and would tie a client to where it happens to live.",
+      },
+      routine_cover: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/RoutineCover',
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description:
+          "How this programme's routines show themselves, which is a decision of the programme and not of each routine: Hoy opens with the week's routines side by side, and six routines each picking their own would put figures, icons and photographs in one row — a sample book rather than a week.\nThe style is the programme's and the image is the routine's. `muscles` draws what each routine works and `photo` takes the catalogue cover matching what each routine works; only `icon` is the same for all of them, because an icon is chosen rather than computed.\nNull is a programme that has not said, and its routines are recognised by their name.",
+      },
+      sessions_done: {
+        type: 'integer',
+        minimum: 0,
+      },
+      sessions_planned: {
+        type: 'integer',
+        minimum: 0,
+      },
+    },
+  },
+  SpaceMyRoutine: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'template_id',
+      'title',
+      'discipline_code',
+      'status',
+      'template_version_id',
+      'cover',
+      'cover_url',
+      'muscles',
+      'muscle_sets',
+      'versions',
+      'programs',
+      'exercise_count',
+      'set_count',
+      'has_unpublished_changes',
+    ],
+    properties: {
+      template_id: {
+        type: 'string',
+        format: 'uuid',
+      },
+      title: {
+        type: 'string',
+      },
+      discipline_code: {
+        type: 'string',
+      },
+      status: {
+        type: 'string',
+      },
+      template_version_id: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/UuidV7',
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description:
+          'The published version a programme can point at. Null means the routine is still only a draft.',
+      },
+      cover: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/RoutineCover',
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description:
+          "**Derived, never declared.** A routine does not choose how it shows itself: the programme that uses it does, so that Hoy's carousel speaks one language. This answers the style of the first of the person's programmes that holds this routine, by the order they already chose for them.\nNull is a routine that no programme holds. That is not an unfinished routine: it is recognised by its name, the way it always was.",
+      },
+      cover_url: {
+        type: ['string', 'null'],
+        format: 'uri',
+        description:
+          "Where to fetch the photograph this routine gets under a `photo` cover, composed by the server out of the picked object key and the catalogue's media origin. Null only for a routine with no exercises yet — nothing has said what it works, so nothing can be picked. The key itself never leaves the database (`ADR-031`).\n**It is answered whatever the programme currently wears.** The cover screen previews all three kinds before any of them is chosen, so answering only for a programme already wearing a photograph left that tab with an empty tile at exactly the moment somebody is deciding.\nThe style is the programme's and the image is this routine's: within `photo` each routine gets the cover matching what **it** works, or six cards would come out cloned and only the label would tell them apart.",
+      },
+      muscle_sets: {
+        type: 'array',
+        description:
+          "How the routine's sets fall across its muscles, heaviest first. Hoy's card draws this under the figure, and a client cannot work it out: it is told how many sets the routine has in total, not how they are spread.\n**A set belongs to one muscle**, the exercise's primary. Sharing each set between every muscle the movement touches turns thirteen sets into thirty-one, and the number stops being the work done and becomes a count of mentions.",
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['code', 'name', 'sets'],
+          properties: {
+            code: {
+              type: 'string',
+            },
+            name: {
+              type: 'string',
+            },
+            sets: {
+              type: 'integer',
+              minimum: 1,
+            },
+          },
+        },
+      },
+      muscles: {
+        type: 'array',
+        items: {
+          type: 'string',
+        },
+        description:
+          'Catalogue muscle codes the routine works, the ones it trains first. They are what a muscle cover is drawn from, and a list cannot compute them: only the reader knows which movements the routine holds.',
+      },
+      versions: {
+        type: 'array',
+        description:
+          "Every published version of this routine, newest first. A programme's week stores the exact version it composed, and republishing the routine mints a new one — so a screen that matched only the newest would lose the routine from a week it is plainly in. Matching against this list is what lets a day name what it holds without resolving «latest», which `ADR-009` forbids for anything historical.",
+        items: {
+          $ref: '#/components/schemas/UuidV7',
+        },
+      },
+      programs: {
+        type: 'array',
+        description:
+          "The person's programmes that use this routine, so a library row can say where it is used without a second request. A caller cannot work this out: `OP-PLN-026` answers programmes without their composition, and one taken from Allfit has no draft to open. Empty means the routine belongs to no programme of theirs — which is a legitimate state and not a problem.",
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['program_id', 'title'],
+          properties: {
+            program_id: {
+              $ref: '#/components/schemas/UuidV7',
+            },
+            title: {
+              type: 'string',
+            },
+          },
+        },
+      },
+      exercise_count: {
+        type: 'integer',
+      },
+      set_count: {
+        type: 'integer',
+      },
+      has_unpublished_changes: {
+        type: 'boolean',
+      },
+    },
+  },
+  SpaceOnboardingAnswers: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'identity',
+      'biological_sex',
+      'training_discipline',
+      'primary_training_goal',
+      'focus_areas',
+      'training_experience',
+      'body_measures',
+    ],
+    properties: {
+      identity: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['answered', 'value'],
+        properties: {
+          answered: {
+            type: 'boolean',
+          },
+          value: {
+            oneOf: [
+              {
+                $ref: '#/components/schemas/SpacePendingFitnessId',
+              },
+              {
+                type: 'null',
+              },
+            ],
+          },
+        },
+        description:
+          'The Fitness ID. Here `answered` and a non-null value say the same thing, and the shape stays uniform anyway so the app never special cases a step.',
+      },
+      biological_sex: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['answered', 'value'],
+        properties: {
+          answered: {
+            type: 'boolean',
+          },
+          value: {
+            oneOf: [
+              {
+                $ref: '#/components/schemas/BiologicalSex',
+              },
+              {
+                type: 'null',
+              },
+            ],
+          },
+        },
+        description:
+          '`answered` is what tells the screen to skip itself; the value alone cannot, because declining is recorded as the absence of a value and is deliberately indistinguishable from never having been asked.',
+      },
+      primary_training_goal: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['answered', 'value'],
+        properties: {
+          answered: {
+            type: 'boolean',
+          },
+          value: {
+            oneOf: [
+              {
+                $ref: '#/components/schemas/PrimaryTrainingGoal',
+              },
+              {
+                type: 'null',
+              },
+            ],
+          },
+        },
+        description:
+          'The claim in force. A superseded claim never appears here: correcting the answer writes another one and this reads the current one.',
+      },
+      focus_areas: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['answered', 'value'],
+        properties: {
+          answered: {
+            type: 'boolean',
+          },
+          value: {
+            $ref: '#/components/schemas/FocusAreaSet',
+          },
+        },
+        description:
+          'The set in force, and the one entry whose value is a set rather than a single value. `answered` is not redundant with emptiness for the app\'s purposes but it is derived from it: an unanswered step has no members, and saying "no emphasis" is answering with `whole_body`.',
+      },
+      training_discipline: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['answered', 'value'],
+        properties: {
+          answered: {
+            type: 'boolean',
+          },
+          value: {
+            oneOf: [
+              {
+                $ref: '#/components/schemas/TrainingDiscipline',
+              },
+              {
+                type: 'null',
+              },
+            ],
+          },
+        },
+        description:
+          'The discipline in force, read before the goal so the goal screen knows which goals to offer.',
+      },
+      training_experience: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['answered', 'value'],
+        properties: {
+          answered: {
+            type: 'boolean',
+          },
+          value: {
+            oneOf: [
+              {
+                $ref: '#/components/schemas/TrainingExperience',
+              },
+              {
+                type: 'null',
+              },
+            ],
+          },
+        },
+        description:
+          'The level in force. A superseded level never appears here: requalifying writes another claim and this reads the current one.',
+      },
+      body_measures: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['answered', 'value'],
+        properties: {
+          answered: {
+            type: 'boolean',
+          },
+          value: {
+            oneOf: [
+              {
+                $ref: '#/components/schemas/SpaceBodyMeasures',
+              },
+              {
+                type: 'null',
+              },
+            ],
+          },
+        },
+        description:
+          'The latest measurement of each metric. `answered` is true when **both** were recorded or the step was skipped — a half-finished pair leaves the step owed, and the value still comes back so the ruler reopens where she left it. Answered with a null value is a skip, exactly as it is for the declined biological sex.',
+      },
+    },
+    description:
+      "One entry per step, all the same shape. This is what keeps a step from widening the reader's signature: a new step adds an entry here, and the database function that builds it changes its body rather than its return type. Every answer is derived on read from the data itself — the person's name, the mark on the attempt, the claim in force — because storing a progress pointer would be a second truth that drifts, and a pointer cannot survive people going back to correct what they already answered.",
   },
   SpaceOnboardingAttempt: {
     type: 'object',
@@ -5401,6 +6671,44 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
     },
     description:
       'The same attempt Studio reads, without the legal versions. Space asks for those acceptances on a later screen and there are no consultable texts to name yet, so quoting a version here would assert something the product cannot honour.',
+  },
+  SpaceOnboardingCompletion: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['given_name', 'family_name', 'terms_accepted', 'privacy_notice_accepted'],
+    properties: {
+      given_name: {
+        type: 'string',
+        minLength: 1,
+      },
+      family_name: {
+        type: 'string',
+        minLength: 1,
+      },
+      terms_accepted: {
+        type: 'boolean',
+        const: true,
+      },
+      privacy_notice_accepted: {
+        type: 'boolean',
+        const: true,
+      },
+    },
+    description:
+      'The acceptances are `true` and nothing else: a `false` is not a way to decline here, it is an attempt to activate without accepting, and the database refuses it. Declining happens at the terms step, by not going on.',
+  },
+  SpaceOnboardingSkip: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['step_code'],
+    properties: {
+      step_code: {
+        type: 'string',
+        enum: ['body_measures'],
+        description:
+          'Closed on purpose, and it grows as screens become skippable. `HU-SP-015` never allows skipping the age, the name or the terms: those are the condition for a person to exist at all, so they can never join this list.',
+      },
+    },
   },
   SpacePasswordResetCreate: {
     type: 'object',
@@ -5455,6 +6763,486 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
     },
     description:
       "The email is absent on purpose. It is the credential's address, it already travels with the session, and changing it is another operation with its own verification.",
+  },
+  SpaceProfileClaim: {
+    oneOf: [
+      {
+        $ref: '#/components/schemas/SpaceTrainingGoalClaim',
+      },
+      {
+        $ref: '#/components/schemas/SpaceTrainingExperienceClaim',
+      },
+      {
+        $ref: '#/components/schemas/SpaceTrainingDisciplineClaim',
+      },
+    ],
+    discriminator: {
+      propertyName: 'attribute_code',
+      mapping: {
+        primary_training_goal: '#/components/schemas/SpaceTrainingGoalClaim',
+        training_experience: '#/components/schemas/SpaceTrainingExperienceClaim',
+        training_discipline: '#/components/schemas/SpaceTrainingDisciplineClaim',
+      },
+    },
+    description: 'The claim as recorded, in the variant matching what was declared.',
+  },
+  SpaceProfileClaimDeclaration: {
+    oneOf: [
+      {
+        $ref: '#/components/schemas/SpaceTrainingGoalDeclaration',
+      },
+      {
+        $ref: '#/components/schemas/SpaceTrainingExperienceDeclaration',
+      },
+      {
+        $ref: '#/components/schemas/SpaceTrainingDisciplineDeclaration',
+      },
+    ],
+    discriminator: {
+      propertyName: 'attribute_code',
+      mapping: {
+        primary_training_goal: '#/components/schemas/SpaceTrainingGoalDeclaration',
+        training_experience: '#/components/schemas/SpaceTrainingExperienceDeclaration',
+        training_discipline: '#/components/schemas/SpaceTrainingDisciplineDeclaration',
+      },
+    },
+    description:
+      'One member of the attribute catalogue per variant. This was a single object while only the goal existed; the second member is what earns the union, and it is what keeps a goal code from being sent with an experience value.',
+  },
+  SpaceProgramAssignment: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'assignment_id',
+      'program_version_id',
+      'title',
+      'starts_on',
+      'timezone',
+      'sessions_planned',
+    ],
+    description: 'The program in force, and the same one on every retry.',
+    properties: {
+      assignment_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      program_version_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      title: {
+        type: 'string',
+      },
+      starts_on: {
+        type: 'string',
+        format: 'date',
+      },
+      timezone: {
+        type: 'string',
+      },
+      sessions_planned: {
+        type: 'integer',
+        minimum: 0,
+        description:
+          'How many sessions the choice actually put on the calendar. It is the evidence that choosing produced a plan and not a preference.',
+      },
+    },
+  },
+  SpaceProgramCatalogue: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['profile', 'programs', 'current_assignment'],
+    description:
+      'Everything the first-day screen needs in one answer: what Allfit publishes, what the person told us, and whether they already chose.',
+    properties: {
+      profile: {
+        $ref: '#/components/schemas/SpaceTrainingProfile',
+      },
+      programs: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/SpaceProgramSummary',
+        },
+      },
+      current_assignment: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/SpaceProgramAssignment',
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description:
+          'Null is what makes this the first day. A person who already chose is not asked to choose again.',
+      },
+    },
+  },
+  SpaceProgramChoice: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['program_version_id', 'timezone'],
+    properties: {
+      program_version_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      timezone: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 64,
+        description:
+          'An IANA zone. The start date is **not** sent: it is always today in this zone, and a client-supplied date could backdate a plan into a history that never happened.',
+      },
+    },
+  },
+  SpaceProgramCover: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['program_id', 'cover'],
+    properties: {
+      program_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      cover: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/RoutineCover',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+    },
+  },
+  SpaceProgramCoverChoice: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['cover'],
+    properties: {
+      cover: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/RoutineCover',
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description: 'Null takes the cover off, and its routines go back to their names.',
+      },
+    },
+  },
+  SpaceProgramDay: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['day', 'title', 'discipline_code', 'steps', 'cover_url'],
+    description: 'One training day of the split, with everything it asks for.',
+    properties: {
+      day: {
+        type: 'integer',
+        minimum: 1,
+        maximum: 7,
+      },
+      title: {
+        type: 'string',
+      },
+      discipline_code: {
+        type: 'string',
+      },
+      steps: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/SpaceProgramStep',
+        },
+      },
+      cover_url: {
+        oneOf: [
+          {
+            type: 'string',
+            format: 'uri',
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description:
+          "The photograph this day's routine wears, picked by `planning.pick_routine_cover` from the region it trains and the set of whoever is asking — the same picture the routine will show on Hoy once the programme is taken. Null where nothing can be picked, which is a day whose exercises say nothing about what they work, not an error.",
+      },
+    },
+  },
+  SpaceProgramDetail: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'program_version_id',
+      'title',
+      'notes',
+      'weeks',
+      'days_per_week',
+      'sex_affinity',
+      'goals',
+      'levels',
+      'emphases',
+      'days',
+      'cover_url',
+    ],
+    properties: {
+      program_version_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      title: {
+        type: 'string',
+      },
+      notes: {
+        oneOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description: 'What the program is, in the words somebody deciding needs.',
+      },
+      weeks: {
+        oneOf: [
+          {
+            type: 'integer',
+            minimum: 1,
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description:
+          'How long the program lasts. Null when it has no end date: its composition repeats instead of running out, and the days below are the week it repeats.',
+      },
+      days_per_week: {
+        type: 'integer',
+        minimum: 1,
+        maximum: 7,
+      },
+      sex_affinity: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/BiologicalSex',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      goals: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/PrimaryTrainingGoal',
+        },
+      },
+      levels: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/TrainingExperience',
+        },
+      },
+      emphases: {
+        $ref: '#/components/schemas/FocusAreaSet',
+      },
+      days: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/SpaceProgramDay',
+        },
+      },
+      cover_url: {
+        oneOf: [
+          {
+            type: 'string',
+            format: 'uri',
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description:
+          "The same photograph the catalogue listed this programme with, so opening it is not meeting a different programme. It is the set of whoever is asking, resolved by `planning.cover_for`, which is why the answer is cacheable per set and never per version: the version is frozen, the cover hangs off the programme, and a cache keyed only by version id would serve one person the other's picture. Null for a programme with no artwork.",
+      },
+    },
+  },
+  SpaceProgramOrder: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['assignment_ids'],
+    description:
+      "Every one of the person's assignments, exactly once, in the order they want them. Anything less is refused rather than merged.",
+    properties: {
+      assignment_ids: {
+        type: 'array',
+        minItems: 1,
+        maxItems: 100,
+        items: {
+          $ref: '#/components/schemas/UuidV7',
+        },
+      },
+    },
+  },
+  SpaceProgramRemoval: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['with_routines'],
+    description:
+      "Whether the programme's own routines go with it. Asked and never defaulted: the person reads a warning that names what is about to go before confirming, and a value chosen here for them would archive part of their library on their behalf.",
+    properties: {
+      with_routines: {
+        type: 'boolean',
+        description:
+          'True archives the routines only this programme used. A routine any other programme of theirs still uses stays, whatever this says.',
+      },
+    },
+  },
+  SpaceProgramStep: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['position', 'movement_id', 'movement', 'target'],
+    properties: {
+      position: {
+        type: 'integer',
+        minimum: 1,
+      },
+      movement_id: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/UuidV7',
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description:
+          'What a recorded set points back at. The name alone would leave the app guessing which movement it just logged, and a set that names no movement is a set nobody can read later.',
+      },
+      movement: {
+        oneOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      target: {
+        type: 'object',
+        additionalProperties: true,
+        description:
+          'The target as the planning domain stores it, discriminated by `family`. It travels structured rather than as a formatted string so the app can render "4 × 8" or "5 km" in its own words and test that it does.',
+      },
+      previous: {
+        type: 'array',
+        description:
+          'What this movement weighed last time, set by set, from the most recent session that finished. Absent when there is nothing to look back at — and on the program detail, where there is no session to look back from.',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['load_value', 'achieved_reps'],
+          properties: {
+            load_value: {
+              type: ['number', 'null'],
+            },
+            achieved_reps: {
+              type: ['integer', 'null'],
+            },
+          },
+        },
+      },
+    },
+  },
+  SpaceProgramSummary: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'program_version_id',
+      'program_id',
+      'title',
+      'weeks',
+      'days_per_week',
+      'sex_affinity',
+      'goals',
+      'levels',
+      'emphases',
+      'cover_url',
+    ],
+    description:
+      'A published version of a global program, with the segmentation it was published with. The segmentation is part of the version and immutable with it: re-aiming a program means publishing another version.',
+    properties: {
+      program_version_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      program_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      title: {
+        type: 'string',
+      },
+      weeks: {
+        oneOf: [
+          {
+            type: 'integer',
+            minimum: 1,
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description:
+          'How long the version lasts, derived from the composition and never stored — when there is a length to derive. Null when the program has no end date: its composition repeats instead of running out, so there is no last week to count to.',
+      },
+      days_per_week: {
+        type: 'integer',
+        minimum: 1,
+        maximum: 7,
+        description:
+          'Derived too, and the axis the three cards are chosen on: three, four and five days exist for every goal and every level.',
+      },
+      sex_affinity: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/BiologicalSex',
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description:
+          'Which way the content leans, when it leans. It **orders and never filters**, so everybody sees the same catalogue and somebody who declined needs no rule of their own. Null on every curated program today.',
+      },
+      goals: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/PrimaryTrainingGoal',
+        },
+      },
+      levels: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/TrainingExperience',
+        },
+      },
+      emphases: {
+        $ref: '#/components/schemas/FocusAreaSet',
+      },
+      cover_url: {
+        oneOf: [
+          {
+            type: 'string',
+            format: 'uri',
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description:
+          "The programme's photograph, composed by the API out of the stored object key and the media origin. It is the same address the programme answers once it has been taken (`SpaceMyProgram.cover_url`), so choosing it and living with it show the same picture — the catalogue is where somebody decides, and deciding on a placeholder is deciding on nothing.\n**It is the set of whoever is asking**, resolved by `planning.cover_for` from the sex they declared; somebody who preferred not to say gets a stable mix, deterministic per programme, and never a default set. Null for a programme with no artwork. The key never leaves the server (`ADR-031`).",
+      },
+    },
   },
   SpaceRegistrationAccepted: {
     type: 'object',
@@ -5512,6 +7300,50 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         type: 'string',
         pattern: '^[0-9]{6}$',
         description: 'The six-digit code sent to the address.',
+      },
+    },
+  },
+  SpaceRoutineLastTime: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['trained_on', 'seconds', 'sets', 'tonnage_kg'],
+    description:
+      'The last finished execution of this routine, which is what the flipped card reports. **Counted per routine, not per version**: a routine takes a new version every time it is published, and matching by version would erase its past the moment somebody edits it.\n**Only what finished counts.** An annulled execution and an attempt still open are both left out: the last time is a time that ended.',
+    properties: {
+      trained_on: {
+        type: 'string',
+        format: 'date',
+        description:
+          "The day it was trained, in the person's zone. The screen words the distance from today.",
+      },
+      seconds: {
+        oneOf: [
+          {
+            type: 'integer',
+            minimum: 0,
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description: 'How long it lasted. Null for an execution that was never closed with an end.',
+      },
+      sets: {
+        type: 'integer',
+        minimum: 0,
+      },
+      tonnage_kg: {
+        oneOf: [
+          {
+            type: 'number',
+            minimum: 0,
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description:
+          "Load moved, always in kilograms. **The database converts**, joining `load_unit_code` to the catalogue's canonical factor, so a session logged in pounds and one logged in kilos add up. Null for a routine that is not strength work: there is no tonnage to report, and zero would invent one.",
       },
     },
   },
@@ -5591,15 +7423,456 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  SpaceToday: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['profile', 'current_assignment', 'session', 'week'],
+    properties: {
+      profile: {
+        $ref: '#/components/schemas/SpaceTrainingProfile',
+      },
+      current_assignment: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/SpaceProgramAssignment',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      session: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/SpaceTodaySession',
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description:
+          'Null on a day the program does not ask for anything. A rest day is an answer, not an absence.',
+      },
+      week: {
+        $ref: '#/components/schemas/SpaceWeekSummary',
+      },
+    },
+  },
+  SpaceTodaySession: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'planned_session_id',
+      'program_title',
+      'session_title',
+      'discipline_code',
+      'status',
+      'exercise_count',
+      'executed_session_id',
+    ],
+    properties: {
+      planned_session_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      exercise_count: {
+        type: 'integer',
+        minimum: 0,
+        description: 'How many exercises the day asks for, which is what the screen promises.',
+      },
+      program_title: {
+        type: 'string',
+      },
+      session_title: {
+        type: 'string',
+      },
+      discipline_code: {
+        type: 'string',
+      },
+      status: {
+        type: 'string',
+      },
+      executed_session_id: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/UuidV7',
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description:
+          'The attempt already open on today\'s session, if there is one. It is what turns "Empezar" into "Continuar" and what stops a second attempt being started by accident.',
+      },
+    },
+  },
+  SpaceTrainedSession: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['executed_session_id', 'trained_on', 'title', 'sets_recorded'],
+    properties: {
+      executed_session_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      trained_on: {
+        type: 'string',
+        format: 'date',
+      },
+      title: {
+        oneOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      sets_recorded: {
+        type: 'integer',
+        minimum: 0,
+      },
+    },
+  },
+  SpaceTrainingDisciplineClaim: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['attribute_code', 'value_text', 'superseded_claim_id'],
+    properties: {
+      attribute_code: {
+        type: 'string',
+        const: 'training_discipline',
+      },
+      value_text: {
+        $ref: '#/components/schemas/TrainingDiscipline',
+      },
+      superseded_claim_id: {
+        $ref: '#/components/schemas/SupersededClaimId',
+      },
+    },
+  },
+  SpaceTrainingDisciplineDeclaration: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['attribute_code', 'value_text'],
+    properties: {
+      attribute_code: {
+        type: 'string',
+        const: 'training_discipline',
+      },
+      value_text: {
+        $ref: '#/components/schemas/TrainingDiscipline',
+      },
+    },
+    description:
+      'One principal discipline, exclusive. Declaring again seals the previous claim rather than editing it, so what somebody started out training stays readable.',
+  },
+  SpaceTrainingExperienceClaim: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['attribute_code', 'value_text', 'superseded_claim_id'],
+    properties: {
+      attribute_code: {
+        type: 'string',
+        const: 'training_experience',
+      },
+      value_text: {
+        $ref: '#/components/schemas/TrainingExperience',
+      },
+      superseded_claim_id: {
+        $ref: '#/components/schemas/SupersededClaimId',
+      },
+    },
+  },
+  SpaceTrainingExperienceDeclaration: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['attribute_code', 'value_text'],
+    properties: {
+      attribute_code: {
+        type: 'string',
+        const: 'training_experience',
+      },
+      value_text: {
+        $ref: '#/components/schemas/TrainingExperience',
+      },
+    },
+    description:
+      'A single level, exclusive. Declaring again is a requalification: the previous claim is sealed rather than edited, so the level someone signed up with stays readable.',
+  },
+  SpaceTrainingGoalClaim: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['attribute_code', 'value_text', 'superseded_claim_id'],
+    properties: {
+      attribute_code: {
+        type: 'string',
+        const: 'primary_training_goal',
+      },
+      value_text: {
+        $ref: '#/components/schemas/PrimaryTrainingGoal',
+      },
+      superseded_claim_id: {
+        $ref: '#/components/schemas/SupersededClaimId',
+      },
+    },
+  },
+  SpaceTrainingGoalDeclaration: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['attribute_code', 'value_text'],
+    properties: {
+      attribute_code: {
+        type: 'string',
+        const: 'primary_training_goal',
+      },
+      value_text: {
+        $ref: '#/components/schemas/PrimaryTrainingGoal',
+      },
+    },
+    description:
+      'Only one goal is principal, so declaring a second time replaces which one that is rather than adding to a set.',
+  },
+  SpaceTrainingProfile: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'given_name',
+      'primary_training_goal',
+      'training_experience',
+      'biological_sex',
+      'focus_areas',
+    ],
+    description:
+      'The onboarding answers the catalogue is matched against, and the name the screen greets somebody by — their own, which is what makes the first screen after signing up feel addressed to them rather than to anybody. Every one of them can be absent: somebody may have declined their sex, and the steps that record the rest can be revisited, so nothing here may be assumed present.',
+    properties: {
+      given_name: {
+        type: 'string',
+      },
+      primary_training_goal: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/PrimaryTrainingGoal',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      training_experience: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/TrainingExperience',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      biological_sex: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/BiologicalSex',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      focus_areas: {
+        $ref: '#/components/schemas/FocusAreaSet',
+      },
+    },
+  },
+  SpaceWeekPlan: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'assignment_id',
+      'program_version_id',
+      'program_title',
+      'program_week',
+      'week_starts_on',
+      'sessions',
+    ],
+    description:
+      'Null-free by construction: a person with no programme gets a 404 rather than an object full of nulls the screen would have to interpret.',
+    properties: {
+      assignment_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      program_version_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      program_title: {
+        type: 'string',
+      },
+      program_week: {
+        type: 'integer',
+        minimum: 1,
+        description:
+          "The programme's own week number, which is what its content is written against.",
+      },
+      week_starts_on: {
+        type: 'string',
+        format: 'date',
+        description: 'The Monday of the calendar week in progress.',
+      },
+      sessions: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/SpaceWeekRoutine',
+        },
+      },
+    },
+  },
+  SpaceWeekRoutine: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'planned_session_id',
+      'template_version_id',
+      'title',
+      'discipline_code',
+      'status',
+      'program_day',
+      'scheduled_at',
+      'exercise_count',
+      'set_count',
+      'done',
+      'open_execution_id',
+      'last_time',
+    ],
+    properties: {
+      planned_session_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      template_version_id: {
+        $ref: '#/components/schemas/UuidV7',
+        description:
+          'The version of the routine this session plans. It is what lets the client match a session of the week to the routine `OP-PLN-025` answers, and so draw it with the cover its programme gave it. Matching by title would match a thing that repeats: two routines can carry the same name, and one routine changes its own from one version to the next.',
+      },
+      title: {
+        type: 'string',
+      },
+      discipline_code: {
+        type: 'string',
+      },
+      status: {
+        type: 'string',
+      },
+      program_day: {
+        type: 'integer',
+        minimum: 1,
+        maximum: 7,
+        description:
+          "The day the programme put this session on, 1 being Monday. Not the same as the day `scheduled_at` fell on: the first week is moved forward so a programme taken on a Thursday does not open with its Monday already missed. The screen names the programme's day, because that is the one the person wrote.",
+      },
+      scheduled_at: {
+        type: 'string',
+        format: 'date-time',
+        description:
+          'When the week put this session. The reader has always answered it and the schema did not say so; the library names the day under each routine, and a day the client invented from the order would be a guess.',
+      },
+      exercise_count: {
+        type: 'integer',
+        minimum: 0,
+      },
+      set_count: {
+        type: 'integer',
+        minimum: 0,
+      },
+      done: {
+        type: 'boolean',
+        description:
+          'Whether it was ever closed. It marks, it does not bar: starting it again creates another attempt and the first one keeps what it earned.',
+      },
+      open_execution_id: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/UuidV7',
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description:
+          'An attempt already open on this routine, which is what turns "empezar" into "continuar".',
+      },
+      last_time: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/SpaceRoutineLastTime',
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description:
+          "How the last time went. Null when this routine was never trained: the card's reverse then shows the muscles and says nothing else, because a zero would claim a session in which no work was done.",
+      },
+    },
+  },
+  SpaceWeekSummary: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'trained_seconds',
+      'sessions_completed',
+      'sessions_planned',
+      'tonnage_kg',
+      'history',
+    ],
+    description:
+      "The calendar week in progress, Monday to Sunday, in the person's zone. The week is the unit and the day inside it is a suggestion, so what counts is how much of the week is done — and what is left undone does not carry over.",
+    properties: {
+      trained_seconds: {
+        type: 'number',
+        minimum: 0,
+      },
+      sessions_completed: {
+        type: 'integer',
+        minimum: 0,
+        description:
+          'Planned sessions of this week that were closed, not executions. A repeat is a second execution of the same session and must not move the number. **Of the selected programme only** — the one this screen names. Somebody following two programmes has two weeks in progress, and a count spanning both would not match the name above it.',
+      },
+      sessions_planned: {
+        type: 'integer',
+        minimum: 0,
+        description:
+          "How many the selected programme's week asks for. Equal to `sessions_completed` means the week is done. Zero with no programme at all, which is a different screen rather than an error.",
+      },
+      tonnage_kg: {
+        oneOf: [
+          {
+            type: 'number',
+            minimum: 0,
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description:
+          "Load moved this week, always in kilograms. **The weight the person lifted, not the weight the person is**: the screen summarises what was done, and a body measurement is not something you do — it lives in body progress.\n**The database converts**, joining `load_unit_code` to the catalogue's canonical factor, so a session logged in pounds and one logged in kilos add up. Null when no load was recorded at all, because a zero would say somebody trained and moved nothing.",
+      },
+      history: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/SpaceTrainedSession',
+        },
+      },
+    },
+  },
   StrengthSet: {
     type: 'object',
     additionalProperties: false,
-    required: ['segment_position', 'order'],
+    required: ['order'],
     properties: {
       segment_position: {
         type: 'integer',
         minimum: 1,
         maximum: 100,
+        description:
+          'Which segment the set belongs to. Omitted when the session declares none, which is every Space session today: a position pointing at a segment that was never sent would name something that does not exist.',
       },
       order: {
         type: 'integer',
@@ -5638,21 +7911,36 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
   StrengthTarget: {
     type: 'object',
     additionalProperties: false,
-    required: ['family', 'target_sets'],
+    required: ['family'],
+    description:
+      'A strength target declares its sets one by one, or the aggregate an older draft carries — `planning.session_content_errors` refuses one with neither. That rule is not written here as `anyOf` on purpose: the generator turns such a union into `unknown`, which would cost every consumer its type to restate a constraint the database enforces anyway, and two guards that can disagree are worse than one.',
     properties: {
       family: {
         type: 'string',
         const: 'strength',
       },
+      sets: {
+        type: 'array',
+        minItems: 1,
+        maxItems: 200,
+        items: {
+          $ref: '#/components/schemas/PlannedSetContent',
+        },
+        description:
+          "Every set, one by one. This is the truth of a strength prescription since `ADR-030`; `target_sets` and `target_reps` are the summary computed from it at publication, kept so that today's session, the week and the whole execution side keep reading what they always read. A draft written by the current editor carries `sets`; an older one carries only the aggregate, and publication synthesises the rows from it.",
+      },
       target_sets: {
         type: 'integer',
         minimum: 1,
         maximum: 2147483647,
+        description:
+          'Derived from `sets` at publication. `IX-47` stops any runtime role authoring it.',
       },
       target_reps: {
         type: ['integer', 'null'],
         minimum: 1,
         maximum: 2147483647,
+        description: 'Derived, and present only when every set agrees.',
       },
       target_load_value: {
         type: ['number', 'null'],
@@ -5665,6 +7953,13 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         type: ['number', 'null'],
         minimum: 0,
         maximum: 10,
+      },
+      target_rest_seconds: {
+        type: ['integer', 'null'],
+        minimum: 0,
+        maximum: 3600,
+        description:
+          'Prescription, not measurement: the rest the step asks for between sets. Nullable because a step may say nothing about it, and a zero would mean "no rest", which is a different instruction from "nobody said".',
       },
     },
   },
@@ -5931,6 +8226,18 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         $ref: '#/components/schemas/AnalyticsIdentity',
       },
     },
+  },
+  SupersededClaimId: {
+    oneOf: [
+      {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      {
+        type: 'null',
+      },
+    ],
+    description:
+      "The claim this one replaced, or null on a first declaration. Returned because it is the app's proof that a correction was recorded as a correction and not as an edit.",
   },
   SupportAttentionPanel: {
     type: 'object',
@@ -6582,6 +8889,18 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         const: 'analytics-v1',
       },
     },
+  },
+  TrainingDiscipline: {
+    type: 'string',
+    enum: ['strength'],
+    description:
+      'The discipline somebody trains, asked before the goal because the goal\'s list depends on it: with strength there is no point offering "run a race".\n\nOne value, and the enum says so. `identity.profile_attributes` holds all six — strength, high intensity, endurance and cardio, combat sports, wellbeing and control, rhythm and classes — because the catalogue is the vocabulary of the concept and its own constraint refuses an enum with fewer than two members. What a person may answer today is a launch decision, and the contract is where that decision belongs. `PrimaryTrainingGoal` already works this way, offering five of the six the catalogue holds.\n\nThe other five are shown in the onboarding, deliberately, so somebody can see what Allfit is going to cover — and they cannot be chosen. No interest is recorded and no notification is offered, so nothing there is a promise.\n\nNot `catalog.disciplines`: that holds the four activity families that type a target, one level below this.',
+  },
+  TrainingExperience: {
+    type: 'string',
+    enum: ['starting', 'some_practice', 'experienced'],
+    description:
+      'The three simple terms of HU-SP-012 criterion 2, least to most.\n\nDeliberately not `beginner`, `intermediate`, `advanced`. The story asks for simple terms and the reason is behavioural rather than stylistic: "advanced" makes people underrate themselves and pick below their real level, and then the plan bores them. Rank is communicated by the screen, which draws one, two or three bars; the vocabulary carries none.\n\nOne global level, not one per discipline. Criterion 2 read "in each one" and was amended on 24 August 2026: the discipline catalogue is not readable by the runtime role and holds no production rows, so there is nothing to hang a per-discipline level on. Were that to change, a per-discipline level would be a new attribute — a member carrying its own value — not a widening of this one.',
   },
   Username: {
     type: 'string',

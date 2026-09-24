@@ -29,6 +29,7 @@ function appWith(overrides: Partial<SpaceRegistrationService> = {}): Hono {
     signIn: async () => ({ accessToken: 'at_1', refreshToken: 'rt_1', expiresIn: 300 }),
     refresh: async () => ({ accessToken: 'at_2', refreshToken: 'rt_2', expiresIn: 300 }),
     requestPasswordReset: async () => undefined,
+    signOut: async () => undefined,
     ...overrides,
   }
   const app = new Hono()
@@ -431,5 +432,66 @@ describe('POST /space/v1/auth/password-resets', () => {
 
     expect(accepted.headers.get('Cache-Control')).toBe('no-store')
     expect(rejected.headers.get('Cache-Control')).toBe('no-store')
+  })
+})
+
+describe('DELETE /auth/sessions', () => {
+  const signOut = (app: Hono, headers: Record<string, string> = {}) =>
+    app.request('/space/v1/auth/sessions', { method: 'DELETE', headers })
+
+  test('closes the session and answers 204 with no body', async () => {
+    const response = await signOut(appWith(), { authorization: 'Bearer at_1' })
+
+    expect(response.status).toBe(204)
+    expect(await response.text()).toBe('')
+  })
+
+  test('hands the provider the token it was given', async () => {
+    let received: string | undefined
+    const app = appWith({
+      signOut: async (accessToken) => {
+        received = accessToken
+      },
+    })
+
+    await signOut(app, { authorization: 'Bearer at_1' })
+
+    expect(received).toBe('at_1')
+  })
+
+  test('answers 204 with no authorization header, rather than trapping somebody inside', async () => {
+    // `OP-IDN-048` has no rejection: the phone has already erased what it held.
+    expect((await signOut(appWith())).status).toBe(204)
+  })
+
+  test('answers 204 for a header that is not a bearer token, and calls nothing', async () => {
+    let called = false
+    const app = appWith({
+      signOut: async () => {
+        called = true
+      },
+    })
+
+    const response = await signOut(app, { authorization: 'Basic abc' })
+
+    expect(response.status).toBe(204)
+    expect(called).toBe(false)
+  })
+
+  test('answers 204 when the provider is down', async () => {
+    // The device erases regardless, so a provider outage must not read as a refusal.
+    const app = appWith({
+      signOut: async () => {
+        throw new RegistrationError('upstream-unavailable')
+      },
+    })
+
+    expect((await signOut(app, { authorization: 'Bearer at_1' })).status).toBe(204)
+  })
+
+  test('is never cached', async () => {
+    const response = await signOut(appWith(), { authorization: 'Bearer at_1' })
+
+    expect(response.headers.get('cache-control')).toBe('no-store')
   })
 })

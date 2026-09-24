@@ -21,7 +21,6 @@
  * where telling somebody their password is wrong would be a lie.
  */
 
-import { AmbientBackdrop } from '@allfitone/react-native/backdrop'
 import { Button } from '@allfitone/react-native/button'
 import { FoundationIcon } from '@allfitone/react-native/icons'
 import { InlineAlert } from '@allfitone/react-native/inline-alert'
@@ -35,6 +34,8 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
 
 import { ApiError, signIn } from '../src/client'
 import { storeSession } from '../src/client/session'
+import { createSpaceOnboardingFlow } from '../src/client/onboarding-transport'
+import { routeAfterAuthentication } from '../src/client/resume-route'
 import { PasswordResetSheet } from '../src/components/password-reset-sheet'
 
 const FAILURE = 'Correo o contraseña incorrectos'
@@ -60,7 +61,7 @@ export default function SignIn() {
       const trimmed = email.trim()
       const session = await signIn(trimmed, password)
       await storeSession({ ...session, email: trimmed })
-      router.replace('/onboarding/age')
+      router.replace(await routeAfterAuthentication(() => createSpaceOnboardingFlow().resume()))
     } catch (cause) {
       setFailure(
         cause instanceof ApiError && cause.failure === 'unavailable' ? UNREACHABLE : FAILURE,
@@ -71,8 +72,7 @@ export default function SignIn() {
   }
 
   return (
-    <Screen edges={['top', 'bottom']}>
-      <AmbientBackdrop />
+    <Screen edges={['top', 'bottom']} dots>
       {/* Outside the scroll view: the content below is centred, and a back
           control that drifts to the middle of the screen with it is unfindable. */}
       <Pressable

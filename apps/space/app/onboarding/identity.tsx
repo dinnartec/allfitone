@@ -16,6 +16,7 @@
  *
  * Which is also why the screen skips itself when the Fitness ID already exists —
  * there is nothing left to create, and re-asking would offer to create a second.
+ * Where it goes instead is `resolveOnboardingRoute`'s call, not this screen's.
  *
  * The email is shown and cannot be edited. It belongs to the credential, and
  * changing it is a different operation with its own verification. It is read from
@@ -36,7 +37,6 @@
  * conflict on submit and lands on the field itself.
  */
 
-import { AmbientBackdrop } from '@allfitone/react-native/backdrop'
 import { Button } from '@allfitone/react-native/button'
 import { InlineAlert } from '@allfitone/react-native/inline-alert'
 import { Screen } from '@allfitone/react-native/screen'
@@ -46,11 +46,12 @@ import { useRouter } from 'expo-router'
 import { useEffect, useMemo, useState } from 'react'
 import { ScrollView, StyleSheet, View } from 'react-native'
 
+import { OnboardingHeader } from '../../src/components/onboarding-header'
 import { ApiError } from '../../src/client'
 import { canSubmitIdentity, isUsernameWellFormed } from '../../src/client/identity-form'
 import { createSpaceOnboardingFlow } from '../../src/client/onboarding-transport'
 import { readSession } from '../../src/client/session'
-import { resolveOnboardingRoute } from '../../src/client/session-gate'
+import { guardStep, nextRouteAfter } from '../../src/client/onboarding-steps'
 
 const NAME_MAX_LENGTH = 120
 const USERNAME_MAX_LENGTH = 30
@@ -58,6 +59,9 @@ const USERNAME_MAX_LENGTH = 30
 const USERNAME_RULE =
   'De 3 a 30 caracteres, empezando con una letra. Solo letras, números y guion bajo.'
 const TAKEN = 'Ese usuario ya está en uso. Prueba con otro.'
+/** Keeps the button off the very bottom edge, the same amount on every step. */
+const FOOTER_LIFT = 16
+
 const EXPIRED = 'Tu sesión venció. Vuelve a entrar para guardar tus datos.'
 const UNREACHABLE = 'No pudimos guardar tus datos. Inténtalo otra vez.'
 
@@ -86,15 +90,18 @@ export default function OnboardingIdentity() {
       .resume()
       .then((current) => {
         if (!active) return
-        const step = resolveOnboardingRoute(current)
-        if (step !== '/onboarding/identity') {
-          router.replace(step)
+        // Only backwards. Being ahead of the first owed step is not a reason to
+        // move: a person who came back to change their name belongs here.
+        const owed = guardStep('/onboarding/identity', current)
+        if (owed) {
+          router.replace(owed)
           return
         }
-        // The Fitness ID exists, so this step is behind us. `/welcome` stands in
-        // until the next onboarding screen exists; it is not the destination.
-        if (current.identity) {
-          router.replace('/welcome')
+        const declared = current.answers.identity.value
+        if (declared) {
+          setGivenName(declared.given_name)
+          setFamilyName(declared.family_name)
+          setUsername(declared.username)
         }
       })
       .catch((cause: unknown) => {
@@ -133,7 +140,7 @@ export default function OnboardingIdentity() {
         family_name: familyName.trim(),
         username,
       })
-      router.replace('/welcome')
+      router.replace(nextRouteAfter('/onboarding/identity'))
     } catch (cause) {
       if (cause instanceof ApiError && cause.failure === 'conflict') {
         // Held against the value, so the message clears the moment it changes.
@@ -152,13 +159,18 @@ export default function OnboardingIdentity() {
   }
 
   return (
-    <Screen edges={['top', 'bottom']}>
-      <AmbientBackdrop />
+    <Screen edges={['top', 'bottom']} dots>
+      <OnboardingHeader step="/onboarding/identity" />
 
+      {/* The keyboard moves the scroll inset, not the container. Without this the
+          username field sat under the keyboard and no amount of dragging revealed it:
+          the content already fits, so there was nothing to scroll. */}
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
+        automaticallyAdjustKeyboardInsets
       >
         <Text role="display" size="4xl" uppercase accessibilityRole="header">
           {'Cómo te\nllamas'}
@@ -220,34 +232,39 @@ export default function OnboardingIdentity() {
               {isUsernameWellFormed(username) ? `Así te verán: @${username}` : USERNAME_RULE}
             </Text>
           </View>
-
-          {failure ? <InlineAlert message={failure} /> : null}
-
-          <Button
-            label="Continuar"
-            disabled={!complete}
-            loading={submitting}
-            onPress={() => {
-              void submit()
-            }}
-            style={styles.submit}
-          />
-
-          {/* Without this the screen says "sign in again" and offers no way to. */}
-          {sessionExpired ? (
-            <Button
-              label="Iniciar sesión"
-              variant="secondary"
-              onPress={() => router.replace('/sign-in')}
-            />
-          ) : null}
         </View>
       </ScrollView>
+
+      {/* Outside the scroll so the button sits in the same place on every step of
+          the onboarding, whatever the content above it does. */}
+      <View style={styles.footer}>
+        {failure ? <InlineAlert message={failure} /> : null}
+
+        <Button
+          label="Continuar"
+          disabled={!complete}
+          loading={submitting}
+          onPress={() => {
+            void submit()
+          }}
+          style={styles.submit}
+        />
+
+        {/* Without this the screen says "sign in again" and offers no way to. */}
+        {sessionExpired ? (
+          <Button
+            label="Iniciar sesión"
+            variant="secondary"
+            onPress={() => router.replace('/sign-in')}
+          />
+        ) : null}
+      </View>
     </Screen>
   )
 }
 
 const styles = StyleSheet.create({
+  footer: { paddingTop: 4, paddingBottom: FOOTER_LIFT },
   scroll: {
     flex: 1,
   },
