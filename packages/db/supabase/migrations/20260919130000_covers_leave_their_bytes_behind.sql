@@ -8,6 +8,8 @@
 -- Suelta la columna y nada más. Las claves, la cola de disposición y las funciones ya
 -- viven en la migración anterior.
 
+set statement_timeout = '60s';
+
 begin;
 
 set lock_timeout = '5s';

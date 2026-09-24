@@ -9,6 +9,9 @@
 -- than every existing one, so it opens the tab the moment it is taken and nothing
 -- has to special-case "the last created".
 
+set lock_timeout = '5s';
+set statement_timeout = '60s';
+
 begin;
 
 alter table planning.program_assignments

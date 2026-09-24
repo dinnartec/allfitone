@@ -22,6 +22,9 @@
 -- them would be a second truth about the same number, and frequency is precisely the
 -- axis people choose on.
 
+set lock_timeout = '5s';
+set statement_timeout = '60s';
+
 begin;
 
 -- 1 · The scope, backfilled from the owner each row already has.
@@ -115,8 +118,7 @@ create table planning.program_version_goals (
   program_version_id uuid not null,
   goal_code text not null,
   constraint pk_program_version_goals primary key (program_version_id, goal_code),
-  constraint fk_program_version_goals_version foreign key (program_version_id)
-    references planning.program_versions(id) on delete cascade,
+  constraint fk_program_version_goals_version foreign key (program_version_id) references planning.program_versions(id) on delete cascade,
   -- Closed rather than a foreign key: `identity.profile_attributes` holds the
   -- vocabulary in a `text[]`, which nothing can reference. The same narrowing
   -- `body_progress_records.metric_code` used, and for the same reason — a typo would
@@ -130,8 +132,7 @@ create table planning.program_version_levels (
   program_version_id uuid not null,
   experience_code text not null,
   constraint pk_program_version_levels primary key (program_version_id, experience_code),
-  constraint fk_program_version_levels_version foreign key (program_version_id)
-    references planning.program_versions(id) on delete cascade,
+  constraint fk_program_version_levels_version foreign key (program_version_id) references planning.program_versions(id) on delete cascade,
   constraint ck_program_version_levels_code check (
     experience_code in ('starting', 'some_practice', 'experienced')
   )
@@ -141,8 +142,7 @@ create table planning.program_version_emphases (
   program_version_id uuid not null,
   focus_area_code text not null,
   constraint pk_program_version_emphases primary key (program_version_id, focus_area_code),
-  constraint fk_program_version_emphases_version foreign key (program_version_id)
-    references planning.program_versions(id) on delete cascade,
+  constraint fk_program_version_emphases_version foreign key (program_version_id) references planning.program_versions(id) on delete cascade,
   constraint ck_program_version_emphases_code check (
     focus_area_code in ('chest', 'back', 'shoulders', 'arms', 'abs', 'glutes', 'legs', 'whole_body')
   )

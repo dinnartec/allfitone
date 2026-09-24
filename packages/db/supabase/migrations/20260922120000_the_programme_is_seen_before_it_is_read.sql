@@ -25,6 +25,9 @@
 -- presta. `region_of_content` hace lo mismo sobre el borrador, que es jsonb; una versión
 -- ya tiene sus pasos en tabla, y pasarla por jsonb sólo para reusar aquélla sería
 -- reconstruir lo que ya está.
+set lock_timeout = '5s';
+set statement_timeout = '60s';
+
 create or replace function planning.region_of_version(p_template_version_id uuid)
 returns text
 language sql

@@ -10,6 +10,9 @@
 -- nutrition, which has no tables. A number invented here would be a number somebody
 -- trusts.
 
+set lock_timeout = '5s';
+set statement_timeout = '60s';
+
 begin;
 
 -- Today's session, and whether one is already open on it.

@@ -1,3 +1,6 @@
+set lock_timeout = '5s';
+set statement_timeout = '60s';
+
 begin;
 
 -- Una versión publicada no se resucita.

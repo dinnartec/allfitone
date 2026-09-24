@@ -18,6 +18,9 @@
 -- results — is not built: it has no reader, and six empty tables would be six
 -- promises the product cannot keep.
 
+set lock_timeout = '5s';
+set statement_timeout = '60s';
+
 begin;
 
 create schema if not exists execution authorization allfit_owner;
@@ -66,12 +69,9 @@ create table execution.executed_sessions (
   -- The carrier key of §10.1: every child row carries the person, so no join can
   -- silently cross people.
   constraint uq_executed_sessions_person unique (id, person_id),
-  constraint fk_executed_sessions_person foreign key (person_id)
-    references identity.people(id) on delete restrict,
-  constraint fk_executed_sessions_activity_type foreign key (activity_type_id)
-    references catalog.activity_types(id) on delete restrict,
-  constraint fk_executed_sessions_result_contract foreign key (result_contract_id)
-    references catalog.result_contracts(id) on delete restrict,
+  constraint fk_executed_sessions_person foreign key (person_id) references identity.people(id) on delete restrict,
+  constraint fk_executed_sessions_activity_type foreign key (activity_type_id) references catalog.activity_types(id) on delete restrict,
+  constraint fk_executed_sessions_result_contract foreign key (result_contract_id) references catalog.result_contracts(id) on delete restrict,
   constraint ck_executed_sessions_revision check (revision_number >= 0),
   constraint ck_executed_sessions_ended check (ended_at is null or ended_at >= started_at),
   -- Autonomous only, until there is a relationship to be non-autonomous within.
@@ -95,10 +95,8 @@ create table execution.planned_session_executions (
   attempt_number integer not null,
   is_primary boolean not null default false,
   constraint pk_planned_session_executions primary key (id),
-  constraint fk_planned_session_executions_planned foreign key (planned_session_id, person_id)
-    references planning.planned_sessions(id, person_id) on delete restrict,
-  constraint fk_planned_session_executions_executed foreign key (executed_session_id, person_id)
-    references execution.executed_sessions(id, person_id) on delete cascade,
+  constraint fk_planned_session_executions_planned foreign key (planned_session_id, person_id) references planning.planned_sessions(id, person_id) on delete restrict,
+  constraint fk_planned_session_executions_executed foreign key (executed_session_id, person_id) references execution.executed_sessions(id, person_id) on delete cascade,
   constraint uq_planned_session_executions_attempt unique (planned_session_id, attempt_number),
   constraint ck_planned_session_executions_attempt check (attempt_number > 0)
 );
@@ -117,12 +115,9 @@ create table execution.session_segments (
   constraint pk_session_segments primary key (id),
   constraint uq_session_segments_position unique (executed_session_id, position),
   constraint uq_session_segments_carrier unique (id, executed_session_id),
-  constraint fk_session_segments_session foreign key (executed_session_id)
-    references execution.executed_sessions(id) on delete cascade,
-  constraint fk_session_segments_activity_type foreign key (activity_type_id)
-    references catalog.activity_types(id) on delete restrict,
-  constraint fk_session_segments_planned_step foreign key (planned_step_id)
-    references planning.planned_steps(id) on delete restrict,
+  constraint fk_session_segments_session foreign key (executed_session_id) references execution.executed_sessions(id) on delete cascade,
+  constraint fk_session_segments_activity_type foreign key (activity_type_id) references catalog.activity_types(id) on delete restrict,
+  constraint fk_session_segments_planned_step foreign key (planned_step_id) references planning.planned_steps(id) on delete restrict,
   constraint ck_session_segments_position check (position > 0)
 );
 
@@ -141,18 +136,12 @@ create table execution.strength_sets (
   rpe numeric,
   constraint pk_strength_sets primary key (id),
   constraint uq_strength_sets_order unique (executed_session_id, set_order),
-  constraint fk_strength_sets_session foreign key (executed_session_id)
-    references execution.executed_sessions(id) on delete cascade,
-  constraint fk_strength_sets_segment foreign key (session_segment_id, executed_session_id)
-    references execution.session_segments(id, executed_session_id) on delete restrict,
-  constraint fk_strength_sets_movement foreign key (movement_id)
-    references catalog.movements(id) on delete restrict,
-  constraint fk_strength_sets_planned_step foreign key (planned_step_id)
-    references planning.planned_steps(id) on delete restrict,
-  constraint fk_strength_sets_load_unit foreign key (load_unit_code)
-    references catalog.units(code) on delete restrict,
-  constraint fk_strength_sets_original_unit foreign key (original_load_unit_code)
-    references catalog.units(code) on delete restrict,
+  constraint fk_strength_sets_session foreign key (executed_session_id) references execution.executed_sessions(id) on delete cascade,
+  constraint fk_strength_sets_segment foreign key (session_segment_id, executed_session_id) references execution.session_segments(id, executed_session_id) on delete restrict,
+  constraint fk_strength_sets_movement foreign key (movement_id) references catalog.movements(id) on delete restrict,
+  constraint fk_strength_sets_planned_step foreign key (planned_step_id) references planning.planned_steps(id) on delete restrict,
+  constraint fk_strength_sets_load_unit foreign key (load_unit_code) references catalog.units(code) on delete restrict,
+  constraint fk_strength_sets_original_unit foreign key (original_load_unit_code) references catalog.units(code) on delete restrict,
   constraint ck_strength_sets_values check (
     set_order > 0
     and (achieved_reps is null or achieved_reps > 0)
@@ -176,14 +165,10 @@ create table execution.endurance_laps (
   avg_heart_rate_bpm integer,
   constraint pk_endurance_laps primary key (id),
   constraint uq_endurance_laps_number unique (executed_session_id, lap_number),
-  constraint fk_endurance_laps_session foreign key (executed_session_id)
-    references execution.executed_sessions(id) on delete cascade,
-  constraint fk_endurance_laps_segment foreign key (session_segment_id, executed_session_id)
-    references execution.session_segments(id, executed_session_id) on delete restrict,
-  constraint fk_endurance_laps_distance_unit foreign key (distance_unit_code)
-    references catalog.units(code) on delete restrict,
-  constraint fk_endurance_laps_elevation_unit foreign key (elevation_gain_unit_code)
-    references catalog.units(code) on delete restrict,
+  constraint fk_endurance_laps_session foreign key (executed_session_id) references execution.executed_sessions(id) on delete cascade,
+  constraint fk_endurance_laps_segment foreign key (session_segment_id, executed_session_id) references execution.session_segments(id, executed_session_id) on delete restrict,
+  constraint fk_endurance_laps_distance_unit foreign key (distance_unit_code) references catalog.units(code) on delete restrict,
+  constraint fk_endurance_laps_elevation_unit foreign key (elevation_gain_unit_code) references catalog.units(code) on delete restrict,
   constraint ck_endurance_laps_values check (
     lap_number > 0
     and distance_value > 0
@@ -207,12 +192,9 @@ create table execution.interval_results (
   completed boolean not null default true,
   constraint pk_interval_results primary key (id),
   constraint uq_interval_results_number unique (executed_session_id, interval_number),
-  constraint fk_interval_results_session foreign key (executed_session_id)
-    references execution.executed_sessions(id) on delete cascade,
-  constraint fk_interval_results_segment foreign key (session_segment_id, executed_session_id)
-    references execution.session_segments(id, executed_session_id) on delete restrict,
-  constraint fk_interval_results_distance_unit foreign key (distance_unit_code)
-    references catalog.units(code) on delete restrict,
+  constraint fk_interval_results_session foreign key (executed_session_id) references execution.executed_sessions(id) on delete cascade,
+  constraint fk_interval_results_segment foreign key (session_segment_id, executed_session_id) references execution.session_segments(id, executed_session_id) on delete restrict,
+  constraint fk_interval_results_distance_unit foreign key (distance_unit_code) references catalog.units(code) on delete restrict,
   constraint ck_interval_results_values check (
     interval_number > 0
     and work_duration_seconds > 0
@@ -237,14 +219,10 @@ create table execution.round_results (
   load_unit_code text,
   constraint pk_round_results primary key (id),
   constraint uq_round_results_number unique (executed_session_id, round_number),
-  constraint fk_round_results_session foreign key (executed_session_id)
-    references execution.executed_sessions(id) on delete cascade,
-  constraint fk_round_results_segment foreign key (session_segment_id, executed_session_id)
-    references execution.session_segments(id, executed_session_id) on delete restrict,
-  constraint fk_round_results_distance_unit foreign key (distance_unit_code)
-    references catalog.units(code) on delete restrict,
-  constraint fk_round_results_load_unit foreign key (load_unit_code)
-    references catalog.units(code) on delete restrict,
+  constraint fk_round_results_session foreign key (executed_session_id) references execution.executed_sessions(id) on delete cascade,
+  constraint fk_round_results_segment foreign key (session_segment_id, executed_session_id) references execution.session_segments(id, executed_session_id) on delete restrict,
+  constraint fk_round_results_distance_unit foreign key (distance_unit_code) references catalog.units(code) on delete restrict,
+  constraint fk_round_results_load_unit foreign key (load_unit_code) references catalog.units(code) on delete restrict,
   constraint ck_round_results_values check (
     round_number > 0
     and activity_family in ('strength', 'endurance', 'interval', 'mobility')
@@ -270,12 +248,9 @@ create table execution.mobility_results (
   completed_repetitions integer,
   constraint pk_mobility_results primary key (id),
   constraint uq_mobility_results_position unique (executed_session_id, sequence_position),
-  constraint fk_mobility_results_session foreign key (executed_session_id)
-    references execution.executed_sessions(id) on delete cascade,
-  constraint fk_mobility_results_segment foreign key (session_segment_id, executed_session_id)
-    references execution.session_segments(id, executed_session_id) on delete restrict,
-  constraint fk_mobility_results_movement foreign key (movement_id)
-    references catalog.movements(id) on delete restrict,
+  constraint fk_mobility_results_session foreign key (executed_session_id) references execution.executed_sessions(id) on delete cascade,
+  constraint fk_mobility_results_segment foreign key (session_segment_id, executed_session_id) references execution.session_segments(id, executed_session_id) on delete restrict,
+  constraint fk_mobility_results_movement foreign key (movement_id) references catalog.movements(id) on delete restrict,
   constraint ck_mobility_results_values check (
     sequence_position > 0
     and side in ('left', 'right', 'bilateral', 'not_applicable')
@@ -314,12 +289,29 @@ begin
     'mobility_results'
   ] loop
     execute format('alter table execution.%I owner to allfit_owner', relation);
-    execute format('alter table execution.%I enable row level security', relation);
-    execute format('alter table execution.%I force row level security', relation);
     execute format('revoke all on execution.%I from public', relation);
   end loop;
 end
 $$;
+
+-- Written out rather than looped: the migration policy reads RLS from the text, and a
+-- table whose protection only a loop can show is one a reviewer cannot see either.
+alter table execution.executed_sessions enable row level security;
+alter table execution.executed_sessions force row level security;
+alter table execution.planned_session_executions enable row level security;
+alter table execution.planned_session_executions force row level security;
+alter table execution.session_segments enable row level security;
+alter table execution.session_segments force row level security;
+alter table execution.strength_sets enable row level security;
+alter table execution.strength_sets force row level security;
+alter table execution.endurance_laps enable row level security;
+alter table execution.endurance_laps force row level security;
+alter table execution.interval_results enable row level security;
+alter table execution.interval_results force row level security;
+alter table execution.round_results enable row level security;
+alter table execution.round_results force row level security;
+alter table execution.mobility_results enable row level security;
+alter table execution.mobility_results force row level security;
 
 create policy executed_sessions_all_self on execution.executed_sessions
   for all to allfit_owner

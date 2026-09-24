@@ -15,6 +15,9 @@
 -- keeps content honest, and a transcription slip in it would be worse than the gap
 -- it closes.
 
+set lock_timeout = '5s';
+set statement_timeout = '60s';
+
 begin;
 
 alter table planning.strength_targets

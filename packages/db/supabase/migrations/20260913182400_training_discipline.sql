@@ -24,6 +24,9 @@
 -- which forces a drop and recreate, and nothing reads the discipline outside the
 -- onboarding while there is only one.
 
+set lock_timeout = '5s';
+set statement_timeout = '60s';
+
 begin;
 
 insert into identity.profile_attributes (code, name, data_classification_code, value_kind, allowed_values)

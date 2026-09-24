@@ -10,6 +10,8 @@
 -- última haría desaparecer la línea justo después de editar la rutina, que es el momento
 -- en que alguien más mira.
 
+set statement_timeout = '60s';
+
 begin;
 
 set lock_timeout = '5s';

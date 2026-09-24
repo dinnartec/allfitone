@@ -13,6 +13,8 @@
 -- todas iguales sigue sin poder decirse como una semana base que se repite, y eso no lo
 -- arregla tener borrador. Los que ya se tomaron reciben el suyo.
 
+set statement_timeout = '60s';
+
 begin;
 
 set lock_timeout = '5s';

@@ -17,6 +17,9 @@
 -- published; showing the draft's numbers beside a version id would describe two
 -- different routines with one row.
 
+set lock_timeout = '5s';
+set statement_timeout = '60s';
+
 begin;
 
 create function planning.read_my_content(p_person_id uuid)

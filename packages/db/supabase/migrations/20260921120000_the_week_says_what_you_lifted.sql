@@ -20,6 +20,9 @@
 
 -- Se suelta antes de crearla: PostgreSQL no deja que `create or replace` cambie las
 -- columnas que una función devuelve, y aquí `latest_weight_*` deja su sitio al tonelaje.
+set lock_timeout = '5s';
+set statement_timeout = '60s';
+
 drop function if exists execution.read_week_summary(uuid, text);
 
 create function execution.read_week_summary(p_person_id uuid, p_timezone text)

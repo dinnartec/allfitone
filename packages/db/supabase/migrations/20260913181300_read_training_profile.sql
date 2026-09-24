@@ -9,6 +9,9 @@
 -- Same claims, same rule about which one is in force — the current claim, never a
 -- superseded one — under a name that says what it is.
 
+set lock_timeout = '5s';
+set statement_timeout = '60s';
+
 begin;
 
 create function identity.read_training_profile(p_person_id uuid)

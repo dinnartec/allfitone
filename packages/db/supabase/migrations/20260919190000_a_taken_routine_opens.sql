@@ -24,6 +24,8 @@
 --
 -- Lo ya bifurcado se rellena igual, que si no seguiría sin poder abrirse.
 
+set statement_timeout = '60s';
+
 begin;
 
 set lock_timeout = '5s';

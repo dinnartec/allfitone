@@ -14,6 +14,9 @@
 -- showing the calendar rather than the split. The split is what the person is
 -- choosing.
 
+set lock_timeout = '5s';
+set statement_timeout = '60s';
+
 begin;
 
 create function planning.read_program_version(p_person_id uuid, p_program_version_id uuid)

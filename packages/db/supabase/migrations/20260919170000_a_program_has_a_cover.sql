@@ -14,6 +14,8 @@
 -- Y la bifurcación se la lleva: quien toma un programa de Allfit se queda con una copia
 -- suya, y una copia sin la foto que vio al elegirlo no es la misma cosa.
 
+set statement_timeout = '60s';
+
 begin;
 
 set lock_timeout = '5s';

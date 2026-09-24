@@ -24,6 +24,9 @@
 -- The read still writes only what it wrote before: `plant_my_open_week`, one week,
 -- idempotent. None of this touches that.
 
+set lock_timeout = '5s';
+set statement_timeout = '60s';
+
 create or replace function planning.read_week_plan(p_person_id uuid, p_timezone text)
 returns table (
   assignment_id uuid,

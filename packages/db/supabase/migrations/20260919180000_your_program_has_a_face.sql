@@ -19,6 +19,8 @@
 -- pestaña, y una portada que cambiara al añadir un ejercicio sería una tarjeta distinta
 -- cada vez que alguien edita.
 
+set statement_timeout = '60s';
+
 begin;
 
 set lock_timeout = '5s';

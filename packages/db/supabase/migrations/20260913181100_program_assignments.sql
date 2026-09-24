@@ -18,6 +18,9 @@
 -- is what §9.16 asks for and it is what lets a session be rescheduled later without
 -- rewriting the program: the plan is a fact, not a projection.
 
+set lock_timeout = '5s';
+set statement_timeout = '60s';
+
 begin;
 
 create type planning.assignment_lifecycle as enum (
@@ -39,10 +42,8 @@ create table planning.program_assignments (
   -- The carrier key of §9.13: every child row carries the person, so no join can
   -- silently cross people.
   constraint uq_program_assignments_person unique (id, person_id),
-  constraint fk_program_assignments_person foreign key (person_id)
-    references identity.people(id) on delete restrict,
-  constraint fk_program_assignments_version foreign key (program_version_id)
-    references planning.program_versions(id) on delete restrict,
+  constraint fk_program_assignments_person foreign key (person_id) references identity.people(id) on delete restrict,
+  constraint fk_program_assignments_version foreign key (program_version_id) references planning.program_versions(id) on delete restrict,
   constraint ck_program_assignments_personal_only check (lifecycle = 'personal'),
   constraint ck_program_assignments_no_origin check (origin_relationship_id is null),
   constraint ck_program_assignments_timezone check (btrim(timezone) <> '')
@@ -57,10 +58,8 @@ create table planning.planned_sessions (
   timezone text not null,
   status text not null default 'scheduled',
   constraint pk_planned_sessions primary key (id),
-  constraint fk_planned_sessions_assignment foreign key (assignment_id, person_id)
-    references planning.program_assignments(id, person_id) on delete cascade,
-  constraint fk_planned_sessions_template_version foreign key (template_version_id)
-    references planning.session_template_versions(id) on delete restrict,
+  constraint fk_planned_sessions_assignment foreign key (assignment_id, person_id) references planning.program_assignments(id, person_id) on delete cascade,
+  constraint fk_planned_sessions_template_version foreign key (template_version_id) references planning.session_template_versions(id) on delete restrict,
   constraint ck_planned_sessions_status check (
     status in ('scheduled', 'paused', 'cancelled', 'completed')
   ),

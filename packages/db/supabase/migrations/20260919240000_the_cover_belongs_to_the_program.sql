@@ -25,6 +25,8 @@
 -- llevara portada: su borrador dirá «cambios sin publicar» hasta que se publique una vez.
 -- Es cierto, su contenido cambió.
 
+set statement_timeout = '60s';
+
 begin;
 
 set lock_timeout = '5s';

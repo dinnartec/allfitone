@@ -23,6 +23,9 @@
 -- operations a Space surface rather than inventing new operations, and the receipt
 -- has to agree with the matrix.
 
+set lock_timeout = '5s';
+set statement_timeout = '60s';
+
 begin;
 
 create or replace function planning.lock_program_template_versions(p_content jsonb, p_organization_id uuid)

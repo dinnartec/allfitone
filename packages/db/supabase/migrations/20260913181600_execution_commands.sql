@@ -12,6 +12,9 @@
 -- somebody who opened the screen and left, and calling that a finished session would
 -- put a lie in their history. `X-3` is the screen for what is missing.
 
+set lock_timeout = '5s';
+set statement_timeout = '60s';
+
 begin;
 
 -- How many results a session holds, across the four families. Three callers ask it

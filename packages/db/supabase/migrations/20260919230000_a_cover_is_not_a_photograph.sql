@@ -20,6 +20,8 @@
 -- tabla de fotos, el bucket, las dos operaciones, y `privacy.binary_disposals`, que se
 -- queda sin un solo escritor y que `ADR-021` no deja puesta por si acaso.
 
+set statement_timeout = '60s';
+
 begin;
 
 set lock_timeout = '5s';

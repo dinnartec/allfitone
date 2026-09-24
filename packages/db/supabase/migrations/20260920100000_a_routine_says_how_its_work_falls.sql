@@ -9,6 +9,8 @@
 -- entre todos los que el movimiento toca convierte trece series en treinta y una, y el
 -- número deja de ser el trabajo hecho para pasar a ser un recuento de menciones.
 
+set statement_timeout = '60s';
+
 begin;
 
 set lock_timeout = '5s';

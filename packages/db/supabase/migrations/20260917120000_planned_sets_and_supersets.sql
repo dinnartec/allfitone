@@ -27,6 +27,9 @@
 -- as a state and never as a deletion: `allfit_api` has no `DELETE` here and does not
 -- need one.
 
+set lock_timeout = '5s';
+set statement_timeout = '60s';
+
 begin;
 
 -- Structure of the prescription, not content somebody browses, so it lives in
@@ -49,16 +52,13 @@ create table planning.planned_sets (
   created_at timestamptz not null default clock_timestamp(),
   constraint pk_planned_sets primary key (id),
   constraint uq_planned_sets_order unique (planned_step_id, set_order),
-  constraint fk_planned_sets_step foreign key (planned_step_id)
-    references planning.planned_steps(id) on delete cascade,
-  constraint fk_planned_sets_unit foreign key (target_load_unit_code)
-    references catalog.units(code) on update cascade on delete restrict,
+  constraint fk_planned_sets_step foreign key (planned_step_id) references planning.planned_steps(id) on delete cascade,
+  constraint fk_planned_sets_unit foreign key (target_load_unit_code) references catalog.units(code) on update cascade on delete restrict,
   constraint ck_planned_sets_order check (set_order > 0),
   constraint ck_planned_sets_reps check (target_reps is null or target_reps > 0),
   -- "Until you cannot" and "until eight" are different instructions; a number here
   -- would be a contradiction stored.
-  constraint ck_planned_sets_failure_has_no_reps
-    check (kind <> 'to_failure' or target_reps is null),
+  constraint ck_planned_sets_failure_has_no_reps check (kind <> 'to_failure' or target_reps is null),
   constraint ck_planned_sets_load check (
     (target_load_value is null) = (target_load_unit_code is null)
     and (target_load_value is null or target_load_value >= 0)
@@ -66,7 +66,7 @@ create table planning.planned_sets (
   constraint ck_planned_sets_rpe check (target_rpe is null or target_rpe between 0 and 10)
 );
 
-create index ix_planned_sets_step on planning.planned_sets (planned_step_id, set_order);
+create index idx_planned_sets_step on planning.planned_sets (planned_step_id, set_order);
 
 -- The same owner as its sisters, or the policy below names a role with no privileges.
 alter table planning.planned_sets owner to allfit_owner;

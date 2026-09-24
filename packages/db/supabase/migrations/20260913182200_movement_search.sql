@@ -13,6 +13,9 @@
 -- enough that a prefix index would be theatre, and somebody typing "senta" wants
 -- everything containing it, which is not what a tsquery answers.
 
+set lock_timeout = '5s';
+set statement_timeout = '60s';
+
 begin;
 
 -- Deterministic and boring on purpose, and applied to both sides of the comparison so

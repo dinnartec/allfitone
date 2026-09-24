@@ -13,6 +13,8 @@
 -- rutina se repite en la misma semana no lo es, y esas filas se quedan con el día que su
 -- fecha ya dice, que es lo único cierto que se puede afirmar de ellas.
 
+set statement_timeout = '60s';
+
 begin;
 
 set lock_timeout = '5s';

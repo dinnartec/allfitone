@@ -13,6 +13,9 @@
 --
 -- Covered by T-IDN-ACTIVATION-01.
 
+set lock_timeout = '5s';
+set statement_timeout = '60s';
+
 create or replace function identity.read_current_onboarding(p_account_id uuid)
 returns table (
   attempt_id uuid,

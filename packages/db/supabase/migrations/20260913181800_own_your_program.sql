@@ -22,6 +22,9 @@
 -- over. That is what a calendar week means. Starting the following Monday instead
 -- would break `HU-SP-100`'s promise of sessions **from today**.
 
+set lock_timeout = '5s';
+set statement_timeout = '60s';
+
 begin;
 
 -- The week a session belongs to. Derived for what already exists, from the day it

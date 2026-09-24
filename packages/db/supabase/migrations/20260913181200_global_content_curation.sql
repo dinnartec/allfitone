@@ -17,6 +17,9 @@
 -- they run with the privileges of whoever calls them, which is the operator running
 -- the curation script.
 
+set lock_timeout = '5s';
+set statement_timeout = '60s';
+
 begin;
 
 create function planning.publish_global_session_template(

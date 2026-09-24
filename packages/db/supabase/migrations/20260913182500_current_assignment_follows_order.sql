@@ -15,6 +15,9 @@
 -- only `personal`. It is kept because it costs nothing and stops being dead the day
 -- there is a way to stop following a programme.
 
+set lock_timeout = '5s';
+set statement_timeout = '60s';
+
 begin;
 
 create or replace function planning.read_current_assignment(p_person_id uuid)

@@ -17,6 +17,9 @@
 -- Se suelta antes de crearla: `create or replace` no puede añadir una columna a lo que
 -- una función devuelve.
 
+set lock_timeout = '5s';
+set statement_timeout = '60s';
+
 drop function if exists planning.read_program_catalogue(uuid);
 
 create function planning.read_program_catalogue(p_person_id uuid)

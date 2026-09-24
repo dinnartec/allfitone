@@ -25,6 +25,9 @@
 -- is filtered to untrained sessions because that is the intent, but the guarantee is
 -- the constraint's and not this file's.
 
+set lock_timeout = '5s';
+set statement_timeout = '60s';
+
 begin;
 
 -- `OP-PLN-026`. The counterpart of the `PUT` that has always been there, answering the

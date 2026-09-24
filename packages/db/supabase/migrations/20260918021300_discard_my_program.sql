@@ -15,6 +15,9 @@
 -- training from something that officially no longer exists. Retiring a version from
 -- new uses is a different act with its own operation.
 
+set lock_timeout = '5s';
+set statement_timeout = '60s';
+
 begin;
 
 create or replace function planning.discard_my_program(

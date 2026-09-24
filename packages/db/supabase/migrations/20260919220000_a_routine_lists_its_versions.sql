@@ -12,6 +12,8 @@
 -- componiendo la versión exacta que eligió, como `ADR-009` manda — y además se puede
 -- saber cuándo está mirando una vieja.
 
+set statement_timeout = '60s';
+
 begin;
 
 set lock_timeout = '5s';
