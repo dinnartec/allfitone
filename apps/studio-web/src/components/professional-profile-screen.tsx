@@ -114,15 +114,6 @@ export function ProfessionalProfileScreen() {
           </AlertAction>
         </Alert>
       ) : null}
-      {catalogError && catalogsReady ? (
-        <Alert variant="danger" live="polite">
-          <AlertTitle>No pudimos actualizar los catálogos profesionales</AlertTitle>
-          <AlertDescription>Los datos cargados permanecen disponibles.</AlertDescription>
-          <AlertAction>
-            <Button onClick={retryCatalogs}>Reintentar</Button>
-          </AlertAction>
-        </Alert>
-      ) : null}
       {/* The same card as every other wait in Studio. Composed here by hand, a
           lone spinner and a paragraph sat against the page's left edge, and the
           spinner's open arc read as a letter C. */}
