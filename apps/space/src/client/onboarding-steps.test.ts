@@ -60,7 +60,7 @@ describe('resolveOnboardingRoute', () => {
   })
 
   test('lands an activated person on Today, not on the gate', () => {
-    // The whole point of `20260830120000_resume_after_activation.sql`: before it the
+    // The whole point of `20260913180900_resume_after_activation.sql`: before it the
     // read went empty after activation and this returned the eligibility gate.
     expect(
       resolveOnboardingRoute({

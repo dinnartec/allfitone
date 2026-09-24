@@ -1,178 +1,175 @@
 /**
- * `/catalog/v1/movements`, `/equipment` and `/muscles` — `OP-CAT-009`, `011` and `015`.
+ * The global catalogue surface: `OP-CAT-007`, `OP-CAT-008` and `OP-CAT-012`.
  *
- * The exercise library, read while somebody types in `S-1`. The catalogue surface is
- * shared by design: it holds what is true for everybody, so it has no product in it.
+ * `/catalog/v1` is the one surface with no subject and no tenant. It serves
+ * global published content that Space, Studio and Backoffice all read, so it is
+ * mounted once rather than duplicated into each product surface — the same
+ * reason `application/` holds the use case and the handlers only project it.
  *
- * **It verifies a Space token.** `/catalog/v1` is a surface and not an application, so
- * there is no `catalog` client to issue tokens for; the caller's own product is what
- * authenticates. Space is the only caller today, and a Studio token is refused rather
- * than quietly accepted — Studio reads its catalogue through its session cookie, and
- * widening this to accept both is a change to make when Studio needs it, with its own
- * test, not an accident of a permissive check.
+ * It is still not public. The operation sheets require any authenticated
+ * account, and the closed database functions refuse a caller that is not an
+ * active person, so an abandoned session stops reading the moment the person is
+ * closed.
+ *
+ * A browser that has signed into both web products sends both session cookies,
+ * because both are set by this API. The `Origin` header is what decides which
+ * one is the caller's, and CORS has already restricted it to the two known web
+ * origins. Space is headless and will arrive with a bearer credential instead;
+ * that branch does not exist yet, so a request without a known origin is
+ * refused rather than silently resolved from whichever cookie happens to be
+ * present.
+ *
+ * Every read answers `private, no-store` and never 304. Both callers today are
+ * browsers reading across origins, and a 304 reached them without
+ * `Access-Control-Allow-Origin` although the application sets it, so the
+ * browser blocked the revalidation outright. When Space arrives with a bearer
+ * credential it is not subject to CORS, and revalidation can be reconsidered
+ * for that branch alone.
  */
 
-import type { VerifiedToken } from '@allfitone/auth-provider'
 import { Hono, type Context } from 'hono'
+import { getCookie } from 'hono/cookie'
+import { cors } from 'hono/cors'
 
-import { authProvider } from '../../../platform/auth/index.js'
-import { fail } from '../../../platform/http/index.js'
 import {
-  SpaceActorError,
-  spaceActorResolver,
-  type SpaceActorResolver,
+  BACKOFFICE_SESSION_COOKIE,
+  BackofficeAuthenticationError,
+  backofficeAuthenticationService,
+  STUDIO_SESSION_COOKIE,
+  StudioSessionError,
+  studioSessionService,
+  trustedBackofficeWebUrl,
+  trustedStudioWebUrl,
+  type BackofficeAuthenticationService,
+  type StudioSessionService,
 } from '../../identity/index.js'
-import { movementLibraryService } from '../dependencies.js'
-import type { MovementLibraryService } from '../application/index.js'
-import { MovementCursorError } from '../domain/index.js'
+import { problem, type ApiErrorCode } from '../../../platform/http/index.js'
+import type { GlobalCatalogService } from '../application/index.js'
+import { globalCatalogService } from '../dependencies.js'
+import type { CatalogReader } from '../domain/index.js'
 
-/** Every identifier the catalogue hands out is a v7, so anything else is a typo. */
-const UUID_V7 = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+const CACHE_CONTROL = 'private, no-store'
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
-const MAX_DISCIPLINE = 64
-const MAX_QUERY = 120
-const DEFAULT_LIMIT = 40
-const MAX_LIMIT = 100
-const MAX_CODE = 64
-/** More chips than the vocabulary has is not a filter, it is a scan. */
-const MAX_FILTER_VALUES = 32
-/** What the contract declares a cursor can be. Longer is not one of ours. */
-const MAX_CURSOR = 1024
-
-export type TokenVerifier = (token: string) => Promise<VerifiedToken>
-
-export function catalogMovementRoutes(
-  injectedLibrary?: MovementLibraryService,
-  injectedVerifier?: TokenVerifier,
-  injectedActors?: SpaceActorResolver,
+export function catalogSurfaceRoutes(
+  injectedCatalog?: GlobalCatalogService,
+  injectedStudioSessions?: StudioSessionService,
+  injectedBackofficeSessions?: BackofficeAuthenticationService,
 ): Hono {
-  const library = () => injectedLibrary ?? movementLibraryService()
-  const actors = () => injectedActors ?? spaceActorResolver()
-  const verify: TokenVerifier =
-    injectedVerifier ?? ((token) => authProvider().verifyAccessToken(token, 'space'))
+  const studioOrigin = new URL(trustedStudioWebUrl()).origin
+  const backofficeOrigin = new URL(trustedBackofficeWebUrl()).origin
+  const catalog = () => injectedCatalog ?? globalCatalogService()
+  const studioSessions = () => injectedStudioSessions ?? studioSessionService()
+  const backofficeSessions = () => injectedBackofficeSessions ?? backofficeAuthenticationService()
   const routes = new Hono()
 
-  routes.get('/movements', async (c) => {
-    c.header('Cache-Control', 'no-store')
+  routes.use(
+    '*',
+    cors({
+      origin: [studioOrigin, backofficeOrigin],
+      credentials: true,
+      allowMethods: ['GET', 'OPTIONS'],
+      allowHeaders: ['Content-Type', 'If-None-Match'],
+      exposeHeaders: ['ETag', 'Server-Timing'],
+      maxAge: 600,
+    }),
+  )
+  const surfaces = {
+    studioOrigin,
+    backofficeOrigin,
+    studioSessions,
+    backofficeSessions,
+  }
 
-    const token = await verified(c, verify)
-    if (!token) return fail(c, 'unauthenticated')
+  routes.get('/disciplines', (c) =>
+    catalogResponse(c, surfaces, (reader) => catalog().listDisciplines(reader)),
+  )
 
-    const discipline = trimmed(c.req.query('discipline'))
-    const query = trimmed(c.req.query('q'))
-    if (discipline !== null && discipline.length > MAX_DISCIPLINE) return fail(c, 'invalid-request')
-    if (query !== null && query.length > MAX_QUERY) return fail(c, 'invalid-request')
+  routes.get('/activity-types', (c) =>
+    catalogResponse(c, surfaces, (reader) => catalog().listActivityTypes(reader)),
+  )
 
-    const limit = readLimit(c.req.query('limit'))
-    if (limit === undefined) return fail(c, 'invalid-request')
-
-    const muscles = readCodes(c.req.queries('muscle'))
-    const equipment = readCodes(c.req.queries('equipment'))
-    if (muscles === undefined || equipment === undefined) return fail(c, 'invalid-request')
-
-    const cursor = trimmed(c.req.query('cursor'))
-    if (cursor !== null && cursor.length > MAX_CURSOR) return fail(c, 'invalid-request')
-
-    try {
-      const personId = await actors().personFor(token.subject)
-      return c.json(
-        await library().search({ personId, discipline, query, muscles, equipment, limit, cursor }),
-        200,
-      )
-    } catch (cause) {
-      if (cause instanceof SpaceActorError) return fail(c, cause.code)
-      // A cursor nobody can decode is a bad request, not an outage.
-      if (cause instanceof MovementCursorError) return fail(c, 'invalid-request')
-      console.error('[catalog] movement search failed')
-      return fail(c, 'upstream-unavailable')
-    }
-  })
-
-  routes.get('/movements/:movementId', async (c) => {
-    c.header('Cache-Control', 'no-store')
-
-    const token = await verified(c, verify)
-    if (!token) return fail(c, 'unauthenticated')
-
-    const movementId = c.req.param('movementId')
-    if (!UUID_V7.test(movementId)) return fail(c, 'invalid-request')
-
-    try {
-      const personId = await actors().personFor(token.subject)
-      const movement = await library().read({ personId, movementId })
-      // Absent and forbidden answer the same, so identifiers cannot be walked to
-      // learn what exists.
-      if (!movement) return fail(c, 'not-found')
-      return c.json(movement, 200)
-    } catch (cause) {
-      if (cause instanceof SpaceActorError) return fail(c, cause.code)
-      console.error('[catalog] movement read failed')
-      return fail(c, 'upstream-unavailable')
-    }
-  })
-
-  routes.get('/equipment', async (c) => {
-    c.header('Cache-Control', 'no-store')
-
-    const token = await verified(c, verify)
-    if (!token) return fail(c, 'unauthenticated')
-
-    try {
-      const personId = await actors().personFor(token.subject)
-      return c.json(await library().equipment(personId), 200)
-    } catch (cause) {
-      if (cause instanceof SpaceActorError) return fail(c, cause.code)
-      console.error('[catalog] equipment read failed')
-      return fail(c, 'upstream-unavailable')
-    }
-  })
-
-  routes.get('/muscles', async (c) => {
-    c.header('Cache-Control', 'no-store')
-
-    const token = await verified(c, verify)
-    if (!token) return fail(c, 'unauthenticated')
-
-    try {
-      const personId = await actors().personFor(token.subject)
-      return c.json(await library().muscles(personId), 200)
-    } catch (cause) {
-      if (cause instanceof SpaceActorError) return fail(c, cause.code)
-      console.error('[catalog] muscle read failed')
-      return fail(c, 'upstream-unavailable')
-    }
+  routes.get('/activity-types/:activityTypeId/result-contracts', (c) => {
+    const activityTypeId = c.req.param('activityTypeId')
+    if (!UUID.test(activityTypeId)) return problem(c, 'invalid-request')
+    return catalogResponse(c, surfaces, (reader) =>
+      catalog().listActivityTypeResultContracts(reader, activityTypeId),
+    )
   })
 
   return routes
 }
 
-/** Undefined is a refusal, not an empty filter: a malformed code is a bad request. */
-function readCodes(values: string[] | undefined): string[] | undefined {
-  const codes = (values ?? []).map((value) => value.trim()).filter((value) => value !== '')
-  if (codes.length > MAX_FILTER_VALUES) return undefined
-  if (codes.some((code) => code.length > MAX_CODE)) return undefined
-  return codes
+interface CatalogSurfaces {
+  studioOrigin: string
+  backofficeOrigin: string
+  studioSessions: () => StudioSessionService
+  backofficeSessions: () => BackofficeAuthenticationService
 }
 
-async function verified(c: Context, verify: TokenVerifier): Promise<VerifiedToken | undefined> {
-  const header = c.req.header('authorization') ?? ''
-  if (!header.toLowerCase().startsWith('bearer ')) return undefined
+async function catalogResponse(
+  c: Context,
+  surfaces: CatalogSurfaces,
+  load: (reader: CatalogReader) => Promise<unknown[]>,
+) {
+  c.header('Cache-Control', CACHE_CONTROL)
   try {
-    return await verify(header.slice('bearer '.length).trim())
-  } catch {
-    return undefined
+    const reader = await catalogReader(c, surfaces)
+    if (reader instanceof Response) return reader
+    return c.json({ items: await load(reader) })
+  } catch (error) {
+    return operationFailure(c, error)
   }
 }
 
-/** An empty box is not a filter, so blank and absent are the same thing. */
-function trimmed(value: string | undefined): string | null {
-  const text = (value ?? '').trim()
-  return text === '' ? null : text
+async function catalogReader(
+  c: Context,
+  surfaces: CatalogSurfaces,
+): Promise<CatalogReader | Response> {
+  const origin = c.req.header('origin')
+  if (origin === surfaces.backofficeOrigin) {
+    const token = getCookie(c, BACKOFFICE_SESSION_COOKIE)
+    if (!token) return problem(c, 'unauthenticated', 'missing session cookie')
+    try {
+      const actor = await surfaces.backofficeSessions().resolveActor(token)
+      return { personId: actor.personId, actorKind: 'support' }
+    } catch (error) {
+      if (error instanceof BackofficeAuthenticationError) return problem(c, error.code)
+      throw error
+    }
+  }
+
+  if (origin === surfaces.studioOrigin) {
+    const token = getCookie(c, STUDIO_SESSION_COOKIE)
+    if (!token) return problem(c, 'unauthenticated', 'missing session cookie')
+    try {
+      const actor = await surfaces.studioSessions().resolveActor(token)
+      if (!actor.personId) return problem(c, 'registration-incomplete')
+      return { personId: actor.personId, actorKind: 'person' }
+    } catch (error) {
+      if (error instanceof StudioSessionError) return problem(c, error.code)
+      throw error
+    }
+  }
+
+  return problem(c, 'forbidden', 'the global catalogue is read from a known product surface')
 }
 
-function readLimit(value: string | undefined): number | undefined {
-  if (value === undefined || value.trim() === '') return DEFAULT_LIMIT
-  if (!/^[1-9][0-9]*$/.test(value.trim())) return undefined
-  const limit = Number(value.trim())
-  return limit <= MAX_LIMIT ? limit : undefined
+function operationFailure(c: Context, error: unknown) {
+  if (error instanceof BackofficeAuthenticationError || error instanceof StudioSessionError) {
+    return problem(c, error.code)
+  }
+  const code = databaseErrorCode(error)
+  if (code) return problem(c, code)
+  console.error('[catalog-surface] operation failed')
+  return problem(c, 'upstream-unavailable')
+}
+
+function databaseErrorCode(error: unknown): ApiErrorCode | undefined {
+  if (typeof error !== 'object' || error === null) return undefined
+  const sqlState = 'code' in error && typeof error.code === 'string' ? error.code : undefined
+  if (sqlState === 'P0002') return 'not-found'
+  if (sqlState === '42501') return 'forbidden'
+  if (sqlState === '22023' || sqlState === '22P02') return 'invalid-request'
+  return undefined
 }

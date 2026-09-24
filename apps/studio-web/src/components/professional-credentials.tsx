@@ -180,17 +180,21 @@ export function ProfessionalCredentials({
   return (
     <section data-profile-section aria-labelledby="credentials-title">
       <div data-profile-section-heading>
-        <div>
-          <p data-profile-kicker>Opcional · Personal</p>
+        <div data-profile-section-heading-text>
+          {/* No kicker. "Opcional · Personal" said what the heading and the
+              sentence under it already say, on a route that is personal by
+              definition. */}
           <h2 id="credentials-title">Credenciales profesionales</h2>
-          <p>
+          <p data-page-header-description>
             No necesitas añadir credenciales para usar Studio. Declara solo las que quieras
             presentar; declarar no significa verificar.
           </p>
         </div>
-        <Button onClick={() => setIntent({ kind: 'declare' })} disabled={!profileExists}>
-          Añadir credencial
-        </Button>
+        <div data-page-header-actions>
+          <Button onClick={() => setIntent({ kind: 'declare' })} disabled={!profileExists}>
+            Añadir credencial
+          </Button>
+        </div>
       </div>
 
       {!profileExists ? (
@@ -239,7 +243,7 @@ export function ProfessionalCredentials({
 
       {retired.length > 0 ? (
         <Collapsible data-credential-history>
-          <CollapsibleTrigger render={<Button variant="ghost" />}>
+          <CollapsibleTrigger render={<Button variant="ghost" />} data-history-trigger>
             Historial retirado · {retired.length}
           </CollapsibleTrigger>
           <CollapsibleContent>
@@ -287,7 +291,12 @@ export function ProfessionalCredentials({
           }
         }}
       >
-        <AlertDialogContent size="sm">
+        {/* `size="default"`, not `sm`. At `sm` the Design System keeps this
+            header centred and its footer a two-column grid at every width,
+            while the sibling `Dialog` in the same feature is left-aligned with
+            a right-aligned footer — so the confirm modal read as coming from
+            another product. */}
+        <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>¿Retirar esta credencial?</AlertDialogTitle>
             <AlertDialogDescription>
@@ -333,7 +342,9 @@ function CredentialCard({
       <CardHeader>
         <div>
           <CardDescription>{credential.credential_type_name}</CardDescription>
-          <CardTitle>{credential.name}</CardTitle>
+          <CardTitle role="heading" aria-level={3}>
+            {credential.name}
+          </CardTitle>
         </div>
         <CardAction>
           <Badge variant={credentialStateVariant(credential)}>
@@ -341,7 +352,7 @@ function CredentialCard({
           </Badge>
         </CardAction>
       </CardHeader>
-      <CardContent>
+      <CardContent data-credential-card-body>
         <dl data-credential-details>
           <div>
             <dt>Emisor</dt>
@@ -748,12 +759,11 @@ function normalizedCredential(value: ProfessionalCredentialWrite): ProfessionalC
 }
 
 function credentialValidity(credential: ProfessionalCredential): string {
-  if (!credential.issued_on && !credential.expires_on) return 'Sin fechas declaradas'
-  if (credential.issued_on && credential.expires_on) {
-    return `${credential.issued_on} – ${credential.expires_on}`
-  }
-  if (credential.issued_on) return `Emitida el ${credential.issued_on}`
-  return `Vigente hasta ${credential.expires_on}`
+  const { issued_on: issued, expires_on: expires } = credential
+  if (issued && expires) return `${formatCalendarDate(issued)} – ${formatCalendarDate(expires)}`
+  if (issued) return `Emitida el ${formatCalendarDate(issued)}`
+  if (expires) return `Vigente hasta ${formatCalendarDate(expires)}`
+  return 'Sin fechas declaradas'
 }
 
 function verificationValidity(credential: ProfessionalCredential): string {
@@ -768,6 +778,20 @@ function verificationValidity(credential: ProfessionalCredential): string {
 
 function formatDateTime(value: string): string {
   return new Intl.DateTimeFormat('es-CO', { dateStyle: 'medium' }).format(new Date(value))
+}
+
+/**
+ * `issued_on` and `expires_on` are `format: date` in the contract — a calendar
+ * date someone typed, with no time and no zone. Read as an instant they land on
+ * UTC midnight, which in Bogotá is the previous evening, so a credential issued
+ * on 2024-01-01 would read "31/12/2023". Pinning the formatter to UTC keeps the
+ * date that was declared. `formatDateTime` above is right as it stands: the
+ * verification window is a real instant and belongs in the reader's own zone.
+ */
+function formatCalendarDate(value: string): string {
+  return new Intl.DateTimeFormat('es-CO', { dateStyle: 'medium', timeZone: 'UTC' }).format(
+    new Date(`${value}T00:00:00Z`),
+  )
 }
 
 async function refreshAfterConflict(refresh: () => Promise<StudioMe | undefined>): Promise<void> {

@@ -21,6 +21,18 @@ values
   ('019ea000-0000-7000-8000-000000000001', 'Autora', 'Propia'),
   ('019ea000-0000-7000-8000-000000000002', 'Vecina', 'Ajena');
 
+-- Un programa del catálogo que preste la portada. Propio del test: `seed.sql` no carga
+-- la curación, y en una base recién creada no hay ninguno que elegir.
+insert into planning.programs (id, content_scope, status)
+values ('019ea000-0000-7000-8000-0000000000c1', 'global', 'published');
+
+insert into planning.program_cover_photos (program_id, audience, object_key)
+values
+  ('019ea000-0000-7000-8000-0000000000c1', 'male',
+   'programs/019ea000-0000-7000-8000-0000000000c1/male/uno.webp'),
+  ('019ea000-0000-7000-8000-0000000000c1', 'female',
+   'programs/019ea000-0000-7000-8000-0000000000c1/female/uno.webp');
+
 set local role allfit_owner;
 select set_config('app.actor_kind', 'person', true);
 select set_config('app.actor_person_id', '019ea000-0000-7000-8000-000000000001', true);

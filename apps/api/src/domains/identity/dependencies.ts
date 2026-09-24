@@ -31,6 +31,10 @@ import {
   type SpaceRegistrationService,
 } from './application/registration.js'
 import {
+  createCredentialVerificationService,
+  type CredentialVerificationService,
+} from './application/credential-verification.js'
+import {
   createIdentityOnboardingDatabase,
   createIdentityProfessionalDatabase,
   createIdentitySessionDatabase,
@@ -39,6 +43,19 @@ import {
   createBackofficeAuthenticationDatabase,
   createSessionTokenVaultFromEnv,
 } from './infrastructure/index.js'
+import { createCredentialVerificationDatabase } from './infrastructure/credential-verification.js'
+import {
+  createStudioOwnershipInvitationService,
+  type StudioOwnershipInvitationService,
+} from './application/ownership-invitations.js'
+import { createOwnershipInvitationDatabase } from './infrastructure/ownership-invitations.js'
+
+let cachedOwnership: StudioOwnershipInvitationService | undefined
+
+export function studioOwnershipInvitationService(): StudioOwnershipInvitationService {
+  cachedOwnership ??= createStudioOwnershipInvitationService(createOwnershipInvitationDatabase())
+  return cachedOwnership
+}
 
 let cached: StudioSessionService | undefined
 let cachedOnboarding: OnboardingService | undefined
@@ -48,6 +65,12 @@ let cachedSpaceOnboarding: SpaceOnboardingService | undefined
 let cachedWebhooks: IdentityWebhookService | undefined
 let cachedInvitations: StudioInvitationService | undefined
 let cachedBackoffice: BackofficeAuthenticationService | undefined
+let cachedVerification: CredentialVerificationService | undefined
+
+export function credentialVerificationService(): CredentialVerificationService {
+  cachedVerification ??= createCredentialVerificationService(createCredentialVerificationDatabase())
+  return cachedVerification
+}
 
 export function studioSessionService(): StudioSessionService {
   if (cached) return cached

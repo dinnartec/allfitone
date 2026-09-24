@@ -25,6 +25,9 @@ export type TeamInvitation = AllfitV1Schemas['TeamInvitation']
 export type TeamInvitationPresentation = AllfitV1Schemas['TeamInvitationPresentation']
 export type TeamInvitationDecisionCreate = AllfitV1Schemas['TeamInvitationDecisionCreate']
 export type TeamInvitationDecisionResult = AllfitV1Schemas['TeamInvitationDecisionResult']
+export type OwnershipInvitationPresentation = AllfitV1Schemas['OwnershipInvitationPresentation']
+export type OwnershipInvitationDecisionCreate = AllfitV1Schemas['OwnershipInvitationDecisionCreate']
+export type OwnershipInvitationDecisionResult = AllfitV1Schemas['OwnershipInvitationDecisionResult']
 export type TeamInvitationPage = AllfitV1Schemas['TeamInvitationPage']
 export type TeamInvitationListItem = AllfitV1Schemas['TeamInvitationListItem']
 export type TeamInvitationStatus = AllfitV1Schemas['TeamInvitationStatus']
@@ -105,17 +108,15 @@ export const studioApi = {
   me: (signal?: AbortSignal) => request<StudioMe>('/studio/v1/me', signal ? { signal } : {}),
 
   professionalSpecialties: (signal?: AbortSignal) =>
-    catalogRequest<AllfitV1Schemas['ProfessionalSpecialtyList']>(
+    request<AllfitV1Schemas['ProfessionalSpecialtyList']>(
       '/studio/v1/professional-specialties',
-      'professional-specialties',
-      signal,
+      signal ? { signal } : {},
     ),
 
   professionalCredentialTypes: (signal?: AbortSignal) =>
-    catalogRequest<AllfitV1Schemas['ProfessionalCredentialTypeList']>(
+    request<AllfitV1Schemas['ProfessionalCredentialTypeList']>(
       '/studio/v1/professional-credential-types',
-      'professional-credential-types',
-      signal,
+      signal ? { signal } : {},
     ),
 
   updateProfessionalProfile: (
@@ -209,6 +210,25 @@ export const studioApi = {
       telemetryContext(invitationDecisionFlowStep(body.decisions[0]?.decision)),
     ),
 
+  // An organization Allfit hands over arrives at the same invitation page, so the page
+  // asks for it when the token is not a team invitation.
+  resolveOwnershipInvitation: (token: string) =>
+    request<OwnershipInvitationPresentation>('/studio/v1/ownership-invitations/resolve', {
+      method: 'POST',
+      body: JSON.stringify({ token }),
+    }),
+
+  decideOwnershipInvitation: (body: OwnershipInvitationDecisionCreate, command: CommandHeaders) =>
+    request<OwnershipInvitationDecisionResult>(
+      '/studio/v1/ownership-invitations/decisions',
+      {
+        method: 'POST',
+        headers: commandHeaders(command),
+        body: JSON.stringify(body),
+      },
+      telemetryContext(invitationDecisionFlowStep(body.decision)),
+    ),
+
   teamInvitations: (
     organizationId: string,
     options: { status?: TeamInvitationStatus; limit?: number; cursor?: string } = {},
@@ -245,10 +265,9 @@ export const studioApi = {
   },
 
   organizationRoles: (organizationId: string, signal?: AbortSignal) =>
-    catalogRequest<OrganizationRoleCatalog>(
+    request<OrganizationRoleCatalog>(
       `/studio/v1/organizations/${organizationId}/roles`,
-      'organization-roles',
-      signal,
+      signal ? { signal } : {},
     ),
 
   revokeTeamInvitation: (
@@ -294,38 +313,6 @@ async function request<T>(
   const response = await fetchApi(path, init, telemetry)
   if (!response.ok) throw await responseError(response)
   return (await response.json()) as T
-}
-
-const CATALOG_CACHE_VERSION = 1
-
-interface CatalogCache<T> {
-  version: typeof CATALOG_CACHE_VERSION
-  etag: string
-  payload: T
-}
-
-async function catalogRequest<T>(
-  path: string,
-  cacheName: string,
-  signal?: AbortSignal,
-): Promise<T> {
-  const cacheKey = `allfit-studio:${cacheName}:v${CATALOG_CACHE_VERSION}`
-  const cached = readCatalogCache<T>(cacheKey)
-  let response = await fetchApi(path, {
-    ...(cached ? { headers: { 'If-None-Match': cached.etag } } : {}),
-    ...(signal ? { signal } : {}),
-  })
-
-  if (response.status === 304) {
-    if (cached) return cached.payload
-    response = await fetchApi(path, signal ? { signal } : {})
-  }
-  if (!response.ok) throw await responseError(response)
-
-  const payload = (await response.json()) as T
-  const etag = response.headers.get('ETag')
-  if (etag) writeCatalogCache(cacheKey, { version: CATALOG_CACHE_VERSION, etag, payload })
-  return payload
 }
 
 async function fetchApi(
@@ -404,6 +391,8 @@ function studioOperation(
     '/studio/v1/organizations': 'studio.organization.create',
     '/studio/v1/invitations/resolve': 'studio.invitation.resolve',
     '/studio/v1/invitations/decisions': 'studio.invitation.decide',
+    '/studio/v1/ownership-invitations/resolve': 'studio.invitation.resolve',
+    '/studio/v1/ownership-invitations/decisions': 'studio.invitation.decide',
   }
   if (exact[pathname]) return exact[pathname]
   if (/^\/studio\/v1\/onboarding-attempts\/[^/]+\/eligibility-evidence$/.test(pathname)) {
@@ -461,52 +450,4 @@ function errorDetail(value: unknown): string | undefined {
   const error = value.error
   if (!error || typeof error !== 'object' || !('detail' in error)) return undefined
   return typeof error.detail === 'string' ? error.detail : undefined
-}
-
-function readCatalogCache<T>(key: string): CatalogCache<T> | undefined {
-  if (typeof sessionStorage === 'undefined') return undefined
-  let raw: string | null
-  try {
-    raw = sessionStorage.getItem(key)
-  } catch {
-    return undefined
-  }
-  if (!raw) return undefined
-  try {
-    const parsed: unknown = JSON.parse(raw)
-    if (
-      !parsed ||
-      typeof parsed !== 'object' ||
-      !('version' in parsed) ||
-      parsed.version !== CATALOG_CACHE_VERSION ||
-      !('etag' in parsed) ||
-      typeof parsed.etag !== 'string' ||
-      parsed.etag.length === 0 ||
-      !('payload' in parsed)
-    ) {
-      clearCatalogCache(key)
-      return undefined
-    }
-    return parsed as CatalogCache<T>
-  } catch {
-    clearCatalogCache(key)
-    return undefined
-  }
-}
-
-function clearCatalogCache(key: string): void {
-  try {
-    sessionStorage.removeItem(key)
-  } catch {
-    // A disabled store behaves like an empty cache.
-  }
-}
-
-function writeCatalogCache<T>(key: string, value: CatalogCache<T>): void {
-  if (typeof sessionStorage === 'undefined') return
-  try {
-    sessionStorage.setItem(key, JSON.stringify(value))
-  } catch {
-    // A disabled or full session store must never prevent catalog use.
-  }
 }

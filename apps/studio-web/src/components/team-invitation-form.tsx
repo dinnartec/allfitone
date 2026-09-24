@@ -1,6 +1,6 @@
 'use client'
 
-import { Alert, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
+import { Alert, AlertAction, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
 import { Badge } from '@allfitone/react/components/badge'
 import { Button } from '@allfitone/react/components/button'
 import {
@@ -39,7 +39,7 @@ import {
 } from '@allfitone/react/components/select'
 import { useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
-import { type FormEvent, useState } from 'react'
+import { type FormEvent, useEffect, useState } from 'react'
 
 import { useOrganizationContext } from './organization-context'
 import { useStudioSessionMutation } from './studio-query-provider'
@@ -83,8 +83,19 @@ export function TeamInvitationForm() {
     },
   })
   const submitting = createMutation.isPending
+  const refused = !canInviteTeam(current.roles)
 
-  if (!INVITATIONS_ENABLED || !canInviteTeam(current.roles)) {
+  // Two different situations used to share one screen. A role that cannot
+  // invite goes to the register, which refuses it in place and leaves its tab
+  // selected; the heading here would otherwise announce a form that never came.
+  useEffect(() => {
+    if (refused) router.replace(`/organizations/${current.organization_id}/team/invitations`)
+  }, [refused, router, current.organization_id])
+
+  if (refused) return null
+
+  // The flag is a product state, not a permission: it reaches every role.
+  if (!INVITATIONS_ENABLED) {
     return (
       <section data-team-invitation-state>
         <Alert variant="warning">
@@ -92,9 +103,11 @@ export function TeamInvitationForm() {
           <AlertDescription>
             Esta función se habilitará cuando el flujo seguro de recepción esté publicado.
           </AlertDescription>
-          <Button onClick={() => router.replace(`/organizations/${current.organization_id}`)}>
-            Volver al espacio
-          </Button>
+          <AlertAction>
+            <Button onClick={() => router.replace(`/organizations/${current.organization_id}`)}>
+              Volver al espacio
+            </Button>
+          </AlertAction>
         </Alert>
       </section>
     )
@@ -207,7 +220,7 @@ export function TeamInvitationForm() {
         </SetupPanelDescription>
         <SetupPanelNote>
           <FoundationIcon name="time" decorative />
-          <p>La invitación estará disponible durante siete días.</p>
+          La invitación estará disponible durante siete días.
         </SetupPanelNote>
       </SetupPanelIntro>
 

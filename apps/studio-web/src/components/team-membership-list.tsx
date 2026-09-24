@@ -1,16 +1,10 @@
 'use client'
 
-import { Alert, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
+import { Alert, AlertAction, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
 import { Avatar, AvatarFallback } from '@allfitone/react/components/avatar'
 import { Badge } from '@allfitone/react/components/badge'
 import { Button, buttonVariants } from '@allfitone/react/components/button'
-import {
-  Card,
-  CardAction,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '@allfitone/react/components/card'
+import { Card, CardContent, CardHeader } from '@allfitone/react/components/card'
 import {
   Empty,
   EmptyContent,
@@ -43,7 +37,11 @@ import {
   type OrganizationMembership,
   type OrganizationMembershipStatus,
 } from '@/lib/studio-api'
-import { flattenMembershipPages, organizationMembershipsQueryOptions } from '@/lib/studio-query'
+import {
+  flattenMembershipPages,
+  isStudioForbidden,
+  organizationMembershipsQueryOptions,
+} from '@/lib/studio-query'
 
 type MembershipFilter = 'all' | OrganizationMembershipStatus
 type LoadError = 'forbidden' | 'stale-cursor' | 'unavailable'
@@ -66,7 +64,7 @@ export function TeamMembershipList() {
   const [filter, setFilter] = useState<MembershipFilter>('all')
   const options = organizationMembershipsQueryOptions(current.organization_id, filter, PAGE_SIZE)
   const query = useInfiniteQuery({ ...options, enabled: canViewDirectory })
-  const forbidden = query.error instanceof StudioApiError && query.error.status === 403
+  const forbidden = isStudioForbidden(query.error)
   const items = forbidden ? [] : flattenMembershipPages(query.data)
   const loading = canViewDirectory && query.isPending
   const loadingMore = query.isFetchingNextPage
@@ -107,12 +105,16 @@ export function TeamMembershipList() {
           <AlertDescription>
             Puedes consultar los roles y entender qué permite cada uno dentro de la organización.
           </AlertDescription>
-          <Link
-            href={`/organizations/${current.organization_id}/team/roles`}
-            className={buttonVariants({ variant: 'outline' })}
-          >
-            Ver roles y permisos
-          </Link>
+          <AlertAction>
+            <Link
+              href={`/organizations/${current.organization_id}/team/roles`}
+              data-slot="button"
+              data-variant="outline"
+              className={buttonVariants({ variant: 'outline' })}
+            >
+              Ver roles y permisos
+            </Link>
+          </AlertAction>
         </Alert>
       </section>
     )
@@ -148,15 +150,6 @@ export function TeamMembershipList() {
               description: 'Cambia el filtro para consultar otro estado de membresía.',
             }
           : undefined
-  const soloOwner =
-    !loading &&
-    !error &&
-    filter === 'all' &&
-    nextCursor === null &&
-    items.length === 1 &&
-    items[0]?.membership_id === current.membership_id &&
-    items[0].roles.includes('owner')
-
   return (
     <section data-team-page aria-label="Directorio de integrantes">
       <WorkspacePageHeader
@@ -165,6 +158,8 @@ export function TeamMembershipList() {
           INVITATIONS_ENABLED && canInviteTeam(current.roles) ? (
             <Link
               href={`/organizations/${current.organization_id}/team/invitations/new`}
+              data-slot="button"
+              data-variant="default"
               className={buttonVariants()}
             >
               Invitar integrante
@@ -172,16 +167,6 @@ export function TeamMembershipList() {
           ) : null
         }
       />
-
-      {soloOwner ? (
-        <Alert variant="info">
-          <AlertTitle>Tu espacio ya está listo para trabajar contigo.</AlertTitle>
-          <AlertDescription data-solo-owner-note>
-            Invita a alguien solo cuando vayas a sumar equipo.
-            <Badge variant="outline">Opcional</Badge>
-          </AlertDescription>
-        </Alert>
-      ) : null}
 
       <ToggleGroup
         value={[filter]}
@@ -232,7 +217,17 @@ export function TeamMembershipList() {
           aria-label="Integrantes"
           aria-busy={loading || loadingMore || undefined}
           scrollAreaLabel="Tabla de integrantes de la organización"
+          data-studio-register="memberships"
         >
+          {/* Same reason as the invitation register: filtering must not move
+              the columns under the reader. */}
+          <colgroup>
+            <col />
+            <col />
+            <col />
+            <col />
+            <col />
+          </colgroup>
           <TableCaption>
             Esta vista presenta membresías organizacionales y no expone información de clientes ni
             datos fitness.
@@ -266,9 +261,11 @@ export function TeamMembershipList() {
               ? 'Actualiza la lista para verla desde el inicio.'
               : 'Los integrantes que ya cargaste permanecen visibles.'}
           </AlertDescription>
-          <Button size="sm" variant="outline" onClick={() => void retry()}>
-            {error === 'stale-cursor' ? 'Actualizar la lista' : 'Reintentar'}
-          </Button>
+          <AlertAction>
+            <Button size="sm" variant="outline" onClick={() => void retry()}>
+              {error === 'stale-cursor' ? 'Actualizar la lista' : 'Reintentar'}
+            </Button>
+          </AlertAction>
         </Alert>
       ) : null}
 
@@ -292,40 +289,81 @@ function MembershipCard({ item }: { item: OrganizationMembership }) {
   return (
     <Card data-team-member-card>
       <CardHeader>
+        {/* The same `strong` the table row uses. CardTitle is the Design
+            System's micro-caps label — 12px, extrabold, uppercase — which
+            turned a person's name into a caption and left the badges beside it
+            looking more important than the person. It carries the heading role
+            so a list of cards can be navigated by name. */}
         <div data-team-member-identity>
           <Avatar decorative>
             <AvatarFallback>{memberInitials(item.display_name)}</AvatarFallback>
           </Avatar>
-          <CardTitle>{item.display_name}</CardTitle>
+          <strong role="heading" aria-level={3}>
+            {item.display_name}
+          </strong>
         </div>
-        <CardAction>
-          <Badge variant={item.status === 'active' ? 'success' : 'outline'}>
-            {item.status === 'active' ? 'Activo' : 'Terminado'}
-          </Badge>
-        </CardAction>
       </CardHeader>
       <CardContent>
-        <div data-team-role-badges>
-          {item.roles.map((role) => (
-            <Badge key={role} variant="secondary">
-              {organizationRoleLabel(role)}
-            </Badge>
-          ))}
-        </div>
-        <dl data-team-member-dates>
-          <div>
-            <dt>Ingreso</dt>
-            <dd>{formatDate(item.joined_at)}</dd>
-          </div>
+        {/* The table names every column it shows. The card used to name one of
+            them, so a badge reading "Propietario" sat next to a badge reading
+            "Activo" with nothing saying which was a role and which a state.
+            Same five facts as the row, in the same order, each one named. */}
+        <dl data-team-member-facts>
+          <dt>Estado</dt>
+          <dd>
+            <StatusBadge item={item} />
+          </dd>
+
+          <dt>Roles</dt>
+          <dd>
+            <RoleBadges item={item} />
+          </dd>
+
+          <dt>Ingreso</dt>
+          <dd>{formatDate(item.joined_at)}</dd>
+
           {item.ended_at ? (
-            <div>
+            <>
               <dt>Finalización</dt>
               <dd>{formatDate(item.ended_at)}</dd>
-            </div>
+            </>
           ) : null}
         </dl>
       </CardContent>
     </Card>
+  )
+}
+
+/**
+ * The table and the card list are two presentations of one row, so how a status
+ * or a role looks is decided once here. Keeping the choice in both is what let
+ * them drift: the card was given its colours and the table kept the old ones.
+ */
+function StatusBadge({ item }: { item: OrganizationMembership }) {
+  // `outline` sets a transparent background over the base's transparent border
+  // and so draws nothing at all. Ended is not an error, so a neutral surface
+  // says it without `destructive` overstating it.
+  return (
+    <Badge variant={item.status === 'active' ? 'success' : 'secondary'}>
+      {item.status === 'active' ? 'Activo' : 'Terminado'}
+    </Badge>
+  )
+}
+
+/**
+ * The accent family, not the semantic one: a role is not a state, and painting
+ * an admin amber would claim a warning that is not there. It also brings the
+ * directory closer to the catalog, which already marks roles in accent.
+ */
+function RoleBadges({ item }: { item: OrganizationMembership }) {
+  return (
+    <div data-team-role-badges>
+      {item.roles.map((role) => (
+        <Badge key={role} variant="default">
+          {organizationRoleLabel(role)}
+        </Badge>
+      ))}
+    </div>
   )
 }
 
@@ -341,18 +379,10 @@ function MembershipRow({ item }: { item: OrganizationMembership }) {
         </div>
       </TableCell>
       <TableCell>
-        <Badge variant={item.status === 'active' ? 'success' : 'outline'}>
-          {item.status === 'active' ? 'Activo' : 'Terminado'}
-        </Badge>
+        <StatusBadge item={item} />
       </TableCell>
       <TableCell>
-        <div data-team-role-badges>
-          {item.roles.map((role) => (
-            <Badge key={role} variant="secondary">
-              {organizationRoleLabel(role)}
-            </Badge>
-          ))}
-        </div>
+        <RoleBadges item={item} />
       </TableCell>
       <TableCell>{formatDate(item.joined_at)}</TableCell>
       <TableCell>{item.ended_at ? formatDate(item.ended_at) : '—'}</TableCell>

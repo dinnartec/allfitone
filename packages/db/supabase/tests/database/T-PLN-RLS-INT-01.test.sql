@@ -27,10 +27,12 @@ select is((
     and relation.relforcerowsecurity
 ), 18::bigint, 'T-PLN-RLS-09 every new relation enables and forces RLS');
 
+-- Counting policies assumed exactly one per relation, so a table that needs a
+-- second one — a write path beside a narrower read path — failed a test named
+-- after coverage. Counting the relations that carry a policy asserts what the
+-- name claims, and is stricter: seventeen covered tables and one uncovered one
+-- used to pass this.
 select is((
-  -- Cuenta relaciones con política de dueño, no políticas. Contando políticas, añadir
-  -- una segunda legítima a una de estas tablas rompía la prueba sin que nada se
-  -- hubiera degradado: el nombre decía una cosa y la consulta medía otra.
   select count(distinct relation.relname)
   from pg_policy as policy
   join pg_class as relation on relation.oid = policy.polrelid

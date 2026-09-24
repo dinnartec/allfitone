@@ -23,17 +23,26 @@ export interface StudioTelemetryState {
   active: boolean
   decision: AnalyticsConsentRecord['decision'] | 'undecided'
   privacySignalDenied: boolean
+  /**
+   * False until the stored decision has actually been read, which cannot happen
+   * on the server or before the first effect runs. Without it "not yet known"
+   * is indistinguishable from "undecided", and every page load paints the
+   * consent panel at someone who answered it long ago.
+   */
+  resolved: boolean
 }
 
 let state: StudioTelemetryState = {
   active: false,
   decision: 'undecided',
   privacySignalDenied: false,
+  resolved: false,
 }
 const SERVER_STATE: StudioTelemetryState = {
   active: false,
   decision: 'undecided',
   privacySignalDenied: false,
+  resolved: false,
 }
 let initialized = false
 let distinctId: string | null = null
@@ -53,6 +62,7 @@ export function initializeStudioTelemetry(): void {
     ...state,
     privacySignalDenied,
     decision: privacySignalDenied ? 'denied' : readConsent(),
+    resolved: true,
   }
   emit()
   reconcileRuntime()

@@ -59,6 +59,11 @@ export function createPostHogBrowserTelemetry(options: BrowserTelemetryOptions):
                   capture_pageview: false,
                   capture_pageleave: false,
                   capture_exceptions: false,
+                  // The one feature this list had missed. It makes posthog-js
+                  // inject its own web-vitals bundle, which measures the same
+                  // metrics the app already reports itself and, on a soft
+                  // navigation, reads an LCP entry that is not there.
+                  capture_performance: false,
                   disable_session_recording: true,
                   disable_surveys: true,
                   advanced_disable_feature_flags: true,

@@ -1,8 +1,7 @@
 -- Profile claims: the piece seven stories were waiting on.
 --
--- `identity.profile_attributes`, `identity.fitness_profile_claims` and
--- `privacy.data_classifications` were specified in the data dictionary and never
--- built, which is why the traceability matrix said no profile claim was writable at
+-- `identity.profile_attributes` and `identity.fitness_profile_claims` were
+-- specified in the data dictionary and never built, which is why the traceability matrix said no profile claim was writable at
 -- all — `HU-SP-010` through `HU-SP-014`, `HU-SP-021` and `HU-SP-096`. The biological
 -- sex went around it as a column, defensibly: a single stable fact with one source.
 -- The training goal is where going around stops paying, and two screens later the
@@ -35,31 +34,8 @@ set statement_timeout = '60s';
 
 -- ---------------------------------------------------------------- classifications
 
-create table privacy.data_classifications (
-  id uuid not null default extensions.uuid_generate_v7(),
-  code text not null,
-  name text not null,
-  sensitivity_rank integer not null,
-  created_at timestamptz not null default clock_timestamp(),
-  constraint pk_data_classifications primary key (id),
-  constraint uq_data_classifications_code unique (code),
-  constraint ck_data_classifications_code check (code ~ '^[a-z][a-z0-9_]{1,63}$'),
-  constraint ck_data_classifications_name check (btrim(name) <> '' and char_length(name) <= 120),
-  constraint ck_data_classifications_rank check (sensitivity_rank between 0 and 100)
-);
-
-alter table privacy.data_classifications owner to allfit_owner;
-
--- El rango es el de sensibilidad: al heredar de varias fuentes, gana la más alta.
-insert into privacy.data_classifications (code, name, sensitivity_rank)
-values
-  ('operational',  'Operacional',            10),
-  ('audit',        'Auditoría',              20),
-  ('training',     'Entrenamiento',          30),
-  ('nutrition',    'Nutrición',              40),
-  ('body',         'Corporal',               50),
-  ('identity_pii', 'Datos identificativos',  60),
-  ('health',       'Salud',                  70);
+-- `privacy.data_classifications` and its rows come from main's
+-- 20260910150000_privacy_scope_publication, which runs before this migration.
 
 -- ---------------------------------------------------------------- provenance
 
@@ -138,17 +114,10 @@ create index idx_fitness_profile_claims_lookup
 
 -- ---------------------------------------------------------------- rls
 
-alter table privacy.data_classifications enable row level security;
-alter table privacy.data_classifications force row level security;
 alter table identity.profile_attributes enable row level security;
 alter table identity.profile_attributes force row level security;
 alter table identity.fitness_profile_claims enable row level security;
 alter table identity.fitness_profile_claims force row level security;
-
-create policy data_classifications_all_owner on privacy.data_classifications
-  for all to allfit_owner using (true) with check (true);
-create policy data_classifications_select_authenticated on privacy.data_classifications
-  for select to allfit_api using (access_control.actor_kind() <> 'anonymous');
 
 create policy profile_attributes_all_owner on identity.profile_attributes
   for all to allfit_owner using (true) with check (true);
@@ -166,7 +135,6 @@ create policy fitness_profile_claims_select_self on identity.fitness_profile_cla
 revoke insert, update, delete on identity.fitness_profile_claims from allfit_api;
 grant select on identity.fitness_profile_claims to allfit_api;
 grant select on identity.profile_attributes to allfit_api;
-grant select on privacy.data_classifications to allfit_api;
 
 -- ---------------------------------------------------------------- command
 

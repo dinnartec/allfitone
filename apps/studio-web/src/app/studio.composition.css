@@ -9,9 +9,15 @@
 
 :root {
   /* One measure for reading, one for the workspace canvas. Without them the
-     product stretches a single sentence across 1400px on a wide display. */
+     product stretches a single sentence across 1400px on a wide display.
+
+     The canvas is 64rem because that is what the content it holds turned out to
+     want: the overview had already been pulled back to it on its own, since at
+     82rem its rows put a name at one edge and a badge at the other. Leaving the
+     two at different widths made the page jump 144px per side on every move
+     between sections. A workspace has one canvas. */
   --studio-measure: 58rem;
-  --studio-canvas: 82rem;
+  --studio-canvas: 64rem;
 }
 
 /* ---------------------------------------------------------------- canvases */
@@ -53,8 +59,14 @@
 }
 
 /* A sentence beside a control reads as one row; a title stack beside a badge
-   does not. */
+   does not.
+
+   The row keeps the height a button gives it whether or not it has one. Without
+   that it is 44px on the sections that carry an action and 22px on the ones that
+   do not, so everything below jumped by the difference on every move between
+   sibling tabs. */
 [data-page-header] {
+  min-height: 2.75rem;
   align-items: center;
 }
 
@@ -70,13 +82,35 @@
 
 [data-page-header-description] {
   max-width: var(--studio-measure);
-  margin: 0;
 }
 
-[data-profile-section-heading],
+/* A title stack beside an action, the same shape as the page header above.
+   This used to be a one-column grid shared by two different compositions: text
+   only in the membership section, text plus a button in the credential one. In
+   the grid the button was a row of its own and stretched to the full 1024px
+   canvas, which is what made the credentials tab read as a different width from
+   its two siblings even though all three measure 208-1232. */
+[data-profile-section-heading] {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--afo-space-4);
+}
+
+[data-profile-section-heading-text],
 [data-ready-later-heading] {
   display: grid;
+  min-width: 0;
   gap: var(--afo-space-2);
+}
+
+/* Two stacked actions that the Design System's own container does not space:
+   `AccessPanelAction` is `flex flex-col` with no gap, which is right for the one
+   action it was built around and leaves these two touching. */
+[data-access-recovery-actions] {
+  display: grid;
+  gap: var(--afo-space-3);
 }
 
 [data-studio-header-actions],
@@ -84,6 +118,7 @@
 [data-profile-setup-actions],
 [data-team-invitation-actions],
 [data-credential-actions],
+[data-card-footer-actions],
 [data-profile-form-actions] {
   display: flex;
   flex-wrap: wrap;
@@ -96,6 +131,17 @@
 }
 
 /* ----------------------------------------------------------------- sidebar */
+
+/* The rail animates its width, but `data-collapsible` flips at once, so the
+   content sized for the open sidebar is mounted while the container is still
+   56px wide. The Design System's SidebarHeader does not clip, so it spilled out
+   of the rail for the length of the animation. Clipping turns that into a
+   reveal. The organization switcher's popover is portalled, so it is not caught
+   by this. */
+[data-organization-brand],
+[data-sidebar-organization] {
+  overflow: hidden;
+}
 
 [data-organization-brand] {
   display: flex;
@@ -116,13 +162,29 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--afo-space-2);
-  margin: 0;
   padding-inline: var(--afo-space-2);
 }
 
 [data-sidebar-organization-name],
 [data-sidebar-organization-label] {
   min-width: 0;
+}
+
+/* The trigger sizes to its content, so a 39-character organization name made it
+   356px wide inside a 255px rail — 101px of control hanging outside, guillotined
+   mid-letter by the `overflow: hidden` above. Width is placement, which this
+   file may set on a component it put in its own column.
+
+   The ellipsis belongs with it: the value already carries `overflow: hidden`
+   and `white-space: nowrap` from the Design System but not `text-overflow`, so
+   two thirds of the standard trio were in place and the name simply stopped. */
+[data-sidebar-switcher] [data-switcher-trigger] {
+  width: 100%;
+  min-width: 0;
+}
+
+[data-sidebar-switcher] [data-switcher-value] {
+  text-overflow: ellipsis;
 }
 
 /* The rule is inset from both sides; full width overshoots the rail by its
@@ -136,6 +198,7 @@
 [data-studio-form],
 [data-invitation-waiting],
 [data-team-page],
+[data-team-section],
 [data-profile-section],
 [data-profile-state],
 [data-organization-state],
@@ -157,21 +220,116 @@
   gap: var(--afo-space-5);
 }
 
-[data-studio-loading],
+/* A measure belongs to what is read, not to the frame around it. Capping the
+   whole organization shell here put the wordmark and the logout button inside a
+   672px column, so a check that lasts milliseconds made the product look like it
+   had collapsed to a phone. */
 [data-studio-error-stage],
 [data-team-invitation-state],
-[data-organization-state-shell] {
+[data-organization-state] {
   width: min(100%, 42rem);
   margin-inline: auto;
 }
 
+/* The only thing on the screen, so it sits in the middle of it. The setup shell
+   is `min-h-svh` but nothing inside it grows, so this stage sat under the header
+   with 605px of empty screen below it on a phone.
+
+   The subtraction is measured, not guessed: the header is 80px and `SetupMain`
+   pads the bottom by 40px, rising to 64px from 1024px up. `align-content`
+   rather than `place-items` so the alert still fills the 42rem measure above
+   instead of shrinking to its text. */
+[data-studio-error-stage] {
+  display: grid;
+  align-content: center;
+  min-height: calc(100svh - 7.5rem);
+}
+
+@media (min-width: 1024px) {
+  [data-studio-error-stage] {
+    min-height: calc(100svh - 9rem);
+  }
+}
+
+/* No width of its own: both places that show this card centre it in a grid, and
+   `place-items: center` already sizes a grid item to its content. A fixed width
+   would only be right for one of the two sentences this card carries. The cap
+   is there for a long one, not to set the size. */
+[data-organization-status],
+[data-session-ending-status],
+[data-studio-loading] {
+  max-width: min(100%, 26rem);
+}
+
+/* The state screen is the only thing on the page, so it sits in the middle of
+   it rather than against the top edge, which is where document flow left it and
+   where nothing decided it should be. */
+[data-organization-state-canvas] {
+  display: grid;
+  min-height: 100%;
+  place-items: center;
+}
+
 [data-studio-loading-body],
 [data-role-catalog-state],
-[data-session-ending-body] {
+[data-session-ending-body],
+[data-organization-status-body] {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: var(--afo-space-3);
+}
+
+/* --------------------------------------------------------------- registers */
+
+/* A table lays itself out from its own content, so a filtered register redrew
+   its grid on every filter: Acciones is wide when something is pending and
+   narrow when nothing is, Estado's labels differ in length, and the columns
+   jumped under the reader on each switch. Fixing the layout hands the decision
+   to the shares each register declares in its colgroup, which do not depend on
+   which rows are showing. `min-width` keeps it from collapsing on a phone —
+   below that the container scrolls, as it already did. */
+[data-studio-register] {
+  min-width: 44rem;
+  table-layout: fixed;
+}
+
+/* The shares live here rather than on the columns because inline visual styles
+   are forbidden in this app, and the lint rule is right: a width written in
+   the markup is a width nobody finds when the table changes. */
+[data-studio-register='memberships'] col:nth-child(1) {
+  width: 30%;
+}
+
+[data-studio-register='memberships'] col:nth-child(2) {
+  width: 14%;
+}
+
+[data-studio-register='memberships'] col:nth-child(3) {
+  width: 22%;
+}
+
+[data-studio-register='memberships'] col:nth-child(4),
+[data-studio-register='memberships'] col:nth-child(5) {
+  width: 17%;
+}
+
+[data-studio-register='invitations'] col:nth-child(1) {
+  width: 30%;
+}
+
+[data-studio-register='invitations'] col:nth-child(2),
+[data-studio-register='invitations'] col:nth-child(5) {
+  width: 15%;
+}
+
+[data-studio-register='invitations'] col:nth-child(3),
+[data-studio-register='invitations'] col:nth-child(4) {
+  width: 14%;
+}
+
+[data-studio-register='invitations'] col:nth-child(6) {
+  width: 12%;
 }
 
 /* ------------------------------------------------------------------- grids */
@@ -187,12 +345,52 @@
 }
 
 [data-studio-field-grid],
-[data-profile-field-grid],
+[data-profile-field-grid] {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--afo-space-4);
+}
+
+/* Cards, not fields. These two sat in the rule above and so were spaced like a
+   pair of form inputs — a 16px gutter, where every other card grid in Studio
+   uses 20px. Two card grids on sibling screens do not get different gutters. */
 [data-membership-context-grid],
 [data-credential-grid] {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--afo-space-4);
+  gap: var(--afo-space-5);
+}
+
+/* Five filters do not fit a phone, and ToggleGroup answers an overflow by
+   squeezing until the labels clip rather than by wrapping or scrolling. Letting
+   them wrap keeps every option readable and reachable; hiding them behind a
+   scroll edge would not. A stopgap: the component should answer this itself. */
+[data-studio-filters] {
+  flex-wrap: wrap;
+}
+
+/* Wrapping leaves the last row short, and the group is full width because its
+   unwrapped content would be wider than that. Letting the options grow spends
+   the leftover on them instead of leaving a hole at the end of the row.
+
+   `1 0 auto`, never `flex: 1`: that shorthand sets the basis to zero, so every
+   option measures nothing, all five fit one line, none of them wraps and the
+   labels clip instead. The basis has to stay on the content for the wrap to
+   happen at all, and shrink has to stay off so a label is never squeezed. */
+/* Wrapping leaves the last row short, and the group is full width because its
+   unwrapped content would be wider than that, so the leftover landed on the
+   right. The options take it instead, so a row is always full.
+
+   `1 0 auto`, never `flex: 1`: that shorthand sets the basis to zero, so every
+   option measures nothing, all five fit one line, none of them wraps and the
+   labels clip. The basis has to stay on the content for a wrap to happen at
+   all, and shrink has to stay off so a label is never squeezed.
+
+   The cost is that each row splits its own leftover, so options differ in width
+   between rows — and a row holding one option gives it everything, which at
+   320px makes "Vencidas" 278px beside others of 117. */
+[data-studio-filters] > * {
+  flex: 1 0 auto;
 }
 
 [data-team-role-badges],
@@ -200,6 +398,7 @@
 [data-team-section-navigation],
 [data-overview-team-roles],
 [data-overview-orientation-roles],
+[data-membership-roles],
 [data-role-disclosure] {
   display: flex;
   flex-wrap: wrap;
@@ -233,24 +432,58 @@
 }
 
 [data-team-invitation-summary],
-[data-team-member-dates],
+[data-ownership-invitation-summary],
+/* Two fixed columns left a hole whenever there was one pair to show, which on a
+   membership card is the common case: a person who has not left has no end
+   date. `auto-fit` gives the pair the row and still splits it when a second
+   arrives, and the `min()` keeps the track from outgrowing a narrow card. */
 [data-credential-details] {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(10rem, 100%), 1fr));
   gap: var(--afo-space-4);
-  margin: 0;
 }
 
 [data-team-invitation-summary] > div,
-[data-team-member-dates] > div,
+[data-ownership-invitation-summary] > div,
 [data-credential-details] > div {
   min-width: 0;
 }
 
-[data-team-invitation-summary] dd,
-[data-team-member-dates] dd,
-[data-credential-details] dd {
-  margin-inline: 0;
+/* Studio renders these lists itself, so nothing was styling them: every `dt`
+   and `dd` in the product came out at the same 14px, the same weight 400 and
+   the same colour, which leaves a definition list unreadable as one — the term
+   and its value were indistinguishable.
+
+   The label takes the treatment the Design System already gives a label above a
+   value in `StatStripItem`, through its own `--afo-typography-label-*` tokens,
+   rather than a weight invented here. */
+[data-team-invitation-summary] dt,
+[data-ownership-invitation-summary] dt,
+[data-team-member-facts] dt,
+[data-credential-details] dt {
+  font-family: var(--afo-typography-label-font-family);
+  font-size: var(--afo-font-size-xs);
+  font-weight: var(--afo-typography-label-font-weight);
+  line-height: var(--afo-typography-label-line-height);
+  letter-spacing: var(--afo-typography-label-letter-spacing);
+  text-transform: uppercase;
+  color: var(--afo-color-text-muted);
+}
+
+/* The card is the table row stacked, so every value keeps the name its column
+   had. The label track sizes to its widest word, which lines the values up
+   down the card instead of leaving each one to start wherever its label ends. */
+/* CardContent pads sideways and nothing else, so the action sat against the
+   last fact. The gap belongs to Studio's own element, not to the component. */
+[data-team-member-card] [data-team-invitation-actions] {
+  margin-block-start: var(--afo-space-4);
+}
+
+[data-team-member-facts] {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--afo-space-2) var(--afo-space-4);
 }
 
 /* ---------------------------------------------------------------- overview */
@@ -258,10 +491,9 @@
 /* One column. A two-column grid left the whole right half empty whenever the
    organization had a single card to show, which is the common case.
 
-   The overview summarises; it is not a register. At the full canvas width its
-   rows put a name at one edge and a badge at the other with 700px between. */
+   No width of its own any more: the canvas is now the width this panel had
+   asked for, so the exception it used to carry is the rule. */
 [data-organization-overview] {
-  width: min(100%, 64rem);
   grid-template-columns: minmax(0, 1fr);
 }
 
@@ -276,6 +508,16 @@
   max-width: 100%;
 }
 
+/* Two or more stats take the canvas, so the strip's right edge lines up with
+   the cards below it instead of stopping 576px short of them. The cap above
+   still applies to a lone stat — a staff member who reads the directory but not
+   the invitation register sees one count, and one number centred in 1024px is
+   what the cap was put there to prevent. */
+[data-overview-signals][data-signals-multiple],
+[data-profile-signals][data-signals-multiple] {
+  min-width: 100%;
+}
+
 [data-overview-signals-placeholder] {
   height: 4.5rem;
   width: min(100%, 24rem);
@@ -284,13 +526,9 @@
 [data-overview-attention-list],
 [data-overview-team-list],
 [data-team-directory-card-list],
-[data-role-capability-list],
-[data-credential-history] {
+[data-role-capability-list] {
   display: grid;
   gap: var(--afo-space-3);
-  margin: 0;
-  padding: 0;
-  list-style: none;
 }
 
 [data-overview-attention-list] > li,
@@ -317,11 +555,39 @@
   gap: var(--afo-space-3);
 }
 
-[data-solo-owner-note] {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+/* CardContent pads sideways only, so the badge row and the sentence under it
+   sat flush. */
+[data-membership-card-body] {
+  display: grid;
   gap: var(--afo-space-3);
+}
+
+/* CardContent pads sideways only, so the facts, the evidence link and the
+   actions stacked flush: each one's top edge sat exactly on the last one's
+   bottom edge. */
+[data-credential-card-body] {
+  display: grid;
+  gap: var(--afo-space-4);
+}
+
+/* Two disclosures doing the same job, laid out the same way.
+   `data-credential-history` used to sit in the list rule above, so it carried a
+   12px grid gap that added to the panel's own 20px margin: its first card
+   opened 33px below the trigger while the membership one opened 21px. One grid
+   with one gap owns the spacing on both, which also matches the 20px the
+   section leaves above the trigger. */
+[data-credential-history],
+[data-membership-history] {
+  display: grid;
+  min-width: 0;
+  gap: var(--afo-space-5);
+}
+
+/* Both roots are grids now, so without this the trigger stretches to the whole
+   canvas — 1024px of ghost button for a six-word label. */
+[data-credential-history] > [data-history-trigger],
+[data-membership-history] > [data-history-trigger] {
+  justify-self: start;
 }
 
 /* -------------------------------------------------------------------- team */
@@ -351,13 +617,15 @@
 
 [data-team-directory-note] {
   max-width: var(--studio-measure);
-  margin: 0;
 }
 
 /* ------------------------------------------------------------------- roles */
 
+/* `min(24rem, 100%)` and not a bare `24rem`: a fixed minimum cannot shrink, so
+   below 384px the track kept its width and the cards ran out of the screen with
+   their badges cut off. */
 [data-role-register] {
-  grid-template-columns: repeat(auto-fit, minmax(24rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(24rem, 100%), 1fr));
 }
 
 /* Roles read as a matrix, so paired cards end on the same line and their
@@ -389,6 +657,20 @@
   align-items: start;
 }
 
+[data-profile-brand] {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Below 360px the two labelled controls need 270 of the 288 the row has, so
+   there is no honest room for the mark. Hidden rather than squeezed: the brand
+   reads whole or not at all. */
+@media (max-width: 359px) {
+  [data-profile-brand] {
+    display: none;
+  }
+}
+
 [data-trajectory-panel] {
   position: sticky;
   top: var(--afo-space-5);
@@ -416,8 +698,10 @@
   max-height: calc(100svh - 2rem);
 }
 
+/* Same fixed-minimum trap as the role register: below 352px the track would
+   keep its width and take the cards off the screen. */
 [data-account-map] {
-  grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(22rem, 100%), 1fr));
 }
 
 /* Two cards of unequal copy still have to end on the same line, so the body
@@ -428,26 +712,46 @@
 
 /* ----------------------------------------------------------------- session */
 
+/* Illegible and out of reach, not gone. Hiding it outright blanked the whole
+   page for the length of a check that usually resolves in milliseconds, which
+   reads as a reload. This is the treatment a logout in flight already uses. */
 [data-organization-protected-content][aria-hidden='true'] {
-  visibility: hidden;
+  pointer-events: none;
+  filter: blur(7px);
+  user-select: none;
 }
 
-[data-organization-verification-overlay] {
+/* Both hold a transient status card over a workspace that is still on screen,
+   so they put it in the same place. Neither sets a width: `place-items: center`
+   already sizes a grid item to its content. */
+[data-organization-verification-overlay],
+[data-session-ending-overlay],
+[data-studio-loading-overlay] {
   position: fixed;
   inset: 0;
-  z-index: 50;
   display: grid;
   place-items: center;
   padding: var(--afo-space-6);
 }
 
-[data-session-ending-status] {
-  position: fixed;
-  inset-inline: 0;
-  bottom: var(--afo-space-6);
+/* The other two are meant to swallow clicks: they cover content that must not be
+   reached while it is unverified. This one covers an empty page, so it must not
+   take the privacy control out of reach on its way past. */
+[data-studio-loading-overlay] {
+  pointer-events: none;
+}
+
+[data-studio-loading-overlay] > * {
+  pointer-events: auto;
+}
+
+[data-organization-verification-overlay] {
+  z-index: 50;
+}
+
+/* Above the access check: a session that is ending outranks one being verified. */
+[data-session-ending-overlay] {
   z-index: 60;
-  width: min(100% - 2rem, 28rem);
-  margin-inline: auto;
 }
 
 [data-session-checking],
@@ -489,7 +793,6 @@
   [data-membership-context-grid],
   [data-credential-grid],
   [data-team-invitation-summary],
-  [data-team-member-dates],
   [data-credential-details] {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -499,36 +802,86 @@
   }
 
   [data-page-header],
-  [data-profile-heading] {
+  [data-profile-heading],
+  [data-profile-section-heading] {
     flex-direction: column;
     align-items: stretch;
   }
 
-  [data-studio-header-actions],
+  /* The setup header is not one of these. It stays a row at every width, so a
+     full-width action box leaves `justify-between` nothing to distribute and
+     strands the button against the wordmark. */
   [data-page-header-actions],
   [data-profile-setup-actions],
+  [data-profile-form-actions],
+  [data-card-footer-actions],
   [data-team-invitation-actions] {
     width: 100%;
+  }
+
+  /* The row above was already given the full width; what sat in it was not, so
+     a primary action ended up as a content-width pill floating at the left of
+     an empty row. Stretching what is in it finishes the intent that rule
+     started. Two actions still share the row rather than one taking it. */
+  [data-page-header-actions] > *,
+  [data-team-invitation-actions] > *,
+  [data-credential-actions] > *,
+  [data-profile-setup-actions] > *,
+  [data-card-footer-actions] > *,
+  [data-profile-form-actions] > * {
+    flex: 1;
+  }
+
+  /* The same rule, reached differently: these triggers are not in an action
+     row, they are direct children of the collapsible, so they take the width
+     themselves. */
+  [data-membership-history] > [data-history-trigger],
+  [data-credential-history] > [data-history-trigger] {
+    width: 100%;
+    justify-self: stretch;
   }
 
   [data-credential-evidence] {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  /* Stacked, an item's own lines have to sit closer together than the gap to
+     the next item. At one rhythm for both, two invitations of two lines each
+     read as four invitations of one. Inner 4px, outer 20px. */
+  [data-overview-attention-list],
+  [data-overview-team-list] {
+    gap: var(--afo-space-5);
+  }
+
   [data-overview-attention-list] > li {
     align-items: flex-start;
     flex-direction: column;
+    gap: var(--afo-space-1);
   }
 
-  /* The avatar belongs beside the name, not stranded on a line of its own. */
+  /* The avatar belongs beside the name, not stranded on a line of its own.
+     `start`, not `center`: the avatar now labels a block of three lines, and
+     centring floats it to the middle of that block, away from the name. */
   [data-overview-team-list] > li {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr);
-    align-items: center;
+    align-items: start;
+    gap: var(--afo-space-2) var(--afo-space-3);
   }
 
+  /* Column two, not the whole row. Spanning both columns put the roles under
+     the avatar, on a left edge nothing else in the row shares, so the badge
+     that says who a person is read as belonging to no one. */
   [data-overview-team-list] > li > [data-overview-team-roles] {
-    grid-column: 1 / -1;
+    grid-column: 2;
+  }
+
+  /* Name over date, not name beside date. Side by side at 320px a two-word
+     name broke mid-word and took its row to 137px next to neighbours of 79. */
+  [data-overview-team-identity] {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--afo-space-1);
   }
 }
 
@@ -540,11 +893,27 @@
   max-width: min(390px, calc(100vw - 32px));
 }
 
+/*
+ * The open panel sits at the top, away from the collapsed control, because the
+ * access landing puts its primary action low: a bottom-anchored panel covers
+ * "Entrar a Studio" at 1280x720 and 390x844, and nobody should have to answer a
+ * question about optional analytics before they can sign in.
+ *
+ * Centred rather than tucked left, which was where it started. Left put it on
+ * top of the wordmark at every width; centred clears the wordmark and the
+ * heading at 1440, 1280 and 768. Below roughly 420px the panel spans the width
+ * whatever it does, so no placement clears the header there.
+ *
+ * `width` rather than `max-width` alone: a centred element with an auto width
+ * collapses to the space between its left edge and the viewport.
+ */
 [data-analytics-controls][data-expanded='true'] {
   top: 16px;
   right: auto;
   bottom: auto;
-  left: 16px;
+  left: 50%;
+  width: min(390px, calc(100vw - 32px));
+  transform: translateX(-50%);
 }
 
 [data-analytics-panel] {
@@ -559,7 +928,6 @@
 }
 
 [data-analytics-panel] p {
-  margin: 0;
   font-size: var(--afo-font-size-sm);
   line-height: var(--afo-line-height-relaxed);
 }

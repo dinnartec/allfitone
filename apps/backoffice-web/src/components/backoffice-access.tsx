@@ -56,6 +56,7 @@ import { Input } from '@allfitone/react/components/input'
 import { Spinner } from '@allfitone/react/components/spinner'
 import { FoundationIcon } from '@allfitone/react/icons'
 import Image from 'next/image'
+import Link from 'next/link'
 import {
   useCallback,
   useEffect,
@@ -955,7 +956,7 @@ function AuthenticatedPanel({
     <Panel
       eyebrow="Paso 3 de 3"
       title="Acceso confirmado."
-      description={`La identidad de ${operatorName} fue verificada. Los módulos operativos se habilitarán con sus deberes específicos.`}
+      description={`La identidad de ${operatorName} fue verificada. Cada módulo operativo comprueba su propio deber al entrar.`}
     >
       <Alert live="polite" variant="success">
         <AlertTitle>Nivel AAL2 comprobado</AlertTitle>
@@ -1002,6 +1003,15 @@ function AuthenticatedPanel({
         </CardContent>
       </Card>
       <AccessPanelAction>
+        {/* The confirmed session is now a doorway rather than a dead end: the
+            operating modules live behind the shell, and each of them resolves
+            its own duty. Landing here still grants nothing by itself. */}
+        {/* The rendered element is an anchor, so the native button contract is
+            declared false: with it left true Base UI warns that it lost native
+            button semantics, and `type` means nothing on a link. */}
+        <Button render={<Link href="/panel" />} nativeButton={false}>
+          Entrar al Backoffice
+        </Button>
         <Button type="button" variant="outline" onClick={onLogout}>
           Cerrar sesión
         </Button>

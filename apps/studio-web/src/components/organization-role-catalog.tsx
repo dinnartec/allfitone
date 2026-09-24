@@ -1,6 +1,6 @@
 'use client'
 
-import { Alert, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
+import { Alert, AlertAction, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
 import { Badge } from '@allfitone/react/components/badge'
 import { Button } from '@allfitone/react/components/button'
 import {
@@ -23,8 +23,8 @@ import { useState } from 'react'
 
 import { useOrganizationContext } from './organization-context'
 import { WorkspacePageHeader } from './workspace-page-header'
-import { StudioApiError, type OrganizationRole } from '@/lib/studio-api'
-import { organizationRolesQueryOptions } from '@/lib/studio-query'
+import type { OrganizationRole } from '@/lib/studio-api'
+import { isStudioForbidden, organizationRolesQueryOptions } from '@/lib/studio-query'
 
 type CatalogState =
   | { kind: 'loading' }
@@ -37,7 +37,7 @@ const EXPECTED_ROLE_CODES = ['owner', 'admin', 'coach', 'staff'] as const
 export function OrganizationRoleCatalog() {
   const { current } = useOrganizationContext()
   const query = useQuery(organizationRolesQueryOptions(current.organization_id))
-  const forbidden = query.error instanceof StudioApiError && query.error.status === 403
+  const forbidden = isStudioForbidden(query.error)
   const roles =
     !forbidden && query.data?.items && hasExpectedRoles(query.data.items)
       ? query.data.items
@@ -52,14 +52,14 @@ export function OrganizationRoleCatalog() {
 
   return (
     <section data-team-page data-role-page aria-label="Roles y permisos">
+      {/* The panel this replaced said the roles were four, fixed and read-only.
+          The count is on screen to be counted and the screen carries no control
+          to change anything; that they cannot be customised is the one fact a
+          reader could not get anywhere else, so it moves into the sentence that
+          already explains the view. */}
       <WorkspacePageHeader
-        description={`Consulta para qué sirve cada rol antes de decidir cómo debe participar una persona en ${current.display_name}.`}
+        description={`Allfit One tiene cuatro roles fijos. Consulta para qué sirve cada uno antes de decidir cómo debe participar una persona en ${current.display_name}.`}
       />
-
-      <Alert variant="info">
-        <AlertTitle>Cuatro roles fijos, solo consulta</AlertTitle>
-        <AlertDescription>Desde esta pantalla no se cambian roles.</AlertDescription>
-      </Alert>
 
       {query.isFetching && state.kind === 'ready' ? (
         <p data-query-refreshing role="status" aria-live="polite">
@@ -71,9 +71,11 @@ export function OrganizationRoleCatalog() {
         <Alert variant="danger" live="polite">
           <AlertTitle>No pudimos actualizar los roles</AlertTitle>
           <AlertDescription>El catálogo cargado permanece visible.</AlertDescription>
-          <Button variant="outline" onClick={() => void query.refetch()}>
-            Reintentar
-          </Button>
+          <AlertAction>
+            <Button variant="outline" onClick={() => void query.refetch()}>
+              Reintentar
+            </Button>
+          </AlertAction>
         </Alert>
       ) : null}
 
@@ -102,9 +104,11 @@ export function OrganizationRoleCatalog() {
             La conexión falló de forma temporal. El catálogo permanecerá oculto hasta comprobarlo de
             nuevo.
           </AlertDescription>
-          <Button variant="outline" onClick={() => void query.refetch()}>
-            Reintentar
-          </Button>
+          <AlertAction>
+            <Button variant="outline" onClick={() => void query.refetch()}>
+              Reintentar
+            </Button>
+          </AlertAction>
         </Alert>
       ) : null}
 

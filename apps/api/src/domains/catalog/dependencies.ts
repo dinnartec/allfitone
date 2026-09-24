@@ -1,12 +1,18 @@
 import {
+  createGlobalCatalogService,
   createMovementLibraryService,
+  createResultContractService,
   createStudioCatalogService,
+  type GlobalCatalogService,
   type MovementLibraryService,
+  type ResultContractService,
   type StudioCatalogService,
 } from './application/index.js'
 import {
-  createMovementLibraryDatabase,
   createProfessionalCatalogDatabase,
+  createGlobalCatalogDatabase,
+  createMovementLibraryDatabase,
+  createResultContractDatabase,
 } from './infrastructure/index.js'
 
 let cached: StudioCatalogService | undefined
@@ -14,6 +20,20 @@ let cached: StudioCatalogService | undefined
 export function studioCatalogService(): StudioCatalogService {
   cached ??= createStudioCatalogService(createProfessionalCatalogDatabase())
   return cached
+}
+
+let cachedContracts: ResultContractService | undefined
+
+export function resultContractService(): ResultContractService {
+  cachedContracts ??= createResultContractService(createResultContractDatabase())
+  return cachedContracts
+}
+
+let cachedGlobal: GlobalCatalogService | undefined
+
+export function globalCatalogService(): GlobalCatalogService {
+  cachedGlobal ??= createGlobalCatalogService(createGlobalCatalogDatabase())
+  return cachedGlobal
 }
 
 let cachedMovements: MovementLibraryService | undefined

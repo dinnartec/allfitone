@@ -28,7 +28,7 @@
  * screen after this one and the button held here, saying the Fitness ID was active
  * and going nowhere. Coming back cold no longer lands here at all: the resume read
  * reports the attempt as `activated` and the entry decision goes straight to Hoy —
- * which is what `20260830120000_resume_after_activation.sql` was written for, since
+ * which is what `20260913180900_resume_after_activation.sql` was written for, since
  * before it an activated person read exactly like an account that never started and
  * was sent back to the eligibility gate.
  */

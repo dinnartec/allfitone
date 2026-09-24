@@ -123,6 +123,619 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/backoffice/v1/platform/role-assignments': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * List who holds the Backoffice base role today and who held it before
+     * @description The internal Allfit catalogue. It is read-only evidence of who can reach the data and is never an authorization cache: every operation resolves its own duty in its own transaction.
+     */
+    get: operations['listBackofficePlatformRoles']
+    put?: never
+    /**
+     * Grant the Backoffice base role to another active person
+     * @description The base role only allows signing in. It grants no operation and implies no duty. Self-assignment is rejected by the database, not by this handler.
+     */
+    post: operations['grantBackofficePlatformRole']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/platform/role-assignments/{assignmentId}/revocation': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Withdraw the Backoffice base role from another person
+     * @description Withdrawing the role revokes that person's Backoffice sessions and closes every effective duty without deleting history. The last active administrator cannot be withdrawn.
+     */
+    post: operations['revokeBackofficePlatformRole']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/platform/duty-assignments': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * List platform duties with their window, AAL, grantor and last recertification
+     * @description Shows effective, scheduled, suspended, expired and revoked assignments. A window that has elapsed reads as expired whether or not a job has moved the row, because validity is evaluated against the clock.
+     */
+    get: operations['listBackofficePlatformDuties']
+    put?: never
+    /**
+     * Grant a closed-catalogue platform duty for at most ninety days
+     * @description The actor mode is derived from the duty code and never accepted from the client. The target must already hold an active base role.
+     */
+    post: operations['grantBackofficePlatformDuty']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/platform/duty-assignments/{assignmentId}/suspension': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Suspend an effective platform duty
+     * @description Suspension cuts the duty's operations from the next transaction onwards. The assignment row stays, so the history remains readable.
+     */
+    post: operations['suspendBackofficePlatformDuty']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/platform/duty-assignments/{assignmentId}/revocation': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Revoke a platform duty permanently
+     * @description Revocation is terminal for that assignment and cuts its operations from the next transaction onwards. History is never rewritten.
+     */
+    post: operations['revokeBackofficePlatformDuty']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/result-contracts': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Publish the validation rules an activity must satisfy to count as complete
+     * @description A published version is immutable: correcting one publishes the next, and a newer version never reinterprets a session already recorded, because each execution freezes the contract and version it was validated against. The server assigns the version number. Publishing is refused unless the request carries at least one fixture the contract accepts and one it rejects.
+     */
+    post: operations['publishResultContract']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/result-contracts/{contractId}/deprecation': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Stop new executions from freezing a published contract
+     * @description Deprecating closes the contract's activity bindings so nothing new can be validated against it. It does not invalidate the executions that already froze it, and it never deletes a version.
+     */
+    post: operations['deprecateResultContract']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/catalog/v1/disciplines': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * List the published disciplines of the global catalogue
+     * @description The catalogue has no subject and no tenant: it is global published content shared by every surface. It still requires an authenticated active person, so it is not public. There is no pagination in V1 — the catalogue is small and closed. It is served uncached and never answers 304: both callers today are browsers reading across origins, and a 304 reached them without `Access-Control-Allow-Origin`, which the browser blocks.
+     */
+    get: operations['listCatalogDisciplines']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/catalog/v1/activity-types': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * List the published global activity types
+     * @description Only global published content. An organisation's own activity types belong to its Studio surface and never appear here. The code is stable and never reused, so a client may cache against it.
+     */
+    get: operations['listCatalogActivityTypes']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/catalog/v1/activity-types/{activityTypeId}/result-contracts': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * List the effective result contracts of an activity type
+     * @description Returns the contracts currently associated with the activity type, their versions, which one is the default, and the minimums a session must carry. This exists so a client can explain a rejection before it syncs; the authoritative validation stays on the server.
+     */
+    get: operations['listCatalogActivityTypeResultContracts']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/support/people': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Find a person by something they handed over in their own case
+     * @description Exact match on exactly one of an identifier, an email or a phone. There is no exploratory search by name, so no parameter offers one. The search is recorded whether or not it matched: a fruitless search is the one most worth being able to review later.
+     */
+    get: operations['searchBackofficeSupportPeople']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/support/people/{personId}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Open the minimised operational state of a person
+     * @description Identifiers, account and verification states, timestamps and counters. To resolve a training case use the break-glass operations; no screen widens the approved category silently. The read is recorded against the person before its content is returned.
+     */
+    get: operations['readBackofficeSupportPersonMetadata']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/support/operations': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Read the technical state of operations that failed
+     * @description Notifications waiting in the outbox and commands that never finished, in one feed. It carries identifiers, states, timestamps, error codes and retries — never a payload, a stored response, a principal fingerprint or a request hash, because the point of this read is diagnosing without opening anyone's data.
+     *     There is no case reference here, unlike the other support reads: this feed has no subject, so there is nothing to trace back to a case.
+     */
+    get: operations['listBackofficeSupportOperations']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/support/delivery-circuits': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Read whether a delivery channel is open or tripped
+     * @description Counters per event type. It answers "is the whole channel down" before anyone chases one notification, and nothing in it belongs to a person.
+     */
+    get: operations['listBackofficeSupportDeliveryCircuits']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/support/attention': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Read what needs attention
+     * @description Counters of what is pending or stuck: credentials waiting for a verifier, gyms nobody claimed and system errors that repeat. Each notice is shown only to an operator whose duties resolve it; any other notice is `withheld`, never zero. An operator whose duties resolve no notice is refused.
+     *     Nothing here names a person or an organization, so reading it records no access. A counter opens nothing: every destination checks its own duty again.
+     */
+    get: operations['readBackofficeSupportAttention']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/organizations': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Read the organization directory
+     * @description Name, type, lifecycle state, active members and sites of every organization, searchable by display name. An `unclaimed` organization exists but does not operate: Allfit created it and its owner has not accepted yet.
+     *     The legal name is neither searched nor returned, because for an independent professional it is a person's name; the responsible party never leaves the database. `people_served` is null until service relationships exist — never zero, which would say the organization serves nobody.
+     */
+    get: operations['listBackofficeOrganizations']
+    put?: never
+    /**
+     * Create an organization and hand it to its owner
+     * @description Creates the organization `unclaimed`, its site when one is given, and one ownership invitation to the owner's email in a single transaction. Nothing operates until the owner accepts, and Allfit does not run it in between.
+     *     A company is named here. A natural person is named from their own identity when they accept, so the body has nowhere to write a person's name and a legal name sent for one is refused.
+     */
+    post: operations['createBackofficeOrganizationHandover']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/organizations/{organizationId}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Read a gym's file
+     * @description `HU-BO-013`: its data, its owner, its sites and its team. Ordinary support reads identifiers, states, dates and counters, so the owner and the team are person identifiers with their roles, never names or contacts, and the responsible party of an independent professional is never named.
+     *     Every active member the file returns is recorded in the access log before the file is returned. A natural person's site address is withheld, because it can be their home. People served, plans, the payment method and Premium have no tables yet and say `not_modelled` instead of an answer.
+     */
+    get: operations['readBackofficeOrganizationFile']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/organizations/{organizationId}/handover': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Read where a handover stands
+     * @description The organization, its site and its latest ownership invitation. The address the invitation went to is a hint, enough to recognise it and not to read it back. An organization its owner created was never handed over: 404.
+     */
+    get: operations['readBackofficeOrganizationHandover']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/organizations/{organizationId}/handover/resends': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Send the ownership invitation again
+     * @description A live invitation is sent again as it is, so the first email keeps working. A spent or lapsed one is replaced by a new invitation to the same address. It is never sent to a different one, and an organization with an owner has nothing to resend: 409. The command carries no body.
+     */
+    post: operations['resendBackofficeOrganizationHandover']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/organizations/{organizationId}/cancellation': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Cancel an organization nobody claimed
+     * @description `HU-BO-015`. Only an organization that was never claimed is cancelled, and its pending invitation is withdrawn with it. One with an owner is closed by that owner, never from here: 409. Cancelling a cancelled organization converges. The command carries no body.
+     */
+    post: operations['cancelBackofficeOrganizationHandover']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/verification-requests': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Read the queue of credentials waiting to be verified
+     * @description Every pending request for one exact credential version: who asked, what they claim, and which registry or issuer to consult. Declaring or revising a credential puts it here and retiring it takes it out, so nobody has to remember to ask.
+     *     Reading this reaches the holder's data, so each row is recorded against the holder before it is returned. `viewer_can_decide` is false when the caller is the holder or shares an active organization with them. It is a hint for the screen, never authority: the decision revalidates on its own.
+     */
+    get: operations['listBackofficeVerificationRequests']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/verifications': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Record the verification of one credential version
+     * @description `verified`, `rejected` or `unverifiable`, checked against the official registry or the issuer. There is no default result. The policy, the validity and the evidence fingerprint are derived by the server and cannot be proposed: the validity never exceeds twelve months, the source's own expiry or the credential's, and a source that reports the credential lapsed cannot produce `verified`.
+     *     The response carries the outcome, never the registry reference or the fingerprint. Verifying one credential marks nothing else as verified.
+     */
+    post: operations['createBackofficeVerification']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/verification-renewals': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Read the verifications that are due for renewal
+     * @description Verified credentials whose validity ends within thirty days or has already ended, with no review in progress. Nothing runs at the moment a verification lapses, so this list is computed and opening a renewal is an explicit step. Each row is recorded against the holder before it is returned.
+     */
+    get: operations['listBackofficeVerificationRenewals']
+    put?: never
+    /**
+     * Open the renewal of a lapsed verification
+     * @description A new request linked to the one it renews. It never extends the earlier verification, which stays exactly as it was.
+     */
+    post: operations['openBackofficeVerificationRenewal']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/access-events': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Read the access log as an independent auditor
+     * @description Who from the team looked at whose data, and when. It carries the record of the access and never what was read.
+     *     Separation of duties is **per case, not global**: an access that belongs to a break-glass window this auditor requested or approved is absent, and every other window stays auditable. `withheld_from_you` counts what was removed for that reason, so an empty list is never mistaken for "nobody touched this person's data" — the auditor is told to hand those cases to someone else.
+     */
+    get: operations['listBackofficeAccessEvents']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/scope-definitions': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Read the published permission definitions
+     * @description Every published version of every scope, newest first, with the resources and fields it includes and excludes. A published version is immutable, so the list is a history rather than a current state.
+     */
+    get: operations['listBackofficeScopeDefinitions']
+    put?: never
+    /**
+     * Publish the next version of a permission definition
+     * @description The version number is assigned by the server, never accepted from the client. Publishing a wider version does not widen what anybody already granted: a grant points at one specific version, and that version can never change.
+     */
+    post: operations['publishBackofficeScopeDefinition']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/break-glass/requests': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Read the break-glass tray
+     * @description Requests to decide, or your own. Reading the tray is never a permission: every operation revalidates its duty, its quorum and its window in its own transaction.
+     */
+    get: operations['listBackofficeBreakGlassRequests']
+    put?: never
+    /**
+     * Ask for a break-glass window
+     * @description The body names the subject, the categories, one of five closed purposes and a traceable case. It does **not** name the tier, the number of approvals or the duration: the server derives all three from the categories, so a caller cannot ask for the cheap ones. A forbidden category is refused rather than priced higher.
+     */
+    post: operations['requestBackofficeBreakGlass']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/break-glass/requests/{requestId}/decisions': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Approve or reject a break-glass request
+     * @description A rejection is terminal. An approval that completes the quorum opens the window in the same transaction; one that does not leaves the request exactly where it was. The approver is never the requester or the subject, and never counts twice.
+     */
+    post: operations['decideBackofficeBreakGlass']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/break-glass/requests/{requestId}/reads': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Exercise an approved break-glass window
+     * @description Only the exact requester exercises. Every attempt, allowed or denied, writes evidence before anything is returned — a denial is an answer with a recorded reason, not an error, because the record of a refused attempt is the point.
+     *     The content projection is not available in this version: `execution` and `nutrition` do not exist yet, so an authorised exercise answers `content_unavailable` rather than inventing data.
+     */
+    post: operations['exerciseBackofficeBreakGlass']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/break-glass/requests/{requestId}/closure': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Close your own break-glass window
+     * @description Only the requester closes their own. There is no reopening and no extension: continuing means asking again. Closing a closed window converges rather than failing.
+     */
+    post: operations['closeBackofficeBreakGlass']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/space/v1/telemetry-config': {
     parameters: {
       query?: never
@@ -994,6 +1607,46 @@ export interface paths {
     put?: never
     /** Accept or reject a Studio team invitation */
     post: operations['decideStudioTeamInvitation']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/studio/v1/ownership-invitations/resolve': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Resolve a pending ownership invitation
+     * @description Resolves a token Allfit sent to hand over an organization, without exposing the address it went to. Invalid, expired, spent, revoked and cancelled invitations are indistinguishable, and a team token never resolves here.
+     */
+    post: operations['resolveStudioOwnershipInvitation']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/studio/v1/ownership-invitations/decisions': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Accept or reject an organization handed over by Allfit
+     * @description Accepting makes the person the owner and the organization starts operating, in one transaction. Only the invited email decides, and whoever from Allfit handed the organization over cannot claim it. A natural person's organization takes its responsible name from their own identity here.
+     */
+    post: operations['decideStudioOwnershipInvitation']
     delete?: never
     options?: never
     head?: never
@@ -2085,6 +2738,740 @@ export interface paths {
 export type webhooks = Record<string, never>
 export interface components {
   schemas: {
+    /** @description One resource and field the version speaks about. An exclusion is stated rather than left out, because criterion 1 asks what a permission excludes and an absence cannot answer that. */
+    ScopeResourceRule: {
+      resource: string
+      /** @description A field name, or `*` for every field of the resource. */
+      field: string
+      data_classification_code: string
+      max_action: components['schemas']['AccessLevel']
+      /** @default false */
+      is_excluded: boolean
+      /**
+       * @description Whether the field may be read for periods before the grant existed. Only valid on an included, read-only field.
+       * @default false
+       */
+      historical_readable: boolean
+    }
+    ScopeDefinition: {
+      id: components['schemas']['Uuid']
+      scope_code: components['schemas']['ScopeCode']
+      version_number: number
+      status: components['schemas']['PublicationStatus']
+      /** Format: date-time */
+      published_at: string | null
+      rules: components['schemas']['ScopeResourceRule'][]
+    }
+    ScopeDefinitionList: {
+      items: components['schemas']['ScopeDefinition'][]
+    }
+    /** @description No version number: the server assigns the next one. At least one rule must be included, because a version made only of exclusions grants nothing. */
+    ScopeDefinitionPublication: {
+      scope_code: components['schemas']['ScopeCode']
+      rules: components['schemas']['ScopeResourceRule'][]
+    }
+    /**
+     * @description The approvable categories. Everything else — media, identity, contact, secrets, payments, raw sensor data — is not a category with a higher bar: it can never be approved.
+     * @enum {string}
+     */
+    BreakGlassCategory:
+      | 'relationship_training'
+      | 'prior_training_history'
+      | 'nutrition_guidance'
+      | 'body_progress'
+      | 'health_context'
+      | 'nutrition_intake'
+    /**
+     * @description Five closed purposes. There is deliberately no `other`: marketing, commercial recovery, AI training and operational curiosity are not purposes, and an open field would become all four.
+     * @enum {string}
+     */
+    BreakGlassPurpose:
+      | 'service_dispute'
+      | 'legal_or_regulatory_obligation'
+      | 'customer_support_request'
+      | 'security_investigation'
+      | 'authorized_quality_review'
+    /**
+     * @description Derived from the categories by the server, never sent by a client.
+     * @enum {string}
+     */
+    BreakGlassTier: 'standard' | 'restricted'
+    /** @enum {string} */
+    BreakGlassStatus: 'requested' | 'approved' | 'rejected' | 'closed' | 'expired'
+    /**
+     * @description `unclaimed` exists but does not operate: Allfit created it and its owner has not accepted yet. `cancelled` was never claimed. `closed` operated and ended.
+     * @enum {string}
+     */
+    OrganizationLifecycleStatus: 'unclaimed' | 'active' | 'closed' | 'cancelled'
+    /** @description An organization as the directory shows it. Nothing here identifies a person: no legal name and no responsible party. */
+    BackofficeOrganizationSummary: {
+      organization_id: components['schemas']['Uuid']
+      display_name: string
+      type_code: string
+      type_name: string
+      status: components['schemas']['OrganizationLifecycleStatus']
+      /** Format: date-time */
+      created_at: string
+      /** Format: date-time */
+      claimed_at: string | null
+      /** Format: date-time */
+      cancelled_at: string | null
+      active_member_count: number
+      site_count: number
+      /** @description Null until service relationships exist. Not zero, because zero would say the organization serves nobody. */
+      people_served: number | null
+    }
+    BackofficeOrganizationPage: {
+      data: components['schemas']['BackofficeOrganizationSummary'][]
+      page: components['schemas']['Page']
+    }
+    /**
+     * @description `not_modelled` means the platform has no table for this yet. It is a fact about Allfit, never about the organization or the person.
+     * @enum {string}
+     */
+    ModelAvailability: 'not_modelled'
+    BackofficeOrganizationFile: {
+      organization: {
+        organization_id: components['schemas']['Uuid']
+        display_name: string
+        type_code: components['schemas']['OrganizationTypeCode']
+        type_name: string
+        status: components['schemas']['OrganizationLifecycleStatus']
+        party_kind: components['schemas']['OrganizationPartyKind']
+        /** @description A company's legal name. Always null for a natural person. */
+        legal_name: string | null
+        /** Format: date-time */
+        created_at: string
+        /** Format: date-time */
+        claimed_at: string | null
+        /** Format: date-time */
+        cancelled_at: string | null
+      }
+      owner: {
+        person_id: components['schemas']['Uuid']
+        membership_id: components['schemas']['Uuid']
+        /** Format: date-time */
+        since: string
+      } | null
+      team: {
+        membership_id: components['schemas']['Uuid']
+        person_id: components['schemas']['Uuid']
+        roles: ('owner' | 'admin' | 'coach' | 'staff')[]
+        /** Format: date-time */
+        joined_at: string
+      }[]
+      team_counts: {
+        active: number
+        terminated: number
+      }
+      /** @description True when the team has more active members than the file lists. */
+      team_truncated: boolean
+      sites: {
+        site_id: components['schemas']['Uuid']
+        name: string
+        address: string | null
+        /** @description A natural person's address is withheld, because it can be their home. */
+        address_withheld: boolean
+        /** @enum {string} */
+        status: 'active' | 'inactive'
+      }[]
+      /** @description Null until service relationships exist. Never zero in their place. */
+      people_served: number | null
+      plans_availability: components['schemas']['ModelAvailability']
+      payment_method_availability: components['schemas']['ModelAvailability']
+      premium_availability: components['schemas']['ModelAvailability']
+    }
+    /**
+     * @description Whether the organization answers as a company or as a natural person. A natural person's name is never written by Allfit.
+     * @enum {string}
+     */
+    OrganizationPartyKind: 'natural_person' | 'legal_entity'
+    OrganizationHandoverCreate: {
+      display_name: string
+      type_code: components['schemas']['OrganizationTypeCode']
+      party_kind: components['schemas']['OrganizationPartyKind']
+      /** @description Required for a company and refused for a natural person. */
+      legal_name?: string | null
+      site?: {
+        name: string
+        address?: string | null
+      } | null
+      /** Format: email */
+      owner_email: string
+    }
+    OrganizationHandover: {
+      organization_id: components['schemas']['Uuid']
+      display_name: string
+      type_code: components['schemas']['OrganizationTypeCode']
+      type_name: string
+      party_kind: components['schemas']['OrganizationPartyKind']
+      legal_name: string | null
+      status: components['schemas']['OrganizationLifecycleStatus']
+      /** Format: date-time */
+      created_at: string
+      /** Format: date-time */
+      claimed_at: string | null
+      /** Format: date-time */
+      cancelled_at: string | null
+      site: {
+        site_id: components['schemas']['Uuid']
+        name: string
+        address: string | null
+      } | null
+      /** @description The latest ownership invitation. The address is a hint, never the address. */
+      invitation: {
+        invitation_id: components['schemas']['Uuid']
+        status: components['schemas']['TeamInvitationStatus']
+        intent_status: components['schemas']['TeamInvitationIntentStatus']
+        contact_hint: string
+        /** Format: date-time */
+        expires_at: string
+      } | null
+    }
+    /**
+     * @description How a credential was checked. Documents, civil identity, health and a complete profile are never verifiable in V1, so no method exists for them.
+     * @enum {string}
+     */
+    CredentialVerificationMethod: 'official_registry_lookup' | 'issuer_confirmation'
+    /**
+     * @description What a verifier may record. There is no default, and `unverifiable` is the answer whenever the evidence does not reach.
+     * @enum {string}
+     */
+    CredentialVerificationResult: 'verified' | 'rejected' | 'unverifiable'
+    CredentialVerificationRequest: {
+      request_id: components['schemas']['Uuid']
+      /** @enum {string} */
+      kind: 'initial' | 'renewal'
+      /** Format: date-time */
+      requested_at: string
+      credential_id: components['schemas']['Uuid']
+      credential_type_code: string
+      credential_type_name: string
+      issuer: string
+      credential_name: string
+      credential_identifier: string | null
+      /** Format: date */
+      issued_on: string | null
+      /** Format: date */
+      expires_on: string | null
+      /** Format: uri */
+      verification_url: string | null
+      holder_person_id: components['schemas']['Uuid']
+      holder_given_name: string
+      holder_family_name: string
+      suggested_method: components['schemas']['CredentialVerificationMethod']
+      /** @description The latest result recorded for this exact version, so a renewal shows what it renews. */
+      previous_result: string | null
+      /** Format: date-time */
+      previous_valid_to: string | null
+      /** @description A hint for the screen, never authority. False when the caller is the holder or shares an active organization with them. */
+      viewer_can_decide: boolean
+    }
+    CredentialVerificationRequestList: {
+      items: components['schemas']['CredentialVerificationRequest'][]
+    }
+    /** @description No policy, no validity and no evidence fingerprint: the server derives all three, so a client cannot decide how long its own verification lasts. */
+    CredentialVerificationDecisionCreate: {
+      request_id: components['schemas']['Uuid']
+      result: components['schemas']['CredentialVerificationResult']
+      method: components['schemas']['CredentialVerificationMethod']
+      source_authority: string
+      source_jurisdiction: string
+      /** @description Kept as evidence and never returned by any read. */
+      source_reference: string
+      source_status: string
+      /** Format: date-time */
+      source_checked_at: string
+      /** Format: date-time */
+      source_valid_to?: string | null
+    }
+    CredentialVerificationRecord: {
+      id: components['schemas']['Uuid']
+      /** @enum {string} */
+      result: 'verified' | 'rejected' | 'unverifiable' | 'revoked'
+      method: components['schemas']['CredentialVerificationMethod']
+      /** Format: date-time */
+      decided_at: string
+      /** Format: date-time */
+      valid_from: string | null
+      /** Format: date-time */
+      valid_to: string | null
+    }
+    /** @description The outcome, never the evidence — no registry reference and no fingerprint. */
+    CredentialVerificationOutcome: {
+      request_id: components['schemas']['Uuid']
+      /** @enum {string} */
+      kind: 'initial' | 'renewal'
+      /** @enum {string} */
+      status: 'pending' | 'resolved' | 'cancelled'
+      credential_id: components['schemas']['Uuid']
+      /** Format: date-time */
+      created_at: string
+      /** Format: date-time */
+      resolved_at: string | null
+      verification: components['schemas']['CredentialVerificationRecord'] | null
+    }
+    CredentialRenewalDue: {
+      credential_id: components['schemas']['Uuid']
+      credential_type_code: string
+      credential_type_name: string
+      credential_name: string
+      issuer: string
+      holder_person_id: components['schemas']['Uuid']
+      holder_given_name: string
+      holder_family_name: string
+      /** Format: date-time */
+      last_valid_to: string
+    }
+    CredentialRenewalDueList: {
+      items: components['schemas']['CredentialRenewalDue'][]
+    }
+    CredentialRenewalCreate: {
+      credential_id: components['schemas']['Uuid']
+    }
+    /**
+     * @description How the access was authorised. `break_glass` is the exceptional path and is the only one subject to the per-case auditor disqualification.
+     * @enum {string}
+     */
+    AccessMode: 'live' | 'frozen' | 'break_glass' | 'organization_operational' | 'support_metadata'
+    /** @description The record of one access. It never carries what was read: the table it comes from has no content columns, and the closed query returns this exact shape. */
+    AccessEvent: {
+      actor_person_id: components['schemas']['Uuid']
+      /** Format: uuid */
+      subject_person_id: string | null
+      /** @description The kind of data that was read, such as `nutrition.intake_entries`. */
+      resource: string
+      /** Format: uuid */
+      resource_id: string | null
+      purpose: string
+      /** @enum {string} */
+      result: 'allowed' | 'denied'
+      scope_code: string | null
+      scope_version: number | null
+      access_mode: components['schemas']['AccessMode']
+      /** Format: date-time */
+      occurred_at: string
+    }
+    AccessEventPage: {
+      items: components['schemas']['AccessEvent'][]
+      /** @description How many records matching these filters were removed because this auditor requested or approved the break-glass window they belong to. Reported separately from the list so that it survives an empty one. */
+      withheld_from_you: number
+    }
+    BreakGlassApproval: {
+      approver_person_id: components['schemas']['Uuid']
+      /** @enum {string} */
+      decision: 'approved' | 'rejected'
+      reason_code: string
+      /** Format: date-time */
+      decided_at: string
+    }
+    /** @description The file. It carries metadata about purpose and subject, and never the person's content. */
+    BreakGlassRequest: {
+      id: components['schemas']['UuidV7']
+      requester_person_id: components['schemas']['Uuid']
+      subject_person_id: components['schemas']['Uuid']
+      categories: components['schemas']['BreakGlassCategory'][]
+      purpose: components['schemas']['BreakGlassPurpose']
+      case_reference: string
+      sensitivity_tier: components['schemas']['BreakGlassTier']
+      required_approvals: number
+      requested_duration_minutes: number
+      /** Format: date-time */
+      requested_at: string
+      /** Format: date-time */
+      request_expires_at: string
+      status: components['schemas']['BreakGlassStatus']
+      /** Format: date-time */
+      window_starts_at: string | null
+      /** Format: date-time */
+      window_ends_at: string | null
+      /** Format: date-time */
+      closed_at: string | null
+      /** Format: date-time */
+      reviewed_at: string | null
+      /** @enum {string|null} */
+      review_outcome: 'justified' | 'unjustified' | 'incident_opened' | null
+      approvals: components['schemas']['BreakGlassApproval'][]
+      exercise_count: number
+      /** @description Whether the caller opened this file. The Backoffice session carries no domain identifier, so the server answers this rather than the client re-deriving it from one. */
+      viewer_is_requester: boolean
+      /** @description A hint for the screen, never authority: it saves offering a button that would always be refused. Every command revalidates on its own. */
+      viewer_can_decide: boolean
+      /** @description A hint for the screen, on the same terms as `viewer_can_decide`. */
+      viewer_can_exercise: boolean
+    }
+    BreakGlassRequestList: {
+      items: components['schemas']['BreakGlassRequest'][]
+    }
+    /** @description No tier, no approval count and no duration: the server derives all three from the categories. */
+    BreakGlassRequestCreate: {
+      subject_person_id: components['schemas']['Uuid']
+      categories: components['schemas']['BreakGlassCategory'][]
+      purpose: components['schemas']['BreakGlassPurpose']
+      case_reference: string
+    }
+    BreakGlassDecision: {
+      /** @enum {string} */
+      decision: 'approved' | 'rejected'
+      reason_code: string
+    }
+    BreakGlassExercise: {
+      category: components['schemas']['BreakGlassCategory']
+      resource_type: string
+      /** Format: uuid */
+      resource_id?: string | null
+    }
+    /** @description Every attempt is recorded before this answers, so `break_glass_event_id` is the evidence of this exact attempt. No outcome carries content in this version. */
+    BreakGlassExerciseOutcome: {
+      /** @enum {string} */
+      outcome: 'denied' | 'content_unavailable'
+      reason_code: string
+      break_glass_event_id: components['schemas']['Uuid']
+      /** Format: date-time */
+      occurred_at: string
+      category?: components['schemas']['BreakGlassCategory']
+    }
+    /** @enum {string} */
+    SupportOperationSourceKind: 'notification' | 'command'
+    /**
+     * @description `pending` is a notification not sent yet and `retrying` one that already failed, kept apart so a healthy queue does not read as a pile of failures. `stalled` is a command still processing long after it started.
+     * @enum {string}
+     */
+    SupportOperationState:
+      | 'pending'
+      | 'retrying'
+      | 'delivered'
+      | 'dead_lettered'
+      | 'processing'
+      | 'stalled'
+      | 'succeeded'
+      | 'rejected_final'
+    /** @description Identifiers, states, timestamps, error codes and retries. No payload, no stored response, no principal fingerprint and no request hash: this read exists to diagnose without opening anyone's data. */
+    SupportOperation: {
+      source: components['schemas']['SupportOperationSourceKind']
+      reference_id: components['schemas']['Uuid']
+      subject_kind: string | null
+      /** Format: uuid */
+      subject_id: string | null
+      label: string
+      state: components['schemas']['SupportOperationState']
+      /** Format: date-time */
+      occurred_at: string
+      attempt_count: number
+      last_error_code: string | null
+      /** Format: date-time */
+      resolved_at: string | null
+    }
+    SupportOperationPage: {
+      data: components['schemas']['SupportOperation'][]
+      page: components['schemas']['Page']
+    }
+    SupportDeliveryCircuit: {
+      event_type: string
+      state: string
+      /** Format: date-time */
+      window_started_at: string
+      success_count: number
+      failure_count: number
+      /** Format: date-time */
+      opened_until: string | null
+    }
+    SupportDeliveryCircuitList: {
+      items: components['schemas']['SupportDeliveryCircuit'][]
+    }
+    /** @description Failed charges and suspended subscriptions. Payments have no tables yet, so this says so instead of printing a zero. */
+    AttentionBillingNotice: {
+      /** @enum {string} */
+      availability: 'not_modelled'
+    }
+    /** @description `withheld` when the operator does not hold `verify_professional_credentials`; every count is then null, never zero. */
+    AttentionVerificationNotice: {
+      /** @enum {string} */
+      availability: 'available' | 'withheld'
+      pending_count: number | null
+      /** Format: date-time */
+      oldest_requested_at: string | null
+      renewals_due_count: number | null
+    }
+    /** @description Organizations Allfit created that nobody claimed. `needs_follow_up_count` counts the ones whose latest ownership invitation lapsed, was declined or never existed. `withheld` without a duty that reads the organization directory. */
+    AttentionUnclaimedOrganizationNotice: {
+      /** @enum {string} */
+      availability: 'available' | 'withheld'
+      count: number | null
+      /** Format: date-time */
+      oldest_created_at: string | null
+      needs_follow_up_count: number | null
+    }
+    /** @description One notification type or command operation that failed at least twice. `failures` counts failed delivery attempts or stranded commands; `affected` counts the notifications or commands involved. */
+    AttentionFailureGroup: {
+      source: components['schemas']['SupportOperationSourceKind']
+      label: string
+      affected: number
+      failures: number
+      /** Format: date-time */
+      latest_occurred_at: string
+      last_error_code: string | null
+    }
+    AttentionOpenCircuit: {
+      event_type: string
+      /** @enum {string} */
+      state: 'open' | 'half_open'
+      failure_count: number
+      /** Format: date-time */
+      opened_until: string | null
+    }
+    /** @description System errors that repeat inside the window, and delivery channels that tripped. `withheld` without `diagnose_support_metadata`; the lists are then null. */
+    AttentionFailureNotice: {
+      /** @enum {string} */
+      availability: 'available' | 'withheld'
+      /** @enum {integer} */
+      window_hours: 24
+      groups: components['schemas']['AttentionFailureGroup'][] | null
+      groups_truncated: boolean | null
+      open_circuits: components['schemas']['AttentionOpenCircuit'][] | null
+    }
+    /** @description Counters only. No person, organization or aggregate identifier travels here, so a counter cannot be used to open anything. */
+    SupportAttentionPanel: {
+      /** Format: date-time */
+      generated_at: string
+      billing: components['schemas']['AttentionBillingNotice']
+      credential_verifications: components['schemas']['AttentionVerificationNotice']
+      unclaimed_organizations: components['schemas']['AttentionUnclaimedOrganizationNotice']
+      repeated_failures: components['schemas']['AttentionFailureNotice']
+    }
+    /**
+     * @description Whether a block of the projection can say anything. `unknown` is a statement about the person; `not_modelled` is a statement about the platform, and confusing the two makes the card lie by omission.
+     * @enum {string}
+     */
+    SupportBlockAvailability: 'available' | 'unknown' | 'not_modelled'
+    /** @description The minimised operational state. No name, no full contact and no identity provider subject appear here, by construction rather than by filtering. */
+    SupportPersonMetadata: {
+      person_id: components['schemas']['Uuid']
+      account_status: string
+      /** Format: date-time */
+      created_at: string
+      /** Format: date-time */
+      activated_at: string | null
+      contact_email_masked: string | null
+      contact_phone_masked: string | null
+      /** Format: date-time */
+      email_verified_at: string | null
+      /** Format: date-time */
+      phone_verified_at: string | null
+      has_access_account: boolean
+      /** Format: date-time */
+      access_account_linked_at: string | null
+      active_session_count: number
+      /** Format: date-time */
+      last_seen_at: string | null
+      has_professional_profile: boolean
+      membership_count: number
+      active_membership_count: number
+      relationships_availability: components['schemas']['SupportBlockAvailability']
+      plan_availability: components['schemas']['SupportBlockAvailability']
+      premium_availability: components['schemas']['SupportBlockAvailability']
+      permissions_availability: components['schemas']['SupportBlockAvailability']
+    }
+    /** @description The outcome travels beside the items so a client cannot render an unexplained empty list. `HU-BO-006` criterion 3 is a contract obligation here, not a copy decision in one screen. */
+    SupportPeopleSearch: {
+      /** @enum {string} */
+      outcome: 'found' | 'not_found'
+      items: components['schemas']['SupportPersonMetadata'][]
+    }
+    PlatformRoleAssignmentPage: {
+      data: components['schemas']['PlatformRoleAssignment'][]
+      page: components['schemas']['Page']
+    }
+    PlatformDutyAssignmentPage: {
+      data: components['schemas']['PlatformDutyAssignment'][]
+      page: components['schemas']['Page']
+    }
+    CatalogDiscipline: {
+      code: string
+      name: string
+    }
+    CatalogDisciplineList: {
+      items: components['schemas']['CatalogDiscipline'][]
+    }
+    CatalogActivityType: {
+      id: components['schemas']['Uuid']
+      discipline_code: string
+      code: string
+      name: string
+    }
+    CatalogActivityTypeList: {
+      items: components['schemas']['CatalogActivityType'][]
+    }
+    /** @description One effective association. The minimums travel so a client can explain a rejection locally; they never replace the server's validation. */
+    ActivityTypeResultContract: {
+      result_contract_id: components['schemas']['UuidV7']
+      contract_code: string
+      version_number: number
+      activity_family: components['schemas']['ActivityFamily']
+      /** @constant */
+      contract_schema_version: 1
+      envelope: {
+        [key: string]: unknown
+      }
+      minimums: {
+        [key: string]: unknown
+      }
+      is_default: boolean
+      /** Format: date-time */
+      valid_from: string
+    }
+    ActivityTypeResultContractList: {
+      items: components['schemas']['ActivityTypeResultContract'][]
+    }
+    /** @enum {string} */
+    ActivityFamily: 'strength' | 'endurance' | 'interval' | 'mobility'
+    /** @description One case the contract must accept or reject. A rule nobody demonstrated failing is a rule nobody tested, so both kinds are required to publish. */
+    ContractFixture: {
+      /** @enum {string} */
+      kind: 'valid' | 'invalid'
+      payload: {
+        [key: string]: unknown
+      }
+      expected: string
+    }
+    PublishedContractFixture: {
+      id: components['schemas']['UuidV7']
+      /** @enum {string} */
+      kind: 'valid' | 'invalid'
+      /** @constant */
+      payload_schema_version: 1
+      payload: {
+        [key: string]: unknown
+      }
+      expected: string
+    }
+    ActivityTypeContractBinding: {
+      id: components['schemas']['UuidV7']
+      activity_type_id: components['schemas']['Uuid']
+      is_default: boolean
+      /** Format: date-time */
+      valid_from: string
+      /** Format: date-time */
+      valid_to: string | null
+    }
+    ResultContractPublication: {
+      contract_code: string
+      activity_family: components['schemas']['ActivityFamily']
+      envelope: {
+        [key: string]: unknown
+      }
+      minimums: {
+        [key: string]: unknown
+      }
+      fixtures: components['schemas']['ContractFixture'][]
+      activity_type_id: components['schemas']['Uuid']
+      /** @description Defaults to true on the server. Publishing a new default closes the previous one with a window instead of overwriting it. */
+      is_default?: boolean
+    }
+    ResultContract: {
+      id: components['schemas']['UuidV7']
+      contract_code: string
+      version_number: number
+      activity_family: components['schemas']['ActivityFamily']
+      /** @constant */
+      contract_schema_version: 1
+      envelope: {
+        [key: string]: unknown
+      }
+      minimums: {
+        [key: string]: unknown
+      }
+      /** @enum {string} */
+      status: 'published' | 'deprecated'
+      /** Format: date-time */
+      published_at: string
+      fixtures: components['schemas']['PublishedContractFixture'][]
+      activity_type_bindings: components['schemas']['ActivityTypeContractBinding'][]
+    }
+    /**
+     * @description Closed duty catalogue fixed by ADR-028. Growing it is a documented decision.
+     * @enum {string}
+     */
+    PlatformDutyCode:
+      | 'view_platform_metrics'
+      | 'diagnose_support_metadata'
+      | 'view_billing_metadata'
+      | 'manage_organization_lifecycle'
+      | 'request_break_glass'
+      | 'verify_professional_credentials'
+      | 'curate_global_catalog'
+      | 'manage_platform_commercial'
+      | 'manage_platform_access'
+      | 'audit_platform_access'
+      | 'approve_break_glass'
+      | 'audit_break_glass'
+      | 'manage_privacy_requests'
+    /**
+     * @description Derived from the duty code by the database; never accepted from a client.
+     * @enum {string}
+     */
+    PlatformActorMode: 'A10' | 'A11' | 'A12'
+    /** @description Opaque operational reference. Never a name, a contact or free narrative. */
+    PlatformAccessReasonCode: string
+    PlatformRoleGrant: {
+      person_id: components['schemas']['Uuid']
+      /** @enum {string} */
+      platform_role: 'allfit_admin'
+    }
+    PlatformRoleAssignment: {
+      id: components['schemas']['UuidV7']
+      person_id: components['schemas']['Uuid']
+      /** @enum {string} */
+      platform_role: 'allfit_admin'
+      /** @enum {string} */
+      status: 'active' | 'revoked'
+      granted_by_person_id: components['schemas']['Uuid']
+      /** Format: date-time */
+      granted_at: string
+      revoked_by_person_id: components['schemas']['Uuid'] | null
+      /** Format: date-time */
+      revoked_at: string | null
+    }
+    PlatformDutyGrant: {
+      person_id: components['schemas']['Uuid']
+      duty_code: components['schemas']['PlatformDutyCode']
+      /**
+       * Format: date-time
+       * @description Defaults to the command instant. A future value schedules the duty.
+       */
+      valid_from?: string
+      /**
+       * Format: date-time
+       * @description At most ninety days after valid_from; the database enforces the bound.
+       */
+      valid_to: string
+      reason_code: components['schemas']['PlatformAccessReasonCode']
+    }
+    PlatformDutyAssignment: {
+      id: components['schemas']['UuidV7']
+      person_id: components['schemas']['Uuid']
+      duty_code: components['schemas']['PlatformDutyCode']
+      actor_mode: components['schemas']['PlatformActorMode']
+      /** @enum {string} */
+      status: 'scheduled' | 'active' | 'suspended' | 'expired' | 'revoked'
+      /** Format: date-time */
+      valid_from: string
+      /** Format: date-time */
+      valid_to: string
+      /** @constant */
+      required_aal: 2
+      granted_by_person_id: components['schemas']['Uuid']
+      recertified_by_person_id: components['schemas']['Uuid'] | null
+      /** Format: date-time */
+      recertified_at: string | null
+      suspended_by_person_id: components['schemas']['Uuid'] | null
+      /** Format: date-time */
+      suspended_at: string | null
+      revoked_by_person_id: components['schemas']['Uuid'] | null
+      /** Format: date-time */
+      revoked_at: string | null
+      reason_code: components['schemas']['PlatformAccessReasonCode']
+    }
     BackofficePasswordRequest: {
       /** Format: email */
       email: string
@@ -3013,6 +4400,44 @@ export interface components {
         /** @enum {string} */
         proposed_role_code: 'admin' | 'coach' | 'staff'
         membership_id: components['schemas']['UuidV7'] | null
+      }
+      replayed: boolean
+    }
+    OwnershipInvitationPresentation: {
+      id: components['schemas']['Uuid']
+      organization: {
+        id: components['schemas']['Uuid']
+        display_name: string
+        type_name: string
+        party_kind: components['schemas']['OrganizationPartyKind']
+        legal_name: string | null
+        site_name: string | null
+      }
+      /** Format: date-time */
+      expires_at: string
+      intent: {
+        id: components['schemas']['Uuid']
+        /** @constant */
+        status: 'pending'
+      }
+    }
+    OwnershipInvitationDecisionCreate: {
+      token: string
+      intent_id: components['schemas']['Uuid']
+      /** @enum {string} */
+      decision: 'accepted' | 'rejected'
+    }
+    OwnershipInvitationDecisionResult: {
+      invitation_id: components['schemas']['Uuid']
+      /** @constant */
+      invitation_status: 'completed'
+      organization_id: components['schemas']['Uuid']
+      intent: {
+        id: components['schemas']['Uuid']
+        /** @enum {string} */
+        status: 'accepted' | 'rejected'
+        /** Format: uuid */
+        membership_id: string | null
       }
       replayed: boolean
     }
@@ -4768,6 +6193,34 @@ export interface components {
     }
   }
   parameters: {
+    BreakGlassRequestId: components['schemas']['UuidV7']
+    /** @description Only your own requests. Absent means the whole tray. */
+    BreakGlassMine: boolean
+    BreakGlassStatus: components['schemas']['BreakGlassStatus']
+    SupportOperationSource: components['schemas']['SupportOperationSourceKind']
+    SupportOperationState: components['schemas']['SupportOperationState']
+    /** @description Part of an organization's display name, matched literally. At least two characters, so a search is a question rather than a way to page everything. */
+    OrganizationSearch: string
+    OrganizationLifecycleFilter: components['schemas']['OrganizationLifecycleStatus']
+    /** @description The team member whose accesses are being reviewed. */
+    AccessEventActor: components['schemas']['Uuid']
+    /** @description The person whose data was accessed. */
+    AccessEventSubject: components['schemas']['Uuid']
+    /** @description Inclusive lower bound on when the access happened. */
+    AccessEventFrom: string
+    /** @description Exclusive upper bound on when the access happened. */
+    AccessEventTo: string
+    /** @description The aggregate an event belongs to. Not every event is reachable from a person: a notification about an invitation belongs to the invitation. */
+    SupportAggregateId: components['schemas']['Uuid']
+    /** @description The case this read belongs to. A structured reference rather than free prose, so the record can be followed back to a case months later. */
+    SupportCaseReference: string
+    SupportPersonId: components['schemas']['Uuid']
+    /** @description Exactly one lookup parameter is accepted per search. */
+    SupportLookupIdentifier: components['schemas']['Uuid']
+    /** @description Exact match only. Exactly one lookup parameter is accepted per search. */
+    SupportLookupEmail: string
+    /** @description Exact match only. Exactly one lookup parameter is accepted per search. */
+    SupportLookupPhone: string
     OnboardingAttemptId: components['schemas']['UuidV7']
     CredentialId: components['schemas']['UuidV7']
     Origin: string
@@ -4784,6 +6237,13 @@ export interface components {
     GrantId: components['schemas']['Uuid']
     MealId: components['schemas']['Uuid']
     GoalVersionId: components['schemas']['Uuid']
+    CatalogActivityTypeId: components['schemas']['Uuid']
+    ResultContractId: components['schemas']['UuidV7']
+    PlatformPersonFilter: components['schemas']['Uuid']
+    PlatformDutyFilter: components['schemas']['PlatformDutyCode']
+    /** @description Filters on the effective state, so `expired` reflects the clock, not a job. */
+    PlatformDutyStatusFilter: 'scheduled' | 'active' | 'suspended' | 'expired' | 'revoked'
+    PlatformAssignmentId: components['schemas']['UuidV7']
     /** @description UUIDv4 reused only for HTTP retries of this operation. */
     IdempotencyKey: components['schemas']['UuidV4']
     /** @description UUIDv7 durable identity generated when the user intention is created. */
@@ -5037,6 +6497,1227 @@ export interface operations {
       400: components['responses']['BadRequest']
       403: components['responses']['Forbidden']
       429: components['responses']['TooManyRequests']
+    }
+  }
+  listBackofficePlatformRoles: {
+    parameters: {
+      query?: {
+        limit?: components['parameters']['Limit']
+        cursor?: components['parameters']['Cursor']
+      }
+      header: {
+        Origin: components['parameters']['Origin']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Assignments ordered by effective state first, then by most recent grant */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['PlatformRoleAssignmentPage']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  grantBackofficePlatformRole: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformRoleGrant']
+      }
+    }
+    responses: {
+      /** @description Base role granted, or the converged assignment for a repeated command */
+      201: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['PlatformRoleAssignment']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  revokeBackofficePlatformRole: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        assignmentId: components['parameters']['PlatformAssignmentId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': Record<string, never>
+      }
+    }
+    responses: {
+      /** @description Base role withdrawn, or the already withdrawn assignment */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['PlatformRoleAssignment']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listBackofficePlatformDuties: {
+    parameters: {
+      query?: {
+        person_id?: components['parameters']['PlatformPersonFilter']
+        duty_code?: components['parameters']['PlatformDutyFilter']
+        /** @description Filters on the effective state, so `expired` reflects the clock, not a job. */
+        status?: components['parameters']['PlatformDutyStatusFilter']
+        limit?: components['parameters']['Limit']
+        cursor?: components['parameters']['Cursor']
+      }
+      header: {
+        Origin: components['parameters']['Origin']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Assignments ordered by effective state first, then by newest window */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['PlatformDutyAssignmentPage']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  grantBackofficePlatformDuty: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlatformDutyGrant']
+      }
+    }
+    responses: {
+      /** @description Duty granted, or the converged assignment for a repeated command */
+      201: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['PlatformDutyAssignment']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  suspendBackofficePlatformDuty: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        assignmentId: components['parameters']['PlatformAssignmentId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': Record<string, never>
+      }
+    }
+    responses: {
+      /** @description Duty suspended, or the already suspended assignment */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['PlatformDutyAssignment']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  revokeBackofficePlatformDuty: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        assignmentId: components['parameters']['PlatformAssignmentId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': Record<string, never>
+      }
+    }
+    responses: {
+      /** @description Duty revoked, or the already revoked assignment */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['PlatformDutyAssignment']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  publishResultContract: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ResultContractPublication']
+      }
+    }
+    responses: {
+      /** @description Contract published with its fixtures and its activity binding */
+      201: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ResultContract']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  deprecateResultContract: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        contractId: components['parameters']['ResultContractId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': Record<string, never>
+      }
+    }
+    responses: {
+      /** @description Deprecated contract, or the already deprecated one */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ResultContract']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listCatalogDisciplines: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Published disciplines ordered by their stable code */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['PrivateNoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CatalogDisciplineList']
+        }
+      }
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listCatalogActivityTypes: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Published global activity types ordered by discipline and code */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['PrivateNoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CatalogActivityTypeList']
+        }
+      }
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listCatalogActivityTypeResultContracts: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        activityTypeId: components['parameters']['CatalogActivityTypeId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Effective associations, the default first */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['PrivateNoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ActivityTypeResultContractList']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  searchBackofficeSupportPeople: {
+    parameters: {
+      query: {
+        /** @description The case this read belongs to. A structured reference rather than free prose, so the record can be followed back to a case months later. */
+        case_reference: components['parameters']['SupportCaseReference']
+        /** @description Exactly one lookup parameter is accepted per search. */
+        identifier?: components['parameters']['SupportLookupIdentifier']
+        /** @description Exact match only. Exactly one lookup parameter is accepted per search. */
+        email?: components['parameters']['SupportLookupEmail']
+        /** @description Exact match only. Exactly one lookup parameter is accepted per search. */
+        phone?: components['parameters']['SupportLookupPhone']
+      }
+      header: {
+        Origin: components['parameters']['Origin']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The match, or an explicit not-found outcome. Never a bare empty list: the outcome says which of the two happened. */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SupportPeopleSearch']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  readBackofficeSupportPersonMetadata: {
+    parameters: {
+      query: {
+        /** @description The case this read belongs to. A structured reference rather than free prose, so the record can be followed back to a case months later. */
+        case_reference: components['parameters']['SupportCaseReference']
+      }
+      header: {
+        Origin: components['parameters']['Origin']
+      }
+      path: {
+        personId: components['parameters']['SupportPersonId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The minimised operational state */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SupportPersonMetadata']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listBackofficeSupportOperations: {
+    parameters: {
+      query?: {
+        source?: components['parameters']['SupportOperationSource']
+        state?: components['parameters']['SupportOperationState']
+        /** @description The aggregate an event belongs to. Not every event is reachable from a person: a notification about an invitation belongs to the invitation. */
+        aggregate_id?: components['parameters']['SupportAggregateId']
+        limit?: components['parameters']['Limit']
+        cursor?: components['parameters']['Cursor']
+      }
+      header: {
+        Origin: components['parameters']['Origin']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Operational events, newest first */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SupportOperationPage']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listBackofficeSupportDeliveryCircuits: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Circuits ordered by failures first */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SupportDeliveryCircuitList']
+        }
+      }
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  readBackofficeSupportAttention: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The notices this operator's duties resolve */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SupportAttentionPanel']
+        }
+      }
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listBackofficeOrganizations: {
+    parameters: {
+      query?: {
+        /** @description Part of an organization's display name, matched literally. At least two characters, so a search is a question rather than a way to page everything. */
+        q?: components['parameters']['OrganizationSearch']
+        status?: components['parameters']['OrganizationLifecycleFilter']
+        limit?: components['parameters']['Limit']
+        cursor?: components['parameters']['Cursor']
+      }
+      header: {
+        Origin: components['parameters']['Origin']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Organizations in name order */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['BackofficeOrganizationPage']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  createBackofficeOrganizationHandover: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['OrganizationHandoverCreate']
+      }
+    }
+    responses: {
+      /** @description The handover, or the same one for a repeated command */
+      201: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['OrganizationHandover']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  readBackofficeOrganizationFile: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+      }
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The file */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['BackofficeOrganizationFile']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  readBackofficeOrganizationHandover: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+      }
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The handover */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['OrganizationHandover']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  resendBackofficeOrganizationHandover: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The handover with the invitation that was sent */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['OrganizationHandover']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  cancelBackofficeOrganizationHandover: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The cancelled handover */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['OrganizationHandover']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listBackofficeVerificationRequests: {
+    parameters: {
+      query?: {
+        limit?: components['parameters']['Limit']
+      }
+      header: {
+        Origin: components['parameters']['Origin']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Pending requests, oldest first */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CredentialVerificationRequestList']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  createBackofficeVerification: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CredentialVerificationDecisionCreate']
+      }
+    }
+    responses: {
+      /** @description The resolved request and the verification that resolved it */
+      201: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CredentialVerificationOutcome']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listBackofficeVerificationRenewals: {
+    parameters: {
+      query?: {
+        limit?: components['parameters']['Limit']
+      }
+      header: {
+        Origin: components['parameters']['Origin']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Due renewals, soonest first */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CredentialRenewalDueList']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  openBackofficeVerificationRenewal: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CredentialRenewalCreate']
+      }
+    }
+    responses: {
+      /** @description The renewal request, pending */
+      201: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CredentialVerificationOutcome']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listBackofficeAccessEvents: {
+    parameters: {
+      query?: {
+        /** @description The team member whose accesses are being reviewed. */
+        actor_person_id?: components['parameters']['AccessEventActor']
+        /** @description The person whose data was accessed. */
+        subject_person_id?: components['parameters']['AccessEventSubject']
+        /** @description Inclusive lower bound on when the access happened. */
+        from?: components['parameters']['AccessEventFrom']
+        /** @description Exclusive upper bound on when the access happened. */
+        to?: components['parameters']['AccessEventTo']
+        limit?: components['parameters']['Limit']
+      }
+      header: {
+        Origin: components['parameters']['Origin']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Access records, newest first */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['AccessEventPage']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listBackofficeScopeDefinitions: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Published versions, newest of each scope first */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ScopeDefinitionList']
+        }
+      }
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  publishBackofficeScopeDefinition: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ScopeDefinitionPublication']
+      }
+    }
+    responses: {
+      /** @description The published version, or the converged one for a repeated command */
+      201: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ScopeDefinition']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listBackofficeBreakGlassRequests: {
+    parameters: {
+      query?: {
+        /** @description Only your own requests. Absent means the whole tray. */
+        mine?: components['parameters']['BreakGlassMine']
+        status?: components['parameters']['BreakGlassStatus']
+        limit?: components['parameters']['Limit']
+      }
+      header: {
+        Origin: components['parameters']['Origin']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Requests, newest first */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['BreakGlassRequestList']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  requestBackofficeBreakGlass: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['BreakGlassRequestCreate']
+      }
+    }
+    responses: {
+      /** @description The file, or the converged one for a repeated command */
+      201: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['BreakGlassRequest']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  decideBackofficeBreakGlass: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        requestId: components['parameters']['BreakGlassRequestId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['BreakGlassDecision']
+      }
+    }
+    responses: {
+      /** @description The file after the decision */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['BreakGlassRequest']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  exerciseBackofficeBreakGlass: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+      }
+      path: {
+        requestId: components['parameters']['BreakGlassRequestId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['BreakGlassExercise']
+      }
+    }
+    responses: {
+      /** @description The outcome of the attempt. `denied` and `content_unavailable` are both answers rather than failures; neither carries content. */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['BreakGlassExerciseOutcome']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  closeBackofficeBreakGlass: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        requestId: components['parameters']['BreakGlassRequestId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The closed file */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['BreakGlassRequest']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      503: components['responses']['UpstreamUnavailable']
     }
   }
   getSpaceTelemetryConfig: {
@@ -5891,9 +8572,7 @@ export interface operations {
   listStudioProfessionalSpecialties: {
     parameters: {
       query?: never
-      header?: {
-        'If-None-Match'?: components['parameters']['IfNoneMatch']
-      }
+      header?: never
       path?: never
       cookie?: never
     }
@@ -5902,22 +8581,12 @@ export interface operations {
       /** @description Published professional specialty catalogue */
       200: {
         headers: {
-          'Cache-Control': components['headers']['PrivateRevalidate']
-          ETag: components['headers']['ETag']
+          'Cache-Control': components['headers']['PrivateNoStore']
           [name: string]: unknown
         }
         content: {
           'application/json': components['schemas']['ProfessionalSpecialtyList']
         }
-      }
-      /** @description Catalogue has not changed */
-      304: {
-        headers: {
-          'Cache-Control': components['headers']['PrivateRevalidate']
-          ETag: components['headers']['ETag']
-          [name: string]: unknown
-        }
-        content?: never
       }
       401: components['responses']['Unauthenticated']
       403: components['responses']['RegistrationIncomplete']
@@ -5927,9 +8596,7 @@ export interface operations {
   listStudioProfessionalCredentialTypes: {
     parameters: {
       query?: never
-      header?: {
-        'If-None-Match'?: components['parameters']['IfNoneMatch']
-      }
+      header?: never
       path?: never
       cookie?: never
     }
@@ -5938,22 +8605,12 @@ export interface operations {
       /** @description Published professional credential type catalogue */
       200: {
         headers: {
-          'Cache-Control': components['headers']['PrivateRevalidate']
-          ETag: components['headers']['ETag']
+          'Cache-Control': components['headers']['PrivateNoStore']
           [name: string]: unknown
         }
         content: {
           'application/json': components['schemas']['ProfessionalCredentialTypeList']
         }
-      }
-      /** @description Catalogue has not changed */
-      304: {
-        headers: {
-          'Cache-Control': components['headers']['PrivateRevalidate']
-          ETag: components['headers']['ETag']
-          [name: string]: unknown
-        }
-        content?: never
       }
       401: components['responses']['Unauthenticated']
       403: components['responses']['RegistrationIncomplete']
@@ -6454,9 +9111,7 @@ export interface operations {
   listStudioOrganizationRoles: {
     parameters: {
       query?: never
-      header?: {
-        'If-None-Match'?: components['parameters']['IfNoneMatch']
-      }
+      header?: never
       path: {
         organizationId: components['parameters']['OrganizationId']
       }
@@ -6467,22 +9122,12 @@ export interface operations {
       /** @description The four governed V1 roles and their capabilities */
       200: {
         headers: {
-          'Cache-Control': components['headers']['PrivateRevalidate']
-          ETag: components['headers']['ETag']
+          'Cache-Control': components['headers']['PrivateNoStore']
           [name: string]: unknown
         }
         content: {
           'application/json': components['schemas']['OrganizationRoleCatalog']
         }
-      }
-      /** @description The role catalogue has not changed */
-      304: {
-        headers: {
-          'Cache-Control': components['headers']['PrivateRevalidate']
-          ETag: components['headers']['ETag']
-          [name: string]: unknown
-        }
-        content?: never
       }
       400: components['responses']['BadRequest']
       401: components['responses']['Unauthenticated']
@@ -6555,6 +9200,72 @@ export interface operations {
       409: components['responses']['Conflict']
       422: components['responses']['ValidationFailed']
       429: components['responses']['RateLimited']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  resolveStudioOwnershipInvitation: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['TeamInvitationToken']
+      }
+    }
+    responses: {
+      /** @description Pending ownership invitation presentation */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['OwnershipInvitationPresentation']
+        }
+      }
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  decideStudioOwnershipInvitation: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['OwnershipInvitationDecisionCreate']
+      }
+    }
+    responses: {
+      /** @description Decision and any ownership committed atomically */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['OwnershipInvitationDecisionResult']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      422: components['responses']['ValidationFailed']
       503: components['responses']['UpstreamUnavailable']
     }
   }

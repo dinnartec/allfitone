@@ -34,6 +34,58 @@ const NO_QUEUE_SDK = {
 // package. Foundations and implementation libraries remain private to the DS.
 const UI_APPS = ['studio-web', 'backoffice-web']
 
+function jsxAttribute(node, name) {
+  return node.attributes.find(
+    (attribute) =>
+      attribute.type === 'JSXAttribute' &&
+      attribute.name.type === 'JSXIdentifier' &&
+      attribute.name.name === name,
+  )
+}
+
+function literalAttribute(node, name) {
+  const value = jsxAttribute(node, name)?.value
+  if (value?.type === 'Literal') return value.value
+  if (value?.type === 'JSXExpressionContainer' && value.expression.type === 'Literal') {
+    return value.expression.value
+  }
+  return undefined
+}
+
+function findCall(node, callee) {
+  if (typeof node?.type !== 'string') return undefined
+  if (
+    node.type === 'CallExpression' &&
+    node.callee.type === 'Identifier' &&
+    node.callee.name === callee
+  ) {
+    return node
+  }
+  for (const [key, child] of Object.entries(node)) {
+    if (key === 'parent') continue
+    for (const item of Array.isArray(child) ? child : [child]) {
+      const found = findCall(item, callee)
+      if (found) return found
+    }
+  }
+  return undefined
+}
+
+// `undefined` when the variant is computed and cannot be compared statically.
+function buttonVariantOf(call) {
+  const [options] = call.arguments
+  if (!options) return 'default'
+  if (options.type !== 'ObjectExpression') return undefined
+  const variant = options.properties.find(
+    (property) =>
+      property.type === 'Property' &&
+      ((property.key.type === 'Identifier' && property.key.name === 'variant') ||
+        (property.key.type === 'Literal' && property.key.value === 'variant')),
+  )
+  if (!variant) return 'default'
+  return variant.value.type === 'Literal' ? variant.value.value : undefined
+}
+
 const allfitonePlugin = {
   rules: {
     'no-visible-native-controls': {
@@ -71,6 +123,43 @@ const allfitonePlugin = {
 
             if (!hidden) {
               context.report({ node, messageId: 'nativeControl', data: { name } })
+            }
+          },
+        }
+      },
+    },
+    // A link cannot be a Design System `Button`: rendered through one it gains
+    // `role="button"`. So it takes the classes, and the slot must come by hand.
+    'button-variants-need-slot': {
+      meta: {
+        type: 'problem',
+        schema: [],
+        messages: {
+          missingSlot:
+            'An element styled with buttonVariants() needs data-slot="button". Without it the Design System button treatment (accent gradient, hover lift) never applies.',
+          variantMismatch:
+            'data-variant="{{actual}}" does not match the "{{expected}}" variant passed to buttonVariants().',
+        },
+      },
+      create(context) {
+        return {
+          JSXOpeningElement(node) {
+            const call = findCall(jsxAttribute(node, 'className')?.value, 'buttonVariants')
+            if (!call) return
+
+            if (literalAttribute(node, 'data-slot') !== 'button') {
+              context.report({ node, messageId: 'missingSlot' })
+              return
+            }
+
+            const expected = buttonVariantOf(call)
+            const actual = literalAttribute(node, 'data-variant')
+            if (expected !== undefined && actual !== expected) {
+              context.report({
+                node,
+                messageId: 'variantMismatch',
+                data: { expected, actual: actual ?? '(missing)' },
+              })
             }
           },
         }
@@ -146,7 +235,15 @@ const noOtherApps = (self) => ({
 // Listed explicitly, like the apps, so a domain can still import its own
 // internals. Adding a domain means adding it here — and until it is added, its
 // internals are reachable, so the list is part of creating a domain.
-const DOMAINS = ['catalog', 'execution', 'identity', 'organizations', 'planning']
+const DOMAINS = [
+  'catalog',
+  'execution',
+  'identity',
+  'organizations',
+  'planning',
+  'privacy',
+  'support',
+]
 
 // Brace expansion is NOT supported here — a `{a,b}` pattern silently matches
 // nothing, which is the worst failure mode for a rule like this. Expanded.
@@ -255,6 +352,7 @@ export default tseslint.config(
     },
     rules: {
       'allfitone/no-visible-native-controls': 'error',
+      'allfitone/button-variants-need-slot': 'error',
       'no-restricted-syntax': [
         'error',
         {

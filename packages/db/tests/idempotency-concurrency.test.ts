@@ -115,6 +115,16 @@ async function cleanupProfessionalFixture(): Promise<void> {
         where credential.professional_profile_id = ${PROFESSIONAL_PROFILE_ID}::uuid
       )
     `
+    // Declaring a credential opens its verification request, so the request goes
+    // before the credential it references and after any decision referencing it.
+    await transaction`
+      delete from identity.credential_verification_requests
+      where professional_credential_id in (
+        select credential.id
+        from identity.professional_credentials as credential
+        where credential.professional_profile_id = ${PROFESSIONAL_PROFILE_ID}::uuid
+      )
+    `
     await transaction`
       delete from identity.professional_credentials
       where professional_profile_id = ${PROFESSIONAL_PROFILE_ID}::uuid

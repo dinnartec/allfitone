@@ -17,8 +17,11 @@ const forbiddenStyleExtensions = new Set([
 ])
 
 const violations = []
+// A colour name only counts when it stands alone. With `\b` on both sides the
+// perfectly ordinary `white-space: nowrap` was reported as a literal colour,
+// because `white` ends at the hyphen.
 const rawColorPattern =
-  /#[0-9a-f]{3,8}\b|\brgba?\(|\bhsla?\(|\b(?:aliceblue|antiquewhite|aqua|aquamarine|azure|beige|bisque|black|blanchedalmond|blue|blueviolet|brown|burlywood|cadetblue|chartreuse|chocolate|coral|cornflowerblue|cornsilk|crimson|cyan|darkblue|darkcyan|darkgoldenrod|darkgray|darkgreen|darkgrey|darkkhaki|darkmagenta|darkolivegreen|darkorange|darkorchid|darkred|darksalmon|darkseagreen|darkslateblue|darkslategray|darkslategrey|darkturquoise|darkviolet|deeppink|deepskyblue|dimgray|dimgrey|dodgerblue|firebrick|floralwhite|forestgreen|fuchsia|gainsboro|ghostwhite|gold|goldenrod|gray|green|greenyellow|grey|honeydew|hotpink|indianred|indigo|ivory|khaki|lavender|lavenderblush|lawngreen|lemonchiffon|lightblue|lightcoral|lightcyan|lightgoldenrodyellow|lightgray|lightgreen|lightgrey|lightpink|lightsalmon|lightseagreen|lightskyblue|lightslategray|lightslategrey|lightsteelblue|lightyellow|lime|limegreen|linen|magenta|maroon|mediumaquamarine|mediumblue|mediumorchid|mediumpurple|mediumseagreen|mediumslateblue|mediumspringgreen|mediumturquoise|mediumvioletred|midnightblue|mintcream|mistyrose|moccasin|navajowhite|navy|oldlace|olive|olivedrab|orange|orangered|orchid|palegoldenrod|palegreen|paleturquoise|palevioletred|papayawhip|peachpuff|peru|pink|plum|powderblue|purple|rebeccapurple|red|rosybrown|royalblue|saddlebrown|salmon|sandybrown|seagreen|seashell|sienna|silver|skyblue|slateblue|slategray|slategrey|snow|springgreen|steelblue|tan|teal|thistle|tomato|turquoise|violet|wheat|white|whitesmoke|yellow|yellowgreen)\b/i
+  /#[0-9a-f]{3,8}\b|\brgba?\(|\bhsla?\(|(?<![\w-])(?:aliceblue|antiquewhite|aqua|aquamarine|azure|beige|bisque|black|blanchedalmond|blue|blueviolet|brown|burlywood|cadetblue|chartreuse|chocolate|coral|cornflowerblue|cornsilk|crimson|cyan|darkblue|darkcyan|darkgoldenrod|darkgray|darkgreen|darkgrey|darkkhaki|darkmagenta|darkolivegreen|darkorange|darkorchid|darkred|darksalmon|darkseagreen|darkslateblue|darkslategray|darkslategrey|darkturquoise|darkviolet|deeppink|deepskyblue|dimgray|dimgrey|dodgerblue|firebrick|floralwhite|forestgreen|fuchsia|gainsboro|ghostwhite|gold|goldenrod|gray|green|greenyellow|grey|honeydew|hotpink|indianred|indigo|ivory|khaki|lavender|lavenderblush|lawngreen|lemonchiffon|lightblue|lightcoral|lightcyan|lightgoldenrodyellow|lightgray|lightgreen|lightgrey|lightpink|lightsalmon|lightseagreen|lightskyblue|lightslategray|lightslategrey|lightsteelblue|lightyellow|lime|limegreen|linen|magenta|maroon|mediumaquamarine|mediumblue|mediumorchid|mediumpurple|mediumseagreen|mediumslateblue|mediumspringgreen|mediumturquoise|mediumvioletred|midnightblue|mintcream|mistyrose|moccasin|navajowhite|navy|oldlace|olive|olivedrab|orange|orangered|orchid|palegoldenrod|palegreen|paleturquoise|palevioletred|papayawhip|peachpuff|peru|pink|plum|powderblue|purple|rebeccapurple|red|rosybrown|royalblue|saddlebrown|salmon|sandybrown|seagreen|seashell|sienna|silver|skyblue|slateblue|slategray|slategrey|snow|springgreen|steelblue|tan|teal|thistle|tomato|turquoise|violet|wheat|white|whitesmoke|yellow|yellowgreen)(?![\w-])/i
 const dataSlotSelectorPattern = /\[\s*data-slot(?:\s*[~|^$*]?=|\s*\])/i
 const directInteractiveSelectorPattern =
   /(^|[\s>+~,])(?:button|input|select|textarea|table|dialog)(?=$|[\s>+~,.#:[\]])/i
@@ -108,6 +111,43 @@ async function verifyEslintBoundaryRule() {
   }
 }
 
+async function verifyButtonSlotRule() {
+  const ruleId = 'allfitone/button-variants-need-slot'
+  const eslint = new ESLint({ cwd: repositoryRoot })
+  const lint = async (source, name) => {
+    const [result] = await eslint.lintText(source, {
+      filePath: `apps/studio-web/src/${name}.tsx`,
+    })
+    return result.messages.filter((message) => message.ruleId === ruleId).length
+  }
+
+  const invalid = [
+    // No slot: the link keeps the flat primary colour instead of the gradient.
+    '<a href="/" className={buttonVariants()}>Go</a>',
+    '<a href="/" data-slot="button" data-variant="default" className={buttonVariants({ variant: "outline" })}>Go</a>',
+    '<a href="/" data-slot="button" className={buttonVariants({ variant: "outline" })}>Go</a>',
+  ]
+  const valid = [
+    '<a href="/" data-slot="button" data-variant="default" className={buttonVariants({ size: "lg" })}>Go</a>',
+    '<a href="/" data-slot="button" data-variant="outline" className={buttonVariants({ variant: "outline", size: "sm" })}>Go</a>',
+    '<a href="/" data-slot="button" data-variant={kind} className={buttonVariants({ variant: kind })}>Go</a>',
+    '<a href="/" className="plain">Go</a>',
+  ]
+  const wrap = (element) =>
+    `import { buttonVariants } from '@allfitone/react/components/button'\nexport function Fixture({ kind }: { kind: 'outline' }) { return ${element} }`
+
+  const missed = []
+  for (const [index, element] of invalid.entries()) {
+    if ((await lint(wrap(element), `__button-slot-invalid-${index}__`)) !== 1) missed.push(element)
+  }
+  for (const [index, element] of valid.entries()) {
+    if ((await lint(wrap(element), `__button-slot-valid-${index}__`)) !== 0) missed.push(element)
+  }
+  if (missed.length > 0) {
+    throw new Error(`ESLint button slot self-test failed on: ${missed.join(' | ')}`)
+  }
+}
+
 function verifyCssBoundaryRules() {
   const initialCount = violations.length
   inspectCompositionCss(
@@ -128,6 +168,11 @@ function verifyCssBoundaryRules() {
     'apps/studio-web/src/app/__valid.composition.css',
     '[data-studio-layout] { display: grid; gap: var(--afo-space-4); }',
   )
+  // A hyphenated property that merely contains a colour name is legitimate.
+  inspectCompositionCss(
+    'apps/studio-web/src/app/__valid-hyphenated.composition.css',
+    '[data-studio-code] { white-space: nowrap; color: var(--afo-color-text-muted); }',
+  )
   if (violations.length !== initialCount) {
     throw new Error('Legitimate composition CSS failed the UI boundary self-test.')
   }
@@ -135,6 +180,7 @@ function verifyCssBoundaryRules() {
 
 verifyCssBoundaryRules()
 await verifyEslintBoundaryRule()
+await verifyButtonSlotRule()
 
 await Promise.all(appRoots.map((appRoot) => inspectDirectory(resolve(repositoryRoot, appRoot))))
 

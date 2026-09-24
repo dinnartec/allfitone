@@ -6,6 +6,7 @@ import { Spinner } from '@allfitone/react/components/spinner'
 
 import { AccessLanding } from './access-landing'
 import { LoadingStage } from './studio-frame'
+import { useAnnouncedWait } from '@/lib/announced-wait'
 import {
   announceStudioLogout,
   readStudioSessionActivity,
@@ -282,6 +283,13 @@ export function SessionGuard({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  // `silent` already covers the checks whose message would be wrong. This covers
+  // the ones whose message arrives and leaves before it can be read: a reload
+  // that finds a confirmed answer in storage resolves inside the first frame,
+  // and announcing that wait paints a card nobody has time to see.
+  const announceCheck = useAnnouncedWait(guard.kind === 'checking' && !guard.silent)
+  const checkingIsVisible = guard.kind === 'checking' && !guard.silent && announceCheck
+
   return (
     <>
       {/* `ready` and `ending` must resolve to the same element in the same slot. A
@@ -296,8 +304,8 @@ export function SessionGuard({ children }: { children: ReactNode }) {
           {children}
         </div>
       ) : guard.kind === 'checking' ? (
-        <div data-session-checking data-session-blank={guard.silent ? '' : undefined}>
-          {guard.silent ? null : <LoadingStage />}
+        <div data-session-checking data-session-blank={checkingIsVisible ? undefined : ''}>
+          {checkingIsVisible ? <LoadingStage /> : null}
         </div>
       ) : guard.kind === 'closing' ? (
         <div data-session-closing>
@@ -315,12 +323,14 @@ export function SessionGuard({ children }: { children: ReactNode }) {
         </div>
       )}
       {guard.kind === 'ending' ? (
-        <Card data-session-ending-status>
-          <CardContent data-session-ending-body role="status" aria-live="polite">
-            <Spinner role={undefined} aria-hidden="true" />
-            <p>Cerrando tu sesión…</p>
-          </CardContent>
-        </Card>
+        <div data-session-ending-overlay>
+          <Card data-session-ending-status>
+            <CardContent data-session-ending-body role="status" aria-live="polite">
+              <Spinner role={undefined} aria-hidden="true" />
+              <p>Cerrando tu sesión…</p>
+            </CardContent>
+          </Card>
+        </div>
       ) : null}
       <form
         ref={inactivityFormRef}

@@ -12,6 +12,16 @@ export interface EligibleBackofficeAccount {
   providerFactorId?: string
 }
 
+/**
+ * The pair every Backoffice authorization resolves against. `sessionId` is the
+ * row in `identity.access_sessions`, not the provider session: the duty check
+ * reads assurance level, activity and revocation from that row.
+ */
+export interface BackofficeActor {
+  personId: string
+  sessionId: string
+}
+
 export interface BackofficeAttemptSecret {
   tokens: SessionTokens
   identity: AuthenticatedIdentity

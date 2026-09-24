@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { Hono } from 'hono'
 
@@ -54,21 +55,32 @@ beforeEach(() => {
 })
 
 describe('Studio professional catalogues', () => {
-  test('returns governed order with an ETag and answers exact revalidation with 304', async () => {
-    const first = await app().request('/studio/v1/professional-specialties', { headers: HEADERS })
-    expect(first.status).toBe(200)
-    expect(first.headers.get('cache-control')).toBe('private, max-age=0, must-revalidate')
-    const etag = first.headers.get('etag')
-    expect(etag).toBeTruthy()
-    await expect(first.json()).resolves.toEqual({
+  test('returns governed order uncached and without an ETag', async () => {
+    const response = await app().request('/studio/v1/professional-specialties', {
+      headers: HEADERS,
+    })
+    expect(response.status).toBe(200)
+    expect(response.headers.get('cache-control')).toBe('private, no-store')
+    expect(response.headers.get('etag')).toBeNull()
+    await expect(response.json()).resolves.toEqual({
       items: [{ code: 'personal_training', name: 'Entrenamiento personal', description: null }],
     })
+  })
 
-    const second = await app().request('/studio/v1/professional-specialties', {
-      headers: { ...HEADERS, 'if-none-match': etag ?? '' },
+  // The regression guard. A 304 reached the browser without CORS headers and was
+  // blocked. The tag sent is the exact one the revalidating version issued for
+  // this body — a Studio tab can still hold it — so a 304 here would be real.
+  test('answers a revalidation with the catalogue and CORS, never with 304', async () => {
+    const body = {
+      items: [{ code: 'personal_training', name: 'Entrenamiento personal', description: null }],
+    }
+    const issuedTag = `"${createHash('sha256').update(JSON.stringify(body)).digest('base64url')}"`
+    const response = await app().request('/studio/v1/professional-specialties', {
+      headers: { ...HEADERS, 'if-none-match': issuedTag },
     })
-    expect(second.status).toBe(304)
-    expect(second.headers.get('etag')).toBe(etag)
+    expect(response.status).toBe(200)
+    expect(response.headers.get('access-control-allow-origin')).toBe('https://studio.example.test')
+    expect(response.headers.get('access-control-allow-credentials')).toBe('true')
   })
 
   test('returns the closed professional credential type catalogue', async () => {
