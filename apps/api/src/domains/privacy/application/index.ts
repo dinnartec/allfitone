@@ -13,6 +13,9 @@ import type {
   ErasureRequestDatabase,
   ErasureRequestFilters,
   ErasureRequestPage,
+  LegalHoldApplication,
+  LegalHoldDatabase,
+  LegalHoldResult,
   PrivacyCurator,
   ScopeCommandContext,
   ScopeCommandResult,
@@ -34,6 +37,24 @@ export interface AccessLogService {
     auditor: PrivacyCurator,
     input: { requestId: string } & AccessEventFilters,
   ): Promise<AccessEventPage>
+}
+
+export interface LegalHoldService {
+  apply(
+    officer: PrivacyCurator,
+    input: ScopeCommandContext & { requestId: string; application: LegalHoldApplication },
+  ): Promise<LegalHoldResult>
+  release(
+    officer: PrivacyCurator,
+    input: ScopeCommandContext & { requestId: string; holdId: string },
+  ): Promise<LegalHoldResult>
+}
+
+export function createLegalHoldService(database: LegalHoldDatabase): LegalHoldService {
+  return {
+    apply: (officer, input) => database.apply({ ...officer, ...input }),
+    release: (officer, input) => database.release({ ...officer, ...input }),
+  }
 }
 
 export interface ErasureRequestService {
