@@ -259,6 +259,23 @@ const failing = (path: string, status: number, code: string) => () =>
     intercept: (request) => (request.path === path ? { status, body: error(code) } : undefined),
   })
 
+/**
+ * The same outage, for a person who is already a member: the failure has to sit
+ * behind a session that resolves, or the screen under audit never renders.
+ *
+ * 503 rather than 500 because `shouldRetryStudioQuery` retries only that one,
+ * which is what a person meets during a real outage. An always-failing path
+ * covers both attempts.
+ */
+const failingFor = (memberships: StudioApiFixture['memberships'], paths: RegExp) => () =>
+  createStudioApiFixture({
+    memberships,
+    intercept: (request) =>
+      request.method === 'GET' && paths.test(request.path)
+        ? { status: 503, body: error('upstream-unavailable') }
+        : undefined,
+  })
+
 const SESSION_STORAGE_KEY = 'allfit-studio-session:v1'
 
 /**
@@ -447,6 +464,57 @@ export const SCREENS: Screen[] = [
       }),
   },
   {
+    // The link outlives its window. The form stays on screen with its submit
+    // disabled, so the person can read why nothing they type will be accepted.
+    stories: 'entry · the activation window closed',
+    path: '/',
+    fixture: () =>
+      createStudioApiFixture({
+        session: {
+          authenticated: true,
+          registration_status: 'registration_incomplete',
+          identity: { given_name: 'Ada', family_name: 'Lovelace' },
+          analytics: { distinct_id: TEST_ANALYTICS_ID },
+        },
+        intercept: (request) =>
+          request.method === 'POST' && request.path === '/studio/v1/onboarding-attempts'
+            ? {
+                status: 201,
+                body: {
+                  id: '01991600-4000-7000-8000-000000000001',
+                  status: 'open',
+                  eligibility_status: 'unknown',
+                  expires_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+                  terms_version: 'platform_terms_v1',
+                  privacy_notice_version: 'privacy_notice_v1',
+                },
+              }
+            : undefined,
+      }),
+    settled: async (page) => {
+      await settledByHeading(page)
+      await expect(page.getByText('La activación venció')).toBeVisible()
+    },
+  },
+  {
+    // The waiting panel checks on demand rather than polling, so its failure is
+    // the only one in the product a person provokes by pressing a button.
+    stories: 'entry · the membership check did not finish',
+    path: '/',
+    fixture: () =>
+      createStudioApiFixture({
+        intercept: (request) =>
+          request.method === 'GET' && request.path === '/studio/v1/me/memberships'
+            ? { status: 503, body: error('upstream-unavailable') }
+            : undefined,
+      }),
+    reveal: async (page) => {
+      await page.getByRole('button', { name: /Esperar una invitación/ }).click()
+      await page.getByRole('button', { name: 'Comprobar de nuevo' }).click()
+      await expect(page.getByText('La comprobación no terminó')).toBeVisible()
+    },
+  },
+  {
     stories: 'HU-007 · how do you work today',
     path: '/',
     fixture: createStudioApiFixture,
@@ -574,6 +642,17 @@ export const SCREENS: Screen[] = [
     },
   },
   {
+    // A 403 and a 404 each mean something the person can act on, so they get
+    // their own screens. Everything else lands here, with the decision unmade.
+    stories: 'HU-085 · the decision could not be saved',
+    path: invitationWithToken,
+    fixture: () => invitationFixture({ decision: { status: 503, body: error('unavailable') } }),
+    reveal: async (page) => {
+      await page.getByRole('button', { name: 'Aceptar invitación' }).click()
+      await expect(page.getByText('No pudimos guardar tu decisión')).toBeVisible()
+    },
+  },
+  {
     stories: 'HU-086 · the invitation was rejected',
     path: invitationWithToken,
     fixture: () => invitationFixture({ decisionOutcome: 'rejected' }),
@@ -670,6 +749,17 @@ export const SCREENS: Screen[] = [
     },
   },
   {
+    // The overview counts two registers. It reports the outage only when it has
+    // neither, which is why both reads fail here rather than one.
+    stories: 'HU-004 · the workspace could not read its own registers',
+    path: workspace,
+    fixture: failingFor([activeMembership], /\/organizations\/[^/]+\/(memberships|invitations)$/),
+    settled: async (page) => {
+      await settledByHeading(page)
+      await expect(page.getByText('No pudimos cargar el estado de tu organización')).toBeVisible()
+    },
+  },
+  {
     stories: 'organization · verifying your access',
     path: workspace,
     fixture: stall('/studio/v1/me/memberships'),
@@ -719,6 +809,66 @@ export const SCREENS: Screen[] = [
     reveal: async (page) => {
       await page.getByRole('tab', { name: 'Mis espacios' }).click()
       await expect(page.getByText('Espacios activos')).toBeVisible()
+    },
+  },
+  {
+    // Not a failed load: the account is on screen and stays there. Retiring a
+    // credential is what asks for the account again, so that is the read that
+    // fails here — the person acted, and the answer never arrived.
+    stories: 'HU-005 · the account could not be refreshed',
+    path: '/account',
+    fixture: () => {
+      // Tied to the retirement rather than to a request count: the screen reads
+      // the account more than once while it mounts, and failing the second read
+      // would break the load instead of the refresh that follows the command.
+      let retired = false
+      return createStudioApiFixture({
+        me: {
+          profile: { ...professionalProfile, credentials: [professionalCredential] },
+          memberships: [activeMembership],
+        },
+        memberships: [activeMembership],
+        intercept: (request) => {
+          if (request.method === 'POST' && request.path.endsWith('/retirement')) {
+            retired = true
+            return undefined
+          }
+          return retired && request.method === 'GET' && request.path === '/studio/v1/me'
+            ? { status: 503, body: error('upstream-unavailable') }
+            : undefined
+        },
+      })
+    },
+    reveal: async (page) => {
+      await page.getByRole('tab', { name: 'Credenciales', exact: true }).click()
+      await page.getByRole('button', { name: 'Retirar' }).click()
+      await page.getByRole('button', { name: 'Retirar credencial' }).click()
+      await expect(page.getByText('No pudimos actualizar tu cuenta')).toBeVisible()
+    },
+  },
+  {
+    // The only failure the product shows inside a dialog: the draft stays, so
+    // the person does not lose what they typed.
+    stories: 'HU-005 · the credential revision could not be saved',
+    path: '/account',
+    fixture: () =>
+      createStudioApiFixture({
+        me: {
+          profile: { ...professionalProfile, credentials: [professionalCredential] },
+          memberships: [activeMembership],
+        },
+        memberships: [activeMembership],
+        intercept: (request) =>
+          request.method === 'POST' && request.path.endsWith('/revisions')
+            ? { status: 503, body: error('upstream-unavailable') }
+            : undefined,
+      }),
+    reveal: async (page) => {
+      await page.getByRole('tab', { name: 'Credenciales', exact: true }).click()
+      await page.getByRole('button', { name: 'Crear revisión' }).click()
+      const dialog = page.getByRole('dialog')
+      await dialog.getByRole('button', { name: 'Crear revisión' }).click()
+      await expect(dialog.getByText('No pudimos guardar')).toBeVisible()
     },
   },
   {
@@ -823,7 +973,34 @@ export const SCREENS: Screen[] = [
       await expect(page.getByText('No puedes consultar las invitaciones')).toBeVisible()
     },
   },
+  {
+    stories: 'HU-017 · the team directory could not be read',
+    path: `${workspace}/team`,
+    fixture: failingFor([activeMembership], /\/organizations\/[^/]+\/memberships$/),
+    settled: async (page) => {
+      await settledByHeading(page)
+      await expect(page.getByText('No pudimos cargar el equipo')).toBeVisible()
+    },
+  },
   { stories: 'HU-018 · role catalog', path: `${workspace}/team/roles`, fixture: memberOfTwo },
+  {
+    stories: 'HU-018 · the role catalog could not be read',
+    path: `${workspace}/team/roles`,
+    fixture: failingFor([activeMembership], /\/organizations\/[^/]+\/roles$/),
+    settled: async (page) => {
+      await settledByHeading(page)
+      await expect(page.getByText('No pudimos cargar los roles')).toBeVisible()
+    },
+  },
+  {
+    stories: 'HU-015 · the invitation register could not be read',
+    path: `${workspace}/team/invitations`,
+    fixture: failingFor([activeMembership], /\/organizations\/[^/]+\/invitations$/),
+    settled: async (page) => {
+      await settledByHeading(page)
+      await expect(page.getByText('No pudimos cargar las invitaciones')).toBeVisible()
+    },
+  },
   {
     stories: 'HU-018 · the role catalog was refused',
     path: `${workspace}/team/roles`,

@@ -182,8 +182,17 @@ test.describe('layout', () => {
       // One h1 per screen: the audit brief asks for visual hierarchy, and a
       // page with zero or several top-level headings has none to speak of. A
       // spinner stage is exempt — it has no content to rank.
+      //
+      // A modal is the other shape this takes. It hides the page behind it from
+      // assistive technology, which is correct and takes the h1 with it, so the
+      // guarantee moves to the dialog: it must carry its own name.
       if (screen.hasHeading ?? true) {
-        await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1)
+        const dialog = page.getByRole('dialog')
+        if ((await dialog.count()) > 0) {
+          await expect(dialog.first()).toHaveAccessibleName(/\S/)
+        } else {
+          await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1)
+        }
       }
     })
   }
