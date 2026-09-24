@@ -176,7 +176,11 @@ jobs:
     needs: scope
     if: needs.scope.outputs.studio == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # The sweep grew from 322 cases to 384 as the screen inventory filled, and a
+    # run that passed took 15m02s — cut during cleanup, reported as cancelled
+    # with every step green. Sharding across runners is the answer when this is
+    # tight again; the suite is 6 minutes locally, so it is not yet.
+    timeout-minutes: 25
 
     steps:
       - uses: actions/checkout@v4
