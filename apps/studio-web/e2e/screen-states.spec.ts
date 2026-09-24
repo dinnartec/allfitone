@@ -206,7 +206,7 @@ test('retiring a credential that already changed refreshes the profile instead o
   })
   await installStudioApiMock(page, fixture)
   await page.goto('/account')
-  await page.getByRole('tab', { name: 'Credenciales opcionales' }).click()
+  await page.getByRole('tab', { name: 'Credenciales', exact: true }).click()
 
   await page.getByRole('button', { name: 'Retirar' }).click()
   const dialog = page.getByRole('alertdialog', { name: '¿Retirar esta credencial?' })

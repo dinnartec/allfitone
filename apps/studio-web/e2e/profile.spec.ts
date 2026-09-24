@@ -65,7 +65,7 @@ test('presents an optional profile with active and terminated membership context
   const lightKicker = page.locator('[data-profile-section] [data-profile-kicker]').first()
   expect(await contrastRatio(lightKicker)).toBeGreaterThanOrEqual(4.5)
 
-  await page.getByRole('tab', { name: 'Credenciales opcionales' }).click()
+  await page.getByRole('tab', { name: 'Credenciales', exact: true }).click()
   const evidence = page.getByRole('link', { name: 'Abrir evidencia declarada' })
   await expect(evidence).toHaveAttribute('rel', 'noopener noreferrer')
   expect(await contrastRatio(evidence)).toBeGreaterThanOrEqual(4.5)
