@@ -680,7 +680,7 @@ function CredentialForm({
         </Field>
       </FieldGroup>
       {remoteError ? (
-        <Alert variant="danger" live="assertive">
+        <Alert variant="danger" live="assertive" data-credential-error>
           <AlertTitle>No pudimos guardar</AlertTitle>
           <AlertDescription>{remoteError}</AlertDescription>
         </Alert>

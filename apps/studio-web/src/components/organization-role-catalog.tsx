@@ -67,18 +67,6 @@ export function OrganizationRoleCatalog() {
         </p>
       ) : null}
 
-      {query.isError && state.kind === 'ready' ? (
-        <Alert variant="danger" live="polite">
-          <AlertTitle>No pudimos actualizar los roles</AlertTitle>
-          <AlertDescription>El catálogo cargado permanece visible.</AlertDescription>
-          <AlertAction>
-            <Button variant="outline" onClick={() => void query.refetch()}>
-              Reintentar
-            </Button>
-          </AlertAction>
-        </Alert>
-      ) : null}
-
       {state.kind === 'loading' ? (
         <Card>
           <CardContent data-role-catalog-state>
