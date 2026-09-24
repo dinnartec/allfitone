@@ -711,6 +711,13 @@
   max-height: calc(100svh - 2rem);
 }
 
+/* The form is a block with no rhythm of its own, so the failure sat flush
+   against the last field's description. It joins the rhythm the fields already
+   keep between them. */
+[data-credential-error] {
+  margin-block-start: var(--afo-space-5);
+}
+
 /* Same fixed-minimum trap as the role register: below 352px the track would
    keep its width and take the cards off the screen. */
 [data-account-map] {
