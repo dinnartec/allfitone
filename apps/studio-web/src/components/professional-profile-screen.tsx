@@ -400,7 +400,10 @@ function AccountShell({ children, onSpaces }: { children: React.ReactNode; onSpa
           </WorkspaceActions>
         </WorkspaceHeader>
         <WorkspaceContent data-profile-content>{children}</WorkspaceContent>
-        <Toaster position="bottom-right" richColors closeButton />
+        {/* No `richColors`: it swaps the Design System's tokens for the toast
+            library's own palette, whose green reads 4.25:1 and misses AA. The
+            type still arrives through the icon. */}
+        <Toaster position="bottom-right" closeButton />
       </WorkspaceMain>
     </WorkspaceShell>
   )
