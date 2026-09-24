@@ -18,6 +18,12 @@
      between sections. A workspace has one canvas. */
   --studio-measure: 58rem;
   --studio-canvas: 64rem;
+
+  /* The privacy control floats over the bottom-right corner: 16px of offset and
+     a 44px target. Content that ends underneath it cannot be scrolled clear,
+     and on a phone the credential card's "Retirar" lost 86x29px of its target
+     to it — a tap there opened the analytics panel instead. */
+  --studio-floating-control-space: 76px;
 }
 
 /* ---------------------------------------------------------------- canvases */
@@ -46,6 +52,13 @@
 [data-profile-editor],
 [data-profile-section-heading] {
   min-width: 0;
+}
+
+/* Room at the end of the page for the floating privacy control to sit over. */
+[data-studio-stage],
+[data-organization-content],
+[data-profile-content] {
+  padding-block-end: var(--studio-floating-control-space);
 }
 
 /* --------------------------------------------------------------- page head */

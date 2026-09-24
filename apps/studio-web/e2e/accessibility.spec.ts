@@ -147,6 +147,38 @@ test.describe('layout', () => {
       )
       expect(clippedTabs, `${screen.stories} hides a tab behind a scroll`).toEqual([])
 
+      // The privacy control floats over the bottom corner, so whatever ends
+      // underneath it cannot be pressed. The credential card's "Retirar" lost
+      // 86x29px of its target that way, and a tap there opened the analytics
+      // panel instead.
+      //
+      // The question is reach, not position: sitting under the control is fine
+      // while the page can scroll past it. So each control is brought into view
+      // the way a person would, and only then asked what a tap at its centre
+      // would hit. The page that cannot scroll clear is the page at fault.
+      const covered = await page.evaluate(() => {
+        const control = document.querySelector('[data-analytics-controls]')
+        if (!control) return []
+        const unreachable: string[] = []
+        for (const element of document.querySelectorAll<HTMLElement>('a[href], button')) {
+          if (control.contains(element)) continue
+          const size = element.getBoundingClientRect()
+          if (size.width === 0 || size.height === 0) continue
+          element.scrollIntoView({ block: 'center', behavior: 'instant' })
+          const box = element.getBoundingClientRect()
+          const atCentre = document.elementFromPoint(
+            (box.left + box.right) / 2,
+            (box.top + box.bottom) / 2,
+          )
+          if (atCentre && control.contains(atCentre)) {
+            unreachable.push((element.textContent ?? '').trim().slice(0, 30) || element.tagName)
+          }
+        }
+        window.scrollTo(0, 0)
+        return unreachable
+      })
+      expect(covered, `${screen.stories}: the privacy control covers a control`).toEqual([])
+
       // One h1 per screen: the audit brief asks for visual hierarchy, and a
       // page with zero or several top-level headings has none to speak of. A
       // spinner stage is exempt — it has no content to rank.
