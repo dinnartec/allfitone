@@ -22,7 +22,7 @@
 
 begin;
 
-select plan(38);
+select plan(39);
 
 -- ---------------------------------------------------------------------------
 -- People, sessions, roles and duties
@@ -34,6 +34,7 @@ values
   ('019ae000-0000-7000-8000-000000000002', 'Manager', 'Beta', 'active'),
   ('019ae000-0000-7000-8000-000000000003', 'Officer', 'Gamma', 'active'),
   ('019ae000-0000-7000-8000-000000000004', 'Operator', 'Delta', 'active'),
+  ('019ae000-0000-7000-8000-000000000007', 'Officer', 'Theta', 'active'),
   ('019ae000-0000-7000-8000-000000000005', 'Subject', 'Zeta', 'active'),
   ('019ae000-0000-7000-8000-000000000006', 'Subject', 'Eta', 'active');
 
@@ -44,7 +45,9 @@ values
   ('019ae000-0000-7000-8000-000000000013', 'workos', 'https://issuer.test', 'gammaH',
     '019ae000-0000-7000-8000-000000000003'),
   ('019ae000-0000-7000-8000-000000000014', 'workos', 'https://issuer.test', 'deltaH',
-    '019ae000-0000-7000-8000-000000000004');
+    '019ae000-0000-7000-8000-000000000004'),
+  ('019ae000-0000-7000-8000-000000000017', 'workos', 'https://issuer.test', 'thetaH',
+    '019ae000-0000-7000-8000-000000000007');
 
 select support.bootstrap_backoffice_administrators(
   '019ae000-0000-7000-8000-000000000001', 'alphaH',
@@ -68,6 +71,10 @@ insert into identity.access_sessions (
   ('019ae000-0000-7000-8000-000000000025', '019ae000-0000-7000-8000-000000000014',
     'sid_delta_h', 'backoffice', decode(repeat('e5', 32), 'hex'), 'v1.delta',
     clock_timestamp() + interval '5 minutes', 2, 'password_totp',
+    clock_timestamp(), clock_timestamp(), clock_timestamp() + interval '8 hours'),
+  ('019ae000-0000-7000-8000-000000000027', '019ae000-0000-7000-8000-000000000017',
+    'sid_theta_h', 'backoffice', decode(repeat('e7', 32), 'hex'), 'v1.theta',
+    clock_timestamp() + interval '5 minutes', 2, 'password_totp',
     clock_timestamp(), clock_timestamp(), clock_timestamp() + interval '8 hours');
 
 select support.assign_platform_role(
@@ -81,6 +88,19 @@ select support.assign_platform_role(
   '019ae000-0000-7000-8000-000000000004', 'allfit_admin',
   '019ae000-0000-7000-8000-000000000102', '019ae000-0000-7000-8000-000000000202',
   decode(repeat('72', 32), 'hex')
+);
+select support.assign_platform_role(
+  '019ae000-0000-7000-8000-000000000001', '019ae000-0000-7000-8000-000000000021',
+  '019ae000-0000-7000-8000-000000000007', 'allfit_admin',
+  '019ae000-0000-7000-8000-000000000106', '019ae000-0000-7000-8000-000000000206',
+  decode(repeat('76', 32), 'hex')
+);
+select support.assign_platform_duty(
+  '019ae000-0000-7000-8000-000000000001', '019ae000-0000-7000-8000-000000000021',
+  '019ae000-0000-7000-8000-000000000007', 'manage_privacy_requests',
+  clock_timestamp(), clock_timestamp() + interval '7 days', 'CASE-HOLD-THETA',
+  '019ae000-0000-7000-8000-000000000107', '019ae000-0000-7000-8000-000000000207',
+  decode(repeat('77', 32), 'hex')
 );
 
 -- ---------------------------------------------------------------------------
@@ -504,7 +524,7 @@ select throws_ok(
 
 create temporary table released on commit drop as
 select * from privacy.release_legal_hold(
-  '019ae000-0000-7000-8000-000000000003', '019ae000-0000-7000-8000-000000000023',
+  '019ae000-0000-7000-8000-000000000007', '019ae000-0000-7000-8000-000000000027',
   (select (result->>'id')::uuid from applied),
   '019ae000-0000-4000-8000-00000000090d', '019ae000-0000-7000-8000-000000000a0d',
   decode(repeat('8d', 32), 'hex')
@@ -557,7 +577,7 @@ select is(
 
 select throws_ok(
   $$ select * from privacy.release_legal_hold(
-    '019ae000-0000-7000-8000-000000000003', '019ae000-0000-7000-8000-000000000023',
+    '019ae000-0000-7000-8000-000000000007', '019ae000-0000-7000-8000-000000000027',
     (select (result->>'id')::uuid from applied),
     '019ae000-0000-4000-8000-00000000090e', '019ae000-0000-7000-8000-000000000a0e',
     decode(repeat('8e', 32), 'hex')
@@ -584,10 +604,18 @@ select throws_ok(
 -- ---------------------------------------------------------------------------
 
 select is(
-  (select count(*)::int from privacy.legal_holds
-    where status = 'released' and released_by_person_id = '019ae000-0000-7000-8000-000000000003'),
-  1,
-  'the hold records who released it, not only that it was released'
+  (select released_by_person_id from privacy.legal_holds
+    where id = (select (result->>'id')::uuid from applied)),
+  '019ae000-0000-7000-8000-000000000007'::uuid,
+  'the hold records who released it, and not the one who applied it'
+);
+
+select isnt(
+  (select released_by_person_id from privacy.legal_holds
+    where id = (select (result->>'id')::uuid from applied)),
+  (select applied_by_person_id from privacy.legal_holds
+    where id = (select (result->>'id')::uuid from applied)),
+  'which is a different person here, so the two cannot be confused'
 );
 
 select is(
