@@ -13,12 +13,12 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json"
   },
   "dependencies": {
-    "@allfitone/brand": "file:../../../allfitone-design-system/packages/brand",
+    "@allfitone/brand": "0.3.0",
     "@allfitone/contracts": "workspace:*",
-    "@allfitone/icons": "file:../../../allfitone-design-system/packages/icons",
-    "@allfitone/react-native": "file:../../../allfitone-design-system/packages/react-native",
+    "@allfitone/icons": "0.3.0",
+    "@allfitone/react-native": "0.7.0",
     "@allfitone/telemetry": "workspace:*",
-    "@allfitone/tokens": "file:../../../allfitone-design-system/packages/tokens",
+    "@allfitone/tokens": "0.3.0",
     "expo": "57.0.11",
     "expo-blur": "57.0.2",
     "expo-constants": "57.0.9",
