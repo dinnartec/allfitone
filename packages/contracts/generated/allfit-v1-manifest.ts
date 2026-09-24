@@ -139,6 +139,20 @@ export const allfitV1ContractManifest = {
       responses: ['200', '400', '401', '403', '422', '503'],
     },
     {
+      method: 'POST',
+      path: '/backoffice/v1/legal-holds',
+      operationId: 'applyBackofficeLegalHold',
+      allfitOperation: 'OP-PRV-009',
+      responses: ['201', '400', '401', '403', '404', '409', '415', '422', '503'],
+    },
+    {
+      method: 'POST',
+      path: '/backoffice/v1/legal-holds/{holdId}/release',
+      operationId: 'releaseBackofficeLegalHold',
+      allfitOperation: 'OP-PRV-010',
+      responses: ['200', '400', '401', '403', '404', '409', '503'],
+    },
+    {
       method: 'GET',
       path: '/backoffice/v1/organizations',
       operationId: 'listBackofficeOrganizations',

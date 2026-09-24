@@ -3501,6 +3501,134 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  LegalHold: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'id',
+      'scope_description',
+      'reason_code',
+      'case_reference',
+      'valid_from',
+      'valid_to',
+      'status',
+      'applied_by_person_id',
+      'released_at',
+      'released_by_person_id',
+      'suspended_items',
+      'items',
+    ],
+    properties: {
+      id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      scope_description: {
+        type: 'string',
+      },
+      reason_code: {
+        $ref: '#/components/schemas/LegalHoldReason',
+      },
+      case_reference: {
+        type: 'string',
+      },
+      valid_from: {
+        type: 'string',
+        format: 'date-time',
+      },
+      valid_to: {
+        type: 'string',
+        format: 'date-time',
+      },
+      status: {
+        $ref: '#/components/schemas/LegalHoldStatus',
+      },
+      applied_by_person_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      released_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      released_by_person_id: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/Uuid',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      suspended_items: {
+        type: 'integer',
+        minimum: 0,
+        description: 'How many dispositions this hold is stopping right now.',
+      },
+      items: {
+        type: 'integer',
+        minimum: 1,
+        description: 'How many it named when it was applied.',
+      },
+    },
+  },
+  LegalHoldApplication: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      'Scope, reason, vigency and what it covers. Who applies it comes from the session and is never accepted here.',
+    required: [
+      'scope_description',
+      'reason_code',
+      'case_reference',
+      'valid_to',
+      'disposition_item_ids',
+    ],
+    properties: {
+      scope_description: {
+        type: 'string',
+        minLength: 3,
+        maxLength: 500,
+        description: 'What this hold covers, in the words of whoever answers for it.',
+      },
+      reason_code: {
+        $ref: '#/components/schemas/LegalHoldReason',
+      },
+      case_reference: {
+        type: 'string',
+        minLength: 3,
+        maxLength: 120,
+        description: 'The order or requirement this hold answers to.',
+      },
+      valid_to: {
+        type: 'string',
+        format: 'date-time',
+        description: 'When the hold ends. There are no indefinite holds.',
+      },
+      disposition_item_ids: {
+        type: 'array',
+        minItems: 1,
+        maxItems: 500,
+        items: {
+          $ref: '#/components/schemas/Uuid',
+        },
+      },
+    },
+  },
+  LegalHoldReason: {
+    type: 'string',
+    description:
+      'The ground the hold answers to. Closed on purpose: a reason typed by hand cannot be queried, and a hold nobody can query is a hold nobody can review.',
+    enum: [
+      'judicial_order',
+      'regulatory_request',
+      'service_dispute',
+      'tax_or_accounting_obligation',
+    ],
+  },
+  LegalHoldStatus: {
+    type: 'string',
+    enum: ['active', 'released'],
+  },
   Load: {
     type: 'object',
     additionalProperties: false,

@@ -1017,6 +1017,48 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/backoffice/v1/legal-holds': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Suspend the disposition of specific data
+     * @description Stops named dispositions from running, because an obligation says the data has to be kept for now.
+     *     A hold suspends; it does not reveal. The answer carries the hold and no field of the data it protects, and holding changes nothing about who may read that person's file.
+     *     There are no indefinite holds: `valid_to` is required and has to be in the future. And whoever requested or approved an exceptional read of that person is refused here — deciding to look and deciding to keep do not belong in the same pair of hands.
+     */
+    post: operations['applyBackofficeLegalHold']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/legal-holds/{holdId}/release': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Release a legal hold
+     * @description Puts the suspended dispositions back where they were — waiting their turn — and nowhere else. Releasing never executes what the hold was holding.
+     */
+    post: operations['releaseBackofficeLegalHold']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/backoffice/v1/scope-definitions': {
     parameters: {
       query?: never
@@ -2912,6 +2954,47 @@ export interface components {
     }
     /** @enum {string} */
     ErasureRequestState: 'open' | 'closed'
+    /**
+     * @description The ground the hold answers to. Closed on purpose: a reason typed by hand cannot be queried, and a hold nobody can query is a hold nobody can review.
+     * @enum {string}
+     */
+    LegalHoldReason:
+      'judicial_order' | 'regulatory_request' | 'service_dispute' | 'tax_or_accounting_obligation'
+    /** @enum {string} */
+    LegalHoldStatus: 'active' | 'released'
+    /** @description Scope, reason, vigency and what it covers. Who applies it comes from the session and is never accepted here. */
+    LegalHoldApplication: {
+      /** @description What this hold covers, in the words of whoever answers for it. */
+      scope_description: string
+      reason_code: components['schemas']['LegalHoldReason']
+      /** @description The order or requirement this hold answers to. */
+      case_reference: string
+      /**
+       * Format: date-time
+       * @description When the hold ends. There are no indefinite holds.
+       */
+      valid_to: string
+      disposition_item_ids: components['schemas']['Uuid'][]
+    }
+    LegalHold: {
+      id: components['schemas']['Uuid']
+      scope_description: string
+      reason_code: components['schemas']['LegalHoldReason']
+      case_reference: string
+      /** Format: date-time */
+      valid_from: string
+      /** Format: date-time */
+      valid_to: string
+      status: components['schemas']['LegalHoldStatus']
+      applied_by_person_id: components['schemas']['Uuid']
+      /** Format: date-time */
+      released_at: string | null
+      released_by_person_id: components['schemas']['Uuid'] | null
+      /** @description How many dispositions this hold is stopping right now. */
+      suspended_items: number
+      /** @description How many it named when it was applied. */
+      items: number
+    }
     /** @enum {string} */
     DataClassificationCode:
       'operational' | 'audit' | 'identity_pii' | 'training' | 'body' | 'nutrition' | 'health'
@@ -7900,6 +7983,78 @@ export interface operations {
       401: components['responses']['Unauthenticated']
       403: components['responses']['Forbidden']
       422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  applyBackofficeLegalHold: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['LegalHoldApplication']
+      }
+    }
+    responses: {
+      /** @description The hold, and how many dispositions it stopped */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['LegalHold']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  releaseBackofficeLegalHold: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        holdId: components['schemas']['Uuid']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The released hold */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['LegalHold']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
       503: components['responses']['UpstreamUnavailable']
     }
   }

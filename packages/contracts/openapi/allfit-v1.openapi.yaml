@@ -2615,6 +2615,102 @@ paths:
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
 
+  /backoffice/v1/legal-holds:
+    post:
+      tags: [Backoffice Privacy]
+      operationId: applyBackofficeLegalHold
+      x-allfit-operation: OP-PRV-009
+      x-allfit-cache: no-store
+      summary: Suspend the disposition of specific data
+      description: >-
+        Stops named dispositions from running, because an obligation says the data
+        has to be kept for now.
+
+        A hold suspends; it does not reveal. The answer carries the hold and no
+        field of the data it protects, and holding changes nothing about who may
+        read that person's file.
+
+        There are no indefinite holds: `valid_to` is required and has to be in the
+        future. And whoever requested or approved an exceptional read of that person
+        is refused here — deciding to look and deciding to keep do not belong in the
+        same pair of hands.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LegalHoldApplication'
+      responses:
+        '201':
+          description: The hold, and how many dispositions it stopped
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LegalHold'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/legal-holds/{holdId}/release:
+    post:
+      tags: [Backoffice Privacy]
+      operationId: releaseBackofficeLegalHold
+      x-allfit-operation: OP-PRV-010
+      x-allfit-cache: no-store
+      summary: Release a legal hold
+      description: >-
+        Puts the suspended dispositions back where they were — waiting their turn —
+        and nowhere else. Releasing never executes what the hold was holding.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+        - name: holdId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/Uuid'
+      responses:
+        '200':
+          description: The released hold
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LegalHold'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
   /backoffice/v1/scope-definitions:
     get:
       tags: [Backoffice Privacy]
@@ -8141,6 +8237,85 @@ components:
     ErasureRequestState:
       type: string
       enum: [open, closed]
+    LegalHoldReason:
+      type: string
+      description: >-
+        The ground the hold answers to. Closed on purpose: a reason typed by hand
+        cannot be queried, and a hold nobody can query is a hold nobody can review.
+      enum: [judicial_order, regulatory_request, service_dispute, tax_or_accounting_obligation]
+    LegalHoldStatus:
+      type: string
+      enum: [active, released]
+    LegalHoldApplication:
+      type: object
+      additionalProperties: false
+      description: >-
+        Scope, reason, vigency and what it covers. Who applies it comes from the
+        session and is never accepted here.
+      required: [scope_description, reason_code, case_reference, valid_to, disposition_item_ids]
+      properties:
+        scope_description:
+          type: string
+          minLength: 3
+          maxLength: 500
+          description: What this hold covers, in the words of whoever answers for it.
+        reason_code:
+          $ref: '#/components/schemas/LegalHoldReason'
+        case_reference:
+          type: string
+          minLength: 3
+          maxLength: 120
+          description: The order or requirement this hold answers to.
+        valid_to:
+          type: string
+          format: date-time
+          description: When the hold ends. There are no indefinite holds.
+        disposition_item_ids:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items:
+            $ref: '#/components/schemas/Uuid'
+    LegalHold:
+      type: object
+      additionalProperties: false
+      required: [id, scope_description, reason_code, case_reference, valid_from, valid_to,
+        status, applied_by_person_id, released_at, released_by_person_id, suspended_items,
+        items]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        scope_description:
+          type: string
+        reason_code:
+          $ref: '#/components/schemas/LegalHoldReason'
+        case_reference:
+          type: string
+        valid_from:
+          type: string
+          format: date-time
+        valid_to:
+          type: string
+          format: date-time
+        status:
+          $ref: '#/components/schemas/LegalHoldStatus'
+        applied_by_person_id:
+          $ref: '#/components/schemas/Uuid'
+        released_at:
+          type: [string, 'null']
+          format: date-time
+        released_by_person_id:
+          oneOf:
+            - $ref: '#/components/schemas/Uuid'
+            - type: 'null'
+        suspended_items:
+          type: integer
+          minimum: 0
+          description: How many dispositions this hold is stopping right now.
+        items:
+          type: integer
+          minimum: 1
+          description: How many it named when it was applied.
     DataClassificationCode:
       type: string
       enum: [operational, audit, identity_pii, training, body, nutrition, health]
