@@ -253,6 +253,18 @@ export function SessionGuard({ children }: { children: ReactNode }) {
       if (document.visibilityState === 'visible') revalidateStoredActivity()
     }
 
+    /**
+     * `pageshow` fires on an ordinary load as well as on a restore from the
+     * back/forward cache, and the ordinary load is already covered by the call
+     * below. Verifying both ways cost two audited session reads on every
+     * document that carried an ended session — the production build made both,
+     * while the development server happened to attach this listener after the
+     * event had passed and made one, which is why only production paid it.
+     */
+    function revalidateOnRestore(event: PageTransitionEvent) {
+      if (event.persisted) revalidateStoredActivity()
+    }
+
     retryVerificationRef.current = revalidateStoredActivity
     window.addEventListener(studioSessionEvents.authenticated, activateFromAuthentication)
     window.addEventListener(studioSessionEvents.unauthenticated, confirmUnauthenticated)
@@ -261,7 +273,7 @@ export function SessionGuard({ children }: { children: ReactNode }) {
     window.addEventListener('pointerdown', recordActivity)
     window.addEventListener('keydown', recordActivity)
     window.addEventListener('touchstart', recordActivity, { passive: true })
-    window.addEventListener('pageshow', revalidateStoredActivity)
+    window.addEventListener('pageshow', revalidateOnRestore)
     document.addEventListener('visibilitychange', handleVisibility)
     revalidateStoredActivity()
 
@@ -278,7 +290,7 @@ export function SessionGuard({ children }: { children: ReactNode }) {
       window.removeEventListener('pointerdown', recordActivity)
       window.removeEventListener('keydown', recordActivity)
       window.removeEventListener('touchstart', recordActivity)
-      window.removeEventListener('pageshow', revalidateStoredActivity)
+      window.removeEventListener('pageshow', revalidateOnRestore)
       document.removeEventListener('visibilitychange', handleVisibility)
     }
   }, [])
