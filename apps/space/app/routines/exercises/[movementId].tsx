@@ -81,7 +81,7 @@ import { ApiError } from '../../../src/client'
 import type { MovementDetail, MuscleTerm } from '../../../src/client/content'
 import { createSpaceContentFlow } from '../../../src/client/content-transport'
 import { litSlugsFor } from '../../../src/client/exercise-catalogue'
-import { addsToRoutine, FROM_PROGRAM, offerExercisePick } from '../../../src/client/exercise-pick'
+import { addsToRoutine, FROM_SESSION, offerExercisePick } from '../../../src/client/exercise-pick'
 import { INERT_SLUGS, type BodySide } from '../../../src/client/focus-form'
 import { BodyFigure, faceShowing } from '../../../src/components/body-figure'
 
@@ -114,6 +114,8 @@ export default function MovementDetailScreen() {
   const params = useLocalSearchParams<{ movementId: string; from?: string }>()
   const movementId = params.movementId
   const adding = addsToRoutine(params.from)
+  // Over a session it is a sheet: it closes downwards and has no status bar above it.
+  const sheet = params.from === FROM_SESSION
 
   const [movement, setMovement] = useState<MovementDetail | undefined>(undefined)
   const [muscles, setMuscles] = useState<readonly MuscleTerm[]>([])
@@ -195,8 +197,8 @@ export default function MovementDetailScreen() {
   // has to tap back through one by one. The origin travels, or the button comes back.
   const openVariant = (id: string) =>
     router.replace({
-      pathname: '/routines/exercises/[movementId]',
-      params: adding ? { movementId: id } : { movementId: id, from: FROM_PROGRAM },
+      pathname: sheet ? '/how-to/[movementId]' : '/routines/exercises/[movementId]',
+      params: params.from ? { movementId: id, from: params.from } : { movementId: id },
     })
 
   const add = () => {
@@ -206,10 +208,14 @@ export default function MovementDetailScreen() {
   }
 
   return (
-    <Screen edges={['top', 'bottom']}>
+    <Screen edges={sheet ? ['bottom'] : ['top', 'bottom']} style={sheet ? styles.sheet : undefined}>
       {/* Outside the scroll, so leaving never means climbing back up five steps. */}
       <View style={styles.top}>
-        <IconButton icon="back" accessibilityLabel="Volver" onPress={() => router.back()} />
+        <IconButton
+          icon={sheet ? 'expand' : 'back'}
+          accessibilityLabel={sheet ? 'Cerrar' : 'Volver'}
+          onPress={() => router.back()}
+        />
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -390,6 +396,8 @@ function Variants({
 
 const styles = StyleSheet.create({
   content: { gap: 14, paddingBottom: 96 },
+  // Clear of the sheet's grabber, which sits where the status bar would.
+  sheet: { paddingTop: 20 },
   top: { flexDirection: 'row', paddingBottom: 8 },
   heading: { gap: 4 },
   demoRow: { flexDirection: 'row', gap: 12 },

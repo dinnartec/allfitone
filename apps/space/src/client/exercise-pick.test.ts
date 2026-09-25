@@ -163,6 +163,10 @@ describe('addsToRoutine', () => {
     expect(addsToRoutine('program')).toBe(false)
   })
 
+  test('a session in progress opens it to explain, and has no draft either', () => {
+    expect(addsToRoutine('session')).toBe(false)
+  })
+
   test('a repeated parameter still says where it came from', () => {
     expect(addsToRoutine(['program', 'program'])).toBe(false)
   })

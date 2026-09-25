@@ -58,6 +58,7 @@ import Animated, {
 
 import { ApiError } from '../../src/client'
 import { createSpaceContentFlow } from '../../src/client/content-transport'
+import { FROM_SESSION } from '../../src/client/exercise-pick'
 import { readExerciseLibrary } from '../../src/client/exercise-library'
 import { createSpaceExecutionFlow } from '../../src/client/execution-transport'
 import { SPRING } from '../../src/client/motion'
@@ -79,7 +80,6 @@ const SAVE_FAILED = 'No pudimos guardar. Lo intentamos otra vez en un momento.'
 const STALE = 'Otra pantalla cambió esta sesión. Vuelve a abrirla para seguir.'
 const CLOSE_FAILED = 'No pudimos cerrar la sesión. Inténtalo otra vez.'
 const LEAVE_FAILED = 'No pudimos dejar la sesión. Inténtalo otra vez.'
-const HOW_TO = 'Cómo se hace el ejercicio llega con su propia pantalla.'
 
 /** Long enough to stop writing on every keystroke, short enough to never lose a set. */
 const SAVE_DELAY_MS = 1_200
@@ -278,6 +278,16 @@ export default function Session() {
       })
   }
 
+  // A sheet over the session, so the timer and the sets are still there on the way back.
+  const explainer = (movementId: string | null) =>
+    movementId
+      ? () =>
+          router.push({
+            pathname: '/how-to/[movementId]',
+            params: { movementId, from: FROM_SESSION },
+          })
+      : undefined
+
   // Opened from a link there is nothing beneath it, and Hoy is where it waits.
   const minimize = () => (router.canGoBack() ? router.back() : router.replace('/today'))
 
@@ -351,7 +361,7 @@ export default function Session() {
             onEdit={(order, change) => edit(exercise.position, order, change)}
             onAddSet={() => addSet(exercise.position)}
             onRemoveSet={(order) => removeSet(exercise.position, order)}
-            onExplain={() => setFailure(HOW_TO)}
+            onExplain={explainer(exercise.movementId)}
           />
         ))}
 
@@ -444,7 +454,8 @@ function Exercise({
   ) => void
   readonly onAddSet: () => void
   readonly onRemoveSet: (order: number) => void
-  readonly onExplain: () => void
+  /** Absent when the step names no catalogue movement: there is nothing to explain. */
+  readonly onExplain: (() => void) | undefined
 }) {
   const theme = useTheme()
   const progress = useSharedValue(0)
@@ -543,64 +554,70 @@ function Exercise({
 
   return (
     <Animated.View style={[styles.shell, shell]}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityState={{ expanded: open }}
-        accessibilityLabel={exercise.movement}
-        onPress={onToggle}
-        style={styles.exerciseHeader}
-      >
+      {/* Two controls side by side, not one inside the other: nested, VoiceOver folds the
+          picture into the row and the explanation cannot be reached. */}
+      <View style={styles.exerciseHeader}>
         <Animated.View style={[styles.thread, thread]} />
-        {/* Still, like the routine editor: one frame tells a press from a fly, and a
-            dozen looping clips would cost more than they say. */}
-        <Image
-          source={picture}
-          style={[styles.preview, { backgroundColor: theme.color.background.surfaceSubtle }]}
-          contentFit="contain"
-          autoplay={false}
-          recyclingKey={exercise.movementId}
-          accessible={false}
-        />
-        <View style={[styles.headerTitle, styles.headerOpen]}>
-          <Text role="control" size="md" numberOfLines={1} style={styles.headerFlex}>
-            {exercise.movement}
-          </Text>
-          {/* Only the open exercise offers how it is done, and a shut row keeps the width. */}
-          {open ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Cómo se hace ${exercise.movement}`}
-              onPress={onExplain}
-              hitSlop={10}
-            >
+        {/* Still, like the routine editor. The picture explains, open or shut, and the
+            rest of the row opens and closes: the play mark promises what a tap does. */}
+        <Pressable
+          onPress={onExplain ?? onToggle}
+          accessibilityRole={onExplain ? 'button' : undefined}
+          accessibilityLabel={onExplain ? `Cómo se hace ${exercise.movement}` : undefined}
+          accessible={onExplain !== undefined}
+          hitSlop={4}
+        >
+          <Image
+            source={picture}
+            style={[styles.preview, { backgroundColor: theme.color.background.surfaceSubtle }]}
+            contentFit="contain"
+            autoplay={false}
+            recyclingKey={exercise.movementId}
+            accessible={false}
+          />
+          {onExplain ? (
+            <View style={[styles.play, { backgroundColor: theme.color.background.canvas }]}>
               <FoundationIcon
-                name="external"
-                customSize={12}
-                color={theme.color.icon.secondary}
+                name="start"
+                customSize={9}
+                color={theme.color.icon.accent}
                 decorative
               />
-            </Pressable>
+            </View>
           ) : null}
-        </View>
-        <Animated.View style={[styles.summary, summary]}>
-          {/* A tick as well as the colour. Green alone is a difference some people
-              cannot see, and WCAG 1.4.1 does not accept colour as the only signal. */}
-          {complete ? (
-            <FoundationIcon
-              name="success"
-              size="xs"
-              color={theme.color.status.success}
-              decorative
-            />
-          ) : null}
-          <Text role="control" size="xs" color={complete ? 'success' : 'muted'}>
-            {`${done} de ${exercise.sets.length}`}
-          </Text>
-        </Animated.View>
-        <Animated.View style={chevron}>
-          <FoundationIcon name="expand" size="xs" color={theme.color.icon.secondary} decorative />
-        </Animated.View>
-      </Pressable>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ expanded: open }}
+          accessibilityLabel={exercise.movement}
+          onPress={onToggle}
+          style={styles.headerToggle}
+        >
+          <View style={[styles.headerTitle, styles.headerOpen]}>
+            <Text role="control" size="md" numberOfLines={1} style={styles.headerFlex}>
+              {exercise.movement}
+            </Text>
+          </View>
+          <Animated.View style={[styles.summary, summary]}>
+            {/* A tick as well as the colour. Green alone is a difference some people
+                cannot see, and WCAG 1.4.1 does not accept colour as the only signal. */}
+            {complete ? (
+              <FoundationIcon
+                name="success"
+                size="xs"
+                color={theme.color.status.success}
+                decorative
+              />
+            ) : null}
+            <Text role="control" size="xs" color={complete ? 'success' : 'muted'}>
+              {`${done} de ${exercise.sets.length}`}
+            </Text>
+          </Animated.View>
+          <Animated.View style={chevron}>
+            <FoundationIcon name="expand" size="xs" color={theme.color.icon.secondary} decorative />
+          </Animated.View>
+        </Pressable>
+      </View>
 
       <Animated.View style={[styles.drawer, drawer]}>
         {/* Out of flow, so it can never add its height to the row it is measuring.
@@ -820,11 +837,23 @@ const styles = StyleSheet.create({
   shell: { borderRadius: 22, paddingHorizontal: CARD_INSET },
   exerciseHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, height: 44 },
   headerTitle: { flex: 1 },
+  headerToggle: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12, height: 44 },
   // Below the row's 44, so the open card keeps a margin above it.
   preview: { width: 40, height: 40, borderRadius: 10 },
   summary: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   headerOpen: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   headerFlex: { flexShrink: 1 },
+  // Over the picture's corner, where it reads as «this plays» without hiding it.
+  play: {
+    position: 'absolute',
+    right: -4,
+    bottom: -4,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   // Clipped, so the animated height is what reveals the drawer.
   drawer: { overflow: 'hidden' },
   measure: { position: 'absolute', left: 0, right: 0, top: 0, gap: 10, paddingTop: 6 },
