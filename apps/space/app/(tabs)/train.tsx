@@ -8,7 +8,8 @@
  * con una palabra menos.
  *
  * **La etiqueta «Sigue esta» se queda.** Es lo único que dice cuál toca de las tres que
- * hay esta semana, y el botón que se fue no la llevaba: la llevaba la fila.
+ * hay esta semana, y el botón que se fue no la llevaba: la llevaba la fila. Marca la de
+ * hoy o la del próximo día pendiente, la misma en la que abre Hoy.
  *
  * **Un segmentado de verdad.** «Rutinas» era un enlace que llevaba a crear una rutina
  * nueva —un control que prometía una vista y abría otra cosa—; ahora es la otra mitad de
@@ -56,7 +57,12 @@ import {
   whereUsed,
   type RoutineFilter,
 } from '../../src/client/library'
-import { cardsFor, weekPlanFailure, type RoutineCard } from '../../src/client/week-plan'
+import {
+  cardsFor,
+  programDayOf,
+  weekPlanFailure,
+  type RoutineCard,
+} from '../../src/client/week-plan'
 import { deviceTimezone } from '../../src/client/timezone'
 import { RoutineMark } from '../../src/components/routine-mark'
 import { ProgramMenuBody, ProgramRemovalBody } from '../../src/components/program-sheets'
@@ -156,7 +162,7 @@ export default function Train() {
   // no vería una rutina escrita ni una sesión cerrada en otro sitio.
   useFocusEffect(load)
 
-  const cards = cardsFor(plan)
+  const cards = cardsFor(plan, programDayOf(new Date()))
   const current = mine.find((one) => one.program_version_id === plan?.program_version_id)
   const others = mine.filter((one) => one.program_version_id !== plan?.program_version_id)
   const counts = routineCounts(routines)

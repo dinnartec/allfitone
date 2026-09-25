@@ -89,6 +89,16 @@ export default function RootLayout() {
                 gestureEnabled: false,
               }}
             />
+            {/* The platform's own sheet: the session it explains stays in view beneath. */}
+            <Stack.Screen
+              name="how-to/[movementId]"
+              options={{
+                presentation: 'formSheet',
+                sheetAllowedDetents: [0.92],
+                sheetGrabberVisible: true,
+                sheetCornerRadius: 24,
+              }}
+            />
           </Stack>
           {/* Withheld until onboarding completes: asking on the welcome screen,
             before the person knows what Allfit is, is not informed consent. */}

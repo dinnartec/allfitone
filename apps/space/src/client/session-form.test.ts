@@ -52,7 +52,6 @@ describe('the working state a session screen holds', () => {
     expect(first?.sets).toHaveLength(4)
     expect(first?.sets.every((set) => set.reps === '8')).toBe(true)
     expect(first?.sets.every((set) => set.done)).toBe(false)
-    expect(first?.targetLabel).toBe('Objetivo 4 × 8')
   })
 
   test('T-SPC-UNIT-41 numbers sets across the whole session, not within each exercise', () => {
@@ -185,7 +184,6 @@ describe('the working state a session screen holds', () => {
           position: 1,
           movementId: MOVEMENT,
           movement: 'Press de banca',
-          targetLabel: '',
           sets: [{ order: 1, loadKg: '', reps: '8', done: false, previous: '—' }],
         },
       ],
@@ -207,7 +205,6 @@ describe('the working state a session screen holds', () => {
     )
 
     expect(vague[0]?.sets).toHaveLength(3)
-    expect(vague[0]?.targetLabel).toBe('')
   })
 })
 
@@ -217,7 +214,6 @@ describe('what the screen can say about a session in progress', () => {
       position: 1,
       movementId: MOVEMENT,
       movement: 'Press de banca',
-      targetLabel: '',
       sets: [
         { order: 1, loadKg: '80', reps: '10', done: true, previous: '—' },
         { order: 2, loadKg: '80', reps: '8', done: true, previous: '—' },
@@ -228,7 +224,6 @@ describe('what the screen can say about a session in progress', () => {
       position: 2,
       movementId: null,
       movement: 'Fondos',
-      targetLabel: '',
       sets: [{ order: 4, loadKg: '', reps: '12', done: true, previous: '—' }],
     },
   ]
@@ -273,7 +268,6 @@ describe('what travels to the server', () => {
         position: 1,
         movementId: MOVEMENT,
         movement: 'Press de banca',
-        targetLabel: '',
         sets: [
           { order: 1, loadKg: '80', reps: '10', done: true, previous: '—' },
           { order: 2, loadKg: '80', reps: '8', done: false, previous: '—' },
@@ -292,7 +286,6 @@ describe('what travels to the server', () => {
         position: 1,
         movementId: null,
         movement: 'Plancha',
-        targetLabel: '',
         sets: [{ order: 1, loadKg: '', reps: '', done: true, previous: '—' }],
       },
     ])

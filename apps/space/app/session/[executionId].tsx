@@ -20,7 +20,7 @@
  * **Accent marks where you are, not where you could be.** Every empty field outlined in
  * cyan made the card read as an alarm, and Ink & Signal reserves the colour for action,
  * focus and selection — an untouched field is none of those. The field lights up when
- * it has focus and the open card is edged in the tonal border, not the full accent.
+ * it has focus, and the open card is set apart by its fill alone, with no edge.
  *
  * **Opening an exercise is animated because the list moves under it.** Swapping a
  * 44-point row for a 300-point card with no transition reads as a glitch, and somebody
@@ -42,9 +42,10 @@ import { Text } from '@allfitone/react-native/text'
 import { useTheme } from '@allfitone/react-native/theme'
 import { transparent } from '@allfitone/react-native/tokens'
 import { FoundationIcon } from '@allfitone/react-native/icons'
+import { Image } from 'expo-image'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native'
+import { Keyboard, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import Animated, {
   interpolateColor,
@@ -56,6 +57,9 @@ import Animated, {
 } from 'react-native-reanimated'
 
 import { ApiError } from '../../src/client'
+import { createSpaceContentFlow } from '../../src/client/content-transport'
+import { FROM_SESSION } from '../../src/client/exercise-pick'
+import { readExerciseLibrary } from '../../src/client/exercise-library'
 import { createSpaceExecutionFlow } from '../../src/client/execution-transport'
 import { SPRING } from '../../src/client/motion'
 import {
@@ -76,7 +80,6 @@ const SAVE_FAILED = 'No pudimos guardar. Lo intentamos otra vez en un momento.'
 const STALE = 'Otra pantalla cambió esta sesión. Vuelve a abrirla para seguir.'
 const CLOSE_FAILED = 'No pudimos cerrar la sesión. Inténtalo otra vez.'
 const LEAVE_FAILED = 'No pudimos dejar la sesión. Inténtalo otra vez.'
-const HOW_TO = 'Cómo se hace el ejercicio llega con su propia pantalla.'
 
 /** Long enough to stop writing on every keystroke, short enough to never lose a set. */
 const SAVE_DELAY_MS = 1_200
@@ -133,6 +136,22 @@ export default function Session() {
   const [failure, setFailure] = useState<string | undefined>(undefined)
   const [closing, setClosing] = useState(false)
   const [deciding, setDeciding] = useState(false)
+
+  /** Each movement's demonstration, by id: the catalogue's, not the session's. */
+  const [previews, setPreviews] = useState<ReadonlyMap<string, string | null>>(new Map())
+
+  // Behind the session, not in front of it: the sets are what somebody came to log.
+  useEffect(() => {
+    let active = true
+    readExerciseLibrary(createSpaceContentFlow())
+      .then((library) => {
+        if (active) setPreviews(new Map(library.movements.map((one) => [one.id, one.demo_url])))
+      })
+      .catch(() => undefined)
+    return () => {
+      active = false
+    }
+  }, [])
 
   const revision = useRef(0)
   const pending = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
@@ -259,6 +278,19 @@ export default function Session() {
       })
   }
 
+  // A sheet over the session, so the timer and the sets are still there on the way back.
+  const explainer = (movementId: string | null) =>
+    movementId
+      ? () =>
+          router.push({
+            pathname: '/how-to/[movementId]',
+            params: { movementId, from: FROM_SESSION },
+          })
+      : undefined
+
+  // Opened from a link there is nothing beneath it, and Hoy is where it waits.
+  const minimize = () => (router.canGoBack() ? router.back() : router.replace('/today'))
+
   const progress = setsProgress(exercises)
   const volume = totalVolumeKg(exercises)
   const recorded = canFinish(exercises)
@@ -266,9 +298,10 @@ export default function Session() {
   return (
     <Screen edges={['top', 'bottom']}>
       <View style={styles.header}>
-        <IconButton icon="back" accessibilityLabel="Volver" onPress={() => router.back()} />
+        {/* Down, not back: the session is set aside, still open, and Hoy carries it. */}
+        <IconButton icon="expand" accessibilityLabel="Minimizar la sesión" onPress={minimize} />
         <View style={styles.heading}>
-          <Text role="display" size="xl" uppercase numberOfLines={1} accessibilityRole="header">
+          <Text role="control" size="lg" numberOfLines={2} accessibilityRole="header">
             {title}
           </Text>
           {caption ? (
@@ -309,11 +342,18 @@ export default function Session() {
 
       {failure ? <InlineAlert message={failure} /> : null}
 
-      <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
+      {/* `handled`: with the keyboard up, the tap on a tick used to only close it and
+          had to be made twice. A tap on nothing still closes it. */}
+      <ScrollView
+        contentContainerStyle={styles.list}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
         {exercises.map((exercise) => (
           <Exercise
             key={exercise.position}
             exercise={exercise}
+            picture={exercise.movementId ? (previews.get(exercise.movementId) ?? null) : null}
             open={exercise.position === openPosition}
             onToggle={() =>
               setOpenPosition((current) => (current === exercise.position ? 0 : exercise.position))
@@ -321,7 +361,7 @@ export default function Session() {
             onEdit={(order, change) => edit(exercise.position, order, change)}
             onAddSet={() => addSet(exercise.position)}
             onRemoveSet={(order) => removeSet(exercise.position, order)}
-            onExplain={() => setFailure(HOW_TO)}
+            onExplain={explainer(exercise.movementId)}
           />
         ))}
 
@@ -391,11 +431,12 @@ function Score({
  *
  * A single component rather than two, because two meant the header jumped from one
  * tree to another mid-animation and nothing could interpolate across the swap. Here the
- * header never unmounts: what changes is the drawer's height, the shell's fill and edge,
+ * header never unmounts: what changes is the drawer's height, the shell's fill,
  * and which way the chevron points — all off the same spring.
  */
 function Exercise({
   exercise,
+  picture,
   open,
   onToggle,
   onEdit,
@@ -404,6 +445,7 @@ function Exercise({
   onExplain,
 }: {
   readonly exercise: WorkingExercise
+  readonly picture: string | null
   readonly open: boolean
   readonly onToggle: () => void
   readonly onEdit: (
@@ -412,7 +454,8 @@ function Exercise({
   ) => void
   readonly onAddSet: () => void
   readonly onRemoveSet: (order: number) => void
-  readonly onExplain: () => void
+  /** Absent when the step names no catalogue movement: there is nothing to explain. */
+  readonly onExplain: (() => void) | undefined
 }) {
   const theme = useTheme()
   const progress = useSharedValue(0)
@@ -433,13 +476,10 @@ function Exercise({
   // colour the Design System does not have. Fading from `transparent` instead would
   // run both of these through black.
   const surface = theme.color.background.surface
-  const edge = theme.color.accent.tonalBorder
   const noSurface = transparent(surface)
-  const noEdge = transparent(edge)
 
   const shell = useAnimatedStyle(() => ({
     backgroundColor: interpolateColor(progress.value, [0, 1], [noSurface, surface]),
-    borderColor: interpolateColor(progress.value, [0, 1], [noEdge, edge]),
     paddingBottom: OPEN_PADDING * progress.value,
   }))
 
@@ -463,8 +503,6 @@ function Exercise({
   }))
 
   const summary = useAnimatedStyle(() => ({ opacity: 1 - progress.value }))
-  const quiet = useAnimatedStyle(() => ({ opacity: 1 - progress.value }))
-  const loud = useAnimatedStyle(() => ({ opacity: progress.value }))
 
   const thread = useAnimatedStyle(() => ({
     opacity: 1 - progress.value,
@@ -473,12 +511,6 @@ function Exercise({
 
   const body = (
     <>
-      {exercise.targetLabel ? (
-        <View style={styles.chips}>
-          <Chip icon="target" label={exercise.targetLabel} />
-        </View>
-      ) : null}
-
       <View style={styles.columns}>
         <Text role="eyebrow" size="xs" color="muted" align="center" style={styles.colSet}>
           SERIE
@@ -522,63 +554,70 @@ function Exercise({
 
   return (
     <Animated.View style={[styles.shell, shell]}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityState={{ expanded: open }}
-        accessibilityLabel={exercise.movement}
-        onPress={onToggle}
-        style={styles.exerciseHeader}
-      >
+      {/* Two controls side by side, not one inside the other: nested, VoiceOver folds the
+          picture into the row and the explanation cannot be reached. */}
+      <View style={styles.exerciseHeader}>
         <Animated.View style={[styles.thread, thread]} />
-        <Text role="control" size="xs" color={complete ? 'success' : open ? 'accent' : 'muted'}>
-          {String(exercise.position).padStart(2, '0')}
-        </Text>
-        {/* Two titles crossfading rather than one changing role: the canvas sets the
-            open exercise in display and the rest in body, and a font cannot animate. */}
-        <View style={styles.headerTitle}>
-          <Animated.View style={quiet}>
-            <Text role="control" size="md" numberOfLines={1}>
-              {exercise.movement}
-            </Text>
-          </Animated.View>
-          <Animated.View style={[styles.headerOver, styles.headerOpen, loud]}>
-            <Text role="display" size="xl" uppercase numberOfLines={1} style={styles.headerFlex}>
-              {exercise.movement}
-            </Text>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Cómo se hace ${exercise.movement}`}
-              onPress={onExplain}
-              hitSlop={10}
-            >
+        {/* Still, like the routine editor. The picture explains, open or shut, and the
+            rest of the row opens and closes: the play mark promises what a tap does. */}
+        <Pressable
+          onPress={onExplain ?? onToggle}
+          accessibilityRole={onExplain ? 'button' : undefined}
+          accessibilityLabel={onExplain ? `Cómo se hace ${exercise.movement}` : undefined}
+          accessible={onExplain !== undefined}
+          hitSlop={4}
+        >
+          <Image
+            source={picture}
+            style={[styles.preview, { backgroundColor: theme.color.background.surfaceSubtle }]}
+            contentFit="contain"
+            autoplay={false}
+            recyclingKey={exercise.movementId}
+            accessible={false}
+          />
+          {onExplain ? (
+            <View style={[styles.play, { backgroundColor: theme.color.background.canvas }]}>
               <FoundationIcon
-                name="external"
-                customSize={12}
-                color={theme.color.icon.secondary}
+                name="start"
+                customSize={9}
+                color={theme.color.icon.accent}
                 decorative
               />
-            </Pressable>
-          </Animated.View>
-        </View>
-        <Animated.View style={[styles.summary, summary]}>
-          {/* A tick as well as the colour. Green alone is a difference some people
-              cannot see, and WCAG 1.4.1 does not accept colour as the only signal. */}
-          {complete ? (
-            <FoundationIcon
-              name="success"
-              size="xs"
-              color={theme.color.status.success}
-              decorative
-            />
+            </View>
           ) : null}
-          <Text role="control" size="xs" color={complete ? 'success' : 'muted'}>
-            {`${done} de ${exercise.sets.length}`}
-          </Text>
-        </Animated.View>
-        <Animated.View style={chevron}>
-          <FoundationIcon name="expand" size="xs" color={theme.color.icon.secondary} decorative />
-        </Animated.View>
-      </Pressable>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ expanded: open }}
+          accessibilityLabel={exercise.movement}
+          onPress={onToggle}
+          style={styles.headerToggle}
+        >
+          <View style={[styles.headerTitle, styles.headerOpen]}>
+            <Text role="control" size="md" numberOfLines={1} style={styles.headerFlex}>
+              {exercise.movement}
+            </Text>
+          </View>
+          <Animated.View style={[styles.summary, summary]}>
+            {/* A tick as well as the colour. Green alone is a difference some people
+                cannot see, and WCAG 1.4.1 does not accept colour as the only signal. */}
+            {complete ? (
+              <FoundationIcon
+                name="success"
+                size="xs"
+                color={theme.color.status.success}
+                decorative
+              />
+            ) : null}
+            <Text role="control" size="xs" color={complete ? 'success' : 'muted'}>
+              {`${done} de ${exercise.sets.length}`}
+            </Text>
+          </Animated.View>
+          <Animated.View style={chevron}>
+            <FoundationIcon name="expand" size="xs" color={theme.color.icon.secondary} decorative />
+          </Animated.View>
+        </Pressable>
+      </View>
 
       <Animated.View style={[styles.drawer, drawer]}>
         {/* Out of flow, so it can never add its height to the row it is measuring.
@@ -680,7 +719,11 @@ function SetRow({
               accessibilityRole="checkbox"
               accessibilityState={{ checked: set.done }}
               accessibilityLabel={`Marcar la serie ${index + 1}`}
-              onPress={() => onEdit({ done: !set.done })}
+              onPress={() => {
+                // The set is over; the keyboard would sit over the ones still to come.
+                Keyboard.dismiss()
+                onEdit({ done: !set.done })
+              }}
               style={[
                 styles.cell,
                 {
@@ -727,27 +770,6 @@ function SetRow({
         </View>
       </Animated.View>
     </GestureDetector>
-  )
-}
-
-function Chip({ icon, label }: { readonly icon: 'target'; readonly label: string }) {
-  const theme = useTheme()
-
-  return (
-    <View
-      style={[
-        styles.chip,
-        {
-          backgroundColor: theme.color.background.surfaceSubtle,
-          borderColor: theme.color.border.subtle,
-        },
-      ]}
-    >
-      <FoundationIcon name={icon} customSize={11} color={theme.color.icon.secondary} decorative />
-      <Text role="body" size="xs" color="secondary">
-        {label}
-      </Text>
-    </View>
   )
 }
 
@@ -812,26 +834,29 @@ const styles = StyleSheet.create({
   score: { flex: 1, alignItems: 'center', gap: 1 },
   divider: { width: 1, height: 30 },
   list: { gap: 6, paddingTop: 16, paddingBottom: 32 },
-  shell: { borderRadius: 22, borderWidth: 1.5, paddingHorizontal: CARD_INSET },
+  shell: { borderRadius: 22, paddingHorizontal: CARD_INSET },
   exerciseHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, height: 44 },
-  headerTitle: { flex: 1, justifyContent: 'center' },
+  headerTitle: { flex: 1 },
+  headerToggle: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12, height: 44 },
+  // Below the row's 44, so the open card keeps a margin above it.
+  preview: { width: 40, height: 40, borderRadius: 10 },
   summary: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  headerOver: { position: 'absolute', left: 0, right: 0 },
   headerOpen: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   headerFlex: { flexShrink: 1 },
+  // Over the picture's corner, where it reads as «this plays» without hiding it.
+  play: {
+    position: 'absolute',
+    right: -4,
+    bottom: -4,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   // Clipped, so the animated height is what reveals the drawer.
   drawer: { overflow: 'hidden' },
   measure: { position: 'absolute', left: 0, right: 0, top: 0, gap: 10, paddingTop: 6 },
-  chips: { flexDirection: 'row', gap: 8 },
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    borderRadius: 9,
-    borderWidth: 1,
-    paddingVertical: 4,
-    paddingHorizontal: 9,
-  },
   columns: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   setRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   // 'SERIE' at the eyebrow's 0.2em tracking needs the room, and the numbers ride the

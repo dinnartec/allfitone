@@ -58,7 +58,8 @@
  * is left out is a tab with nothing behind it.
  *
  * Adding from here goes through the same mailbox the picker uses, so the routine
- * draft keeps exactly one writer.
+ * draft keeps exactly one writer. Opened from a program there is no draft, so the
+ * detail is only there to be read.
  */
 
 import { Button } from '@allfitone/react-native/button'
@@ -80,7 +81,7 @@ import { ApiError } from '../../../src/client'
 import type { MovementDetail, MuscleTerm } from '../../../src/client/content'
 import { createSpaceContentFlow } from '../../../src/client/content-transport'
 import { litSlugsFor } from '../../../src/client/exercise-catalogue'
-import { offerExercisePick } from '../../../src/client/exercise-pick'
+import { addsToRoutine, FROM_SESSION, offerExercisePick } from '../../../src/client/exercise-pick'
 import { INERT_SLUGS, type BodySide } from '../../../src/client/focus-form'
 import { BodyFigure, faceShowing } from '../../../src/components/body-figure'
 
@@ -110,8 +111,11 @@ export default function MovementDetailScreen() {
   const router = useRouter()
   const theme = useTheme()
   const flow = useMemo(() => createSpaceContentFlow(), [])
-  const params = useLocalSearchParams<{ movementId: string }>()
+  const params = useLocalSearchParams<{ movementId: string; from?: string }>()
   const movementId = params.movementId
+  const adding = addsToRoutine(params.from)
+  // Over a session it is a sheet: it closes downwards and has no status bar above it.
+  const sheet = params.from === FROM_SESSION
 
   const [movement, setMovement] = useState<MovementDetail | undefined>(undefined)
   const [muscles, setMuscles] = useState<readonly MuscleTerm[]>([])
@@ -190,8 +194,12 @@ export default function MovementDetailScreen() {
   }, [playing, picture])
 
   // Replace and not push: walking variant to variant would build a stack somebody
-  // has to tap back through one by one.
-  const openVariant = (id: string) => router.replace(`/routines/exercises/${id}`)
+  // has to tap back through one by one. The origin travels, or the button comes back.
+  const openVariant = (id: string) =>
+    router.replace({
+      pathname: sheet ? '/how-to/[movementId]' : '/routines/exercises/[movementId]',
+      params: params.from ? { movementId: id, from: params.from } : { movementId: id },
+    })
 
   const add = () => {
     if (!movement) return
@@ -200,12 +208,17 @@ export default function MovementDetailScreen() {
   }
 
   return (
-    <Screen edges={['top', 'bottom']}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.top}>
-          <IconButton icon="back" accessibilityLabel="Volver" onPress={() => router.back()} />
-        </View>
+    <Screen edges={sheet ? ['bottom'] : ['top', 'bottom']} style={sheet ? styles.sheet : undefined}>
+      {/* Outside the scroll, so leaving never means climbing back up five steps. */}
+      <View style={styles.top}>
+        <IconButton
+          icon={sheet ? 'expand' : 'back'}
+          accessibilityLabel={sheet ? 'Cerrar' : 'Volver'}
+          onPress={() => router.back()}
+        />
+      </View>
 
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.heading}>
           <Text role="eyebrow" size="2xs" color="muted">
             MOVIMIENTO DEL CATÁLOGO
@@ -328,7 +341,9 @@ export default function MovementDetailScreen() {
         ) : null}
       </ScrollView>
 
-      {movement === undefined ? null : <Button label="Añadir a la rutina" onPress={add} />}
+      {movement === undefined || !adding ? null : (
+        <Button label="Añadir a la rutina" onPress={add} />
+      )}
     </Screen>
   )
 }
@@ -362,7 +377,8 @@ function Variants({
           ]}
         >
           <View style={styles.variantText}>
-            <Text role="display" size="sm" uppercase numberOfLines={1}>
+            {/* Sentence case: the condensed display face in capitals ran the letters together. */}
+            <Text role="control" size="sm" numberOfLines={1}>
               {one.name}
             </Text>
             {one.note === null ? null : (
@@ -380,7 +396,9 @@ function Variants({
 
 const styles = StyleSheet.create({
   content: { gap: 14, paddingBottom: 96 },
-  top: { flexDirection: 'row' },
+  // Clear of the sheet's grabber, which sits where the status bar would.
+  sheet: { paddingTop: 20 },
+  top: { flexDirection: 'row', paddingBottom: 8 },
   heading: { gap: 4 },
   demoRow: { flexDirection: 'row', gap: 12 },
   // Whatever the column leaves, and square because the source is. Narrower than the
