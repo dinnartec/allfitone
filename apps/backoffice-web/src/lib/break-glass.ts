@@ -283,7 +283,8 @@ export function outcomeMessage(outcome: BreakGlassExerciseOutcome): string {
 }
 
 const METRIC_LABELS: Record<BodyProgressMetricCode, string> = {
-  weight: 'Peso',
+  body_weight: 'Peso',
+  body_height: 'Estatura',
   muscle_mass: 'Masa muscular',
   body_fat: 'Grasa corporal',
   waist: 'Cintura',

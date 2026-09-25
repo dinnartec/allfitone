@@ -6502,21 +6502,25 @@ export interface components {
       items: components['schemas']['ErasureRequest'][]
       has_more: boolean
     }
-    /** @enum {string} */
+    /**
+     * @description The rows of `identity.body_progress_metrics`. Recording is an onboarding step and accepts weight and height only; the rest exist in the catalogue, and a read returns whichever were written.
+     * @enum {string}
+     */
     BodyProgressMetricCode:
-      'weight' | 'muscle_mass' | 'body_fat' | 'waist' | 'hip' | 'chest' | 'arm' | 'thigh'
+      | 'body_weight'
+      | 'body_height'
+      | 'muscle_mass'
+      | 'body_fat'
+      | 'waist'
+      | 'hip'
+      | 'chest'
+      | 'arm'
+      | 'thigh'
     /**
      * @description Masses in `kg` or `lb`, lengths in `m`, `cm` or `in`, body fat in `percent`.
      * @enum {string}
      */
     BodyProgressUnitCode: 'kg' | 'lb' | 'm' | 'cm' | 'in' | 'percent'
-    BodyProgressRecordCreate: {
-      metric_code: components['schemas']['BodyProgressMetricCode']
-      value: number
-      unit_code: components['schemas']['BodyProgressUnitCode']
-      /** Format: date */
-      measured_on: string
-    }
     BodyProgressRecord: {
       id: components['schemas']['UuidV7']
       metric_code: components['schemas']['BodyProgressMetricCode']

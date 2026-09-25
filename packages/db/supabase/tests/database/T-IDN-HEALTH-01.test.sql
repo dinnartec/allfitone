@@ -505,11 +505,17 @@ select is(
 -- ---------------------------------------------------------------------------
 
 -- A statement does not see rows written by functions it calls, so each step is its own.
+select set_config('app.actor_kind', 'account', true),
+       set_config('app.actor_account_id', '019b6000-0000-7000-8000-000000000101', true);
+
 create temporary table weighed on commit drop as
 select * from identity.record_body_progress(
-  'workos', 'https://issuer.test', 'subject_health', '019b6000-0000-7000-8000-000000000551',
-  'body_weight', 70, 'kg', current_date, gen_random_uuid(), extensions.gen_random_bytes(32)
+  '019b6000-0000-7000-8000-000000000101', 'body_weight', 70, 'kg', current_date,
+  gen_random_uuid(), '019b6000-0000-7000-8000-000000000551', extensions.gen_random_bytes(32)
 );
+
+select set_config('app.actor_kind', 'support', true),
+       set_config('app.actor_account_id', '', true);
 
 create temporary table unweighed on commit drop as
 select * from identity.delete_body_progress(

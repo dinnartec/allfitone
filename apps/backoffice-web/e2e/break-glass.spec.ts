@@ -267,7 +267,7 @@ test('an authorised read of body progress shows the measurements until the windo
         },
         {
           id: '019a8000-0000-7000-8000-000000000702',
-          metric_code: 'weight',
+          metric_code: 'body_weight',
           value: 80,
           unit_code: 'kg',
           original_value: 176.37,
@@ -678,7 +678,7 @@ test('a second read replaces what the first one showed', async ({ context, page 
         bodyProgress: [
           {
             id: '019a8000-0000-7000-8000-000000000704',
-            metric_code: 'weight',
+            metric_code: 'body_weight',
             value: 72,
             unit_code: 'kg',
             original_value: null,

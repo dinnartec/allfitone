@@ -15720,27 +15720,26 @@ components:
           type: boolean
     BodyProgressMetricCode:
       type: string
-      enum: [weight, muscle_mass, body_fat, waist, hip, chest, arm, thigh]
+      description: >-
+        The rows of `identity.body_progress_metrics`. Recording is an onboarding step and
+        accepts weight and height only; the rest exist in the catalogue, and a read returns
+        whichever were written.
+      enum:
+        [
+          body_weight,
+          body_height,
+          muscle_mass,
+          body_fat,
+          waist,
+          hip,
+          chest,
+          arm,
+          thigh,
+        ]
     BodyProgressUnitCode:
       type: string
       description: Masses in `kg` or `lb`, lengths in `m`, `cm` or `in`, body fat in `percent`.
       enum: [kg, lb, m, cm, in, percent]
-    BodyProgressRecordCreate:
-      type: object
-      additionalProperties: false
-      required: [metric_code, value, unit_code, measured_on]
-      properties:
-        metric_code:
-          $ref: '#/components/schemas/BodyProgressMetricCode'
-        value:
-          type: number
-          exclusiveMinimum: 0
-          maximum: 100000
-        unit_code:
-          $ref: '#/components/schemas/BodyProgressUnitCode'
-        measured_on:
-          type: string
-          format: date
     BodyProgressRecord:
       type: object
       additionalProperties: false

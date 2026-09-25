@@ -1,9 +1,9 @@
 -- T-IDN-BODY-01 — OP-IDN-006, OP-IDN-007 and OP-SUP-003 over body progress
 -- (`HU-SP-025`, `HU-SP-026`, `HU-SP-027`, `HU-BO-009`).
 --
--- **A measurement is the person's, and only theirs.** Space records it for the person
--- the token resolves to, nobody reads the table directly, and one person's list never
--- shows another's.
+-- **A measurement is the person's, and only theirs.** Space records it through the one
+-- command that owns `OP-IDN-006`, for the person its onboarding account belongs to;
+-- nobody reads the table directly, and one person's list never shows another's.
 --
 -- **Deleting is physical, and it leaves evidence.** The record is gone in the same
 -- transaction; what stays is a disposition case saying which kind of data was deleted,
@@ -15,7 +15,7 @@
 
 begin;
 
-select plan(50);
+select plan(51);
 
 insert into identity.people (id, given_name, family_name, status)
 values
@@ -102,12 +102,27 @@ from (values
 create function pg_temp.record(
   p_subject text, p_record uuid, p_metric text, p_value numeric, p_unit text, p_on date,
   p_key uuid default gen_random_uuid(), p_hash bytea default extensions.gen_random_bytes(32)
-) returns table (result jsonb, replayed boolean)
-language sql as $fn$
-  select * from identity.record_body_progress(
-    'workos', 'https://issuer.test', p_subject, p_record, p_metric, p_value, p_unit, p_on,
-    p_key, p_hash
-  )
+) returns table (
+  record_id uuid, metric_code text, value_numeric numeric, unit_code text,
+  original_value numeric, original_unit_code text, replayed boolean
+)
+language plpgsql as $fn$
+declare
+  account uuid;
+begin
+  select access_account.id into account
+  from identity.access_accounts as access_account
+  where access_account.provider = 'workos'
+    and access_account.issuer = 'https://issuer.test'
+    and access_account.subject = p_subject;
+
+  perform set_config('app.actor_kind', 'account', true);
+  perform set_config('app.actor_account_id', coalesce(account::text, ''), true);
+
+  return query select * from identity.record_body_progress(
+    account, p_metric, p_value, p_unit, p_on, p_key, p_record, p_hash
+  );
+end
 $fn$;
 
 create function pg_temp.forget(
@@ -153,11 +168,9 @@ select * from pg_temp.record(
 );
 
 select results_eq(
-  $$ select result->>'metric_code', (result->>'value')::numeric, result->>'unit_code',
-            result->'original_value', result->'original_unit_code', result->'has_media', replayed
+  $$ select metric_code, value_numeric, unit_code, original_value, original_unit_code, replayed
      from first_weight $$,
-  $$ values ('body_weight'::text, 80::numeric, 'kg'::text, 'null'::jsonb, 'null'::jsonb,
-             'false'::jsonb, false) $$,
+  $$ values ('body_weight'::text, 80::numeric, 'kg'::text, null::numeric, null::text, false) $$,
   'a weight in kilograms is stored as it came, with no original to keep'
 );
 
@@ -169,24 +182,23 @@ select is(
 );
 
 select results_eq(
-  $$ select (result->>'value')::numeric, result->>'unit_code',
-            (result->>'original_value')::numeric, result->>'original_unit_code'
+  $$ select value_numeric, unit_code, original_value, original_unit_code
      from pg_temp.record('subject_body', '019b5000-0000-7000-8000-000000000502', 'body_weight',
        176.37, 'lb', current_date - 2) $$,
-  $$ values (80.000::numeric, 'kg'::text, 176.37::numeric, 'lb'::text) $$,
+  $$ values ((176.37 * 0.45359237)::numeric, 'kg'::text, 176.37::numeric, 'lb'::text) $$,
   'pounds are kept as written and stored in kilograms'
 );
 
 select results_eq(
-  $$ select (result->>'value')::numeric, result->>'unit_code', result->>'original_unit_code'
+  $$ select value_numeric, unit_code, original_unit_code
      from pg_temp.record('subject_body', '019b5000-0000-7000-8000-000000000503', 'waist',
        32, 'in', current_date - 1) $$,
-  $$ values (81.280::numeric, 'cm'::text, 'in'::text) $$,
+  $$ values (81.28::numeric, 'cm'::text, 'in'::text) $$,
   'a waist in inches is kept as written and stored in centimetres'
 );
 
 select results_eq(
-  $$ select result->>'metric_code', replayed
+  $$ select metric_code, replayed
      from pg_temp.record('subject_body', '019b5000-0000-7000-8000-000000000501', 'body_weight', 80,
        'kg', current_date - 3, 'a0000000-0000-4000-8000-000000000501',
        decode(repeat('51', 32), 'hex')) $$,
@@ -205,35 +217,35 @@ select throws_ok(
 select throws_ok(
   $$ select * from pg_temp.record('subject_body', extensions.uuid_generate_v7(), 'body_weight', 80,
        'cm', current_date) $$,
-  '22023', null,
+  '23514', null,
   'a weight is not measured in centimetres'
 );
 
 select throws_ok(
   $$ select * from pg_temp.record('subject_body', extensions.uuid_generate_v7(), 'shoe_size',
        42, 'cm', current_date) $$,
-  '22023', null,
+  '23514', null,
   'a measurement outside the catalogue is refused'
 );
 
 select throws_ok(
   $$ select * from pg_temp.record('subject_body', extensions.uuid_generate_v7(), 'body_weight', 0,
        'kg', current_date) $$,
-  '22023', null,
+  '23514', null,
   'a measurement is positive'
 );
 
 select throws_ok(
   $$ select * from pg_temp.record('subject_body', extensions.uuid_generate_v7(), 'body_fat',
        120, 'percent', current_date) $$,
-  '22023', null,
+  '23514', null,
   'a percentage does not pass one hundred'
 );
 
 select throws_ok(
   $$ select * from pg_temp.record('subject_body', extensions.uuid_generate_v7(), 'body_weight', 80,
        'kg', current_date + 5) $$,
-  '22023', null,
+  '23514', null,
   'nobody measured themselves next week'
 );
 
@@ -256,6 +268,21 @@ select throws_ok(
        'kg', current_date) $$,
   '42501', null,
   'nor a closed person'
+);
+
+-- The account is an argument, so the command has to refuse one that is not the actor's.
+-- Everything else here goes through a wrapper that keeps the two in step, which is exactly
+-- how this would stay untested.
+select set_config('app.actor_kind', 'account', true),
+       set_config('app.actor_account_id', '019b5000-0000-7000-8000-000000000101', true);
+
+select throws_ok(
+  $$ select * from identity.record_body_progress(
+       '019b5000-0000-7000-8000-000000000102', 'body_weight', 70, 'kg', current_date,
+       'a0000000-0000-4000-8000-000000000509'::uuid, extensions.uuid_generate_v7(),
+       decode(repeat('59', 32), 'hex')) $$,
+  '42501', null,
+  'and nobody records a measurement against an account that is not theirs'
 );
 
 select is(
@@ -614,7 +641,7 @@ select ok(
 
 select ok(
   has_function_privilege('allfit_api',
-    'identity.record_body_progress(text,text,text,uuid,text,numeric,text,date,uuid,bytea)', 'EXECUTE')
+    'identity.record_body_progress(uuid,text,numeric,text,date,uuid,uuid,bytea)', 'EXECUTE')
   and has_function_privilege('allfit_api',
     'identity.list_body_progress(text,text,text,integer,date,uuid)', 'EXECUTE')
   and has_function_privilege('allfit_api',

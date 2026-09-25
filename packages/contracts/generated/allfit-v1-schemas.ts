@@ -1553,7 +1553,19 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
   },
   BodyProgressMetricCode: {
     type: 'string',
-    enum: ['weight', 'muscle_mass', 'body_fat', 'waist', 'hip', 'chest', 'arm', 'thigh'],
+    description:
+      'The rows of `identity.body_progress_metrics`. Recording is an onboarding step and accepts weight and height only; the rest exist in the catalogue, and a read returns whichever were written.',
+    enum: [
+      'body_weight',
+      'body_height',
+      'muscle_mass',
+      'body_fat',
+      'waist',
+      'hip',
+      'chest',
+      'arm',
+      'thigh',
+    ],
   },
   BodyProgressPage: {
     type: 'object',
@@ -1624,28 +1636,6 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       recorded_at: {
         type: 'string',
         format: 'date-time',
-      },
-    },
-  },
-  BodyProgressRecordCreate: {
-    type: 'object',
-    additionalProperties: false,
-    required: ['metric_code', 'value', 'unit_code', 'measured_on'],
-    properties: {
-      metric_code: {
-        $ref: '#/components/schemas/BodyProgressMetricCode',
-      },
-      value: {
-        type: 'number',
-        exclusiveMinimum: 0,
-        maximum: 100000,
-      },
-      unit_code: {
-        $ref: '#/components/schemas/BodyProgressUnitCode',
-      },
-      measured_on: {
-        type: 'string',
-        format: 'date',
       },
     },
   },

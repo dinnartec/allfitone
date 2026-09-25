@@ -4,12 +4,25 @@ import { allfitV1ContractManifest } from '@allfitone/contracts'
 import { createApp } from './application.js'
 
 type Route = { method: string; path: string }
+type Handled = Route & { handler: { length: number } }
 
 const HTTP_METHODS = new Set(['DELETE', 'GET', 'HEAD', 'OPTIONS', 'PATCH', 'POST', 'PUT'])
 
 function routeKey(route: Route) {
   const canonicalPath = route.path.replace(/:([A-Za-z0-9_]+)/g, '{$1}')
   return `${route.method.toUpperCase()} ${canonicalPath}`
+}
+
+// A terminal handler takes the context alone; route-level middleware takes a next as
+// well. Only the first kind answers, so only the first kind may appear twice.
+function collidingRoutes(routes: readonly Handled[]) {
+  const answered = new Map<string, number>()
+  for (const { method, path, handler } of routes) {
+    if (!HTTP_METHODS.has(method.toUpperCase()) || handler.length !== 1) continue
+    const key = routeKey({ method, path })
+    answered.set(key, (answered.get(key) ?? 0) + 1)
+  }
+  return [...answered].filter(([, count]) => count > 1).map(([key]) => key)
 }
 
 function contractDrift(implementedRoutes: readonly Route[], excludedRoutes: readonly Route[]) {
@@ -38,6 +51,30 @@ describe('OpenAPI route gate', () => {
       undocumented: [],
       staleExclusions: [],
     })
+  })
+
+  // Two routers mounted on the same prefix can both claim a path. Hono answers with
+  // whichever registered first, so the other becomes unreachable without failing anything.
+  test('leaves no path answered by two handlers', () => {
+    process.env.API_PUBLIC_URL = 'https://api.example.test'
+    process.env.STUDIO_WEB_URL = 'https://studio.example.test'
+    process.env.BACKOFFICE_WEB_URL = 'https://backoffice.example.test'
+
+    expect(collidingRoutes(createApp().routes)).toEqual([])
+  })
+
+  test('rejects a path two handlers answer and ignores route-level middleware', () => {
+    const answer = (c: unknown) => c
+    const middleware = (c: unknown, next: unknown) => [c, next]
+
+    expect(
+      collidingRoutes([
+        { method: 'POST', path: '/twice', handler: answer },
+        { method: 'POST', path: '/twice', handler: answer },
+        { method: 'POST', path: '/guarded', handler: middleware },
+        { method: 'POST', path: '/guarded', handler: answer },
+      ]),
+    ).toEqual(['POST /twice'])
   })
 
   test('rejects an implemented route absent from both OpenAPI and exclusions', () => {

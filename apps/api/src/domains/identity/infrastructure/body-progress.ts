@@ -14,7 +14,6 @@ import type {
   BodyProgressDatabase,
   BodyProgressDeletion,
   BodyProgressPage,
-  BodyProgressRecord,
   BodyProgressResult,
 } from '../domain/body-progress.js'
 
@@ -36,19 +35,6 @@ export function createBodyProgressDatabase(): BodyProgressDatabase {
         `
         if (!row) throw new Error('PostgreSQL did not read the measurements')
         return row.list_body_progress
-      }),
-
-    record: (input) =>
-      withinRequest(sql, input.requestId, async (transaction) => {
-        const rows = await transaction<CommandRow<BodyProgressRecord>[]>`
-          select * from identity.record_body_progress(
-            ${PROVIDER}, ${input.issuer}, ${input.subject}, ${input.recordId}::uuid,
-            ${input.measurement.metric_code}, ${input.measurement.value}::numeric,
-            ${input.measurement.unit_code}, ${input.measurement.measured_on}::date,
-            ${input.idempotencyKey}::uuid, ${input.requestHash}
-          )
-        `
-        return result(rows, 'record the measurement')
       }),
 
     delete: (input) =>

@@ -231,12 +231,23 @@ describe('break-glass presentation rules', () => {
       content: {
         body_progress: [
           {
+            id: '019a8000-0000-7000-8000-000000000700',
+            metric_code: 'body_weight',
+            value: 80,
+            unit_code: 'kg',
+            original_value: 176.37,
+            original_unit_code: 'lb',
+            measured_on: '2026-09-02',
+            has_media: false,
+            recorded_at: '2026-09-02T11:00:00.000Z',
+          },
+          {
             id: '019a8000-0000-7000-8000-000000000701',
             metric_code: 'waist',
-            value: 0.82,
-            unit_code: 'm',
-            original_value: 82,
-            original_unit_code: 'cm',
+            value: 81.28,
+            unit_code: 'cm',
+            original_value: 32,
+            original_unit_code: 'in',
             measured_on: '2026-09-01',
             has_media: false,
             recorded_at: '2026-09-01T11:00:00.000Z',
@@ -260,10 +271,18 @@ describe('break-glass presentation rules', () => {
     // as UTC midnight and shown in Bogotá it would move to the day before.
     expect(measurementRows(allowed)).toEqual([
       {
+        id: '019a8000-0000-7000-8000-000000000700',
+        metric: 'Peso',
+        recorded: '176,37 lb',
+        normalized: '80 kg',
+        measuredOn: '2 de septiembre de 2026',
+        photo: 'Sin foto',
+      },
+      {
         id: '019a8000-0000-7000-8000-000000000701',
         metric: 'Cintura',
-        recorded: '82 cm',
-        normalized: '0,82 m',
+        recorded: '32 in',
+        normalized: '81,28 cm',
         measuredOn: '1 de septiembre de 2026',
         photo: 'Sin foto',
       },

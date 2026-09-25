@@ -10,11 +10,11 @@ import { spaceBodyProgressRoutes } from './space-body-progress.js'
 const RECORD_ID = '019b5000-0000-7000-8000-000000000501'
 const CASE_ID = '019b5000-0000-7000-8000-000000000901'
 const IDEMPOTENCY_KEY = 'a0000000-0000-4000-8000-000000000501'
-const OPERATIONS = ['OP-IDN-006', 'OP-IDN-007', 'OP-IDN-015']
+const OPERATIONS = ['OP-IDN-007', 'OP-IDN-015']
 
 const record: AllfitV1Schemas['BodyProgressRecord'] = {
   id: RECORD_ID,
-  metric_code: 'weight',
+  metric_code: 'body_weight',
   value: 80,
   unit_code: 'kg',
   original_value: 176.37,
@@ -33,10 +33,6 @@ function bodyService(overrides: Partial<BodyProgressService> = {}): BodyProgress
     list: (verifiedToken, input) => {
       captured.push({ operation: 'list', token: verifiedToken, input })
       return Promise.resolve({ items: [record], has_more: false })
-    },
-    record: (verifiedToken, input) => {
-      captured.push({ operation: 'record', token: verifiedToken, input })
-      return Promise.resolve({ resource: record, replayed: false })
     },
     delete: (verifiedToken, input) => {
       captured.push({ operation: 'delete', token: verifiedToken, input })
@@ -83,7 +79,7 @@ function request(
 
 function command(
   path: string,
-  method: 'POST' | 'DELETE',
+  method: 'DELETE',
   body?: unknown,
   headers: Record<string, string> = {},
 ): Request {
@@ -103,13 +99,6 @@ function colonPath(path: string): string {
   return path.replace(/\{([A-Za-z0-9_]+)\}/g, ':$1')
 }
 
-const measurement = {
-  metric_code: 'weight',
-  value: 176.37,
-  unit_code: 'lb',
-  measured_on: '2026-09-15',
-}
-
 beforeEach(() => {
   captured = []
   process.env.BACKOFFICE_WEB_URL = 'https://backoffice.example.test'
@@ -118,7 +107,7 @@ beforeEach(() => {
 })
 
 describe('Space body progress API contract', () => {
-  test('T-IDN-BODY-API-01 mounts the read and both commands with their contract methods', () => {
+  test('T-IDN-BODY-API-01 mounts the read and the deletion with their contract methods', () => {
     const contract = allfitV1ContractManifest.operations
       .filter((operation) => OPERATIONS.includes(operation.allfitOperation))
       .map((operation) => `${operation.method} ${colonPath(operation.path)}`)
@@ -128,7 +117,7 @@ describe('Space body progress API contract', () => {
       .map((route) => `${route.method} /space/v1${route.path}`)
       .sort()
 
-    expect(contract).toHaveLength(3)
+    expect(contract).toHaveLength(2)
     expect(mounted).toEqual(contract)
   })
 
@@ -140,63 +129,7 @@ describe('Space body progress API contract', () => {
       .map((route) => `${route.method} ${route.path}`)
 
     expect(mounted).toContain('GET /space/v1/body-progress')
-    expect(mounted).toContain('POST /space/v1/body-progress')
     expect(mounted).toContain('DELETE /space/v1/body-progress/:recordId')
-  })
-
-  test('T-IDN-BODY-API-03 records a measurement under the command that names it', async () => {
-    const response = await routes().fetch(command('/body-progress', 'POST', measurement))
-
-    expect(response.status).toBe(201)
-    expect(response.headers.get('cache-control')).toBe('no-store')
-    await expect(response.json()).resolves.toEqual(record)
-    expect(captured[0]?.token).toBe(token)
-    expect(captured[0]?.input).toMatchObject({
-      recordId: RECORD_ID,
-      idempotencyKey: IDEMPOTENCY_KEY,
-      measurement: {
-        metric_code: 'weight',
-        value: 176.37,
-        unit_code: 'lb',
-        measured_on: '2026-09-15',
-      },
-    })
-  })
-
-  test('T-IDN-BODY-API-04 refuses a measurement whose shape the database would refuse anyway', async () => {
-    const bodies: unknown[] = [
-      { ...measurement, metric_code: 'shoe_size' },
-      { ...measurement, unit_code: 'stone' },
-      { ...measurement, value: 0 },
-      { ...measurement, value: '80' },
-      { ...measurement, measured_on: '15/09/2026' },
-      { ...measurement, media_ref: 'photos/1' },
-      { metric_code: 'weight', value: 80, unit_code: 'kg' },
-      '{not json',
-    ]
-    const answers = await Promise.all(
-      bodies.map((body) => routes().fetch(command('/body-progress', 'POST', body))),
-    )
-
-    expect(answers.map((response) => response.status)).toEqual(bodies.map(() => 422))
-    expect(captured).toEqual([])
-  })
-
-  test('T-IDN-BODY-API-05 requires a JSON body and the command identifiers', async () => {
-    const answers = await Promise.all([
-      routes().fetch(
-        command('/body-progress', 'POST', measurement, { 'content-type': 'text/plain' }),
-      ),
-      routes().fetch(command('/body-progress', 'POST', measurement, { 'idempotency-key': 'nope' })),
-      routes().fetch(
-        command('/body-progress', 'POST', measurement, {
-          'command-id': 'a0000000-0000-4000-8000-000000000501',
-        }),
-      ),
-    ])
-
-    expect(answers.map((response) => response.status)).toEqual([415, 400, 400])
-    expect(captured).toEqual([])
   })
 
   test('T-IDN-BODY-API-06 reads my measurements a page at a time', async () => {
@@ -283,15 +216,10 @@ describe('Space body progress API contract', () => {
       routes().fetch(request('/body-progress', { bearer: null })),
       routes().fetch(request('/body-progress', { bearer: 'forged' })),
       routes().fetch(
-        request('/body-progress', {
-          method: 'POST',
+        request(`/body-progress/${RECORD_ID}`, {
+          method: 'DELETE',
           bearer: 'forged',
-          headers: {
-            'content-type': 'application/json',
-            'idempotency-key': IDEMPOTENCY_KEY,
-            'command-id': RECORD_ID,
-          },
-          body: JSON.stringify(measurement),
+          headers: { 'idempotency-key': IDEMPOTENCY_KEY, 'command-id': RECORD_ID },
         }),
       ),
     ])
