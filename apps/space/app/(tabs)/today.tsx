@@ -66,6 +66,7 @@ import { routineFigures, routineOfVersion } from '../../src/client/library'
 import {
   cardsFor as weekCards,
   dayChip,
+  firstCardShown,
   lastTimeShown,
   programDayOf,
   startLabel,
@@ -224,8 +225,8 @@ export default function Today() {
    * la biblioteca sabe con qué portada se dibuja; dos rutinas pueden llamarse igual, y
    * emparejarlas por el rótulo dibujaría la portada de la otra.
    */
-  const week = useMemo(() => weekCards(plan), [plan])
   const todayIs = useMemo(() => programDayOf(new Date()), [])
+  const week = useMemo(() => weekCards(plan, todayIs), [plan, todayIs])
   const days = useMemo(() => weekDays(week, todayIs), [week, todayIs])
 
   /** Empezar la rutina de una tarjeta, o volver a la que quedó abierta. */
@@ -514,7 +515,9 @@ function Carousel({
    * dedo, así que el valor cambia en cada fotograma; guardarlo con `useState` sería un
    * render por cuadro justo mientras se arrastra, que es de donde venía la latencia.
    */
-  const at = useSharedValue(0)
+  // Opens on today's card, or the next day's: moved to, never reordered.
+  const opening = useMemo(() => firstCardShown(week, today), [week, today])
+  const at = useSharedValue(opening)
   const follow = useAnimatedScrollHandler((event) => {
     at.set(event.contentOffset.x / step)
   })
@@ -530,7 +533,7 @@ function Carousel({
    * interfaz y sólo cruza al de React cuando el número redondeado cambia, que son dos
    * o tres veces por gesto.
    */
-  const [leadingIndex, setLeadingIndex] = useState(0)
+  const [leadingIndex, setLeadingIndex] = useState(opening)
   useAnimatedReaction(
     () => Math.round(at.get()),
     (now, before) => {
@@ -547,6 +550,7 @@ function Carousel({
         snapToInterval={step}
         decelerationRate="fast"
         contentContainerStyle={{ paddingHorizontal: DECK_GUTTER, gap: CARD_GAP }}
+        contentOffset={{ x: opening * step, y: 0 }}
         onScroll={follow}
         scrollEventThrottle={16}
       >

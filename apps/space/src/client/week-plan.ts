@@ -5,9 +5,10 @@
  * is not to say what today is: it is to say **which routine to reach for next**,
  * and to make every other one just as reachable.
  *
- * **Suggested is the first one still pending, in the order the programme wrote
- * them.** Nothing cleverer, because nothing cleverer could be explained to
- * somebody standing in a gym. It orients; it never decides.
+ * **Suggested is today's, or the next day's that is still pending.** The same rule
+ * Hoy opens its carousel on, so the two screens never point at different days. A
+ * session left behind earlier in the week keeps its place but is not suggested
+ * again. It orients; it never decides.
  *
  * **Done marks, it does not bar.** A routine already closed keeps its place and
  * offers to be done again: repeating is legitimate, the repeat is another attempt,
@@ -34,10 +35,11 @@ export interface RoutineCard {
  * more urgent than starting the next thing, and offering the next thing would
  * strand it.
  */
-export function cardsFor(plan: WeekPlan | undefined): readonly RoutineCard[] {
+export function cardsFor(plan: WeekPlan | undefined, today: number): readonly RoutineCard[] {
   if (!plan) return []
   const open = plan.sessions.find((session) => session.open_execution_id !== null)
-  const suggested = plan.sessions.find((session) => !session.done)
+  const pending = plan.sessions.filter((session) => !session.done)
+  const suggested = pending[nearestFrom(pending, today)]
 
   return plan.sessions.map((routine) => ({
     routine,
@@ -95,6 +97,34 @@ export function programDayOf(date: Date): number {
 export function dayChip(programDay: number, today: number): string {
   if (programDay === today) return 'HOY'
   return DAY_NAMES[programDay] ?? ''
+}
+
+/**
+ * La tarjeta en la que abre el carrusel: la de hoy, o la del próximo día que pida algo.
+ *
+ * **Se desplaza, no se reordena.** La semana sigue en el orden del programa, porque es
+ * la forma de la semana; lo que cambia es dónde se para al abrir. Pasada la última
+ * sesión, la siguiente es la primera de la semana que viene.
+ */
+export function firstCardShown(cards: readonly RoutineCard[], today: number): number {
+  return nearestFrom(
+    cards.map((card) => card.routine),
+    today,
+  )
+}
+
+/** Which session comes first counting from today, wrapping past Sunday; ties keep order. */
+function nearestFrom(sessions: readonly WeekRoutine[], today: number): number {
+  let best = 0
+  let nearest = Number.POSITIVE_INFINITY
+  sessions.forEach((session, index) => {
+    const ahead = (session.program_day - today + 7) % 7
+    if (ahead < nearest) {
+      nearest = ahead
+      best = index
+    }
+  })
+  return best
 }
 
 export interface WeekDay {
