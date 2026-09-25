@@ -7,6 +7,7 @@ import {
   LAST_TIME_LABEL,
   lastTimeShown,
   programDayOf,
+  sessionInProgress,
   startLabel,
   weekDays,
   weekPlanFailure,
@@ -251,5 +252,29 @@ describe('which card the carousel opens on', () => {
 
   test('an empty week opens on nothing in particular', () => {
     expect(firstCardShown([], 3)).toBe(0)
+  })
+})
+
+describe('the session Hoy keeps while it is minimised', () => {
+  test('the one left open, wherever it sits in the week', () => {
+    const cards = cardsFor(
+      plan([
+        routine({ title: 'Torso', program_day: 1 }),
+        routine({
+          title: 'Pierna',
+          program_day: 3,
+          open_execution_id: '019e4000-0000-7000-8000-000000000601',
+        }),
+      ]),
+      5,
+    )
+
+    expect(sessionInProgress(cards)?.routine.title).toBe('Pierna')
+  })
+
+  test('nothing when no session is open', () => {
+    expect(sessionInProgress(cardsFor(plan([routine(), routine({ done: true })]), 1))).toBe(
+      undefined,
+    )
   })
 })

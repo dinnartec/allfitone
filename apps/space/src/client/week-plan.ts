@@ -58,6 +58,11 @@ export function cardsFor(plan: WeekPlan | undefined, today: number): readonly Ro
   }))
 }
 
+/** The session left open, which Hoy keeps in view while it is minimised. */
+export function sessionInProgress(cards: readonly RoutineCard[]): RoutineCard | undefined {
+  return cards.find((card) => card.state === 'open')
+}
+
 export type WeekPlanFailure = 'expired' | 'unassigned' | 'failed'
 
 /**

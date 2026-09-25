@@ -259,6 +259,9 @@ export default function Session() {
       })
   }
 
+  // Opened from a link there is nothing beneath it, and Hoy is where it waits.
+  const minimize = () => (router.canGoBack() ? router.back() : router.replace('/today'))
+
   const progress = setsProgress(exercises)
   const volume = totalVolumeKg(exercises)
   const recorded = canFinish(exercises)
@@ -266,7 +269,8 @@ export default function Session() {
   return (
     <Screen edges={['top', 'bottom']}>
       <View style={styles.header}>
-        <IconButton icon="back" accessibilityLabel="Volver" onPress={() => router.back()} />
+        {/* Down, not back: the session is set aside, still open, and Hoy carries it. */}
+        <IconButton icon="expand" accessibilityLabel="Minimizar la sesión" onPress={minimize} />
         <View style={styles.heading}>
           <Text role="display" size="xl" uppercase numberOfLines={1} accessibilityRole="header">
             {title}
@@ -473,12 +477,6 @@ function Exercise({
 
   const body = (
     <>
-      {exercise.targetLabel ? (
-        <View style={styles.chips}>
-          <Chip icon="target" label={exercise.targetLabel} />
-        </View>
-      ) : null}
-
       <View style={styles.columns}>
         <Text role="eyebrow" size="xs" color="muted" align="center" style={styles.colSet}>
           SERIE
@@ -730,27 +728,6 @@ function SetRow({
   )
 }
 
-function Chip({ icon, label }: { readonly icon: 'target'; readonly label: string }) {
-  const theme = useTheme()
-
-  return (
-    <View
-      style={[
-        styles.chip,
-        {
-          backgroundColor: theme.color.background.surfaceSubtle,
-          borderColor: theme.color.border.subtle,
-        },
-      ]}
-    >
-      <FoundationIcon name={icon} customSize={11} color={theme.color.icon.secondary} decorative />
-      <Text role="body" size="xs" color="secondary">
-        {label}
-      </Text>
-    </View>
-  )
-}
-
 function Field({
   value,
   label,
@@ -822,16 +799,6 @@ const styles = StyleSheet.create({
   // Clipped, so the animated height is what reveals the drawer.
   drawer: { overflow: 'hidden' },
   measure: { position: 'absolute', left: 0, right: 0, top: 0, gap: 10, paddingTop: 6 },
-  chips: { flexDirection: 'row', gap: 8 },
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    borderRadius: 9,
-    borderWidth: 1,
-    paddingVertical: 4,
-    paddingHorizontal: 9,
-  },
   columns: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   setRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   // 'SERIE' at the eyebrow's 0.2em tracking needs the room, and the numbers ride the

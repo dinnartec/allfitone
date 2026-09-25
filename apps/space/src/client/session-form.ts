@@ -35,7 +35,6 @@ export interface WorkingExercise {
   readonly position: number
   readonly movementId: string | null
   readonly movement: string
-  readonly targetLabel: string
   readonly sets: readonly WorkingSet[]
 }
 
@@ -116,7 +115,6 @@ export function workingStateFrom(execution: Execution): readonly WorkingExercise
       position: step.position,
       movementId: step.movement_id,
       movement: step.movement ?? 'Ejercicio',
-      targetLabel: labelFor(step),
       sets,
     }
   })
@@ -172,14 +170,6 @@ export function withExtraSet(
         : exercise.sets
     return { ...exercise, sets: rows.map((set) => ({ ...set, order: (order += 1) })) }
   })
-}
-
-function labelFor(step: PlannedStep): string {
-  const target = step.target as Record<string, unknown>
-  const sets = target.target_sets
-  const reps = target.target_reps
-  if (typeof sets !== 'number') return ''
-  return typeof reps === 'number' ? `Objetivo ${sets} × ${reps}` : `Objetivo ${sets} series`
 }
 
 /** How many sets are ticked, and how many the session planned. */

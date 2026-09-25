@@ -29,12 +29,14 @@
 
 import { Button } from '@allfitone/react-native/button'
 import { GlassPanel } from '@allfitone/react-native/glass'
+import { IconButton } from '@allfitone/react-native/icon-button'
 import { InlineAlert } from '@allfitone/react-native/inline-alert'
 import { Screen } from '@allfitone/react-native/screen'
+import { Sheet } from '@allfitone/react-native/sheet'
 import { Text } from '@allfitone/react-native/text'
 import { useTheme } from '@allfitone/react-native/theme'
 import { useFocusEffect, useRouter } from 'expo-router'
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native'
 import Animated, {
   useAnimatedReaction,
@@ -69,11 +71,13 @@ import {
   firstCardShown,
   lastTimeShown,
   programDayOf,
+  sessionInProgress,
   startLabel,
   weekDays,
   type RoutineCard,
   type WeekDay,
 } from '../../src/client/week-plan'
+import { elapsedLabel } from '../../src/client/session-form'
 import { HomeCard } from '../../src/components/home-card'
 import { OfferRow } from '../../src/components/offer-row'
 import { PHOTO_COVER } from '../../src/client/routine-cover'
@@ -84,6 +88,7 @@ import { DOCK_HEIGHT } from '../../src/components/tab-bar'
 const EXPIRED = 'Tu sesión venció. Vuelve a entrar para continuar.'
 const READ_FAILED = 'No pudimos cargar tu día. Inténtalo otra vez.'
 const START_FAILED = 'No pudimos empezar la sesión. Inténtalo otra vez.'
+const DISCARD_FAILED = 'No pudimos descartar el entrenamiento. Inténtalo otra vez.'
 
 /** What a destination that does not exist yet answers, instead of a blank screen. */
 const PENDING: Record<string, string> = {
@@ -228,6 +233,27 @@ export default function Today() {
   const todayIs = useMemo(() => programDayOf(new Date()), [])
   const week = useMemo(() => weekCards(plan, todayIs), [plan, todayIs])
   const days = useMemo(() => weekDays(week, todayIs), [week, todayIs])
+  const inProgress = sessionInProgress(week)
+  const [discarding, setDiscarding] = useState(false)
+  const [leaving, setLeaving] = useState(false)
+
+  /**
+   * Descartar desde aquí es lo mismo que descartar dentro de la sesión: `abandon`, y lo
+   * registrado se queda. Después se relee la semana, que es la que dice si sigue abierta.
+   */
+  const discard = (executionId: string) => {
+    setLeaving(true)
+    training
+      .abandon(executionId)
+      .then(() => Promise.all([training.readToday(timezone), programs.readWeekPlan(timezone)]))
+      .then(([current, week]) => {
+        setToday(current)
+        setPlan(week)
+        setDiscarding(false)
+      })
+      .catch(() => setFailure(DISCARD_FAILED))
+      .finally(() => setLeaving(false))
+  }
 
   /** Empezar la rutina de una tarjeta, o volver a la que quedó abierta. */
   const start = (card: RoutineCard) => {
@@ -289,6 +315,7 @@ export default function Today() {
         contentContainerStyle={[
           styles.content,
           assigned ? { paddingHorizontal: 24, paddingTop: 20 } : null,
+          inProgress ? styles.underInProgress : null,
         ]}
         showsVerticalScrollIndicator={false}
       >
@@ -454,7 +481,130 @@ export default function Today() {
           </Text>
         ) : null}
       </ScrollView>
+
+      {inProgress?.routine.open_execution_id ? (
+        <InProgress
+          executionId={inProgress.routine.open_execution_id}
+          title={inProgress.routine.title}
+          bottom={Math.max(insets.bottom, 12) + DOCK_HEIGHT + 10}
+          read={training.readExecution}
+          onResume={() => start(inProgress)}
+          onDiscard={() => setDiscarding(true)}
+        />
+      ) : null}
+
+      <Sheet
+        visible={discarding}
+        onDismiss={() => setDiscarding(false)}
+        title="¿Descartar este entrenamiento?"
+      >
+        <View style={styles.decisions}>
+          <Button
+            label="Descartar entrenamiento"
+            variant="secondary"
+            loading={leaving}
+            onPress={() => {
+              const id = inProgress?.routine.open_execution_id
+              if (id) discard(id)
+            }}
+          />
+          <Text role="body" size="sm" color="muted">
+            No se borra. Queda en tu historial como una sesión sin terminar.
+          </Text>
+          <Button label="Seguir entrenando" variant="ghost" onPress={() => setDiscarding(false)} />
+        </View>
+      </Sheet>
     </Screen>
+  )
+}
+
+/**
+ * La sesión minimizada: sigue abierta, y esta barra es el camino de vuelta.
+ *
+ * **Encima del menú y fuera del desplazamiento**, como se deja algo a mano: la pantalla
+ * de la sesión baja al minimizarse, y lo que la trae de vuelta sube desde el mismo borde.
+ */
+function InProgress({
+  executionId,
+  title,
+  bottom,
+  read,
+  onResume,
+  onDiscard,
+}: {
+  readonly executionId: string
+  readonly title: string
+  readonly bottom: number
+  readonly read: (id: string) => Promise<{ started_at: string }>
+  readonly onResume: () => void
+  readonly onDiscard: () => void
+}) {
+  const theme = useTheme()
+  const [startedAt, setStartedAt] = useState<number | undefined>(undefined)
+  const [seconds, setSeconds] = useState(0)
+
+  // The agenda says a session is open but not since when; the session itself does.
+  useEffect(() => {
+    let active = true
+    read(executionId)
+      .then((current) => {
+        if (active) setStartedAt(Date.parse(current.started_at))
+      })
+      .catch(() => undefined)
+    return () => {
+      active = false
+    }
+  }, [executionId, read])
+
+  // From the start and not a counter, like the session screen: both show the same time.
+  useEffect(() => {
+    if (startedAt === undefined) return
+    const tick = () => setSeconds((Date.now() - startedAt) / 1000)
+    tick()
+    const timer = setInterval(tick, 1_000)
+    return () => clearInterval(timer)
+  }, [startedAt])
+
+  return (
+    <View
+      style={[
+        styles.inProgress,
+        {
+          bottom,
+          backgroundColor: theme.color.background.surface,
+          borderColor: theme.color.border.accent,
+        },
+      ]}
+    >
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Volver a ${title}, en curso`}
+        onPress={onResume}
+        style={styles.inProgressResume}
+      >
+        <View style={[styles.live, { backgroundColor: theme.color.icon.accent }]} />
+        <View style={styles.inProgressText}>
+          <Text role="eyebrow" size="2xs" color="accent">
+            EN CURSO
+          </Text>
+          <Text role="control" size="sm" numberOfLines={1}>
+            {title}
+          </Text>
+        </View>
+        {startedAt === undefined ? null : (
+          <Text role="data" size="md" accessibilityLabel={`Llevas ${elapsedLabel(seconds)}`}>
+            {elapsedLabel(seconds)}
+          </Text>
+        )}
+        <FoundationIcon name="collapse" size="sm" color={theme.color.icon.primary} decorative />
+      </Pressable>
+      <IconButton
+        icon="close"
+        size="sm"
+        accessibilityLabel="Descartar entrenamiento"
+        onPress={onDiscard}
+      />
+    </View>
   )
 }
 
@@ -797,6 +947,24 @@ const styles = StyleSheet.create({
   // queda alineada con el texto y la última no se pega al borde.
   // The dock floats over the scroll, so the last section has to clear it.
   content: { gap: 20, paddingBottom: DOCK_HEIGHT + 40 },
+  // The bar's own height and gap, so the history's last row is not left beneath it.
+  underInProgress: { paddingBottom: DOCK_HEIGHT + 40 + 72 },
+  inProgress: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    minHeight: 60,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+    borderRadius: 18,
+    borderWidth: 1,
+  },
+  live: { width: 8, height: 8, borderRadius: 4 },
+  inProgressText: { flex: 1, gap: 2 },
+  inProgressResume: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  decisions: { gap: 12 },
   header: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
   greeting: { flex: 1, gap: 4 },
   bell: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
