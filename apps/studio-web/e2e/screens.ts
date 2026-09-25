@@ -90,6 +90,25 @@ export async function openScreen(page: Page, screen: Screen, viewport: Viewport)
   await page.goto(screen.path)
   await (screen.settled ?? settledByHeading)(page)
   await screen.reveal?.(page)
+  await settleAnimations(page)
+}
+
+/**
+ * Audit the frame a person reads, not one on the way to it. A dialog is
+ * "visible" to Playwright the instant it has a box, while its entrance is still
+ * at `opacity: 0`, and axe composites the text against whatever shows through:
+ * the revocation dialog reported 4.30:1 mid-fade and passes once it lands.
+ *
+ * Endless animations — the spinner, the skeleton shimmer — are skipped, because
+ * a loading screen would otherwise never settle.
+ */
+async function settleAnimations(page: Page): Promise<void> {
+  await page.waitForFunction(() =>
+    document
+      .getAnimations()
+      .filter((animation) => animation.effect?.getComputedTiming().iterations !== Infinity)
+      .every((animation) => animation.playState !== 'running'),
+  )
 }
 
 const workspace = `/organizations/${activeMembership.organization_id}`
