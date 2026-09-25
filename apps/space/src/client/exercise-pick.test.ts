@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 
 import {
+  addsToRoutine,
   alreadyIn,
   declareAlreadyIn,
   declareReplacing,
@@ -150,5 +151,19 @@ describe('the selection crosses, the draft does not', () => {
     forgetExerciseFilter()
 
     expect(exerciseFilter()).toEqual({ muscles: [], equipment: [] })
+  })
+})
+
+describe('addsToRoutine', () => {
+  test('the picker opens the detail with a draft to add to', () => {
+    expect(addsToRoutine(undefined)).toBe(true)
+  })
+
+  test('a program opens it to look, and there is no draft behind it', () => {
+    expect(addsToRoutine('program')).toBe(false)
+  })
+
+  test('a repeated parameter still says where it came from', () => {
+    expect(addsToRoutine(['program', 'program'])).toBe(false)
   })
 })
