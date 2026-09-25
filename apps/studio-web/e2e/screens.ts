@@ -278,6 +278,18 @@ const failing = (path: string, status: number, code: string) => () =>
     intercept: (request) => (request.path === path ? { status, body: error(code) } : undefined),
   })
 
+/** A read that never answers, for a person who is already a member. */
+const stallingFor = (memberships: StudioApiFixture['memberships'], paths: RegExp) => () =>
+  createStudioApiFixture({
+    memberships,
+    intercept: async (request) => {
+      if (request.method === 'GET' && paths.test(request.path)) {
+        await new Promise((resolve) => setTimeout(resolve, 15_000))
+      }
+      return undefined
+    },
+  })
+
 /**
  * The same outage, for a person who is already a member: the failure has to sit
  * behind a session that resolves, or the screen under audit never renders.
@@ -891,6 +903,19 @@ export const SCREENS: Screen[] = [
     },
   },
   {
+    // Retiring is the one credential action that cannot be undone from the
+    // screen, so it asks first. The dialog is also where issue #42's question
+    // about `AlertDialogHeader` spacing becomes answerable.
+    stories: 'HU-005 · confirming a credential retirement',
+    path: '/account',
+    fixture: withProfile,
+    reveal: async (page) => {
+      await page.getByRole('tab', { name: 'Credenciales', exact: true }).click()
+      await page.getByRole('button', { name: 'Retirar' }).click()
+      await expect(page.getByText('¿Retirar esta credencial?')).toBeVisible()
+    },
+  },
+  {
     stories: 'HU-005 · no credentials declared yet',
     path: '/account',
     fixture: withProfileAndNoCredentials,
@@ -993,6 +1018,24 @@ export const SCREENS: Screen[] = [
     },
   },
   {
+    stories: 'HU-017 · the team directory while it loads',
+    path: `${workspace}/team`,
+    fixture: stallingFor([activeMembership], /\/organizations\/[^/]+\/memberships$/),
+    settled: async (page) => {
+      await settledByHeading(page)
+      await expect(page.getByText('Cargando integrantes')).toBeVisible()
+    },
+  },
+  {
+    stories: 'HU-015 · the invitation register while it loads',
+    path: `${workspace}/team/invitations`,
+    fixture: stallingFor([activeMembership], /\/organizations\/[^/]+\/invitations$/),
+    settled: async (page) => {
+      await settledByHeading(page)
+      await expect(page.getByText('Cargando invitaciones')).toBeVisible()
+    },
+  },
+  {
     stories: 'HU-017 · the team directory could not be read',
     path: `${workspace}/team`,
     fixture: failingFor([activeMembership], /\/organizations\/[^/]+\/memberships$/),
@@ -1009,6 +1052,15 @@ export const SCREENS: Screen[] = [
     settled: async (page) => {
       await settledByHeading(page)
       await expect(page.getByText('No pudimos cargar los roles')).toBeVisible()
+    },
+  },
+  {
+    stories: 'HU-016 · confirming an invitation revocation',
+    path: `${workspace}/team/invitations`,
+    fixture: withIssuedInvitations,
+    reveal: async (page) => {
+      await page.getByRole('button', { name: 'Revocar' }).first().click()
+      await expect(page.getByText('¿Revocar esta invitación?')).toBeVisible()
     },
   },
   {
