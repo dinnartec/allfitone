@@ -21,6 +21,8 @@ export default {
         'queue',
         'contracts',
         'db',
+        'notifications',
+        'telemetry',
         // domains inside apps/api
         'identity',
         'organizations',

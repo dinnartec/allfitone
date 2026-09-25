@@ -7,6 +7,7 @@ import {
   createBackofficeAuthenticationService,
   type BackofficeAuthenticationService,
 } from './application/backoffice.js'
+import { createSpaceActorResolver, type SpaceActorResolver } from './application/space-actor.js'
 import {
   createStudioInvitationService,
   type StudioInvitationService,
@@ -166,6 +167,8 @@ export function setStudioSessionService(service: StudioSessionService | undefine
 /**
  * Needs no database and no issuer: account creation touches the provider only.
  */
+let cachedSpaceActor: SpaceActorResolver | undefined
+
 export function spaceRegistrationService(): SpaceRegistrationService {
   if (cachedRegistrations) return cachedRegistrations
   const issuer = process.env.WORKOS_ISSUER
@@ -179,6 +182,21 @@ export function setSpaceRegistrationService(service: SpaceRegistrationService | 
   cachedRegistrations = service
 }
 
+export function spaceActorResolver(): SpaceActorResolver {
+  const issuer = process.env.WORKOS_ISSUER
+  if (!issuer) throw new Error('WORKOS_ISSUER is not set')
+  cachedSpaceActor ??= createSpaceActorResolver({
+    accounts: createIdentitySessionDatabase(),
+    issuer,
+  })
+  return cachedSpaceActor
+}
+
+/** Test seam. Undefined restores environment-backed construction. */
+export function setSpaceActorResolver(resolver: SpaceActorResolver | undefined): void {
+  cachedSpaceActor = resolver
+}
+
 export function spaceOnboardingService(): SpaceOnboardingService {
   if (cachedSpaceOnboarding) return cachedSpaceOnboarding
   const issuer = process.env.WORKOS_ISSUER
@@ -186,6 +204,7 @@ export function spaceOnboardingService(): SpaceOnboardingService {
   cachedSpaceOnboarding = createSpaceOnboardingService({
     accounts: createIdentitySessionDatabase(),
     onboarding: studioOnboardingService(),
+    provider: { identityFor: (subject) => authProvider().identityFor(subject) },
     issuer,
   })
   return cachedSpaceOnboarding

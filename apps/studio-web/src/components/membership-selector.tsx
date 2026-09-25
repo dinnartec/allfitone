@@ -4,7 +4,7 @@ import { Badge } from '@allfitone/react/components/badge'
 import { Button } from '@allfitone/react/components/button'
 import {
   Card,
-  CardAction,
+  CardContent,
   CardDescription,
   CardFooter,
   CardHeader,
@@ -20,7 +20,7 @@ import {
 } from '@allfitone/react/components/setup-shell'
 
 import { StudioFrame } from './studio-frame'
-import { membershipRoleSummary } from '@/lib/membership-roles'
+import { membershipRoleLabels } from '@/lib/membership-roles'
 import type { Membership } from '@/lib/studio-api'
 
 export function MembershipSelector({
@@ -30,8 +30,11 @@ export function MembershipSelector({
   memberships: Membership[]
   onSelect: (organizationId: string) => void
 }) {
+  // No step. This screen only appears for someone with more than one active
+  // membership, so they finished setup long ago: the bar told a returning
+  // person they were on step 3 of 3 of something they do every sign-in.
   return (
-    <StudioFrame step="ready">
+    <StudioFrame>
       <SetupPanel>
         <SetupPanelIntro>
           <SetupPanelEyebrow>Selecciona un espacio</SetupPanelEyebrow>
@@ -48,14 +51,27 @@ export function MembershipSelector({
                 <CardTitle role="heading" aria-level={2}>
                   {membership.display_name}
                 </CardTitle>
-                <CardAction>
-                  <Badge variant="secondary">{membershipRoleSummary(membership.roles)}</Badge>
-                </CardAction>
               </CardHeader>
+              {/* One badge per role in the body, not a joined string in the
+                  header action. "Propietario · Administrador" in a single
+                  non-wrapping badge ran 36px past the viewport at 320px — the
+                  same fault the account cards had, worse here because this card
+                  sits in a two-column panel. */}
+              <CardContent data-membership-card-body>
+                <div data-membership-roles>
+                  {membershipRoleLabels(membership.roles).map((label) => (
+                    <Badge key={label} variant="secondary">
+                      {label}
+                    </Badge>
+                  ))}
+                </div>
+              </CardContent>
               <CardFooter>
-                <Button onClick={() => onSelect(membership.organization_id)}>
-                  Entrar al espacio
-                </Button>
+                <div data-card-footer-actions>
+                  <Button onClick={() => onSelect(membership.organization_id)}>
+                    Entrar al espacio
+                  </Button>
+                </div>
               </CardFooter>
             </Card>
           ))}

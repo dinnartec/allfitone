@@ -10,9 +10,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@allfitone/react/components/alert-dialog'
-import { Alert, AlertDescription } from '@allfitone/react/components/alert'
+import { Alert, AlertAction, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
 import { Badge } from '@allfitone/react/components/badge'
 import { Button, buttonVariants } from '@allfitone/react/components/button'
+import { Card, CardContent, CardHeader } from '@allfitone/react/components/card'
+import { Empty, EmptyDescription, EmptyTitle } from '@allfitone/react/components/empty'
 import { Spinner } from '@allfitone/react/components/spinner'
 import {
   Table,
@@ -33,6 +35,7 @@ import { useOrganizationContext } from './organization-context'
 import { useStudioSessionMutation } from './studio-query-provider'
 import { WorkspacePageHeader } from './workspace-page-header'
 import { createCommandIntentManager } from '@/lib/command-intent'
+import { useCompactViewport } from '@/lib/use-compact-viewport'
 import {
   StudioApiError,
   newCommand,
@@ -43,6 +46,7 @@ import {
 } from '@/lib/studio-api'
 import {
   flattenInvitationPages,
+  isStudioForbidden,
   isStudioQuerySessionCancelled,
   organizationInvitationsQueryOptions,
   removeInvitationFromPages,
@@ -64,28 +68,30 @@ const INVITATION_ISSUANCE_ENABLED = process.env.NEXT_PUBLIC_STAFF_INVITATIONS_EN
 
 export function TeamInvitationList() {
   const { current } = useOrganizationContext()
+  const compact = useCompactViewport()
   const queryClient = useQueryClient()
   const [filter, setFilter] = useState<Filter>('all')
   const [revokeIntent, setRevokeIntent] = useState<InvitationItem>()
   const [revokeError, setRevokeError] = useState<string>()
   const [revokeCommandIntent] = useState(() => createCommandIntentManager(newCommand))
   const options = organizationInvitationsQueryOptions(current.organization_id, filter, 50)
-  const query = useInfiniteQuery(options)
-  const forbidden = query.error instanceof StudioApiError && query.error.status === 403
+  // The register is governed by the invite capability, not by a separate read
+  // one: `identity.list_staff_invitations` refuses a coach with 42501.
+  const canReadInvitations = canInviteTeam(current.roles)
+  const query = useInfiniteQuery({ ...options, enabled: canReadInvitations })
+  const forbidden = isStudioForbidden(query.error)
   const staleCursor =
     query.isFetchNextPageError &&
     query.error instanceof StudioApiError &&
     query.error.status === 422
-  const items = forbidden ? [] : flattenInvitationPages(query.data)
-  const loading = query.isPending
+  const items = flattenInvitationPages(query.data)
+  const loading = query.isPending && canReadInvitations
   const loadingMore = query.isFetchingNextPage
   const nextCursor =
     !staleCursor && query.hasNextPage ? (query.data?.pages.at(-1)?.page.next_cursor ?? null) : null
-  const error = forbidden
-    ? 'Tu rol actual no permite consultar las invitaciones.'
-    : query.isError
-      ? 'La conexión falló de forma temporal. Inténtalo de nuevo.'
-      : undefined
+  const error = query.isError
+    ? 'La conexión falló de forma temporal. Inténtalo de nuevo.'
+    : undefined
   const revokeMutation = useStudioSessionMutation({
     mutationFn: (
       { invitationId, command }: { invitationId: string; command: CommandHeaders },
@@ -153,6 +159,33 @@ export function TeamInvitationList() {
     }
   }
 
+  // Refusal is not a failed load: it has no retry, and the section still exists
+  // for this person. `forbidden` covers a role that changed mid-session.
+  if (!canReadInvitations || forbidden) {
+    return (
+      <section data-team-page aria-label="Invitaciones del equipo">
+        <WorkspacePageHeader description="Las invitaciones del equipo las gestionan quienes pueden proponerlas." />
+        <Alert variant="warning">
+          <AlertTitle>No puedes consultar las invitaciones</AlertTitle>
+          <AlertDescription>
+            Tu rol no incluye esta parte del equipo. Puedes consultar los roles y entender qué
+            permite cada uno.
+          </AlertDescription>
+          <AlertAction>
+            <Link
+              href={`/organizations/${current.organization_id}/team/roles`}
+              data-slot="button"
+              data-variant="outline"
+              className={buttonVariants({ variant: 'outline' })}
+            >
+              Ver roles y permisos
+            </Link>
+          </AlertAction>
+        </Alert>
+      </section>
+    )
+  }
+
   // One derived state for the whole list. The error and the empty result used
   // to be independent conditions, so a failed load claimed both that we could
   // not read the invitations and that there were none.
@@ -189,6 +222,8 @@ export function TeamInvitationList() {
           INVITATION_ISSUANCE_ENABLED && canInviteTeam(current.roles) ? (
             <Link
               href={`/organizations/${current.organization_id}/team/invitations/new`}
+              data-slot="button"
+              data-variant="default"
               className={buttonVariants()}
             >
               Nueva invitación
@@ -198,6 +233,7 @@ export function TeamInvitationList() {
       />
 
       <ToggleGroup
+        data-studio-filters
         value={[filter]}
         onValueChange={changeFilter}
         aria-label="Filtrar invitaciones por estado"
@@ -215,39 +251,77 @@ export function TeamInvitationList() {
         </p>
       ) : null}
 
-      <Table
-        aria-label="Invitaciones"
-        aria-busy={loading || loadingMore || undefined}
-        scrollAreaLabel="Tabla de invitaciones de la organización"
-      >
-        <TableCaption>
-          Las invitaciones muestran el destino propuesto y nunca datos fitness de una persona.
-        </TableCaption>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Correo</TableHead>
-            <TableHead>Rol</TableHead>
-            <TableHead>Creada</TableHead>
-            <TableHead>Vence</TableHead>
-            <TableHead>Estado</TableHead>
-            <TableHead>Acciones</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
+      {/* Six columns do not fit a phone. The directory answered that with a
+          card list and this one did not, so invitations were the section that
+          scrolled sideways on a phone while its sibling did not. Only one
+          presentation is rendered — see useCompactViewport. */}
+      {compact ? (
+        <div data-team-directory-cards aria-label="Invitaciones" aria-busy={loading || undefined}>
           {listState ? (
-            <TableState colSpan={6} {...listState} />
+            <Empty>
+              <EmptyTitle>{listState.title}</EmptyTitle>
+              <EmptyDescription>{listState.description}</EmptyDescription>
+            </Empty>
           ) : (
-            items.map((item) => (
-              <InvitationRow
-                key={item.id}
-                item={item}
-                revoking={revoking}
-                onRevoke={requestRevoke}
-              />
-            ))
+            <ul data-team-directory-card-list>
+              {items.map((item) => (
+                <li key={item.id}>
+                  <InvitationCard item={item} revoking={revoking} onRevoke={requestRevoke} />
+                </li>
+              ))}
+            </ul>
           )}
-        </TableBody>
-      </Table>
+          <p data-team-directory-note>
+            Las invitaciones muestran el destino propuesto y nunca datos fitness de una persona.
+          </p>
+        </div>
+      ) : (
+        <Table
+          aria-label="Invitaciones"
+          aria-busy={loading || loadingMore || undefined}
+          scrollAreaLabel="Tabla de invitaciones de la organización"
+          data-studio-register="invitations"
+        >
+          {/* A register must not redraw its own grid when it is filtered. With
+              the layout fixed, these shares settle the columns once instead of
+              letting whichever rows are showing settle them again. */}
+          <colgroup>
+            <col />
+            <col />
+            <col />
+            <col />
+            <col />
+            <col />
+          </colgroup>
+          <TableCaption>
+            Las invitaciones muestran el destino propuesto y nunca datos fitness de una persona.
+          </TableCaption>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Correo</TableHead>
+              <TableHead>Rol</TableHead>
+              <TableHead>Creada</TableHead>
+              <TableHead>Vence</TableHead>
+              <TableHead>Estado</TableHead>
+              <TableHead>Acciones</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {listState ? (
+              <TableState colSpan={6} {...listState} />
+            ) : (
+              items.map((item) => (
+                <InvitationRow
+                  key={item.id}
+                  item={item}
+                  revoking={revoking}
+                  onRevoke={requestRevoke}
+                />
+              ))
+            )}
+          </TableBody>
+        </Table>
+      )}
 
       {staleCursor || (error && items.length > 0) ? (
         <Alert variant={staleCursor ? 'info' : 'danger'} live="polite">
@@ -256,9 +330,11 @@ export function TeamInvitationList() {
               ? 'Las invitaciones cambiaron. Actualiza la lista para verla desde el inicio.'
               : 'No pudimos actualizar la lista. Las invitaciones cargadas siguen visibles.'}
           </AlertDescription>
-          <Button size="sm" variant="outline" onClick={() => void retryList()}>
-            {staleCursor ? 'Actualizar la lista' : 'Reintentar'}
-          </Button>
+          <AlertAction>
+            <Button size="sm" variant="outline" onClick={() => void retryList()}>
+              {staleCursor ? 'Actualizar la lista' : 'Reintentar'}
+            </Button>
+          </AlertAction>
         </Alert>
       ) : null}
 
@@ -285,7 +361,12 @@ export function TeamInvitationList() {
           }
         }}
       >
-        <AlertDialogContent size="sm">
+        {/* `size="default"`, not `sm`. At `sm` the Design System keeps this
+            header centred and its footer a two-column grid at every width,
+            while the sibling `Dialog` in the same feature is left-aligned with
+            a right-aligned footer — so the confirm modal read as coming from
+            another product. */}
+        <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>¿Revocar esta invitación?</AlertDialogTitle>
             <AlertDialogDescription>
@@ -315,6 +396,57 @@ export function TeamInvitationList() {
         </AlertDialogContent>
       </AlertDialog>
     </section>
+  )
+}
+
+/**
+ * The table row stacked, the way the directory card is: the address identifies
+ * the invitation, every other value keeps the name its column had, and the one
+ * action a pending invitation offers closes the card.
+ */
+function InvitationCard({
+  item,
+  revoking,
+  onRevoke,
+}: {
+  item: InvitationItem
+  revoking: string | undefined
+  onRevoke: (item: InvitationItem) => void
+}) {
+  const intent = item.intents[0]
+
+  return (
+    <Card data-team-member-card>
+      <CardHeader>
+        <strong role="heading" aria-level={3}>
+          {item.contact}
+        </strong>
+      </CardHeader>
+      <CardContent>
+        <dl data-team-member-facts>
+          <dt>Rol</dt>
+          <dd>{intent ? invitationRoleLabel(intent.proposed_role_code) : '—'}</dd>
+
+          <dt>Estado</dt>
+          <dd>
+            <InvitationStatusBadge status={item.status} />
+          </dd>
+
+          <dt>Creada</dt>
+          <dd>{formatDate(item.created_at)}</dd>
+
+          <dt>Vence</dt>
+          <dd>{formatDate(item.expires_at)}</dd>
+        </dl>
+        {item.status === 'pending' ? (
+          <div data-team-invitation-actions>
+            <Button variant="outline" disabled={Boolean(revoking)} onClick={() => onRevoke(item)}>
+              {revoking === item.id ? 'Revocando…' : 'Revocar'}
+            </Button>
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
   )
 }
 
@@ -374,7 +506,11 @@ function InvitationStatusBadge({ status }: { status: TeamInvitationStatus }) {
   }
   return (
     <Badge
-      variant={status === 'pending' ? 'warning' : status === 'completed' ? 'success' : 'outline'}
+      // `outline` sets a transparent background over the base's transparent
+      // border and so draws nothing: revoked and expired read as loose text
+      // beside the two that are filled. Neither is an error, so both take the
+      // neutral surface rather than `destructive`.
+      variant={status === 'pending' ? 'warning' : status === 'completed' ? 'success' : 'secondary'}
     >
       {labels[status]}
     </Badge>

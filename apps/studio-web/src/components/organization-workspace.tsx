@@ -1,6 +1,6 @@
 'use client'
 
-import { Alert, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
+import { Alert, AlertAction, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
 import { Avatar, AvatarFallback } from '@allfitone/react/components/avatar'
 import { Badge } from '@allfitone/react/components/badge'
 import { Button, buttonVariants } from '@allfitone/react/components/button'
@@ -27,6 +27,7 @@ import Link from 'next/link'
 
 import { useOrganizationContext } from './organization-context'
 import {
+  countLabel,
   countPage,
   formatTotal,
   invitationsExpiringWithin,
@@ -34,8 +35,9 @@ import {
 } from '@/lib/organization-overview'
 import { canViewTeamDirectory, memberInitials, organizationRoleLabel } from '@/lib/team-directory'
 import { canInviteTeam } from '@/lib/team-invitations'
-import { StudioApiError, type Membership } from '@/lib/studio-api'
+import type { Membership } from '@/lib/studio-api'
 import {
+  isStudioForbidden,
   organizationInvitationsQueryOptions,
   organizationMembershipsQueryOptions,
 } from '@/lib/studio-query'
@@ -61,10 +63,8 @@ export function OrganizationWorkspace() {
     ...organizationInvitationsQueryOptions(current.organization_id, 'pending', OVERVIEW_PAGE_SIZE),
     enabled: canSeeInvitations,
   })
-  const membersForbidden =
-    membersQuery.error instanceof StudioApiError && membersQuery.error.status === 403
-  const invitationsForbidden =
-    invitationsQuery.error instanceof StudioApiError && invitationsQuery.error.status === 403
+  const membersForbidden = isStudioForbidden(membersQuery.error)
+  const invitationsForbidden = isStudioForbidden(invitationsQuery.error)
   const memberPage = canSeeDirectory && !membersForbidden ? membersQuery.data?.pages[0] : undefined
   const invitationPage =
     canSeeInvitations && !invitationsForbidden ? invitationsQuery.data?.pages[0] : undefined
@@ -98,7 +98,14 @@ export function OrganizationWorkspace() {
 
   return (
     <div data-organization-overview>
-      <section data-overview-signals aria-label={`Estado de ${current.display_name}`}>
+      {/* Studio knows how many figures it is about to render, so it says so here
+          rather than making the stylesheet count Design System children. The cap
+          on the strip is lifted only when a second figure shares the row. */}
+      <section
+        data-overview-signals
+        {...(members && invitations ? { 'data-signals-multiple': '' } : {})}
+        aria-label={`Estado de ${current.display_name}`}
+      >
         {loading ? (
           <Skeleton data-overview-signals-placeholder />
         ) : error ? (
@@ -107,19 +114,28 @@ export function OrganizationWorkspace() {
             <AlertDescription>
               La conexión falló de forma temporal. Los datos siguen intactos.
             </AlertDescription>
-            <Button size="sm" variant="outline" onClick={retry}>
-              Reintentar
-            </Button>
+            <AlertAction>
+              <Button size="sm" variant="outline" onClick={retry}>
+                Reintentar
+              </Button>
+            </AlertAction>
           </Alert>
         ) : (
           <StatStrip>
             {members ? (
-              <StatStripItem value={formatTotal(members.total)} label="Integrantes activos" />
+              <StatStripItem
+                value={formatTotal(members.total)}
+                label={countLabel(members.total, 'Integrante activo', 'Integrantes activos')}
+              />
             ) : null}
             {invitations ? (
               <StatStripItem
                 value={formatTotal(invitations.total)}
-                label="Invitaciones pendientes"
+                label={countLabel(
+                  invitations.total,
+                  'Invitación pendiente',
+                  'Invitaciones pendientes',
+                )}
               />
             ) : null}
           </StatStrip>
@@ -146,6 +162,8 @@ export function OrganizationWorkspace() {
             <CardAction>
               <Link
                 href={`${teamPath}/invitations`}
+                data-slot="button"
+                data-variant="outline"
                 className={buttonVariants({ variant: 'outline', size: 'sm' })}
               >
                 Ver invitaciones
@@ -156,7 +174,10 @@ export function OrganizationWorkspace() {
             <ul data-overview-attention-list>
               {invitations.attention.map((invitation) => (
                 <li key={invitation.id}>
-                  <span data-overview-attention-contact>{invitation.contact}</span>
+                  {/* The subject of the row, the way the member's name is in
+                      the team list below. Stacked on a phone the two lines had
+                      the same weight, so neither read as the one being named. */}
+                  <strong data-overview-attention-contact>{invitation.contact}</strong>
                   <span data-overview-attention-expiry>
                     Vence el {formatDate(invitation.expires_at)}
                   </span>
@@ -177,7 +198,12 @@ export function OrganizationWorkspace() {
               Las últimas personas que se sumaron a la organización.
             </CardDescription>
             <CardAction>
-              <Link href={teamPath} className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+              <Link
+                href={teamPath}
+                data-slot="button"
+                data-variant="outline"
+                className={buttonVariants({ variant: 'outline', size: 'sm' })}
+              >
                 Ver equipo
               </Link>
             </CardAction>
@@ -247,6 +273,8 @@ function OrientationPanel({ roles, teamPath }: { roles: Membership['roles']; tea
           <CardAction>
             <Link
               href={`${teamPath}/roles`}
+              data-slot="button"
+              data-variant="outline"
               className={buttonVariants({ variant: 'outline', size: 'sm' })}
             >
               Ver roles y permisos

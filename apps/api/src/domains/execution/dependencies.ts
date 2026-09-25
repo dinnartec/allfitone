@@ -1,20 +1,16 @@
 /** Execution module composition. */
 
-import { randomUUID } from 'node:crypto'
+import { createSpaceExecutionService, type SpaceExecutionService } from './application/index.js'
+import { createExecutionDatabase } from './infrastructure/index.js'
 
-import { createExecutionService, type ExecutionService } from './application/sessions.js'
-import { createExecutionDatabase } from './infrastructure/sessions.js'
+let cached: SpaceExecutionService | undefined
 
-let cachedSessions: ExecutionService | undefined
+export function spaceExecutionService(): SpaceExecutionService {
+  cached ??= createSpaceExecutionService(createExecutionDatabase())
+  return cached
+}
 
-export function spaceExecutionService(): ExecutionService {
-  if (cachedSessions) return cachedSessions
-  const issuer = process.env.WORKOS_ISSUER
-  if (!issuer) throw new Error('WORKOS_ISSUER is not set')
-  cachedSessions = createExecutionService({
-    database: createExecutionDatabase(),
-    issuer,
-    requestId: () => randomUUID(),
-  })
-  return cachedSessions
+/** Test seam. Undefined restores environment-backed construction. */
+export function setSpaceExecutionService(service: SpaceExecutionService | undefined): void {
+  cached = service
 }

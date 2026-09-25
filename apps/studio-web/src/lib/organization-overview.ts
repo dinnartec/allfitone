@@ -26,6 +26,16 @@ export function formatTotal(total: CountedTotal): string {
   return total.atLeast ? `${total.value}+` : String(total.value)
 }
 
+/**
+ * A count of one takes the singular, and "1+" does not: a lower bound of one
+ * describes an unknown number of people, not one person. Every organization is
+ * created with exactly one member, so the plural-only label was what its owner
+ * read on the first screen they ever saw.
+ */
+export function countLabel(total: CountedTotal, singular: string, plural: string): string {
+  return total.value === 1 && !total.atLeast ? singular : plural
+}
+
 export function invitationsExpiringWithin(
   items: readonly TeamInvitationListItem[],
   days: number,

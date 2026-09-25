@@ -1,17 +1,23 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import postgres from 'postgres'
 
-const PERSON_ID = '019f1000-0000-7000-8000-000000000001'
-const ORGANIZATION_ID = '019f1000-0000-7000-8000-000000000101'
-const MEMBERSHIP_ID = '019f1000-0000-7000-8000-000000000201'
-const COMPOSITION_TEMPLATE_ID = '019f1000-0000-7000-8000-000000000301'
-const COMPOSITION_DRAFT_ID = '019f1000-0000-7000-8000-000000000302'
-const COMPOSITION_VERSION_ID = '019f1000-0000-7000-8000-000000000303'
-const DERIVATION_TEMPLATE_ID = '019f1000-0000-7000-8000-000000000311'
-const DERIVATION_DRAFT_ID = '019f1000-0000-7000-8000-000000000312'
-const DERIVATION_VERSION_ID = '019f1000-0000-7000-8000-000000000313'
-const PROGRAM_ID = '019f1000-0000-7000-8000-000000000401'
-const PROGRAM_DRAFT_ID = '019f1000-0000-7000-8000-000000000402'
+// `019ee000-…`, deliberately not `019f1000-…`: that prefix is the curated movement
+// namespace, where the identifier is the ordinal padded to twelve digits. Movement 101
+// would have been spelled exactly like the organization below. Different tables, so
+// nothing would have broken — and debugging two rows that share an identifier and mean
+// different things is a cost nobody should pay for a fixture.
+
+const PERSON_ID = '019ee000-0000-7000-8000-000000000001'
+const ORGANIZATION_ID = '019ee000-0000-7000-8000-000000000101'
+const MEMBERSHIP_ID = '019ee000-0000-7000-8000-000000000201'
+const COMPOSITION_TEMPLATE_ID = '019ee000-0000-7000-8000-000000000301'
+const COMPOSITION_DRAFT_ID = '019ee000-0000-7000-8000-000000000302'
+const COMPOSITION_VERSION_ID = '019ee000-0000-7000-8000-000000000303'
+const DERIVATION_TEMPLATE_ID = '019ee000-0000-7000-8000-000000000311'
+const DERIVATION_DRAFT_ID = '019ee000-0000-7000-8000-000000000312'
+const DERIVATION_VERSION_ID = '019ee000-0000-7000-8000-000000000313'
+const PROGRAM_ID = '019ee000-0000-7000-8000-000000000401'
+const PROGRAM_DRAFT_ID = '019ee000-0000-7000-8000-000000000402'
 
 const connectionOptions = {
   host: process.env.SUPABASE_DB_HOST ?? '127.0.0.1',
@@ -51,8 +57,8 @@ async function cleanup(): Promise<void> {
     `
     await transaction`
       delete from system.idempotency_keys
-      where command_id between '019f1000-0000-7000-8000-000000000501'::uuid
-        and '019f1000-0000-7000-8000-000000000504'::uuid
+      where command_id between '019ee000-0000-7000-8000-000000000501'::uuid
+        and '019ee000-0000-7000-8000-000000000504'::uuid
     `
     await transaction`
       delete from planning.program_drafts where id = ${PROGRAM_DRAFT_ID}::uuid
@@ -108,10 +114,10 @@ beforeAll(async () => {
       values (${MEMBERSHIP_ID}::uuid, 'owner')
     `
     await transaction`
-      insert into planning.session_templates (id, owner_organization_id, discipline_code, author_person_id, status)
+      insert into planning.session_templates (id, content_scope, owner_organization_id, discipline_code, author_person_id, status)
       values
-        (${COMPOSITION_TEMPLATE_ID}::uuid, ${ORGANIZATION_ID}::uuid, 'test_strength', ${PERSON_ID}::uuid, 'published'),
-        (${DERIVATION_TEMPLATE_ID}::uuid, ${ORGANIZATION_ID}::uuid, 'test_strength', ${PERSON_ID}::uuid, 'published')
+        (${COMPOSITION_TEMPLATE_ID}::uuid, 'organization', ${ORGANIZATION_ID}::uuid, 'test_strength', ${PERSON_ID}::uuid, 'published'),
+        (${DERIVATION_TEMPLATE_ID}::uuid, 'organization', ${ORGANIZATION_ID}::uuid, 'test_strength', ${PERSON_ID}::uuid, 'published')
     `
     await transaction`
       insert into planning.session_template_drafts (id, template_id, content)
@@ -131,8 +137,8 @@ beforeAll(async () => {
           '019c0000-0000-7000-8000-000000000011'::uuid, 'Derivation', decode(repeat('d1', 32), 'hex'))
     `
     await transaction`
-      insert into planning.programs (id, owner_organization_id, author_person_id)
-      values (${PROGRAM_ID}::uuid, ${ORGANIZATION_ID}::uuid, ${PERSON_ID}::uuid)
+      insert into planning.programs (id, content_scope, owner_organization_id, author_person_id)
+      values (${PROGRAM_ID}::uuid, 'organization', ${ORGANIZATION_ID}::uuid, ${PERSON_ID}::uuid)
     `
     await transaction`
       insert into planning.program_drafts (id, program_id, content)
@@ -173,7 +179,7 @@ describe('Planning retirement serialization', () => {
         select * from planning.deprecate_session_template_version(
           ${PERSON_ID}::uuid, ${ORGANIZATION_ID}::uuid, ${COMPOSITION_TEMPLATE_ID}::uuid, 1,
           '71111111-1111-4111-8111-111111111111'::uuid,
-          '019f1000-0000-7000-8000-000000000501'::uuid, decode(repeat('71', 32), 'hex'))
+          '019ee000-0000-7000-8000-000000000501'::uuid, decode(repeat('71', 32), 'hex'))
       `
       retirementLocked?.()
       await release
@@ -190,7 +196,7 @@ describe('Planning retirement serialization', () => {
           jsonb_build_object('position', 1, 'week', 1, 'day', 1,
             'template_version_id', ${COMPOSITION_VERSION_ID}::uuid))),
         '72222222-2222-4222-8222-222222222222'::uuid,
-        '019f1000-0000-7000-8000-000000000502'::uuid, decode(repeat('72', 32), 'hex'))
+        '019ee000-0000-7000-8000-000000000502'::uuid, decode(repeat('72', 32), 'hex'))
     `,
     ).finally(() => {
       settled = true
@@ -217,7 +223,7 @@ describe('Planning retirement serialization', () => {
         select * from planning.deprecate_session_template_version(
           ${PERSON_ID}::uuid, ${ORGANIZATION_ID}::uuid, ${DERIVATION_TEMPLATE_ID}::uuid, 1,
           '73333333-3333-4333-8333-333333333333'::uuid,
-          '019f1000-0000-7000-8000-000000000503'::uuid, decode(repeat('73', 32), 'hex'))
+          '019ee000-0000-7000-8000-000000000503'::uuid, decode(repeat('73', 32), 'hex'))
       `
       retirementLocked?.()
       await release
@@ -231,7 +237,7 @@ describe('Planning retirement serialization', () => {
         ${PERSON_ID}::uuid, ${ORGANIZATION_ID}::uuid, ${DERIVATION_TEMPLATE_ID}::uuid, 1,
         ${derivationEtag},
         '74444444-4444-4444-8444-444444444444'::uuid,
-        '019f1000-0000-7000-8000-000000000504'::uuid, decode(repeat('74', 32), 'hex'))
+        '019ee000-0000-7000-8000-000000000504'::uuid, decode(repeat('74', 32), 'hex'))
     `,
     ).finally(() => {
       settled = true

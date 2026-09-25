@@ -1,0 +1,2539 @@
+{
+  "taken": 362,
+  "chosen": [
+    {
+      "exerciseId": "4IKbhHV",
+      "source": "alternate lateral pulldown",
+      "bodyPart": "back",
+      "equipment": ["cable"],
+      "muscles": ["lats", "biceps", "upper_back"]
+    },
+    {
+      "exerciseId": "72BC5Za",
+      "source": "archer pull up",
+      "bodyPart": "back",
+      "equipment": ["bodyweight"],
+      "muscles": ["lats", "biceps", "forearm"]
+    },
+    {
+      "exerciseId": "kiJ4Z2K",
+      "source": "assisted pull-up",
+      "bodyPart": "back",
+      "equipment": ["machine"],
+      "muscles": ["lats", "biceps", "forearm"]
+    },
+    {
+      "exerciseId": "5ipN0iE",
+      "source": "assisted pull-up inclined",
+      "bodyPart": "back",
+      "equipment": ["machine"],
+      "muscles": ["lats", "biceps", "forearm"]
+    },
+    {
+      "exerciseId": "7OeHptV",
+      "source": "assisted standing chin-up",
+      "bodyPart": "back",
+      "equipment": ["machine"],
+      "muscles": ["lats", "biceps", "forearm"]
+    },
+    {
+      "exerciseId": "f4xtKBj",
+      "source": "assisted standing pull-up",
+      "bodyPart": "back",
+      "equipment": ["machine"],
+      "muscles": ["lats", "biceps", "forearm"]
+    },
+    {
+      "exerciseId": "GaSzzuh",
+      "source": "back lever",
+      "bodyPart": "back",
+      "equipment": ["bodyweight"],
+      "muscles": ["upper_back", "biceps", "forearm", "abs"]
+    },
+    {
+      "exerciseId": "chfnQnM",
+      "source": "back pec stretch",
+      "bodyPart": "back",
+      "equipment": ["bodyweight"],
+      "muscles": ["lats", "shoulders", "chest"]
+    },
+    {
+      "exerciseId": "r1XNRYB",
+      "source": "band assisted pull-up",
+      "bodyPart": "back",
+      "equipment": ["band"],
+      "muscles": ["lats", "biceps", "forearm"]
+    },
+    {
+      "exerciseId": "DptumMx",
+      "source": "band close-grip pulldown",
+      "bodyPart": "back",
+      "equipment": ["band"],
+      "muscles": ["lats", "biceps", "forearm"]
+    },
+    {
+      "exerciseId": "k6tUeqS",
+      "source": "band underhand pulldown",
+      "bodyPart": "back",
+      "equipment": ["band"],
+      "muscles": ["lats", "biceps", "forearm"]
+    },
+    {
+      "exerciseId": "dmgMp3n",
+      "source": "barbell incline row",
+      "bodyPart": "back",
+      "equipment": ["barbell"],
+      "muscles": ["upper_back", "biceps", "forearm"]
+    },
+    {
+      "exerciseId": "r0z6xzQ",
+      "source": "barbell pendlay row",
+      "bodyPart": "back",
+      "equipment": ["barbell"],
+      "muscles": ["upper_back", "biceps", "forearm"]
+    },
+    {
+      "exerciseId": "i6LWjok",
+      "source": "barbell pullover",
+      "bodyPart": "back",
+      "equipment": ["barbell"],
+      "muscles": ["lats", "chest", "triceps"]
+    },
+    {
+      "exerciseId": "dG7tG5y",
+      "source": "barbell shrug",
+      "bodyPart": "back",
+      "equipment": ["barbell"],
+      "muscles": ["trapezius", "shoulders"]
+    },
+    {
+      "exerciseId": "3xK09Sk",
+      "source": "bodyweight squatting row",
+      "bodyPart": "back",
+      "equipment": ["bodyweight"],
+      "muscles": ["upper_back", "biceps", "shoulders"]
+    },
+    {
+      "exerciseId": "1PK5Uo3",
+      "source": "cable incline pushdown",
+      "bodyPart": "back",
+      "equipment": ["cable"],
+      "muscles": ["lats", "triceps", "shoulders"]
+    },
+    {
+      "exerciseId": "hvV79Si",
+      "source": "cable low seated row",
+      "bodyPart": "back",
+      "equipment": ["cable"],
+      "muscles": ["upper_back", "biceps", "forearm"]
+    },
+    {
+      "exerciseId": "Eg98Ft9",
+      "source": "cable shrug",
+      "bodyPart": "back",
+      "equipment": ["cable"],
+      "muscles": ["trapezius", "shoulders"]
+    },
+    {
+      "exerciseId": "dVeWXf2",
+      "source": "chin-up diagonal",
+      "bodyPart": "back",
+      "equipment": ["bodyweight"],
+      "muscles": ["lats", "biceps", "forearm"]
+    },
+    {
+      "exerciseId": "cwsAI4G",
+      "source": "dumbbell decline shrug",
+      "bodyPart": "back",
+      "equipment": ["dumbbell"],
+      "muscles": ["trapezius", "shoulders", "upper_back"]
+    },
+    {
+      "exerciseId": "7vG5o25",
+      "source": "dumbbell incline row",
+      "bodyPart": "back",
+      "equipment": ["dumbbell"],
+      "muscles": ["upper_back", "biceps", "shoulders"]
+    },
+    {
+      "exerciseId": "JymLInS",
+      "source": "dumbbell incline shrug",
+      "bodyPart": "back",
+      "equipment": ["dumbbell"],
+      "muscles": ["trapezius", "shoulders"]
+    },
+    {
+      "exerciseId": "PbzNu7c",
+      "source": "dumbbell incline y-raise",
+      "bodyPart": "back",
+      "equipment": ["dumbbell"],
+      "muscles": ["upper_back", "shoulders"]
+    },
+    {
+      "exerciseId": "NJzBsGJ",
+      "source": "dumbbell shrug",
+      "bodyPart": "back",
+      "equipment": ["dumbbell"],
+      "muscles": ["trapezius", "shoulders"]
+    },
+    {
+      "exerciseId": "d7z1Y7V",
+      "source": "exercise ball hug",
+      "bodyPart": "back",
+      "equipment": ["stability_ball"],
+      "muscles": ["lower_back", "shoulders", "chest"]
+    },
+    {
+      "exerciseId": "bZGHsAZ",
+      "source": "inverted row",
+      "bodyPart": "back",
+      "equipment": ["bodyweight"],
+      "muscles": ["upper_back", "biceps", "forearm"]
+    },
+    {
+      "exerciseId": "Ca76jUE",
+      "source": "kettlebell alternating row",
+      "bodyPart": "back",
+      "equipment": ["kettlebell"],
+      "muscles": ["upper_back", "biceps", "forearm"]
+    },
+    {
+      "exerciseId": "f38OEuO",
+      "source": "kneeling lat stretch",
+      "bodyPart": "back",
+      "equipment": ["bodyweight"],
+      "muscles": ["lats", "shoulders", "triceps"]
+    },
+    {
+      "exerciseId": "d1GgzTU",
+      "source": "l-pull-up",
+      "bodyPart": "back",
+      "equipment": ["bodyweight"],
+      "muscles": ["lats", "biceps", "forearm"]
+    },
+    {
+      "exerciseId": "MaMuGH6",
+      "source": "lever assisted chin-up",
+      "bodyPart": "back",
+      "equipment": ["machine"],
+      "muscles": ["lats", "biceps", "forearm"]
+    },
+    {
+      "exerciseId": "X3cqyXz",
+      "source": "lever bent over row",
+      "bodyPart": "back",
+      "equipment": ["barbell"],
+      "muscles": ["upper_back", "biceps", "forearm"]
+    },
+    {
+      "exerciseId": "7F1DVzn",
+      "source": "lever front pulldown",
+      "bodyPart": "back",
+      "equipment": ["machine"],
+      "muscles": ["lats", "biceps", "upper_back", "shoulders"]
+    },
+    {
+      "exerciseId": "f91FwXG",
+      "source": "lever gripless shrug",
+      "bodyPart": "back",
+      "equipment": ["machine"],
+      "muscles": ["trapezius", "shoulders", "forearm"]
+    },
+    {
+      "exerciseId": "nZZZy9m",
+      "source": "lever high row",
+      "bodyPart": "back",
+      "equipment": ["machine"],
+      "muscles": ["upper_back", "biceps", "shoulders"]
+    },
+    {
+      "exerciseId": "4U7iLb5",
+      "source": "lever pullover",
+      "bodyPart": "back",
+      "equipment": ["machine"],
+      "muscles": ["lats", "triceps", "shoulders"]
+    },
+    {
+      "exerciseId": "7I6LNUG",
+      "source": "lever seated row",
+      "bodyPart": "back",
+      "equipment": ["machine"],
+      "muscles": ["upper_back", "biceps", "forearm"]
+    },
+    {
+      "exerciseId": "aaXr7ld",
+      "source": "lever t bar row",
+      "bodyPart": "back",
+      "equipment": ["machine"],
+      "muscles": ["upper_back", "biceps", "forearm"]
+    },
+    {
+      "exerciseId": "bLyQokI",
+      "source": "london bridge",
+      "bodyPart": "back",
+      "equipment": ["rope"],
+      "muscles": ["upper_back", "shoulders", "biceps", "forearm"]
+    },
+    {
+      "exerciseId": "ANbbry2",
+      "source": "lower back curl",
+      "bodyPart": "back",
+      "equipment": ["bodyweight"],
+      "muscles": ["lower_back", "glutes", "hamstrings"]
+    },
+    {
+      "exerciseId": "bKWbrTA",
+      "source": "one arm towel row",
+      "bodyPart": "back",
+      "equipment": ["bodyweight"],
+      "muscles": ["upper_back", "biceps", "forearm"]
+    },
+    {
+      "exerciseId": "0V2YQjW",
+      "source": "pull up (neutral grip)",
+      "bodyPart": "back",
+      "equipment": ["bodyweight"],
+      "muscles": ["lats", "biceps", "forearm"]
+    },
+    {
+      "exerciseId": "CbFSYC1",
+      "source": "rear pull-up",
+      "bodyPart": "back",
+      "equipment": ["bodyweight"],
+      "muscles": ["lats", "biceps", "forearm"]
+    },
+    {
+      "exerciseId": "cQ19bBP",
+      "source": "rocky pull-up pulldown",
+      "bodyPart": "back",
+      "equipment": ["bodyweight"],
+      "muscles": ["lats", "biceps", "forearm"]
+    },
+    {
+      "exerciseId": "isofgzg",
+      "source": "roller back stretch",
+      "bodyPart": "back",
+      "equipment": ["foam_roller"],
+      "muscles": ["lower_back", "hamstrings", "glutes"]
+    },
+    {
+      "exerciseId": "yaAxcQr",
+      "source": "rope climb",
+      "bodyPart": "back",
+      "equipment": ["rope"],
+      "muscles": ["upper_back", "forearm", "biceps", "shoulders"]
+    },
+    {
+      "exerciseId": "7xeukSt",
+      "source": "scapula dips",
+      "bodyPart": "back",
+      "equipment": ["bodyweight"],
+      "muscles": ["trapezius", "upper_back", "shoulders"]
+    },
+    {
+      "exerciseId": "MzNnwx9",
+      "source": "smith back shrug",
+      "bodyPart": "back",
+      "equipment": ["smith_machine"],
+      "muscles": ["trapezius", "shoulders"]
+    },
+    {
+      "exerciseId": "ZX9UZmj",
+      "source": "smith bent over row",
+      "bodyPart": "back",
+      "equipment": ["smith_machine"],
+      "muscles": ["upper_back", "biceps", "forearm"]
+    },
+    {
+      "exerciseId": "JGKowMS",
+      "source": "smith narrow row",
+      "bodyPart": "back",
+      "equipment": ["smith_machine"],
+      "muscles": ["upper_back", "biceps", "shoulders"]
+    },
+    {
+      "exerciseId": "Q4DSJPC",
+      "source": "smith one arm row",
+      "bodyPart": "back",
+      "equipment": ["smith_machine"],
+      "muscles": ["upper_back", "biceps", "forearm"]
+    },
+    {
+      "exerciseId": "OUQ0ZyW",
+      "source": "smith shrug",
+      "bodyPart": "back",
+      "equipment": ["smith_machine"],
+      "muscles": ["trapezius", "shoulders"]
+    },
+    {
+      "exerciseId": "DIVyqrU",
+      "source": "sphinx",
+      "bodyPart": "back",
+      "equipment": ["bodyweight"],
+      "muscles": ["lower_back", "glutes", "hamstrings"]
+    },
+    {
+      "exerciseId": "1jXLYEw",
+      "source": "standing lateral stretch",
+      "bodyPart": "back",
+      "equipment": ["bodyweight"],
+      "muscles": ["lats", "shoulders", "abs"]
+    },
+    {
+      "exerciseId": "cuKYxhu",
+      "source": "standing pelvic tilt",
+      "bodyPart": "back",
+      "equipment": ["bodyweight"],
+      "muscles": ["lower_back", "abs"]
+    },
+    {
+      "exerciseId": "4OaumBr",
+      "source": "suspended row",
+      "bodyPart": "back",
+      "equipment": ["bodyweight"],
+      "muscles": ["upper_back", "biceps", "shoulders"]
+    },
+    {
+      "exerciseId": "01qpYSe",
+      "source": "upward facing dog",
+      "bodyPart": "back",
+      "equipment": ["bodyweight"],
+      "muscles": ["lower_back", "shoulders", "chest"]
+    },
+    {
+      "exerciseId": "JsOV1SU",
+      "source": "weighted muscle up",
+      "bodyPart": "back",
+      "equipment": ["weighted"],
+      "muscles": ["lats", "biceps", "triceps", "shoulders", "chest"]
+    },
+    {
+      "exerciseId": "HMzLjXx",
+      "source": "weighted pull-up",
+      "bodyPart": "back",
+      "equipment": ["weighted"],
+      "muscles": ["lats", "biceps", "forearm"]
+    },
+    {
+      "exerciseId": "0Yz8WdV",
+      "source": "bear crawl",
+      "bodyPart": "cardio",
+      "equipment": ["bodyweight"],
+      "muscles": ["cardio", "abs", "shoulders", "triceps"]
+    },
+    {
+      "exerciseId": "dK9394r",
+      "source": "burpee",
+      "bodyPart": "cardio",
+      "equipment": ["bodyweight"],
+      "muscles": ["cardio", "quadriceps", "hamstrings", "calves", "shoulders", "chest"]
+    },
+    {
+      "exerciseId": "0JtKWum",
+      "source": "dumbbell burpee",
+      "bodyPart": "cardio",
+      "equipment": ["dumbbell"],
+      "muscles": ["cardio", "quadriceps", "hamstrings", "calves", "shoulders", "triceps", "abs"]
+    },
+    {
+      "exerciseId": "mr7pkqP",
+      "source": "jack burpee",
+      "bodyPart": "cardio",
+      "equipment": ["bodyweight"],
+      "muscles": ["cardio", "quadriceps", "hamstrings", "calves", "shoulders", "triceps", "abs"]
+    },
+    {
+      "exerciseId": "e1e76I2",
+      "source": "jump rope",
+      "bodyPart": "cardio",
+      "equipment": ["rope"],
+      "muscles": ["cardio", "calves", "quadriceps", "hamstrings", "glutes"]
+    },
+    {
+      "exerciseId": "zfNHMN9",
+      "source": "skater hops",
+      "bodyPart": "cardio",
+      "equipment": ["bodyweight"],
+      "muscles": ["cardio", "quadriceps", "hamstrings", "glutes", "calves"]
+    },
+    {
+      "exerciseId": "5MRH8H2",
+      "source": "ski step",
+      "bodyPart": "cardio",
+      "equipment": ["bodyweight"],
+      "muscles": ["cardio", "quadriceps", "hamstrings", "glutes", "calves"]
+    },
+    {
+      "exerciseId": "tnaj0mT",
+      "source": "swing 360",
+      "bodyPart": "cardio",
+      "equipment": ["bodyweight"],
+      "muscles": ["cardio", "shoulders", "abs"]
+    },
+    {
+      "exerciseId": "km2Ljzj",
+      "source": "wheel run",
+      "bodyPart": "cardio",
+      "equipment": ["bodyweight"],
+      "muscles": ["cardio", "quadriceps", "hamstrings", "calves"]
+    },
+    {
+      "exerciseId": "A9qxk2F",
+      "source": "archer push up",
+      "bodyPart": "chest",
+      "equipment": ["bodyweight"],
+      "muscles": ["chest", "triceps", "shoulders", "abs"]
+    },
+    {
+      "exerciseId": "drfGhTV",
+      "source": "balance cable incline fly",
+      "bodyPart": "chest",
+      "equipment": ["cable"],
+      "muscles": ["chest", "shoulders", "triceps"]
+    },
+    {
+      "exerciseId": "khlHMqs",
+      "source": "band bench press",
+      "bodyPart": "chest",
+      "equipment": ["band"],
+      "muscles": ["chest", "triceps", "shoulders"]
+    },
+    {
+      "exerciseId": "9sgNE2O",
+      "source": "barbell decline pullover",
+      "bodyPart": "chest",
+      "equipment": ["barbell"],
+      "muscles": ["chest", "triceps", "shoulders"]
+    },
+    {
+      "exerciseId": "JsKq9so",
+      "source": "barbell wide bench press",
+      "bodyPart": "chest",
+      "equipment": ["barbell"],
+      "muscles": ["chest", "shoulders", "triceps"]
+    },
+    {
+      "exerciseId": "QoHIhPl",
+      "source": "behind head chest stretch",
+      "bodyPart": "chest",
+      "equipment": ["assisted"],
+      "muscles": ["chest", "shoulders", "triceps"]
+    },
+    {
+      "exerciseId": "7xI5MXA",
+      "source": "cable bench press",
+      "bodyPart": "chest",
+      "equipment": ["cable"],
+      "muscles": ["chest", "triceps", "shoulders"]
+    },
+    {
+      "exerciseId": "7saC5zz",
+      "source": "cable decline fly",
+      "bodyPart": "chest",
+      "equipment": ["cable"],
+      "muscles": ["chest", "shoulders", "triceps"]
+    },
+    {
+      "exerciseId": "2Pya1cP",
+      "source": "cable decline press",
+      "bodyPart": "chest",
+      "equipment": ["cable"],
+      "muscles": ["chest", "triceps", "shoulders"]
+    },
+    {
+      "exerciseId": "Vh0GsK4",
+      "source": "cable incline bench press",
+      "bodyPart": "chest",
+      "equipment": ["cable"],
+      "muscles": ["chest", "shoulders", "triceps"]
+    },
+    {
+      "exerciseId": "tBWXbIT",
+      "source": "cable incline fly",
+      "bodyPart": "chest",
+      "equipment": ["cable"],
+      "muscles": ["chest", "shoulders", "triceps"]
+    },
+    {
+      "exerciseId": "FVmZVhk",
+      "source": "cable low fly",
+      "bodyPart": "chest",
+      "equipment": ["cable"],
+      "muscles": ["chest", "shoulders", "triceps"]
+    },
+    {
+      "exerciseId": "lJJ7Yq8",
+      "source": "cable lying fly",
+      "bodyPart": "chest",
+      "equipment": ["cable"],
+      "muscles": ["chest", "shoulders", "triceps"]
+    },
+    {
+      "exerciseId": "nIR4Rwl",
+      "source": "cable seated chest press",
+      "bodyPart": "chest",
+      "equipment": ["cable"],
+      "muscles": ["chest", "shoulders", "triceps"]
+    },
+    {
+      "exerciseId": "Pr9Rhf4",
+      "source": "cable standing fly",
+      "bodyPart": "chest",
+      "equipment": ["cable"],
+      "muscles": ["chest", "shoulders", "triceps"]
+    },
+    {
+      "exerciseId": "CMAxnsG",
+      "source": "clock push-up",
+      "bodyPart": "chest",
+      "equipment": ["bodyweight"],
+      "muscles": ["chest", "triceps", "shoulders", "abs"]
+    },
+    {
+      "exerciseId": "i5cEhka",
+      "source": "decline push-up",
+      "bodyPart": "chest",
+      "equipment": ["bodyweight"],
+      "muscles": ["chest", "triceps", "shoulders"]
+    },
+    {
+      "exerciseId": "B3Rxp6L",
+      "source": "dumbbell incline breeding",
+      "bodyPart": "chest",
+      "equipment": ["dumbbell"],
+      "muscles": ["chest", "shoulders", "triceps"]
+    },
+    {
+      "exerciseId": "ESOd5Pl",
+      "source": "dumbbell incline fly",
+      "bodyPart": "chest",
+      "equipment": ["dumbbell"],
+      "muscles": ["chest", "shoulders"]
+    },
+    {
+      "exerciseId": "9XjtHvS",
+      "source": "dumbbell pullover",
+      "bodyPart": "chest",
+      "equipment": ["dumbbell"],
+      "muscles": ["chest", "lats", "triceps"]
+    },
+    {
+      "exerciseId": "neonEDL",
+      "source": "floor fly (with barbell)",
+      "bodyPart": "chest",
+      "equipment": ["barbell"],
+      "muscles": ["chest", "shoulders", "triceps"]
+    },
+    {
+      "exerciseId": "gw9PqGk",
+      "source": "full planche push-up",
+      "bodyPart": "chest",
+      "equipment": ["bodyweight"],
+      "muscles": ["chest", "shoulders", "triceps", "abs"]
+    },
+    {
+      "exerciseId": "pAIWRGu",
+      "source": "hands bike",
+      "bodyPart": "chest",
+      "equipment": ["cardio_machine"],
+      "muscles": ["chest", "triceps", "shoulders"]
+    },
+    {
+      "exerciseId": "gMyx3Qn",
+      "source": "high style scapula push-up",
+      "bodyPart": "chest",
+      "equipment": ["bodyweight"],
+      "muscles": ["chest", "triceps", "shoulders"]
+    },
+    {
+      "exerciseId": "B1EVP9F",
+      "source": "incline push-up",
+      "bodyPart": "chest",
+      "equipment": ["bodyweight"],
+      "muscles": ["chest", "triceps", "shoulders"]
+    },
+    {
+      "exerciseId": "F7vjXqT",
+      "source": "incline push-up (on box)",
+      "bodyPart": "chest",
+      "equipment": ["bodyweight"],
+      "muscles": ["chest", "triceps", "shoulders"]
+    },
+    {
+      "exerciseId": "GdMa1ET",
+      "source": "incline scapula push up",
+      "bodyPart": "chest",
+      "equipment": ["bodyweight"],
+      "muscles": ["chest", "triceps", "shoulders"]
+    },
+    {
+      "exerciseId": "HbSG1Pw",
+      "source": "isometric chest squeeze",
+      "bodyPart": "chest",
+      "equipment": ["bodyweight"],
+      "muscles": ["chest", "triceps", "shoulders"]
+    },
+    {
+      "exerciseId": "11wrviz",
+      "source": "isometric wipers",
+      "bodyPart": "chest",
+      "equipment": ["bodyweight"],
+      "muscles": ["chest", "shoulders", "triceps", "abs"]
+    },
+    {
+      "exerciseId": "ktf3nvW",
+      "source": "kettlebell plyo push-up",
+      "bodyPart": "chest",
+      "equipment": ["kettlebell"],
+      "muscles": ["chest", "triceps", "shoulders", "abs"]
+    },
+    {
+      "exerciseId": "DOoWcnA",
+      "source": "lever chest press",
+      "bodyPart": "chest",
+      "equipment": ["machine"],
+      "muscles": ["chest", "triceps", "shoulders"]
+    },
+    {
+      "exerciseId": "vsVoPHt",
+      "source": "lever decline chest press",
+      "bodyPart": "chest",
+      "equipment": ["machine"],
+      "muscles": ["chest", "triceps", "shoulders"]
+    },
+    {
+      "exerciseId": "jHAnWmT",
+      "source": "lever incline chest press",
+      "bodyPart": "chest",
+      "equipment": ["machine"],
+      "muscles": ["chest", "shoulders", "triceps"]
+    },
+    {
+      "exerciseId": "v3xmPAR",
+      "source": "lever seated fly",
+      "bodyPart": "chest",
+      "equipment": ["machine"],
+      "muscles": ["chest", "shoulders", "trapezius"]
+    },
+    {
+      "exerciseId": "wDN97Ca",
+      "source": "machine inner chest press",
+      "bodyPart": "chest",
+      "equipment": ["machine"],
+      "muscles": ["chest", "triceps", "shoulders"]
+    },
+    {
+      "exerciseId": "aDoFKrE",
+      "source": "medicine ball chest pass",
+      "bodyPart": "chest",
+      "equipment": ["medicine_ball"],
+      "muscles": ["chest", "shoulders", "triceps"]
+    },
+    {
+      "exerciseId": "2kr2lWy",
+      "source": "push-up (bosu ball)",
+      "bodyPart": "chest",
+      "equipment": ["stability_ball"],
+      "muscles": ["chest", "triceps", "shoulders", "abs"]
+    },
+    {
+      "exerciseId": "LEH9jxP",
+      "source": "push-up (wall)",
+      "bodyPart": "chest",
+      "equipment": ["bodyweight"],
+      "muscles": ["chest", "triceps", "shoulders"]
+    },
+    {
+      "exerciseId": "W8KAlkI",
+      "source": "push-up medicine ball",
+      "bodyPart": "chest",
+      "equipment": ["medicine_ball"],
+      "muscles": ["chest", "triceps", "shoulders", "abs"]
+    },
+    {
+      "exerciseId": "13TpY4H",
+      "source": "raise single arm push-up",
+      "bodyPart": "chest",
+      "equipment": ["bodyweight"],
+      "muscles": ["chest", "triceps", "shoulders", "abs"]
+    },
+    {
+      "exerciseId": "jCBOdh0",
+      "source": "rough cable decline fly",
+      "bodyPart": "chest",
+      "equipment": ["cable"],
+      "muscles": ["chest", "shoulders", "triceps"]
+    },
+    {
+      "exerciseId": "jV65tKx",
+      "source": "scapula push-up",
+      "bodyPart": "chest",
+      "equipment": ["bodyweight"],
+      "muscles": ["chest", "triceps", "shoulders"]
+    },
+    {
+      "exerciseId": "trqKQv2",
+      "source": "smith bench press",
+      "bodyPart": "chest",
+      "equipment": ["smith_machine"],
+      "muscles": ["chest", "triceps", "shoulders"]
+    },
+    {
+      "exerciseId": "ETZfAbZ",
+      "source": "smith decline bench press",
+      "bodyPart": "chest",
+      "equipment": ["smith_machine"],
+      "muscles": ["chest", "triceps", "shoulders"]
+    },
+    {
+      "exerciseId": "5v7KYld",
+      "source": "smith incline bench press",
+      "bodyPart": "chest",
+      "equipment": ["smith_machine"],
+      "muscles": ["chest", "shoulders", "triceps"]
+    },
+    {
+      "exerciseId": "zK8Fu1W",
+      "source": "smith reverse-grip press",
+      "bodyPart": "chest",
+      "equipment": ["smith_machine"],
+      "muscles": ["chest", "triceps", "shoulders"]
+    },
+    {
+      "exerciseId": "4GqRrAk",
+      "source": "superman push-up",
+      "bodyPart": "chest",
+      "equipment": ["bodyweight"],
+      "muscles": ["chest", "abs", "shoulders"]
+    },
+    {
+      "exerciseId": "IaGQCrC",
+      "source": "suspended push-up",
+      "bodyPart": "chest",
+      "equipment": ["bodyweight"],
+      "muscles": ["chest", "triceps", "shoulders", "abs"]
+    },
+    {
+      "exerciseId": "PSlvNMs",
+      "source": "weighted drop push up",
+      "bodyPart": "chest",
+      "equipment": ["weighted"],
+      "muscles": ["chest", "triceps", "shoulders"]
+    },
+    {
+      "exerciseId": "Ff18ItA",
+      "source": "weighted straight bar dip",
+      "bodyPart": "chest",
+      "equipment": ["weighted"],
+      "muscles": ["chest", "triceps", "shoulders"]
+    },
+    {
+      "exerciseId": "I1OBLnn",
+      "source": "weighted svend press",
+      "bodyPart": "chest",
+      "equipment": ["weighted"],
+      "muscles": ["chest", "shoulders", "triceps"]
+    },
+    {
+      "exerciseId": "JmMVpR3",
+      "source": "wide hand push up",
+      "bodyPart": "chest",
+      "equipment": ["bodyweight"],
+      "muscles": ["chest", "triceps", "shoulders"]
+    },
+    {
+      "exerciseId": "Ezpnw9d",
+      "source": "band reverse wrist curl",
+      "bodyPart": "lower arms",
+      "equipment": ["band"],
+      "muscles": ["forearm"]
+    },
+    {
+      "exerciseId": "vUTfFHw",
+      "source": "band wrist curl",
+      "bodyPart": "lower arms",
+      "equipment": ["band"],
+      "muscles": ["forearm", "biceps", "triceps"]
+    },
+    {
+      "exerciseId": "82LxxkW",
+      "source": "barbell wrist curl",
+      "bodyPart": "lower arms",
+      "equipment": ["barbell"],
+      "muscles": ["forearm", "biceps"]
+    },
+    {
+      "exerciseId": "LrV4s90",
+      "source": "cable wrist curl",
+      "bodyPart": "lower arms",
+      "equipment": ["cable"],
+      "muscles": ["forearm", "biceps"]
+    },
+    {
+      "exerciseId": "MqNdIbe",
+      "source": "controlled wrist rollerer",
+      "bodyPart": "lower arms",
+      "equipment": ["weighted"],
+      "muscles": ["forearm", "biceps", "triceps"]
+    },
+    {
+      "exerciseId": "mtXengz",
+      "source": "dumbbell finger curls",
+      "bodyPart": "lower arms",
+      "equipment": ["dumbbell"],
+      "muscles": ["forearm"]
+    },
+    {
+      "exerciseId": "mym4hJo",
+      "source": "dumbbell lying pronation",
+      "bodyPart": "lower arms",
+      "equipment": ["dumbbell"],
+      "muscles": ["forearm", "biceps", "shoulders"]
+    },
+    {
+      "exerciseId": "M2Pm3zj",
+      "source": "dumbbell lying supination",
+      "bodyPart": "lower arms",
+      "equipment": ["dumbbell"],
+      "muscles": ["forearm", "biceps", "shoulders"]
+    },
+    {
+      "exerciseId": "awG04cF",
+      "source": "finger curls",
+      "bodyPart": "lower arms",
+      "equipment": ["barbell"],
+      "muscles": ["forearm"]
+    },
+    {
+      "exerciseId": "mKwcrHn",
+      "source": "lever gripper hands",
+      "bodyPart": "lower arms",
+      "equipment": ["machine"],
+      "muscles": ["forearm", "biceps", "triceps"]
+    },
+    {
+      "exerciseId": "UtmIqcI",
+      "source": "side wrist pull stretch",
+      "bodyPart": "lower arms",
+      "equipment": ["bodyweight"],
+      "muscles": ["forearm"]
+    },
+    {
+      "exerciseId": "B6dAO1t",
+      "source": "smith seated wrist curl",
+      "bodyPart": "lower arms",
+      "equipment": ["smith_machine"],
+      "muscles": ["forearm", "biceps"]
+    },
+    {
+      "exerciseId": "2zNKRUB",
+      "source": "wrist circles",
+      "bodyPart": "lower arms",
+      "equipment": ["bodyweight"],
+      "muscles": ["forearm"]
+    },
+    {
+      "exerciseId": "bd5b860",
+      "source": "wrist rollerer",
+      "bodyPart": "lower arms",
+      "equipment": ["weighted"],
+      "muscles": ["forearm", "biceps", "triceps"]
+    },
+    {
+      "exerciseId": "uL9CsKm",
+      "source": "ankle circles",
+      "bodyPart": "lower legs",
+      "equipment": ["bodyweight"],
+      "muscles": ["calves"]
+    },
+    {
+      "exerciseId": "2IHEa2T",
+      "source": "barbell floor calf raise",
+      "bodyPart": "lower legs",
+      "equipment": ["barbell"],
+      "muscles": ["calves", "hamstrings"]
+    },
+    {
+      "exerciseId": "ipvgBnC",
+      "source": "barbell seated calf raise",
+      "bodyPart": "lower legs",
+      "equipment": ["barbell"],
+      "muscles": ["calves", "hamstrings"]
+    },
+    {
+      "exerciseId": "yl2IYyy",
+      "source": "cable standing calf raise",
+      "bodyPart": "lower legs",
+      "equipment": ["cable"],
+      "muscles": ["calves", "hamstrings", "glutes"]
+    },
+    {
+      "exerciseId": "1LVFcEn",
+      "source": "calf stretch with rope",
+      "bodyPart": "lower legs",
+      "equipment": ["rope"],
+      "muscles": ["calves", "hamstrings"]
+    },
+    {
+      "exerciseId": "X7jbxra",
+      "source": "circles knee stretch",
+      "bodyPart": "lower legs",
+      "equipment": ["bodyweight"],
+      "muscles": ["calves", "hamstrings", "quadriceps"]
+    },
+    {
+      "exerciseId": "u5ESqzH",
+      "source": "donkey calf raise",
+      "bodyPart": "lower legs",
+      "equipment": ["bodyweight"],
+      "muscles": ["calves", "hamstrings", "glutes"]
+    },
+    {
+      "exerciseId": "r29jP7S",
+      "source": "dumbbell seated calf raise",
+      "bodyPart": "lower legs",
+      "equipment": ["dumbbell"],
+      "muscles": ["calves", "hamstrings"]
+    },
+    {
+      "exerciseId": "2ORFMoR",
+      "source": "hack calf raise",
+      "bodyPart": "lower legs",
+      "equipment": ["machine"],
+      "muscles": ["calves", "hamstrings", "glutes"]
+    },
+    {
+      "exerciseId": "7B4F5nZ",
+      "source": "lever calf press",
+      "bodyPart": "lower legs",
+      "equipment": ["machine"],
+      "muscles": ["calves", "hamstrings"]
+    },
+    {
+      "exerciseId": "C9LuR4A",
+      "source": "lever donkey calf raise",
+      "bodyPart": "lower legs",
+      "equipment": ["machine"],
+      "muscles": ["calves", "hamstrings", "glutes"]
+    },
+    {
+      "exerciseId": "MrgP9L6",
+      "source": "lever rotary calf",
+      "bodyPart": "lower legs",
+      "equipment": ["machine"],
+      "muscles": ["calves"]
+    },
+    {
+      "exerciseId": "Ie9UGty",
+      "source": "lever seated calf press",
+      "bodyPart": "lower legs",
+      "equipment": ["machine"],
+      "muscles": ["calves", "hamstrings"]
+    },
+    {
+      "exerciseId": "bOOdeyc",
+      "source": "lever seated calf raise",
+      "bodyPart": "lower legs",
+      "equipment": ["machine"],
+      "muscles": ["calves"]
+    },
+    {
+      "exerciseId": "ykUOVze",
+      "source": "lever standing calf raise",
+      "bodyPart": "lower legs",
+      "equipment": ["machine"],
+      "muscles": ["calves"]
+    },
+    {
+      "exerciseId": "XhfS1DZ",
+      "source": "peroneals stretch",
+      "bodyPart": "lower legs",
+      "equipment": ["rope"],
+      "muscles": ["calves"]
+    },
+    {
+      "exerciseId": "DEEqoI2",
+      "source": "posterior tibialis stretch",
+      "bodyPart": "lower legs",
+      "equipment": ["rope"],
+      "muscles": ["calves", "hamstrings", "quadriceps"]
+    },
+    {
+      "exerciseId": "qCNVnaU",
+      "source": "sled 45в° calf press",
+      "bodyPart": "lower legs",
+      "equipment": ["machine"],
+      "muscles": ["calves", "hamstrings"]
+    },
+    {
+      "exerciseId": "g376LuL",
+      "source": "sled lying calf press",
+      "bodyPart": "lower legs",
+      "equipment": ["machine"],
+      "muscles": ["calves", "hamstrings", "glutes"]
+    },
+    {
+      "exerciseId": "Lsqrgh4",
+      "source": "smith reverse calf raises",
+      "bodyPart": "lower legs",
+      "equipment": ["smith_machine"],
+      "muscles": ["calves", "hamstrings"]
+    },
+    {
+      "exerciseId": "Y4QlY8z",
+      "source": "smith toe raise",
+      "bodyPart": "lower legs",
+      "equipment": ["smith_machine"],
+      "muscles": ["calves"]
+    },
+    {
+      "exerciseId": "XIHEoCG",
+      "source": "standing calves",
+      "bodyPart": "lower legs",
+      "equipment": ["bodyweight"],
+      "muscles": ["calves", "hamstrings", "glutes"]
+    },
+    {
+      "exerciseId": "LmaFNZS",
+      "source": "weighted donkey calf raise",
+      "bodyPart": "lower legs",
+      "equipment": ["weighted"],
+      "muscles": ["calves", "hamstrings", "glutes"]
+    },
+    {
+      "exerciseId": "trmte8s",
+      "source": "band shrug",
+      "bodyPart": "neck",
+      "equipment": ["band"],
+      "muscles": ["trapezius", "shoulders"]
+    },
+    {
+      "exerciseId": "TFA88iB",
+      "source": "band front raise",
+      "bodyPart": "shoulders",
+      "equipment": ["band"],
+      "muscles": ["shoulders", "triceps", "upper_back"]
+    },
+    {
+      "exerciseId": "sTfvVsG",
+      "source": "band reverse fly",
+      "bodyPart": "shoulders",
+      "equipment": ["band"],
+      "muscles": ["shoulders", "upper_back", "trapezius"]
+    },
+    {
+      "exerciseId": "peAeMR3",
+      "source": "band shoulder press",
+      "bodyPart": "shoulders",
+      "equipment": ["band"],
+      "muscles": ["shoulders", "triceps", "upper_back"]
+    },
+    {
+      "exerciseId": "aHDy5O5",
+      "source": "band y-raise",
+      "bodyPart": "shoulders",
+      "equipment": ["band"],
+      "muscles": ["shoulders", "trapezius", "upper_back"]
+    },
+    {
+      "exerciseId": "b2Uoz54",
+      "source": "barbell front raise",
+      "bodyPart": "shoulders",
+      "equipment": ["barbell"],
+      "muscles": ["shoulders", "biceps", "triceps"]
+    },
+    {
+      "exerciseId": "S9zHIvU",
+      "source": "barbell rear delt row",
+      "bodyPart": "shoulders",
+      "equipment": ["barbell"],
+      "muscles": ["shoulders", "trapezius", "upper_back", "biceps"]
+    },
+    {
+      "exerciseId": "4Leypho",
+      "source": "barbell skier",
+      "bodyPart": "shoulders",
+      "equipment": ["barbell"],
+      "muscles": ["shoulders", "triceps", "abs"]
+    },
+    {
+      "exerciseId": "f7Y9eDZ",
+      "source": "barbell thruster",
+      "bodyPart": "shoulders",
+      "equipment": ["barbell"],
+      "muscles": ["shoulders", "quadriceps", "glutes", "hamstrings", "abs"]
+    },
+    {
+      "exerciseId": "UDlhcO8",
+      "source": "barbell upright row",
+      "bodyPart": "shoulders",
+      "equipment": ["barbell"],
+      "muscles": ["shoulders", "trapezius", "biceps"]
+    },
+    {
+      "exerciseId": "RJa4tCo",
+      "source": "battling ropes",
+      "bodyPart": "shoulders",
+      "equipment": ["rope"],
+      "muscles": ["shoulders", "forearm", "abs"]
+    },
+    {
+      "exerciseId": "hvHhCv8",
+      "source": "cable forward raise",
+      "bodyPart": "shoulders",
+      "equipment": ["cable"],
+      "muscles": ["shoulders", "triceps", "forearm"]
+    },
+    {
+      "exerciseId": "u2X71Np",
+      "source": "cable front raise",
+      "bodyPart": "shoulders",
+      "equipment": ["cable"],
+      "muscles": ["shoulders", "triceps", "forearm"]
+    },
+    {
+      "exerciseId": "goJ6ezq",
+      "source": "cable lateral raise",
+      "bodyPart": "shoulders",
+      "equipment": ["cable"],
+      "muscles": ["shoulders", "trapezius", "triceps"]
+    },
+    {
+      "exerciseId": "PzQanLE",
+      "source": "cable shoulder press",
+      "bodyPart": "shoulders",
+      "equipment": ["cable"],
+      "muscles": ["shoulders", "triceps", "upper_back"]
+    },
+    {
+      "exerciseId": "cALKspW",
+      "source": "cable upright row",
+      "bodyPart": "shoulders",
+      "equipment": ["cable"],
+      "muscles": ["shoulders", "trapezius", "biceps"]
+    },
+    {
+      "exerciseId": "3eGE2JC",
+      "source": "dumbbell front raise",
+      "bodyPart": "shoulders",
+      "equipment": ["dumbbell"],
+      "muscles": ["shoulders", "biceps", "trapezius"]
+    },
+    {
+      "exerciseId": "cALkHHX",
+      "source": "dumbbell iron cross",
+      "bodyPart": "shoulders",
+      "equipment": ["dumbbell"],
+      "muscles": ["shoulders", "triceps", "chest"]
+    },
+    {
+      "exerciseId": "FS63wTN",
+      "source": "dumbbell push press",
+      "bodyPart": "shoulders",
+      "equipment": ["dumbbell"],
+      "muscles": ["shoulders", "triceps", "abs"]
+    },
+    {
+      "exerciseId": "c9MnDRp",
+      "source": "dumbbell raise",
+      "bodyPart": "shoulders",
+      "equipment": ["dumbbell"],
+      "muscles": ["shoulders", "trapezius", "upper_back"]
+    },
+    {
+      "exerciseId": "8DiFDVA",
+      "source": "dumbbell rear fly",
+      "bodyPart": "shoulders",
+      "equipment": ["dumbbell"],
+      "muscles": ["shoulders", "trapezius", "upper_back"]
+    },
+    {
+      "exerciseId": "EAs3xL9",
+      "source": "dumbbell reverse fly",
+      "bodyPart": "shoulders",
+      "equipment": ["dumbbell"],
+      "muscles": ["shoulders", "trapezius", "upper_back"]
+    },
+    {
+      "exerciseId": "5vfAI0I",
+      "source": "dumbbell scott press",
+      "bodyPart": "shoulders",
+      "equipment": ["dumbbell"],
+      "muscles": ["shoulders", "triceps", "chest"]
+    },
+    {
+      "exerciseId": "ainizkb",
+      "source": "dumbbell upright row",
+      "bodyPart": "shoulders",
+      "equipment": ["dumbbell"],
+      "muscles": ["shoulders", "trapezius", "biceps"]
+    },
+    {
+      "exerciseId": "5KLbZWx",
+      "source": "kettlebell alternating press",
+      "bodyPart": "shoulders",
+      "equipment": ["kettlebell"],
+      "muscles": ["shoulders", "triceps", "abs"]
+    },
+    {
+      "exerciseId": "UM8mgyG",
+      "source": "kettlebell arnold press",
+      "bodyPart": "shoulders",
+      "equipment": ["kettlebell"],
+      "muscles": ["shoulders", "triceps", "upper_back"]
+    },
+    {
+      "exerciseId": "tznL2Ad",
+      "source": "kettlebell double jerk",
+      "bodyPart": "shoulders",
+      "equipment": ["kettlebell"],
+      "muscles": ["shoulders", "triceps", "abs"]
+    },
+    {
+      "exerciseId": "M74kdvm",
+      "source": "kettlebell double snatch",
+      "bodyPart": "shoulders",
+      "equipment": ["kettlebell"],
+      "muscles": ["shoulders", "trapezius", "forearm", "abs"]
+    },
+    {
+      "exerciseId": "BkxB8LW",
+      "source": "kettlebell seated press",
+      "bodyPart": "shoulders",
+      "equipment": ["kettlebell"],
+      "muscles": ["shoulders", "triceps", "abs"]
+    },
+    {
+      "exerciseId": "UDm6cGl",
+      "source": "kettlebell seesaw press",
+      "bodyPart": "shoulders",
+      "equipment": ["kettlebell"],
+      "muscles": ["shoulders", "triceps", "abs"]
+    },
+    {
+      "exerciseId": "yWxMvB5",
+      "source": "kettlebell thruster",
+      "bodyPart": "shoulders",
+      "equipment": ["kettlebell"],
+      "muscles": ["shoulders", "quadriceps", "glutes", "abs"]
+    },
+    {
+      "exerciseId": "eXMFHww",
+      "source": "landmine lateral raise",
+      "bodyPart": "shoulders",
+      "equipment": ["barbell"],
+      "muscles": ["shoulders", "trapezius", "upper_back"]
+    },
+    {
+      "exerciseId": "hoXt6wv",
+      "source": "left hook. boxing",
+      "bodyPart": "shoulders",
+      "equipment": ["bodyweight"],
+      "muscles": ["shoulders", "biceps", "triceps", "forearm"]
+    },
+    {
+      "exerciseId": "dRTfGZT",
+      "source": "lever lateral raise",
+      "bodyPart": "shoulders",
+      "equipment": ["machine"],
+      "muscles": ["shoulders", "trapezius", "upper_back"]
+    },
+    {
+      "exerciseId": "CggQhII",
+      "source": "lever military press",
+      "bodyPart": "shoulders",
+      "equipment": ["machine"],
+      "muscles": ["shoulders", "triceps", "chest"]
+    },
+    {
+      "exerciseId": "67n3r98",
+      "source": "lever shoulder press",
+      "bodyPart": "shoulders",
+      "equipment": ["machine"],
+      "muscles": ["shoulders", "triceps", "chest"]
+    },
+    {
+      "exerciseId": "xifhB5W",
+      "source": "rear deltoid stretch",
+      "bodyPart": "shoulders",
+      "equipment": ["bodyweight"],
+      "muscles": ["shoulders", "trapezius", "upper_back"]
+    },
+    {
+      "exerciseId": "nFUwqG6",
+      "source": "smith rear delt row",
+      "bodyPart": "shoulders",
+      "equipment": ["smith_machine"],
+      "muscles": ["shoulders", "trapezius", "upper_back", "biceps"]
+    },
+    {
+      "exerciseId": "903mzG8",
+      "source": "smith shoulder press",
+      "bodyPart": "shoulders",
+      "equipment": ["smith_machine"],
+      "muscles": ["shoulders", "triceps", "upper_back"]
+    },
+    {
+      "exerciseId": "1DN3iz4",
+      "source": "smith upright row",
+      "bodyPart": "shoulders",
+      "equipment": ["smith_machine"],
+      "muscles": ["shoulders", "trapezius", "biceps"]
+    },
+    {
+      "exerciseId": "e4aFmFY",
+      "source": "weighted front raise",
+      "bodyPart": "shoulders",
+      "equipment": ["weighted"],
+      "muscles": ["shoulders", "biceps", "forearm"]
+    },
+    {
+      "exerciseId": "VLYXo8S",
+      "source": "weighted round arm",
+      "bodyPart": "shoulders",
+      "equipment": ["weighted"],
+      "muscles": ["shoulders", "triceps", "upper_back"]
+    },
+    {
+      "exerciseId": "3omWx6P",
+      "source": "band alternating biceps curl",
+      "bodyPart": "upper arms",
+      "equipment": ["band"],
+      "muscles": ["biceps", "forearm"]
+    },
+    {
+      "exerciseId": "ufaxB52",
+      "source": "band close-grip push-up",
+      "bodyPart": "upper arms",
+      "equipment": ["band"],
+      "muscles": ["triceps", "chest", "shoulders"]
+    },
+    {
+      "exerciseId": "kmVVAfu",
+      "source": "band concentration curl",
+      "bodyPart": "upper arms",
+      "equipment": ["band"],
+      "muscles": ["biceps", "forearm"]
+    },
+    {
+      "exerciseId": "obe5LMq",
+      "source": "band side triceps extension",
+      "bodyPart": "upper arms",
+      "equipment": ["band"],
+      "muscles": ["triceps", "shoulders"]
+    },
+    {
+      "exerciseId": "IENzBdA",
+      "source": "barbell drag curl",
+      "bodyPart": "upper arms",
+      "equipment": ["barbell"],
+      "muscles": ["biceps", "forearm"]
+    },
+    {
+      "exerciseId": "EMpUwRI",
+      "source": "barbell lying extension",
+      "bodyPart": "upper arms",
+      "equipment": ["barbell"],
+      "muscles": ["triceps", "shoulders"]
+    },
+    {
+      "exerciseId": "bndCa3Q",
+      "source": "barbell pin presses",
+      "bodyPart": "upper arms",
+      "equipment": ["barbell"],
+      "muscles": ["triceps", "shoulders"]
+    },
+    {
+      "exerciseId": "4LIG9xr",
+      "source": "barbell reverse preacher curl",
+      "bodyPart": "upper arms",
+      "equipment": ["barbell"],
+      "muscles": ["biceps", "forearm"]
+    },
+    {
+      "exerciseId": "RrLske5",
+      "source": "bench dip (knees bent)",
+      "bodyPart": "upper arms",
+      "equipment": ["bodyweight"],
+      "muscles": ["triceps", "chest", "shoulders"]
+    },
+    {
+      "exerciseId": "9RT8oQW",
+      "source": "bench dip on floor",
+      "bodyPart": "upper arms",
+      "equipment": ["bodyweight"],
+      "muscles": ["triceps", "chest", "shoulders"]
+    },
+    {
+      "exerciseId": "sJFIDIp",
+      "source": "biceps leg concentration curl",
+      "bodyPart": "upper arms",
+      "equipment": ["bodyweight"],
+      "muscles": ["biceps", "forearm"]
+    },
+    {
+      "exerciseId": "50BETrz",
+      "source": "biceps narrow pull-ups",
+      "bodyPart": "upper arms",
+      "equipment": ["bodyweight"],
+      "muscles": ["biceps", "forearm", "shoulders"]
+    },
+    {
+      "exerciseId": "guT8YnS",
+      "source": "biceps pull-up",
+      "bodyPart": "upper arms",
+      "equipment": ["bodyweight"],
+      "muscles": ["biceps", "forearm", "shoulders"]
+    },
+    {
+      "exerciseId": "U6G2gk9",
+      "source": "body-up",
+      "bodyPart": "upper arms",
+      "equipment": ["bodyweight"],
+      "muscles": ["triceps", "chest", "shoulders"]
+    },
+    {
+      "exerciseId": "BCGQ6J5",
+      "source": "cable close grip curl",
+      "bodyPart": "upper arms",
+      "equipment": ["cable"],
+      "muscles": ["biceps", "forearm"]
+    },
+    {
+      "exerciseId": "G08RZcQ",
+      "source": "cable curl",
+      "bodyPart": "upper arms",
+      "equipment": ["cable"],
+      "muscles": ["biceps", "forearm"]
+    },
+    {
+      "exerciseId": "dXz8zjF",
+      "source": "cable drag curl",
+      "bodyPart": "upper arms",
+      "equipment": ["cable"],
+      "muscles": ["biceps", "forearm"]
+    },
+    {
+      "exerciseId": "HEJ6DIX",
+      "source": "cable kickback",
+      "bodyPart": "upper arms",
+      "equipment": ["cable"],
+      "muscles": ["triceps", "shoulders"]
+    },
+    {
+      "exerciseId": "61GrD55",
+      "source": "cable lying close-grip curl",
+      "bodyPart": "upper arms",
+      "equipment": ["cable"],
+      "muscles": ["biceps", "forearm"]
+    },
+    {
+      "exerciseId": "c3QQLPi",
+      "source": "cable rear drive",
+      "bodyPart": "upper arms",
+      "equipment": ["cable"],
+      "muscles": ["triceps", "shoulders", "upper_back"]
+    },
+    {
+      "exerciseId": "eOG0r6v",
+      "source": "cable reverse curl",
+      "bodyPart": "upper arms",
+      "equipment": ["cable"],
+      "muscles": ["biceps", "forearm"]
+    },
+    {
+      "exerciseId": "8oYqOt9",
+      "source": "cable seated curl",
+      "bodyPart": "upper arms",
+      "equipment": ["cable"],
+      "muscles": ["biceps", "forearm"]
+    },
+    {
+      "exerciseId": "DpWMFP5",
+      "source": "cable seated overhead curl",
+      "bodyPart": "upper arms",
+      "equipment": ["cable"],
+      "muscles": ["biceps", "forearm", "shoulders"]
+    },
+    {
+      "exerciseId": "3XFdb1Z",
+      "source": "cable squatting curl",
+      "bodyPart": "upper arms",
+      "equipment": ["cable"],
+      "muscles": ["biceps", "forearm"]
+    },
+    {
+      "exerciseId": "v3vLFW0",
+      "source": "close-grip push-up (on knees)",
+      "bodyPart": "upper arms",
+      "equipment": ["bodyweight"],
+      "muscles": ["triceps", "chest", "shoulders"]
+    },
+    {
+      "exerciseId": "soIB2rj",
+      "source": "diamond push-up",
+      "bodyPart": "upper arms",
+      "equipment": ["bodyweight"],
+      "muscles": ["triceps", "chest", "shoulders"]
+    },
+    {
+      "exerciseId": "7jGOBF3",
+      "source": "dumbbell close grip press",
+      "bodyPart": "upper arms",
+      "equipment": ["dumbbell"],
+      "muscles": ["triceps", "chest", "shoulders"]
+    },
+    {
+      "exerciseId": "ae9UoXQ",
+      "source": "dumbbell incline curl",
+      "bodyPart": "upper arms",
+      "equipment": ["dumbbell"],
+      "muscles": ["biceps", "forearm"]
+    },
+    {
+      "exerciseId": "6sMAmNv",
+      "source": "dumbbell reverse spider curl",
+      "bodyPart": "upper arms",
+      "equipment": ["dumbbell"],
+      "muscles": ["biceps", "forearm"]
+    },
+    {
+      "exerciseId": "7D5bgLT",
+      "source": "dumbbell seated preacher curl",
+      "bodyPart": "upper arms",
+      "equipment": ["dumbbell"],
+      "muscles": ["biceps", "forearm"]
+    },
+    {
+      "exerciseId": "3s4NnTh",
+      "source": "dumbbell standing biceps curl",
+      "bodyPart": "upper arms",
+      "equipment": ["dumbbell"],
+      "muscles": ["biceps", "forearm"]
+    },
+    {
+      "exerciseId": "LkoAWAE",
+      "source": "elbow dips",
+      "bodyPart": "upper arms",
+      "equipment": ["bodyweight"],
+      "muscles": ["triceps", "chest", "shoulders"]
+    },
+    {
+      "exerciseId": "kprile3",
+      "source": "exercise ball dip",
+      "bodyPart": "upper arms",
+      "equipment": ["stability_ball"],
+      "muscles": ["triceps", "chest", "shoulders"]
+    },
+    {
+      "exerciseId": "V4ryaZa",
+      "source": "ez barbell close-grip curl",
+      "bodyPart": "upper arms",
+      "equipment": ["barbell"],
+      "muscles": ["biceps", "forearm"]
+    },
+    {
+      "exerciseId": "6TG6x2w",
+      "source": "ez barbell curl",
+      "bodyPart": "upper arms",
+      "equipment": ["barbell"],
+      "muscles": ["biceps", "forearm"]
+    },
+    {
+      "exerciseId": "jtFKbt5",
+      "source": "ez barbell seated curls",
+      "bodyPart": "upper arms",
+      "equipment": ["barbell"],
+      "muscles": ["biceps", "forearm"]
+    },
+    {
+      "exerciseId": "2kattbR",
+      "source": "ez barbell spider curl",
+      "bodyPart": "upper arms",
+      "equipment": ["barbell"],
+      "muscles": ["biceps", "forearm"]
+    },
+    {
+      "exerciseId": "da4cXST",
+      "source": "ez-bar close-grip bench press",
+      "bodyPart": "upper arms",
+      "equipment": ["barbell"],
+      "muscles": ["triceps", "chest", "shoulders"]
+    },
+    {
+      "exerciseId": "rQxwMxO",
+      "source": "handstand push-up",
+      "bodyPart": "upper arms",
+      "equipment": ["bodyweight"],
+      "muscles": ["triceps", "shoulders", "chest", "abs"]
+    },
+    {
+      "exerciseId": "05Cf2v8",
+      "source": "impossible dips",
+      "bodyPart": "upper arms",
+      "equipment": ["bodyweight"],
+      "muscles": ["triceps", "chest", "shoulders"]
+    },
+    {
+      "exerciseId": "1YB40kg",
+      "source": "incline close-grip push-up",
+      "bodyPart": "upper arms",
+      "equipment": ["bodyweight"],
+      "muscles": ["triceps", "chest", "shoulders"]
+    },
+    {
+      "exerciseId": "q6y3OhV",
+      "source": "lever bicep curl",
+      "bodyPart": "upper arms",
+      "equipment": ["machine"],
+      "muscles": ["biceps", "forearm"]
+    },
+    {
+      "exerciseId": "D5yqP2p",
+      "source": "lever overhand triceps dip",
+      "bodyPart": "upper arms",
+      "equipment": ["machine"],
+      "muscles": ["triceps", "chest", "shoulders"]
+    },
+    {
+      "exerciseId": "b6hQYMb",
+      "source": "lever preacher curl",
+      "bodyPart": "upper arms",
+      "equipment": ["machine"],
+      "muscles": ["biceps", "forearm"]
+    },
+    {
+      "exerciseId": "BRImeP8",
+      "source": "lever seated dip",
+      "bodyPart": "upper arms",
+      "equipment": ["machine"],
+      "muscles": ["triceps", "chest", "shoulders"]
+    },
+    {
+      "exerciseId": "Ser9eQp",
+      "source": "lever triceps extension",
+      "bodyPart": "upper arms",
+      "equipment": ["machine"],
+      "muscles": ["triceps", "shoulders"]
+    },
+    {
+      "exerciseId": "o1ntciW",
+      "source": "olympic barbell hammer curl",
+      "bodyPart": "upper arms",
+      "equipment": ["barbell"],
+      "muscles": ["biceps", "forearm"]
+    },
+    {
+      "exerciseId": "FAoIFMw",
+      "source": "one arm dip",
+      "bodyPart": "upper arms",
+      "equipment": ["bodyweight"],
+      "muscles": ["triceps", "chest", "shoulders"]
+    },
+    {
+      "exerciseId": "4Jt8QsQ",
+      "source": "push-up on lower arms",
+      "bodyPart": "upper arms",
+      "equipment": ["bodyweight"],
+      "muscles": ["triceps", "chest", "shoulders"]
+    },
+    {
+      "exerciseId": "NZ5Qqkz",
+      "source": "reverse dip",
+      "bodyPart": "upper arms",
+      "equipment": ["bodyweight"],
+      "muscles": ["triceps", "chest", "shoulders"]
+    },
+    {
+      "exerciseId": "ezTvXcr",
+      "source": "ring dips",
+      "bodyPart": "upper arms",
+      "equipment": ["bodyweight"],
+      "muscles": ["triceps", "chest", "shoulders"]
+    },
+    {
+      "exerciseId": "vpQaQkH",
+      "source": "ski ergometer",
+      "bodyPart": "upper arms",
+      "equipment": ["cardio_machine"],
+      "muscles": ["triceps", "shoulders", "forearm"]
+    },
+    {
+      "exerciseId": "WcHl7ru",
+      "source": "smith close-grip bench press",
+      "bodyPart": "upper arms",
+      "equipment": ["smith_machine"],
+      "muscles": ["triceps", "chest", "shoulders"]
+    },
+    {
+      "exerciseId": "zILLZ98",
+      "source": "smith machine bicep curl",
+      "bodyPart": "upper arms",
+      "equipment": ["smith_machine"],
+      "muscles": ["biceps", "forearm"]
+    },
+    {
+      "exerciseId": "DQ0cqkT",
+      "source": "three bench dip",
+      "bodyPart": "upper arms",
+      "equipment": ["bodyweight"],
+      "muscles": ["triceps", "chest", "shoulders"]
+    },
+    {
+      "exerciseId": "7aVz15j",
+      "source": "triceps dips floor",
+      "bodyPart": "upper arms",
+      "equipment": ["bodyweight"],
+      "muscles": ["triceps", "chest", "shoulders"]
+    },
+    {
+      "exerciseId": "fSrPP6B",
+      "source": "triceps press",
+      "bodyPart": "upper arms",
+      "equipment": ["bodyweight"],
+      "muscles": ["triceps", "shoulders"]
+    },
+    {
+      "exerciseId": "uOV3Itw",
+      "source": "triceps stretch",
+      "bodyPart": "upper arms",
+      "equipment": ["bodyweight"],
+      "muscles": ["triceps", "shoulders"]
+    },
+    {
+      "exerciseId": "MU9HnE7",
+      "source": "weighted bench dip",
+      "bodyPart": "upper arms",
+      "equipment": ["weighted"],
+      "muscles": ["triceps", "chest", "shoulders"]
+    },
+    {
+      "exerciseId": "M5Y7GPg",
+      "source": "weighted standing curl",
+      "bodyPart": "upper arms",
+      "equipment": ["weighted"],
+      "muscles": ["biceps", "forearm"]
+    },
+    {
+      "exerciseId": "gtO1ErP",
+      "source": "weighted three bench dips",
+      "bodyPart": "upper arms",
+      "equipment": ["weighted"],
+      "muscles": ["triceps", "chest", "shoulders"]
+    },
+    {
+      "exerciseId": "bZq4bwK",
+      "source": "weighted tricep dips",
+      "bodyPart": "upper arms",
+      "equipment": ["weighted"],
+      "muscles": ["triceps", "chest", "shoulders"]
+    },
+    {
+      "exerciseId": "VedGSby",
+      "source": "assisted prone hamstring",
+      "bodyPart": "upper legs",
+      "equipment": ["assisted"],
+      "muscles": ["hamstrings", "glutes", "lower_back"]
+    },
+    {
+      "exerciseId": "E4R8Hz1",
+      "source": "band hip lift",
+      "bodyPart": "upper legs",
+      "equipment": ["band"],
+      "muscles": ["glutes", "hamstrings", "quadriceps"]
+    },
+    {
+      "exerciseId": "VtTbiP3",
+      "source": "band pull through",
+      "bodyPart": "upper legs",
+      "equipment": ["band"],
+      "muscles": ["glutes", "hamstrings", "lower_back"]
+    },
+    {
+      "exerciseId": "TUZLh71",
+      "source": "band squat",
+      "bodyPart": "upper legs",
+      "equipment": ["band"],
+      "muscles": ["glutes", "quadriceps", "hamstrings", "calves"]
+    },
+    {
+      "exerciseId": "w1NOByi",
+      "source": "band squat row",
+      "bodyPart": "upper legs",
+      "equipment": ["band"],
+      "muscles": ["glutes", "hamstrings", "quadriceps", "upper_back"]
+    },
+    {
+      "exerciseId": "d5bTEPV",
+      "source": "band step-up",
+      "bodyPart": "upper legs",
+      "equipment": ["band"],
+      "muscles": ["glutes", "quadriceps", "hamstrings", "calves"]
+    },
+    {
+      "exerciseId": "5VCj6iH",
+      "source": "barbell hack squat",
+      "bodyPart": "upper legs",
+      "equipment": ["barbell"],
+      "muscles": ["glutes", "quadriceps", "hamstrings", "calves"]
+    },
+    {
+      "exerciseId": "1gFNTZV",
+      "source": "barbell jump squat",
+      "bodyPart": "upper legs",
+      "equipment": ["barbell"],
+      "muscles": ["glutes", "quadriceps", "hamstrings", "calves"]
+    },
+    {
+      "exerciseId": "gfk9kD4",
+      "source": "barbell overhead squat",
+      "bodyPart": "upper legs",
+      "equipment": ["barbell"],
+      "muscles": ["quadriceps", "glutes", "hamstrings", "calves", "abs"]
+    },
+    {
+      "exerciseId": "euI1BwR",
+      "source": "barbell speed squat",
+      "bodyPart": "upper legs",
+      "equipment": ["barbell"],
+      "muscles": ["glutes", "quadriceps", "hamstrings", "calves"]
+    },
+    {
+      "exerciseId": "bWlZvXh",
+      "source": "butterfly yoga pose",
+      "bodyPart": "upper legs",
+      "equipment": ["bodyweight"],
+      "muscles": ["adductors", "hamstrings"]
+    },
+    {
+      "exerciseId": "eGDudUV",
+      "source": "cable deadlift",
+      "bodyPart": "upper legs",
+      "equipment": ["cable"],
+      "muscles": ["glutes", "hamstrings", "quadriceps", "lower_back"]
+    },
+    {
+      "exerciseId": "hBGWILP",
+      "source": "cable hip adduction",
+      "bodyPart": "upper legs",
+      "equipment": ["cable"],
+      "muscles": ["adductors", "glutes", "quadriceps"]
+    },
+    {
+      "exerciseId": "mnzcrIB",
+      "source": "dumbbell bench squat",
+      "bodyPart": "upper legs",
+      "equipment": ["dumbbell"],
+      "muscles": ["glutes", "quadriceps", "hamstrings", "calves"]
+    },
+    {
+      "exerciseId": "7Hg55JG",
+      "source": "dumbbell clean",
+      "bodyPart": "upper legs",
+      "equipment": ["dumbbell"],
+      "muscles": ["glutes", "hamstrings", "quadriceps", "calves"]
+    },
+    {
+      "exerciseId": "nUwVh7b",
+      "source": "dumbbell deadlift",
+      "bodyPart": "upper legs",
+      "equipment": ["dumbbell"],
+      "muscles": ["glutes", "hamstrings", "lower_back"]
+    },
+    {
+      "exerciseId": "FkBIE6a",
+      "source": "dumbbell lying femoral",
+      "bodyPart": "upper legs",
+      "equipment": ["dumbbell"],
+      "muscles": ["hamstrings", "glutes"]
+    },
+    {
+      "exerciseId": "S4pwGlc",
+      "source": "dumbbell plyo squat",
+      "bodyPart": "upper legs",
+      "equipment": ["dumbbell"],
+      "muscles": ["glutes", "quadriceps", "hamstrings", "calves"]
+    },
+    {
+      "exerciseId": "rR0LJzx",
+      "source": "dumbbell romanian deadlift",
+      "bodyPart": "upper legs",
+      "equipment": ["dumbbell"],
+      "muscles": ["glutes", "hamstrings", "lower_back"]
+    },
+    {
+      "exerciseId": "HsvHqgf",
+      "source": "dumbbell squat",
+      "bodyPart": "upper legs",
+      "equipment": ["dumbbell"],
+      "muscles": ["glutes", "quadriceps", "hamstrings", "calves"]
+    },
+    {
+      "exerciseId": "aXtJhlg",
+      "source": "dumbbell step-up",
+      "bodyPart": "upper legs",
+      "equipment": ["dumbbell"],
+      "muscles": ["glutes", "quadriceps", "hamstrings", "calves"]
+    },
+    {
+      "exerciseId": "gFyFj9z",
+      "source": "dumbbell step-up lunge",
+      "bodyPart": "upper legs",
+      "equipment": ["dumbbell"],
+      "muscles": ["quadriceps", "glutes", "hamstrings", "calves"]
+    },
+    {
+      "exerciseId": "r5DgrW9",
+      "source": "dumbbell supported squat",
+      "bodyPart": "upper legs",
+      "equipment": ["dumbbell"],
+      "muscles": ["quadriceps", "glutes", "hamstrings", "calves"]
+    },
+    {
+      "exerciseId": "qPEzJjA",
+      "source": "farmers walk",
+      "bodyPart": "upper legs",
+      "equipment": ["dumbbell"],
+      "muscles": ["quadriceps", "calves", "forearm", "abs"]
+    },
+    {
+      "exerciseId": "bdWcbaU",
+      "source": "frankenstein squat",
+      "bodyPart": "upper legs",
+      "equipment": ["barbell"],
+      "muscles": ["glutes", "quadriceps", "hamstrings", "calves"]
+    },
+    {
+      "exerciseId": "99rWm7w",
+      "source": "hamstring stretch",
+      "bodyPart": "upper legs",
+      "equipment": ["bodyweight"],
+      "muscles": ["hamstrings", "glutes"]
+    },
+    {
+      "exerciseId": "DB0n8AG",
+      "source": "kettlebell front squat",
+      "bodyPart": "upper legs",
+      "equipment": ["kettlebell"],
+      "muscles": ["glutes", "quadriceps", "hamstrings", "calves"]
+    },
+    {
+      "exerciseId": "ZA8b5hc",
+      "source": "kettlebell goblet squat",
+      "bodyPart": "upper legs",
+      "equipment": ["kettlebell"],
+      "muscles": ["glutes", "quadriceps", "hamstrings", "calves"]
+    },
+    {
+      "exerciseId": "LHWF7us",
+      "source": "kettlebell hang clean",
+      "bodyPart": "upper legs",
+      "equipment": ["kettlebell"],
+      "muscles": ["hamstrings", "glutes", "quadriceps", "calves"]
+    },
+    {
+      "exerciseId": "5bpPTHv",
+      "source": "kettlebell pistol squat",
+      "bodyPart": "upper legs",
+      "equipment": ["kettlebell"],
+      "muscles": ["glutes", "quadriceps", "hamstrings", "calves"]
+    },
+    {
+      "exerciseId": "UHJlbu3",
+      "source": "kettlebell swing",
+      "bodyPart": "upper legs",
+      "equipment": ["kettlebell"],
+      "muscles": ["glutes", "hamstrings", "abs"]
+    },
+    {
+      "exerciseId": "GUT8I22",
+      "source": "lever deadlift",
+      "bodyPart": "upper legs",
+      "equipment": ["machine"],
+      "muscles": ["glutes", "hamstrings", "quadriceps"]
+    },
+    {
+      "exerciseId": "C31LMnP",
+      "source": "one leg squat",
+      "bodyPart": "upper legs",
+      "equipment": ["bodyweight"],
+      "muscles": ["glutes", "quadriceps", "hamstrings", "calves"]
+    },
+    {
+      "exerciseId": "6YUfHPL",
+      "source": "quads",
+      "bodyPart": "upper legs",
+      "equipment": ["bodyweight"],
+      "muscles": ["quadriceps", "hamstrings", "glutes"]
+    },
+    {
+      "exerciseId": "2Dk4xQV",
+      "source": "rocking frog stretch",
+      "bodyPart": "upper legs",
+      "equipment": ["bodyweight"],
+      "muscles": ["glutes", "hamstrings", "quadriceps"]
+    },
+    {
+      "exerciseId": "oMypNrz",
+      "source": "roller hip stretch",
+      "bodyPart": "upper legs",
+      "equipment": ["foam_roller"],
+      "muscles": ["glutes", "hamstrings", "quadriceps"]
+    },
+    {
+      "exerciseId": "0mB6wHO",
+      "source": "runners stretch",
+      "bodyPart": "upper legs",
+      "equipment": ["bodyweight"],
+      "muscles": ["hamstrings", "calves", "quadriceps"]
+    },
+    {
+      "exerciseId": "DeDThfG",
+      "source": "seated glute stretch",
+      "bodyPart": "upper legs",
+      "equipment": ["bodyweight"],
+      "muscles": ["glutes", "hamstrings"]
+    },
+    {
+      "exerciseId": "7WaDzyL",
+      "source": "side hip abduction",
+      "bodyPart": "upper legs",
+      "equipment": ["bodyweight"],
+      "muscles": ["glutes", "quadriceps"]
+    },
+    {
+      "exerciseId": "DoEYq4s",
+      "source": "sissy squat isolation",
+      "bodyPart": "upper legs",
+      "equipment": ["bodyweight"],
+      "muscles": ["quadriceps", "calves", "glutes"]
+    },
+    {
+      "exerciseId": "Qa55kX1",
+      "source": "sled hack squat",
+      "bodyPart": "upper legs",
+      "equipment": ["machine"],
+      "muscles": ["glutes", "quadriceps", "hamstrings", "calves"]
+    },
+    {
+      "exerciseId": "9n2149Z",
+      "source": "sled lying squat",
+      "bodyPart": "upper legs",
+      "equipment": ["machine"],
+      "muscles": ["glutes", "quadriceps", "hamstrings", "calves"]
+    },
+    {
+      "exerciseId": "Gu2rNJd",
+      "source": "smith chair squat",
+      "bodyPart": "upper legs",
+      "equipment": ["smith_machine"],
+      "muscles": ["quadriceps", "glutes", "hamstrings", "calves"]
+    },
+    {
+      "exerciseId": "UfePqpx",
+      "source": "smith deadlift",
+      "bodyPart": "upper legs",
+      "equipment": ["smith_machine"],
+      "muscles": ["glutes", "hamstrings", "quadriceps", "lower_back"]
+    },
+    {
+      "exerciseId": "NNoHCEA",
+      "source": "smith full squat",
+      "bodyPart": "upper legs",
+      "equipment": ["smith_machine"],
+      "muscles": ["glutes", "quadriceps", "hamstrings", "calves"]
+    },
+    {
+      "exerciseId": "ZuPXtCK",
+      "source": "smith hack squat",
+      "bodyPart": "upper legs",
+      "equipment": ["smith_machine"],
+      "muscles": ["glutes", "quadriceps", "hamstrings", "calves"]
+    },
+    {
+      "exerciseId": "7zdxRTl",
+      "source": "smith leg press",
+      "bodyPart": "upper legs",
+      "equipment": ["smith_machine"],
+      "muscles": ["glutes", "quadriceps", "hamstrings", "calves"]
+    },
+    {
+      "exerciseId": "HsjbB1z",
+      "source": "smith sprint lunge",
+      "bodyPart": "upper legs",
+      "equipment": ["smith_machine"],
+      "muscles": ["glutes", "quadriceps", "hamstrings", "calves"]
+    },
+    {
+      "exerciseId": "jFtipLl",
+      "source": "smith squat",
+      "bodyPart": "upper legs",
+      "equipment": ["smith_machine"],
+      "muscles": ["glutes", "quadriceps", "hamstrings", "calves"]
+    },
+    {
+      "exerciseId": "dzz6BiV",
+      "source": "smith sumo squat",
+      "bodyPart": "upper legs",
+      "equipment": ["smith_machine"],
+      "muscles": ["glutes", "quadriceps", "hamstrings", "calves"]
+    },
+    {
+      "exerciseId": "dG5Smob",
+      "source": "snatch pull",
+      "bodyPart": "upper legs",
+      "equipment": ["barbell"],
+      "muscles": ["quadriceps", "hamstrings", "glutes", "calves"]
+    },
+    {
+      "exerciseId": "9E25EOx",
+      "source": "split squats",
+      "bodyPart": "upper legs",
+      "equipment": ["bodyweight"],
+      "muscles": ["quadriceps", "glutes", "hamstrings", "calves"]
+    },
+    {
+      "exerciseId": "IMRsOCn",
+      "source": "squat jerk",
+      "bodyPart": "upper legs",
+      "equipment": ["barbell"],
+      "muscles": ["quadriceps", "glutes", "hamstrings", "calves", "abs"]
+    },
+    {
+      "exerciseId": "jQGwmxN",
+      "source": "trap bar deadlift",
+      "bodyPart": "upper legs",
+      "equipment": ["barbell"],
+      "muscles": ["glutes", "hamstrings", "quadriceps", "lower_back"]
+    },
+    {
+      "exerciseId": "AX1kB0o",
+      "source": "twist hip lift",
+      "bodyPart": "upper legs",
+      "equipment": ["bodyweight"],
+      "muscles": ["glutes", "abs", "hamstrings"]
+    },
+    {
+      "exerciseId": "0lQnxMZ",
+      "source": "weighted sissy squat",
+      "bodyPart": "upper legs",
+      "equipment": ["weighted"],
+      "muscles": ["quadriceps", "glutes", "hamstrings", "calves"]
+    },
+    {
+      "exerciseId": "JZuApnB",
+      "source": "weighted squat",
+      "bodyPart": "upper legs",
+      "equipment": ["weighted"],
+      "muscles": ["glutes", "quadriceps", "hamstrings", "calves"]
+    },
+    {
+      "exerciseId": "13VW2VO",
+      "source": "weighted stretch lunge",
+      "bodyPart": "upper legs",
+      "equipment": ["weighted"],
+      "muscles": ["glutes", "quadriceps", "hamstrings", "calves"]
+    },
+    {
+      "exerciseId": "DFGXwZr",
+      "source": "world greatest stretch",
+      "bodyPart": "upper legs",
+      "equipment": ["bodyweight"],
+      "muscles": ["hamstrings", "glutes", "quadriceps", "calves"]
+    },
+    {
+      "exerciseId": "2gPfomN",
+      "source": "3/4 sit-up",
+      "bodyPart": "waist",
+      "equipment": ["bodyweight"],
+      "muscles": ["abs", "quadriceps", "lower_back"]
+    },
+    {
+      "exerciseId": "1ZFqTDN",
+      "source": "air bike",
+      "bodyPart": "waist",
+      "equipment": ["bodyweight"],
+      "muscles": ["abs", "quadriceps"]
+    },
+    {
+      "exerciseId": "aumB2IV",
+      "source": "assisted sit-up",
+      "bodyPart": "waist",
+      "equipment": ["assisted"],
+      "muscles": ["abs", "quadriceps"]
+    },
+    {
+      "exerciseId": "tZkGYZ9",
+      "source": "band bicycle crunch",
+      "bodyPart": "waist",
+      "equipment": ["band"],
+      "muscles": ["abs", "quadriceps"]
+    },
+    {
+      "exerciseId": "zFzbBfL",
+      "source": "band push sit-up",
+      "bodyPart": "waist",
+      "equipment": ["band"],
+      "muscles": ["abs", "shoulders", "chest"]
+    },
+    {
+      "exerciseId": "S1JXDAG",
+      "source": "band seated twist",
+      "bodyPart": "waist",
+      "equipment": ["band"],
+      "muscles": ["abs"]
+    },
+    {
+      "exerciseId": "Kzg30R7",
+      "source": "band standing crunch",
+      "bodyPart": "waist",
+      "equipment": ["band"],
+      "muscles": ["abs"]
+    },
+    {
+      "exerciseId": "H6ETwO9",
+      "source": "band v-up",
+      "bodyPart": "waist",
+      "equipment": ["band"],
+      "muscles": ["abs", "quadriceps"]
+    },
+    {
+      "exerciseId": "wnEscH8",
+      "source": "barbell press sit-up",
+      "bodyPart": "waist",
+      "equipment": ["barbell"],
+      "muscles": ["abs", "shoulders", "chest"]
+    },
+    {
+      "exerciseId": "7M66AVi",
+      "source": "barbell rollerout",
+      "bodyPart": "waist",
+      "equipment": ["barbell"],
+      "muscles": ["abs", "lower_back"]
+    },
+    {
+      "exerciseId": "dFSNDOA",
+      "source": "barbell seated twist",
+      "bodyPart": "waist",
+      "equipment": ["barbell"],
+      "muscles": ["abs", "lower_back"]
+    },
+    {
+      "exerciseId": "CI6baTY",
+      "source": "bottoms-up",
+      "bodyPart": "waist",
+      "equipment": ["bodyweight"],
+      "muscles": ["abs", "quadriceps"]
+    },
+    {
+      "exerciseId": "MvQPqVW",
+      "source": "cable judo flip",
+      "bodyPart": "waist",
+      "equipment": ["cable"],
+      "muscles": ["abs", "shoulders"]
+    },
+    {
+      "exerciseId": "RqOtqD7",
+      "source": "cable reverse crunch",
+      "bodyPart": "waist",
+      "equipment": ["cable"],
+      "muscles": ["abs", "quadriceps"]
+    },
+    {
+      "exerciseId": "8xUv4J7",
+      "source": "cable seated crunch",
+      "bodyPart": "waist",
+      "equipment": ["cable"],
+      "muscles": ["abs"]
+    },
+    {
+      "exerciseId": "UEjSrKI",
+      "source": "cable seated twist",
+      "bodyPart": "waist",
+      "equipment": ["cable"],
+      "muscles": ["abs"]
+    },
+    {
+      "exerciseId": "wPypxFY",
+      "source": "cable side bend",
+      "bodyPart": "waist",
+      "equipment": ["cable"],
+      "muscles": ["abs"]
+    },
+    {
+      "exerciseId": "q2ADGqV",
+      "source": "cable side crunch",
+      "bodyPart": "waist",
+      "equipment": ["cable"],
+      "muscles": ["abs"]
+    },
+    {
+      "exerciseId": "qFpAkpP",
+      "source": "cable standing lift",
+      "bodyPart": "waist",
+      "equipment": ["cable"],
+      "muscles": ["abs", "lower_back"]
+    },
+    {
+      "exerciseId": "aVs3BR3",
+      "source": "cable twist",
+      "bodyPart": "waist",
+      "equipment": ["cable"],
+      "muscles": ["abs"]
+    },
+    {
+      "exerciseId": "7i4msxz",
+      "source": "cocoons with mega",
+      "bodyPart": "waist",
+      "equipment": ["bodyweight"],
+      "muscles": ["abs", "quadriceps", "lower_back"]
+    },
+    {
+      "exerciseId": "9Ap7miY",
+      "source": "decline crunch",
+      "bodyPart": "waist",
+      "equipment": ["bodyweight"],
+      "muscles": ["abs", "quadriceps"]
+    },
+    {
+      "exerciseId": "IpONWYv",
+      "source": "dumbbell side bend",
+      "bodyPart": "waist",
+      "equipment": ["dumbbell"],
+      "muscles": ["abs"]
+    },
+    {
+      "exerciseId": "bmwlYvD",
+      "source": "gorilla chin",
+      "bodyPart": "waist",
+      "equipment": ["bodyweight"],
+      "muscles": ["abs", "forearm", "biceps"]
+    },
+    {
+      "exerciseId": "1GPHRyK",
+      "source": "janda sit-up",
+      "bodyPart": "waist",
+      "equipment": ["bodyweight"],
+      "muscles": ["abs", "quadriceps", "lower_back"]
+    },
+    {
+      "exerciseId": "L4ay0PW",
+      "source": "kettlebell figure 8",
+      "bodyPart": "waist",
+      "equipment": ["kettlebell"],
+      "muscles": ["abs", "shoulders", "forearm"]
+    },
+    {
+      "exerciseId": "9Tkqa9O",
+      "source": "kettlebell windmill",
+      "bodyPart": "waist",
+      "equipment": ["kettlebell"],
+      "muscles": ["abs", "shoulders"]
+    },
+    {
+      "exerciseId": "QYysSLV",
+      "source": "landmine 180",
+      "bodyPart": "waist",
+      "equipment": ["barbell"],
+      "muscles": ["abs", "quadriceps"]
+    },
+    {
+      "exerciseId": "sZOR9EV",
+      "source": "lever kneeling twist",
+      "bodyPart": "waist",
+      "equipment": ["machine"],
+      "muscles": ["abs", "lower_back"]
+    },
+    {
+      "exerciseId": "Wgaz7pm",
+      "source": "lever seated crunch",
+      "bodyPart": "waist",
+      "equipment": ["machine"],
+      "muscles": ["abs"]
+    },
+    {
+      "exerciseId": "9IxJdtC",
+      "source": "lying leg-hip raise",
+      "bodyPart": "waist",
+      "equipment": ["bodyweight"],
+      "muscles": ["abs", "quadriceps"]
+    },
+    {
+      "exerciseId": "UVL20oz",
+      "source": "otis up",
+      "bodyPart": "waist",
+      "equipment": ["weighted"],
+      "muscles": ["abs", "quadriceps", "lower_back"]
+    },
+    {
+      "exerciseId": "75Bgtjy",
+      "source": "potty squat",
+      "bodyPart": "waist",
+      "equipment": ["bodyweight"],
+      "muscles": ["abs", "quadriceps", "glutes"]
+    },
+    {
+      "exerciseId": "XeMvLgE",
+      "source": "roller body saw",
+      "bodyPart": "waist",
+      "equipment": ["foam_roller"],
+      "muscles": ["abs", "shoulders", "triceps"]
+    },
+    {
+      "exerciseId": "CqhoytW",
+      "source": "smith hip raise",
+      "bodyPart": "waist",
+      "equipment": ["smith_machine"],
+      "muscles": ["abs", "glutes", "hamstrings"]
+    },
+    {
+      "exerciseId": "p9cCe2r",
+      "source": "spell caster",
+      "bodyPart": "waist",
+      "equipment": ["dumbbell"],
+      "muscles": ["abs", "lower_back"]
+    },
+    {
+      "exerciseId": "2jl9K55",
+      "source": "spine twist",
+      "bodyPart": "waist",
+      "equipment": ["bodyweight"],
+      "muscles": ["abs", "lower_back"]
+    },
+    {
+      "exerciseId": "BL3GHeY",
+      "source": "straddle planche",
+      "bodyPart": "waist",
+      "equipment": ["bodyweight"],
+      "muscles": ["abs", "shoulders", "triceps", "chest"]
+    },
+    {
+      "exerciseId": "BMMolZ3",
+      "source": "tuck crunch",
+      "bodyPart": "waist",
+      "equipment": ["bodyweight"],
+      "muscles": ["abs", "quadriceps"]
+    },
+    {
+      "exerciseId": "C0eCeEt",
+      "source": "twisted leg raise",
+      "bodyPart": "waist",
+      "equipment": ["bodyweight"],
+      "muscles": ["abs", "quadriceps"]
+    },
+    {
+      "exerciseId": "s8nrDXF",
+      "source": "weighted crunch",
+      "bodyPart": "waist",
+      "equipment": ["weighted"],
+      "muscles": ["abs"]
+    },
+    {
+      "exerciseId": "VBAWRPG",
+      "source": "weighted front plank",
+      "bodyPart": "waist",
+      "equipment": ["weighted"],
+      "muscles": ["abs", "shoulders", "lower_back"]
+    }
+  ]
+}

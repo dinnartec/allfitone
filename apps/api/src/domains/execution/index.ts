@@ -1,9 +1,3 @@
-/**
- * Public interface of the execution domain.
- *
- * Everything outside this module reaches execution through here and nowhere else — the
- * boundary rules enforce it.
- */
-
-export { spaceExecutionRoutes } from './handlers/space-executions.js'
-export type { ExecutionService } from './application/sessions.js'
+export { spaceExecutionRoutes } from './handlers/space.js'
+export { spaceExecutionService, setSpaceExecutionService } from './dependencies.js'
+export type { SpaceExecutionService, Execution, WeekSummary } from './application/index.js'

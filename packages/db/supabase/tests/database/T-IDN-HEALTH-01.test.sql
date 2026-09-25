@@ -508,7 +508,7 @@ select is(
 create temporary table weighed on commit drop as
 select * from identity.record_body_progress(
   'workos', 'https://issuer.test', 'subject_health', '019b6000-0000-7000-8000-000000000551',
-  'weight', 70, 'kg', current_date, gen_random_uuid(), extensions.gen_random_bytes(32)
+  'body_weight', 70, 'kg', current_date, gen_random_uuid(), extensions.gen_random_bytes(32)
 );
 
 create temporary table unweighed on commit drop as

@@ -128,17 +128,18 @@ $fn$;
 select results_eq(
   $$ select code, dimension from identity.body_progress_metrics order by code $$,
   $$ values ('arm'::text, 'length'::text), ('body_fat'::text, 'ratio'::text),
+            ('body_height'::text, 'length'::text), ('body_weight'::text, 'mass'::text),
             ('chest'::text, 'length'::text), ('hip'::text, 'length'::text),
             ('muscle_mass'::text, 'mass'::text), ('thigh'::text, 'length'::text),
-            ('waist'::text, 'length'::text), ('weight'::text, 'mass'::text) $$,
-  'eight measurements, each of one dimension'
+            ('waist'::text, 'length'::text) $$,
+  'nine measurements, each of one dimension'
 );
 
 select results_eq(
   $$ select dimension, code from catalog.units
      where is_canonical and dimension in ('mass', 'length', 'ratio') order by dimension $$,
-  $$ values ('length'::text, 'm'::text), ('mass'::text, 'kg'::text), ('ratio'::text, 'percent'::text) $$,
-  'each dimension has one canonical unit, SI where there is one'
+  $$ values ('length'::text, 'cm'::text), ('mass'::text, 'kg'::text), ('ratio'::text, 'percent'::text) $$,
+  'each dimension has exactly one canonical unit'
 );
 
 -- ---------------------------------------------------------------------------
@@ -147,7 +148,7 @@ select results_eq(
 
 create temporary table first_weight on commit drop as
 select * from pg_temp.record(
-  'subject_body', '019b5000-0000-7000-8000-000000000501', 'weight', 80, 'kg',
+  'subject_body', '019b5000-0000-7000-8000-000000000501', 'body_weight', 80, 'kg',
   current_date - 3, 'a0000000-0000-4000-8000-000000000501', decode(repeat('51', 32), 'hex')
 );
 
@@ -155,7 +156,7 @@ select results_eq(
   $$ select result->>'metric_code', (result->>'value')::numeric, result->>'unit_code',
             result->'original_value', result->'original_unit_code', result->'has_media', replayed
      from first_weight $$,
-  $$ values ('weight'::text, 80::numeric, 'kg'::text, 'null'::jsonb, 'null'::jsonb,
+  $$ values ('body_weight'::text, 80::numeric, 'kg'::text, 'null'::jsonb, 'null'::jsonb,
              'false'::jsonb, false) $$,
   'a weight in kilograms is stored as it came, with no original to keep'
 );
@@ -170,7 +171,7 @@ select is(
 select results_eq(
   $$ select (result->>'value')::numeric, result->>'unit_code',
             (result->>'original_value')::numeric, result->>'original_unit_code'
-     from pg_temp.record('subject_body', '019b5000-0000-7000-8000-000000000502', 'weight',
+     from pg_temp.record('subject_body', '019b5000-0000-7000-8000-000000000502', 'body_weight',
        176.37, 'lb', current_date - 2) $$,
   $$ values (80.000::numeric, 'kg'::text, 176.37::numeric, 'lb'::text) $$,
   'pounds are kept as written and stored in kilograms'
@@ -179,30 +180,30 @@ select results_eq(
 select results_eq(
   $$ select (result->>'value')::numeric, result->>'unit_code', result->>'original_unit_code'
      from pg_temp.record('subject_body', '019b5000-0000-7000-8000-000000000503', 'waist',
-       82, 'cm', current_date - 1) $$,
-  $$ values (0.820::numeric, 'm'::text, 'cm'::text) $$,
-  'a waist in centimetres is stored in metres'
+       32, 'in', current_date - 1) $$,
+  $$ values (81.280::numeric, 'cm'::text, 'in'::text) $$,
+  'a waist in inches is kept as written and stored in centimetres'
 );
 
 select results_eq(
   $$ select result->>'metric_code', replayed
-     from pg_temp.record('subject_body', '019b5000-0000-7000-8000-000000000501', 'weight', 80,
+     from pg_temp.record('subject_body', '019b5000-0000-7000-8000-000000000501', 'body_weight', 80,
        'kg', current_date - 3, 'a0000000-0000-4000-8000-000000000501',
        decode(repeat('51', 32), 'hex')) $$,
-  $$ values ('weight'::text, true) $$,
+  $$ values ('body_weight'::text, true) $$,
   'a retried recording answers the same record instead of a second one'
 );
 
 select throws_ok(
   $$ select * from pg_temp.record('subject_body', '019b5000-0000-7000-8000-000000000501',
-       'weight', 81, 'kg', current_date - 3, 'a0000000-0000-4000-8000-000000000501',
+       'body_weight', 81, 'kg', current_date - 3, 'a0000000-0000-4000-8000-000000000501',
        decode(repeat('52', 32), 'hex')) $$,
   '23505', null,
   'the same key with a different measurement is a conflict, not a correction'
 );
 
 select throws_ok(
-  $$ select * from pg_temp.record('subject_body', extensions.uuid_generate_v7(), 'weight', 80,
+  $$ select * from pg_temp.record('subject_body', extensions.uuid_generate_v7(), 'body_weight', 80,
        'cm', current_date) $$,
   '22023', null,
   'a weight is not measured in centimetres'
@@ -216,7 +217,7 @@ select throws_ok(
 );
 
 select throws_ok(
-  $$ select * from pg_temp.record('subject_body', extensions.uuid_generate_v7(), 'weight', 0,
+  $$ select * from pg_temp.record('subject_body', extensions.uuid_generate_v7(), 'body_weight', 0,
        'kg', current_date) $$,
   '22023', null,
   'a measurement is positive'
@@ -230,28 +231,28 @@ select throws_ok(
 );
 
 select throws_ok(
-  $$ select * from pg_temp.record('subject_body', extensions.uuid_generate_v7(), 'weight', 80,
+  $$ select * from pg_temp.record('subject_body', extensions.uuid_generate_v7(), 'body_weight', 80,
        'kg', current_date + 5) $$,
   '22023', null,
   'nobody measured themselves next week'
 );
 
 select throws_ok(
-  $$ select * from pg_temp.record('nobody_body', extensions.uuid_generate_v7(), 'weight', 80,
+  $$ select * from pg_temp.record('nobody_body', extensions.uuid_generate_v7(), 'body_weight', 80,
        'kg', current_date) $$,
   '42501', null,
   'a token that resolves to no account records nothing'
 );
 
 select throws_ok(
-  $$ select * from pg_temp.record('pending_body', extensions.uuid_generate_v7(), 'weight', 80,
+  $$ select * from pg_temp.record('pending_body', extensions.uuid_generate_v7(), 'body_weight', 80,
        'kg', current_date) $$,
   '42501', null,
   'nor does an account without a Fitness ID'
 );
 
 select throws_ok(
-  $$ select * from pg_temp.record('closed_body', extensions.uuid_generate_v7(), 'weight', 80,
+  $$ select * from pg_temp.record('closed_body', extensions.uuid_generate_v7(), 'body_weight', 80,
        'kg', current_date) $$,
   '42501', null,
   'nor a closed person'
@@ -277,7 +278,7 @@ select throws_ok(
   $$ insert into identity.body_progress_records (
        id, person_id, metric_code, value_numeric, unit_code, measured_on, media_ref, has_media
      ) values (
-       extensions.uuid_generate_v7(), '019b5000-0000-7000-8000-000000000001', 'weight', 80, 'kg',
+       extensions.uuid_generate_v7(), '019b5000-0000-7000-8000-000000000001', 'body_weight', 80, 'kg',
        current_date, 'photos/1', false
      ) $$,
   '23514', null,
@@ -295,7 +296,7 @@ select throws_ok(
 -- Reading my own
 -- ---------------------------------------------------------------------------
 
-select * from pg_temp.record('other_body', '019b5000-0000-7000-8000-000000000601', 'weight', 60,
+select * from pg_temp.record('other_body', '019b5000-0000-7000-8000-000000000601', 'body_weight', 60,
   'kg', current_date);
 
 select results_eq(
@@ -603,12 +604,12 @@ select throws_ok(
 -- ---------------------------------------------------------------------------
 
 select ok(
-  not has_table_privilege('allfit_api', 'identity.body_progress_records', 'SELECT, INSERT, UPDATE, DELETE')
+  not has_table_privilege('allfit_api', 'identity.body_progress_records', 'INSERT, UPDATE, DELETE')
   and not has_table_privilege('allfit_api', 'privacy.disposition_cases', 'SELECT, INSERT, UPDATE, DELETE')
   and not has_table_privilege('allfit_api', 'privacy.disposition_items', 'SELECT, INSERT, UPDATE, DELETE')
   and not has_table_privilege('allfit_api', 'privacy.disposition_events', 'SELECT, INSERT, UPDATE, DELETE')
   and not has_table_privilege('allfit_api', 'privacy.retention_policies', 'SELECT, INSERT, UPDATE, DELETE'),
-  'the runtime touches no measurement and no disposition table'
+  'the runtime writes no measurement and reaches no disposition table'
 );
 
 select ok(

@@ -148,7 +148,14 @@ beforeEach(() => {
 describe('Backoffice account recovery API contract', () => {
   test('T-IDN-RECOVERY-API-01 mounts NEW-IDN-ACTION and OP-IDN-046..048 with their contract methods', () => {
     const contract = allfitV1ContractManifest.operations
-      .filter((operation) => OPERATIONS.includes(operation.allfitOperation))
+      // Space reused these four numbers for onboarding operations. The operations
+      // matrix assigns them here, so the surface is part of the filter until that
+      // clash is settled in the matrix.
+      .filter(
+        (operation) =>
+          OPERATIONS.includes(operation.allfitOperation) &&
+          operation.path.startsWith('/backoffice/v1/'),
+      )
       .map((operation) => `${operation.method} ${colonPath(operation.path)}`)
       .sort()
     const mounted = backofficeAccountRecoveryRoutes()

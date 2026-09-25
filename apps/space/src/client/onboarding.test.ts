@@ -44,6 +44,14 @@ const IDENTITY = {
 function flowWith(transport: Partial<OnboardingTransport> = {}) {
   const sent: Array<{ idempotencyKey: string; declaredAdult: boolean }> = []
   const declared: Array<{ idempotencyKey: string; username: string }> = []
+  const sexes: Array<{ idempotencyKey: string; value: string | null }> = []
+  const goals: Array<{ idempotencyKey: string; value: string }> = []
+  const focuses: Array<{ idempotencyKey: string; value: string[] }> = []
+  const disciplines: Array<{ idempotencyKey: string; value: string }> = []
+  const levels: Array<{ idempotencyKey: string; value: string }> = []
+  const measures: Array<{ idempotencyKey: string; metric: string; value: number }> = []
+  const skips: string[] = []
+  const activations: Array<{ idempotencyKey: string; name: string }> = []
   let issued = 0
 
   const flow = createOnboardingFlow({
@@ -57,7 +65,72 @@ function flowWith(transport: Partial<OnboardingTransport> = {}) {
         declared.push({ idempotencyKey: command.idempotencyKey, username: identity.username })
         return identity
       },
-      readCurrent: async () => ({ attempt: ATTEMPT, identity: null }),
+      declareBiologicalSex: async (command, _attemptId, biologicalSex) => {
+        sexes.push({ idempotencyKey: command.idempotencyKey, value: biologicalSex })
+        return biologicalSex
+      },
+      declareTrainingGoal: async (command, goal) => {
+        goals.push({ idempotencyKey: command.idempotencyKey, value: goal })
+        return {
+          attribute_code: 'primary_training_goal' as const,
+          value_text: goal,
+          superseded_claim_id: null,
+        }
+      },
+      declareFocusAreas: async (command, areas) => {
+        focuses.push({ idempotencyKey: command.idempotencyKey, value: [...areas] })
+        return areas
+      },
+      declareTrainingDiscipline: async (command, discipline) => {
+        disciplines.push({ idempotencyKey: command.idempotencyKey, value: discipline })
+        return {
+          attribute_code: 'training_discipline' as const,
+          value_text: discipline,
+          superseded_claim_id: null,
+        }
+      },
+      declareTrainingExperience: async (command, level) => {
+        levels.push({ idempotencyKey: command.idempotencyKey, value: level })
+        return {
+          attribute_code: 'training_experience' as const,
+          value_text: level,
+          superseded_claim_id: null,
+        }
+      },
+      recordBodyProgress: async (command, declaration) => {
+        measures.push({
+          idempotencyKey: command.idempotencyKey,
+          metric: declaration.metric_code,
+          value: declaration.value,
+        })
+        return {
+          id: '019fe000-0000-7000-8000-000000000001',
+          metric_code: declaration.metric_code,
+          value: declaration.value,
+          unit: declaration.unit,
+          original_value: null,
+          original_unit: null,
+        }
+      },
+      skipStep: async (_attemptId, stepCode) => {
+        skips.push(stepCode)
+      },
+      complete: async (command, _attemptId, completion) => {
+        activations.push({ idempotencyKey: command.idempotencyKey, name: completion.given_name })
+        return { person_id: '019ff100-0000-7000-8000-000000000001' }
+      },
+      readCurrent: async () => ({
+        attempt: ATTEMPT,
+        answers: {
+          identity: { answered: false, value: null },
+          biological_sex: { answered: false, value: null },
+          training_discipline: { answered: false, value: null },
+          primary_training_goal: { answered: false, value: null },
+          focus_areas: { answered: false, value: [] },
+          training_experience: { answered: false, value: null },
+          body_measures: { answered: false, value: null },
+        },
+      }),
       ...transport,
     },
     newCommand: () => {
@@ -66,7 +139,19 @@ function flowWith(transport: Partial<OnboardingTransport> = {}) {
     },
   })
 
-  return { flow, sent, declared }
+  return {
+    flow,
+    sent,
+    declared,
+    sexes,
+    goals,
+    focuses,
+    disciplines,
+    levels,
+    measures,
+    skips,
+    activations,
+  }
 }
 
 describe('declareAdult', () => {
@@ -217,10 +302,32 @@ describe('createFitnessId', () => {
 describe('resume', () => {
   test('returns what the server already holds', async () => {
     const { flow } = flowWith({
-      readCurrent: async () => ({ attempt: ATTEMPT, identity: IDENTITY }),
+      readCurrent: async () => ({
+        attempt: ATTEMPT,
+        answers: {
+          identity: { answered: true, value: IDENTITY },
+          biological_sex: { answered: false, value: null },
+          training_discipline: { answered: false, value: null },
+          primary_training_goal: { answered: false, value: null },
+          focus_areas: { answered: false, value: [] },
+          training_experience: { answered: false, value: null },
+          body_measures: { answered: false, value: null },
+        },
+      }),
     })
 
-    expect(await flow.resume()).toEqual({ attempt: ATTEMPT, identity: IDENTITY })
+    expect(await flow.resume()).toEqual({
+      attempt: ATTEMPT,
+      answers: {
+        identity: { answered: true, value: IDENTITY },
+        biological_sex: { answered: false, value: null },
+        training_discipline: { answered: false, value: null },
+        primary_training_goal: { answered: false, value: null },
+        focus_areas: { answered: false, value: [] },
+        training_experience: { answered: false, value: null },
+        body_measures: { answered: false, value: null },
+      },
+    })
   })
 
   test('adopts the open attempt instead of starting a second one', async () => {
@@ -230,7 +337,18 @@ describe('resume', () => {
         starts += 1
         return ATTEMPT
       },
-      readCurrent: async () => ({ attempt: ATTEMPT, identity: null }),
+      readCurrent: async () => ({
+        attempt: ATTEMPT,
+        answers: {
+          identity: { answered: false, value: null },
+          biological_sex: { answered: false, value: null },
+          training_discipline: { answered: false, value: null },
+          primary_training_goal: { answered: false, value: null },
+          focus_areas: { answered: false, value: [] },
+          training_experience: { answered: false, value: null },
+          body_measures: { answered: false, value: null },
+        },
+      }),
     })
 
     await flow.resume()
@@ -246,11 +364,537 @@ describe('resume', () => {
         starts += 1
         return ATTEMPT
       },
-      readCurrent: async () => ({ attempt: null, identity: null }),
+      readCurrent: async () => ({
+        attempt: null,
+        answers: {
+          identity: { answered: false, value: null },
+          biological_sex: { answered: false, value: null },
+          training_discipline: { answered: false, value: null },
+          primary_training_goal: { answered: false, value: null },
+          focus_areas: { answered: false, value: [] },
+          training_experience: { answered: false, value: null },
+          body_measures: { answered: false, value: null },
+        },
+      }),
     })
 
     await flow.resume()
     await flow.createFitnessId(IDENTITY)
+
+    expect(starts).toBe(1)
+  })
+})
+
+describe('declareBiologicalSex', () => {
+  test('sends the value the person chose', async () => {
+    const { flow, sexes } = flowWith()
+
+    await expect(flow.declareBiologicalSex('female')).resolves.toBe('female')
+    expect(sexes.map((entry) => entry.value)).toEqual(['female'])
+  })
+
+  test('reuses the key while the same answer keeps failing', async () => {
+    let attempts = 0
+    const keys: string[] = []
+    const { flow } = flowWith({
+      declareBiologicalSex: async (command, _attemptId, value) => {
+        keys.push(command.idempotencyKey)
+        attempts += 1
+        if (attempts === 1) throw new Error('network')
+        return value
+      },
+    })
+
+    await expect(flow.declareBiologicalSex('male')).rejects.toThrow('network')
+    await expect(flow.declareBiologicalSex('male')).resolves.toBe('male')
+
+    expect(keys).toHaveLength(2)
+    expect(keys[0]).toBe(keys[1])
+  })
+
+  test('starts a new submission when the answer changes', async () => {
+    const keys: string[] = []
+    const { flow } = flowWith({
+      declareBiologicalSex: async (command) => {
+        keys.push(command.idempotencyKey)
+        throw new Error('network')
+      },
+    })
+
+    await expect(flow.declareBiologicalSex('male')).rejects.toThrow('network')
+    await expect(flow.declareBiologicalSex('female')).rejects.toThrow('network')
+
+    // A corrected answer must not reuse a key the server already hashed against
+    // the previous body: that would come back as a conflict.
+    expect(keys[0]).not.toBe(keys[1])
+  })
+
+  test('discards the key once it lands, so a later change is a new command', async () => {
+    const keys: string[] = []
+    const { flow } = flowWith({
+      declareBiologicalSex: async (command, _attemptId, value) => {
+        keys.push(command.idempotencyKey)
+        return value
+      },
+    })
+
+    await flow.declareBiologicalSex('male')
+    await flow.declareBiologicalSex('male')
+
+    expect(keys[0]).not.toBe(keys[1])
+  })
+})
+
+describe('declareTrainingGoal', () => {
+  test('sends the goal the person chose, without opening an attempt for it', async () => {
+    const { flow, goals } = flowWith({
+      startAttempt: async () => {
+        throw new Error('the goal must not need an attempt')
+      },
+    })
+
+    const claim = await flow.declareTrainingGoal('build_muscle')
+
+    expect(claim.value_text).toBe('build_muscle')
+    expect(goals.map((entry) => entry.value)).toEqual(['build_muscle'])
+  })
+
+  test('reuses the key while the same answer keeps failing', async () => {
+    let attempts = 0
+    const keys: string[] = []
+    const { flow } = flowWith({
+      declareTrainingGoal: async (command, goal) => {
+        keys.push(command.idempotencyKey)
+        attempts += 1
+        if (attempts === 1) throw new Error('network')
+        return {
+          attribute_code: 'primary_training_goal' as const,
+          value_text: goal,
+          superseded_claim_id: null,
+        }
+      },
+    })
+
+    await expect(flow.declareTrainingGoal('get_fit')).rejects.toThrow('network')
+    await expect(flow.declareTrainingGoal('get_fit')).resolves.toMatchObject({
+      value_text: 'get_fit',
+    })
+
+    // One lost response must replay, not record a second goal.
+    expect(keys).toHaveLength(2)
+    expect(keys[0]).toBe(keys[1])
+  })
+
+  test('starts a new submission when the answer changes', async () => {
+    const keys: string[] = []
+    const { flow } = flowWith({
+      declareTrainingGoal: async (command) => {
+        keys.push(command.idempotencyKey)
+        throw new Error('network')
+      },
+    })
+
+    await expect(flow.declareTrainingGoal('lose_weight')).rejects.toThrow('network')
+    await expect(flow.declareTrainingGoal('maintain')).rejects.toThrow('network')
+
+    // The server hashes the body against the key, so reusing it with a different
+    // goal comes back as a conflict rather than a correction.
+    expect(keys[0]).not.toBe(keys[1])
+  })
+
+  test('discards the key once it lands, so a later correction is its own command', async () => {
+    const keys: string[] = []
+    const { flow } = flowWith({
+      declareTrainingGoal: async (command, goal) => {
+        keys.push(command.idempotencyKey)
+        return {
+          attribute_code: 'primary_training_goal' as const,
+          value_text: goal,
+          superseded_claim_id: null,
+        }
+      },
+    })
+
+    await flow.declareTrainingGoal('run_a_race')
+    await flow.declareTrainingGoal('run_a_race')
+
+    expect(keys[0]).not.toBe(keys[1])
+  })
+})
+
+describe('declareFocusAreas', () => {
+  test('sends the whole set, and needs no attempt for it', async () => {
+    const { flow, focuses } = flowWith({
+      startAttempt: async () => {
+        throw new Error('the emphasis must not need an attempt')
+      },
+    })
+
+    const declared = await flow.declareFocusAreas(['chest', 'arms'])
+
+    expect(declared).toEqual(['chest', 'arms'])
+    expect(focuses.map((entry) => entry.value)).toEqual([['chest', 'arms']])
+  })
+
+  test('reuses the key while the same emphasis keeps failing', async () => {
+    let attempts = 0
+    const keys: string[] = []
+    const { flow } = flowWith({
+      declareFocusAreas: async (command, areas) => {
+        keys.push(command.idempotencyKey)
+        attempts += 1
+        if (attempts === 1) throw new Error('network')
+        return areas
+      },
+    })
+
+    await expect(flow.declareFocusAreas(['legs'])).rejects.toThrow('network')
+    await expect(flow.declareFocusAreas(['legs'])).resolves.toEqual(['legs'])
+
+    // One lost response must replay rather than declare the emphasis twice.
+    expect(keys).toHaveLength(2)
+    expect(keys[0]).toBe(keys[1])
+  })
+
+  test('treats the same set in another order as the same submission', async () => {
+    let attempts = 0
+    const keys: string[] = []
+    const { flow } = flowWith({
+      declareFocusAreas: async (command, areas) => {
+        keys.push(command.idempotencyKey)
+        attempts += 1
+        if (attempts === 1) throw new Error('network')
+        return areas
+      },
+    })
+
+    await expect(flow.declareFocusAreas(['chest', 'legs'])).rejects.toThrow('network')
+    await expect(flow.declareFocusAreas(['legs', 'chest'])).resolves.toBeDefined()
+
+    // Tapping the same two zones in the other order is not a different answer, and
+    // a new key would turn a retry into a second command.
+    expect(keys[0]).toBe(keys[1])
+  })
+
+  test('starts a new submission when a zone changes', async () => {
+    const keys: string[] = []
+    const { flow } = flowWith({
+      declareFocusAreas: async (command) => {
+        keys.push(command.idempotencyKey)
+        throw new Error('network')
+      },
+    })
+
+    await expect(flow.declareFocusAreas(['chest'])).rejects.toThrow('network')
+    await expect(flow.declareFocusAreas(['chest', 'abs'])).rejects.toThrow('network')
+
+    // The server hashes the body against the key, so the same key with another set
+    // comes back as a conflict rather than as a correction.
+    expect(keys[0]).not.toBe(keys[1])
+  })
+
+  test('discards the key once it lands, so editing later is its own command', async () => {
+    const keys: string[] = []
+    const { flow } = flowWith({
+      declareFocusAreas: async (command, areas) => {
+        keys.push(command.idempotencyKey)
+        return areas
+      },
+    })
+
+    await flow.declareFocusAreas(['whole_body'])
+    await flow.declareFocusAreas(['whole_body'])
+
+    expect(keys[0]).not.toBe(keys[1])
+  })
+})
+
+describe('declareTrainingDiscipline', () => {
+  test('reuses the key when a failed submission is retried', async () => {
+    // The key belongs to the submission, not the call: the server may already have
+    // recorded the first attempt, and a second key would be a second claim.
+    let attempts = 0
+    const { flow, disciplines } = flowWith({
+      declareTrainingDiscipline: async (command, discipline) => {
+        attempts += 1
+        disciplines.push({ idempotencyKey: command.idempotencyKey, value: discipline })
+        if (attempts === 1) throw new Error('network')
+        return {
+          attribute_code: 'training_discipline' as const,
+          value_text: discipline,
+          superseded_claim_id: null,
+        }
+      },
+    })
+
+    await expect(flow.declareTrainingDiscipline('strength')).rejects.toThrow('network')
+    await flow.declareTrainingDiscipline('strength')
+
+    expect(disciplines).toHaveLength(2)
+    expect(disciplines[0]?.idempotencyKey).toBe(disciplines[1]?.idempotencyKey)
+  })
+
+  test('answers the claim and what it displaced', async () => {
+    const { flow } = flowWith()
+
+    expect(await flow.declareTrainingDiscipline('strength')).toEqual({
+      attribute_code: 'training_discipline',
+      value_text: 'strength',
+      superseded_claim_id: null,
+    })
+  })
+})
+
+describe('declareTrainingExperience', () => {
+  test('sends the level chosen, without opening an attempt for it', async () => {
+    const { flow, levels } = flowWith({
+      startAttempt: async () => {
+        throw new Error('the level must not need an attempt')
+      },
+    })
+
+    const claim = await flow.declareTrainingExperience('some_practice')
+
+    expect(claim.value_text).toBe('some_practice')
+    expect(levels.map((entry) => entry.value)).toEqual(['some_practice'])
+  })
+
+  test('reuses the key while the same level keeps failing', async () => {
+    let attempts = 0
+    const keys: string[] = []
+    const { flow } = flowWith({
+      declareTrainingExperience: async (command, level) => {
+        keys.push(command.idempotencyKey)
+        attempts += 1
+        if (attempts === 1) throw new Error('network')
+        return {
+          attribute_code: 'training_experience' as const,
+          value_text: level,
+          superseded_claim_id: null,
+        }
+      },
+    })
+
+    await expect(flow.declareTrainingExperience('starting')).rejects.toThrow('network')
+    await expect(flow.declareTrainingExperience('starting')).resolves.toMatchObject({
+      value_text: 'starting',
+    })
+
+    // One lost response must replay, not record a second level.
+    expect(keys).toHaveLength(2)
+    expect(keys[0]).toBe(keys[1])
+  })
+
+  test('starts a new submission when the level changes', async () => {
+    const keys: string[] = []
+    const { flow } = flowWith({
+      declareTrainingExperience: async (command) => {
+        keys.push(command.idempotencyKey)
+        throw new Error('network')
+      },
+    })
+
+    await expect(flow.declareTrainingExperience('starting')).rejects.toThrow('network')
+    await expect(flow.declareTrainingExperience('experienced')).rejects.toThrow('network')
+
+    // The server hashes the body against the key, so reusing it with another level
+    // comes back as a conflict rather than as a requalification.
+    expect(keys[0]).not.toBe(keys[1])
+  })
+
+  test('discards the key once it lands, so requalifying later is its own command', async () => {
+    const keys: string[] = []
+    const { flow } = flowWith({
+      declareTrainingExperience: async (command, level) => {
+        keys.push(command.idempotencyKey)
+        return {
+          attribute_code: 'training_experience' as const,
+          value_text: level,
+          superseded_claim_id: null,
+        }
+      },
+    })
+
+    await flow.declareTrainingExperience('experienced')
+    await flow.declareTrainingExperience('experienced')
+
+    expect(keys[0]).not.toBe(keys[1])
+  })
+})
+
+describe('recordBodyProgress', () => {
+  const weight = {
+    metric_code: 'body_weight' as const,
+    value: 74,
+    unit: 'kg' as const,
+    measured_on: '2026-08-24',
+  }
+  const height = {
+    metric_code: 'body_height' as const,
+    value: 170,
+    unit: 'cm' as const,
+    measured_on: '2026-08-24',
+  }
+
+  test('sends what the person read, not the canonical figure', async () => {
+    // The database converts, because the factor lives in the unit catalogue and a
+    // factor with two homes is a factor with two answers.
+    const { flow, measures } = flowWith()
+
+    await flow.recordBodyProgress({ ...weight, value: 163, unit: 'lb' })
+
+    expect(measures).toEqual([{ idempotencyKey: 'key_1', metric: 'body_weight', value: 163 }])
+  })
+
+  test('gives weight and height different keys, because they are two commands', async () => {
+    const { flow, measures } = flowWith()
+
+    await flow.recordBodyProgress(weight)
+    await flow.recordBodyProgress(height)
+
+    expect(measures[0]?.idempotencyKey).not.toBe(measures[1]?.idempotencyKey)
+  })
+
+  test('reuses the key while the same measurement keeps failing', async () => {
+    let attempts = 0
+    const keys: string[] = []
+    const { flow } = flowWith({
+      recordBodyProgress: async (command, declaration) => {
+        keys.push(command.idempotencyKey)
+        attempts += 1
+        if (attempts === 1) throw new Error('network')
+        return {
+          id: '019fe000-0000-7000-8000-000000000002',
+          metric_code: declaration.metric_code,
+          value: declaration.value,
+          unit: declaration.unit,
+          original_value: null,
+          original_unit: null,
+        }
+      },
+    })
+
+    await expect(flow.recordBodyProgress(weight)).rejects.toThrow('network')
+    await expect(flow.recordBodyProgress(weight)).resolves.toBeDefined()
+
+    // One lost response must replay, not record the same weight twice in the series.
+    expect(keys).toHaveLength(2)
+    expect(keys[0]).toBe(keys[1])
+  })
+
+  test('starts a new submission when the number changes', async () => {
+    const keys: string[] = []
+    const { flow } = flowWith({
+      recordBodyProgress: async (command) => {
+        keys.push(command.idempotencyKey)
+        throw new Error('network')
+      },
+    })
+
+    await expect(flow.recordBodyProgress(weight)).rejects.toThrow('network')
+    await expect(flow.recordBodyProgress({ ...weight, value: 75 })).rejects.toThrow('network')
+
+    expect(keys[0]).not.toBe(keys[1])
+  })
+
+  test('a failed height leaves the saved weight alone', async () => {
+    // They are independent measurements, so a partial failure is not a rollback: the
+    // retry replays the weight and completes the height.
+    const saved: string[] = []
+    const { flow } = flowWith({
+      recordBodyProgress: async (_command, declaration) => {
+        if (declaration.metric_code === 'body_height') throw new Error('network')
+        saved.push(declaration.metric_code)
+        return {
+          id: '019fe000-0000-7000-8000-000000000003',
+          metric_code: declaration.metric_code,
+          value: declaration.value,
+          unit: declaration.unit,
+          original_value: null,
+          original_unit: null,
+        }
+      },
+    })
+
+    await flow.recordBodyProgress(weight)
+    await expect(flow.recordBodyProgress(height)).rejects.toThrow('network')
+
+    expect(saved).toEqual(['body_weight'])
+  })
+})
+
+describe('skipStep', () => {
+  test('records the skip against the open attempt', async () => {
+    const { flow, skips } = flowWith()
+
+    await flow.skipStep('body_measures')
+
+    expect(skips).toEqual(['body_measures'])
+  })
+
+  test('opens an attempt when there is none, because a skip belongs to one', async () => {
+    let starts = 0
+    const { flow } = flowWith({
+      startAttempt: async () => {
+        starts += 1
+        return ATTEMPT
+      },
+    })
+
+    await flow.skipStep('body_measures')
+
+    expect(starts).toBe(1)
+  })
+})
+
+describe('activate', () => {
+  const completion = {
+    given_name: 'Ada',
+    family_name: 'Lovelace',
+    terms_accepted: true as const,
+    privacy_notice_accepted: true as const,
+  }
+
+  test('closes the onboarding and answers the Fitness ID', async () => {
+    const { flow, activations } = flowWith()
+
+    const person = await flow.activate(completion)
+
+    expect(person.person_id).toBe('019ff100-0000-7000-8000-000000000001')
+    expect(activations.map((entry) => entry.name)).toEqual(['Ada'])
+  })
+
+  test('holds the key across retries, because this is the one command that must not run twice', async () => {
+    let attempts = 0
+    const keys: string[] = []
+    const { flow } = flowWith({
+      complete: async (command) => {
+        keys.push(command.idempotencyKey)
+        attempts += 1
+        if (attempts === 1) throw new Error('network')
+        return { person_id: '019ff100-0000-7000-8000-000000000002' }
+      },
+    })
+
+    await expect(flow.activate(completion)).rejects.toThrow('network')
+    await expect(flow.activate(completion)).resolves.toBeDefined()
+
+    // A second key would be a second command, and "exactly one Fitness ID" has to
+    // hold under a lost response, not only under a good one.
+    expect(keys).toHaveLength(2)
+    expect(keys[0]).toBe(keys[1])
+  })
+
+  test('opens an attempt when there is none, because activation belongs to one', async () => {
+    let starts = 0
+    const { flow } = flowWith({
+      startAttempt: async () => {
+        starts += 1
+        return ATTEMPT
+      },
+    })
+
+    await flow.activate(completion)
 
     expect(starts).toBe(1)
   })

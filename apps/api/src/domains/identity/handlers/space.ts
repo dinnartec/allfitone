@@ -136,6 +136,23 @@ export function spaceIdentityRoutes(injectedService?: SpaceRegistrationService):
     }
   })
 
+  routes.delete('/auth/sessions', async (c) => {
+    c.header('Cache-Control', 'no-store')
+
+    // `OP-IDN-048` has no rejection. A missing or malformed header is somebody
+    // whose phone has nothing left to protect, and refusing would trap them inside.
+    const header = c.req.header('authorization') ?? ''
+    if (header.toLowerCase().startsWith('bearer ')) {
+      try {
+        await registrations().signOut(header.slice('bearer '.length).trim())
+      } catch {
+        // Caught here as well as in the service. The contract says this operation
+        // never rejects, so the answer must not depend on who swallowed what.
+      }
+    }
+    return c.body(null, 204)
+  })
+
   return routes
 }
 

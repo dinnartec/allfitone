@@ -1,0 +1,8 @@
+# Every answer the source gave, keyed by the query. Local scaffolding for a resumable
+# walk, not a source of truth: the snapshot beside it is what gets reviewed.
+.cache/
+.partial-*.json
+
+# The origin's directory: derived from `movement-media.json` by `media.ts`, and 30 MB
+# of binaries that git would keep forever. The manifest beside it is what gets reviewed.
+.media/

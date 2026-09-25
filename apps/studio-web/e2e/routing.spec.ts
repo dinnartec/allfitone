@@ -112,6 +112,9 @@ test('finishes a new organization in a dedicated ready step before entering the 
   // of the "your space is ready" message the person just dismissed.
   await expect(page.getByRole('heading', { name: 'Equipo reciente' })).toBeVisible()
   await expect(page.getByText('Studio está listo para operar')).toHaveCount(0)
+  // A new organization has exactly one member, so the singular is the first
+  // count its owner ever reads. The plural cases are unit-tested.
+  await expect(page.getByText('Integrante activo', { exact: true })).toBeVisible()
 
   await page.goto(`/organizations/${createdOrganizationId}/ready`)
   await expect(page.getByRole('heading', { name: 'Tu espacio está listo.' })).toHaveCount(0)
@@ -249,6 +252,30 @@ test('waits without mutations and rechecks an empty membership list', async ({ p
       (request) => request.method === 'GET' && request.path === '/studio/v1/me/memberships',
     ),
   ).toHaveLength(1)
+})
+
+/**
+ * Choosing to wait is one click with no confirmation, and it used to be the only
+ * decision in setup that could not be taken back: the state dropped what the
+ * choice screen needs to render, so the way out was to log out.
+ */
+test('returns from the invitation wait to the choice it came from', async ({ page }) => {
+  const fixture = createStudioApiFixture()
+  await installStudioApiMock(page, fixture)
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Esperar una invitación' }).click()
+  await expect(
+    page.getByRole('heading', { name: 'Tu espacio puede llegar después.' }),
+  ).toBeVisible()
+
+  await page.getByRole('button', { name: 'Volver' }).click()
+
+  await expect(page.getByRole('heading', { name: '¿Cómo trabajas hoy?' })).toBeVisible()
+  // The organization types have to survive the round trip. Losing them leaves the
+  // choice rendering perfectly and the type selector empty one screen later.
+  await page.getByRole('button', { name: /Tengo un equipo o centro/ }).click()
+  await expect(page.locator('[data-studio-select-trigger]')).toContainText('Estudio')
+  expect(fixture.requests.filter((request) => request.method !== 'GET')).toHaveLength(0)
 })
 
 test('enters a newly active membership from the invitation wait', async ({ page }) => {
@@ -402,7 +429,7 @@ test('revalidates memberships after the in-memory entry snapshot expires', async
     clock.__studioTestNow = (clock.__studioTestNow ?? 0) + 31_000
   })
   await page.getByLabel('Cambiar de organización').click()
-  await page.getByRole('option', { name: `${secondActiveMembership.display_name} · Coach` }).click()
+  await page.getByRole('option', { name: secondActiveMembership.display_name }).click()
   await expect(page).toHaveURL(`/organizations/${secondActiveMembership.organization_id}`)
   await expect
     .poll(
@@ -451,7 +478,7 @@ test('replaces the organization context without retaining the previous workspace
   await page.goto(`/organizations/${activeMembership.organization_id}`)
 
   await page.getByLabel('Cambiar de organización').click()
-  await page.getByRole('option', { name: `${secondActiveMembership.display_name} · Coach` }).click()
+  await page.getByRole('option', { name: secondActiveMembership.display_name }).click()
 
   await expect(page).toHaveURL(`/organizations/${secondActiveMembership.organization_id}`)
   const organizationContext = page.locator('[data-sidebar-organization]')
@@ -536,6 +563,11 @@ test('blocks revalidation without remounting the workspace state', async ({ page
   const protectedContent = page.locator('[data-organization-protected-content]')
   await expect(protectedContent).toHaveAttribute('inert', '')
   await expect(protectedContent).toHaveAttribute('aria-hidden', 'true')
+  // Illegible and out of reach, but still there. Hiding it outright blanked the
+  // page for a check that usually resolves in milliseconds, which reads as a
+  // reload; a logout in flight already answers this with the same blur.
+  await expect(protectedContent).toBeVisible()
+  await expect(protectedContent).toHaveCSS('filter', /blur\(7px\)/)
   await expect(page.locator('[data-organization-verification-overlay]')).toBeVisible()
 
   releaseRevalidation?.()
@@ -605,7 +637,7 @@ test('switches by keyboard and browser history does not restore the previous org
   await page.getByLabel('Cambiar de organización').focus()
   await page.keyboard.press('Enter')
   const secondOption = page.getByRole('option', {
-    name: `${secondActiveMembership.display_name} · Coach`,
+    name: secondActiveMembership.display_name,
   })
   await secondOption.focus()
   await page.keyboard.press('Enter')

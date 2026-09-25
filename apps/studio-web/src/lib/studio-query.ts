@@ -143,6 +143,20 @@ export function shouldRetryStudioQuery(failureCount: number, error: Error): bool
   return error instanceof TypeError
 }
 
+/**
+ * A denial, as opposed to an outage.
+ *
+ * The distinction decides what a surface may say and offer: a 403 is terminal,
+ * shouldRetryStudioQuery above refuses to retry it, and a screen that presents
+ * it as a temporary connection failure offers a retry that cannot succeed. That
+ * defect reached the organization verification layer precisely because this
+ * predicate was written inline in every component that needed it, so one of
+ * them could be missing it without anywhere to notice.
+ */
+export function isStudioForbidden(error: unknown): boolean {
+  return error instanceof StudioApiError && error.status === 403
+}
+
 export function organizationTypesQueryOptions() {
   return queryOptions({
     queryKey: studioQueryKeys.organizationTypes(),

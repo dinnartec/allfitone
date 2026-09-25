@@ -45,7 +45,9 @@ const ASSIGNABLE_ROLES = new Set<Exclude<OrganizationRoleCode, 'owner'>>([
   'coach',
   'staff',
 ])
-const ROLE_CATALOG_CACHE_CONTROL = 'private, max-age=0, must-revalidate'
+// Not revalidated: a 304 reached Studio without `Access-Control-Allow-Origin`
+// and was blocked as a cross-origin read. See `catalog/handlers/studio.ts`.
+const ROLE_CATALOG_CACHE_CONTROL = 'private, no-store'
 
 export function studioOrganizationRoutes(
   injectedService?: StudioOrganizationService,
@@ -192,22 +194,15 @@ export function studioOrganizationRoutes(
       const actor = await studioActor(c, sessions())
       if (actor instanceof Response) return actor
       const items = await organizations().listRoleCatalog(actor, organizationId)
-      const body = {
+      recordStudioOrganizationQuery('roles', items.length === 0 ? 'empty' : 'listed')
+      return c.json({
         items: items.map((role) => ({
           code: role.code,
           name: role.name,
           capabilities: role.capabilities,
           fitness_data_access_policy: role.fitnessDataAccessPolicy,
         })),
-      }
-      const etag = `"${createHash('sha256').update(JSON.stringify(body)).digest('base64url')}"`
-      c.header('ETag', etag)
-      if (c.req.header('if-none-match') === etag) {
-        recordStudioOrganizationQuery('roles', 'not-modified')
-        return c.body(null, 304)
-      }
-      recordStudioOrganizationQuery('roles', items.length === 0 ? 'empty' : 'listed')
-      return c.json(body)
+      })
     } catch (error) {
       recordStudioOrganizationQuery('roles', 'failed')
       return operationFailure(c, error)

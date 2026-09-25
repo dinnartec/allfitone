@@ -133,6 +133,27 @@ export function studioPlanningRoutes(
     }
   })
 
+  routes.get('/organizations/:organizationId/session-templates/:templateId/draft', async (c) => {
+    const ids = templatePath(c, studioOrigin)
+    if (ids instanceof Response) return ids
+    try {
+      const actor = await studioActor(c, sessions)
+      if (actor instanceof Response) return actor
+      const draft = await planning().readSessionTemplateDraft(actor, {
+        ...ids,
+        requestId: randomUUID(),
+      })
+      // Outside the organization and never existing answer the same, so an identifier
+      // cannot be used to learn what another tenant holds.
+      if (!draft) return problem(c, 'not-found')
+      c.header('Cache-Control', 'no-store')
+      c.header('ETag', draft.etag)
+      return c.json(draft)
+    } catch (error) {
+      return operationFailure(c, error)
+    }
+  })
+
   routes.post(
     '/organizations/:organizationId/session-templates/:templateId/versions',
     async (c) => {

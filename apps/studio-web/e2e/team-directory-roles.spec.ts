@@ -37,7 +37,7 @@ test('owner consults the minimum team directory and navigates with real section 
     'page',
   )
   await expect(sectionNavigation.getByRole('link', { name: 'Invitaciones' })).toBeVisible()
-  await expect(sectionNavigation.getByRole('link', { name: 'Roles y permisos' })).toBeVisible()
+  await expect(sectionNavigation.getByRole('link', { name: 'Roles', exact: true })).toBeVisible()
   await expect(
     page.getByRole('region', { name: 'Tabla de integrantes de la organización' }),
   ).toBeVisible()
@@ -60,10 +60,10 @@ test('owner consults the minimum team directory and navigates with real section 
     ),
   ).toBe(true)
 
-  await sectionNavigation.getByRole('link', { name: 'Roles y permisos' }).focus()
+  await sectionNavigation.getByRole('link', { name: 'Roles', exact: true }).focus()
   await page.keyboard.press('Enter')
   await expect(page).toHaveURL(`/organizations/${activeMembership.organization_id}/team/roles`)
-  await expect(sectionNavigation.getByRole('link', { name: 'Roles y permisos' })).toHaveAttribute(
+  await expect(sectionNavigation.getByRole('link', { name: 'Roles', exact: true })).toHaveAttribute(
     'aria-current',
     'page',
   )
@@ -77,14 +77,16 @@ test('coach sees only the governed role catalog and never requests the team dire
   await installStudioApiMock(page, fixture)
   await page.goto(`/organizations/${coachMembership.organization_id}/team`)
 
-  // The section exists for everyone and explains the denial in place; hiding
-  // the destination made the same sidebar label resolve to a different page per
-  // person. The directory itself is still never requested.
+  // Every section exists for everyone and explains its own denial in place;
+  // hiding a destination made the same label resolve to a different page per
+  // person. This expected `Invitaciones` to be hidden, which was the one
+  // section still doing the opposite, and left a coach who opened an invitation
+  // URL on a page with no tab selected. The data itself is still never read.
   await expect(page.getByText('No tienes acceso a este directorio')).toBeVisible()
   const sectionNavigation = page.getByRole('navigation', { name: 'Secciones del equipo' })
   await expect(sectionNavigation.getByRole('link', { name: 'Integrantes' })).toBeVisible()
-  await expect(sectionNavigation.getByRole('link', { name: 'Roles y permisos' })).toBeVisible()
-  await expect(sectionNavigation.getByRole('link', { name: 'Invitaciones' })).toHaveCount(0)
+  await expect(sectionNavigation.getByRole('link', { name: 'Invitaciones' })).toBeVisible()
+  await expect(sectionNavigation.getByRole('link', { name: 'Roles', exact: true })).toBeVisible()
   await expect(
     page.locator('[data-organization-sidebar]').getByRole('link', { name: 'Equipo' }),
   ).toHaveAttribute('href', `/organizations/${coachMembership.organization_id}/team`)
@@ -119,7 +121,15 @@ test('coach sees only the governed role catalog and never requests the team dire
   ).toBeVisible()
 })
 
-test('a solo owner is told that inviting a team is optional', async ({ page }) => {
+/**
+ * The directory used to carry a panel telling a solo owner that inviting was
+ * optional. Onboarding says exactly that on the screen before this one, and the
+ * condition behind the panel is permanent, so a professional working alone read
+ * it on every visit forever. The invitation is still one click away.
+ */
+test('a solo owner keeps the invitation within reach and is not told about it again', async ({
+  page,
+}) => {
   const fixture = createStudioApiFixture({
     memberships: [activeMembership],
     organizationMemberships: [
@@ -133,9 +143,9 @@ test('a solo owner is told that inviting a team is optional', async ({ page }) =
   await installStudioApiMock(page, fixture)
   await page.goto(`/organizations/${activeMembership.organization_id}/team`)
 
-  await expect(page.getByText(/Invita a alguien solo cuando vayas a sumar equipo/i)).toBeVisible()
-  await expect(page.getByText('Opcional', { exact: true })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Invitar integrante' })).toBeVisible()
+  await expect(page.getByText(/sumar equipo/i)).toHaveCount(0)
+  await expect(page.getByText('Opcional', { exact: true })).toHaveCount(0)
 })
 
 test('reuses the fresh active-membership query when opening the matching filter', async ({
@@ -351,7 +361,7 @@ for (const viewport of [
         true,
       )
 
-      await page.getByRole('link', { name: 'Roles y permisos' }).click()
+      await page.getByRole('link', { name: 'Roles', exact: true }).click()
       await expect(page.locator('[data-role-card]')).toHaveCount(4)
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
         true,

@@ -99,13 +99,13 @@ insert into identity.body_progress_records (
   id, person_id, metric_code, value_numeric, unit_code, measured_on
 ) values
   ('019ac000-0000-7000-8000-000000000301', '019ac000-0000-7000-8000-000000000005',
-    'weight', 70, 'kg', date '2026-09-01'),
+    'body_weight', 70, 'kg', date '2026-09-01'),
   ('019ac000-0000-7000-8000-000000000303', '019ac000-0000-7000-8000-000000000006',
-    'weight', 80, 'kg', date '2026-09-02'),
+    'body_weight', 80, 'kg', date '2026-09-02'),
   ('019ac000-0000-7000-8000-000000000304', '019ac000-0000-7000-8000-000000000005',
-    'hip', 0.95, 'm', date '2026-09-03'),
+    'hip', 95, 'cm', date '2026-09-03'),
   ('019ac000-0000-7000-8000-000000000305', '019ac000-0000-7000-8000-000000000005',
-    'chest', 1.0, 'm', date '2026-09-05');
+    'chest', 100, 'cm', date '2026-09-05');
 
 insert into identity.health_context_claims (
   id, person_id, context_type, description, body_area, provenance, valid_from

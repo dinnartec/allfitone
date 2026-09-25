@@ -26,6 +26,7 @@ function provider(verifyWebhookEvent: AuthProvider['verifyWebhookEvent']): AuthP
     },
     verifyWebhookEvent,
     updateEmail: async () => undefined,
+    identityFor: async () => ({ givenName: null, familyName: null, verifiedEmail: null }),
     enrollTotp: async () => {
       throw new Error('not used')
     },

@@ -16,9 +16,17 @@ import * as Crypto from 'expo-crypto'
 
 import { ApiError, authorizedGet, authorizedPost, refreshSession } from './index'
 import {
+  type BiologicalSex,
   createOnboardingFlow,
   type CurrentOnboardingAttempt,
+  type FocusArea,
   type OnboardingFlow,
+  type BodyProgressRecord,
+  type ActivatedPerson,
+  type OnboardingCompletion,
+  type ProfileClaim,
+  type TrainingDisciplineClaim,
+  type TrainingExperienceClaim,
 } from './onboarding'
 import { readSession, storeSession } from './session'
 import { withRefresh } from './with-refresh'
@@ -50,6 +58,80 @@ export function createSpaceOnboardingFlow(): OnboardingFlow {
             `/space/v1/onboarding-attempts/${attemptId}/fitness-id`,
             command,
             identity,
+            token,
+          ),
+        ),
+      declareBiologicalSex: (command, attemptId, biologicalSex) =>
+        authenticated(async (token) => {
+          const declared = await authorizedPost<{ biological_sex: BiologicalSex | null }>(
+            `/space/v1/onboarding-attempts/${attemptId}/biological-sex`,
+            command,
+            { biological_sex: biologicalSex },
+            token,
+          )
+          return declared.biological_sex
+        }),
+      declareTrainingGoal: (command, goal) =>
+        authenticated((token) =>
+          authorizedPost<ProfileClaim>(
+            '/space/v1/profile/claims',
+            command,
+            { attribute_code: 'primary_training_goal', value_text: goal },
+            token,
+          ),
+        ),
+      declareFocusAreas: (command, areas) =>
+        authenticated(async (token) => {
+          const declared = await authorizedPost<{ areas: FocusArea[] }>(
+            '/space/v1/profile/focus-areas',
+            command,
+            { areas },
+            token,
+          )
+          return declared.areas
+        }),
+      declareTrainingDiscipline: (command, discipline) =>
+        authenticated((token) =>
+          authorizedPost<TrainingDisciplineClaim>(
+            '/space/v1/profile/claims',
+            command,
+            { attribute_code: 'training_discipline', value_text: discipline },
+            token,
+          ),
+        ),
+      declareTrainingExperience: (command, level) =>
+        authenticated((token) =>
+          authorizedPost<TrainingExperienceClaim>(
+            '/space/v1/profile/claims',
+            command,
+            { attribute_code: 'training_experience', value_text: level },
+            token,
+          ),
+        ),
+      recordBodyProgress: (command, declaration) =>
+        authenticated((token) =>
+          authorizedPost<BodyProgressRecord>(
+            '/space/v1/body-progress',
+            command,
+            declaration,
+            token,
+          ),
+        ),
+      skipStep: (attemptId, stepCode) =>
+        authenticated(async (token) => {
+          await authorizedPost<void>(
+            `/space/v1/onboarding-attempts/${attemptId}/skips`,
+            undefined,
+            { step_code: stepCode },
+            token,
+          )
+        }),
+      complete: (command, attemptId, completion) =>
+        authenticated((token) =>
+          authorizedPost<ActivatedPerson>(
+            `/space/v1/onboarding-attempts/${attemptId}/completion`,
+            command,
+            completion satisfies OnboardingCompletion,
             token,
           ),
         ),

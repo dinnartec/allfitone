@@ -160,6 +160,16 @@ export function createPlanningDatabase(): PlanningDatabase {
           input.limit,
         )
       }),
+    readSessionTemplateDraft: (input) =>
+      query(sql, input.personId, input.requestId, async (transaction) => {
+        const [row] = await transaction<{ draft: SessionTemplateDraft | null }[]>`
+          select planning.read_session_template_draft(
+            ${input.personId}::uuid, ${input.organizationId}::uuid, ${input.templateId}::uuid
+          ) as draft
+        `
+        return row?.draft ?? null
+      }),
+
     readSessionTemplateVersion: (input) =>
       query(sql, input.personId, input.requestId, async (transaction) => {
         const [row] = await transaction<{ result: SessionTemplateVersion }[]>`

@@ -23,7 +23,6 @@
  * why the alternative did not survive contact with the provider.
  */
 
-import { AmbientBackdrop } from '@allfitone/react-native/backdrop'
 import { Button } from '@allfitone/react-native/button'
 import { CodeField } from '@allfitone/react-native/code-field'
 import { FoundationIcon } from '@allfitone/react-native/icons'
@@ -37,6 +36,8 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
 
 import { ApiError, register, verifyRegistration } from '../src/client'
 import { storeSession } from '../src/client/session'
+import { createSpaceOnboardingFlow } from '../src/client/onboarding-transport'
+import { routeAfterAuthentication } from '../src/client/resume-route'
 
 const CODE_LENGTH = 6
 
@@ -78,7 +79,7 @@ export default function VerifyEmail() {
     try {
       const session = await verifyRegistration(email, password, code)
       await storeSession({ ...session, email })
-      router.replace('/onboarding/age')
+      router.replace(await routeAfterAuthentication(() => createSpaceOnboardingFlow().resume()))
     } catch (cause) {
       setFailure(
         cause instanceof ApiError && cause.failure === 'unavailable'
@@ -91,9 +92,7 @@ export default function VerifyEmail() {
   }
 
   return (
-    <Screen edges={['top', 'bottom']}>
-      <AmbientBackdrop />
-
+    <Screen edges={['top', 'bottom']} dots>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Volver"

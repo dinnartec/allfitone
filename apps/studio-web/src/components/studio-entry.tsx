@@ -1,6 +1,6 @@
 'use client'
 
-import { Alert, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
+import { Alert, AlertAction, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
 import { Button } from '@allfitone/react/components/button'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -13,6 +13,7 @@ import { OrganizationReadyScreen } from './organization-ready-screen'
 import { SpaceSetup } from './space-setup'
 import { useStudioEntryContext } from './studio-entry-context'
 import { LoadingStage, StudioFrame } from './studio-frame'
+import { useAnnouncedWait } from '@/lib/announced-wait'
 import { resolveMembershipDestination } from '@/lib/membership-routing'
 import { readPendingInvitationToken } from '@/lib/invitation-token'
 import { studioSessionConfirmedEnded } from '@/lib/session-activity'
@@ -33,7 +34,9 @@ type FlowState =
   | { kind: 'activation'; attempt: OnboardingAttempt; identity: StudioEntryContext['identity'] }
   | { kind: 'space'; organizationTypes: OrganizationType[]; fullName?: string }
   | { kind: 'ready'; organization: OrganizationCreated }
-  | { kind: 'waiting' }
+  // Waiting carries what the choice screen needs to render, because choosing to
+  // wait must not be the one decision here that cannot be taken back.
+  | { kind: 'waiting'; organizationTypes: OrganizationType[]; fullName?: string }
   | { kind: 'select'; memberships: Membership[] }
   | { kind: 'error'; message: string }
 
@@ -63,7 +66,9 @@ export function StudioEntry() {
         return
       }
       if (emptyDestination === 'waiting') {
-        setFlow({ kind: 'waiting' })
+        // Only the waiting screen asks for this, and no membership arrived, so it
+        // stays exactly as it is. Rebuilding the state would drop what it needs to
+        // offer the way back.
         return
       }
       const typeList = await studioApi.organizationTypes()
@@ -132,7 +137,9 @@ export function StudioEntry() {
     void bootstrap()
   }, [bootstrap])
 
-  if (flow.kind === 'loading') return <LoadingStage />
+  const announceWait = useAnnouncedWait(flow.kind === 'loading')
+
+  if (flow.kind === 'loading') return announceWait ? <LoadingStage /> : null
   if (flow.kind === 'access') return <AccessLanding logoutPartial={logoutPartial} />
   if (flow.kind === 'activation') {
     return (
@@ -154,7 +161,13 @@ export function StudioEntry() {
         organizationTypes={flow.organizationTypes}
         fullName={flow.fullName}
         onCreated={(organization) => setFlow({ kind: 'ready', organization })}
-        onWait={() => setFlow({ kind: 'waiting' })}
+        onWait={() =>
+          setFlow({
+            kind: 'waiting',
+            organizationTypes: flow.organizationTypes,
+            ...(flow.fullName ? { fullName: flow.fullName } : {}),
+          })
+        }
         onSessionExpired={() => setFlow({ kind: 'access' })}
       />
     )
@@ -168,7 +181,18 @@ export function StudioEntry() {
     )
   }
   if (flow.kind === 'waiting') {
-    return <InvitationWaiting onCheck={checkWaitingMemberships} />
+    return (
+      <InvitationWaiting
+        onCheck={checkWaitingMemberships}
+        onBack={() =>
+          setFlow({
+            kind: 'space',
+            organizationTypes: flow.organizationTypes,
+            ...(flow.fullName ? { fullName: flow.fullName } : {}),
+          })
+        }
+      />
+    )
   }
   if (flow.kind === 'select') {
     return (
@@ -178,13 +202,21 @@ export function StudioEntry() {
       />
     )
   }
+  // No step. The bootstrap call is what decides which of the nine entry screens
+  // to show, so when it fails Studio knows nothing about this person — least of
+  // all that they are on step one of a setup they may have finished years ago.
   return (
-    <StudioFrame step="identity" showLogout={false}>
+    <StudioFrame showLogout={false}>
       <div data-studio-error-stage>
         <Alert variant="danger" live="assertive">
-          <AlertTitle>No pudimos abrir Studio</AlertTitle>
+          {/* This stage replaces the page, so its title is the page heading. */}
+          <AlertTitle role="heading" aria-level={1}>
+            No pudimos abrir Studio
+          </AlertTitle>
           <AlertDescription>{flow.message}</AlertDescription>
-          <Button onClick={() => void bootstrap()}>Reintentar</Button>
+          <AlertAction>
+            <Button onClick={() => void bootstrap()}>Reintentar</Button>
+          </AlertAction>
         </Alert>
       </div>
     </StudioFrame>

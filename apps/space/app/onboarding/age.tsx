@@ -30,7 +30,6 @@
  * `src/client/onboarding`, where they can be tested without launching the app.
  */
 
-import { AmbientBackdrop } from '@allfitone/react-native/backdrop'
 import { Button } from '@allfitone/react-native/button'
 import { Checkbox } from '@allfitone/react-native/checkbox'
 import { InlineAlert } from '@allfitone/react-native/inline-alert'
@@ -42,8 +41,12 @@ import { ScrollView, StyleSheet, View } from 'react-native'
 
 import { ApiError } from '../../src/client'
 import { createSpaceOnboardingFlow } from '../../src/client/onboarding-transport'
+import { FIRST_STEP_ROUTE } from '../../src/client/onboarding-steps'
 
 const DECLARATION = 'Declaro que tengo 18 años o más.'
+
+/** Keeps the button off the very bottom edge, the same amount on every step. */
+const FOOTER_LIFT = 16
 
 export default function AdultDeclaration() {
   const router = useRouter()
@@ -64,7 +67,7 @@ export default function AdultDeclaration() {
         setFailure('No podemos continuar sin la declaración de mayoría de edad.')
         return
       }
-      router.replace('/onboarding/identity')
+      router.replace(FIRST_STEP_ROUTE)
     } catch (cause) {
       setFailure(
         cause instanceof ApiError && cause.failure === 'unauthenticated'
@@ -77,9 +80,7 @@ export default function AdultDeclaration() {
   }
 
   return (
-    <Screen edges={['top', 'bottom']}>
-      <AmbientBackdrop />
-
+    <Screen edges={['top', 'bottom']} dots>
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.content}
@@ -99,25 +100,30 @@ export default function AdultDeclaration() {
             onChange={setDeclared}
             disabled={submitting}
           />
-
-          {failure ? <InlineAlert message={failure} /> : null}
-
-          <Button
-            label="Continuar"
-            disabled={!declared || submitting}
-            loading={submitting}
-            onPress={() => {
-              void submit()
-            }}
-            style={styles.submit}
-          />
         </View>
       </ScrollView>
+
+      {/* Outside the scroll so the button sits in the same place on every step of
+          the onboarding, whatever the content above it does. */}
+      <View style={styles.footer}>
+        {failure ? <InlineAlert message={failure} /> : null}
+
+        <Button
+          label="Continuar"
+          disabled={!declared || submitting}
+          loading={submitting}
+          onPress={() => {
+            void submit()
+          }}
+          style={styles.submit}
+        />
+      </View>
     </Screen>
   )
 }
 
 const styles = StyleSheet.create({
+  footer: { paddingTop: 4, paddingBottom: FOOTER_LIFT },
   scroll: {
     flex: 1,
   },

@@ -441,7 +441,7 @@ describe('Studio organization routes', () => {
     expect(await first.text()).toBe(await second.text())
   })
 
-  test('returns the four governed roles with cache validation after authorization', async () => {
+  test('returns the four governed roles uncached, authorizing every read', async () => {
     let roleCalls = 0
     let actorCalls = 0
     const service = organizations({
@@ -489,21 +489,24 @@ describe('Studio organization routes', () => {
       { headers: HEADERS },
     )
     expect(first.status).toBe(200)
-    expect(first.headers.get('cache-control')).toBe('private, max-age=0, must-revalidate')
-    const etag = first.headers.get('etag')
-    expect(etag).toBeTruthy()
-    if (!etag) throw new Error('role catalogue response is missing ETag')
+    expect(first.headers.get('cache-control')).toBe('private, no-store')
+    expect(first.headers.get('etag')).toBeNull()
     const body = (await first.json()) as { items: Array<Record<string, unknown>> }
     expect(body.items.map((role) => role.code)).toEqual(['owner', 'admin', 'coach', 'staff'])
     expect(body.items[2]).toMatchObject({
       fitness_data_access_policy: 'requires_relationship_assignment_and_grant',
     })
 
-    const cached = await app(service, sessionService).request(
+    // A tab that cached the old ETag still sends it. It gets the catalogue with
+    // CORS, not a 304 that reached Studio stripped of that header.
+    const revalidation = await app(service, sessionService).request(
       `/studio/v1/organizations/${ORGANIZATION_ID}/roles`,
-      { headers: { ...HEADERS, 'if-none-match': etag } },
+      { headers: { ...HEADERS, 'if-none-match': '"a-tab-kept-this"' } },
     )
-    expect(cached.status).toBe(304)
+    expect(revalidation.status).toBe(200)
+    expect(revalidation.headers.get('access-control-allow-origin')).toBe(
+      'https://studio.example.test',
+    )
     expect(actorCalls).toBe(2)
     expect(roleCalls).toBe(2)
   })

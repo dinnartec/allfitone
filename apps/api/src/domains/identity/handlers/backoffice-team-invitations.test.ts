@@ -138,7 +138,14 @@ beforeEach(() => {
 describe('Backoffice team invitation resend API contract', () => {
   test('T-IDN-RESEND-API-01 mounts NEW-IDN-RESEND and OP-IDN-045 with their contract methods', () => {
     const contract = allfitV1ContractManifest.operations
-      .filter((operation) => ['NEW-IDN-RESEND', 'OP-IDN-045'].includes(operation.allfitOperation))
+      // Space reused OP-IDN-045 for an onboarding operation. The operations matrix
+      // assigns it here, so the surface is part of the filter until that clash is
+      // settled in the matrix.
+      .filter(
+        (operation) =>
+          ['NEW-IDN-RESEND', 'OP-IDN-045'].includes(operation.allfitOperation) &&
+          operation.path.startsWith('/backoffice/v1/'),
+      )
       .map((operation) => `${operation.method} ${colonPath(operation.path)}`)
       .sort()
     const mounted = backofficeTeamInvitationRoutes()

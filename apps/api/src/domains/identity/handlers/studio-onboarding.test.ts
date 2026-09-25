@@ -3,6 +3,20 @@ import { Hono } from 'hono'
 
 import type { OnboardingService, StudioSessionService } from '../application/index.js'
 import { studioOnboardingRoutes } from './studio-onboarding.js'
+import type { ProfileClaim, ProfileClaimDeclaration } from '../domain/index.js'
+
+/**
+ * Echoes a declaration back as the claim it would become, keeping the attribute
+ * paired with its value. The whole declaration is spread rather than its two fields:
+ * naming them separately loses that pairing, because destructuring a discriminated
+ * union drops the correlation between its members.
+ */
+function echoClaim(
+  input: ProfileClaimDeclaration,
+  supersededClaimId: string | null = null,
+): ProfileClaim {
+  return { ...input, supersededClaimId }
+}
 
 const COMMAND_HEADERS = {
   origin: 'https://studio.example.test',
@@ -50,7 +64,30 @@ function onboarding(overrides: Partial<OnboardingService> = {}): OnboardingServi
       familyName: input.familyName,
       username: input.username,
     }),
-    readCurrentAttempt: async () => ({ attempt: null, identity: null }),
+    declareBiologicalSex: async (_actor, input) => input.biologicalSex,
+    declareProfileClaim: async (_actor, input) => echoClaim(input),
+    declareFocusAreas: async (_actor, input) => input.areas,
+    recordBodyProgress: async (_actor, input) => ({
+      id: '019fe000-0000-7000-8000-000000000001',
+      metricCode: input.metricCode,
+      value: input.value,
+      unit: input.unit,
+      originalValue: null,
+      originalUnit: null,
+    }),
+    skipStep: async () => undefined,
+    readCurrentAttempt: async () => ({
+      attempt: null,
+      answers: {
+        identity: { answered: false, value: null },
+        biologicalSex: { answered: false, value: null },
+        trainingDiscipline: { answered: false, value: null },
+        primaryTrainingGoal: { answered: false, value: null },
+        trainingExperience: { answered: false, value: null },
+        focusAreas: { answered: false, value: [] },
+        bodyMeasures: { answered: false, value: null },
+      },
+    }),
     complete: async () => '0198d000-0000-7000-8000-000000000031',
     ...overrides,
   }

@@ -41,12 +41,12 @@ export interface StoredAccessSession {
   tokenCiphertext: string
   accessTokenExpiresAt: Date
   tokenVersion: number
-  personStatus?: 'active' | 'closed'
+  personStatus?: 'pending_activation' | 'active' | 'closed'
 }
 
 export interface ActorRegistration {
   personId?: string
-  personStatus?: 'active' | 'closed'
+  personStatus?: 'pending_activation' | 'active' | 'closed'
 }
 
 /** The access account, and the person behind it once activated. Every surface. */
@@ -84,10 +84,129 @@ export interface PendingFitnessId {
   username: string
 }
 
+/** Only what the person can declare. Declining is the absence of a value. */
+export type BiologicalSex = 'male' | 'female'
+
+/**
+ * The five goals offered in the initial V1 launch. `improve_performance` stays in
+ * the database catalogue, deferred rather than deleted, and is refused here.
+ */
+export type PrimaryTrainingGoal =
+  'lose_weight' | 'build_muscle' | 'get_fit' | 'run_a_race' | 'maintain'
+
+/**
+ * The three simple terms of HU-SP-012 criterion 2, least to most.
+ *
+ * Not `beginner`, `intermediate`, `advanced`. The story asks for simple terms and
+ * the reason is behavioural: "advanced" makes people underrate themselves and pick
+ * below their real level, and then the plan bores them. Rank is drawn by the screen,
+ * not carried by the words.
+ */
+export type TrainingExperience = 'starting' | 'some_practice' | 'experienced'
+
+/**
+ * The discipline somebody trains, asked before the goal because the goal's list
+ * depends on it.
+ *
+ * One value. The attribute catalogue holds all six the product will cover — its own
+ * constraint refuses an enum with fewer than two — but what a person may answer today
+ * is a launch decision, and this is where it belongs. `PrimaryTrainingGoal` is the
+ * same shape of decision: six in the catalogue, five offered.
+ */
+export type TrainingDiscipline = 'strength'
+
+/**
+ * The two body metrics V1 records. The `body_` prefix is not decoration: `metric_code`
+ * also names execution results, where `weight` is the load on the bar.
+ */
+export type BodyMetric = 'body_weight' | 'body_height'
+export type MassUnit = 'kg' | 'lb'
+export type LengthUnit = 'cm' | 'in'
+
+/**
+ * One measurement, and the unit is tied to the metric so a weight cannot arrive in
+ * centimetres. The value is **what the person read**, not the canonical figure: the
+ * conversion happens in the database, where the factor lives.
+ */
+export type BodyProgressDeclaration =
+  | { metricCode: 'body_weight'; value: number; unit: MassUnit; measuredOn: string }
+  | { metricCode: 'body_height'; value: number; unit: LengthUnit; measuredOn: string }
+
+/** What the database recorded, in canonical units, plus what she actually read. */
+export interface BodyProgressRecord {
+  id: string
+  metricCode: BodyMetric
+  value: number
+  unit: string
+  /** Null when she was already using the canonical unit: nothing to preserve. */
+  originalValue: number | null
+  originalUnit: string | null
+}
+
+/** The latest of each metric. Either can be null on its own, mid-pair. */
+export interface BodyMeasures {
+  weight: { value: number; unit: string; originalUnit: string | null } | null
+  height: { value: number; unit: string; originalUnit: string | null } | null
+}
+
+/**
+ * The seven zones of HU-SP-097, plus `whole_body`, which is a member and not an
+ * empty set: it says "no emphasis, my goal decides". Without it that answer and
+ * never having answered would both be zero members.
+ */
+export type FocusArea =
+  'chest' | 'back' | 'shoulders' | 'arms' | 'abs' | 'glutes' | 'legs' | 'whole_body'
+
+/**
+ * One entry per onboarding step, every one the same shape. `answered` is separate
+ * from the value because a step can be answered without leaving one: declining the
+ * sex records the refusal as an absence, and a value alone could not tell that
+ * apart from never having been asked.
+ */
+export interface OnboardingAnswer<T> {
+  answered: boolean
+  value: T | null
+}
+
+export interface OnboardingAnswers {
+  identity: OnboardingAnswer<PendingFitnessId>
+  biologicalSex: OnboardingAnswer<BiologicalSex>
+  primaryTrainingGoal: OnboardingAnswer<PrimaryTrainingGoal>
+  trainingDiscipline: OnboardingAnswer<TrainingDiscipline>
+  trainingExperience: OnboardingAnswer<TrainingExperience>
+  /**
+   * Answered when both were recorded **or** the step was skipped. A half-finished
+   * pair leaves the step owed and still returns what it has, so the ruler reopens
+   * where she left it — which is why this cannot be derived from presence alone.
+   */
+  bodyMeasures: { answered: boolean; value: BodyMeasures | null }
+  /**
+   * The one answer that is a set. Its value is never null — an unanswered step is
+   * no members — so it does not use `OnboardingAnswer`, whose nullable value would
+   * invent a third state this step does not have.
+   */
+  focusAreas: { answered: boolean; value: readonly FocusArea[] }
+}
+
 export interface CurrentOnboardingAttempt {
   attempt: OnboardingAttempt | null
-  /** Non-null once the Fitness ID exists, which is how the app knows to move on. */
-  identity: PendingFitnessId | null
+  answers: OnboardingAnswers
+}
+
+/**
+ * Which attribute is being declared, and with what. A union rather than two loose
+ * strings so a goal code cannot be paired with an experience value: the database
+ * would refuse it, and refusing it here means the mistake cannot be written at all.
+ */
+export type ProfileClaimDeclaration =
+  | { attributeCode: 'primary_training_goal'; valueText: PrimaryTrainingGoal }
+  | { attributeCode: 'training_experience'; valueText: TrainingExperience }
+  | { attributeCode: 'training_discipline'; valueText: TrainingDiscipline }
+
+/** What the database records for a claim, including what it displaced. */
+export type ProfileClaim = ProfileClaimDeclaration & {
+  /** The claim this one replaced, or null on a first declaration. */
+  supersededClaimId: string | null
 }
 
 export interface IdentityOnboardingDatabase {
@@ -98,8 +217,39 @@ export interface IdentityOnboardingDatabase {
     input: CommandContext & { accountId: string; attemptId: string; declaredAdult: boolean },
   ): Promise<AdultEligibilityEvidence>
   createPendingPerson(
-    input: CommandContext & { accountId: string; attemptId: string } & PendingFitnessId,
+    input: CommandContext & {
+      accountId: string
+      attemptId: string
+      givenName: string
+      familyName: string
+      username: string
+      contactEmail: string
+      contactEmailVerified: boolean
+    },
   ): Promise<PendingFitnessId>
+  declareBiologicalSex(
+    input: CommandContext & {
+      accountId: string
+      attemptId: string
+      /** Null declines: no value is recorded, only that the question was answered. */
+      biologicalSex: BiologicalSex | null
+    },
+  ): Promise<BiologicalSex | null>
+  declareProfileClaim(
+    input: CommandContext & { accountId: string } & ProfileClaimDeclaration,
+  ): Promise<ProfileClaim>
+  declareFocusAreas(
+    input: CommandContext & { accountId: string; areas: readonly FocusArea[] },
+  ): Promise<readonly FocusArea[]>
+  recordBodyProgress(
+    input: CommandContext & { accountId: string } & BodyProgressDeclaration,
+  ): Promise<BodyProgressRecord>
+  /** No command context: the primary key of the skip is the whole idempotency. */
+  skipOnboardingStep(input: {
+    accountId: string
+    attemptId: string
+    stepCode: string
+  }): Promise<void>
   readCurrentAttempt(accountId: string): Promise<CurrentOnboardingAttempt>
   activatePerson(
     input: CommandContext & {

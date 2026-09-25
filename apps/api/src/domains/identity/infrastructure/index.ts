@@ -7,6 +7,10 @@ import type postgres from 'postgres'
 import { database } from '../../../platform/db/index.js'
 import { measureStudioRequestPhase } from '../../../platform/observability/index.js'
 import type {
+  BiologicalSex,
+  BodyMeasures,
+  BodyProgressRecord,
+  FocusArea,
   IdentitySessionDatabase,
   IdentityWebhookDatabase,
   IdentityOnboardingDatabase,
@@ -14,7 +18,12 @@ import type {
   IdentityInvitationDatabase,
   BackofficeAuthenticationDatabase,
   BackofficeAttemptSecret,
+  OnboardingAnswers,
   OnboardingAttempt,
+  PrimaryTrainingGoal,
+  ProfileClaimDeclaration,
+  TrainingDiscipline,
+  TrainingExperience,
   ProfessionalCredential,
   ProfessionalProfile,
   StudioProfessionalContext,
@@ -25,6 +34,51 @@ import type {
   TeamInvitationIntentStatus,
   TeamInvitationStatus,
 } from '../domain/index.js'
+
+/**
+ * The `answers` object exactly as PostgreSQL builds it. Snake case because it is
+ * the wire shape, not the domain one, and only the identity entry needs mapping:
+ * the other two already match.
+ */
+type RawOnboardingAnswers = {
+  identity: {
+    answered: boolean
+    value: { given_name: string; family_name: string; username: string } | null
+  }
+  biological_sex: { answered: boolean; value: BiologicalSex | null }
+  primary_training_goal: { answered: boolean; value: PrimaryTrainingGoal | null }
+  training_discipline: { answered: boolean; value: TrainingDiscipline | null }
+  training_experience: { answered: boolean; value: TrainingExperience | null }
+  focus_areas: { answered: boolean; value: FocusArea[] }
+  body_measures: { answered: boolean; value: RawBodyMeasures | null }
+}
+
+/** Snake case because it is the wire shape the function builds, not the domain one. */
+type RawBodyMeasures = {
+  weight: { value: number; unit: string; original_unit: string | null } | null
+  height: { value: number; unit: string; original_unit: string | null } | null
+}
+
+/** The one answer whose value needs mapping, because its keys are snake case. */
+function toBodyMeasures(raw: RawBodyMeasures | null): BodyMeasures | null {
+  if (!raw) return null
+  const side = (m: RawBodyMeasures['weight']) =>
+    m ? { value: m.value, unit: m.unit, originalUnit: m.original_unit } : null
+  return { weight: side(raw.weight), height: side(raw.height) }
+}
+
+/** No open attempt still answers the question: nothing has been answered. */
+function emptyAnswers(): OnboardingAnswers {
+  return {
+    identity: { answered: false, value: null },
+    biologicalSex: { answered: false, value: null },
+    primaryTrainingGoal: { answered: false, value: null },
+    trainingDiscipline: { answered: false, value: null },
+    trainingExperience: { answered: false, value: null },
+    focusAreas: { answered: false, value: [] },
+    bodyMeasures: { answered: false, value: null },
+  }
+}
 
 type InvitationRow = {
   invitation_id: string
@@ -245,24 +299,163 @@ export function createIdentityOnboardingDatabase(): IdentityOnboardingDatabase {
     async createPendingPerson(input) {
       return sql.begin(async (transaction) => {
         await setAccountActor(transaction, input.accountId)
-        // A taken handle surfaces as SQLSTATE 23505 and the handler maps it to
+        // Creates the Fitness ID, or corrects it when the account already owns one.
+        // A handle somebody else holds surfaces as 23505 and the handler maps it to
         // conflict, the same way its siblings do. Nothing is translated here.
         const [row] = await transaction<
           { given_name: string; family_name: string; username: string }[]
         >`
-          select given_name, family_name, username from identity.create_pending_person(
+          select given_name, family_name, username
+          from identity.declare_fitness_id(
             ${input.accountId}::uuid,
             ${input.attemptId}::uuid,
             ${input.givenName},
             ${input.familyName},
             ${input.username},
+            ${input.contactEmail},
+            ${input.contactEmailVerified},
             ${input.idempotencyKey}::uuid,
             ${input.commandId}::uuid,
             ${input.requestHash}
           )
         `
         if (!row) throw new Error('PostgreSQL did not create the pending Fitness ID')
-        return { givenName: row.given_name, familyName: row.family_name, username: row.username }
+        return {
+          givenName: row.given_name,
+          familyName: row.family_name,
+          username: row.username,
+        }
+      })
+    },
+
+    async declareBiologicalSex(input) {
+      return sql.begin(async (transaction) => {
+        await setAccountActor(transaction, input.accountId)
+        // A second, different declaration raises 23505 and the handler maps it to
+        // conflict. Nothing is translated here.
+        const [row] = await transaction<{ biological_sex: BiologicalSex | null }[]>`
+          select biological_sex
+          from identity.declare_biological_sex(
+            ${input.accountId}::uuid,
+            ${input.attemptId}::uuid,
+            ${input.biologicalSex},
+            ${input.idempotencyKey}::uuid,
+            ${input.commandId}::uuid,
+            ${input.requestHash}
+          )
+        `
+        if (!row) throw new Error('PostgreSQL did not record the biological sex')
+        return row.biological_sex
+      })
+    },
+
+    async declareProfileClaim(input) {
+      return sql.begin(async (transaction) => {
+        await setAccountActor(transaction, input.accountId)
+        // An unknown attribute or a value outside the catalogue raises 23514 and
+        // the handler maps it to invalid-request. Nothing is validated twice here.
+        const [row] = await transaction<
+          { attribute_code: string; value_text: string; superseded_claim_id: string | null }[]
+        >`
+          select attribute_code, value_text, superseded_claim_id
+          from identity.declare_profile_claim(
+            ${input.accountId}::uuid,
+            ${input.attributeCode},
+            ${input.valueText},
+            null,
+            null,
+            ${input.idempotencyKey}::uuid,
+            ${input.commandId}::uuid,
+            ${input.requestHash}
+          )
+        `
+        if (!row) throw new Error('PostgreSQL did not record the profile claim')
+        // The function echoes what it stored, and the catalogue is what validated the
+        // pairing, so the narrowed input is what types the answer. Asserting the echo
+        // rather than casting means a divergence surfaces instead of being asserted away.
+        if (row.attribute_code !== input.attributeCode || row.value_text !== input.valueText) {
+          throw new Error('PostgreSQL recorded a different claim than the one declared')
+        }
+        // Spread rather than a chain of branches. The input already *is* the narrowed
+        // pair the union is made of, so re-deciding which arm it is once per attribute
+        // is exactly the place where the fourth one gets forgotten.
+        const declaration: ProfileClaimDeclaration = input
+        return { ...declaration, supersededClaimId: row.superseded_claim_id }
+      })
+    },
+
+    async declareFocusAreas(input) {
+      return sql.begin(async (transaction) => {
+        await setAccountActor(transaction, input.accountId)
+        // The array is the shape of the command, not of the storage: one row per
+        // zone, so several stay in force at once. The function answers the set it
+        // left behind, which on a replay is simply the set in force.
+        const [row] = await transaction<{ areas: FocusArea[] }[]>`
+          select areas
+          from identity.declare_focus_areas(
+            ${input.accountId}::uuid,
+            ${input.areas as FocusArea[]}::text[],
+            ${input.idempotencyKey}::uuid,
+            ${input.commandId}::uuid,
+            ${input.requestHash}
+          )
+        `
+        if (!row) throw new Error('PostgreSQL did not record the focus areas')
+        return row.areas
+      })
+    },
+
+    async recordBodyProgress(input) {
+      return sql.begin(async (transaction) => {
+        await setAccountActor(transaction, input.accountId)
+        // What she read goes over the wire; the canonical figure comes back computed
+        // from the unit catalogue, which is the only place the factor lives.
+        const [row] = await transaction<
+          {
+            record_id: string
+            metric_code: BodyProgressRecord['metricCode']
+            value_numeric: string
+            unit_code: string
+            original_value: string | null
+            original_unit_code: string | null
+          }[]
+        >`
+          select record_id, metric_code, value_numeric, unit_code, original_value, original_unit_code
+          from identity.record_body_progress(
+            ${input.accountId}::uuid,
+            ${input.metricCode},
+            ${input.value}::numeric,
+            ${input.unit},
+            ${input.measuredOn}::date,
+            ${input.idempotencyKey}::uuid,
+            ${input.commandId}::uuid,
+            ${input.requestHash}
+          )
+        `
+        if (!row) throw new Error('PostgreSQL did not record the body measurement')
+        return {
+          id: row.record_id,
+          metricCode: row.metric_code,
+          // `numeric` arrives as a string so no precision is lost in transit; the
+          // contract carries a number, so the widening happens once, here.
+          value: Number(row.value_numeric),
+          unit: row.unit_code,
+          originalValue: row.original_value === null ? null : Number(row.original_value),
+          originalUnit: row.original_unit_code,
+        }
+      })
+    },
+
+    async skipOnboardingStep(input) {
+      await sql.begin(async (transaction) => {
+        await setAccountActor(transaction, input.accountId)
+        await transaction`
+          select identity.skip_onboarding_step(
+            ${input.accountId}::uuid,
+            ${input.attemptId}::uuid,
+            ${input.stepCode}
+          )
+        `
       })
     },
 
@@ -277,15 +470,13 @@ export function createIdentityOnboardingDatabase(): IdentityOnboardingDatabase {
             status: OnboardingAttempt['status']
             eligibility_status: OnboardingAttempt['eligibilityStatus']
             expires_at: Date
-            given_name: string | null
-            family_name: string | null
-            username: string | null
+            answers: RawOnboardingAnswers
           }[]
         >`select * from identity.read_current_onboarding(${accountId}::uuid)`
 
         // No open attempt is an answer, not a failure: it is also what an
         // already activated person sees.
-        if (!row) return { attempt: null, identity: null }
+        if (!row) return { attempt: null, answers: emptyAnswers() }
         return {
           attempt: {
             id: row.attempt_id,
@@ -293,14 +484,27 @@ export function createIdentityOnboardingDatabase(): IdentityOnboardingDatabase {
             eligibilityStatus: row.eligibility_status,
             expiresAt: new Date(row.expires_at),
           },
-          identity:
-            row.given_name && row.family_name && row.username
-              ? {
-                  givenName: row.given_name,
-                  familyName: row.family_name,
-                  username: row.username,
-                }
-              : null,
+          answers: {
+            identity: {
+              answered: row.answers.identity.answered,
+              value: row.answers.identity.value
+                ? {
+                    givenName: row.answers.identity.value.given_name,
+                    familyName: row.answers.identity.value.family_name,
+                    username: row.answers.identity.value.username,
+                  }
+                : null,
+            },
+            biologicalSex: row.answers.biological_sex,
+            primaryTrainingGoal: row.answers.primary_training_goal,
+            trainingDiscipline: row.answers.training_discipline,
+            trainingExperience: row.answers.training_experience,
+            focusAreas: row.answers.focus_areas,
+            bodyMeasures: {
+              answered: row.answers.body_measures.answered,
+              value: toBodyMeasures(row.answers.body_measures.value),
+            },
+          },
         }
       })
     },

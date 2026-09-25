@@ -18,11 +18,34 @@
  * and, more to the point, matches what every other iOS app does when going back.
  * The opening keeps its fade, because there is no spatial relationship between a
  * splash and the screen after it.
+ *
+ * **The tabs are a navigator, not screens on this stack.** They live in `(tabs)`,
+ * which owns their transition and keeps them mounted; this stack only knows the group
+ * exists. Everything that used to be here to make three stack peers behave — a
+ * cross-fade, a duration, a list of their names — went with them.
+ *
+ * **A session is a mode, not a page.** It rises from the bottom, which is what an app
+ * uses for something you are inside and then leave, and its back gesture is off: half
+ * a swipe should not drop somebody out of the workout they are recording.
+ *
+ * It is **not** `presentation: 'fullScreenModal'`, which was tried. A modal is
+ * presented in its own native view hierarchy and `SafeAreaView` reads no top inset
+ * there, so the header sat across the clock and the battery. `initialWindowMetrics`
+ * does not reach it either. A card with the same animation costs nothing and stays
+ * inside the safe area.
+ *
+ * No `animationDuration` anywhere but the splash. It only applies to
+ * `slide_from_bottom`, `fade_from_bottom`, `fade` and `simple_push` on iOS, so the
+ * 220 that used to sit beside `slide_from_right` was configuring nothing, and the
+ * platform's own timing is what makes a push feel native.
  */
 
 import { useAllfitFonts } from '@allfitone/react-native/fonts'
 import { ThemeProvider } from '@allfitone/react-native/theme'
+import { GestureHandlerRootView } from 'react-native-gesture-handler'
+import { StyleSheet } from 'react-native'
 import { Stack } from 'expo-router'
+import { useReducedMotion } from 'react-native-reanimated'
 import { StatusBar } from 'expo-status-bar'
 import { useColorScheme } from 'react-native'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
@@ -30,6 +53,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context'
 export default function RootLayout() {
   const { loaded, error } = useAllfitFonts()
   const scheme = useColorScheme()
+  const reduceMotion = useReducedMotion()
 
   // A font that fails to load is not recoverable at runtime and must not be
   // hidden: rendering anyway would ship the wrong typeface without a trace.
@@ -39,21 +63,39 @@ export default function RootLayout() {
   const theme = scheme === 'light' ? 'light' : 'dark'
 
   return (
-    <SafeAreaProvider>
-      <ThemeProvider theme={theme}>
-        <StatusBar style={theme === 'light' ? 'dark' : 'light'} />
-        <Stack
-          screenOptions={{
-            headerShown: false,
-            animation: 'slide_from_right',
-            animationDuration: 220,
-          }}
-        >
-          <Stack.Screen name="welcome" options={{ animation: 'fade', animationDuration: 260 }} />
-        </Stack>
-        {/* Withheld until onboarding completes: asking on the welcome screen,
+    // Wraps the app once. Without it gestures do nothing and report no error,
+    // which is the failure that looks like a broken animation.
+    <GestureHandlerRootView style={styles.root}>
+      <SafeAreaProvider>
+        <ThemeProvider theme={theme}>
+          <StatusBar style={theme === 'light' ? 'dark' : 'light'} />
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              // Reduced motion keeps the change and drops the travel, which for a screen
+              // transition is a cross-fade rather than nothing: something has to say the
+              // screen changed.
+              animation: reduceMotion ? 'fade' : 'slide_from_right',
+            }}
+          >
+            <Stack.Screen name="welcome" options={{ animation: 'fade', animationDuration: 260 }} />
+            {/* The group carries its own navigator, so this stack pushes it once and
+                never animates between what is inside it. */}
+            <Stack.Screen name="(tabs)" options={{ animation: 'fade', animationDuration: 160 }} />
+            <Stack.Screen
+              name="session/[executionId]"
+              options={{
+                animation: reduceMotion ? 'fade' : 'slide_from_bottom',
+                gestureEnabled: false,
+              }}
+            />
+          </Stack>
+          {/* Withheld until onboarding completes: asking on the welcome screen,
             before the person knows what Allfit is, is not informed consent. */}
-      </ThemeProvider>
-    </SafeAreaProvider>
+        </ThemeProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   )
 }
+
+const styles = StyleSheet.create({ root: { flex: 1 } })

@@ -1,7 +1,7 @@
 'use client'
 
-import { ProductWordmark } from '@allfitone/react/brand'
-import { Alert, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
+import { BrandLogoCarrier, ProductWordmark } from '@allfitone/react/brand'
+import { Alert, AlertAction, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
 import { Badge } from '@allfitone/react/components/badge'
 import { Button } from '@allfitone/react/components/button'
 import {
@@ -13,7 +13,6 @@ import {
   CardHeader,
   CardTitle,
 } from '@allfitone/react/components/card'
-import { Spinner } from '@allfitone/react/components/spinner'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@allfitone/react/components/tabs'
 import { Toaster } from '@allfitone/react/components/sonner'
 import {
@@ -33,7 +32,9 @@ import { LogoutForm } from './logout-form'
 import { ProfessionalCredentials } from './professional-credentials'
 import { ProfessionalMemberships } from './professional-memberships'
 import { ProfessionalPresentation } from './professional-presentation'
+import { LoadingCard } from './studio-frame'
 import { StudioApiError, type ProfessionalCatalogItem, type StudioMe } from '@/lib/studio-api'
+import { useCompactViewport } from '@/lib/use-compact-viewport'
 import {
   professionalCredentialTypesQueryOptions,
   professionalSpecialtiesQueryOptions,
@@ -95,8 +96,11 @@ export function ProfessionalProfileScreen() {
 
   return (
     <AccountShell onSpaces={() => router.push('/')}>
+      {/* A refresh of what is already on screen, never a first load. Gated on
+          `catalogsEnabled` it also fired while the catalogues loaded for the first
+          time, so "Actualizando tu cuenta…" sat above the catalogue loader. */}
       {(meQuery.isFetching && !meQuery.isPending) ||
-      (catalogsEnabled && (specialtiesQuery.isFetching || credentialTypesQuery.isFetching)) ? (
+      (catalogsReady && (specialtiesQuery.isFetching || credentialTypesQuery.isFetching)) ? (
         <p data-query-refreshing role="status" aria-live="polite">
           Actualizando tu cuenta…
         </p>
@@ -105,31 +109,30 @@ export function ProfessionalProfileScreen() {
         <Alert variant="danger" live="polite">
           <AlertTitle>No pudimos actualizar tu cuenta</AlertTitle>
           <AlertDescription>La información cargada permanece visible.</AlertDescription>
-          <Button onClick={() => void meQuery.refetch()}>Reintentar</Button>
+          <AlertAction>
+            <Button onClick={() => void meQuery.refetch()}>Reintentar</Button>
+          </AlertAction>
         </Alert>
       ) : null}
-      {catalogError && catalogsReady ? (
-        <Alert variant="danger" live="polite">
-          <AlertTitle>No pudimos actualizar los catálogos profesionales</AlertTitle>
-          <AlertDescription>Los datos cargados permanecen disponibles.</AlertDescription>
-          <Button onClick={retryCatalogs}>Reintentar</Button>
-        </Alert>
-      ) : null}
+      {/* The same card as every other wait in Studio. Composed here by hand, a
+          lone spinner and a paragraph sat against the page's left edge, and the
+          spinner's open arc read as a letter C. */}
       {meQuery.isPending ? (
-        <div data-profile-state role="status" aria-live="polite">
-          <Spinner label="Cargando tu cuenta" />
-          <p>Reuniendo tus espacios y opciones personales…</p>
-        </div>
+        <LoadingCard label="Reuniendo tus espacios y opciones personales…" />
       ) : !meQuery.data ? (
         <div data-profile-state>
           <Alert variant="danger" live="assertive">
-            <AlertTitle>No pudimos abrir tu cuenta</AlertTitle>
+            <AlertTitle role="heading" aria-level={1}>
+              No pudimos abrir tu cuenta
+            </AlertTitle>
             <AlertDescription>
               {meQuery.error instanceof StudioApiError && meQuery.error.status === 503
                 ? 'El servicio no está disponible en este momento. Puedes reintentar.'
                 : 'Ocurrió un error al reunir la información de tu cuenta.'}
             </AlertDescription>
-            <Button onClick={() => void meQuery.refetch()}>Reintentar</Button>
+            <AlertAction>
+              <Button onClick={() => void meQuery.refetch()}>Reintentar</Button>
+            </AlertAction>
           </Alert>
         </div>
       ) : !meQuery.data.profile && !setupStarted ? (
@@ -157,10 +160,7 @@ export function ProfessionalProfileScreen() {
           onBack={!meQuery.data.profile ? () => setSetupStarted(false) : undefined}
         />
       ) : (
-        <div data-profile-state role="status" aria-live="polite">
-          <Spinner label="Preparando la configuración profesional" />
-          <p>Reuniendo especialidades y tipos de credencial…</p>
-        </div>
+        <LoadingCard label="Reuniendo especialidades y tipos de credencial…" />
       )}
     </AccountShell>
   )
@@ -173,7 +173,6 @@ function AccountOverview({
   me: StudioMe
   onStartProfessionalSetup: () => void
 }) {
-  const activeSpaces = me.memberships.filter((membership) => membership.status === 'active').length
   return (
     <>
       <header data-profile-heading>
@@ -188,48 +187,32 @@ function AccountOverview({
         <Badge variant="success">Cuenta activa</Badge>
       </header>
 
-      <section data-account-map aria-label="Opciones de mi cuenta">
-        <Card data-account-track>
-          <CardHeader>
-            <CardDescription>Siempre disponible</CardDescription>
-            <CardTitle role="heading" aria-level={2}>
-              Mis espacios
-            </CardTitle>
-            <CardAction>
-              <Badge variant="outline">
-                {activeSpaces} {activeSpaces === 1 ? 'activo' : 'activos'}
-              </Badge>
-            </CardAction>
-          </CardHeader>
-          <CardContent data-account-body>
-            <p>Consulta las organizaciones donde participas y tu historial de vinculaciones.</p>
-          </CardContent>
-          <CardFooter>
-            <Badge variant="success">Activo</Badge>
-          </CardFooter>
-        </Card>
-
-        <Card data-account-track>
-          <CardHeader>
-            <CardDescription>Solo si prestas servicios</CardDescription>
-            <CardTitle role="heading" aria-level={2}>
-              Perfil profesional
-            </CardTitle>
-            <CardAction>
-              <Badge variant="outline">Opcional</Badge>
-            </CardAction>
-          </CardHeader>
-          <CardContent data-account-body>
-            <p>
-              Presenta tu experiencia y, si quieres, declara credenciales. Administrar un espacio no
-              requiere completar esta información.
-            </p>
-          </CardContent>
-          <CardFooter>
+      {/* There used to be a "Mis espacios" card here, signposting the section
+          two hundred pixels below it on the same screen. It repeated that
+          section's own heading, so the page offered the same h2 twice and a
+          heading list read as two destinations for one. */}
+      <Card data-account-track>
+        <CardHeader>
+          <CardDescription>Solo si prestas servicios</CardDescription>
+          <CardTitle role="heading" aria-level={2}>
+            Perfil profesional
+          </CardTitle>
+          <CardAction>
+            <Badge variant="outline">Opcional</Badge>
+          </CardAction>
+        </CardHeader>
+        <CardContent data-account-body>
+          <p>
+            Presenta tu experiencia y, si quieres, declara credenciales. Administrar un espacio no
+            requiere completar esta información.
+          </p>
+        </CardContent>
+        <CardFooter>
+          <div data-card-footer-actions>
             <Button onClick={onStartProfessionalSetup}>Configurar perfil profesional</Button>
-          </CardFooter>
-        </Card>
-      </section>
+          </div>
+        </CardFooter>
+      </Card>
 
       <ProfessionalMemberships memberships={me.memberships} />
     </>
@@ -269,7 +252,11 @@ function ProfessionalArea({
               roles, permisos ni membresías.
             </p>
           </div>
-          <Badge variant="outline">Sin publicar</Badge>
+          {/* No badge here. "Sin publicar" named a state the product does not
+              have — `ProfessionalProfile` carries no published, draft or
+              visibility field — and implied that saving would make the profile
+              public, which nothing does. Its counterpart on the created screen
+              says "Perfil creado", so it was not even the same vocabulary. */}
         </header>
         <div data-profile-setup-actions>
           <Button variant="ghost" onClick={onCancelSetup}>
@@ -305,7 +292,10 @@ function ProfessionalArea({
       <Tabs defaultValue="presentation" data-profile-tabs>
         <TabsList variant="line" aria-label="Secciones de mi cuenta">
           <TabsTrigger value="presentation">Presentación</TabsTrigger>
-          <TabsTrigger value="credentials">Credenciales opcionales</TabsTrigger>
+          {/* One word, like its two siblings. "Credenciales opcionales" was
+              193px of a 358px strip and pushed "Mis espacios" behind a scroll;
+              the panel itself opens by saying they are not required. */}
+          <TabsTrigger value="credentials">Credenciales</TabsTrigger>
           <TabsTrigger value="spaces">Mis espacios</TabsTrigger>
         </TabsList>
         <TabsContent value="presentation">
@@ -348,35 +338,51 @@ function ProfessionalCatalogError({
   return (
     <div data-profile-state>
       <Alert variant="danger" live="assertive">
-        <AlertTitle>No pudimos preparar el perfil profesional</AlertTitle>
+        <AlertTitle role="heading" aria-level={1}>
+          No pudimos preparar el perfil profesional
+        </AlertTitle>
         <AlertDescription>
           {retryable
             ? 'Los catálogos profesionales no están disponibles en este momento.'
             : 'Ocurrió un error al reunir los catálogos profesionales.'}
         </AlertDescription>
-        <Button onClick={onRetry}>Reintentar</Button>
-        {onBack ? (
-          <Button variant="ghost" onClick={onBack}>
-            Volver a mi cuenta
-          </Button>
-        ) : null}
+        <AlertAction>
+          <Button onClick={onRetry}>Reintentar</Button>
+          {onBack ? (
+            <Button variant="ghost" onClick={onBack}>
+              Volver a mi cuenta
+            </Button>
+          ) : null}
+        </AlertAction>
       </Alert>
     </div>
   )
 }
 
 function AccountShell({ children, onSpaces }: { children: React.ReactNode; onSpaces: () => void }) {
+  const compact = useCompactViewport()
   return (
     <WorkspaceShell>
       <WorkspaceMain data-profile-canvas>
         <WorkspaceHeader data-profile-header>
-          <ProductWordmark
-            product="studio"
-            surface="light"
-            title="Allfit Studio"
-            width={138}
-            height={28}
-          />
+          {/* `WorkspaceActions` is `shrink-0`, so the brand absorbs every bit of
+              squeeze: the 138px wordmark rendered at 14px on a 320px phone. The
+              compact mark fits beside both labelled controls from 360px up
+              (27+125+137+gaps = 309 of 328), and below that the CSS hides it —
+              the brand is shown whole or not at all, never crushed. */}
+          <span data-profile-brand>
+            {compact ? (
+              <BrandLogoCarrier title="Allfit Studio" height={28} />
+            ) : (
+              <ProductWordmark
+                product="studio"
+                surface="light"
+                title="Allfit Studio"
+                width={138}
+                height={28}
+              />
+            )}
+          </span>
           <WorkspaceActions>
             <Button variant="ghost" size="sm" onClick={onSpaces}>
               Mis espacios
@@ -385,7 +391,10 @@ function AccountShell({ children, onSpaces }: { children: React.ReactNode; onSpa
           </WorkspaceActions>
         </WorkspaceHeader>
         <WorkspaceContent data-profile-content>{children}</WorkspaceContent>
-        <Toaster position="bottom-right" richColors closeButton />
+        {/* No `richColors`: it swaps the Design System's tokens for the toast
+            library's own palette, whose green reads 4.25:1 and misses AA. The
+            type still arrives through the icon. */}
+        <Toaster position="bottom-right" closeButton />
       </WorkspaceMain>
     </WorkspaceShell>
   )

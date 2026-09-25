@@ -111,13 +111,13 @@ insert into identity.body_progress_records (
   id, person_id, metric_code, value_numeric, unit_code, measured_on
 ) values
   ('019ae000-0000-7000-8000-000000000301', '019ae000-0000-7000-8000-000000000005',
-    'weight', 70, 'kg', date '2026-09-01'),
+    'body_weight', 70, 'kg', date '2026-09-01'),
   ('019ae000-0000-7000-8000-000000000302', '019ae000-0000-7000-8000-000000000005',
-    'waist', 0.8, 'm', date '2026-09-01'),
+    'waist', 80, 'cm', date '2026-09-01'),
   ('019ae000-0000-7000-8000-000000000303', '019ae000-0000-7000-8000-000000000006',
-    'weight', 80, 'kg', date '2026-09-02'),
+    'body_weight', 80, 'kg', date '2026-09-02'),
   ('019ae000-0000-7000-8000-000000000304', '019ae000-0000-7000-8000-000000000006',
-    'hip', 0.9, 'm', date '2026-09-02');
+    'hip', 90, 'cm', date '2026-09-02');
 
 insert into privacy.disposition_cases (
   id, subject_person_id, origin, status, requested_by_person_id, opened_at
