@@ -834,12 +834,12 @@ export const SCREENS: Screen[] = [
     },
   },
   {
-    stories: 'HU-006 · my spaces',
+    stories: 'HU-006 · the memberships you hold',
     path: '/account',
     fixture: withProfile,
     reveal: async (page) => {
-      await page.getByRole('tab', { name: 'Mis espacios' }).click()
-      await expect(page.getByText('Espacios activos')).toBeVisible()
+      await page.getByRole('tab', { name: 'Vinculaciones' }).click()
+      await expect(page.getByText('Vinculaciones activas')).toBeVisible()
     },
   },
   {
@@ -925,12 +925,12 @@ export const SCREENS: Screen[] = [
     },
   },
   {
-    stories: 'HU-006 · no active spaces',
+    stories: 'HU-006 · no memberships left',
     path: '/account',
     fixture: withoutActiveSpaces,
     reveal: async (page) => {
-      await page.getByRole('tab', { name: 'Mis espacios' }).click()
-      await expect(page.getByText('Aún no tienes espacios')).toBeVisible()
+      await page.getByRole('tab', { name: 'Vinculaciones' }).click()
+      await expect(page.getByText('Aún no tienes vinculaciones')).toBeVisible()
     },
   },
   {

@@ -54,8 +54,8 @@ test('presents an optional profile with active and terminated membership context
   await expect(page.getByText('Perfil creado')).toBeVisible()
   await expect(page.getByText('Sus credenciales son opcionales', { exact: false })).toBeVisible()
 
-  await page.getByRole('tab', { name: 'Mis espacios' }).click()
-  await expect(page.getByText('Espacios activos')).toBeVisible()
+  await page.getByRole('tab', { name: 'Vinculaciones' }).click()
+  await expect(page.getByText('Vinculaciones activas')).toBeVisible()
   await expect(page.getByText('Vinculaciones finalizadas')).toBeVisible()
   await expect(page.getByText(activeMembership.display_name)).toBeVisible()
   await page.getByRole('button', { name: 'Historial de vinculaciones · 1' }).click()
