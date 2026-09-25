@@ -3,9 +3,9 @@
 -- **A number without a period is not shown.** Every metric carries the window it was
 -- measured over, because a count means nothing until it says since when.
 --
--- **What cannot be computed is empty, never zero.** Payments have no tables and Space
--- persists no session, so those metrics answer `not_modelled` with no value. Zero
--- would be a claim about the business; this is a claim about the platform.
+-- **What cannot be computed is empty, never zero.** Payments have no tables, so those
+-- metrics answer `not_modelled` with no value. Zero would be a claim about the
+-- business; this is a claim about the platform.
 --
 -- **A count of people hides a small group.** Below the declared minimum the figure is
 -- withheld, so no metric narrows the platform down to somebody. A true zero is still
@@ -15,7 +15,7 @@
 
 begin;
 
-select plan(24);
+select plan(29);
 
 create function pg_temp.metric(p_panel jsonb, p_key text) returns integer
 language sql immutable as $fn$
@@ -160,19 +160,17 @@ select is(
 select results_eq(
   $$ select entry->>'key', entry->>'availability', entry->>'value'
      from biz_before, jsonb_array_elements(panel->'metrics') as entry
-     where entry->>'key' in ('active_people_this_week', 'active_subscriptions',
-       'billed_this_month', 'premium_people')
+     where entry->>'key' in ('active_subscriptions', 'billed_this_month', 'premium_people')
      order by 1 $$,
-  $$ values ('active_people_this_week'::text, 'not_modelled'::text, null::text),
-            ('active_subscriptions'::text, 'not_modelled'::text, null::text),
+  $$ values ('active_subscriptions'::text, 'not_modelled'::text, null::text),
             ('billed_this_month'::text, 'not_modelled'::text, null::text),
             ('premium_people'::text, 'not_modelled'::text, null::text) $$,
-  'Space activity, subscriptions, billing and Premium answer not modelled with no figure'
+  'subscriptions, billing and Premium answer not modelled with no figure'
 );
 
 select is(
-  (select pg_temp.metric_field(panel, 'active_people_this_week', 'reason') from biz_before),
-  'space_sessions_not_recorded',
+  (select pg_temp.metric_field(panel, 'active_subscriptions', 'reason') from biz_before),
+  'payments_not_modelled',
   'and each one says why, so the gap can be argued with'
 );
 
@@ -256,6 +254,85 @@ select results_eq(
   $$ values ('below_threshold'::text, null::text) $$,
   'a group of people smaller than the minimum is withheld instead of counted out loud'
 );
+
+-- ---------------------------------------------------------------------------
+-- People training: who was active this week
+-- ---------------------------------------------------------------------------
+
+-- Six of the fresh people trained inside the window, one of them twice. The person
+-- who arrived forty days ago trained then, and the one who closed their account
+-- trained today: neither is an active person this week.
+insert into execution.executed_sessions (
+  id, person_id, activity_type_id, result_contract_id, contract_version,
+  started_at, timezone, requested_level, capture_source
+)
+select
+  ('019b3000-0000-7000-8000-00000000060' || step)::uuid,
+  ('019b3000-0000-7000-8000-00000000030' || step)::uuid,
+  '019c0000-0000-7000-8000-000000000011', '019c0000-0000-7000-8000-000000000031', 1,
+  clock_timestamp() - interval '1 day', 'America/Bogota', 'summary', 'manual'
+from generate_series(1, 6) as step;
+
+insert into execution.executed_sessions (
+  id, person_id, activity_type_id, result_contract_id, contract_version,
+  started_at, timezone, requested_level, capture_source
+) values
+  ('019b3000-0000-7000-8000-000000000611', '019b3000-0000-7000-8000-000000000301',
+    '019c0000-0000-7000-8000-000000000011', '019c0000-0000-7000-8000-000000000031', 1,
+    clock_timestamp() - interval '3 days', 'America/Bogota', 'summary', 'manual'),
+  ('019b3000-0000-7000-8000-000000000612', '019b3000-0000-7000-8000-000000000401',
+    '019c0000-0000-7000-8000-000000000011', '019c0000-0000-7000-8000-000000000031', 1,
+    clock_timestamp() - interval '40 days', 'America/Bogota', 'summary', 'manual'),
+  ('019b3000-0000-7000-8000-000000000613', '019b3000-0000-7000-8000-000000000402',
+    '019c0000-0000-7000-8000-000000000011', '019c0000-0000-7000-8000-000000000031', 1,
+    clock_timestamp() - interval '1 day', 'America/Bogota', 'summary', 'manual');
+
+create temporary table biz_training on commit drop as
+select support.read_business_panel(
+  '019b3000-0000-7000-8000-000000000003', '019b3000-0000-7000-8000-000000000023'
+) as panel;
+
+select is(
+  (select pg_temp.metric(panel, 'active_people_this_week') from biz_training),
+  6,
+  'a person who trained this week was active, counted once however often they trained'
+);
+
+select is(
+  (select pg_temp.metric_field(panel, 'active_people_this_week', 'period.kind')
+   from biz_training),
+  'week',
+  'and the figure says it is a weekly one'
+);
+
+-- Somebody without the duty reads no figure at all, so this cannot become a way to
+-- learn who trains by watching the count move.
+select throws_ok(
+  $$ select support.read_business_panel(
+       '019b3000-0000-7000-8000-000000000004', '019b3000-0000-7000-8000-000000000024'
+     ) $$,
+  '42501', null,
+  'and the training figure is behind the same duty as every other one'
+);
+
+-- The floor the panel counts on. The panel refuses an operator without the duty
+-- before the policy is consulted, so the policy is asked on its own.
+
+select ok(
+  access_control.counts_platform_metrics(),
+  'the duty is what lets the count see the training at all'
+);
+
+select ok(
+  not (
+    select access_control.counts_platform_metrics()
+    from (select set_config('app.actor_person_id',
+      '019b3000-0000-7000-8000-000000000001', true)) as other_actor
+  ),
+  'and an administrator with other duties and not this one sees no row to count'
+);
+
+select set_config('app.actor_person_id', '019b3000-0000-7000-8000-000000000003', true);
 
 -- ---------------------------------------------------------------------------
 -- Gyms: how many exist, and how many actually operate

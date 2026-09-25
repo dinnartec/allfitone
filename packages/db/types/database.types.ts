@@ -18,6 +18,7 @@ export type Database = {
         Args: { p_membership_id: string }
         Returns: boolean
       }
+      counts_platform_metrics: { Args: never; Returns: boolean }
       has_capability: {
         Args: { p_capability_code: string; p_organization_id: string }
         Returns: boolean
@@ -39,6 +40,10 @@ export type Database = {
       org: { Args: never; Returns: string }
       owns_membership: { Args: { p_membership_id: string }; Returns: boolean }
       person: { Args: never; Returns: string }
+      reads_under_break_glass: {
+        Args: { p_category: string; p_subject_person_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       [_ in never]: never

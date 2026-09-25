@@ -38,11 +38,11 @@ function panel(metrics: SupportBusinessMetric[]): SupportBusinessPanel {
 
 describe('business panel presentation', () => {
   test('a figure the platform cannot give is blank with a reason, never zero', () => {
-    const space = metric({
-      key: 'active_people_this_week',
+    const premium = metric({
+      key: 'premium_people',
       availability: 'not_modelled',
       value: null,
-      reason: 'space_sessions_not_recorded',
+      reason: 'payments_not_modelled',
       period: WEEK,
     })
     const payments = metric({
@@ -52,11 +52,25 @@ describe('business panel presentation', () => {
       reason: 'payments_not_modelled',
     })
 
-    expect(metricValue(space)).toBe('—')
-    expect(metricNote(space, 5)).toContain('No es cero')
+    expect(metricValue(premium)).toBe('—')
     expect(metricValue(payments)).toBe('—')
     expect(metricNote(payments, 5)).toContain('todavía no guarda pagos')
-    expect(metricBadge(space).label).toBe('Sin datos aún')
+    expect(metricBadge(premium).label).toBe('Sin datos aún')
+  })
+
+  test('people training this week is a figure like any other, and says of what week', () => {
+    const training = metric({
+      key: 'active_people_this_week',
+      availability: 'available',
+      value: 42,
+      reason: null,
+      period: WEEK,
+    })
+
+    expect(metricValue(training)).toBe('42')
+    expect(metricNote(training, 5)).toBeNull()
+    expect(metricHint('active_people_this_week')).toContain('entrenó')
+    expect(periodPhrase(training.period)).toContain('Del ')
   })
 
   test('a reason the screen does not know still says the figure is missing, not zero', () => {

@@ -23,12 +23,13 @@ test('every figure arrives with its period, and what cannot be computed is blank
   await expect(arrivals.locator('[data-business-value]')).toHaveText('37')
   await expect(arrivals.locator('[data-business-period]')).toContainText('Del ')
 
-  // The question the founder is actually asking has no answer at all, and says so
-  // instead of borrowing the Studio figure next to it.
+  // The question the founder is actually asking, answered from the training itself
+  // rather than borrowed from the Studio figure next to it.
   const training = page.locator('[data-business-metric="active_people_this_week"]')
-  await expect(training.locator('[data-business-value]')).toHaveText('—')
-  await expect(training.locator('[data-business-note]')).toContainText('No es cero')
-  await expect(training).toHaveAttribute('data-availability', 'not_modelled')
+  await expect(training.locator('[data-business-value]')).toHaveText('118')
+  await expect(training.locator('[data-business-period]')).toContainText('Del ')
+  await expect(training.locator('[data-business-note]')).toHaveCount(0)
+  await expect(training).toHaveAttribute('data-availability', 'available')
 
   const money = page.locator('[data-business-metric="billed_this_month"]')
   await expect(money.locator('[data-business-value]')).toHaveText('—')

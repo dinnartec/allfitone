@@ -775,9 +775,9 @@ export function businessPanelRecord(
       },
       {
         key: 'active_people_this_week',
-        availability: 'not_modelled',
-        value: null,
-        reason: 'space_sessions_not_recorded',
+        availability: 'available',
+        value: 118,
+        reason: null,
         period: lastWeek,
       },
       {

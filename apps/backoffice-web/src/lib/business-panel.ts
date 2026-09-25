@@ -80,9 +80,9 @@ const METRIC_HINTS: Record<string, string> = {
   registered_people: 'Cuentas abiertas que siguen abiertas. Quien cerró la suya no cuenta.',
   new_people_this_week: 'Cuentas abiertas dentro de la ventana, no personas que volvieron.',
   active_people_this_week:
-    'Gente entrenando en Space. Es la pregunta del negocio, y hoy no tiene respuesta.',
+    'Quien entrenó dentro de la ventana, contado una vez por más veces que haya entrenado. Abrir la aplicación no es estar activo.',
   studio_active_professionals_this_week:
-    'Profesionales que trabajaron en Studio. Es la única actividad que la plataforma guarda, y no sustituye a la anterior.',
+    'Profesionales que trabajaron en Studio. Es otra pregunta que la de arriba y no sustituye a la anterior.',
   organizations: 'Todos, sin importar en qué estado estén.',
   operating_organizations: 'Reclamados, no cerrados y con al menos una persona en el equipo.',
   unclaimed_organizations: 'Allfit los creó y su dueño todavía no los aceptó.',
@@ -92,8 +92,6 @@ const METRIC_HINTS: Record<string, string> = {
 const REASONS: Record<string, string> = {
   payments_not_modelled:
     'Allfit todavía no guarda pagos ni suscripciones. Cuando existan, esta cifra aparece aquí.',
-  space_sessions_not_recorded:
-    'Space no guarda sesiones, así que no hay señal para contar quién entrenó. No es cero: es que no se puede saber.',
 }
 
 export const NOT_MODELLED_NOTE = 'Allfit todavía no guarda los datos para esta cifra.'
