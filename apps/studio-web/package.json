@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "next dev --port 3000",
     "dev:e2e": "next dev --hostname 127.0.0.1 --port 3101",
+    "start:e2e": "next build && next start --hostname 127.0.0.1 --port 3101",
     "build": "next build",
     "start": "next start --port 3000",
     "lint": "eslint . --ignore-pattern .next-local --ignore-pattern .next-e2e --ignore-pattern .next-build --ignore-pattern playwright-report --ignore-pattern test-results",
@@ -18,7 +19,7 @@
     "@allfitone/react": "0.13.0",
     "@allfitone/telemetry": "workspace:*",
     "@tanstack/react-query": "5.101.4",
-    "next": "16.2.11",
+    "next": "16.3.3",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },
