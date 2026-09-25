@@ -20,7 +20,7 @@
  * **Accent marks where you are, not where you could be.** Every empty field outlined in
  * cyan made the card read as an alarm, and Ink & Signal reserves the colour for action,
  * focus and selection — an untouched field is none of those. The field lights up when
- * it has focus and the open card is edged in the tonal border, not the full accent.
+ * it has focus, and the open card is set apart by its fill alone, with no edge.
  *
  * **Opening an exercise is animated because the list moves under it.** Swapping a
  * 44-point row for a 300-point card with no transition reads as a glitch, and somebody
@@ -42,6 +42,7 @@ import { Text } from '@allfitone/react-native/text'
 import { useTheme } from '@allfitone/react-native/theme'
 import { transparent } from '@allfitone/react-native/tokens'
 import { FoundationIcon } from '@allfitone/react-native/icons'
+import { Image } from 'expo-image'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native'
@@ -56,6 +57,8 @@ import Animated, {
 } from 'react-native-reanimated'
 
 import { ApiError } from '../../src/client'
+import { createSpaceContentFlow } from '../../src/client/content-transport'
+import { readExerciseLibrary } from '../../src/client/exercise-library'
 import { createSpaceExecutionFlow } from '../../src/client/execution-transport'
 import { SPRING } from '../../src/client/motion'
 import {
@@ -133,6 +136,22 @@ export default function Session() {
   const [failure, setFailure] = useState<string | undefined>(undefined)
   const [closing, setClosing] = useState(false)
   const [deciding, setDeciding] = useState(false)
+
+  /** Each movement's demonstration, by id: the catalogue's, not the session's. */
+  const [previews, setPreviews] = useState<ReadonlyMap<string, string | null>>(new Map())
+
+  // Behind the session, not in front of it: the sets are what somebody came to log.
+  useEffect(() => {
+    let active = true
+    readExerciseLibrary(createSpaceContentFlow())
+      .then((library) => {
+        if (active) setPreviews(new Map(library.movements.map((one) => [one.id, one.demo_url])))
+      })
+      .catch(() => undefined)
+    return () => {
+      active = false
+    }
+  }, [])
 
   const revision = useRef(0)
   const pending = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
@@ -272,7 +291,7 @@ export default function Session() {
         {/* Down, not back: the session is set aside, still open, and Hoy carries it. */}
         <IconButton icon="expand" accessibilityLabel="Minimizar la sesión" onPress={minimize} />
         <View style={styles.heading}>
-          <Text role="display" size="xl" uppercase numberOfLines={1} accessibilityRole="header">
+          <Text role="control" size="lg" numberOfLines={2} accessibilityRole="header">
             {title}
           </Text>
           {caption ? (
@@ -318,6 +337,7 @@ export default function Session() {
           <Exercise
             key={exercise.position}
             exercise={exercise}
+            picture={exercise.movementId ? (previews.get(exercise.movementId) ?? null) : null}
             open={exercise.position === openPosition}
             onToggle={() =>
               setOpenPosition((current) => (current === exercise.position ? 0 : exercise.position))
@@ -395,11 +415,12 @@ function Score({
  *
  * A single component rather than two, because two meant the header jumped from one
  * tree to another mid-animation and nothing could interpolate across the swap. Here the
- * header never unmounts: what changes is the drawer's height, the shell's fill and edge,
+ * header never unmounts: what changes is the drawer's height, the shell's fill,
  * and which way the chevron points — all off the same spring.
  */
 function Exercise({
   exercise,
+  picture,
   open,
   onToggle,
   onEdit,
@@ -408,6 +429,7 @@ function Exercise({
   onExplain,
 }: {
   readonly exercise: WorkingExercise
+  readonly picture: string | null
   readonly open: boolean
   readonly onToggle: () => void
   readonly onEdit: (
@@ -437,13 +459,10 @@ function Exercise({
   // colour the Design System does not have. Fading from `transparent` instead would
   // run both of these through black.
   const surface = theme.color.background.surface
-  const edge = theme.color.accent.tonalBorder
   const noSurface = transparent(surface)
-  const noEdge = transparent(edge)
 
   const shell = useAnimatedStyle(() => ({
     backgroundColor: interpolateColor(progress.value, [0, 1], [noSurface, surface]),
-    borderColor: interpolateColor(progress.value, [0, 1], [noEdge, edge]),
     paddingBottom: OPEN_PADDING * progress.value,
   }))
 
@@ -467,8 +486,6 @@ function Exercise({
   }))
 
   const summary = useAnimatedStyle(() => ({ opacity: 1 - progress.value }))
-  const quiet = useAnimatedStyle(() => ({ opacity: 1 - progress.value }))
-  const loud = useAnimatedStyle(() => ({ opacity: progress.value }))
 
   const thread = useAnimatedStyle(() => ({
     opacity: 1 - progress.value,
@@ -528,21 +545,22 @@ function Exercise({
         style={styles.exerciseHeader}
       >
         <Animated.View style={[styles.thread, thread]} />
-        <Text role="control" size="xs" color={complete ? 'success' : open ? 'accent' : 'muted'}>
-          {String(exercise.position).padStart(2, '0')}
-        </Text>
-        {/* Two titles crossfading rather than one changing role: the canvas sets the
-            open exercise in display and the rest in body, and a font cannot animate. */}
-        <View style={styles.headerTitle}>
-          <Animated.View style={quiet}>
-            <Text role="control" size="md" numberOfLines={1}>
-              {exercise.movement}
-            </Text>
-          </Animated.View>
-          <Animated.View style={[styles.headerOver, styles.headerOpen, loud]}>
-            <Text role="display" size="xl" uppercase numberOfLines={1} style={styles.headerFlex}>
-              {exercise.movement}
-            </Text>
+        {/* Still, like the routine editor: one frame tells a press from a fly, and a
+            dozen looping clips would cost more than they say. */}
+        <Image
+          source={picture}
+          style={[styles.preview, { backgroundColor: theme.color.background.surfaceSubtle }]}
+          contentFit="contain"
+          autoplay={false}
+          recyclingKey={exercise.movementId}
+          accessible={false}
+        />
+        <View style={[styles.headerTitle, styles.headerOpen]}>
+          <Text role="control" size="md" numberOfLines={1} style={styles.headerFlex}>
+            {exercise.movement}
+          </Text>
+          {/* Only the open exercise offers how it is done, and a shut row keeps the width. */}
+          {open ? (
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={`Cómo se hace ${exercise.movement}`}
@@ -556,7 +574,7 @@ function Exercise({
                 decorative
               />
             </Pressable>
-          </Animated.View>
+          ) : null}
         </View>
         <Animated.View style={[styles.summary, summary]}>
           {/* A tick as well as the colour. Green alone is a difference some people
@@ -789,11 +807,12 @@ const styles = StyleSheet.create({
   score: { flex: 1, alignItems: 'center', gap: 1 },
   divider: { width: 1, height: 30 },
   list: { gap: 6, paddingTop: 16, paddingBottom: 32 },
-  shell: { borderRadius: 22, borderWidth: 1.5, paddingHorizontal: CARD_INSET },
+  shell: { borderRadius: 22, paddingHorizontal: CARD_INSET },
   exerciseHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, height: 44 },
-  headerTitle: { flex: 1, justifyContent: 'center' },
+  headerTitle: { flex: 1 },
+  // Below the row's 44, so the open card keeps a margin above it.
+  preview: { width: 40, height: 40, borderRadius: 10 },
   summary: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  headerOver: { position: 'absolute', left: 0, right: 0 },
   headerOpen: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   headerFlex: { flexShrink: 1 },
   // Clipped, so the animated height is what reveals the drawer.
