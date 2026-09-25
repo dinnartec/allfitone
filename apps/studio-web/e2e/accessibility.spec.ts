@@ -187,7 +187,10 @@ test.describe('layout', () => {
       // assistive technology, which is correct and takes the h1 with it, so the
       // guarantee moves to the dialog: it must carry its own name.
       if (screen.hasHeading ?? true) {
-        const dialog = page.getByRole('dialog')
+        // `alertdialog` is its own role, and the confirmations use it — asking
+        // only for `dialog` sent those screens back to the h1 rule they cannot
+        // satisfy.
+        const dialog = page.locator('[role="dialog"], [role="alertdialog"]')
         if ((await dialog.count()) > 0) {
           await expect(dialog.first()).toHaveAccessibleName(/\S/)
         } else {

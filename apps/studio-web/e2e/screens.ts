@@ -90,6 +90,25 @@ export async function openScreen(page: Page, screen: Screen, viewport: Viewport)
   await page.goto(screen.path)
   await (screen.settled ?? settledByHeading)(page)
   await screen.reveal?.(page)
+  await settleAnimations(page)
+}
+
+/**
+ * Audit the frame a person reads, not one on the way to it. A dialog is
+ * "visible" to Playwright the instant it has a box, while its entrance is still
+ * at `opacity: 0`, and axe composites the text against whatever shows through:
+ * the revocation dialog reported 4.30:1 mid-fade and passes once it lands.
+ *
+ * Endless animations — the spinner, the skeleton shimmer — are skipped, because
+ * a loading screen would otherwise never settle.
+ */
+async function settleAnimations(page: Page): Promise<void> {
+  await page.waitForFunction(() =>
+    document
+      .getAnimations()
+      .filter((animation) => animation.effect?.getComputedTiming().iterations !== Infinity)
+      .every((animation) => animation.playState !== 'running'),
+  )
 }
 
 const workspace = `/organizations/${activeMembership.organization_id}`
@@ -257,6 +276,18 @@ const stall = (path: string) => () =>
 const failing = (path: string, status: number, code: string) => () =>
   createStudioApiFixture({
     intercept: (request) => (request.path === path ? { status, body: error(code) } : undefined),
+  })
+
+/** A read that never answers, for a person who is already a member. */
+const stallingFor = (memberships: StudioApiFixture['memberships'], paths: RegExp) => () =>
+  createStudioApiFixture({
+    memberships,
+    intercept: async (request) => {
+      if (request.method === 'GET' && paths.test(request.path)) {
+        await new Promise((resolve) => setTimeout(resolve, 15_000))
+      }
+      return undefined
+    },
   })
 
 /**
@@ -872,6 +903,19 @@ export const SCREENS: Screen[] = [
     },
   },
   {
+    // Retiring is the one credential action that cannot be undone from the
+    // screen, so it asks first. The dialog is also where issue #42's question
+    // about `AlertDialogHeader` spacing becomes answerable.
+    stories: 'HU-005 · confirming a credential retirement',
+    path: '/account',
+    fixture: withProfile,
+    reveal: async (page) => {
+      await page.getByRole('tab', { name: 'Credenciales', exact: true }).click()
+      await page.getByRole('button', { name: 'Retirar' }).click()
+      await expect(page.getByText('¿Retirar esta credencial?')).toBeVisible()
+    },
+  },
+  {
     stories: 'HU-005 · no credentials declared yet',
     path: '/account',
     fixture: withProfileAndNoCredentials,
@@ -974,6 +1018,24 @@ export const SCREENS: Screen[] = [
     },
   },
   {
+    stories: 'HU-017 · the team directory while it loads',
+    path: `${workspace}/team`,
+    fixture: stallingFor([activeMembership], /\/organizations\/[^/]+\/memberships$/),
+    settled: async (page) => {
+      await settledByHeading(page)
+      await expect(page.getByText('Cargando integrantes')).toBeVisible()
+    },
+  },
+  {
+    stories: 'HU-015 · the invitation register while it loads',
+    path: `${workspace}/team/invitations`,
+    fixture: stallingFor([activeMembership], /\/organizations\/[^/]+\/invitations$/),
+    settled: async (page) => {
+      await settledByHeading(page)
+      await expect(page.getByText('Cargando invitaciones')).toBeVisible()
+    },
+  },
+  {
     stories: 'HU-017 · the team directory could not be read',
     path: `${workspace}/team`,
     fixture: failingFor([activeMembership], /\/organizations\/[^/]+\/memberships$/),
@@ -990,6 +1052,15 @@ export const SCREENS: Screen[] = [
     settled: async (page) => {
       await settledByHeading(page)
       await expect(page.getByText('No pudimos cargar los roles')).toBeVisible()
+    },
+  },
+  {
+    stories: 'HU-016 · confirming an invitation revocation',
+    path: `${workspace}/team/invitations`,
+    fixture: withIssuedInvitations,
+    reveal: async (page) => {
+      await page.getByRole('button', { name: 'Revocar' }).first().click()
+      await expect(page.getByText('¿Revocar esta invitación?')).toBeVisible()
     },
   },
   {

@@ -310,7 +310,6 @@ function ProfessionalArea({
           <ProfessionalCredentials
             credentials={profile.credentials}
             credentialTypes={credentialTypes}
-            profileExists
             onSessionFailure={onSessionFailure}
             onRefreshMe={onRefreshMe}
             onCredentialsChange={(credentials) =>
