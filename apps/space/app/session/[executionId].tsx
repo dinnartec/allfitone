@@ -45,7 +45,7 @@ import { FoundationIcon } from '@allfitone/react-native/icons'
 import { Image } from 'expo-image'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native'
+import { Keyboard, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import Animated, {
   interpolateColor,
@@ -332,7 +332,13 @@ export default function Session() {
 
       {failure ? <InlineAlert message={failure} /> : null}
 
-      <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
+      {/* `handled`: with the keyboard up, the tap on a tick used to only close it and
+          had to be made twice. A tap on nothing still closes it. */}
+      <ScrollView
+        contentContainerStyle={styles.list}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
         {exercises.map((exercise) => (
           <Exercise
             key={exercise.position}
@@ -696,7 +702,11 @@ function SetRow({
               accessibilityRole="checkbox"
               accessibilityState={{ checked: set.done }}
               accessibilityLabel={`Marcar la serie ${index + 1}`}
-              onPress={() => onEdit({ done: !set.done })}
+              onPress={() => {
+                // The set is over; the keyboard would sit over the ones still to come.
+                Keyboard.dismiss()
+                onEdit({ done: !set.done })
+              }}
               style={[
                 styles.cell,
                 {
