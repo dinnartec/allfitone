@@ -673,11 +673,11 @@ function Carousel({
   })
 
   /**
-   * Cuál va delante: enciende su filo y es lo que se lee en voz alta.
+   * Cuál va delante: el punto que se enciende y lo que se lee en voz alta.
    *
    * **Cambia al cruzar la mitad, no cuando el carrusel se para.** Estaba atado a
    * `onMomentumScrollEnd`, que no dispara hasta que la inercia termina del todo, así
-   * que el azul llegaba segundos después de que la tarjeta ya estuviera en su sitio.
+   * que la marca llegaba segundos después de que la tarjeta ya estuviera en su sitio.
    *
    * Y sigue sin ser un render por fotograma: la reacción vive en el hilo de la
    * interfaz y sólo cruza al de React cuando el número redondeado cambia, que son dos
@@ -704,7 +704,7 @@ function Carousel({
         onScroll={follow}
         scrollEventThrottle={16}
       >
-        {week.map((one, index) => {
+        {week.map((one) => {
           const routine = routineOfVersion(routines, one.routine.template_version_id)
           return (
             <HomeCard
@@ -728,7 +728,6 @@ function Carousel({
               // El reverso. Lo que no se respondió no viaja, y la tarjeta que se queda
               // sin las dos cosas tampoco ofrece el botón de girar.
               lastTime={lastTimeShown(one.routine.last_time, new Date())}
-              leading={index === leadingIndex}
               actions={{
                 onOpen: () => routine && onOpen(routine.template_id),
                 onStart: () => onStart(one),
