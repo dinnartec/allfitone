@@ -34,6 +34,9 @@ export type TeamInvitationStatus = AllfitV1Schemas['TeamInvitationStatus']
 export type OrganizationMembership = AllfitV1Schemas['OrganizationMembershipListItem']
 export type OrganizationMembershipPage = AllfitV1Schemas['OrganizationMembershipPage']
 export type OrganizationMembershipStatus = AllfitV1Schemas['OrganizationMembershipStatus']
+export type Organization = AllfitV1Schemas['Organization']
+export type OrganizationSite = AllfitV1Schemas['OrganizationSite']
+export type OrganizationSiteStatus = AllfitV1Schemas['OrganizationSiteStatus']
 export type OrganizationRole = AllfitV1Schemas['OrganizationRole']
 export type OrganizationRoleCatalog = AllfitV1Schemas['OrganizationRoleCatalog']
 export type OrganizationRoleCode = AllfitV1Schemas['OrganizationRoleCode']
@@ -263,6 +266,9 @@ export const studioApi = {
       },
     )
   },
+
+  organization: (organizationId: string, signal?: AbortSignal) =>
+    request<Organization>(`/studio/v1/organizations/${organizationId}`, signal ? { signal } : {}),
 
   organizationRoles: (organizationId: string, signal?: AbortSignal) =>
     request<OrganizationRoleCatalog>(

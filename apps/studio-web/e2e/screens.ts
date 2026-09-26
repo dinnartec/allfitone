@@ -16,6 +16,7 @@ import {
   TEST_ANALYTICS_ID,
   activeMembership,
   createStudioApiFixture,
+  organizationWithoutSites,
   error,
   installStudioApiMock,
   professionalCredential,
@@ -788,6 +789,63 @@ export const SCREENS: Screen[] = [
     settled: async (page) => {
       await settledByHeading(page)
       await expect(page.getByText('No pudimos cargar el estado de tu organización')).toBeVisible()
+    },
+  },
+  // --- `/organizations/[id]/organization` · HU-011 ---
+  {
+    stories: 'HU-011 · the organization and its sites',
+    path: `${workspace}/organization`,
+    fixture: () => createStudioApiFixture({ memberships: [activeMembership] }),
+    settled: async (page) => {
+      await settledByHeading(page)
+      await expect(page.getByText('Allfit Gym SAS')).toBeVisible()
+      await expect(page.getByRole('list', { name: 'Sedes de la organización' })).toBeVisible()
+    },
+  },
+  {
+    // Label-above-value pairs and the site rows both reflow here: the facts
+    // drop from two columns to one, and each site stacks its address.
+    stories: 'HU-011 · the organization and its sites on a phone',
+    path: `${workspace}/organization`,
+    fixture: () => createStudioApiFixture({ memberships: [activeMembership] }),
+    viewport: MOBILE,
+    settled: async (page) => {
+      await settledByHeading(page)
+      await expect(page.getByRole('list', { name: 'Sedes de la organización' })).toBeVisible()
+    },
+  },
+  {
+    // Two absences at once. Neither is an error, and neither may silently
+    // remove its row.
+    stories: 'HU-011 · an organization with no legal name and no sites',
+    path: `${workspace}/organization`,
+    fixture: () =>
+      createStudioApiFixture({
+        memberships: [activeMembership],
+        organization: organizationWithoutSites,
+      }),
+    settled: async (page) => {
+      await settledByHeading(page)
+      await expect(page.getByText('Sin razón social registrada')).toBeVisible()
+      await expect(page.getByText('Aún no hay sedes registradas')).toBeVisible()
+    },
+  },
+  {
+    stories: 'HU-011 · the organization could not be read',
+    path: `${workspace}/organization`,
+    fixture: failingFor([activeMembership], /\/organizations\/[^/]+$/),
+    settled: async (page) => {
+      await expect(page.getByText('No pudimos cargar los datos de tu organización')).toBeVisible()
+    },
+  },
+  {
+    // Absent, or not ours to read: the API answers both with the same 404 and
+    // this screen is what keeps them indistinguishable.
+    stories: 'HU-011 · no organization to show',
+    path: `${workspace}/organization`,
+    fixture: () => createStudioApiFixture({ memberships: [activeMembership], organization: null }),
+    settled: async (page) => {
+      await expect(page.getByText('No encontramos esta organización')).toBeVisible()
     },
   },
   {

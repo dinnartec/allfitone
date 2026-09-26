@@ -24,6 +24,7 @@ export type InvitationFilter = TeamInvitationStatus | 'all'
 export const STUDIO_QUERY_GC_TIME_MS = 5 * 60 * 1000
 export const STUDIO_TEAM_STALE_TIME_MS = 30 * 1000
 export const STUDIO_PROFILE_STALE_TIME_MS = 2 * 60 * 1000
+export const STUDIO_ORGANIZATION_STALE_TIME_MS = 2 * 60 * 1000
 export const STUDIO_ROLE_STALE_TIME_MS = 5 * 60 * 1000
 export const STUDIO_CATALOG_STALE_TIME_MS = 60 * 60 * 1000
 
@@ -155,6 +156,26 @@ export function shouldRetryStudioQuery(failureCount: number, error: Error): bool
  */
 export function isStudioForbidden(error: unknown): boolean {
   return error instanceof StudioApiError && error.status === 403
+}
+
+/**
+ * An organization this account cannot read, for either of two reasons.
+ *
+ * PostgreSQL answers the same 'organization not found' whether the row is
+ * absent or the actor holds no active membership in it, so the two arrive here
+ * as one 404 and must stay indistinguishable. A screen that told them apart
+ * would turn the address bar into a directory of which organizations exist.
+ */
+export function isStudioNotFound(error: unknown): boolean {
+  return error instanceof StudioApiError && error.status === 404
+}
+
+export function organizationQueryOptions(organizationId: string) {
+  return queryOptions({
+    queryKey: studioQueryKeys.organization(organizationId),
+    queryFn: ({ signal }) => studioApi.organization(organizationId, signal),
+    staleTime: STUDIO_ORGANIZATION_STALE_TIME_MS,
+  })
 }
 
 export function organizationTypesQueryOptions() {

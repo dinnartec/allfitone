@@ -22,6 +22,7 @@ export interface StudioApiFixture {
   session: unknown
   memberships: unknown[]
   organizationMemberships: unknown[]
+  organization: unknown
   organizationRoles: unknown[]
   organizationTypes: unknown[]
   me: { profile: Record<string, unknown> | null; memberships: unknown[] }
@@ -220,6 +221,47 @@ export const professionalCredential = {
   },
 }
 
+export const organizationWithSites = {
+  id: '01991600-1000-7000-8000-000000000002',
+  display_name: 'Allfit Gym',
+  legal_name: 'Allfit Gym SAS',
+  type_code: 'gym',
+  status: 'active',
+  revision_number: 4,
+  sites: [
+    {
+      id: '01991600-2000-7000-8000-000000000001',
+      name: 'Sede Chapinero',
+      address: 'Calle 63 #11-40, Bogotá',
+      status: 'active',
+      revision_number: 2,
+    },
+    {
+      id: '01991600-2000-7000-8000-000000000002',
+      name: 'Sede Usaquén',
+      address: null,
+      status: 'active',
+      revision_number: 1,
+    },
+    {
+      id: '01991600-2000-7000-8000-000000000003',
+      name: 'Sede Chicó',
+      address: 'Carrera 11 #93-45, Bogotá',
+      status: 'inactive',
+      revision_number: 3,
+    },
+  ],
+}
+
+// No legal name and no site registered. Both absences are legitimate, and the
+// screen has to say so rather than drop the rows and leave the reader
+// wondering whether it even asked.
+export const organizationWithoutSites = {
+  ...organizationWithSites,
+  legal_name: null,
+  sites: [],
+}
+
 export function createStudioApiFixture(
   overrides: Partial<StudioApiFixture> = {},
 ): StudioApiFixture {
@@ -232,6 +274,7 @@ export function createStudioApiFixture(
     },
     memberships: [],
     organizationMemberships: [activeTeamMember, terminatedTeamMember],
+    organization: organizationWithSites,
     organizationRoles: organizationRoleCatalog,
     organizationTypes: [
       { code: 'professional_practice', name: 'Profesional independiente', description: null },
@@ -360,6 +403,14 @@ function defaultResponse(
       status: 200,
       body: { items: fixture.organizationRoles },
       headers: { ETag: '"organization-roles-v1"' },
+    }
+  }
+  if (request.method === 'GET' && /^\/studio\/v1\/organizations\/[^/]+$/.test(request.path)) {
+    if (fixture.organization === null) return { status: 404, body: error('not-found') }
+    return {
+      status: 200,
+      body: fixture.organization,
+      headers: { ETag: '"organization-v1"' },
     }
   }
   if (request.method === 'GET' && request.path === '/studio/v1/organization-types') {

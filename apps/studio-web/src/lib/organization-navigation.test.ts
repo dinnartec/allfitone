@@ -12,6 +12,12 @@ describe('organization workspace navigation', () => {
     })
   })
 
+  test('resolves the organization details title', () => {
+    expect(resolveWorkspaceRoute(`${basePath}/organization`, organizationId)).toEqual({
+      title: 'Organización',
+    })
+  })
+
   test('resolves the governed role catalogue title without duplicating sidebar hierarchy', () => {
     const rolesPath = `${basePath}/team/roles`
     expect(resolveWorkspaceRoute(rolesPath, organizationId)).toEqual({
