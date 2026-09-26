@@ -70,6 +70,7 @@ async function bootstrap(input: Options): Promise<void> {
   try {
     const operator = await ensureOperator(sql, input)
     const granted = await grantDuties(sql, operator, input.duties)
+    const approvers = await armWitnessToApprove(sql, operator, input.issuer)
 
     const effective = await sql<Array<{ duty_code: string; valid_to: Date }>>`
       select duty_code, valid_to
@@ -91,6 +92,10 @@ async function bootstrap(input: Options): Promise<void> {
     if (missing.length) {
       console.log(`Still not in force: ${missing.join(', ')}`)
       process.exitCode = 1
+    }
+    if (approvers >= 2) {
+      console.log(`${approvers} local approvers, which is enough for a restricted window:`)
+      console.log('  bun packages/db/scripts/approve-local-break-glass.ts')
     }
     console.log('Sign in at http://localhost:3001 and enrol TOTP if you have not yet.')
   } finally {
@@ -212,6 +217,123 @@ async function grantDuties(
       where id = ${sessionId}::uuid
     `
     return pending.map((row) => row.duty_code)
+  })
+}
+
+/**
+ * A break-glass window needs somebody who is not the requester, and a restricted one —
+ * body measurements, health notes, meals — needs two of them. Locally there is one
+ * witness, so without this the operator can ask for a window and nothing can ever open
+ * it: `HU-BO-008` and `HU-BO-009` cannot be looked at at all.
+ *
+ * Two local approvers are ensured here. The operator grants, which is the honest
+ * direction: they hold `manage_platform_access` and a duty is never self-assigned. Their
+ * session lives only for this transaction. Nobody signs in as either approver.
+ */
+async function armWitnessToApprove(
+  sql: postgres.Sql,
+  operator: string,
+  issuer: string,
+): Promise<number> {
+  return sql.begin(async (transaction) => {
+    const [operatorAccount] = await transaction<Array<{ id: string }>>`
+      select id from identity.access_accounts
+      where person_id = ${operator}::uuid
+      order by created_at desc
+      limit 1
+    `
+    if (!operatorAccount) return 0
+
+    const sessionId = randomUUID()
+    await transaction`
+      insert into identity.access_sessions (
+        id, access_account_id, provider_session_id, surface, token_hash, token_ciphertext,
+        access_token_expires_at, assurance_level, authentication_method,
+        assurance_verified_at, last_activity_at, absolute_expires_at
+      ) values (
+        ${sessionId}::uuid, ${operatorAccount.id}::uuid, ${`local_operator_${sessionId}`},
+        'backoffice', ${randomBytes(32)}, 'v1.local-operator',
+        clock_timestamp() + interval '5 minutes', 2, 'password_totp',
+        clock_timestamp(), clock_timestamp(), clock_timestamp() + interval '5 minutes'
+      )
+    `
+
+    // The second approver does not come from the bootstrap ceremony, which makes exactly
+    // two administrators. Now that two exist, the operator can appoint a third the way
+    // the Team screen does.
+    const [second] = await transaction<Array<{ person_id: string }>>`
+      select person_id from identity.access_accounts
+      where subject like 'local_witness_2_%' and person_id is not null
+      limit 1
+    `
+    if (!second) {
+      const [person] = await transaction<Array<{ id: string }>>`
+        insert into identity.people (given_name, family_name, status)
+        values ('Local', 'Witness Two', 'active')
+        returning id
+      `
+      if (!person) throw new Error('PostgreSQL did not create the second local witness')
+      await transaction`
+        insert into identity.access_accounts (provider, issuer, subject, person_id)
+        values ('workos', ${issuer}, ${`local_witness_2_${person.id.slice(0, 8)}`},
+          ${person.id}::uuid)
+      `
+      await transaction`
+        select result from support.assign_platform_role(
+          ${operator}::uuid, ${sessionId}::uuid, ${person.id}::uuid, 'allfit_admin',
+          ${randomUUID()}::uuid, ${uuidV7()}::uuid, ${randomBytes(32)}
+        )
+      `
+    }
+
+    const approvers = await transaction<Array<{ person_id: string }>>`
+      select account.person_id
+      from identity.access_accounts as account
+      join support.platform_role_assignments as role
+        on role.person_id = account.person_id
+       and role.platform_role = 'allfit_admin'
+       and role.status = 'active'
+      where account.subject like 'local_witness_%'
+        and account.person_id is not null
+        and account.person_id <> ${operator}::uuid
+        and not exists (
+          select 1 from support.platform_duty_assignments as duty
+          where duty.person_id = account.person_id
+            and duty.duty_code = 'approve_break_glass'
+            and duty.status = 'active'
+            and duty.valid_from <= clock_timestamp()
+            and duty.valid_to > clock_timestamp()
+        )
+    `
+    for (const approver of approvers) {
+      await transaction`
+        select result from support.assign_platform_duty(
+          ${operator}::uuid, ${sessionId}::uuid, ${approver.person_id}::uuid,
+          'approve_break_glass',
+          clock_timestamp(), clock_timestamp() + ${`${DUTY_DAYS} days`}::interval,
+          ${`LOCAL-BOOTSTRAP-${new Date().toISOString().slice(0, 10)}`},
+          ${randomUUID()}::uuid, ${uuidV7()}::uuid, ${randomBytes(32)}
+        )
+      `
+    }
+
+    await transaction`
+      update identity.access_sessions set revoked_at = clock_timestamp()
+      where id = ${sessionId}::uuid
+    `
+
+    const [held] = await transaction<Array<{ count: number }>>`
+      select count(*)::integer as count
+      from identity.access_accounts as account
+      join support.platform_duty_assignments as duty
+        on duty.person_id = account.person_id
+       and duty.duty_code = 'approve_break_glass'
+       and duty.status = 'active'
+       and duty.valid_to > clock_timestamp()
+      where account.subject like 'local_witness_%'
+        and account.person_id <> ${operator}::uuid
+    `
+    return held?.count ?? 0
   })
 }
 

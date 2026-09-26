@@ -9,6 +9,10 @@
  * inserted directly, because activating one goes through a provider ceremony that has no
  * meaning offline.
  *
+ * Training is the one exception to the "real commands" rule beyond the people: a session
+ * that belongs to no plan has no command yet — `OP-EXE-004` is unimplemented — so those
+ * rows are inserted. Everything the support screens read about them is real.
+ *
  * Every row it writes is named `Demo` and every code starts with `demo_`, so nothing here
  * can be mistaken for something a person actually did. It refuses any database that is
  * not on this machine, and it is idempotent: run it twice and the second run reports what
@@ -43,6 +47,12 @@ async function seed(): Promise<void> {
   await demoInvitations(owner, organizationId)
   await demoCredential(coach)
 
+  const athlete = await demoAthlete()
+  await demoBodyProgress(athlete)
+  await demoHealthContext(athlete)
+  await demoMeals(athlete)
+  const trained = await demoTraining(athlete)
+
   const [counts] = await sql<
     Array<{ organizations: number; invitations: number; verifications: number }>
   >`
@@ -57,6 +67,227 @@ async function seed(): Promise<void> {
       ` and ${counts?.verifications} credential verification(s) waiting.`,
   )
   console.log('People: Demo Dueña, Demo Entrenador, Demo SinVerificar (no verified email).')
+  console.log(
+    `Demo Atleta has measurements, a health note, meals and training; ${trained} people` +
+      ' trained inside the last seven days, which is what the business panel counts.',
+  )
+}
+
+/**
+ * The person the support screens are about. Everything Backoffice reads under a
+ * break-glass window belongs to somebody, and none of it exists on a local database
+ * until somebody trains, eats and measures themselves.
+ */
+async function demoAthlete(): Promise<{ person: string; account: string; subject: string }> {
+  const [existing] = await sql<Array<{ id: string }>>`
+    select id from identity.people where given_name = 'Demo' and family_name = 'Atleta'
+  `
+  const [created] = existing
+    ? [existing]
+    : await sql<Array<{ id: string }>>`
+        insert into identity.people (
+          given_name, family_name, status, contact_email, contact_email_verified_at
+        ) values ('Demo', 'Atleta', 'active', 'demo.athlete@example.test', clock_timestamp())
+        returning id
+      `
+  if (!created) throw new Error('PostgreSQL did not create the demo athlete')
+
+  const subject = `demo_athlete_${created.id.slice(0, 8)}`
+  const [account] = await sql<Array<{ id: string }>>`
+    insert into identity.access_accounts (provider, issuer, subject, person_id)
+    values ('workos', ${ISSUER}, ${subject}, ${created.id}::uuid)
+    on conflict (provider, issuer, subject) do update set person_id = excluded.person_id
+    returning id
+  `
+  if (!account) throw new Error('PostgreSQL did not create the demo athlete account')
+  return { person: created.id, account: account.id, subject }
+}
+
+/**
+ * Three measurements and one deletion. The deletion is what gives the erasure screen a
+ * request to show: deleting your own measurement opens and closes a disposition case in
+ * the same transaction, which is exactly what `HU-BO-032` follows.
+ */
+async function demoBodyProgress(athlete: {
+  person: string
+  account: string
+  subject: string
+}): Promise<void> {
+  const [existing] = await sql<Array<{ count: number }>>`
+    select count(*)::integer as count from identity.body_progress_records
+    where person_id = ${athlete.person}::uuid
+  `
+  if ((existing?.count ?? 0) > 0) return
+
+  const measurements: Array<[string, number, string, number]> = [
+    ['body_weight', 74, 'kg', 30],
+    ['body_weight', 163, 'lb', 10],
+    ['waist', 32, 'in', 3],
+  ]
+  const recorded: string[] = []
+  for (const [metric, value, unit, daysAgo] of measurements) {
+    const commandId = uuidV7()
+    await sql.begin(async (transaction) => {
+      await accountActor(transaction, athlete.account)
+      await transaction`
+        select identity.record_body_progress(
+          ${athlete.account}::uuid, ${metric}, ${value}::numeric, ${unit},
+          (current_date - make_interval(days => ${daysAgo}))::date,
+          ${randomUUID()}::uuid, ${commandId}::uuid, ${digest()}
+        )
+      `
+    })
+    recorded.push(commandId)
+  }
+
+  // The one she took back. Her file keeps the case, never the figure.
+  await sql.begin(async (transaction) => {
+    await actor(transaction, 'person', athlete.person)
+    await transaction`
+      select identity.delete_body_progress(
+        'workos', ${ISSUER}, ${athlete.subject}, ${recorded.at(-1)}::uuid,
+        ${randomUUID()}::uuid, ${uuidV7()}::uuid, ${digest()}
+      )
+    `
+  })
+}
+
+/** One note that expires and one that does not, so the window shows both shapes. */
+async function demoHealthContext(athlete: { person: string; subject: string }): Promise<void> {
+  const [existing] = await sql<Array<{ count: number }>>`
+    select count(*)::integer as count from identity.health_context_claims
+    where person_id = ${athlete.person}::uuid
+  `
+  if ((existing?.count ?? 0) > 0) return
+
+  await sql.begin(async (transaction) => {
+    await actor(transaction, 'person', athlete.person)
+    await transaction`
+      select identity.record_health_context(
+        'workos', ${ISSUER}, ${athlete.subject}, ${uuidV7()}::uuid, 'pain',
+        'Molestia en el hombro derecho al empujar por encima de la cabeza.', 'shoulder',
+        clock_timestamp() - interval '20 days', clock_timestamp() + interval '40 days',
+        ${randomUUID()}::uuid, ${digest()}
+      )
+    `
+    await transaction`
+      select identity.record_health_context(
+        'workos', ${ISSUER}, ${athlete.subject}, ${uuidV7()}::uuid, 'limitation',
+        'Evita impacto en rodillas por recomendacion medica.', 'knee',
+        clock_timestamp() - interval '90 days', null,
+        ${randomUUID()}::uuid, ${digest()}
+      )
+    `
+  })
+}
+
+async function demoMeals(athlete: { person: string; subject: string }): Promise<void> {
+  const [existing] = await sql<Array<{ count: number }>>`
+    select count(*)::integer as count from nutrition.meals
+    where person_id = ${athlete.person}::uuid
+  `
+  if ((existing?.count ?? 0) > 0) return
+
+  const meals: Array<[string, string, string, unknown]> = [
+    [
+      'breakfast',
+      'Antes de entrenar.',
+      '1 day',
+      [
+        { position: 1, name: 'Avena', quantity: 80, quantity_unit: 'g', nutrients: [] },
+        { position: 2, name: 'Banano', nutrients: [] },
+      ],
+    ],
+    [
+      'lunch',
+      'Almuerzo despues de la sesion.',
+      '1 day',
+      [
+        { position: 1, name: 'Arroz', quantity: 150, quantity_unit: 'g', nutrients: [] },
+        {
+          position: 2,
+          name: 'Pollo a la plancha',
+          quantity: 200,
+          quantity_unit: 'g',
+          nutrients: [],
+        },
+      ],
+    ],
+  ]
+
+  for (const [type, note, ago, items] of meals) {
+    await sql.begin(async (transaction) => {
+      await actor(transaction, 'person', athlete.person)
+      await transaction`
+        select nutrition.record_meal(
+          'workos', ${ISSUER}, ${athlete.subject}, ${uuidV7()}::uuid,
+          clock_timestamp() - ${ago}::interval, 'America/Bogota', ${type}, ${note},
+          ${JSON.stringify(items)}::text::jsonb, ${randomUUID()}::uuid, ${digest()}
+        )
+      `
+    })
+  }
+}
+
+/**
+ * Training, and enough of it for the business panel to publish a figure: a count of
+ * people is withheld below five, so five more people train besides the athlete.
+ *
+ * Inserted rather than commanded. A session that belongs to no plan has no command —
+ * OP-EXE-004 is unimplemented — and execution.start_planned_session_attempt needs a
+ * programme that a local database does not have.
+ */
+async function demoTraining(athlete: { person: string }): Promise<number> {
+  const [shape] = await sql<Array<{ activity: string; contract: string }>>`
+    select activity.id as activity, contract.id as contract
+    from catalog.activity_types as activity, catalog.result_contracts as contract
+    where contract.activity_family = 'strength'
+    order by activity.code, contract.contract_code
+    limit 1
+  `
+  if (!shape) {
+    console.log('No activity type to train with, so no sessions were seeded.')
+    return 0
+  }
+
+  const [existing] = await sql<Array<{ count: number }>>`
+    select count(distinct person_id)::integer as count from execution.executed_sessions
+    where started_at >= clock_timestamp() - interval '7 days'
+  `
+  if ((existing?.count ?? 0) >= 6) return existing?.count ?? 0
+
+  const companions = await sql<Array<{ id: string }>>`
+    insert into identity.people (given_name, family_name, status)
+    select 'Demo', 'Activa' || step, 'active' from generate_series(1, 5) as step
+    returning id
+  `
+
+  // Two for the athlete, one each for the others: the panel counts people, not sessions.
+  const trainees = [athlete.person, athlete.person, ...companions.map((person) => person.id)]
+  for (const [index, person] of trainees.entries()) {
+    await sql`
+      insert into execution.executed_sessions (
+        id, person_id, activity_type_id, result_contract_id, contract_version,
+        started_at, ended_at, timezone, requested_level, capture_source
+      ) values (
+        ${uuidV7()}::uuid, ${person}::uuid, ${shape.activity}::uuid, ${shape.contract}::uuid, 1,
+        clock_timestamp() - make_interval(days => ${index % 6}, hours => 2),
+        clock_timestamp() - make_interval(days => ${index % 6}, hours => 1),
+        'America/Bogota', 'summary', 'manual'
+      )
+    `
+  }
+  return companions.length + 1
+}
+
+async function accountActor(
+  transaction: postgres.TransactionSql,
+  accountId: string,
+): Promise<void> {
+  await transaction`
+    select set_config('app.actor_kind', 'account', true),
+           set_config('app.actor_account_id', ${accountId}, true)
+  `
 }
 
 /** The three people the support screens need: two who can sign in, one who cannot. */
