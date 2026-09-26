@@ -226,6 +226,7 @@
 [data-ready-later],
 [data-role-register],
 [data-organization-overview],
+[data-organization-details],
 [data-profile-presentation],
 [data-account-map] {
   display: grid;
@@ -514,6 +515,7 @@
    floated alone in the middle of 1400px. Both axes are set because these sit
    in a grid on the overview and in a flex column on the account page. */
 [data-overview-signals],
+[data-organization-signals],
 [data-profile-signals] {
   justify-self: start;
   align-self: flex-start;
@@ -527,6 +529,7 @@
    the invitation register sees one count, and one number centred in 1024px is
    what the cap was put there to prevent. */
 [data-overview-signals][data-signals-multiple],
+[data-organization-signals][data-signals-multiple],
 [data-profile-signals][data-signals-multiple] {
   min-width: 100%;
 }
@@ -538,6 +541,7 @@
 
 [data-overview-attention-list],
 [data-overview-team-list],
+[data-organization-site-list],
 [data-team-directory-card-list],
 [data-role-capability-list] {
   display: grid;
@@ -546,6 +550,7 @@
 
 [data-overview-attention-list] > li,
 [data-overview-team-list] > li,
+[data-organization-site-list] > li,
 [data-role-capability-list] > li {
   display: flex;
   min-width: 0;
@@ -554,6 +559,7 @@
 }
 
 [data-overview-attention-contact],
+[data-organization-site-identity],
 [data-overview-team-identity] {
   min-width: 0;
   flex: 1;
@@ -968,4 +974,68 @@
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+/* Label above value, the same pairing the rest of Studio uses. The grid stays
+   single-column on a phone and pairs up once there is room for two to read as
+   columns rather than as one long ladder. */
+[data-organization-facts] {
+  display: grid;
+  gap: var(--afo-space-4);
+}
+
+@media (width >= 40rem) {
+  [data-organization-facts] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+[data-organization-fact] {
+  display: grid;
+  min-width: 0;
+  gap: var(--afo-space-1);
+}
+
+[data-organization-fact] > dt {
+  color: var(--afo-color-text-muted);
+  font-size: var(--afo-font-size-sm);
+}
+
+[data-organization-fact] > dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* A fact the organization never registered is still a fact worth showing: the
+   row would otherwise vanish and the reader could not tell it was asked. */
+[data-organization-fact] > dd[data-fact-absent] {
+  color: var(--afo-color-text-muted);
+}
+
+[data-organization-sites] [data-organization-signals] {
+  margin-block-end: var(--afo-space-5);
+}
+
+/* Name over address, not name beside address. An address is long enough that
+   set on one line it either breaks mid-street or squeezes the status badge off
+   the row, and inline it ran straight into the name with nothing between. */
+[data-organization-site-identity] {
+  display: grid;
+  gap: var(--afo-space-1);
+}
+
+[data-organization-site-address] {
+  color: var(--afo-color-text-muted);
+  font-size: var(--afo-font-size-sm);
+  overflow-wrap: anywhere;
+}
+
+[data-organization-details-placeholder] {
+  height: 4.5rem;
+  width: min(100%, 24rem);
+}
+
+[data-organization-card-placeholder] {
+  height: 12rem;
 }

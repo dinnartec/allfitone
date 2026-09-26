@@ -73,6 +73,8 @@ function OrganizationSidebar({ basePath, pathname }: { basePath: string; pathnam
   // On the icon rail the wordmark does not fit. Swapping to the mark keeps the
   // brand legible instead of clipping the lockup mid-letter.
   const railed = state === 'collapsed' && !isMobile
+  const organizationHref = `${basePath}/organization`
+  const organizationActive = pathname === organizationHref
   const teamHref = `${basePath}/team`
   const teamActive = pathname.startsWith(teamHref)
 
@@ -176,6 +178,16 @@ function OrganizationSidebar({ basePath, pathname }: { basePath: string; pathnam
                 >
                   <FoundationIcon name="overview" decorative />
                   <span>Inicio</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  render={<Link href={organizationHref} onClick={closeMobileNavigation} />}
+                  isActive={organizationActive}
+                  aria-current={organizationActive ? 'page' : undefined}
+                >
+                  <FoundationIcon name="organization" decorative />
+                  <span>Organización</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
