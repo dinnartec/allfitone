@@ -1025,6 +1025,15 @@
   gap: var(--afo-space-1);
 }
 
+/* The alert states the refusal and the button acts on it; as bare siblings in
+   a section they had no space between them and read as one block. The button
+   sizes to its label rather than stretching the width of the alert. */
+[data-site-form-refusal] {
+  display: grid;
+  justify-items: start;
+  gap: var(--afo-space-5);
+}
+
 [data-organization-site-address] {
   color: var(--afo-color-text-muted);
   font-size: var(--afo-font-size-sm);

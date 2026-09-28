@@ -18,6 +18,12 @@ describe('organization workspace navigation', () => {
     })
   })
 
+  test('resolves the new site title', () => {
+    expect(resolveWorkspaceRoute(`${basePath}/organization/sites/new`, organizationId)).toEqual({
+      title: 'Nueva sede',
+    })
+  })
+
   test('resolves the governed role catalogue title without duplicating sidebar hierarchy', () => {
     const rolesPath = `${basePath}/team/roles`
     expect(resolveWorkspaceRoute(rolesPath, organizationId)).toEqual({

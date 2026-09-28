@@ -74,7 +74,7 @@ function OrganizationSidebar({ basePath, pathname }: { basePath: string; pathnam
   // brand legible instead of clipping the lockup mid-letter.
   const railed = state === 'collapsed' && !isMobile
   const organizationHref = `${basePath}/organization`
-  const organizationActive = pathname === organizationHref
+  const organizationActive = pathname.startsWith(organizationHref)
   const teamHref = `${basePath}/team`
   const teamActive = pathname.startsWith(teamHref)
 

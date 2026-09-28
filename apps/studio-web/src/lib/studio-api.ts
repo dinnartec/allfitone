@@ -37,6 +37,7 @@ export type OrganizationMembershipStatus = AllfitV1Schemas['OrganizationMembersh
 export type Organization = AllfitV1Schemas['Organization']
 export type OrganizationSite = AllfitV1Schemas['OrganizationSite']
 export type OrganizationSiteStatus = AllfitV1Schemas['OrganizationSiteStatus']
+export type OrganizationSiteCreate = AllfitV1Schemas['OrganizationSiteCreate']
 export type OrganizationRole = AllfitV1Schemas['OrganizationRole']
 export type OrganizationRoleCatalog = AllfitV1Schemas['OrganizationRoleCatalog']
 export type OrganizationRoleCode = AllfitV1Schemas['OrganizationRoleCode']
@@ -269,6 +270,19 @@ export const studioApi = {
 
   organization: (organizationId: string, signal?: AbortSignal) =>
     request<Organization>(`/studio/v1/organizations/${organizationId}`, signal ? { signal } : {}),
+
+  createOrganizationSite: (
+    organizationId: string,
+    body: OrganizationSiteCreate,
+    command: CommandHeaders,
+    signal?: AbortSignal,
+  ) =>
+    request<OrganizationSite>(`/studio/v1/organizations/${organizationId}/sites`, {
+      method: 'POST',
+      headers: commandHeaders(command),
+      body: JSON.stringify(body),
+      ...(signal ? { signal } : {}),
+    }),
 
   organizationRoles: (organizationId: string, signal?: AbortSignal) =>
     request<OrganizationRoleCatalog>(
