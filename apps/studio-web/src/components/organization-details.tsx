@@ -169,7 +169,11 @@ function SitesPanel({
             </div>
             <ul data-organization-site-list aria-label="Sedes de la organización">
               {[...sites.active, ...sites.inactive].map((site) => (
-                <SiteRow key={site.id} site={site} />
+                <SiteRow
+                  key={site.id}
+                  site={site}
+                  editPath={newSitePath ? `${newSitePath.replace(/\/new$/, '')}/${site.id}` : null}
+                />
               ))}
             </ul>
           </>
@@ -179,19 +183,33 @@ function SitesPanel({
   )
 }
 
-function SiteRow({ site }: { site: OrganizationSite }) {
+function SiteRow({ site, editPath }: { site: OrganizationSite; editPath: string | null }) {
   return (
     <li
       data-organization-site
       {...(site.status === 'inactive' ? { 'data-site-inactive': '' } : {})}
     >
       <div data-organization-site-identity>
-        <strong>{site.name}</strong>
+        <strong data-organization-site-name>{site.name}</strong>
         <span data-organization-site-address>{site.address ?? 'Sin dirección registrada'}</span>
       </div>
       <Badge variant={site.status === 'active' ? 'success' : 'secondary'}>
         {siteStatusLabel(site.status)}
       </Badge>
+      {/* Named for the site it edits: three rows of bare "Editar" give a
+          screen reader three identical links and no way to tell them apart. */}
+      {editPath ? (
+        <Link
+          href={editPath}
+          data-organization-site-edit
+          aria-label={`Editar ${site.name}`}
+          className={buttonVariants({ variant: 'ghost', size: 'sm' })}
+          data-slot="button"
+          data-variant="ghost"
+        >
+          Editar
+        </Link>
+      ) : null}
     </li>
   )
 }

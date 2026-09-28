@@ -16,6 +16,7 @@ import {
   TEST_ANALYTICS_ID,
   activeMembership,
   createStudioApiFixture,
+  organizationWithLongSite,
   organizationWithoutSites,
   error,
   installStudioApiMock,
@@ -884,6 +885,74 @@ export const SCREENS: Screen[] = [
     reveal: async (page) => {
       await page.getByRole('button', { name: 'Registrar sede' }).click()
       await expect(page.getByText('Escribe el nombre de la sede.')).toBeVisible()
+    },
+  },
+  {
+    /*
+     * The longest text the form allows, on the narrowest screen. Every other
+     * site fixture is short enough that the row was never going to break, so
+     * this is the only screen that puts the edit link under real pressure.
+     */
+    stories: 'HU-011 · a site whose name and address fill the field',
+    path: `${workspace}/organization`,
+    fixture: () =>
+      createStudioApiFixture({
+        memberships: [activeMembership],
+        organization: organizationWithLongSite,
+      }),
+    settled: async (page) => {
+      await settledByHeading(page)
+      await expect(page.getByRole('link', { name: /^Editar Sede Villavicencio/ })).toBeVisible()
+    },
+  },
+  // --- `/organizations/[id]/organization/sites/[siteId]` · HU-010 ---
+  {
+    stories: 'HU-010 · edit a site',
+    path: `${workspace}/organization/sites/01991600-2000-7000-8000-000000000001`,
+    fixture: () => createStudioApiFixture({ memberships: [activeMembership] }),
+    settled: async (page) => {
+      await expect(page.getByLabel('Nombre')).toHaveValue('Sede Chapinero')
+    },
+  },
+  {
+    // The form and the withdrawal panel below it share a column here, so the
+    // rule between them carries the whole separation.
+    stories: 'HU-010 · edit a site on a phone',
+    path: `${workspace}/organization/sites/01991600-2000-7000-8000-000000000001`,
+    fixture: () => createStudioApiFixture({ memberships: [activeMembership] }),
+    viewport: MOBILE,
+    settled: async (page) => {
+      await expect(page.getByLabel('Nombre')).toHaveValue('Sede Chapinero')
+    },
+  },
+  {
+    // The confirmation carries criterion 1 of the story: what withdrawing does
+    // not touch, said to the person about to do it.
+    stories: 'HU-010 · confirming a site withdrawal',
+    path: `${workspace}/organization/sites/01991600-2000-7000-8000-000000000001`,
+    fixture: () => createStudioApiFixture({ memberships: [activeMembership] }),
+    reveal: async (page) => {
+      await page.getByRole('button', { name: 'Retirar de servicio', exact: true }).click()
+      await expect(page.getByRole('alertdialog')).toBeVisible()
+    },
+  },
+  {
+    // A withdrawn site offers the opposite action, and says what it restores.
+    stories: 'HU-010 · putting a withdrawn site back in service',
+    path: `${workspace}/organization/sites/01991600-2000-7000-8000-000000000003`,
+    fixture: () => createStudioApiFixture({ memberships: [activeMembership] }),
+    settled: async (page) => {
+      await expect(page.getByRole('button', { name: 'Poner en servicio' })).toBeVisible()
+    },
+  },
+  {
+    // A site that is not in this organization, whether it never existed or
+    // belongs to another: the screen cannot tell, and neither may the reader.
+    stories: 'HU-010 · the site is not there',
+    path: `${workspace}/organization/sites/01991600-2000-7000-8000-000000000999`,
+    fixture: () => createStudioApiFixture({ memberships: [activeMembership] }),
+    settled: async (page) => {
+      await expect(page.getByText('No encontramos esta sede')).toBeVisible()
     },
   },
   {

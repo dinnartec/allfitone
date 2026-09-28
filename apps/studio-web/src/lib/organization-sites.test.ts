@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 
-import { canManageSites, siteDraftErrors } from './organization-sites.js'
-import type { OrganizationRole } from './studio-api.js'
+import { canManageSites, siteChanges, siteDraftErrors, siteEtag } from './organization-sites.js'
+import type { OrganizationRole, OrganizationSite } from './studio-api.js'
 
 function role(code: OrganizationRole['code'], capabilities: string[]): OrganizationRole {
   return {
@@ -69,5 +69,75 @@ describe('what the site form refuses to send', () => {
 
   test('both fields trimmed are what gets sent', () => {
     expect(siteDraftErrors({ name: '  Sede Usaquén  ', address: '  Calle 1  ' })).toEqual({})
+  })
+})
+
+function site(overrides: Partial<OrganizationSite> = {}): OrganizationSite {
+  return {
+    id: '01991600-2000-7000-8000-000000000001',
+    name: 'Sede Chapinero',
+    address: 'Calle 63 #11-40',
+    status: 'active',
+    revision_number: 4,
+    ...overrides,
+  }
+}
+
+describe('the revision a site edit is based on', () => {
+  test('names the site and the revision the screen was showing', () => {
+    expect(siteEtag(site())).toBe('"organization-site:01991600-2000-7000-8000-000000000001:r4"')
+  })
+
+  /*
+   * The server rejects anything that does not match its own pattern, so a
+   * revision of zero has to survive the trip rather than be treated as absent.
+   */
+  test('a first revision is still a revision', () => {
+    expect(siteEtag(site({ revision_number: 0 }))).toContain(':r0"')
+  })
+})
+
+describe('what an edit actually sends', () => {
+  test('nothing at all when nothing changed', () => {
+    expect(siteChanges(site(), { name: 'Sede Chapinero', address: 'Calle 63 #11-40' })).toBeNull()
+  })
+
+  test('surrounding space is not a change', () => {
+    expect(
+      siteChanges(site(), { name: '  Sede Chapinero  ', address: ' Calle 63 #11-40 ' }),
+    ).toBeNull()
+  })
+
+  test('only the field that moved', () => {
+    expect(
+      siteChanges(site(), { name: 'Sede Chapinero Norte', address: 'Calle 63 #11-40' }),
+    ).toEqual({
+      name: 'Sede Chapinero Norte',
+    })
+  })
+
+  /*
+   * Clearing the address is a real edit, and `null` is how the contract says
+   * it: an empty string would be rejected for failing minLength.
+   */
+  test('an address cleared travels as null, not as an empty string', () => {
+    expect(siteChanges(site(), { name: 'Sede Chapinero', address: '   ' })).toEqual({
+      address: null,
+    })
+  })
+
+  test('an address added where there was none', () => {
+    expect(
+      siteChanges(site({ address: null }), { name: 'Sede Chapinero', address: 'Calle 1' }),
+    ).toEqual({
+      address: 'Calle 1',
+    })
+  })
+
+  test('both fields at once', () => {
+    expect(siteChanges(site(), { name: 'Sede Norte', address: 'Calle 2' })).toEqual({
+      name: 'Sede Norte',
+      address: 'Calle 2',
+    })
   })
 })

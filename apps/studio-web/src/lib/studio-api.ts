@@ -38,6 +38,7 @@ export type Organization = AllfitV1Schemas['Organization']
 export type OrganizationSite = AllfitV1Schemas['OrganizationSite']
 export type OrganizationSiteStatus = AllfitV1Schemas['OrganizationSiteStatus']
 export type OrganizationSiteCreate = AllfitV1Schemas['OrganizationSiteCreate']
+export type OrganizationSiteUpdate = AllfitV1Schemas['OrganizationSiteUpdate']
 export type OrganizationRole = AllfitV1Schemas['OrganizationRole']
 export type OrganizationRoleCatalog = AllfitV1Schemas['OrganizationRoleCatalog']
 export type OrganizationRoleCode = AllfitV1Schemas['OrganizationRoleCode']
@@ -280,6 +281,23 @@ export const studioApi = {
     request<OrganizationSite>(`/studio/v1/organizations/${organizationId}/sites`, {
       method: 'POST',
       headers: commandHeaders(command),
+      body: JSON.stringify(body),
+      ...(signal ? { signal } : {}),
+    }),
+
+  updateOrganizationSite: (
+    organizationId: string,
+    siteId: string,
+    body: OrganizationSiteUpdate,
+    expectedRevision: string,
+    command: CommandHeaders,
+    signal?: AbortSignal,
+  ) =>
+    request<OrganizationSite>(`/studio/v1/organizations/${organizationId}/sites/${siteId}`, {
+      method: 'PATCH',
+      // The revision this edit was based on. Without it the server answers 428
+      // rather than guessing that the screen was current.
+      headers: { ...commandHeaders(command), 'If-Match': expectedRevision },
       body: JSON.stringify(body),
       ...(signal ? { signal } : {}),
     }),

@@ -24,6 +24,21 @@ describe('organization workspace navigation', () => {
     })
   })
 
+  test('resolves the site edit title, whatever the site', () => {
+    expect(
+      resolveWorkspaceRoute(
+        `${basePath}/organization/sites/01991600-2000-7000-8000-000000000001`,
+        organizationId,
+      ),
+    ).toEqual({ title: 'Editar sede' })
+  })
+
+  test('the new-site route keeps its own title rather than matching the edit pattern', () => {
+    expect(resolveWorkspaceRoute(`${basePath}/organization/sites/new`, organizationId)).toEqual({
+      title: 'Nueva sede',
+    })
+  })
+
   test('resolves the governed role catalogue title without duplicating sidebar hierarchy', () => {
     const rolesPath = `${basePath}/team/roles`
     expect(resolveWorkspaceRoute(rolesPath, organizationId)).toEqual({
