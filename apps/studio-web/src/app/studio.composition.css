@@ -1034,6 +1034,15 @@
   gap: var(--afo-space-5);
 }
 
+/* A site name is one word as often as not, and nothing caps how long that word
+   is. Without a break opportunity it set the column's minimum width, pushed the
+   whole identity past its own box, and painted the name and the address over
+   the status badge and the edit link beside them. */
+[data-organization-site-name] {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 [data-organization-site-address] {
   color: var(--afo-color-text-muted);
   font-size: var(--afo-font-size-sm);
@@ -1047,4 +1056,36 @@
 
 [data-organization-card-placeholder] {
   height: 12rem;
+}
+
+/* Withdrawing a site is not another field of the form above it, so it sits
+   below a rule rather than inside a card: a hairline and space say "separate
+   matter" without adding another box to the page. */
+[data-site-status-panel] {
+  display: grid;
+  justify-items: start;
+  gap: var(--afo-space-2);
+  margin-block-start: var(--afo-space-7);
+  padding-block-start: var(--afo-space-6);
+  border-block-start: 1px solid var(--afo-color-border);
+}
+
+[data-site-status-title] {
+  margin: 0;
+  font-size: var(--afo-font-size-lg);
+}
+
+[data-site-status-description] {
+  margin: 0;
+  max-width: var(--studio-measure);
+  color: var(--afo-color-text-muted);
+}
+
+/* The action, whatever element the Design System renders it as. */
+[data-site-status-panel] > :last-child {
+  margin-block-start: var(--afo-space-3);
+}
+
+[data-organization-site-edit] {
+  flex: none;
 }

@@ -7,7 +7,12 @@
  * client is a second source of truth that drifts silently the day the grant
  * changes.
  */
-import type { OrganizationRole, OrganizationSiteCreate } from './studio-api'
+import type {
+  OrganizationRole,
+  OrganizationSite,
+  OrganizationSiteCreate,
+  OrganizationSiteUpdate,
+} from './studio-api'
 
 const MANAGE_SITES = 'manage_sites'
 
@@ -44,4 +49,39 @@ export function siteDraftToRequest(draft: SiteDraft): OrganizationSiteCreate {
     name: draft.name.trim(),
     ...(address ? { address } : {}),
   }
+}
+
+/**
+ * The revision an edit is based on, in the form the contract publishes:
+ * `"organization-site:<id>:r<revision>"`. The server compares it with the row
+ * it holds and refuses the write if someone else moved it first, which is what
+ * keeps two people editing one site from overwriting each other in silence.
+ */
+export function siteEtag(site: OrganizationSite): string {
+  return `"organization-site:${site.id}:r${site.revision_number}"`
+}
+
+/**
+ * Only the fields that actually moved, or null when none did.
+ *
+ * Two reasons it is not simply the whole draft. The contract requires at least
+ * one property, so an unchanged form has nothing legal to send; and a PATCH
+ * that restates every field would overwrite an edit someone else made to a
+ * field this person never touched.
+ */
+export function siteChanges(
+  site: OrganizationSite,
+  draft: SiteDraft,
+): OrganizationSiteUpdate | null {
+  const name = draft.name.trim()
+  const address = draft.address.trim() ? draft.address.trim() : null
+  const changes: OrganizationSiteUpdate = {
+    ...(name !== site.name ? { name } : {}),
+    ...(address !== site.address ? { address } : {}),
+  }
+  return Object.keys(changes).length > 0 ? changes : null
+}
+
+export function siteToDraft(site: OrganizationSite): SiteDraft {
+  return { name: site.name, address: site.address ?? '' }
 }

@@ -4,6 +4,7 @@ import {
   activeMembership,
   createStudioApiFixture,
   installStudioApiMock,
+  organizationWithLongSite,
   secondActiveMembership,
 } from './studio-api-mock'
 
@@ -155,5 +156,88 @@ test('the refusal separates its alert from the way out', async ({ page }) => {
     expect(measured.buttonWidth, `button width at ${viewport.width}px`).toBeLessThan(
       measured.alertWidth,
     )
+  }
+})
+
+/**
+ * Raised in review: what happens to the edit link when a site's name and
+ * address are long? Every other fixture is short enough that the row was never
+ * under pressure, so nothing in the suite answered it.
+ *
+ * The answer is that the identity column shrinks and wraps while the badge and
+ * the link keep their size. This fixes that: the link must stay on screen, keep
+ * a tappable size, and actually receive a tap at its centre.
+ */
+test('the edit link survives a site whose text fills the field', async ({ page }) => {
+  for (const viewport of [
+    { width: 390, height: 844 },
+    { width: 1440, height: 900 },
+  ]) {
+    await page.setViewportSize(viewport)
+    await installStudioApiMock(
+      page,
+      createStudioApiFixture({
+        memberships: [activeMembership],
+        organization: organizationWithLongSite,
+      }),
+    )
+    await page.goto(organizationPath)
+    await expect(page.getByRole('link', { name: /^Editar Sede Villavicencio/ })).toBeVisible()
+
+    const measured = await page.evaluate(() => {
+      const row = document.querySelector('[data-organization-site]') as HTMLElement
+      const link = row.querySelector('a') as HTMLElement
+      link.scrollIntoView({ block: 'center', behavior: 'instant' })
+      const box = link.getBoundingClientRect()
+      const atCentre = document.elementFromPoint(
+        (box.left + box.right) / 2,
+        (box.top + box.bottom) / 2,
+      )
+      return {
+        width: Math.round(box.width),
+        height: Math.round(box.height),
+        right: Math.round(box.right),
+        viewport: document.documentElement.clientWidth,
+        overflow: document.documentElement.scrollWidth,
+        reachable: link === atCentre || link.contains(atCentre),
+      }
+    })
+
+    // The question the first version of this test forgot to ask. A link can be
+    // on screen, tappable and reachable at its centre while the text beside it
+    // is painted underneath it: an unbreakable name sets the column's minimum
+    // width, overflows its own box and runs straight over its neighbours.
+    const overlaps = await page.evaluate(() => {
+      const row = document.querySelector('[data-organization-site]') as HTMLElement
+      const identity = row.querySelector('[data-organization-site-identity]') as HTMLElement
+      const others = [...row.children].filter((child) => child !== identity) as HTMLElement[]
+      const hits = (a: HTMLElement, b: HTMLElement) => {
+        const p = a.getBoundingClientRect()
+        const q = b.getBoundingClientRect()
+        return p.left < q.right && q.left < p.right && p.top < q.bottom && q.top < p.bottom
+      }
+      const texts = [...identity.children] as HTMLElement[]
+      const found: string[] = []
+      for (const text of texts) {
+        for (const other of others) {
+          if (hits(text, other)) {
+            found.push(`${text.tagName.toLowerCase()} over ${other.tagName.toLowerCase()}`)
+          }
+        }
+      }
+      return found
+    })
+
+    const where = `at ${viewport.width}px`
+    expect(overlaps, `nothing in the row is painted over ${where}`).toEqual([])
+    expect(measured.overflow, `no horizontal overflow ${where}`).toBeLessThanOrEqual(
+      measured.viewport,
+    )
+    expect(measured.right, `the link stays on screen ${where}`).toBeLessThanOrEqual(
+      measured.viewport,
+    )
+    expect(measured.width, `tappable width ${where}`).toBeGreaterThanOrEqual(44)
+    expect(measured.height, `tappable height ${where}`).toBeGreaterThanOrEqual(24)
+    expect(measured.reachable, `a tap reaches the link ${where}`).toBe(true)
   }
 })

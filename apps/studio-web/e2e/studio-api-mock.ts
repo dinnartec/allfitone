@@ -221,7 +221,59 @@ export const professionalCredential = {
   },
 }
 
+interface SiteRow {
+  id: string
+  name: string
+  address: string | null
+  status: string
+  revision_number: number
+}
+
 let siteSequence = 900
+
+// Named rather than positional: the specs reach for a particular site, and
+// `sites[0]!` costs a forbidden non-null assertion to say the same thing less
+// clearly.
+export const chapineroSite = {
+  id: '01991600-2000-7000-8000-000000000001',
+  name: 'Sede Chapinero',
+  address: 'Calle 63 #11-40, Bogotá',
+  status: 'active',
+  revision_number: 2,
+}
+
+export const usaquenSite = {
+  id: '01991600-2000-7000-8000-000000000002',
+  name: 'Sede Usaquén',
+  address: null,
+  status: 'active',
+  revision_number: 1,
+}
+
+export const chicoSite = {
+  id: '01991600-2000-7000-8000-000000000003',
+  name: 'Sede Chicó',
+  address: 'Carrera 11 #93-45, Bogotá',
+  status: 'inactive',
+  revision_number: 3,
+}
+
+/*
+ * The longest a person can actually type: the form caps the name at 120
+ * characters and the address at 240. Every other fixture is comfortably short,
+ * so without this one the sweep only ever measures rows that were never going
+ * to break. The name is one unbroken word on purpose — a string with spaces
+ * wraps, and the hard case is the one that cannot.
+ */
+export const longestSite = {
+  id: '01991600-2000-7000-8000-000000000004',
+  name: `Sede ${'Villavicencio'.repeat(8)}`.slice(0, 120),
+  address: `Autopista Norte kilómetro 21 costado occidental ${'bodega 14 '.repeat(20)}`
+    .trim()
+    .slice(0, 240),
+  status: 'active',
+  revision_number: 1,
+}
 
 export const organizationWithSites = {
   id: '01991600-1000-7000-8000-000000000002',
@@ -230,29 +282,12 @@ export const organizationWithSites = {
   type_code: 'gym',
   status: 'active',
   revision_number: 4,
-  sites: [
-    {
-      id: '01991600-2000-7000-8000-000000000001',
-      name: 'Sede Chapinero',
-      address: 'Calle 63 #11-40, Bogotá',
-      status: 'active',
-      revision_number: 2,
-    },
-    {
-      id: '01991600-2000-7000-8000-000000000002',
-      name: 'Sede Usaquén',
-      address: null,
-      status: 'active',
-      revision_number: 1,
-    },
-    {
-      id: '01991600-2000-7000-8000-000000000003',
-      name: 'Sede Chicó',
-      address: 'Carrera 11 #93-45, Bogotá',
-      status: 'inactive',
-      revision_number: 3,
-    },
-  ],
+  sites: [chapineroSite, usaquenSite, chicoSite],
+}
+
+export const organizationWithLongSite = {
+  ...organizationWithSites,
+  sites: [longestSite],
 }
 
 // No legal name and no site registered. Both absences are legitimate, and the
@@ -276,7 +311,14 @@ export function createStudioApiFixture(
     },
     memberships: [],
     organizationMemberships: [activeTeamMember, terminatedTeamMember],
-    organization: organizationWithSites,
+    /*
+     * A copy, not the shared object. Sites are now editable, and the mock
+     * writes the change into this fixture so the screen the form returns to
+     * shows it. Handing out the module-level object let one test's rename or
+     * withdrawal reach every test that ran after it, which makes a suite whose
+     * result depends on its order.
+     */
+    organization: structuredClone(organizationWithSites),
     organizationRoles: organizationRoleCatalog,
     organizationTypes: [
       { code: 'professional_practice', name: 'Profesional independiente', description: null },
@@ -406,6 +448,31 @@ function defaultResponse(
       body: { items: fixture.organizationRoles },
       headers: { ETag: '"organization-roles-v1"' },
     }
+  }
+  if (
+    request.method === 'PATCH' &&
+    /^\/studio\/v1\/organizations\/[^/]+\/sites\/[^/]+$/.test(request.path)
+  ) {
+    const siteId = request.path.split('/').pop() ?? ''
+    const organization = fixture.organization as { sites: SiteRow[] } | null
+    const existing = organization?.sites.find((entry) => entry.id === siteId)
+    if (!existing) return { status: 404, body: error('not-found') }
+
+    // The server compares the revision the screen was showing with the row it
+    // holds, so the mock has to as well: without it the conflict state has no
+    // way to be reached from a test.
+    const ifMatch = request.headers['if-match']
+    if (!ifMatch) return { status: 428, body: error('precondition-required') }
+    if (ifMatch !== `"organization-site:${existing.id}:r${existing.revision_number}"`) {
+      return { status: 409, body: error('conflict') }
+    }
+
+    const patch = request.body as Partial<SiteRow> | undefined
+    if (!patch || Object.keys(patch).length === 0) {
+      return { status: 400, body: error('invalid-request') }
+    }
+    Object.assign(existing, patch, { revision_number: existing.revision_number + 1 })
+    return { status: 200, body: existing }
   }
   if (
     request.method === 'POST' &&
@@ -645,8 +712,12 @@ async function fulfill(route: Route, response: MockResponse): Promise<void> {
     headers: {
       'Access-Control-Allow-Origin': STUDIO_ORIGIN,
       'Access-Control-Allow-Credentials': 'true',
-      'Access-Control-Allow-Headers': 'Content-Type, Idempotency-Key, Command-Id, If-None-Match',
-      'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS',
+      // Mirrors the API's own policy for the studio surface. A method or
+      // header missing here is refused at preflight, so the failure looks like
+      // broken client code rather than a stale fixture.
+      'Access-Control-Allow-Headers':
+        'Content-Type, Idempotency-Key, Command-Id, If-Match, If-None-Match',
+      'Access-Control-Allow-Methods': 'GET, POST, PATCH, PUT, OPTIONS',
       ...(hasBody ? { 'Content-Type': 'application/json' } : {}),
       ...response.headers,
     },
