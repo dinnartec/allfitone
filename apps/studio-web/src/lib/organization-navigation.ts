@@ -16,6 +16,9 @@ export function resolveWorkspaceRoute(
   if (pathname === `${basePath}/organization`) {
     return { title: 'Organización' }
   }
+  if (pathname === `${basePath}/organization/sites/new`) {
+    return { title: 'Nueva sede' }
+  }
   if (pathname === teamPath) {
     return { title: 'Integrantes' }
   }

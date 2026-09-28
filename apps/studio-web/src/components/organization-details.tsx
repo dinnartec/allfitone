@@ -13,7 +13,7 @@
 
 import { Alert, AlertAction, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
 import { Badge } from '@allfitone/react/components/badge'
-import { Button } from '@allfitone/react/components/button'
+import { Button, buttonVariants } from '@allfitone/react/components/button'
 import {
   Card,
   CardAction,
@@ -33,18 +33,26 @@ import { Skeleton } from '@allfitone/react/components/skeleton'
 import { StatStrip, StatStripItem } from '@allfitone/react/components/stat-strip'
 import { FoundationIcon } from '@allfitone/react/icons'
 import { useQuery } from '@tanstack/react-query'
+import Link from 'next/link'
 
 import { organizationTypeLabel } from './membership-selector'
 import { useOrganizationContext } from './organization-context'
 import { partitionSites, siteStatusLabel } from '@/lib/organization-details'
+import { canManageSites } from '@/lib/organization-sites'
 import type { OrganizationSite } from '@/lib/studio-api'
-import { isStudioForbidden, isStudioNotFound, organizationQueryOptions } from '@/lib/studio-query'
+import {
+  isStudioForbidden,
+  isStudioNotFound,
+  organizationQueryOptions,
+  organizationRolesQueryOptions,
+} from '@/lib/studio-query'
 
 const LEGAL_NAME_ABSENT = 'Sin razón social registrada'
 
 export function OrganizationDetails() {
   const { current } = useOrganizationContext()
   const query = useQuery(organizationQueryOptions(current.organization_id))
+  const rolesQuery = useQuery(organizationRolesQueryOptions(current.organization_id))
   const organization = query.data
 
   if (query.isPending) return <LoadingState />
@@ -91,12 +99,28 @@ export function OrganizationDetails() {
         </CardContent>
       </Card>
 
-      <SitesPanel sites={sites} total={organization.sites.length} />
+      <SitesPanel
+        sites={sites}
+        total={organization.sites.length}
+        newSitePath={
+          canManageSites(current.roles, rolesQuery.data?.items)
+            ? `/organizations/${current.organization_id}/organization/sites/new`
+            : null
+        }
+      />
     </div>
   )
 }
 
-function SitesPanel({ sites, total }: { sites: ReturnType<typeof partitionSites>; total: number }) {
+function SitesPanel({
+  sites,
+  total,
+  newSitePath,
+}: {
+  sites: ReturnType<typeof partitionSites>
+  total: number
+  newSitePath: string | null
+}) {
   return (
     <Card data-organization-sites>
       <CardHeader>
@@ -104,6 +128,20 @@ function SitesPanel({ sites, total }: { sites: ReturnType<typeof partitionSites>
           Sedes
         </CardTitle>
         <CardDescription>Los lugares desde los que opera tu organización.</CardDescription>
+        {/* Only for a role the server would accept. Offering it to everyone
+            would spend a click to reach a refusal. */}
+        {newSitePath ? (
+          <CardAction>
+            <Link
+              href={newSitePath}
+              data-slot="button"
+              data-variant="outline"
+              className={buttonVariants({ variant: 'outline', size: 'sm' })}
+            >
+              Registrar sede
+            </Link>
+          </CardAction>
+        ) : null}
       </CardHeader>
       <CardContent>
         {total === 0 ? (

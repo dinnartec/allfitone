@@ -221,6 +221,8 @@ export const professionalCredential = {
   },
 }
 
+let siteSequence = 900
+
 export const organizationWithSites = {
   id: '01991600-1000-7000-8000-000000000002',
   display_name: 'Allfit Gym',
@@ -404,6 +406,25 @@ function defaultResponse(
       body: { items: fixture.organizationRoles },
       headers: { ETag: '"organization-roles-v1"' },
     }
+  }
+  if (
+    request.method === 'POST' &&
+    /^\/studio\/v1\/organizations\/[^/]+\/sites$/.test(request.path)
+  ) {
+    const body = request.body as { name?: string; address?: string } | undefined
+    if (!body?.name?.trim()) return { status: 422, body: error('validation-failed') }
+    const site = {
+      id: `01991600-2000-7000-8000-${String(siteSequence++).padStart(12, '0')}`,
+      name: body.name.trim(),
+      address: body.address?.trim() ? body.address.trim() : null,
+      status: 'active',
+      revision_number: 1,
+    }
+    // The screen the form returns to reads the organization, so a site that is
+    // only echoed back would vanish on arrival.
+    const organization = fixture.organization as { sites: unknown[] } | null
+    if (organization) organization.sites = [...organization.sites, site]
+    return { status: 201, body: site }
   }
   if (request.method === 'GET' && /^\/studio\/v1\/organizations\/[^/]+$/.test(request.path)) {
     if (fixture.organization === null) return { status: 404, body: error('not-found') }

@@ -848,6 +848,44 @@ export const SCREENS: Screen[] = [
       await expect(page.getByText('No encontramos esta organización')).toBeVisible()
     },
   },
+  // --- `/organizations/[id]/organization/sites/new` · HU-009 ---
+  {
+    stories: 'HU-009 · register a site',
+    path: `${workspace}/organization/sites/new`,
+    fixture: () => createStudioApiFixture({ memberships: [activeMembership] }),
+    settled: async (page) => {
+      await expect(page.getByLabel('Nombre')).toBeVisible()
+    },
+  },
+  {
+    stories: 'HU-009 · register a site on a phone',
+    path: `${workspace}/organization/sites/new`,
+    fixture: () => createStudioApiFixture({ memberships: [activeMembership] }),
+    viewport: MOBILE,
+    settled: async (page) => {
+      await expect(page.getByLabel('Nombre')).toBeVisible()
+    },
+  },
+  {
+    // The form refuses in place rather than sending the person somewhere else:
+    // a coach arriving by URL learns why, and where the sites are readable.
+    stories: 'HU-009 · a role that does not manage sites',
+    path: `/organizations/${secondActiveMembership.organization_id}/organization/sites/new`,
+    fixture: () => createStudioApiFixture({ memberships: [secondActiveMembership] }),
+    settled: async (page) => {
+      await expect(page.getByText('Tu rol no administra las sedes')).toBeVisible()
+    },
+  },
+  {
+    // The name is required, and the message has to survive on both viewports.
+    stories: 'HU-009 · the site needs a name',
+    path: `${workspace}/organization/sites/new`,
+    fixture: () => createStudioApiFixture({ memberships: [activeMembership] }),
+    reveal: async (page) => {
+      await page.getByRole('button', { name: 'Registrar sede' }).click()
+      await expect(page.getByText('Escribe el nombre de la sede.')).toBeVisible()
+    },
+  },
   {
     stories: 'organization · verifying your access',
     path: workspace,
