@@ -2672,6 +2672,118 @@ paths:
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
 
+  /space/v1/client-invitations/resolve:
+    post:
+      tags: [Space Identity]
+      operationId: resolveSpaceClientInvitation
+      x-allfit-operation: OP-REL-002
+      x-allfit-cache: no-store
+      summary: Read what a client invitation is asking for
+      description: >-
+        HU-STUDIO-023, criterion 3. Returns each scope the organization asks for
+        as its own entry, with the purpose it was asked for, the access level
+        requested and the contract exactly as it was presented. The person needs
+        all of that before answering, and answers each one separately.
+
+
+        Unlike team invitations, this one does **not** resolve anonymously. What
+        it returns is a list of health-data categories somebody wants access to,
+        and it is readable only by the person whose verified contact it was
+        addressed to. Holding the token is not enough.
+
+
+        The token travels in the body, never in the URL, so it stays out of
+        server logs and browser history.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClientInvitationToken'
+      responses:
+        '200':
+          description: The invitation and every scope it asks for
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientInvitationPresentation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /space/v1/client-invitations/decisions:
+    post:
+      tags: [Space Identity]
+      operationId: decideSpaceClientInvitation
+      x-allfit-operation: OP-IDN-009
+      x-allfit-cache: no-store
+      summary: Answer a client invitation, scope by scope
+      description: >-
+        HU-STUDIO-023, criteria 4, 5 and 8. One call decides the relationship and
+        every scope at once, because they were presented together and a partial
+        answer would leave the person consenting to something they never saw
+        resolved.
+
+
+        **Accepting the relationship grants nothing.** Each scope carries its own
+        answer, and a scope left out of `scope_decisions` counts as rejected. A
+        person may accept the relationship and reject every scope: the
+        relationship is then in force and no professional can read anything of
+        theirs. That is a legitimate outcome, not a broken state.
+
+
+        Rejecting the relationship ends the invitation and no scope is granted,
+        whatever the scope answers say.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClientInvitationDecisionCreate'
+      responses:
+        '200':
+          description: The decision as it was recorded
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientInvitationDecisionResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
   /space/v1/body-progress:
     post:
       tags: [Space Identity]
@@ -4083,6 +4195,76 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TeamInvitation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /studio/v1/organizations/{organizationId}/client-invitations:
+    post:
+      tags: [Studio Relationships]
+      operationId: createStudioClientInvitation
+      x-allfit-operation: OP-REL-001
+      x-allfit-cache: no-store
+      summary: Invite a person to become a client of the organization
+      description: >-
+        HU-STUDIO-023. Creates an invitation and, separately, one option per scope
+        the organization is asking for. It creates nothing else: no account, no
+        person, no relationship, no grant. Those only exist once the person
+        answers, and each scope is answered on its own.
+
+
+        Reissuing the same offer to the same contact reuses the pending invitation
+        so the person does not receive two. Asking for a different set of scopes is
+        a different proposal and issues a new one, because the person would be
+        answering a different question.
+
+
+        The initial-program proposal in criteria 2, 6 and 7 of the story is not
+        implemented: an organization has no way to publish a program yet.
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClientInvitationCreate'
+      responses:
+        '200':
+          description: An equivalent pending invitation was reused
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientInvitation'
+        '201':
+          description: Invitation and scope options created atomically
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientInvitation'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -11541,6 +11723,184 @@ components:
             membership_id:
               type: [string, 'null']
               format: uuid
+        replayed:
+          type: boolean
+    ClientInvitationToken:
+      type: object
+      additionalProperties: false
+      required: [token]
+      properties:
+        token:
+          type: string
+          minLength: 43
+          maxLength: 43
+          pattern: '^[A-Za-z0-9_-]{43}$'
+          description: Opaque token transported in JSON, never in the URL.
+    ClientInvitationScopeRequest:
+      type: object
+      additionalProperties: false
+      required: [scope_code, access_level, purpose, presented_snapshot]
+      properties:
+        scope_code:
+          $ref: '#/components/schemas/ScopeCode'
+        access_level:
+          $ref: '#/components/schemas/AccessLevel'
+        purpose:
+          type: string
+          minLength: 1
+          maxLength: 500
+          description: Why this organization is asking, in the person's language.
+        presented_snapshot:
+          type: object
+          description: >-
+            The contract text exactly as the person will be shown it. Stored
+            verbatim so a later edit to the scope catalogue cannot change what
+            somebody already agreed to.
+    ClientInvitationCreate:
+      type: object
+      additionalProperties: false
+      required: [channel, contact, scopes]
+      properties:
+        channel:
+          type: string
+          enum: [email]
+        contact:
+          type: string
+          format: email
+          minLength: 3
+          maxLength: 254
+        scopes:
+          type: array
+          minItems: 1
+          maxItems: 7
+          items:
+            $ref: '#/components/schemas/ClientInvitationScopeRequest'
+    ClientInvitation:
+      type: object
+      additionalProperties: false
+      required: [id, invitation_intent_id, status, channel, contact_hint, expires_at, scope_codes, reused]
+      properties:
+        id:
+          $ref: '#/components/schemas/UuidV7'
+        invitation_intent_id:
+          $ref: '#/components/schemas/UuidV7'
+        status:
+          $ref: '#/components/schemas/TeamInvitationStatus'
+        channel:
+          type: string
+          enum: [email]
+        contact_hint:
+          type: string
+          description: A masked form of the contact. The full address is never echoed back.
+        expires_at:
+          type: string
+          format: date-time
+        scope_codes:
+          type: array
+          items:
+            $ref: '#/components/schemas/ScopeCode'
+        reused:
+          type: boolean
+          description: True when an equivalent pending invitation already existed.
+    ClientInvitationScopeOption:
+      type: object
+      additionalProperties: false
+      required: [scope_code, offered_access_level, purpose, presented_snapshot_schema_version, presented_snapshot, decision]
+      properties:
+        scope_code:
+          $ref: '#/components/schemas/ScopeCode'
+        offered_access_level:
+          $ref: '#/components/schemas/AccessLevel'
+        purpose:
+          type: string
+        presented_snapshot_schema_version:
+          type: integer
+        presented_snapshot:
+          type: object
+        decision:
+          type: [string, 'null']
+          enum: [accepted, rejected, null]
+          description: Null until the person answers this scope.
+    ClientInvitationPresentation:
+      type: object
+      additionalProperties: false
+      required: [id, invitation_intent_id, status, organization, expires_at, scope_options]
+      properties:
+        id:
+          $ref: '#/components/schemas/UuidV7'
+        invitation_intent_id:
+          $ref: '#/components/schemas/UuidV7'
+        status:
+          $ref: '#/components/schemas/TeamInvitationStatus'
+        organization:
+          type: object
+          additionalProperties: false
+          required: [id, display_name, responsible_party]
+          properties:
+            id:
+              $ref: '#/components/schemas/UuidV7'
+            display_name:
+              type: string
+              minLength: 1
+            responsible_party:
+              $ref: '#/components/schemas/ResponsibleParty'
+        expires_at:
+          type: string
+          format: date-time
+        scope_options:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClientInvitationScopeOption'
+    ClientInvitationDecisionCreate:
+      type: object
+      additionalProperties: false
+      required: [token, invitation_intent_id, relationship_decision]
+      properties:
+        token:
+          type: string
+          minLength: 43
+          maxLength: 43
+          pattern: '^[A-Za-z0-9_-]{43}$'
+        invitation_intent_id:
+          $ref: '#/components/schemas/UuidV7'
+        relationship_decision:
+          type: string
+          enum: [accepted, rejected]
+        scope_decisions:
+          type: object
+          additionalProperties:
+            type: string
+            enum: [accepted, rejected]
+          description: >-
+            One answer per scope, keyed by scope code. A scope left out counts as
+            rejected: silence is not consent.
+    ClientInvitationDecisionResult:
+      type: object
+      additionalProperties: false
+      required: [invitation_id, invitation_status, organization_id, invitation_intent_id, intent_status, relationship_id, granted_scope_codes, replayed]
+      properties:
+        invitation_id:
+          $ref: '#/components/schemas/UuidV7'
+        invitation_status:
+          $ref: '#/components/schemas/TeamInvitationStatus'
+        organization_id:
+          $ref: '#/components/schemas/UuidV7'
+        invitation_intent_id:
+          $ref: '#/components/schemas/UuidV7'
+        intent_status:
+          $ref: '#/components/schemas/TeamInvitationIntentStatus'
+        relationship_id:
+          oneOf:
+            - $ref: '#/components/schemas/UuidV7'
+            - type: 'null'
+          description: Null when the relationship was rejected; nothing was created.
+        granted_scope_codes:
+          type: array
+          items:
+            $ref: '#/components/schemas/ScopeCode'
+          description: >-
+            Possibly empty. An accepted relationship with no granted scope is a
+            valid outcome, not a failure.
         replayed:
           type: boolean
     TeamInvitationCreate:

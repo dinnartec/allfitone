@@ -2494,6 +2494,19 @@ export type Database = {
           provider_factor_id: string
         }[]
       }
+      resolve_client_invitation: {
+        Args: { p_token_hash: string }
+        Returns: {
+          expires_at: string
+          invitation_id: string
+          invitation_intent_id: string
+          organization_display_name: string
+          organization_id: string
+          responsible_party: Json
+          scope_options: Json
+          status: string
+        }[]
+      }
       resolve_or_create_access_account: {
         Args: { p_issuer: string; p_provider: string; p_subject: string }
         Returns: {

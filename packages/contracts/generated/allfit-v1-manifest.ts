@@ -392,6 +392,20 @@ export const allfitV1ContractManifest = {
     },
     {
       method: 'POST',
+      path: '/space/v1/client-invitations/decisions',
+      operationId: 'decideSpaceClientInvitation',
+      allfitOperation: 'OP-IDN-009',
+      responses: ['200', '400', '401', '403', '404', '409', '422', '503'],
+    },
+    {
+      method: 'POST',
+      path: '/space/v1/client-invitations/resolve',
+      operationId: 'resolveSpaceClientInvitation',
+      allfitOperation: 'OP-REL-002',
+      responses: ['200', '400', '401', '403', '404', '422', '503'],
+    },
+    {
+      method: 'POST',
       path: '/space/v1/consents/{grantId}/revocation',
       operationId: 'revokeConsentGrant',
       allfitOperation: 'OP-PRV-005',
@@ -837,6 +851,13 @@ export const allfitV1ContractManifest = {
       operationId: 'updateStudioOrganization',
       allfitOperation: 'OP-ORG-002',
       responses: ['200', '400', '401', '403', '404', '409', '422', '428', '503'],
+    },
+    {
+      method: 'POST',
+      path: '/studio/v1/organizations/{organizationId}/client-invitations',
+      operationId: 'createStudioClientInvitation',
+      allfitOperation: 'OP-REL-001',
+      responses: ['200', '201', '400', '401', '403', '404', '409', '422', '429', '503'],
     },
     {
       method: 'GET',

@@ -1660,6 +1660,282 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  ClientInvitation: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'id',
+      'invitation_intent_id',
+      'status',
+      'channel',
+      'contact_hint',
+      'expires_at',
+      'scope_codes',
+      'reused',
+    ],
+    properties: {
+      id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      invitation_intent_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      status: {
+        $ref: '#/components/schemas/TeamInvitationStatus',
+      },
+      channel: {
+        type: 'string',
+        enum: ['email'],
+      },
+      contact_hint: {
+        type: 'string',
+        description: 'A masked form of the contact. The full address is never echoed back.',
+      },
+      expires_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      scope_codes: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/ScopeCode',
+        },
+      },
+      reused: {
+        type: 'boolean',
+        description: 'True when an equivalent pending invitation already existed.',
+      },
+    },
+  },
+  ClientInvitationCreate: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['channel', 'contact', 'scopes'],
+    properties: {
+      channel: {
+        type: 'string',
+        enum: ['email'],
+      },
+      contact: {
+        type: 'string',
+        format: 'email',
+        minLength: 3,
+        maxLength: 254,
+      },
+      scopes: {
+        type: 'array',
+        minItems: 1,
+        maxItems: 7,
+        items: {
+          $ref: '#/components/schemas/ClientInvitationScopeRequest',
+        },
+      },
+    },
+  },
+  ClientInvitationDecisionCreate: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['token', 'invitation_intent_id', 'relationship_decision'],
+    properties: {
+      token: {
+        type: 'string',
+        minLength: 43,
+        maxLength: 43,
+        pattern: '^[A-Za-z0-9_-]{43}$',
+      },
+      invitation_intent_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      relationship_decision: {
+        type: 'string',
+        enum: ['accepted', 'rejected'],
+      },
+      scope_decisions: {
+        type: 'object',
+        additionalProperties: {
+          type: 'string',
+          enum: ['accepted', 'rejected'],
+        },
+        description:
+          'One answer per scope, keyed by scope code. A scope left out counts as rejected: silence is not consent.',
+      },
+    },
+  },
+  ClientInvitationDecisionResult: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'invitation_id',
+      'invitation_status',
+      'organization_id',
+      'invitation_intent_id',
+      'intent_status',
+      'relationship_id',
+      'granted_scope_codes',
+      'replayed',
+    ],
+    properties: {
+      invitation_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      invitation_status: {
+        $ref: '#/components/schemas/TeamInvitationStatus',
+      },
+      organization_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      invitation_intent_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      intent_status: {
+        $ref: '#/components/schemas/TeamInvitationIntentStatus',
+      },
+      relationship_id: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/UuidV7',
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description: 'Null when the relationship was rejected; nothing was created.',
+      },
+      granted_scope_codes: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/ScopeCode',
+        },
+        description:
+          'Possibly empty. An accepted relationship with no granted scope is a valid outcome, not a failure.',
+      },
+      replayed: {
+        type: 'boolean',
+      },
+    },
+  },
+  ClientInvitationPresentation: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'id',
+      'invitation_intent_id',
+      'status',
+      'organization',
+      'expires_at',
+      'scope_options',
+    ],
+    properties: {
+      id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      invitation_intent_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      status: {
+        $ref: '#/components/schemas/TeamInvitationStatus',
+      },
+      organization: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['id', 'display_name', 'responsible_party'],
+        properties: {
+          id: {
+            $ref: '#/components/schemas/UuidV7',
+          },
+          display_name: {
+            type: 'string',
+            minLength: 1,
+          },
+          responsible_party: {
+            $ref: '#/components/schemas/ResponsibleParty',
+          },
+        },
+      },
+      expires_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      scope_options: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/ClientInvitationScopeOption',
+        },
+      },
+    },
+  },
+  ClientInvitationScopeOption: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'scope_code',
+      'offered_access_level',
+      'purpose',
+      'presented_snapshot_schema_version',
+      'presented_snapshot',
+      'decision',
+    ],
+    properties: {
+      scope_code: {
+        $ref: '#/components/schemas/ScopeCode',
+      },
+      offered_access_level: {
+        $ref: '#/components/schemas/AccessLevel',
+      },
+      purpose: {
+        type: 'string',
+      },
+      presented_snapshot_schema_version: {
+        type: 'integer',
+      },
+      presented_snapshot: {
+        type: 'object',
+      },
+      decision: {
+        type: ['string', 'null'],
+        enum: ['accepted', 'rejected', null],
+        description: 'Null until the person answers this scope.',
+      },
+    },
+  },
+  ClientInvitationScopeRequest: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['scope_code', 'access_level', 'purpose', 'presented_snapshot'],
+    properties: {
+      scope_code: {
+        $ref: '#/components/schemas/ScopeCode',
+      },
+      access_level: {
+        $ref: '#/components/schemas/AccessLevel',
+      },
+      purpose: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 500,
+        description: "Why this organization is asking, in the person's language.",
+      },
+      presented_snapshot: {
+        type: 'object',
+        description:
+          'The contract text exactly as the person will be shown it. Stored verbatim so a later edit to the scope catalogue cannot change what somebody already agreed to.',
+      },
+    },
+  },
+  ClientInvitationToken: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['token'],
+    properties: {
+      token: {
+        type: 'string',
+        minLength: 43,
+        maxLength: 43,
+        pattern: '^[A-Za-z0-9_-]{43}$',
+        description: 'Opaque token transported in JSON, never in the URL.',
+      },
+    },
+  },
   CompletenessLevel: {
     type: 'string',
     enum: ['partial', 'summary', 'detailed', 'sensor_enriched'],

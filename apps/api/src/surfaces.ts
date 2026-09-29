@@ -28,6 +28,8 @@ import {
   studioInvitationRoutes,
   studioOnboardingRoutes,
   studioOwnershipInvitationRoutes,
+  studioClientInvitationRoutes,
+  spaceClientInvitationRoutes,
   studioProfessionalRoutes,
   trustedBackofficeWebUrl,
   trustedStudioWebUrl,
@@ -61,12 +63,14 @@ export function mountSurfaces(app: Hono): void {
   app.route('/studio/v1', studioProfessionalRoutes())
   app.route('/studio/v1', studioInvitationRoutes())
   app.route('/studio/v1', studioOwnershipInvitationRoutes())
+  app.route('/studio/v1', studioClientInvitationRoutes())
   app.route('/studio/v1', studioOrganizationRoutes())
   app.route('/studio/v1', studioRelationshipRoutes())
   app.route('/studio/v1', studioCatalogRoutes())
   app.route('/studio/v1', studioPlanningRoutes())
   app.route('/space/v1', spaceIdentityRoutes())
   app.route('/space/v1', spaceOnboardingRoutes())
+  app.route('/space/v1', spaceClientInvitationRoutes())
   app.route('/space/v1', spacePlanningRoutes())
   app.route('/space/v1', spaceExecutionRoutes())
   app.route('/backoffice/v1', backofficeIdentityRoutes())

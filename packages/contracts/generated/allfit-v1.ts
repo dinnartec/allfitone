@@ -1077,6 +1077,54 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/space/v1/client-invitations/resolve': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Read what a client invitation is asking for
+     * @description HU-STUDIO-023, criterion 3. Returns each scope the organization asks for as its own entry, with the purpose it was asked for, the access level requested and the contract exactly as it was presented. The person needs all of that before answering, and answers each one separately.
+     *
+     *     Unlike team invitations, this one does **not** resolve anonymously. What it returns is a list of health-data categories somebody wants access to, and it is readable only by the person whose verified contact it was addressed to. Holding the token is not enough.
+     *
+     *     The token travels in the body, never in the URL, so it stays out of server logs and browser history.
+     */
+    post: operations['resolveSpaceClientInvitation']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/client-invitations/decisions': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Answer a client invitation, scope by scope
+     * @description HU-STUDIO-023, criteria 4, 5 and 8. One call decides the relationship and every scope at once, because they were presented together and a partial answer would leave the person consenting to something they never saw resolved.
+     *
+     *     **Accepting the relationship grants nothing.** Each scope carries its own answer, and a scope left out of `scope_decisions` counts as rejected. A person may accept the relationship and reject every scope: the relationship is then in force and no professional can read anything of theirs. That is a legitimate outcome, not a broken state.
+     *
+     *     Rejecting the relationship ends the invitation and no scope is granted, whatever the scope answers say.
+     */
+    post: operations['decideSpaceClientInvitation']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/space/v1/body-progress': {
     parameters: {
       query?: never
@@ -1688,6 +1736,30 @@ export interface paths {
      * @description Creates or reuses a pending email invitation and its membership intent. The command never creates an account, person, profile, or membership and never reveals whether the contact already belongs to Allfit One.
      */
     post: operations['createStudioTeamInvitation']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/studio/v1/organizations/{organizationId}/client-invitations': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Invite a person to become a client of the organization
+     * @description HU-STUDIO-023. Creates an invitation and, separately, one option per scope the organization is asking for. It creates nothing else: no account, no person, no relationship, no grant. Those only exist once the person answers, and each scope is answered on its own.
+     *
+     *     Reissuing the same offer to the same contact reuses the pending invitation so the person does not receive two. Asking for a different set of scopes is a different proposal and issues a new one, because the person would be answering a different question.
+     *
+     *     The initial-program proposal in criteria 2, 6 and 7 of the story is not implemented: an organization has no way to publish a program yet.
+     */
+    post: operations['createStudioClientInvitation']
     delete?: never
     options?: never
     head?: never
@@ -4459,6 +4531,86 @@ export interface components {
         /** Format: uuid */
         membership_id: string | null
       }
+      replayed: boolean
+    }
+    ClientInvitationToken: {
+      /** @description Opaque token transported in JSON, never in the URL. */
+      token: string
+    }
+    ClientInvitationScopeRequest: {
+      scope_code: components['schemas']['ScopeCode']
+      access_level: components['schemas']['AccessLevel']
+      /** @description Why this organization is asking, in the person's language. */
+      purpose: string
+      /** @description The contract text exactly as the person will be shown it. Stored verbatim so a later edit to the scope catalogue cannot change what somebody already agreed to. */
+      presented_snapshot: Record<string, never>
+    }
+    ClientInvitationCreate: {
+      /** @enum {string} */
+      channel: 'email'
+      /** Format: email */
+      contact: string
+      scopes: components['schemas']['ClientInvitationScopeRequest'][]
+    }
+    ClientInvitation: {
+      id: components['schemas']['UuidV7']
+      invitation_intent_id: components['schemas']['UuidV7']
+      status: components['schemas']['TeamInvitationStatus']
+      /** @enum {string} */
+      channel: 'email'
+      /** @description A masked form of the contact. The full address is never echoed back. */
+      contact_hint: string
+      /** Format: date-time */
+      expires_at: string
+      scope_codes: components['schemas']['ScopeCode'][]
+      /** @description True when an equivalent pending invitation already existed. */
+      reused: boolean
+    }
+    ClientInvitationScopeOption: {
+      scope_code: components['schemas']['ScopeCode']
+      offered_access_level: components['schemas']['AccessLevel']
+      purpose: string
+      presented_snapshot_schema_version: number
+      presented_snapshot: Record<string, never>
+      /**
+       * @description Null until the person answers this scope.
+       * @enum {string|null}
+       */
+      decision: 'accepted' | 'rejected' | null
+    }
+    ClientInvitationPresentation: {
+      id: components['schemas']['UuidV7']
+      invitation_intent_id: components['schemas']['UuidV7']
+      status: components['schemas']['TeamInvitationStatus']
+      organization: {
+        id: components['schemas']['UuidV7']
+        display_name: string
+        responsible_party: components['schemas']['ResponsibleParty']
+      }
+      /** Format: date-time */
+      expires_at: string
+      scope_options: components['schemas']['ClientInvitationScopeOption'][]
+    }
+    ClientInvitationDecisionCreate: {
+      token: string
+      invitation_intent_id: components['schemas']['UuidV7']
+      /** @enum {string} */
+      relationship_decision: 'accepted' | 'rejected'
+      /** @description One answer per scope, keyed by scope code. A scope left out counts as rejected: silence is not consent. */
+      scope_decisions?: {
+        [key: string]: 'accepted' | 'rejected'
+      }
+    }
+    ClientInvitationDecisionResult: {
+      invitation_id: components['schemas']['UuidV7']
+      invitation_status: components['schemas']['TeamInvitationStatus']
+      organization_id: components['schemas']['UuidV7']
+      invitation_intent_id: components['schemas']['UuidV7']
+      intent_status: components['schemas']['TeamInvitationIntentStatus']
+      /** @description Null when the relationship was rejected; nothing was created. */
+      relationship_id: components['schemas']['UuidV7'] | null
+      /** @description Possibly empty. An accepted relationship with no granted scope is a valid outcome, not a failure. */
+      granted_scope_codes: components['schemas']['ScopeCode'][]
       replayed: boolean
     }
     TeamInvitationCreate: {
@@ -8235,6 +8387,74 @@ export interface operations {
       503: components['responses']['UpstreamUnavailable']
     }
   }
+  resolveSpaceClientInvitation: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ClientInvitationToken']
+      }
+    }
+    responses: {
+      /** @description The invitation and every scope it asks for */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ClientInvitationPresentation']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  decideSpaceClientInvitation: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ClientInvitationDecisionCreate']
+      }
+    }
+    responses: {
+      /** @description The decision as it was recorded */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ClientInvitationDecisionResult']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
   recordSpaceBodyProgress: {
     parameters: {
       query?: never
@@ -9407,6 +9627,56 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['TeamInvitation']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      422: components['responses']['ValidationFailed']
+      429: components['responses']['RateLimited']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  createStudioClientInvitation: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ClientInvitationCreate']
+      }
+    }
+    responses: {
+      /** @description An equivalent pending invitation was reused */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ClientInvitation']
+        }
+      }
+      /** @description Invitation and scope options created atomically */
+      201: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ClientInvitation']
         }
       }
       400: components['responses']['BadRequest']
