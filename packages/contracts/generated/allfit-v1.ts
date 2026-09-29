@@ -1539,6 +1539,26 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/studio/v1/organizations/{organizationId}/clients': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * List the clients of an organization the caller may see
+     * @description Returns who the organization's clients are and where each link stands. It carries no fitness data of any kind, not even aggregated, and writes no access event. What comes back depends on the caller: a role holding `view_directory` reads the whole directory, while a coach reads only the relationships they hold or stand in for.
+     */
+    get: operations['listStudioOrganizationClients']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/studio/v1/organizations/{organizationId}/memberships/{membershipId}/roles': {
     parameters: {
       query?: never
@@ -4548,6 +4568,22 @@ export interface components {
     }
     OrganizationMembershipPage: {
       data: components['schemas']['OrganizationMembershipListItem'][]
+      page: components['schemas']['Page']
+    }
+    /** @enum {string} */
+    RelationshipStatus: 'active' | 'terminated'
+    ClientDirectoryItem: {
+      relationship_id: components['schemas']['UuidV7']
+      person_id: components['schemas']['UuidV7']
+      display_name: string
+      status: components['schemas']['RelationshipStatus']
+      /** Format: date-time */
+      started_at: string
+      /** Format: date-time */
+      ended_at: string | null
+    }
+    ClientDirectoryPage: {
+      data: components['schemas']['ClientDirectoryItem'][]
       page: components['schemas']['Page']
     }
     OrganizationCapability: {
@@ -9057,6 +9093,38 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['OrganizationMembershipPage']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listStudioOrganizationClients: {
+    parameters: {
+      query?: {
+        status?: components['schemas']['RelationshipStatus']
+        limit?: number
+        cursor?: components['parameters']['Cursor']
+      }
+      header?: never
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Authorized client directory page */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['PrivateNoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ClientDirectoryPage']
         }
       }
       400: components['responses']['BadRequest']

@@ -3696,6 +3696,58 @@ paths:
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
 
+  /studio/v1/organizations/{organizationId}/clients:
+    get:
+      tags: [Studio Relationships]
+      operationId: listStudioOrganizationClients
+      x-allfit-operation: OP-REL-010
+      x-allfit-cache: private-no-store
+      summary: List the clients of an organization the caller may see
+      description: >-
+        Returns who the organization's clients are and where each link stands.
+        It carries no fitness data of any kind, not even aggregated, and writes
+        no access event. What comes back depends on the caller: a role holding
+        `view_directory` reads the whole directory, while a coach reads only the
+        relationships they hold or stand in for.
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/RelationshipStatus'
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Authorized client directory page
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/PrivateNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientDirectoryPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
   /studio/v1/organizations/{organizationId}/memberships/{membershipId}/roles:
     post:
       tags: [Studio Organizations]
@@ -11716,6 +11768,41 @@ components:
           maxItems: 100
           items:
             $ref: '#/components/schemas/OrganizationMembershipListItem'
+        page:
+          $ref: '#/components/schemas/Page'
+    RelationshipStatus:
+      type: string
+      enum: [active, terminated]
+    ClientDirectoryItem:
+      type: object
+      additionalProperties: false
+      required: [relationship_id, person_id, display_name, status, started_at, ended_at]
+      properties:
+        relationship_id:
+          $ref: '#/components/schemas/UuidV7'
+        person_id:
+          $ref: '#/components/schemas/UuidV7'
+        display_name:
+          type: string
+          minLength: 1
+        status:
+          $ref: '#/components/schemas/RelationshipStatus'
+        started_at:
+          type: string
+          format: date-time
+        ended_at:
+          type: [string, 'null']
+          format: date-time
+    ClientDirectoryPage:
+      type: object
+      additionalProperties: false
+      required: [data, page]
+      properties:
+        data:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/ClientDirectoryItem'
         page:
           $ref: '#/components/schemas/Page'
     OrganizationCapability:
