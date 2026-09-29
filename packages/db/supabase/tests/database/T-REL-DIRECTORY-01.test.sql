@@ -67,9 +67,10 @@ insert into relationships.relationship_professional_assignments (
 set local role allfit_owner;
 
 -- The owner reads the whole directory, terminated relationships included.
+-- Only the person is declared. The function sets the organization itself,
+-- exactly as the API does; setting it here would test a path no caller takes.
 select set_config('app.actor_kind', 'person', true),
-       set_config('app.actor_person_id', '019ad000-0000-7000-8000-000000000011', true),
-       set_config('app.actor_org_id', '019ad000-0000-7000-8000-000000000101', true);
+       set_config('app.actor_person_id', '019ad000-0000-7000-8000-000000000011', true);
 
 select is(
   (select count(*) from relationships.list_organization_clients(

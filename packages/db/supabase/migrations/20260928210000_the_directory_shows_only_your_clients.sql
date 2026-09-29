@@ -78,6 +78,15 @@ begin
       using errcode = '42501';
   end if;
 
+  /*
+   * The row policy resolves the organization through `access_control.org()`,
+   * which reads this setting and then checks the actor really holds a live
+   * membership in it. Declaring it here grants nothing that the check would
+   * not already allow; omitting it leaves the policy blind to the
+   * organization, and a coach would silently see an empty directory.
+   */
+  perform set_config('app.actor_org_id', p_organization_id::text, true);
+
   return query
   select
     relationship.id,
