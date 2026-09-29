@@ -1884,6 +1884,18 @@ export type Database = {
         }
         Returns: undefined
       }
+      client_invitation_projection: {
+        Args: { p_invitation_id: string }
+        Returns: {
+          channel: string
+          contact_hint: string
+          expires_at: string
+          invitation_id: string
+          invitation_intent_id: string
+          scope_codes: string[]
+          status: string
+        }[]
+      }
       complete_backoffice_authentication: {
         Args: {
           p_access_token_expires_at: string
@@ -2089,6 +2101,31 @@ export type Database = {
       get_my_professional_context: {
         Args: { p_person_id: string; p_request_id: string }
         Returns: Json
+      }
+      issue_client_invitation: {
+        Args: {
+          p_channel: string
+          p_command_id: string
+          p_contact: string
+          p_idempotency_key: string
+          p_organization_id: string
+          p_person_id: string
+          p_request_hash: string
+          p_scope_options: Json
+          p_token_hash: string
+          p_token_key_version: number
+        }
+        Returns: {
+          channel: string
+          contact_hint: string
+          expires_at: string
+          invitation_id: string
+          invitation_intent_id: string
+          replayed: boolean
+          reused: boolean
+          scope_codes: string[]
+          status: string
+        }[]
       }
       issue_staff_invitation: {
         Args: {
