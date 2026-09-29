@@ -19,6 +19,9 @@
 -- listed here so a reviewer can correct them before this reaches production;
 -- an enum value is immutable once deployed and forward-only afterwards.
 
+set lock_timeout = '5s';
+set statement_timeout = '60s';
+
 create schema if not exists relationships;
 alter schema relationships owner to allfit_owner;
 
@@ -54,33 +57,26 @@ create table relationships.service_relationships (
   constraint uq_service_relationships_id_person unique (id, person_id),
   constraint uq_service_relationships_id_organization unique (id, organization_id),
   constraint uq_service_relationships_carrier unique (id, person_id, organization_id),
-  constraint fk_service_relationships_person foreign key (person_id)
-    references identity.people(id) on delete restrict,
-  constraint fk_service_relationships_organization foreign key (organization_id)
-    references organizations.organizations(id) on delete restrict,
+  constraint fk_service_relationships_person foreign key (person_id) references identity.people(id) on delete restrict,
+  constraint fk_service_relationships_organization foreign key (organization_id) references organizations.organizations(id) on delete restrict,
   -- IX-01: a returning client's new relationship may only point at one of their
   -- own, in the same organization.
-  constraint fk_service_relationships_previous
-    foreign key (previous_relationship_id, person_id, organization_id)
-    references relationships.service_relationships(id, person_id, organization_id)
+  constraint fk_service_relationships_previous foreign key (previous_relationship_id, person_id, organization_id) references relationships.service_relationships(id, person_id, organization_id)
     on delete restrict,
-  constraint ck_service_relationships_ended_at
-    check (ended_at is null or ended_at >= started_at),
-  constraint ck_service_relationships_ended_reason
-    check (ended_reason is null or btrim(ended_reason) <> ''),
-  constraint ck_service_relationships_not_self
-    check (previous_relationship_id is null or previous_relationship_id <> id)
+  constraint ck_service_relationships_ended_at check (ended_at is null or ended_at >= started_at),
+  constraint ck_service_relationships_ended_reason check (ended_reason is null or btrim(ended_reason) <> ''),
+  constraint ck_service_relationships_not_self check (previous_relationship_id is null or previous_relationship_id <> id)
 );
 
 -- One active relationship per person and organization. A person who leaves and
 -- comes back gets a new row, not a revived one.
-create unique index uq_service_relationships_active
+create unique index uidx_service_relationships_active
   on relationships.service_relationships (person_id, organization_id)
   where status = 'active';
 
-create index ix_service_relationships_person_status
+create index idx_service_relationships_person_status
   on relationships.service_relationships (person_id, status);
-create index ix_service_relationships_organization_status
+create index idx_service_relationships_organization_status
   on relationships.service_relationships (organization_id, status);
 
 create table relationships.relationship_professional_assignments (
@@ -101,38 +97,31 @@ create table relationships.relationship_professional_assignments (
   constraint uq_relationship_professional_assignments_id_person unique (id, person_id),
   constraint uq_relationship_professional_assignments_carrier
     unique (id, relationship_id, person_id, organization_id, membership_id),
-  constraint fk_relationship_professional_assignments_relationship
-    foreign key (relationship_id, person_id, organization_id)
-    references relationships.service_relationships(id, person_id, organization_id)
+  constraint fk_relationship_professional_assignments_relationship foreign key (relationship_id, person_id, organization_id) references relationships.service_relationships(id, person_id, organization_id)
     on delete restrict,
   -- IX-02: the assigned membership belongs to the same organization as the
   -- relationship. A professional from another organization is never assignable,
   -- even when the person is a client of both.
-  constraint fk_relationship_professional_assignments_membership
-    foreign key (membership_id, organization_id)
-    references organizations.organization_memberships(id, organization_id)
+  constraint fk_relationship_professional_assignments_membership foreign key (membership_id, organization_id) references organizations.organization_memberships(id, organization_id)
     on delete restrict,
-  constraint ck_relationship_professional_assignments_valid_to
-    check (valid_to is null or valid_to >= valid_from),
+  constraint ck_relationship_professional_assignments_valid_to check (valid_to is null or valid_to >= valid_from),
   -- A substitution always ends on a date; a holder's assignment is open-ended.
-  constraint ck_relationship_professional_assignments_ends_on
-    check (kind = 'holder' or ends_on is not null),
+  constraint ck_relationship_professional_assignments_ends_on check (kind = 'holder' or ends_on is not null),
   -- A substitution only becomes effective once the person accepts it.
-  constraint ck_relationship_professional_assignments_accepted
-    check (kind = 'holder' or accepted_by_person_at is not null or status = 'proposed')
+  constraint ck_relationship_professional_assignments_accepted check (kind = 'holder' or accepted_by_person_at is not null or status = 'proposed')
 );
 
 -- One effective holder per relationship.
-create unique index uq_relationship_professional_assignments_holder
+create unique index uidx_relationship_professional_assignments_holder
   on relationships.relationship_professional_assignments (relationship_id)
   where kind = 'holder' and status = 'active';
 
-create index ix_relationship_professional_assignments_relationship
+create index idx_relationship_professional_assignments_relationship
   on relationships.relationship_professional_assignments
   (relationship_id, status, valid_from, valid_to);
-create index ix_relationship_professional_assignments_person
+create index idx_relationship_professional_assignments_person
   on relationships.relationship_professional_assignments (person_id, status);
-create index ix_relationship_professional_assignments_organization
+create index idx_relationship_professional_assignments_organization
   on relationships.relationship_professional_assignments (organization_id, status);
 
 alter table relationships.service_relationships owner to allfit_owner;
@@ -216,12 +205,12 @@ create policy service_relationships_select_actor
  * so a permissive write policy silently grants every reader everything the
  * select policy was written to withhold. The denial tests caught exactly that.
  */
-create policy service_relationships_write_owner_insert
+create policy service_relationships_insert_owner
   on relationships.service_relationships
   for insert to allfit_owner
   with check (access_control.actor_kind() is not null);
 
-create policy service_relationships_write_owner_update
+create policy service_relationships_update_owner
   on relationships.service_relationships
   for update to allfit_owner
   using (access_control.actor_kind() is not null)
@@ -254,12 +243,12 @@ create policy relationship_professional_assignments_select_actor
  * so a permissive write policy silently grants every reader everything the
  * select policy was written to withhold. The denial tests caught exactly that.
  */
-create policy relationship_professional_assignments_write_owner_insert
+create policy relationship_professional_assignments_insert_owner
   on relationships.relationship_professional_assignments
   for insert to allfit_owner
   with check (access_control.actor_kind() is not null);
 
-create policy relationship_professional_assignments_write_owner_update
+create policy relationship_professional_assignments_update_owner
   on relationships.relationship_professional_assignments
   for update to allfit_owner
   using (access_control.actor_kind() is not null)

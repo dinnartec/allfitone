@@ -16,6 +16,9 @@
 -- carrying a `service_relationship` intent do not exist yet, so there is
 -- nothing to report; adding the column later is additive.
 
+set lock_timeout = '5s';
+set statement_timeout = '60s';
+
 create or replace function relationships.list_organization_clients(
   p_person_id uuid,
   p_organization_id uuid,
