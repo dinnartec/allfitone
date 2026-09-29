@@ -44,6 +44,11 @@ import {
   createSessionTokenVaultFromEnv,
 } from './infrastructure/index.js'
 import { createCredentialVerificationDatabase } from './infrastructure/credential-verification.js'
+import { createClientInvitationDatabase } from './infrastructure/client-invitations.js'
+import {
+  createClientInvitationService,
+  type ClientInvitationService,
+} from './application/client-invitations.js'
 import {
   createStudioOwnershipInvitationService,
   type StudioOwnershipInvitationService,
@@ -64,6 +69,7 @@ let cachedRegistrations: SpaceRegistrationService | undefined
 let cachedSpaceOnboarding: SpaceOnboardingService | undefined
 let cachedWebhooks: IdentityWebhookService | undefined
 let cachedInvitations: StudioInvitationService | undefined
+let cachedClientInvitations: ClientInvitationService | undefined
 let cachedBackoffice: BackofficeAuthenticationService | undefined
 let cachedVerification: CredentialVerificationService | undefined
 
@@ -171,6 +177,18 @@ export function studioInvitationService(): StudioInvitationService {
     enabled: process.env.STAFF_INVITATION_ISSUANCE_ENABLED === 'true',
   })
   return cachedInvitations
+}
+
+export function clientInvitationService(): ClientInvitationService {
+  cachedClientInvitations ??= createClientInvitationService(createClientInvitationDatabase(), {
+    enabled: process.env.CLIENT_INVITATION_ISSUANCE_ENABLED === 'true',
+  })
+  return cachedClientInvitations
+}
+
+/** Test seam. Undefined restores environment-backed construction. */
+export function setClientInvitationService(service: ClientInvitationService | undefined): void {
+  cachedClientInvitations = service
 }
 
 export function backofficeAuthenticationService(): BackofficeAuthenticationService {
