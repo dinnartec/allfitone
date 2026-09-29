@@ -81,7 +81,7 @@ select is(
 );
 
 select is(
-  (select array_agg(display_name order by sort_display_name)
+  (select array_agg(display_name order by sort_name)
      from relationships.list_organization_clients(
        '019ad000-0000-7000-8000-000000000011', '019ad000-0000-7000-8000-000000000101',
        'active', 50, null, null, null)),
@@ -113,7 +113,7 @@ select is(
 );
 
 select is(
-  (select array_agg(display_name order by sort_display_name)
+  (select array_agg(display_name order by sort_name)
      from relationships.list_organization_clients(
        '019ad000-0000-7000-8000-000000000012', '019ad000-0000-7000-8000-000000000101',
        null, 50, null, null, null)),

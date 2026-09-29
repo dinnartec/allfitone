@@ -3,7 +3,7 @@ import { Hono } from 'hono'
 
 import type { StudioSessionService } from '../../identity/index.js'
 import type { ClientDirectoryService } from '../application/index.js'
-import type { DirectoryPage, DirectoryQuery } from '../domain/index.js'
+import type { DirectoryEntry, DirectoryPage, DirectoryQuery } from '../domain/index.js'
 import { studioRelationshipRoutes } from './studio.js'
 
 const ORGANIZATION = '019ad000-0000-7000-8000-000000000101'
@@ -30,17 +30,35 @@ function sessions(overrides: Partial<StudioSessionService> = {}): StudioSessionS
   }
 }
 
-function client(overrides: Record<string, unknown> = {}) {
+function client(overrides: Record<string, unknown> = {}): DirectoryEntry {
   return {
+    kind: 'relationship',
     relationshipId: '019ad000-0000-7000-8000-000000000301',
     personId: '019ad000-0000-7000-8000-000000000001',
     displayName: 'Ana Alvarez',
-    status: 'active' as const,
+    relationshipStatus: 'active',
+    invitationStatus: 'accepted',
     startedAt: new Date('2026-01-10T14:02:11.000Z'),
     endedAt: null,
-    sortDisplayName: 'ana alvarez',
+    sortGroup: 'active',
+    sortName: 'ana alvarez',
+    sortId: '019ad000-0000-7000-8000-000000000301',
     ...overrides,
-  }
+  } as DirectoryEntry
+}
+
+function invited(overrides: Record<string, unknown> = {}): DirectoryEntry {
+  return {
+    kind: 'invitation',
+    invitationId: '019ad000-0000-7000-8000-000000000501',
+    contactHint: 'b***@example.test',
+    invitationStatus: 'pending',
+    invitedAt: new Date('2026-02-01T09:00:00.000Z'),
+    sortGroup: 'invited',
+    sortName: 'bruno@example.test',
+    sortId: '019ad000-0000-7000-8000-000000000501',
+    ...overrides,
+  } as DirectoryEntry
 }
 
 function directory(page: Partial<DirectoryPage> = {}, capture?: (query: DirectoryQuery) => void) {
@@ -75,15 +93,57 @@ describe('the client directory endpoint', () => {
     const body = (await response.json()) as { data: unknown[]; page: Record<string, unknown> }
     expect(body.data).toEqual([
       {
+        kind: 'relationship',
         relationship_id: '019ad000-0000-7000-8000-000000000301',
         person_id: '019ad000-0000-7000-8000-000000000001',
         display_name: 'Ana Alvarez',
-        status: 'active',
+        relationship_status: 'active',
+        invitation_status: 'accepted',
         started_at: '2026-01-10T14:02:11.000Z',
         ended_at: null,
       },
     ])
     expect(body.page).toEqual({ has_more: false, next_cursor: null })
+  })
+
+  test('presents somebody invited with no person and no name', async () => {
+    const response = await app(directory({ items: [invited()] })).request(
+      `/studio/v1/organizations/${ORGANIZATION}/clients`,
+      { headers: HEADERS },
+    )
+    const body = (await response.json()) as { data: Record<string, unknown>[] }
+    expect(body.data).toEqual([
+      {
+        kind: 'invitation',
+        invitation_id: '019ad000-0000-7000-8000-000000000501',
+        contact_hint: 'b***@example.test',
+        invitation_status: 'pending',
+        invited_at: '2026-02-01T09:00:00.000Z',
+      },
+    ])
+  })
+
+  test('never echoes the full contact of somebody invited', async () => {
+    const response = await app(directory({ items: [invited()] })).request(
+      `/studio/v1/organizations/${ORGANIZATION}/clients`,
+      { headers: HEADERS },
+    )
+    const body = await response.text()
+    expect(body).not.toContain('bruno@example.test')
+    expect(body).toContain('b***@example.test')
+  })
+
+  test('accepts the invited filter and passes it through unchanged', async () => {
+    let seen: DirectoryQuery | undefined
+    const response = await app(
+      directory({ items: [invited()] }, (query) => {
+        seen = query
+      }),
+    ).request(`/studio/v1/organizations/${ORGANIZATION}/clients?status=invited`, {
+      headers: HEADERS,
+    })
+    expect(response.status).toBe(200)
+    expect(seen?.status).toBe('invited')
   })
 
   /*
@@ -101,10 +161,27 @@ describe('the client directory endpoint', () => {
     expect(Object.keys(body.data[0] ?? {}).sort()).toEqual([
       'display_name',
       'ended_at',
+      'invitation_status',
+      'kind',
       'person_id',
       'relationship_id',
+      'relationship_status',
       'started_at',
-      'status',
+    ])
+  })
+
+  test('an invited entry carries nothing but the masked contact and its state', async () => {
+    const response = await app(directory({ items: [invited()] })).request(
+      `/studio/v1/organizations/${ORGANIZATION}/clients`,
+      { headers: HEADERS },
+    )
+    const body = (await response.json()) as { data: Record<string, unknown>[] }
+    expect(Object.keys(body.data[0] ?? {}).sort()).toEqual([
+      'contact_hint',
+      'invitation_id',
+      'invitation_status',
+      'invited_at',
+      'kind',
     ])
   })
 

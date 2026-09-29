@@ -1615,31 +1615,52 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
-  ClientDirectoryItem: {
+  ClientDirectoryGroup: {
+    type: 'string',
+    enum: ['active', 'invited', 'terminated'],
+  },
+  ClientDirectoryInvitation: {
     type: 'object',
     additionalProperties: false,
-    required: ['relationship_id', 'person_id', 'display_name', 'status', 'started_at', 'ended_at'],
+    required: ['kind', 'invitation_id', 'contact_hint', 'invitation_status', 'invited_at'],
     properties: {
-      relationship_id: {
+      kind: {
+        type: 'string',
+        const: 'invitation',
+      },
+      invitation_id: {
         $ref: '#/components/schemas/UuidV7',
       },
-      person_id: {
-        $ref: '#/components/schemas/UuidV7',
-      },
-      display_name: {
+      contact_hint: {
         type: 'string',
         minLength: 1,
+        description: 'The address the invitation went to, masked. Never the full contact.',
       },
-      status: {
-        $ref: '#/components/schemas/RelationshipStatus',
+      invitation_status: {
+        $ref: '#/components/schemas/ClientInvitationEntryStatus',
       },
-      started_at: {
+      invited_at: {
         type: 'string',
         format: 'date-time',
       },
-      ended_at: {
-        type: ['string', 'null'],
-        format: 'date-time',
+    },
+  },
+  ClientDirectoryItem: {
+    description:
+      'A directory entry is one of two things and says which. A `relationship` entry has a person behind it. An `invitation` entry does not: until somebody accepts, no person and no name exist, so it carries only the masked contact the invitation was sent to.',
+    oneOf: [
+      {
+        $ref: '#/components/schemas/ClientDirectoryRelationship',
+      },
+      {
+        $ref: '#/components/schemas/ClientDirectoryInvitation',
+      },
+    ],
+    discriminator: {
+      propertyName: 'kind',
+      mapping: {
+        relationship: '#/components/schemas/ClientDirectoryRelationship',
+        invitation: '#/components/schemas/ClientDirectoryInvitation',
       },
     },
   },
@@ -1657,6 +1678,50 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
       page: {
         $ref: '#/components/schemas/Page',
+      },
+    },
+  },
+  ClientDirectoryRelationship: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'kind',
+      'relationship_id',
+      'person_id',
+      'display_name',
+      'relationship_status',
+      'invitation_status',
+      'started_at',
+      'ended_at',
+    ],
+    properties: {
+      kind: {
+        type: 'string',
+        const: 'relationship',
+      },
+      relationship_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      person_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      display_name: {
+        type: 'string',
+        minLength: 1,
+      },
+      relationship_status: {
+        $ref: '#/components/schemas/RelationshipStatus',
+      },
+      invitation_status: {
+        $ref: '#/components/schemas/ClientInvitationEntryStatus',
+      },
+      started_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      ended_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
       },
     },
   },
@@ -1813,6 +1878,10 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         type: 'boolean',
       },
     },
+  },
+  ClientInvitationEntryStatus: {
+    type: 'string',
+    enum: ['pending', 'accepted', 'rejected', 'revoked', 'expired'],
   },
   ClientInvitationPresentation: {
     type: 'object',

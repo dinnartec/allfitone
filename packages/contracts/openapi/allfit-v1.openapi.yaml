@@ -3818,9 +3818,19 @@ paths:
       description: >-
         Returns who the organization's clients are and where each link stands.
         It carries no fitness data of any kind, not even aggregated, and writes
-        no access event. What comes back depends on the caller: a role holding
-        `view_directory` reads the whole directory, while a coach reads only the
-        relationships they hold or stand in for.
+        no access event.
+
+
+        An entry is either a **relationship** — somebody who accepted — or an
+        **invitation** nobody has answered yet. An invitation entry has no person
+        and no name, because until somebody accepts, neither exists; it carries
+        the masked contact instead.
+
+
+        What comes back depends on the caller. A role holding `view_directory`
+        reads the whole directory and every unanswered invitation. A coach reads
+        only the relationships they hold or stand in for, and only the
+        invitations they themselves sent.
       security:
         - cookieAuth: []
       parameters:
@@ -3828,8 +3838,9 @@ paths:
         - name: status
           in: query
           required: false
+          description: Narrows to one group of entries. `invited` selects the unanswered ones.
           schema:
-            $ref: '#/components/schemas/RelationshipStatus'
+            $ref: '#/components/schemas/ClientDirectoryGroup'
         - name: limit
           in: query
           required: false
@@ -12134,10 +12145,29 @@ components:
       type: string
       enum: [active, terminated]
     ClientDirectoryItem:
+      description: >-
+        A directory entry is one of two things and says which. A `relationship`
+        entry has a person behind it. An `invitation` entry does not: until
+        somebody accepts, no person and no name exist, so it carries only the
+        masked contact the invitation was sent to.
+      oneOf:
+        - $ref: '#/components/schemas/ClientDirectoryRelationship'
+        - $ref: '#/components/schemas/ClientDirectoryInvitation'
+      discriminator:
+        propertyName: kind
+        mapping:
+          relationship: '#/components/schemas/ClientDirectoryRelationship'
+          invitation: '#/components/schemas/ClientDirectoryInvitation'
+    ClientDirectoryRelationship:
       type: object
       additionalProperties: false
-      required: [relationship_id, person_id, display_name, status, started_at, ended_at]
+      required:
+        [kind, relationship_id, person_id, display_name, relationship_status,
+         invitation_status, started_at, ended_at]
       properties:
+        kind:
+          type: string
+          const: relationship
         relationship_id:
           $ref: '#/components/schemas/UuidV7'
         person_id:
@@ -12145,14 +12175,41 @@ components:
         display_name:
           type: string
           minLength: 1
-        status:
+        relationship_status:
           $ref: '#/components/schemas/RelationshipStatus'
+        invitation_status:
+          $ref: '#/components/schemas/ClientInvitationEntryStatus'
         started_at:
           type: string
           format: date-time
         ended_at:
           type: [string, 'null']
           format: date-time
+    ClientDirectoryInvitation:
+      type: object
+      additionalProperties: false
+      required: [kind, invitation_id, contact_hint, invitation_status, invited_at]
+      properties:
+        kind:
+          type: string
+          const: invitation
+        invitation_id:
+          $ref: '#/components/schemas/UuidV7'
+        contact_hint:
+          type: string
+          minLength: 1
+          description: The address the invitation went to, masked. Never the full contact.
+        invitation_status:
+          $ref: '#/components/schemas/ClientInvitationEntryStatus'
+        invited_at:
+          type: string
+          format: date-time
+    ClientInvitationEntryStatus:
+      type: string
+      enum: [pending, accepted, rejected, revoked, expired]
+    ClientDirectoryGroup:
+      type: string
+      enum: [active, invited, terminated]
     ClientDirectoryPage:
       type: object
       additionalProperties: false

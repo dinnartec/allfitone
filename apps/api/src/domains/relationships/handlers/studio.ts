@@ -14,10 +14,10 @@ import {
 import { fail } from '../../../platform/http/index.js'
 import { clientDirectoryService } from '../dependencies.js'
 import { RelationshipsError, type ClientDirectoryService } from '../application/index.js'
-import type { RelationshipStatus } from '../domain/index.js'
+import type { DirectoryEntry, DirectoryGroup } from '../domain/index.js'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
-const RELATIONSHIP_STATUSES = new Set<RelationshipStatus>(['active', 'terminated'])
+const DIRECTORY_GROUPS = new Set<DirectoryGroup>(['active', 'invited', 'terminated'])
 
 export function studioRelationshipRoutes(
   injectedService?: ClientDirectoryService,
@@ -55,8 +55,8 @@ export function studioRelationshipRoutes(
 
     const statusValue = c.req.query('status')
     const status =
-      statusValue && RELATIONSHIP_STATUSES.has(statusValue as RelationshipStatus)
-        ? (statusValue as RelationshipStatus)
+      statusValue && DIRECTORY_GROUPS.has(statusValue as DirectoryGroup)
+        ? (statusValue as DirectoryGroup)
         : undefined
     if (statusValue && !status) return fail(c, 'validation-failed')
 
@@ -76,19 +76,12 @@ export function studioRelationshipRoutes(
       })
       const last = page.items.at(-1)
       return c.json({
-        data: page.items.map((client) => ({
-          relationship_id: client.relationshipId,
-          person_id: client.personId,
-          display_name: client.displayName,
-          status: client.status,
-          started_at: client.startedAt.toISOString(),
-          ended_at: client.endedAt?.toISOString() ?? null,
-        })),
+        data: page.items.map(presentEntry),
         page: {
           has_more: page.hasMore,
           next_cursor:
             page.hasMore && last
-              ? encodeClientCursor(last.status, last.sortDisplayName, last.relationshipId, status)
+              ? encodeClientCursor(last.sortGroup, last.sortName, last.sortId, status)
               : null,
         },
       })
@@ -135,18 +128,45 @@ function parseLimit(value: string | undefined): number | undefined {
 }
 
 /**
+ * An invitation entry carries no person and no name: until somebody accepts,
+ * neither exists. Presenting it with empty strings would invite a client to
+ * render a blank name where there is nothing to render.
+ */
+function presentEntry(entry: DirectoryEntry): Record<string, unknown> {
+  if (entry.kind === 'invitation') {
+    return {
+      kind: 'invitation',
+      invitation_id: entry.invitationId,
+      contact_hint: entry.contactHint,
+      invitation_status: entry.invitationStatus,
+      invited_at: entry.invitedAt.toISOString(),
+    }
+  }
+  return {
+    kind: 'relationship',
+    relationship_id: entry.relationshipId,
+    person_id: entry.personId,
+    display_name: entry.displayName,
+    relationship_status: entry.relationshipStatus,
+    invitation_status: entry.invitationStatus,
+    started_at: entry.startedAt.toISOString(),
+    ended_at: entry.endedAt?.toISOString() ?? null,
+  }
+}
+
+/**
  * The cursor carries the filter it was issued under. Changing `status` between
  * pages would otherwise resume a different query from an offset that means
  * nothing in it, which reads as rows skipped rather than as a bad request.
  */
 function parseClientCursor(
   value: string | undefined,
-  filterStatus: RelationshipStatus | undefined,
+  filterStatus: DirectoryGroup | undefined,
 ):
   | {
-      cursorStatus: RelationshipStatus
-      cursorDisplayName: string
-      cursorRelationshipId: string
+      cursorGroup: DirectoryGroup
+      cursorName: string
+      cursorId: string
     }
   | undefined
   | null {
@@ -156,23 +176,23 @@ function parseClientCursor(
     const parsed = JSON.parse(Buffer.from(value, 'base64url').toString('utf8')) as unknown
     if (
       !isObject(parsed) ||
-      parsed.v !== 1 ||
+      parsed.v !== 2 ||
       parsed.filter_status !== (filterStatus ?? null) ||
-      typeof parsed.status !== 'string' ||
-      !RELATIONSHIP_STATUSES.has(parsed.status as RelationshipStatus) ||
-      (filterStatus !== undefined && parsed.status !== filterStatus) ||
-      typeof parsed.display_name !== 'string' ||
-      parsed.display_name.length === 0 ||
-      parsed.display_name.length > 240 ||
-      typeof parsed.relationship_id !== 'string' ||
-      !UUID.test(parsed.relationship_id)
+      typeof parsed.group !== 'string' ||
+      !DIRECTORY_GROUPS.has(parsed.group as DirectoryGroup) ||
+      (filterStatus !== undefined && parsed.group !== filterStatus) ||
+      typeof parsed.name !== 'string' ||
+      parsed.name.length === 0 ||
+      parsed.name.length > 254 ||
+      typeof parsed.id !== 'string' ||
+      !UUID.test(parsed.id)
     ) {
       return null
     }
     return {
-      cursorStatus: parsed.status as RelationshipStatus,
-      cursorDisplayName: parsed.display_name,
-      cursorRelationshipId: parsed.relationship_id,
+      cursorGroup: parsed.group as DirectoryGroup,
+      cursorName: parsed.name,
+      cursorId: parsed.id,
     }
   } catch {
     return null
@@ -180,18 +200,18 @@ function parseClientCursor(
 }
 
 function encodeClientCursor(
-  status: RelationshipStatus,
-  displayName: string,
-  relationshipId: string,
-  filterStatus: RelationshipStatus | undefined,
+  group: DirectoryGroup,
+  name: string,
+  id: string,
+  filterStatus: DirectoryGroup | undefined,
 ): string {
   return Buffer.from(
     JSON.stringify({
-      v: 1,
+      v: 2,
       filter_status: filterStatus ?? null,
-      status,
-      display_name: displayName,
-      relationship_id: relationshipId,
+      group,
+      name,
+      id,
     }),
     'utf8',
   ).toString('base64url')
