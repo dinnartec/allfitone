@@ -1244,6 +1244,7 @@ export type Database = {
           invitation_id: string
           kind: Database['identity']['Enums']['invitation_intent_kind']
           materialized_membership_id: string | null
+          materialized_relationship_id: string | null
           proposed_role_code: string | null
           status: Database['identity']['Enums']['invitation_intent_status']
           updated_at: string
@@ -1255,6 +1256,7 @@ export type Database = {
           invitation_id: string
           kind: Database['identity']['Enums']['invitation_intent_kind']
           materialized_membership_id?: string | null
+          materialized_relationship_id?: string | null
           proposed_role_code?: string | null
           status?: Database['identity']['Enums']['invitation_intent_status']
           updated_at?: string
@@ -1266,6 +1268,7 @@ export type Database = {
           invitation_id?: string
           kind?: Database['identity']['Enums']['invitation_intent_kind']
           materialized_membership_id?: string | null
+          materialized_relationship_id?: string | null
           proposed_role_code?: string | null
           status?: Database['identity']['Enums']['invitation_intent_status']
           updated_at?: string
@@ -1942,6 +1945,28 @@ export type Database = {
         Returns: string
       }
       current_focus_areas: { Args: { p_person_id: string }; Returns: string[] }
+      decide_client_invitation: {
+        Args: {
+          p_command_id: string
+          p_idempotency_key: string
+          p_intent_id: string
+          p_person_id: string
+          p_relationship_decision: string
+          p_request_hash: string
+          p_scope_decisions: Json
+          p_token_hash: string
+        }
+        Returns: {
+          granted_scope_codes: string[]
+          intent_status: string
+          invitation_id: string
+          invitation_intent_id: string
+          invitation_status: string
+          organization_id: string
+          relationship_id: string
+          replayed: boolean
+        }[]
+      }
       decide_credential_verification: {
         Args: {
           p_actor_person_id: string
