@@ -1615,6 +1615,51 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  ClientDirectoryItem: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['relationship_id', 'person_id', 'display_name', 'status', 'started_at', 'ended_at'],
+    properties: {
+      relationship_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      person_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      display_name: {
+        type: 'string',
+        minLength: 1,
+      },
+      status: {
+        $ref: '#/components/schemas/RelationshipStatus',
+      },
+      started_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      ended_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+    },
+  },
+  ClientDirectoryPage: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['data', 'page'],
+    properties: {
+      data: {
+        type: 'array',
+        maxItems: 100,
+        items: {
+          $ref: '#/components/schemas/ClientDirectoryItem',
+        },
+      },
+      page: {
+        $ref: '#/components/schemas/Page',
+      },
+    },
+  },
   CompletenessLevel: {
     type: 'string',
     enum: ['partial', 'summary', 'detailed', 'sensor_enriched'],
@@ -5260,6 +5305,10 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         maxLength: 200,
       },
     },
+  },
+  RelationshipStatus: {
+    type: 'string',
+    enum: ['active', 'terminated'],
   },
   RequiredScope: {
     type: 'object',

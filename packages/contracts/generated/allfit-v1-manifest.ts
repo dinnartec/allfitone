@@ -840,6 +840,13 @@ export const allfitV1ContractManifest = {
     },
     {
       method: 'GET',
+      path: '/studio/v1/organizations/{organizationId}/clients',
+      operationId: 'listStudioOrganizationClients',
+      allfitOperation: 'OP-REL-010',
+      responses: ['200', '400', '401', '403', '422', '503'],
+    },
+    {
+      method: 'GET',
       path: '/studio/v1/organizations/{organizationId}/clients/{personId}/executions/{executionId}',
       operationId: 'getAuthorizedClientExecution',
       allfitOperation: 'OP-EXE-018',

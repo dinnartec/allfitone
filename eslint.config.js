@@ -242,6 +242,7 @@ const DOMAINS = [
   'organizations',
   'planning',
   'privacy',
+  'relationships',
   'support',
 ]
 
