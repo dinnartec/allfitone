@@ -702,6 +702,7 @@ describe('the session is its own list of exercises', () => {
 
 describe('the rest between sets (ADR-035)', () => {
   const CURL = '019e4000-0000-7000-8000-000000000605'
+  const ROW = '019e4000-0000-7000-8000-000000000606'
 
   /** Press and dips chained, then a lone curl, each with a rest of its own. */
   const rested = () =>
@@ -752,6 +753,49 @@ describe('the rest between sets (ADR-035)', () => {
 
   test("T-SPC-UNIT-131 mid-chain, what comes next is the chain's next exercise", () => {
     expect(resumesWith(rested(), 1)).toEqual({ movement: 'Fondos', chained: true })
+  })
+
+  /** Every set of that exercise ticked, the way the last tick leaves it. */
+  const finished = (exercises: ReturnType<typeof rested>, position: number) =>
+    (exercises.find((one) => one.position === position)?.sets ?? []).reduce(
+      (state, set) => (set.done ? state : withTick(state, position, set.order)),
+      exercises,
+    )
+
+  /** A lone curl first, then press and dips chained, then a lone row. */
+  const loneFirst = () =>
+    workingStateFrom(
+      execution({
+        exercises: [
+          exercise(1, CURL, 'Curl'),
+          exercise(2, MOVEMENT, 'Press de banca', { superset_group: 1 }),
+          exercise(3, OTHER, 'Fondos', { superset_group: 1 }),
+          exercise(4, ROW, 'Remo'),
+        ],
+      }),
+    )
+
+  test('T-SPC-UNIT-143 the last set of an exercise leads to the next exercise, not itself', () => {
+    expect(resumesWith(finished(loneFirst(), 1), 1)).toEqual({
+      movement: 'Press de banca',
+      chained: false,
+    })
+  })
+
+  test('T-SPC-UNIT-144 a superset finished leads past the whole chain', () => {
+    const done = finished(finished(loneFirst(), 2), 3)
+
+    expect(resumesWith(done, 3)).toEqual({ movement: 'Remo', chained: false })
+  })
+
+  test('T-SPC-UNIT-145 an exercise already finished is skipped on the way', () => {
+    const done = finished(finished(finished(loneFirst(), 2), 3), 1)
+
+    expect(resumesWith(done, 1)).toEqual({ movement: 'Remo', chained: false })
+  })
+
+  test('T-SPC-UNIT-146 the last exercise finished has nothing left to name', () => {
+    expect(resumesWith(finished(loneFirst(), 4), 4)).toEqual({ movement: '', chained: false })
   })
 
   test('T-SPC-UNIT-122 an exercise added in the session comes with no rest', () => {

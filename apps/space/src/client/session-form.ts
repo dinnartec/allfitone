@@ -346,8 +346,11 @@ export function restAfter(
 }
 
 /**
- * What comes after the rest: mid-chain, the chain's next exercise; otherwise this one
- * again, or the first of its superset for another round.
+ * What comes after the rest.
+ *
+ * Mid-chain, the chain's next exercise. Otherwise this exercise again, or the first of
+ * its superset for another round — unless that was the last set, and then the next
+ * exercise still to do after it; nothing, once the session has nothing left.
  */
 export function resumesWith(
   exercises: readonly WorkingExercise[],
@@ -361,11 +364,16 @@ export function resumesWith(
   ) {
     return { movement: following.movement, chained: true }
   }
-  const [first] = blockAt(exercises, position)
-  return {
-    movement: exercises.find((one) => one.position === first)?.movement ?? '',
-    chained: false,
+  const block = blockAt(exercises, position)
+  const members = exercises.filter((one) => block.includes(one.position))
+  const finished = (one: WorkingExercise) => one.sets.every((set) => set.done)
+  if (!members.every(finished)) {
+    const first = members[0]
+    return { movement: first?.movement ?? '', chained: false }
   }
+  const last = block.at(-1) ?? position
+  const next = exercises.find((one) => one.position > last && !finished(one))
+  return { movement: next?.movement ?? '', chained: false }
 }
 
 /**
