@@ -6204,6 +6204,12 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  SetKind: {
+    type: 'string',
+    enum: ['normal', 'warmup', 'to_failure', 'drop'],
+    description:
+      'What a set is: `planning.set_kind`, shared by the plan and by what was done (ADR-030, ADR-033). A warmup is recorded but never counted as work.',
+  },
   SignedMediaUrl: {
     type: 'object',
     additionalProperties: false,
@@ -7478,6 +7484,40 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
           },
         },
       },
+      sets: {
+        type: 'array',
+        description:
+          'The sets the routine asked for, in order, with their kind. The session opens each row with it and the person can change it (ADR-033). Empty for a step published before sets existed, where `target` is all there is; absent on the program detail.',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: [
+            'set_order',
+            'kind',
+            'target_reps',
+            'target_load_value',
+            'target_load_unit_code',
+          ],
+          properties: {
+            set_order: {
+              type: 'integer',
+              minimum: 1,
+            },
+            kind: {
+              $ref: '#/components/schemas/SetKind',
+            },
+            target_reps: {
+              type: ['integer', 'null'],
+            },
+            target_load_value: {
+              type: ['number', 'null'],
+            },
+            target_load_unit_code: {
+              type: ['string', 'null'],
+            },
+          },
+        },
+      },
     },
   },
   SpaceProgramSummary: {
@@ -8230,6 +8270,10 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         type: ['number', 'null'],
         minimum: 0,
         maximum: 10,
+      },
+      kind: {
+        $ref: '#/components/schemas/SetKind',
+        description: 'What the set was. Omitted, it is recorded as `normal` (ADR-033).',
       },
     },
   },

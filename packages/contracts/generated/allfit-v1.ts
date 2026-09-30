@@ -4204,7 +4204,20 @@ export interface components {
         load_value: number | null
         achieved_reps: number | null
       }[]
+      /** @description The sets the routine asked for, in order, with their kind. The session opens each row with it and the person can change it (ADR-033). Empty for a step published before sets existed, where `target` is all there is; absent on the program detail. */
+      sets?: {
+        set_order: number
+        kind: components['schemas']['SetKind']
+        target_reps: number | null
+        target_load_value: number | null
+        target_load_unit_code: string | null
+      }[]
     }
+    /**
+     * @description What a set is: `planning.set_kind`, shared by the plan and by what was done (ADR-030, ADR-033). A warmup is recorded but never counted as work.
+     * @enum {string}
+     */
+    SetKind: 'normal' | 'warmup' | 'to_failure' | 'drop'
     SpaceProgramChoice: {
       program_version_id: components['schemas']['UuidV7']
       /** @description An IANA zone. The start date is **not** sent: it is always today in this zone, and a client-supplied date could backdate a plan into a history that never happened. */
@@ -5375,6 +5388,8 @@ export interface components {
       achieved_reps?: number | null
       load?: components['schemas']['Load'] | null
       rpe?: number | null
+      /** @description What the set was. Omitted, it is recorded as `normal` (ADR-033). */
+      kind?: components['schemas']['SetKind']
     }
     Load: {
       value: number
