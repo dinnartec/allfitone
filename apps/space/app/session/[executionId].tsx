@@ -33,7 +33,7 @@
  * somebody typed about their body would be worse than its absence.
  */
 
-import { Badge, badgeToneColor, identityTone, type BadgeTone } from '@allfitone/react-native/badge'
+import { badgeToneColor, identityTone, type BadgeTone } from '@allfitone/react-native/badge'
 import { Button } from '@allfitone/react-native/button'
 import { IconButton } from '@allfitone/react-native/icon-button'
 import { InlineAlert } from '@allfitone/react-native/inline-alert'
@@ -1086,12 +1086,15 @@ function Exercise({
             <Text role="control" size="md" numberOfLines={1}>
               {exercise.movement}
             </Text>
+            {/* A dot and a quiet word, not a filled pill: the name is what the eye is for,
+                and the chain's colour already runs down the row's edge. */}
             {chain ? (
-              <Badge
-                label={`Superserie ${chain.letter}`}
-                tone={chain.tone}
-                style={styles.chainBadge}
-              />
+              <View style={styles.chainMark}>
+                <View style={[styles.chainDot, { backgroundColor: chain.color }]} />
+                <Text role="body" size="xs" color="muted">
+                  {`Superserie ${chain.letter}`}
+                </Text>
+              </View>
             ) : null}
           </View>
           <Animated.View style={[styles.summary, summary]}>
@@ -1447,7 +1450,8 @@ const styles = StyleSheet.create({
   shell: { borderRadius: 22, paddingHorizontal: CARD_INSET },
   exerciseHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, height: 44 },
   headerTitle: { flex: 1, gap: 2 },
-  chainBadge: { alignSelf: 'flex-start' },
+  chainMark: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  chainDot: { width: 6, height: 6, borderRadius: 3 },
   headerToggle: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12, height: 44 },
   // Below the row's 44, so the open card keeps a margin above it.
   preview: { width: 40, height: 40, borderRadius: 10 },
