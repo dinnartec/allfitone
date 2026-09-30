@@ -90,6 +90,9 @@ import {
   movedExercise,
   chainedExercise,
   unchainedExercise,
+  restAfter,
+  resumesWith,
+  withRest,
   setMark,
   withSetKind,
   withTick,
@@ -102,10 +105,16 @@ import {
   SET_KIND_DETAILS,
   SET_KIND_NAMES,
   SET_KIND_TONES,
+  REST_OPENING_SECONDS,
+  restLabel,
   type SetKind,
 } from '../../src/client/set-scheme'
+import { announceRestEnd, cancelRestEnd } from '../../src/client/rest-alert'
+import { adjusted, rememberRest, restFor, started, type Rest } from '../../src/client/rest-timer'
 import { chainLetters } from '../../src/client/chain-order'
 import { DraggableRow } from '../../src/components/draggable-row'
+import { RestBar } from '../../src/components/rest-bar'
+import { RestSheetBody } from '../../src/components/rest-sheet'
 import { RpeSheetBody } from '../../src/components/rpe-sheet'
 import { SheetChoice } from '../../src/components/sheet-choice'
 
@@ -163,6 +172,9 @@ const REFLOW = LinearTransition.duration(220)
   .easing(Easing.bezier(0.23, 1, 0.32, 1))
   .reduceMotion(ReduceMotion.System)
 
+/** How long «¡A darle!» stays after a rest ends, before the bar goes. */
+const RESTED_MS = 1_600
+
 /** How far a done set steps back: still legible, no longer leading. */
 const DIMMED = 0.5
 
@@ -197,9 +209,14 @@ export default function Session() {
   /** What the one sheet on screen is about: a set's kind or effort, or an exercise. */
   const [asking, setAsking] = useState<
     | { readonly about: 'kind' | 'effort'; readonly position: number; readonly order: number }
-    | { readonly about: 'menu' | 'chain'; readonly position: number }
+    | { readonly about: 'menu' | 'chain' | 'rest'; readonly position: number }
     | undefined
   >(undefined)
+
+  /** The rest counting down, kept outside the screen so setting the session aside keeps it. */
+  const [rest, setRest] = useState<Rest | undefined>(() => restFor(executionId, Date.now()))
+  /** The moment after a rest ends, when the bar says so before it goes. */
+  const [rested, setRested] = useState(false)
 
   const [dragging, setDragging] = useState(false)
   const [settling, setSettling] = useState(false)
@@ -375,7 +392,7 @@ export default function Session() {
   }
 
   const asked =
-    asking?.about === 'menu' || asking?.about === 'chain'
+    asking?.about === 'menu' || asking?.about === 'chain' || asking?.about === 'rest'
       ? exercises.find((exercise) => exercise.position === asking.position)
       : undefined
 
@@ -386,12 +403,48 @@ export default function Session() {
           ?.sets.find((set) => set.order === asking.order)
       : undefined
 
+  // One place decides what is counting, so the notice and the bar never disagree.
+  const restMovement = useRef('')
+  const restWith = (next: Rest | undefined, movement = restMovement.current) => {
+    restMovement.current = movement
+    setRest(next)
+    setRested(false)
+    rememberRest(executionId, next)
+    if (next) void announceRestEnd(next.endsAt, movement)
+    else void cancelRestEnd()
+  }
+
   // A tick is always a write, and it fills an empty weight from last time or the set above.
+  // Ticking one done starts the rest that follows it; unticking leaves the rest alone.
   const tick = (position: number, order: number) => {
     const next = withTick(exercises, position, order)
     setExercises(next)
     save(next)
+    const ticked = next
+      .find((one) => one.position === position)
+      ?.sets.find((set) => set.order === order)?.done
+    const seconds = restAfter(next, position)
+    if (ticked && seconds !== undefined) {
+      restWith(started(Date.now(), seconds), resumesWith(next, position))
+    }
   }
+
+  // The screen already renders once a second for its clock; the rest ends on that beat.
+  useEffect(() => {
+    if (!rest || rest.endsAt > Date.now()) return
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+    rememberRest(executionId, undefined)
+    void cancelRestEnd()
+    setRest(undefined)
+    setRested(true)
+  }, [rest, seconds, executionId])
+
+  // Its own effect: on the clock's, the next second's render cancelled the goodbye.
+  useEffect(() => {
+    if (!rested) return
+    const gone = setTimeout(() => setRested(false), RESTED_MS)
+    return () => clearTimeout(gone)
+  }, [rested])
 
   const scroll = useRef<ScrollView>(null)
   const scrolled = useRef(0)
@@ -425,6 +478,7 @@ export default function Session() {
 
   const finish = () => {
     if (pending.current) clearTimeout(pending.current)
+    restWith(undefined)
     setDeciding(false)
     setClosing(true)
     flow
@@ -442,6 +496,7 @@ export default function Session() {
 
   const leave = () => {
     if (pending.current) clearTimeout(pending.current)
+    restWith(undefined)
     setDeciding(false)
     setClosing(true)
     flow
@@ -571,6 +626,7 @@ export default function Session() {
                 setAsking({ about: 'effort', position: exercise.position, order })
               }
               onExplain={explainer(exercise.movementId)}
+              onRest={() => setAsking({ about: 'rest', position: exercise.position })}
             />
           </DraggableRow>
         ))}
@@ -581,6 +637,17 @@ export default function Session() {
           <Button label="Añadir ejercicio" icon="add" variant="secondary" onPress={addExercise} />
         </View>
       </ScrollView>
+
+      {rest || rested ? (
+        <RestBar
+          rest={rest}
+          now={startedAt === undefined ? Date.now() : startedAt + seconds * 1000}
+          onAdjust={(by) => {
+            if (rest) restWith(adjusted(rest, by, Date.now()))
+          }}
+          onSkip={() => restWith(undefined)}
+        />
+      ) : null}
 
       <Sheet
         visible={deciding}
@@ -651,6 +718,19 @@ export default function Session() {
             }
             // One tap is the answer; the sheet has nothing else to say.
             setAsking(undefined)
+          }}
+        />
+      </Sheet>
+
+      <Sheet
+        visible={asking?.about === 'rest'}
+        onDismiss={() => setAsking(undefined)}
+        title="Descanso entre series"
+      >
+        <RestSheetBody
+          value={asked?.restSeconds ?? REST_OPENING_SECONDS}
+          onChange={(value) => {
+            if (asked) restructure(withRest(exercises, asked.position, value))
           }}
         />
       </Sheet>
@@ -771,6 +851,7 @@ function Exercise({
   onEffort,
   onTick,
   onExplain,
+  onRest,
 }: {
   readonly exercise: WorkingExercise
   readonly picture: string | null
@@ -791,6 +872,7 @@ function Exercise({
   readonly onTick: (order: number) => void
   /** Absent when the step names no catalogue movement: there is nothing to explain. */
   readonly onExplain: (() => void) | undefined
+  readonly onRest: () => void
 }) {
   const theme = useTheme()
   const progress = useSharedValue(0)
@@ -852,6 +934,20 @@ function Exercise({
 
   const body = (
     <>
+      {/* Today's rest, where the sets are: changing it here never touches the routine. */}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Descanso entre series: ${restLabel(exercise.restSeconds)}`}
+        onPress={onRest}
+        hitSlop={8}
+        style={({ pressed }) => [styles.restLine, { opacity: pressed ? 0.6 : 1 }]}
+      >
+        <FoundationIcon name="time" size="xs" color={theme.color.icon.accent} decorative />
+        <Text role="control" size="sm" color="accent">
+          {`Descanso · ${restLabel(exercise.restSeconds)}`}
+        </Text>
+      </Pressable>
+
       <View style={styles.columns}>
         <Text role="eyebrow" size="xs" color="muted" align="center" style={styles.colSet}>
           SERIE
@@ -1339,6 +1435,13 @@ const styles = StyleSheet.create({
   drawer: { overflow: 'hidden' },
   measure: { position: 'absolute', left: 0, right: 0, top: 0, gap: 10, paddingTop: 6 },
   // The same inset as a row, or every title sits four points off its column.
+  restLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 4,
+    paddingBottom: 2,
+  },
   columns: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 4 },
   setWrap: { borderRadius: 12, overflow: 'hidden' },
   setRow: {

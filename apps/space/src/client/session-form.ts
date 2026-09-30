@@ -18,7 +18,7 @@
 import type { AllfitV1Schemas } from '@allfitone/contracts'
 
 import type { PickedMovement } from './exercise-pick'
-import { chainedBy, movedTo, renumbered, settled, unchained } from './chain-order'
+import { blockAt, chainedBy, movedTo, renumbered, settled, unchained } from './chain-order'
 import type { SetKind } from './set-scheme'
 
 export type Execution = AllfitV1Schemas['SpaceExecution']
@@ -61,6 +61,8 @@ export interface WorkingExercise {
   /** The routine step it came from; null for one added during the session. */
   readonly plannedStepId?: string | null
   readonly supersetGroup?: number
+  /** Seconds to rest after its sets: today's, copied from the routine (ADR-035). */
+  readonly restSeconds?: number
 }
 
 /** A routine step or a session exercise: whatever carries a target and a history. */
@@ -264,6 +266,7 @@ function fromList(
         'Ejercicio',
       plannedStepId: listed.planned_step_id,
       ...(listed.superset_group === null ? {} : { supersetGroup: listed.superset_group }),
+      ...(listed.rest_seconds === null ? {} : { restSeconds: listed.rest_seconds }),
       sets,
     }
   })
@@ -308,6 +311,46 @@ export function unchainedExercise(
   position: number,
 ): readonly WorkingExercise[] {
   return laddered(unchained(exercises, position))
+}
+
+/** Today's rest for one exercise; the routine keeps its own (ADR-035). */
+export function withRest(
+  exercises: readonly WorkingExercise[],
+  position: number,
+  seconds: number | undefined,
+): readonly WorkingExercise[] {
+  return exercises.map((exercise) => {
+    if (exercise.position !== position) return exercise
+    const { restSeconds: _dropped, ...rest } = exercise
+    return seconds === undefined ? rest : { ...rest, restSeconds: seconds }
+  })
+}
+
+/**
+ * The rest that follows ticking a set of this exercise, or nothing to count.
+ *
+ * A superset is done back to back, so only its last exercise rests, and what it rests is
+ * the chain's rest, which is the last one's (ADR-030, HU-SP-105).
+ */
+export function restAfter(
+  exercises: readonly WorkingExercise[],
+  position: number,
+): number | undefined {
+  const exercise = exercises.find((one) => one.position === position)
+  if (!exercise) return undefined
+  const group = exercise.supersetGroup
+  if (group !== undefined) {
+    const next = exercises.find((one) => one.position === position + 1)
+    if (next?.supersetGroup === group) return undefined
+  }
+  const seconds = exercise.restSeconds
+  return seconds !== undefined && seconds > 0 ? seconds : undefined
+}
+
+/** What comes after the rest: this exercise again, or the first of its superset. */
+export function resumesWith(exercises: readonly WorkingExercise[], position: number): string {
+  const [first] = blockAt(exercises, position)
+  return exercises.find((one) => one.position === first)?.movement ?? ''
 }
 
 /**
@@ -554,6 +597,7 @@ export function resultsFrom(exercises: readonly WorkingExercise[]): ExecutionRes
     movement_id: exercise.movementId,
     planned_step_id: exercise.plannedStepId ?? null,
     superset_group: exercise.supersetGroup ?? null,
+    rest_seconds: exercise.restSeconds ?? null,
   }))
   const strength = exercises.flatMap((exercise) =>
     exercise.sets

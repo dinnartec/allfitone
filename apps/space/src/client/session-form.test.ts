@@ -3,6 +3,9 @@ import { describe, expect, test } from 'bun:test'
 import {
   chainedExercise,
   movedExercise,
+  restAfter,
+  resumesWith,
+  withRest,
   unchainedExercise,
   withoutExercise,
   withTick,
@@ -69,6 +72,7 @@ function exercise(
     movement,
     planned_step_id: null,
     superset_group: null,
+    rest_seconds: null,
     target: { family: 'strength', target_sets: 2, target_reps: 10 },
     previous: [],
     sets: [],
@@ -665,9 +669,27 @@ describe('the session is its own list of exercises', () => {
     const sent = resultsFrom(workingStateFrom(three()))
 
     expect(sent.exercises).toEqual([
-      { position: 1, movement_id: MOVEMENT, planned_step_id: null, superset_group: 1 },
-      { position: 2, movement_id: OTHER, planned_step_id: null, superset_group: 1 },
-      { position: 3, movement_id: MOVEMENT, planned_step_id: null, superset_group: null },
+      {
+        position: 1,
+        movement_id: MOVEMENT,
+        planned_step_id: null,
+        superset_group: 1,
+        rest_seconds: null,
+      },
+      {
+        position: 2,
+        movement_id: OTHER,
+        planned_step_id: null,
+        superset_group: 1,
+        rest_seconds: null,
+      },
+      {
+        position: 3,
+        movement_id: MOVEMENT,
+        planned_step_id: null,
+        superset_group: null,
+        rest_seconds: null,
+      },
     ])
     expect(sent.strength_sets?.map((set) => set.exercise_position)).toEqual([1, 3])
   })
@@ -675,5 +697,59 @@ describe('the session is its own list of exercises', () => {
   test('T-SPC-UNIT-116 a session with no list yet reads its plan, as it always did', () => {
     expect(workingStateFrom(execution()).map((one) => one.movementId)).toEqual([MOVEMENT, OTHER])
     expect(THIRD).toBeTruthy()
+  })
+})
+
+describe('the rest between sets (ADR-035)', () => {
+  const CURL = '019e4000-0000-7000-8000-000000000605'
+
+  /** Press and dips chained, then a lone curl, each with a rest of its own. */
+  const rested = () =>
+    workingStateFrom(
+      execution({
+        exercises: [
+          exercise(1, MOVEMENT, 'Press de banca', { superset_group: 1, rest_seconds: 60 }),
+          exercise(2, OTHER, 'Fondos', { superset_group: 1, rest_seconds: 90 }),
+          exercise(3, CURL, 'Curl', { rest_seconds: 120 }),
+        ],
+      }),
+    )
+
+  test('T-SPC-UNIT-117 each exercise opens with the rest its list carries', () => {
+    expect(rested().map((one) => one.restSeconds)).toEqual([60, 90, 120])
+  })
+
+  test('T-SPC-UNIT-118 a lone exercise rests its own rest', () => {
+    expect(restAfter(rested(), 3)).toBe(120)
+  })
+
+  test('T-SPC-UNIT-119 a chain rests only after its last exercise, and its rest is the last one', () => {
+    expect(restAfter(rested(), 1)).toBeUndefined()
+    expect(restAfter(rested(), 2)).toBe(90)
+  })
+
+  test('T-SPC-UNIT-120 no rest, or a rest of zero, starts nothing', () => {
+    const none = withRest(withRest(rested(), 3, undefined), 2, 0)
+
+    expect(restAfter(none, 3)).toBeUndefined()
+    expect(restAfter(none, 2)).toBeUndefined()
+  })
+
+  test("T-SPC-UNIT-121 changing it is today's, and travels with the list", () => {
+    const sent = resultsFrom(withRest(rested(), 3, 45))
+
+    expect(sent.exercises?.map((one) => one.rest_seconds)).toEqual([60, 90, 45])
+  })
+
+  test('T-SPC-UNIT-129 after resting comes the same exercise, or the first of its chain', () => {
+    expect(resumesWith(rested(), 3)).toBe('Curl')
+    expect(resumesWith(rested(), 2)).toBe('Press de banca')
+  })
+
+  test('T-SPC-UNIT-122 an exercise added in the session comes with no rest', () => {
+    const added = withAddedExercises(rested(), [{ id: 'new-movement', name: 'Remo' }])
+
+    expect(added.at(-1)?.restSeconds).toBeUndefined()
+    expect(resultsFrom(added).exercises?.at(-1)?.rest_seconds).toBeNull()
   })
 })

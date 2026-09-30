@@ -47,7 +47,6 @@ import { Button } from '@allfitone/react-native/button'
 import { Badge, badgeToneColor, identityTone } from '@allfitone/react-native/badge'
 import { Chip } from '@allfitone/react-native/chip'
 import { Sheet } from '@allfitone/react-native/sheet'
-import { Stepper } from '@allfitone/react-native/stepper'
 import { FoundationIcon } from '@allfitone/react-native/icons'
 import { IconButton } from '@allfitone/react-native/icon-button'
 import { InlineAlert } from '@allfitone/react-native/inline-alert'
@@ -82,6 +81,7 @@ import { discardFailure, saveFailure } from '../../src/client/save-failure'
 import { offerPublishedRoutine } from '../../src/client/routine-handoff'
 import { revealOffset, type Frame } from '../../src/client/reveal'
 import { DraggableRow } from '../../src/components/draggable-row'
+import { RestSheetBody } from '../../src/components/rest-sheet'
 import { readExerciseLibrary } from '../../src/client/exercise-library'
 import {
   declareAlreadyIn,
@@ -106,16 +106,12 @@ import {
 } from '../../src/client/routine-draft'
 import {
   OPENING_UNIT,
-  REST_MAX_SECONDS,
   REST_OPENING_SECONDS,
-  REST_PRESETS,
-  REST_STEP_SECONDS,
   SET_KIND_DETAILS,
   SET_KIND_NAMES,
   SET_KIND_TONES,
   otherUnit,
   restLabel,
-  restPresetLabel,
   setsLabel,
   withKind,
   withLoad,
@@ -983,46 +979,10 @@ export default function RoutineEditor() {
         ) : null}
 
         {sheet?.kind === 'rest' ? (
-          <View style={styles.sheet}>
-            <Text role="body" size="sm" color="muted">
-              Cuánto esperas antes de la siguiente serie.
-            </Text>
-
-            {/* Any rest, not one of seven. The presets below are a shortcut to the
-                common answers, never the whole set of them. */}
-            <Stepper
-              accessibilityLabel="Descanso entre series"
-              value={restAt(steps, sheet)}
-              min={0}
-              max={REST_MAX_SECONDS}
-              step={REST_STEP_SECONDS}
-              format={restPresetLabel}
-              caption={`de ${REST_STEP_SECONDS} en ${REST_STEP_SECONDS} segundos`}
-              grow
-              style={{ borderColor: theme.color.border.accent }}
-              onChange={(seconds) => {
-                if (sheet?.kind !== 'rest') return
-                change(withRest(steps, sheet.position, seconds))
-              }}
-            />
-
-            <Text role="control" size="sm" color="secondary">
-              O elige uno habitual
-            </Text>
-            <View style={styles.chips}>
-              {REST_PRESETS.map((preset) => (
-                <Chip
-                  key={preset}
-                  label={restPresetLabel(preset)}
-                  selected={restAt(steps, sheet) === preset}
-                  onPress={() => {
-                    if (sheet?.kind !== 'rest') return
-                    change(withRest(steps, sheet.position, preset))
-                  }}
-                />
-              ))}
-            </View>
-          </View>
+          <RestSheetBody
+            value={restAt(steps, sheet)}
+            onChange={(seconds) => change(withRest(steps, sheet.position, seconds))}
+          />
         ) : null}
 
         {sheet?.kind === 'superset' ? (
