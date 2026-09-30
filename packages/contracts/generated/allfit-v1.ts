@@ -1596,7 +1596,11 @@ export interface paths {
     }
     /**
      * List the clients of an organization the caller may see
-     * @description Returns who the organization's clients are and where each link stands. It carries no fitness data of any kind, not even aggregated, and writes no access event. What comes back depends on the caller: a role holding `view_directory` reads the whole directory, while a coach reads only the relationships they hold or stand in for.
+     * @description Returns who the organization's clients are and where each link stands. It carries no fitness data of any kind, not even aggregated, and writes no access event.
+     *
+     *     An entry is either a **relationship** — somebody who accepted — or an **invitation** nobody has answered yet. An invitation entry has no person and no name, because until somebody accepts, neither exists; it carries the masked contact instead.
+     *
+     *     What comes back depends on the caller. A role holding `view_directory` reads the whole directory and every unanswered invitation. A coach reads only the relationships they hold or stand in for, and only the invitations they themselves sent.
      */
     get: operations['listStudioOrganizationClients']
     put?: never
@@ -4724,16 +4728,43 @@ export interface components {
     }
     /** @enum {string} */
     RelationshipStatus: 'active' | 'terminated'
-    ClientDirectoryItem: {
+    /** @description A directory entry is one of two things and says which. A `relationship` entry has a person behind it. An `invitation` entry does not: until somebody accepts, no person and no name exist, so it carries only the masked contact the invitation was sent to. */
+    ClientDirectoryItem:
+      | components['schemas']['ClientDirectoryRelationship']
+      | components['schemas']['ClientDirectoryInvitation']
+    ClientDirectoryRelationship: {
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      kind: 'relationship'
       relationship_id: components['schemas']['UuidV7']
       person_id: components['schemas']['UuidV7']
       display_name: string
-      status: components['schemas']['RelationshipStatus']
+      relationship_status: components['schemas']['RelationshipStatus']
+      invitation_status: components['schemas']['ClientInvitationEntryStatus']
       /** Format: date-time */
       started_at: string
       /** Format: date-time */
       ended_at: string | null
     }
+    ClientDirectoryInvitation: {
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      kind: 'invitation'
+      invitation_id: components['schemas']['UuidV7']
+      /** @description The address the invitation went to, masked. Never the full contact. */
+      contact_hint: string
+      invitation_status: components['schemas']['ClientInvitationEntryStatus']
+      /** Format: date-time */
+      invited_at: string
+    }
+    /** @enum {string} */
+    ClientInvitationEntryStatus: 'pending' | 'accepted' | 'rejected' | 'revoked' | 'expired'
+    /** @enum {string} */
+    ClientDirectoryGroup: 'active' | 'invited' | 'terminated'
     ClientDirectoryPage: {
       data: components['schemas']['ClientDirectoryItem'][]
       page: components['schemas']['Page']
@@ -9325,7 +9356,8 @@ export interface operations {
   listStudioOrganizationClients: {
     parameters: {
       query?: {
-        status?: components['schemas']['RelationshipStatus']
+        /** @description Narrows to one group of entries. `invited` selects the unanswered ones. */
+        status?: components['schemas']['ClientDirectoryGroup']
         limit?: number
         cursor?: components['parameters']['Cursor']
       }

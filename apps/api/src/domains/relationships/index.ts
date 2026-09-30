@@ -8,8 +8,11 @@ export { RelationshipsError } from './application/index.js'
 export type { ClientDirectoryService } from './application/index.js'
 export type {
   ClientDirectoryDatabase,
-  DirectoryClient,
+  DirectoryEntry,
+  DirectoryGroup,
+  DirectoryInvitationEntry,
   DirectoryPage,
   DirectoryQuery,
+  DirectoryRelationshipEntry,
   RelationshipStatus,
 } from './domain/index.js'

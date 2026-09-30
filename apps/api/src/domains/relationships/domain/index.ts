@@ -6,34 +6,61 @@
  */
 
 export type RelationshipStatus = 'active' | 'terminated'
+export type InvitationStatus = 'pending' | 'accepted' | 'rejected' | 'revoked' | 'expired'
+
+/** What a directory row may be filtered down to. */
+export type DirectoryGroup = RelationshipStatus | 'invited'
 
 /**
- * A client as the directory presents them: who they are and where the link
- * stands. No fitness data appears here, not even aggregated, which is why
- * reading the directory writes no access event.
+ * A directory entry: either a person the organization has a relationship with,
+ * or somebody invited who has not answered. No fitness data appears in either,
+ * not even aggregated, which is why reading the directory writes no access
+ * event.
+ *
+ * The two kinds are deliberately not merged into one optional-everything shape:
+ * an unanswered invitation has no person and no name, because until somebody
+ * accepts, neither exists.
  */
-export interface DirectoryClient {
+export type DirectoryEntry = DirectoryRelationshipEntry | DirectoryInvitationEntry
+
+export interface DirectoryRelationshipEntry {
+  readonly kind: 'relationship'
   readonly relationshipId: string
   readonly personId: string
   readonly displayName: string
-  readonly status: RelationshipStatus
+  readonly relationshipStatus: RelationshipStatus
+  readonly invitationStatus: InvitationStatus
   readonly startedAt: Date
   readonly endedAt: Date | null
-  readonly sortDisplayName: string
+  readonly sortGroup: DirectoryGroup
+  readonly sortName: string
+  readonly sortId: string
+}
+
+export interface DirectoryInvitationEntry {
+  readonly kind: 'invitation'
+  readonly invitationId: string
+  /** The address the invitation went to, masked. Never the full contact. */
+  readonly contactHint: string
+  readonly invitationStatus: InvitationStatus
+  readonly invitedAt: Date
+  readonly sortGroup: DirectoryGroup
+  readonly sortName: string
+  readonly sortId: string
 }
 
 export interface DirectoryPage {
-  readonly items: readonly DirectoryClient[]
+  readonly items: readonly DirectoryEntry[]
   readonly hasMore: boolean
 }
 
 export interface DirectoryQuery {
   readonly organizationId: string
-  readonly status?: RelationshipStatus
+  readonly status?: DirectoryGroup
   readonly limit: number
-  readonly cursorStatus?: string
-  readonly cursorDisplayName?: string
-  readonly cursorRelationshipId?: string
+  readonly cursorGroup?: string
+  readonly cursorName?: string
+  readonly cursorId?: string
 }
 
 export interface ClientDirectoryDatabase {
