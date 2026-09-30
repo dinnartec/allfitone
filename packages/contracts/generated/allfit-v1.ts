@@ -4161,6 +4161,8 @@ export interface components {
       /** @description Derived from the assignment's start date, not stored: the same number kept in two places is one of them wrong. */
       week: number | null
       planned: components['schemas']['SpaceProgramStep'][]
+      /** @description The session's own exercises, in the order they are trained (ADR-034). Copied from the routine when the attempt started, with its supersets, and changed only by the person since; `planned` is kept for older clients. */
+      exercises: components['schemas']['SpaceSessionExercise'][]
       results: {
         [key: string]: unknown
       }[]
@@ -5372,6 +5374,8 @@ export interface components {
       interval_results?: components['schemas']['IntervalResultReplace'][]
       mobility_results?: components['schemas']['MobilityResultReplace'][]
       strength_sets: components['schemas']['StrengthSet'][]
+      /** @description The session's exercise list, replaced with the sets. Omitted, the session keeps the list it has. Exercises sharing a superset group must be contiguous (IX-50). */
+      exercises?: components['schemas']['SessionExerciseReplace'][]
     }
     ExecutionSegment: {
       position: number
@@ -5390,6 +5394,43 @@ export interface components {
       rpe?: number | null
       /** @description What the set was. Omitted, it is recorded as `normal` (ADR-033). */
       kind?: components['schemas']['SetKind']
+      /** @description The position of the exercise the set belongs to, in `exercises`. Omitted, it lands on the first exercise of its movement. */
+      exercise_position?: number
+    }
+    SessionExerciseReplace: {
+      position: number
+      /** Format: uuid */
+      movement_id?: string | null
+      /**
+       * Format: uuid
+       * @description The routine step it came from; null for one added during the session.
+       */
+      planned_step_id?: string | null
+      superset_group?: number | null
+    }
+    SpaceSessionExercise: {
+      position: number
+      /** Format: uuid */
+      movement_id: string | null
+      movement: string | null
+      /** Format: uuid */
+      planned_step_id: string | null
+      superset_group: number | null
+      /** @description The routine step's target; null for an exercise added in the session. */
+      target: {
+        [key: string]: unknown
+      } | null
+      previous: {
+        load_value: number | null
+        achieved_reps: number | null
+      }[]
+      sets: {
+        set_order: number
+        kind: components['schemas']['SetKind']
+        target_reps: number | null
+        target_load_value: number | null
+        target_load_unit_code: string | null
+      }[]
     }
     Load: {
       value: number

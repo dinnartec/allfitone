@@ -2533,6 +2533,15 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
           $ref: '#/components/schemas/StrengthSet',
         },
       },
+      exercises: {
+        type: 'array',
+        maxItems: 100,
+        description:
+          "The session's exercise list, replaced with the sets. Omitted, the session keeps the list it has. Exercises sharing a superset group must be contiguous (IX-50).",
+        items: {
+          $ref: '#/components/schemas/SessionExerciseReplace',
+        },
+      },
     },
   },
   ExecutionResultsState: {
@@ -5986,6 +5995,30 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  SessionExerciseReplace: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['position'],
+    properties: {
+      position: {
+        type: 'integer',
+        minimum: 1,
+      },
+      movement_id: {
+        type: ['string', 'null'],
+        format: 'uuid',
+      },
+      planned_step_id: {
+        type: ['string', 'null'],
+        format: 'uuid',
+        description: 'The routine step it came from; null for one added during the session.',
+      },
+      superset_group: {
+        type: ['integer', 'null'],
+        minimum: 1,
+      },
+    },
+  },
   SessionTemplate: {
     type: 'object',
     additionalProperties: false,
@@ -6484,6 +6517,7 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       'week',
       'planned',
       'results',
+      'exercises',
     ],
     properties: {
       executed_session_id: {
@@ -6548,6 +6582,14 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         type: 'array',
         items: {
           $ref: '#/components/schemas/SpaceProgramStep',
+        },
+      },
+      exercises: {
+        type: 'array',
+        description:
+          "The session's own exercises, in the order they are trained (ADR-034). Copied from the routine when the attempt started, with its supersets, and changed only by the person since; `planned` is kept for older clients.",
+        items: {
+          $ref: '#/components/schemas/SpaceSessionExercise',
         },
       },
       results: {
@@ -7712,6 +7754,100 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  SpaceSessionExercise: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'position',
+      'movement_id',
+      'movement',
+      'planned_step_id',
+      'superset_group',
+      'target',
+      'previous',
+      'sets',
+    ],
+    properties: {
+      position: {
+        type: 'integer',
+        minimum: 1,
+      },
+      movement_id: {
+        type: ['string', 'null'],
+        format: 'uuid',
+      },
+      movement: {
+        type: ['string', 'null'],
+      },
+      planned_step_id: {
+        type: ['string', 'null'],
+        format: 'uuid',
+      },
+      superset_group: {
+        type: ['integer', 'null'],
+      },
+      target: {
+        oneOf: [
+          {
+            type: 'object',
+            additionalProperties: true,
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description: "The routine step's target; null for an exercise added in the session.",
+      },
+      previous: {
+        type: 'array',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['load_value', 'achieved_reps'],
+          properties: {
+            load_value: {
+              type: ['number', 'null'],
+            },
+            achieved_reps: {
+              type: ['integer', 'null'],
+            },
+          },
+        },
+      },
+      sets: {
+        type: 'array',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: [
+            'set_order',
+            'kind',
+            'target_reps',
+            'target_load_value',
+            'target_load_unit_code',
+          ],
+          properties: {
+            set_order: {
+              type: 'integer',
+              minimum: 1,
+            },
+            kind: {
+              $ref: '#/components/schemas/SetKind',
+            },
+            target_reps: {
+              type: ['integer', 'null'],
+            },
+            target_load_value: {
+              type: ['number', 'null'],
+            },
+            target_load_unit_code: {
+              type: ['string', 'null'],
+            },
+          },
+        },
+      },
+    },
+  },
   SpaceSessionRefreshCreate: {
     type: 'object',
     additionalProperties: false,
@@ -8274,6 +8410,12 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       kind: {
         $ref: '#/components/schemas/SetKind',
         description: 'What the set was. Omitted, it is recorded as `normal` (ADR-033).',
+      },
+      exercise_position: {
+        type: 'integer',
+        minimum: 1,
+        description:
+          'The position of the exercise the set belongs to, in `exercises`. Omitted, it lands on the first exercise of its movement.',
       },
     },
   },
