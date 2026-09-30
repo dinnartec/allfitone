@@ -169,6 +169,7 @@ function flatten(results: ExecutionResultsReplace): Record<string, unknown>[] {
     load_value: entry.load?.value ?? null,
     load_unit_code: entry.load?.unit ?? null,
     rpe: entry.rpe ?? null,
+    kind: entry.kind ?? null,
   }))
   const endurance = (results.endurance_laps ?? []).map((entry) => ({
     family: 'endurance',

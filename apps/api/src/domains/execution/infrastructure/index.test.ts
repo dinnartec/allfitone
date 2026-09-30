@@ -77,8 +77,28 @@ describe('the results list binding', () => {
         load_value: null,
         load_unit_code: null,
         rpe: null,
+        // Null and not `normal`: the database owns the default (ADR-033).
+        kind: null,
       },
     ])
+  })
+
+  test("T-EXE-API-KIND-01 carries each set's kind and effort to the command", async () => {
+    const captured: CapturedQuery[] = []
+    await setDatabase(recordingDatabase(captured))
+
+    await createExecutionDatabase().replaceResults({
+      personId: PERSON_ID,
+      executedSessionId: EXECUTION_ID,
+      revisionNumber: 0,
+      results: {
+        strength_sets: [{ order: 1, movement_id: MOVEMENT_ID, kind: 'warmup', rpe: 6 }],
+      } as never,
+      ...command,
+    })
+
+    const [sent] = JSON.parse(String(captured.at(-1)?.values[3])) as Record<string, unknown>[]
+    expect(sent).toMatchObject({ kind: 'warmup', rpe: 6 })
   })
 
   test('T-EXE-IDEM-11 casts through text, so the driver does not serialize it twice', async () => {
