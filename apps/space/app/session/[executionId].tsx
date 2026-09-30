@@ -50,7 +50,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Keyboard, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import Animated, {
+  Easing,
+  FadeInUp,
   interpolateColor,
+  LayoutAnimationConfig,
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
@@ -130,6 +133,14 @@ const DELETE_COMMIT = 200
 
 /** Where a deleted row slides out to before it goes, clear of any screen's edge. */
 const ROW_EXIT = 480
+
+/** A new row arrives from just above its place, the way a card is dealt onto a pile. */
+const ROW_ENTER = FadeInUp.duration(260).easing(Easing.bezier(0.23, 1, 0.32, 1))
+
+/** Room left under the add button when the list scrolls to show it. */
+const REVEAL_MARGIN = 24
+/** Long enough for the new row to lay out, short enough to feel like one motion. */
+const REVEAL_DELAY_MS = 80
 
 /** How far a done set steps back: still legible, no longer leading. */
 const DIMMED = 0.5
@@ -308,8 +319,25 @@ export default function Session() {
     save(next)
   }
 
-  const addSet = (position: number) => {
+  const scroll = useRef<ScrollView>(null)
+  const scrolled = useRef(0)
+  const viewport = useRef(0)
+
+  // After the row lands, bring the add button into view if it went below the fold.
+  const reveal = (node: View | null) => {
+    const list = scroll.current
+    if (!node || !list) return
+    node.measureInWindow((_x, y, _width, height) => {
+      const hidden = y + height + REVEAL_MARGIN - viewport.current
+      if (hidden > 0) list.scrollTo({ y: scrolled.current + hidden, animated: true })
+    })
+  }
+
+  const addSet = (position: number, button: View | null) => {
+    Keyboard.dismiss()
+    void Haptics.selectionAsync()
     setExercises((current) => withExtraSet(current, position))
+    setTimeout(() => reveal(button), REVEAL_DELAY_MS)
   }
 
   const removeSet = (position: number, order: number) => {
@@ -418,9 +446,18 @@ export default function Session() {
       {/* `handled`: with the keyboard up, the tap on a tick used to only close it and
           had to be made twice. A tap on nothing still closes it. */}
       <ScrollView
+        ref={scroll}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        scrollEventThrottle={32}
+        onScroll={(event) => {
+          scrolled.current = event.nativeEvent.contentOffset.y
+        }}
+        onLayout={(event) => {
+          const { y, height } = event.nativeEvent.layout
+          viewport.current = y + height
+        }}
       >
         {exercises.map((exercise) => (
           <Exercise
@@ -433,7 +470,7 @@ export default function Session() {
             }
             onEdit={(order, change) => edit(exercise.position, order, change)}
             onTick={(order) => tick(exercise.position, order)}
-            onAddSet={() => addSet(exercise.position)}
+            onAddSet={(button) => addSet(exercise.position, button)}
             onRemoveSet={(order) => removeSet(exercise.position, order)}
             onKind={(order) => setAsking({ about: 'kind', position: exercise.position, order })}
             onEffort={(order) => setAsking({ about: 'effort', position: exercise.position, order })}
@@ -574,7 +611,7 @@ function Exercise({
     order: number,
     change: Partial<{ loadKg: string; reps: string; done: boolean }>,
   ) => void
-  readonly onAddSet: () => void
+  readonly onAddSet: (button: View | null) => void
   readonly onRemoveSet: (order: number) => void
   readonly onKind: (order: number) => void
   readonly onEffort: (order: number) => void
@@ -585,6 +622,7 @@ function Exercise({
   const theme = useTheme()
   const progress = useSharedValue(0)
   const drawerHeight = useSharedValue(0)
+  const addButton = useRef<View>(null)
   const reduceMotion = useReducedMotion()
 
   // A warmup is not work, so it is not what «3 de 3» counts.
@@ -657,26 +695,35 @@ function Exercise({
         <View style={styles.colTick} />
       </View>
 
-      {exercise.sets.map((set, index) => (
-        <SetRow
-          key={set.order}
-          set={set}
-          index={index}
-          mark={setMark(exercise.sets, index)}
-          onKind={() => onKind(set.order)}
-          onEffort={() => onEffort(set.order)}
-          onTick={() => onTick(set.order)}
-          onEdit={(change) => onEdit(set.order, change)}
-          onRemove={() => onRemoveSet(set.order)}
-        />
-      ))}
+      {/* Keyed by place, not by order: the ladder renumbers on every change, and a key
+          that moved would replay the entrance on rows that never left. */}
+      {/* The rows already there when the exercise mounts are the plan, not an addition. */}
+      <LayoutAnimationConfig skipEntering>
+        {exercise.sets.map((set, index) => (
+          <SetRow
+            key={index}
+            set={set}
+            index={index}
+            mark={setMark(exercise.sets, index)}
+            onKind={() => onKind(set.order)}
+            onEffort={() => onEffort(set.order)}
+            onTick={() => onTick(set.order)}
+            onEdit={(change) => onEdit(set.order, change)}
+            onRemove={() => onRemoveSet(set.order)}
+          />
+        ))}
+      </LayoutAnimationConfig>
 
+      {/* Drawn as the next row, dashed, so what it does is visible before the tap. */}
       <Pressable
+        ref={addButton}
         accessibilityRole="button"
         accessibilityLabel={`Añadir una serie a ${exercise.movement}`}
-        onPress={onAddSet}
-        style={styles.addSet}
-        hitSlop={8}
+        onPress={() => onAddSet(addButton.current)}
+        style={({ pressed }) => [
+          styles.addSet,
+          { borderColor: theme.color.border.default, opacity: pressed ? 0.6 : 1 },
+        ]}
       >
         <FoundationIcon name="add" customSize={12} color={theme.color.icon.accent} decorative />
         <Text role="control" size="sm" color="accent">
@@ -761,7 +808,9 @@ function Exercise({
           style={[styles.measure, contents]}
           onLayout={(event) => {
             const height = event.nativeEvent.layout.height
-            if (height > 0) drawerHeight.value = height
+            if (height <= 0) return
+            // The first measure is where it starts; later ones are a set added or gone.
+            drawerHeight.value = drawerHeight.value === 0 ? height : withSpring(height, SPRING)
           }}
         >
           {body}
@@ -844,8 +893,8 @@ function SetRow({
   function commitDelete() {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
     onRemove()
-    // Rows are keyed by order and the ladder renumbers, so this one is about to show
-    // the set below it: it has to be back in place, not slid out.
+    // Rows are keyed by place, so this one is about to show the set below it: it has
+    // to be back in place, not slid out.
     offset.value = 0
     setOpen(false)
   }
@@ -864,7 +913,7 @@ function SetRow({
   const tint = theme.color.accent.tonal
 
   return (
-    <View style={styles.setWrap}>
+    <Animated.View entering={ROW_ENTER} style={styles.setWrap}>
       <Animated.View
         style={[styles.deleteAction, { backgroundColor: theme.color.status.danger }, action]}
       >
@@ -1005,7 +1054,7 @@ function SetRow({
           </Pressable>
         </Animated.View>
       </GestureDetector>
-    </View>
+    </Animated.View>
   )
 }
 
@@ -1140,7 +1189,17 @@ const styles = StyleSheet.create({
   // `ANTERIOR` at the eyebrow's tracking clipped at 76 once RPE took a column; the
   // inputs have room to spare, so they give it back.
   colPrevious: { width: 88 },
-  addSet: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingTop: 4 },
+  addSet: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    height: 42,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    marginTop: 2,
+  },
   colInput: { flex: 1, textAlign: 'center' },
   colTick: { width: 34, height: 34 },
   colRpe: { width: 38, textAlign: 'center' },

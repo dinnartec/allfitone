@@ -299,13 +299,15 @@ export function withExtraSet(
       exercise.position === position
         ? [
             ...exercise.sets,
+            // The next set usually repeats the last one, so it arrives ready to tick;
+            // after a warmup it is the work that follows, not more warming up.
             {
               order: 0,
-              loadKg: '',
+              loadKg: last?.loadKg ?? '',
               reps: last?.reps ?? '',
               done: false,
               previous: '—',
-              kind: 'normal' as const,
+              kind: last === undefined || last.kind === 'warmup' ? ('normal' as const) : last.kind,
             },
           ]
         : exercise.sets

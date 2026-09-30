@@ -210,13 +210,12 @@ export default function MovementDetailScreen() {
   return (
     <Screen edges={sheet ? ['bottom'] : ['top', 'bottom']} style={sheet ? styles.sheet : undefined}>
       {/* Outside the scroll, so leaving never means climbing back up five steps. */}
-      <View style={styles.top}>
-        <IconButton
-          icon={sheet ? 'expand' : 'back'}
-          accessibilityLabel={sheet ? 'Cerrar' : 'Volver'}
-          onPress={() => router.back()}
-        />
-      </View>
+      {/* A sheet closes by its grabber or a tap outside; a button would be a third way. */}
+      {sheet ? null : (
+        <View style={styles.top}>
+          <IconButton icon="back" accessibilityLabel="Volver" onPress={() => router.back()} />
+        </View>
+      )}
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.heading}>
@@ -397,7 +396,7 @@ function Variants({
 const styles = StyleSheet.create({
   content: { gap: 14, paddingBottom: 96 },
   // Clear of the sheet's grabber, which sits where the status bar would.
-  sheet: { paddingTop: 20 },
+  sheet: { paddingTop: 28 },
   top: { flexDirection: 'row', paddingBottom: 8 },
   heading: { gap: 4 },
   demoRow: { flexDirection: 'row', gap: 12 },

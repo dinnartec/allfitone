@@ -539,3 +539,34 @@ describe('ticking a set with no weight typed', () => {
     expect(withTick(warm, 1, 2)[0]?.sets[1]).toMatchObject({ done: true, loadKg: '' })
   })
 })
+
+describe('a set added mid-exercise', () => {
+  const typed = (): readonly WorkingExercise[] =>
+    workingStateFrom(execution()).map((exercise) => ({
+      ...exercise,
+      sets: exercise.sets.map((set) =>
+        set.order === 4 ? { ...set, loadKg: '82.5', reps: '6' } : set,
+      ),
+    }))
+
+  test('T-SPC-UNIT-108 repeats the set above: its weight, reps and kind', () => {
+    const [press] = withExtraSet(withSetKind(typed(), 1, 4, 'drop'), 1)
+    const added = press?.sets.at(-1)
+
+    expect(added).toMatchObject({ loadKg: '82.5', reps: '6', kind: 'drop', done: false })
+  })
+
+  test('T-SPC-UNIT-109 after a warmup it is a working set, not another warmup', () => {
+    const [press] = withExtraSet(withSetKind(typed(), 1, 4, 'warmup'), 1)
+
+    expect(press?.sets.at(-1)?.kind).toBe('normal')
+  })
+
+  test('T-SPC-UNIT-110 it is never born ticked, whatever the set above was', () => {
+    const ticked = withTick(typed(), 1, 4)
+    const [press] = withExtraSet(ticked, 1)
+
+    expect(press?.sets.at(-1)?.done).toBe(false)
+    expect(press?.sets.at(-1)?.rpe).toBeUndefined()
+  })
+})
