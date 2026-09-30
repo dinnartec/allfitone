@@ -249,7 +249,13 @@ function readResults(body: unknown): ExecutionResultsReplace | undefined {
   if (typeof body !== 'object' || body === null) return undefined
   const candidate = body as Record<string, unknown>
   if (!Array.isArray(candidate.strength_sets)) return undefined
-  for (const optional of ['segments', 'endurance_laps', 'interval_results', 'mobility_results']) {
+  for (const optional of [
+    'segments',
+    'endurance_laps',
+    'interval_results',
+    'mobility_results',
+    'exercises',
+  ]) {
     if (candidate[optional] !== undefined && !Array.isArray(candidate[optional])) return undefined
   }
   return candidate as unknown as ExecutionResultsReplace
