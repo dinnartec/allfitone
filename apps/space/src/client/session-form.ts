@@ -19,7 +19,7 @@ import type { AllfitV1Schemas } from '@allfitone/contracts'
 
 import type { PickedMovement } from './exercise-pick'
 import { blockAt, chainedBy, movedTo, renumbered, settled, unchained } from './chain-order'
-import type { SetKind } from './set-scheme'
+import { REST_OPENING_SECONDS, type SetKind } from './set-scheme'
 
 export type Execution = AllfitV1Schemas['SpaceExecution']
 export type ExecutionResults = AllfitV1Schemas['ExecutionResultsReplace']
@@ -329,8 +329,10 @@ export function withRest(
 /**
  * The rest that follows ticking a set of this exercise, or nothing to count.
  *
- * A superset is done back to back, so only its last exercise rests, and what it rests is
- * the chain's rest, which is the last one's (ADR-030, HU-SP-105).
+ * Every exercise rests its own, inside a superset too: the transition is still time, and
+ * a bar that only says «next» leaves somebody guessing how long they have (ADR-035). A
+ * routine that never said rests the editor's opening value: a timer that never appears
+ * reads as broken.
  */
 export function restAfter(
   exercises: readonly WorkingExercise[],
@@ -338,19 +340,32 @@ export function restAfter(
 ): number | undefined {
   const exercise = exercises.find((one) => one.position === position)
   if (!exercise) return undefined
-  const group = exercise.supersetGroup
-  if (group !== undefined) {
-    const next = exercises.find((one) => one.position === position + 1)
-    if (next?.supersetGroup === group) return undefined
-  }
-  const seconds = exercise.restSeconds
-  return seconds !== undefined && seconds > 0 ? seconds : undefined
+  // Unsaid is the opening rest, the editor's own; only «Ninguno» (0) rests nothing.
+  const seconds = exercise.restSeconds ?? REST_OPENING_SECONDS
+  return seconds > 0 ? seconds : undefined
 }
 
-/** What comes after the rest: this exercise again, or the first of its superset. */
-export function resumesWith(exercises: readonly WorkingExercise[], position: number): string {
+/**
+ * What comes after the rest: mid-chain, the chain's next exercise; otherwise this one
+ * again, or the first of its superset for another round.
+ */
+export function resumesWith(
+  exercises: readonly WorkingExercise[],
+  position: number,
+): { readonly movement: string; readonly chained: boolean } {
+  const exercise = exercises.find((one) => one.position === position)
+  const following = exercises.find((one) => one.position === position + 1)
+  if (
+    exercise?.supersetGroup !== undefined &&
+    following?.supersetGroup === exercise.supersetGroup
+  ) {
+    return { movement: following.movement, chained: true }
+  }
   const [first] = blockAt(exercises, position)
-  return exercises.find((one) => one.position === first)?.movement ?? ''
+  return {
+    movement: exercises.find((one) => one.position === first)?.movement ?? '',
+    chained: false,
+  }
 }
 
 /**

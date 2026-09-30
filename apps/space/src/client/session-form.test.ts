@@ -723,16 +723,20 @@ describe('the rest between sets (ADR-035)', () => {
     expect(restAfter(rested(), 3)).toBe(120)
   })
 
-  test('T-SPC-UNIT-119 a chain rests only after its last exercise, and its rest is the last one', () => {
-    expect(restAfter(rested(), 1)).toBeUndefined()
+  test('T-SPC-UNIT-119 inside a chain each exercise rests its own rest too', () => {
+    expect(restAfter(rested(), 1)).toBe(60)
     expect(restAfter(rested(), 2)).toBe(90)
   })
 
-  test('T-SPC-UNIT-120 no rest, or a rest of zero, starts nothing', () => {
-    const none = withRest(withRest(rested(), 3, undefined), 2, 0)
+  test('T-SPC-UNIT-120 a rest of zero, «Ninguno», starts nothing', () => {
+    expect(restAfter(withRest(rested(), 2, 0), 2)).toBeUndefined()
+  })
 
-    expect(restAfter(none, 3)).toBeUndefined()
-    expect(restAfter(none, 2)).toBeUndefined()
+  test('T-SPC-UNIT-130 a routine that says nothing about rest rests the opening minute and a half', () => {
+    const unsaid = withRest(rested(), 3, undefined)
+
+    expect(restAfter(unsaid, 3)).toBe(90)
+    expect(restAfter(withRest(rested(), 2, undefined), 2)).toBe(90)
   })
 
   test("T-SPC-UNIT-121 changing it is today's, and travels with the list", () => {
@@ -742,8 +746,12 @@ describe('the rest between sets (ADR-035)', () => {
   })
 
   test('T-SPC-UNIT-129 after resting comes the same exercise, or the first of its chain', () => {
-    expect(resumesWith(rested(), 3)).toBe('Curl')
-    expect(resumesWith(rested(), 2)).toBe('Press de banca')
+    expect(resumesWith(rested(), 3)).toEqual({ movement: 'Curl', chained: false })
+    expect(resumesWith(rested(), 2)).toEqual({ movement: 'Press de banca', chained: false })
+  })
+
+  test("T-SPC-UNIT-131 mid-chain, what comes next is the chain's next exercise", () => {
+    expect(resumesWith(rested(), 1)).toEqual({ movement: 'Fondos', chained: true })
   })
 
   test('T-SPC-UNIT-122 an exercise added in the session comes with no rest', () => {

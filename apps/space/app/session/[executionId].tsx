@@ -106,7 +106,7 @@ import {
   SET_KIND_NAMES,
   SET_KIND_TONES,
   REST_OPENING_SECONDS,
-  restLabel,
+  restPresetLabel,
   type SetKind,
 } from '../../src/client/set-scheme'
 import { announceRestEnd, cancelRestEnd } from '../../src/client/rest-alert'
@@ -172,8 +172,8 @@ const REFLOW = LinearTransition.duration(220)
   .easing(Easing.bezier(0.23, 1, 0.32, 1))
   .reduceMotion(ReduceMotion.System)
 
-/** How long «¡A darle!» stays after a rest ends, before the bar goes. */
-const RESTED_MS = 1_600
+/** How long «¡A darle!», or a superset's next, stays on the bar before it goes. */
+const RESTED_MS = 2_400
 
 /** How far a done set steps back: still legible, no longer leading. */
 const DIMMED = 0.5
@@ -215,8 +215,10 @@ export default function Session() {
 
   /** The rest counting down, kept outside the screen so setting the session aside keeps it. */
   const [rest, setRest] = useState<Rest | undefined>(() => restFor(executionId, Date.now()))
-  /** The moment after a rest ends, when the bar says so before it goes. */
-  const [rested, setRested] = useState(false)
+  /** What the bar says for a moment when nothing counts: a rest over, or a chain's next. */
+  const [aside, setAside] = useState<
+    { readonly kind: 'done' | 'chain'; readonly next: string } | undefined
+  >(undefined)
 
   const [dragging, setDragging] = useState(false)
   const [settling, setSettling] = useState(false)
@@ -404,13 +406,14 @@ export default function Session() {
       : undefined
 
   // One place decides what is counting, so the notice and the bar never disagree.
-  const restMovement = useRef('')
-  const restWith = (next: Rest | undefined, movement = restMovement.current) => {
-    restMovement.current = movement
+  /** What the rest leads to, kept so a nudge or the end still says it. */
+  const upNext = useRef({ movement: '', chained: false })
+  const restWith = (next: Rest | undefined, after = upNext.current) => {
+    upNext.current = after
     setRest(next)
-    setRested(false)
+    setAside(undefined)
     rememberRest(executionId, next)
-    if (next) void announceRestEnd(next.endsAt, movement)
+    if (next) void announceRestEnd(next.endsAt, after.movement)
     else void cancelRestEnd()
   }
 
@@ -424,8 +427,16 @@ export default function Session() {
       .find((one) => one.position === position)
       ?.sets.find((set) => set.order === order)?.done
     const seconds = restAfter(next, position)
-    if (ticked && seconds !== undefined) {
-      restWith(started(Date.now(), seconds), resumesWith(next, position))
+    if (!ticked) return
+    const after = resumesWith(next, position)
+    if (seconds !== undefined) {
+      restWith(started(Date.now(), seconds), after)
+      return
+    }
+    // «Ninguno» inside a superset: nothing counts, but the bar still says where to go.
+    if (after.chained) {
+      restWith(undefined, after)
+      setAside({ kind: 'chain', next: after.movement })
     }
   }
 
@@ -436,15 +447,15 @@ export default function Session() {
     rememberRest(executionId, undefined)
     void cancelRestEnd()
     setRest(undefined)
-    setRested(true)
+    setAside({ kind: 'done', next: upNext.current.movement })
   }, [rest, seconds, executionId])
 
   // Its own effect: on the clock's, the next second's render cancelled the goodbye.
   useEffect(() => {
-    if (!rested) return
-    const gone = setTimeout(() => setRested(false), RESTED_MS)
+    if (!aside) return
+    const gone = setTimeout(() => setAside(undefined), RESTED_MS)
     return () => clearTimeout(gone)
-  }, [rested])
+  }, [aside])
 
   const scroll = useRef<ScrollView>(null)
   const scrolled = useRef(0)
@@ -638,9 +649,11 @@ export default function Session() {
         </View>
       </ScrollView>
 
-      {rest || rested ? (
+      {rest || aside ? (
         <RestBar
-          rest={rest}
+          moment={
+            rest ? { kind: 'rest', rest, ...upNext.current } : (aside ?? { kind: 'done', next: '' })
+          }
           now={startedAt === undefined ? Date.now() : startedAt + seconds * 1000}
           onAdjust={(by) => {
             if (rest) restWith(adjusted(rest, by, Date.now()))
@@ -932,20 +945,39 @@ function Exercise({
       chainColor ?? (complete ? theme.color.status.success : theme.color.border.default),
   }))
 
+  // What the timer will count: the routine's, or the opening rest when it said nothing.
+  const effectiveRest = exercise.restSeconds ?? REST_OPENING_SECONDS
+
   const body = (
     <>
       {/* Today's rest, where the sets are: changing it here never touches the routine. */}
+      {/* A quiet pill, not a cyan line: it is a setting, and the rows below are the work. */}
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`Descanso entre series: ${restLabel(exercise.restSeconds)}`}
+        accessibilityLabel={`Descanso entre series: ${restPresetLabel(effectiveRest)}. Cambiar`}
         onPress={onRest}
         hitSlop={8}
-        style={({ pressed }) => [styles.restLine, { opacity: pressed ? 0.6 : 1 }]}
+        style={({ pressed }) => [
+          styles.restPill,
+          {
+            backgroundColor: theme.color.background.surfaceSubtle,
+            transform: [{ scale: pressed ? 0.96 : 1 }],
+          },
+        ]}
       >
-        <FoundationIcon name="time" size="xs" color={theme.color.icon.accent} decorative />
-        <Text role="control" size="sm" color="accent">
-          {`Descanso · ${restLabel(exercise.restSeconds)}`}
+        <FoundationIcon name="rest" customSize={14} color={theme.color.icon.secondary} decorative />
+        <Text role="control" size="xs" color="muted">
+          Descanso
         </Text>
+        <Text role="control" size="xs">
+          {restPresetLabel(effectiveRest)}
+        </Text>
+        <FoundationIcon
+          name="expand"
+          customSize={12}
+          color={theme.color.icon.secondary}
+          decorative
+        />
       </Pressable>
 
       <View style={styles.columns}>
@@ -1434,14 +1466,17 @@ const styles = StyleSheet.create({
   // Clipped, so the animated height is what reveals the drawer.
   drawer: { overflow: 'hidden' },
   measure: { position: 'absolute', left: 0, right: 0, top: 0, gap: 10, paddingTop: 6 },
-  // The same inset as a row, or every title sits four points off its column.
-  restLine: {
+  restPill: {
     flexDirection: 'row',
     alignItems: 'center',
+    alignSelf: 'flex-start',
     gap: 6,
-    paddingHorizontal: 4,
-    paddingBottom: 2,
+    height: 30,
+    borderRadius: 15,
+    paddingHorizontal: 12,
+    marginLeft: 4,
   },
+  // The same inset as a row, or every title sits four points off its column.
   columns: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 4 },
   setWrap: { borderRadius: 12, overflow: 'hidden' },
   setRow: {
