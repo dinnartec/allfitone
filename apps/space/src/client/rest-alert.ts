@@ -13,6 +13,8 @@
 
 import { Platform } from 'react-native'
 
+import { restEndNotice } from './rest-lines'
+
 type NotificationsModule = typeof import('expo-notifications')
 
 const CHANNEL = 'rest'
@@ -59,11 +61,7 @@ export async function announceRestEnd(endsAt: number, movement: string): Promise
   if (!Notifications) return
   try {
     scheduled = await Notifications.scheduleNotificationAsync({
-      content: {
-        title: 'Descanso terminado',
-        body: movement ? `Sigue con ${movement}` : 'A darle',
-        sound: true,
-      },
+      content: { ...restEndNotice(movement, endsAt / 1000), sound: true },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
         seconds,

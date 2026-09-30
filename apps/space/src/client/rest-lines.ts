@@ -41,13 +41,13 @@ export const REST_LINES: readonly string[] = [
   'Buen ritmo. Mantenlo.',
   'Esta pausa también cuenta.',
   'Calidad primero, cantidad después.',
-  'Ajusta el agarre y prepárate.',
+  'Acomódate y prepárate para la siguiente.',
   'Nadie te ve, pero tú sí.',
   'Un día a la vez, una serie a la vez.',
   'Otra serie y lo tienes.',
-  'La disciplina llega cuando no hay ganas.',
+  'Hoy viniste. Eso ya es ganar.',
   'Recarga. Lo mejor está por venir.',
-  'Controla la bajada en la siguiente.',
+  'Sin prisa: la calidad manda.',
   'Pequeño paso, gran costumbre.',
   'Cuerpo quieto, mente lista.',
   'Lo estás logrando, serie a serie.',
@@ -56,7 +56,7 @@ export const REST_LINES: readonly string[] = [
   'El esfuerzo de hoy es la base de mañana.',
   'Afloja el cuello, relaja la cara.',
   'Aquí no se trata de ganar: de volver.',
-  'Siente el músculo que acabas de usar.',
+  'Bien hecho. Disfruta la pausa.',
   'Lento y bien vale más que rápido.',
   'Lo difícil ya lo hiciste una vez.',
   'Tu única competencia eres tú.',
@@ -65,7 +65,7 @@ export const REST_LINES: readonly string[] = [
   'Hoy también es un buen día para sumar.',
   'Recupera el aire, conserva las ganas.',
   'Cada repetición es un voto por ti.',
-  'Casi. La siguiente, con todo.',
+  'Casi listo. Tú marcas el ritmo.',
 ]
 
 /** How long the bar says what comes next before the phrase takes over. */
@@ -89,4 +89,59 @@ export function restLine(rest: Rest, now: number, next: string): RestLine {
   const middle =
     rest.total >= SHORTEST_FOR_A_PHRASE && elapsed >= OPENING_SECONDS && left > CLOSING_SECONDS
   return middle ? { kind: 'phrase', text: phrase } : { kind: 'next', text: next }
+}
+
+/**
+ * The push when a rest is over, for the notification that reaches a locked phone.
+ *
+ * Unlike the phrases above, these have one job: get somebody off the bench and into the
+ * next set. Each comes in two forms, with the exercise's name and without, so a rest
+ * with nothing named after it still reads as a whole sentence.
+ *
+ * **Never about load or intensity.** «Ahora, peso muerto con todo» reads as «with all the
+ * weight»; a line here must not be mistaken for an instruction about the bar. And the
+ * name sits where no agreement depends on it: «que {next} no se hace sola» breaks for
+ * every masculine exercise. `rest-lines.test.ts` guards both.
+ */
+export const GO_LINES: readonly (readonly [named: string, unnamed: string])[] = [
+  ['💪 ¡A darle! Toca {next}.', '💪 ¡A darle! Toca la siguiente serie.'],
+  ['🔥 Se acabó la pausa: {next} te espera.', '🔥 Se acabó la pausa: la siguiente te espera.'],
+  ['⚡ Recargado. Vamos con {next}.', '⚡ Recargado. Vamos con la siguiente.'],
+  ['🏋️ De vuelta a {next}.', '🏋️ De vuelta a la siguiente serie.'],
+  ['👊 Tú puedes con {next}. ¡Vamos!', '👊 Tú puedes con la siguiente. ¡Vamos!'],
+  ['🎯 Enfoque en {next}.', '🎯 Enfoque en la siguiente serie.'],
+  ['⏱️ Tiempo cumplido. Te toca {next}.', '⏱️ Tiempo cumplido. A por la siguiente serie.'],
+  ['💥 Esta serie de {next} es tuya.', '💥 Esta serie es tuya.'],
+  ['🙌 Una serie más de {next} y sumas otra.', '🙌 Una serie más y sumas otra.'],
+  [
+    '🔥 El descanso terminó, las ganas no. Sigue con {next}.',
+    '🔥 El descanso terminó, las ganas no.',
+  ],
+  ['🏆 Cada serie de {next} te acerca a tu meta.', '🏆 Cada serie te acerca a tu meta.'],
+  ['🚀 Listo el aire. Dale a {next}.', '🚀 Listo el aire. Dale a la siguiente.'],
+  ['👏 Vas muy bien. Sigue con {next}.', '👏 Vas muy bien. Sigue con la siguiente.'],
+  ['🎯 Buena técnica en {next}. ¡Vamos!', '🎯 Buena técnica en la siguiente. ¡Vamos!'],
+  ['✅ Pausa cumplida. Ahora, {next}.', '✅ Pausa cumplida. Ahora, la siguiente.'],
+  ['💪 Hora de volver. ¡A por {next}!', '💪 Hora de volver a la siguiente serie.'],
+  ['🙌 Lo estás haciendo genial. Sigue con {next}.', '🙌 Lo estás haciendo genial. Sigue así.'],
+  ['⚡ A tu ritmo, vamos con {next}.', '⚡ A tu ritmo, vamos con la siguiente.'],
+  ['🔥 Otra serie de {next} al marcador.', '🔥 Otra serie al marcador.'],
+  ['🏁 Un paso más: {next}.', '🏁 Un paso más: la siguiente serie.'],
+]
+
+export interface RestEndNotice {
+  readonly title: string
+  readonly subtitle: string
+  readonly body: string
+}
+
+/** Chosen by the rest it ends, so a restarted rest does not repeat the last push. */
+export function restEndNotice(next: string, seed: number): RestEndNotice {
+  const [named, unnamed] = GO_LINES[Math.abs(Math.floor(seed)) % GO_LINES.length] ??
+    GO_LINES[0] ?? ['', '']
+  return {
+    title: 'Allfit Space',
+    subtitle: 'Descanso terminado ⏱️',
+    body: next ? named.replace('{next}', next) : unnamed,
+  }
 }
