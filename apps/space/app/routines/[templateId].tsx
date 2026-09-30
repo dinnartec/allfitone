@@ -44,7 +44,7 @@
  */
 
 import { Button } from '@allfitone/react-native/button'
-import { Badge, badgeToneColor, identityTone, type BadgeTone } from '@allfitone/react-native/badge'
+import { Badge, badgeToneColor, identityTone } from '@allfitone/react-native/badge'
 import { Chip } from '@allfitone/react-native/chip'
 import { Sheet } from '@allfitone/react-native/sheet'
 import { Stepper } from '@allfitone/react-native/stepper'
@@ -125,13 +125,11 @@ import {
   withKind,
   withLoad,
   withReps,
-  withRpe,
   type MassUnit,
   type WorkingSet,
 } from '../../src/client/set-scheme'
 import { ScreenHeader } from '../../src/components/screen-header'
-import { RpeSheetBody } from '../../src/components/rpe-sheet'
-import { rpeCopy, rpeShown } from '../../src/client/rpe-scale'
+import { SheetChoice } from '../../src/components/sheet-choice'
 
 const SUGGESTIONS = ['Empuje', 'Tirón', 'Pierna', 'Full body']
 
@@ -199,7 +197,6 @@ type Sheeted =
   | { readonly kind: 'rest'; readonly position: number }
   | { readonly kind: 'superset'; readonly position: number }
   | { readonly kind: 'set-kind'; readonly position: number; readonly order: number }
-  | { readonly kind: 'effort'; readonly position: number; readonly order: number }
 
 const LOAD_FAILED = 'No pudimos abrir el borrador. Revisa tu conexión.'
 
@@ -585,7 +582,6 @@ export default function RoutineEditor() {
     if (sheet?.kind === 'leaving') return '¿Guardas esta rutina?'
     if (sheet?.kind === 'discarding') return '¿Descartar cambios?'
     if (sheet?.kind === 'set-kind') return 'Tipo de serie'
-    if (sheet?.kind === 'effort') return 'Esfuerzo de la serie'
     if (sheet?.kind === 'rest') return 'Descanso entre series'
     if (sheet?.kind === 'superset') return 'Superserie'
     if (sheet?.kind === 'menu') return 'Ejercicio'
@@ -870,9 +866,6 @@ export default function RoutineEditor() {
                   <SetTable
                     step={step}
                     onChangeSets={(sets) => change(withSets(steps, step.position, sets))}
-                    onEffort={(order) =>
-                      setSheet({ kind: 'effort', position: step.position, order })
-                    }
                     onKind={(order) =>
                       setSheet({ kind: 'set-kind', position: step.position, order })
                     }
@@ -1062,27 +1055,6 @@ export default function RoutineEditor() {
           </View>
         ) : null}
 
-        {sheet?.kind === 'effort' ? (
-          <RpeSheetBody
-            value={steps.find((one) => one.position === sheet.position)?.sets[sheet.order]?.rpe}
-            onChoose={(rpe) => {
-              if (sheet.kind !== 'effort') return
-              change(
-                steps.map((one) =>
-                  one.position === sheet.position
-                    ? {
-                        ...one,
-                        sets: one.sets.map((set, at) =>
-                          at === sheet.order ? withRpe(set, rpe) : set,
-                        ),
-                      }
-                    : one,
-                ),
-              )
-            }}
-          />
-        ) : null}
-
         {sheet?.kind === 'menu' ? (
           <View style={styles.sheet}>
             <SheetChoice
@@ -1138,71 +1110,6 @@ export default function RoutineEditor() {
 }
 
 /** One line of a sheet: what it is, why, and what it will look like. */
-function SheetChoice({
-  name,
-  detail,
-  shape,
-  tone,
-  selected,
-  disabled,
-  edge,
-  onPress,
-}: {
-  readonly name: string
-  /** Absent leaves the name alone, for a list where the name is the whole answer. */
-  readonly detail?: string
-  readonly shape?: string
-  /** Draws the name as its badge instead of as a word, for a choice that has one. */
-  readonly tone?: BadgeTone
-  readonly selected?: boolean
-  readonly disabled?: boolean
-  /** A rule down the leading edge, for a choice that already belongs to something. */
-  readonly edge?: string | undefined
-  readonly onPress: () => void
-}) {
-  const theme = useTheme()
-
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={name}
-      {...(detail === undefined ? {} : { accessibilityHint: detail })}
-      accessibilityState={{ selected: selected ?? false, disabled: disabled ?? false }}
-      disabled={disabled ?? false}
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.choice,
-        {
-          borderColor: selected ? theme.color.border.accent : theme.color.border.subtle,
-          backgroundColor: theme.color.background.surface,
-          opacity: disabled ? 0.45 : pressed ? 0.7 : 1,
-        },
-        edge === undefined ? null : { borderLeftWidth: 3, borderLeftColor: edge },
-      ]}
-    >
-      <View style={styles.choiceText}>
-        {tone === undefined ? (
-          <Text role="control" size="md">
-            {name}
-          </Text>
-        ) : (
-          <Badge label={name} tone={tone} />
-        )}
-        {detail === undefined ? null : (
-          <Text role="body" size="sm" color="muted">
-            {detail}
-          </Text>
-        )}
-      </View>
-      {shape === undefined ? null : (
-        <Text role="body" size="sm" color="accent">
-          {shape}
-        </Text>
-      )}
-    </Pressable>
-  )
-}
-
 /** Only the exercise before and the one after: `IX-46` refuses anything else. */
 /** Everything the superset sheet can offer: the whole routine but this exercise. */
 function others(steps: readonly WorkingStep[], sheet: Sheeted | undefined) {
@@ -1261,7 +1168,6 @@ function SetTable({
   step,
   onChangeSets,
   onKind,
-  onEffort,
   onUnit,
   onRest,
   onMenu,
@@ -1269,7 +1175,6 @@ function SetTable({
   readonly step: WorkingStep
   readonly onChangeSets: (sets: readonly WorkingSet[]) => void
   readonly onKind: (order: number) => void
-  readonly onEffort: (order: number) => void
   readonly onUnit: () => void
   readonly onRest: () => void
   readonly onMenu: () => void
@@ -1295,13 +1200,6 @@ function SetTable({
         <View style={styles.colCell}>
           <Text role="eyebrow" size="xs" color="muted">
             Reps
-          </Text>
-        </View>
-        {/* El esfuerzo que se pide. Sin unidad en el rótulo porque RPE no la tiene:
-            es una escala, y escribir «/10» en cada fila la repite diez veces. */}
-        <View style={styles.colEffort}>
-          <Text role="eyebrow" size="xs" color="muted">
-            RPE
           </Text>
         </View>
         <Pressable
@@ -1342,28 +1240,6 @@ function SetTable({
             {...(one.kind === 'to_failure' ? { fixedAs: 'máx' } : {})}
             onChange={(reps) => edit(order, withReps(one, reps))}
           />
-          {/* Un botón y no un campo: el número solo no dice nada, y la escala se abre
-              explicada. Además devuelve el ancho que la quinta columna le quitaba al
-              badge del tipo. */}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Esfuerzo de la serie ${order + 1}`}
-            accessibilityHint={rpeCopy(one.rpe)}
-            hitSlop={PRESS_SLOP}
-            onPress={() => onEffort(order)}
-            style={[
-              styles.effort,
-              {
-                backgroundColor: theme.color.background.surface,
-                borderColor:
-                  one.rpe === undefined ? theme.color.border.subtle : theme.color.border.accent,
-              },
-            ]}
-          >
-            <Text role="data" size="md" color={one.rpe === undefined ? 'muted' : 'accent'}>
-              {rpeShown(one.rpe)}
-            </Text>
-          </Pressable>
           <NumberField
             accessibilityLabel={`Peso de la serie ${order + 1} en ${unit}`}
             value={one.load}
@@ -1742,32 +1618,8 @@ const styles = StyleSheet.create({
   // Cincuenta y ocho y no sesenta y dos: con la columna de esfuerzo, al badge de
   // «Calentamiento» le faltaban diez puntos y se cortaba a «Calentam…».
   colCell: { minWidth: 58, alignItems: 'center' },
-  // Más estrecha que las otras dos: la escala llega a diez, así que caben dos cifras
-  // y no hace falta sitio para una unidad.
-  // Estrecha: la escala llega a diez y el botón no lleva unidad. Se probó bajarla
-  // más para que «Calentamiento» dejara de cortarse y no lo consigue — el badge no
-  // recoge lo que se le suelta —, así que se queda en lo cómodo de tocar.
-  colEffort: { minWidth: 46, alignItems: 'center' },
-  effort: {
-    minWidth: 46,
-    height: 44,
-    borderRadius: 12,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   colClose: { width: 20 },
   sheet: { gap: 10, paddingBottom: 8 },
-  choice: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    borderWidth: 1,
-    borderRadius: 14,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-  },
-  choiceText: { flex: 1, gap: 2 },
   // A transition rather than a worklet: the value is a two-state flip, not a gesture.
   remove: { transitionProperty: 'transform', transitionDuration: PRESS_MS },
   chevron: { transitionProperty: 'transform', transitionDuration: 200 },

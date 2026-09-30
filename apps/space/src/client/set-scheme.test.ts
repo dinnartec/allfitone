@@ -25,7 +25,6 @@ import {
   withKind,
   withLoad,
   withReps,
-  withRpe,
 } from './set-scheme'
 
 describe('what an exercise opens with', () => {
@@ -144,33 +143,5 @@ describe('what the row says', () => {
       expect(restLabel(preset).length).toBeGreaterThan(0)
     }
     expect(Object.keys(SET_KIND_NAMES)).toHaveLength(4)
-  })
-})
-
-describe('withRpe', () => {
-  test('sets the effort asked for', () => {
-    expect(withRpe({ kind: 'normal', reps: 8 }, 8)).toEqual({ kind: 'normal', reps: 8, rpe: 8 })
-  })
-
-  test('takes a half, because that is how effort is prescribed', () => {
-    expect(withRpe({ kind: 'normal', reps: 8 }, 7.5).rpe).toBe(7.5)
-  })
-
-  test('drops the key rather than carrying an undefined', () => {
-    // Un esfuerzo ausente y un esfuerzo `undefined` son el mismo hecho, y sólo uno de
-    // los dos es una forma sobre la que `stepsToContent` pueda decidir.
-    expect(withRpe({ kind: 'normal', reps: 8, rpe: 8 }, undefined)).toEqual({
-      kind: 'normal',
-      reps: 8,
-    })
-    expect('rpe' in withRpe({ kind: 'normal', rpe: 8 }, undefined)).toBe(false)
-  })
-
-  test('leaves the rest of the set alone', () => {
-    expect(withRpe({ kind: 'to_failure', load: 60 }, 10)).toEqual({
-      kind: 'to_failure',
-      load: 60,
-      rpe: 10,
-    })
   })
 })
