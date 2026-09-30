@@ -1,13 +1,15 @@
 import { describe, expect, test } from 'bun:test'
 
 import {
-  addedDuring,
+  chainedExercise,
+  movedExercise,
+  unchainedExercise,
+  withoutExercise,
   withTick,
   setMark,
   withSetKind,
   withSetRpe,
   canFinish,
-  rememberAdded,
   elapsedLabel,
   resultsFrom,
   setsProgress,
@@ -48,8 +50,38 @@ function execution(overrides: Partial<Execution> = {}): Execution {
       },
     ],
     results: [],
+    exercises: [],
     ...overrides,
   }
+}
+
+type Listed = Execution['exercises'][number]
+
+function exercise(
+  position: number,
+  movementId: string,
+  movement: string,
+  overrides: Partial<Listed> = {},
+): Listed {
+  return {
+    position,
+    movement_id: movementId,
+    movement,
+    planned_step_id: null,
+    superset_group: null,
+    target: { family: 'strength', target_sets: 2, target_reps: 10 },
+    previous: [],
+    sets: [],
+    ...overrides,
+  }
+}
+
+/** Press and dips as the session lists them, chained, like the plan above. */
+function listed(): Listed[] {
+  return [
+    exercise(1, MOVEMENT, 'Press de banca', { superset_group: 1 }),
+    exercise(2, OTHER, 'Fondos', { superset_group: 1 }),
+  ]
 }
 
 describe('the working state a session screen holds', () => {
@@ -290,6 +322,8 @@ describe('what travels to the server', () => {
         achieved_reps: 10,
         load: { value: 80, unit: 'kg' },
         kind: 'normal',
+        // Which exercise it belongs to, so the same movement twice keeps apart (ADR-034).
+        exercise_position: 1,
       },
     ])
   })
@@ -305,7 +339,7 @@ describe('what travels to the server', () => {
     ])
 
     expect(sent.segments).toBeUndefined()
-    expect(sent.strength_sets).toEqual([{ order: 1, kind: 'normal' }])
+    expect(sent.strength_sets).toEqual([{ order: 1, kind: 'normal', exercise_position: 1 }])
   })
 })
 
@@ -355,12 +389,16 @@ describe('exercises added while the session runs', () => {
     expect(resumed[2]?.sets).toHaveLength(3)
   })
 
-  test('T-SPC-UNIT-93 keeps one added but not yet recorded, so minimising does not lose it', () => {
-    const resumed = workingStateFrom(execution(), {
-      added: [{ id: ADDED, name: 'Curl de bíceps' }],
-    })
+  test('T-SPC-UNIT-93 an added exercise with nothing ticked comes back from the session', () => {
+    // It is in the session's own list now, so neither minimising nor a restart drops it.
+    const resumed = workingStateFrom(
+      execution({
+        exercises: [...listed(), exercise(3, ADDED, 'Curl de bíceps', { target: null })],
+      }),
+    )
 
-    expect(resumed.map((exercise) => exercise.movementId)).toEqual([MOVEMENT, OTHER, ADDED])
+    expect(resumed.map((one) => one.movementId)).toEqual([MOVEMENT, OTHER, ADDED])
+    expect(resumed[2]?.sets).toHaveLength(3)
   })
 
   test('T-SPC-UNIT-94 an added movement the library does not name still gets a label', () => {
@@ -369,14 +407,6 @@ describe('exercises added while the session runs', () => {
     )
 
     expect(resumed[2]?.movement).toBe('Ejercicio')
-  })
-
-  test('T-SPC-UNIT-95 what was added is remembered per session, not across them', () => {
-    rememberAdded('session-a', [{ id: ADDED, name: 'Curl de bíceps' }])
-    rememberAdded('session-a', [{ id: OTHER, name: 'Fondos' }])
-
-    expect(addedDuring('session-a').map((one) => one.id)).toEqual([ADDED, OTHER])
-    expect(addedDuring('session-b')).toEqual([])
   })
 })
 
@@ -568,5 +598,82 @@ describe('a set added mid-exercise', () => {
 
     expect(press?.sets.at(-1)?.done).toBe(false)
     expect(press?.sets.at(-1)?.rpe).toBeUndefined()
+  })
+})
+
+describe('the session is its own list of exercises', () => {
+  const THIRD = '019e4000-0000-7000-8000-000000000604'
+  const three = () =>
+    execution({
+      exercises: [...listed(), exercise(3, MOVEMENT, 'Press de banca', { target: null })],
+      results: [
+        {
+          family: 'strength',
+          set_order: 1,
+          exercise_position: 1,
+          movement_id: MOVEMENT,
+          achieved_reps: 8,
+        },
+        {
+          family: 'strength',
+          set_order: 2,
+          exercise_position: 3,
+          movement_id: MOVEMENT,
+          achieved_reps: 12,
+        },
+      ],
+    })
+
+  test("T-SPC-UNIT-111 opens in the session's order, with its supersets and its own sets", () => {
+    const state = workingStateFrom(three())
+
+    expect(state.map((one) => one.supersetGroup)).toEqual([1, 1, undefined])
+    // The same movement twice keeps two separate sets: each set knows its exercise.
+    expect(state[0]?.sets[0]).toMatchObject({ reps: '8', done: true })
+    expect(state[2]?.sets[0]).toMatchObject({ reps: '12', done: true })
+  })
+
+  test('T-SPC-UNIT-112 taking one out closes the gap and dissolves a superset of one', () => {
+    const next = withoutExercise(workingStateFrom(three()), 2)
+
+    expect(next.map((one) => one.position)).toEqual([1, 2])
+    expect(next[0]?.supersetGroup).toBeUndefined()
+    // The ladder is one per session, so it closes too.
+    expect(next.flatMap((one) => one.sets.map((set) => set.order))).toEqual([1, 2, 3, 4, 5])
+  })
+
+  test('T-SPC-UNIT-113 moving a superset moves it whole', () => {
+    const next = movedExercise(workingStateFrom(three()), 3, 1)
+
+    expect(next.map((one) => `${one.movement}${one.supersetGroup ?? ''}`)).toEqual([
+      'Press de banca',
+      'Press de banca1',
+      'Fondos1',
+    ])
+  })
+
+  test('T-SPC-UNIT-114 chaining brings the other alongside, and unchaining lets it go', () => {
+    const loose = unchainedExercise(workingStateFrom(three()), 2)
+    const chained = chainedExercise(loose, 3, 1)
+
+    // The one who asked stays put and the other comes alongside, as in the editor.
+    expect(chained.map((one) => one.supersetGroup !== undefined)).toEqual([false, true, true])
+    expect(chained[2]?.sets[0]?.reps).toBe('12')
+  })
+
+  test('T-SPC-UNIT-115 sends the list, and where each ticked set belongs', () => {
+    const sent = resultsFrom(workingStateFrom(three()))
+
+    expect(sent.exercises).toEqual([
+      { position: 1, movement_id: MOVEMENT, planned_step_id: null, superset_group: 1 },
+      { position: 2, movement_id: OTHER, planned_step_id: null, superset_group: 1 },
+      { position: 3, movement_id: MOVEMENT, planned_step_id: null, superset_group: null },
+    ])
+    expect(sent.strength_sets?.map((set) => set.exercise_position)).toEqual([1, 3])
+  })
+
+  test('T-SPC-UNIT-116 a session with no list yet reads its plan, as it always did', () => {
+    expect(workingStateFrom(execution()).map((one) => one.movementId)).toEqual([MOVEMENT, OTHER])
+    expect(THIRD).toBeTruthy()
   })
 })

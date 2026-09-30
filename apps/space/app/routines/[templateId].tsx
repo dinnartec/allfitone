@@ -58,9 +58,8 @@ import { TextField } from '@allfitone/react-native/text-field'
 import { useTheme } from '@allfitone/react-native/theme'
 import { Image } from 'expo-image'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native'
-import { Gesture, GestureDetector } from 'react-native-gesture-handler'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Pressable, StyleSheet, View } from 'react-native'
 import Animated, {
   Easing,
   FadeIn,
@@ -70,23 +69,19 @@ import Animated, {
   measure,
   scrollTo,
   useAnimatedRef,
-  useAnimatedStyle,
   useFrameCallback,
   useScrollOffset,
   useSharedValue,
-  withTiming,
-  type SharedValue,
 } from 'react-native-reanimated'
-
-import { scheduleOnRN } from 'react-native-worklets'
 
 import { ApiError } from '../../src/client'
 import { createSpaceContentFlow } from '../../src/client/content-transport'
-import { aside, edgeScroll, nextOffset, placeOf } from '../../src/client/drag-order'
+import { edgeScroll, nextOffset } from '../../src/client/drag-order'
 import { createQueue } from '../../src/client/queue'
 import { discardFailure, saveFailure } from '../../src/client/save-failure'
 import { offerPublishedRoutine } from '../../src/client/routine-handoff'
 import { revealOffset, type Frame } from '../../src/client/reveal'
+import { DraggableRow } from '../../src/components/draggable-row'
 import { readExerciseLibrary } from '../../src/client/exercise-library'
 import {
   declareAlreadyIn,
@@ -147,9 +142,6 @@ const PRESS_MS = 120
 
 /** `ease-out`, never `ease-in`: a slow start delays the moment the finger asks about. */
 const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1)
-
-/** Quick enough that a row reads as answering the finger rather than following it. */
-const STEP_ASIDE = { duration: 160, easing: EASE_OUT }
 
 /** Gone rather than vanished. Opacity only, which is what survives reduced motion. */
 const EXIT = FadeOut.duration(140).reduceMotion(ReduceMotion.System)
@@ -757,10 +749,12 @@ export default function RoutineEditor() {
           steps.map((step) => (
             <DraggableRow
               key={step.movementId}
-              step={step}
+              position={step.position}
               count={steps.length}
               open={open === step.position}
-              dragging={dragging}
+              // The row it leaves behind closes the gap rather than snapping shut.
+              exiting={EXIT}
+              {...(dragging ? {} : { layout: REFLOW })}
               from={liftedFrom}
               travel={liftedBy}
               finger={fingerY}
@@ -1294,128 +1288,6 @@ function SetTable({
         <IconButton icon="more" size="sm" accessibilityLabel="Más opciones" onPress={onMenu} />
       </View>
     </View>
-  )
-}
-
-/**
- * A row that can be picked up, with every other row getting out of its way as it goes.
- *
- * **The whole list moves during the drag, not after it.** Two shared values say it:
- * which position is in the air and how far it has travelled. Every row reads both in
- * its own `useAnimatedStyle` and works out whether the one in the air has passed over
- * it — if it has, the row steps aside by exactly one place. That computation is a
- * worklet, so it runs per frame on the UI runtime and React renders nothing at all
- * between picking up and putting down.
- *
- * **Held, not pressed.** The pan activates after a quarter of a second of stillness,
- * which is what both platforms use for reorder and what keeps this gesture from
- * fighting the scroll view it lives in — a pan that won immediately would make the
- * list unscrollable wherever a finger happened to land on a grip.
- *
- * **The layout animation stands down while a drag is on.** `REFLOW` animates a row
- * from where it used to be to where it now is, which is exactly the wrong thing at the
- * moment of dropping: the transform has already put the row in its new place, so the
- * two would fight and the row would jump back a slot before sliding forward again. It
- * comes back a frame after the order is committed, which is one `setState` per gesture
- * rather than per frame.
- */
-function DraggableRow({
-  step,
-  count,
-  open,
-  dragging,
-  from,
-  travel,
-  finger,
-  onLift,
-  onDrop,
-  onFrame,
-  style,
-  children,
-}: {
-  readonly step: WorkingStep
-  readonly count: number
-  /** An open row is not draggable: its own content takes the long press. */
-  readonly open: boolean
-  readonly dragging: boolean
-  readonly from: SharedValue<number>
-  readonly travel: SharedValue<number>
-  /** Where the finger is on screen, which is what the edges are measured against. */
-  readonly finger: SharedValue<number>
-  readonly onLift: () => void
-  readonly onDrop: (to: number) => void
-  /** Where it sits in the list, so whatever opens can be scrolled into view. */
-  readonly onFrame: (frame: Frame) => void
-  readonly style: StyleProp<ViewStyle>
-  readonly children: ReactNode
-}) {
-  const position = step.position
-
-  const drag = Gesture.Pan()
-    // Shut only. Open, the row holds a table of number fields, and a long press on one
-    // of them would lift the whole exercise instead of putting a caret in it.
-    .enabled(!open)
-    .activateAfterLongPress(250)
-    .onStart((event) => {
-      from.set(position)
-      travel.set(0)
-      finger.set(event.absoluteY)
-      // The frame loop is started from `onLift`, on the other side of `scheduleOnRN`.
-      // `setActive` closes over the registry and a React ref, both of which exist only
-      // on the RN runtime; called from here it writes to a copy, and the UI side then
-      // times a callback it has no record of.
-      scheduleOnRN(onLift)
-    })
-    // `onChange` rather than `onUpdate`: what is added is the movement since the last
-    // frame. The frame loop puts what the list scrolled into the same number, and
-    // assigning the whole translation would throw that away sixty times a second —
-    // the row would sit still while the list ran underneath it.
-    .onChange((event) => {
-      finger.set(event.absoluteY)
-      travel.set(travel.get() + event.changeY)
-    })
-    .onEnd((_event, success) => {
-      const landed = success ? placeOf(position, travel.get(), count) : position
-      scheduleOnRN(onDrop, landed)
-    })
-
-  const moving = useAnimatedStyle(() => {
-    const lifted = from.get()
-    if (lifted === 0) return { transform: [{ translateY: 0 }, { scale: 1 }], opacity: 1, zIndex: 0 }
-    if (lifted === position) {
-      return {
-        transform: [{ translateY: travel.get() }, { scale: 1.02 }],
-        opacity: 0.94,
-        zIndex: 2,
-      }
-    }
-    return {
-      transform: [
-        { translateY: withTiming(aside(position, lifted, travel.get(), count), STEP_ASIDE) },
-        { scale: 1 },
-      ],
-      opacity: 1,
-      zIndex: 0,
-    }
-  })
-
-  return (
-    <GestureDetector gesture={drag}>
-      <Animated.View
-        // The row it leaves behind closes the gap rather than snapping shut, and both
-        // honour the system setting rather than deciding for it.
-        exiting={EXIT}
-        {...(dragging ? {} : { layout: REFLOW })}
-        // Fires again when the exercise opens, which is the measurement that matters:
-        // the shut height says nothing about what has to be brought into view.
-        onLayout={(event) =>
-          onFrame({ y: event.nativeEvent.layout.y, height: event.nativeEvent.layout.height })
-        }
-        style={[style, moving]}
-      >
-        {children}
-      </Animated.View>
-    </GestureDetector>
   )
 }
 

@@ -18,6 +18,7 @@
 import type { AllfitV1Schemas } from '@allfitone/contracts'
 
 import type { PickedMovement } from './exercise-pick'
+import { chainedBy, movedTo, renumbered, settled, unchained } from './chain-order'
 import type { SetKind } from './set-scheme'
 
 export type Execution = AllfitV1Schemas['SpaceExecution']
@@ -55,29 +56,46 @@ export interface WorkingExercise {
   readonly movementId: string | null
   readonly movement: string
   readonly sets: readonly WorkingSet[]
+  /** Stable while the screen lives, so a row keeps its state when positions move. */
+  readonly key?: string
+  /** The routine step it came from; null for one added during the session. */
+  readonly plannedStepId?: string | null
+  readonly supersetGroup?: number
 }
+
+/** A routine step or a session exercise: whatever carries a target and a history. */
+interface Source {
+  readonly target: unknown
+  readonly previous?: readonly { load_value: number | null; achieved_reps: number | null }[]
+  readonly sets?: readonly {
+    kind: SetKind
+    target_reps: number | null
+  }[]
+}
+
+type Listed = Execution['exercises'][number]
 
 const DEFAULT_SETS = 3
 
-function targetSets(step: PlannedStep): number {
-  const target = step.target as Record<string, unknown>
+function targetSets(step: Source): number {
+  const target = (step.target ?? {}) as Record<string, unknown>
   const sets = target.target_sets
   return typeof sets === 'number' && sets > 0 ? sets : DEFAULT_SETS
 }
 
-function targetReps(step: PlannedStep): string {
-  const target = step.target as Record<string, unknown>
+function targetReps(step: Source): string {
+  const target = (step.target ?? {}) as Record<string, unknown>
   const reps = target.target_reps
   return typeof reps === 'number' ? String(reps) : ''
 }
 
-function previousLoadOf(step: PlannedStep, index: number): string | undefined {
+function previousLoadOf(step: Source, index: number): string | undefined {
   const load = step.previous?.[index]?.load_value
   return typeof load === 'number' ? String(load) : undefined
 }
 
 /** "60 × 12", or an em dash when the movement has no history. */
-function previousLabel(step: PlannedStep, index: number): string {
+function previousLabel(step: Source, index: number): string {
   const entry = step.previous?.[index]
   if (!entry || entry.load_value === null || entry.achieved_reps === null) return '—'
   return `${entry.load_value} × ${entry.achieved_reps}`
@@ -103,10 +121,10 @@ export function workingStateFrom(
   extra: {
     /** What the library calls each movement: a recorded set carries only its id. */
     readonly names?: ReadonlyMap<string, string>
-    /** Added during this session, recorded or not. */
-    readonly added?: readonly PickedMovement[]
   } = {},
 ): readonly WorkingExercise[] {
+  if (execution.exercises.length > 0) return fromList(execution, extra.names)
+
   const byMovement = new Map<string, Record<string, unknown>[]>()
   const unattributed: Record<string, unknown>[] = []
   for (const entry of [...execution.results].sort(orderOf)) {
@@ -125,32 +143,8 @@ export function workingStateFrom(
   let order = 0
   const planned = execution.planned.map((step) => {
     const done = step.movement_id ? (byMovement.get(step.movement_id) ?? []) : unattributed
-    const reps = targetReps(step)
-    // The routine's own sets when it wrote them; a step published before sets existed
-    // only has its summary, and opens that many plain rows.
-    const prescribed = step.sets ?? []
-    const rows = Math.max(prescribed.length || targetSets(step), done.length)
-    const sets: WorkingSet[] = []
-    for (let index = 0; index < rows; index += 1) {
-      order += 1
-      const recorded = done[index]
-      const asked = prescribed[index]
-      const askedReps = asked ? (asked.target_reps === null ? '' : String(asked.target_reps)) : reps
-      sets.push({
-        order,
-        loadKg:
-          recorded && typeof recorded.load_value === 'number' ? String(recorded.load_value) : '',
-        reps:
-          recorded && typeof recorded.achieved_reps === 'number'
-            ? String(recorded.achieved_reps)
-            : askedReps,
-        done: recorded !== undefined,
-        previous: previousLabel(step, index),
-        previousLoad: previousLoadOf(step, index),
-        kind: kindOf(recorded?.kind) ?? asked?.kind ?? 'normal',
-        rpe: rpeOf(recorded),
-      })
-    }
+    const sets = rowsFor(step, done, order)
+    order += sets.length
     return {
       position: step.position,
       movementId: step.movement_id,
@@ -159,14 +153,9 @@ export function workingStateFrom(
     }
   })
 
-  // Whatever the plan never had: recorded sets first, in the order they were logged,
-  // then what was added and has nothing recorded yet.
+  // Whatever the plan never had, in the order it was first logged.
   const inPlan = new Set(execution.planned.map((step) => step.movement_id))
-  const addedNames = new Map((extra.added ?? []).map((one) => [one.id, one.name]))
-  const extras = [
-    ...[...byMovement.keys()].filter((id) => !inPlan.has(id)),
-    ...(extra.added ?? []).map((one) => one.id).filter((id) => !inPlan.has(id)),
-  ].filter((id, index, all) => all.indexOf(id) === index)
+  const extras = [...byMovement.keys()].filter((id) => !inPlan.has(id))
 
   const last = planned.at(-1)?.position ?? 0
   return [
@@ -195,7 +184,7 @@ export function workingStateFrom(
       return {
         position: last + index + 1,
         movementId: id,
-        movement: extra.names?.get(id) ?? addedNames.get(id) ?? 'Ejercicio',
+        movement: extra.names?.get(id) ?? 'Ejercicio',
         sets,
       }
     }),
@@ -203,10 +192,129 @@ export function workingStateFrom(
 }
 
 /**
+ * One exercise's rows: the routine's own sets when it wrote them, else its summary,
+ * and never fewer than what was recorded. A recorded set wins over its planned row.
+ */
+function rowsFor(
+  source: Source,
+  done: readonly Record<string, unknown>[],
+  after: number,
+): WorkingSet[] {
+  const reps = targetReps(source)
+  const prescribed = source.sets ?? []
+  const rows = Math.max(prescribed.length || targetSets(source), done.length)
+  const sets: WorkingSet[] = []
+  for (let index = 0; index < rows; index += 1) {
+    const recorded = done[index]
+    const asked = prescribed[index]
+    const askedReps = asked ? (asked.target_reps === null ? '' : String(asked.target_reps)) : reps
+    sets.push({
+      order: after + index + 1,
+      loadKg:
+        recorded && typeof recorded.load_value === 'number' ? String(recorded.load_value) : '',
+      reps:
+        recorded && typeof recorded.achieved_reps === 'number'
+          ? String(recorded.achieved_reps)
+          : askedReps,
+      done: recorded !== undefined,
+      previous: previousLabel(source, index),
+      previousLoad: previousLoadOf(source, index),
+      kind: kindOf(recorded?.kind) ?? asked?.kind ?? 'normal',
+      rpe: rpeOf(recorded),
+    })
+  }
+  return sets
+}
+
+/**
+ * The session's own list, in its order (ADR-034).
+ *
+ * Each set says which exercise it belongs to, so the same movement twice keeps two sets
+ * of its own. A set from before the list existed lands on the first exercise of its
+ * movement, which is where the backfill put it too.
+ */
+function fromList(
+  execution: Execution,
+  names: ReadonlyMap<string, string> | undefined,
+): readonly WorkingExercise[] {
+  const exercises = [...execution.exercises].sort((one, other) => one.position - other.position)
+  const byExercise = new Map<number, Record<string, unknown>[]>()
+  for (const entry of [...execution.results].sort(orderOf)) {
+    const value = entry as Record<string, unknown>
+    if (value.family !== 'strength') continue
+    const owner =
+      typeof value.exercise_position === 'number'
+        ? value.exercise_position
+        : exercises.find((one) => one.movement_id === value.movement_id)?.position
+    if (owner === undefined) continue
+    byExercise.set(owner, [...(byExercise.get(owner) ?? []), value])
+  }
+
+  let order = 0
+  return exercises.map((listed: Listed) => {
+    const sets = rowsFor(listed, byExercise.get(listed.position) ?? [], order)
+    order += sets.length
+    return {
+      key: `listed-${listed.position}`,
+      position: listed.position,
+      movementId: listed.movement_id,
+      movement:
+        listed.movement ??
+        (listed.movement_id ? names?.get(listed.movement_id) : undefined) ??
+        'Ejercicio',
+      plannedStepId: listed.planned_step_id,
+      ...(listed.superset_group === null ? {} : { supersetGroup: listed.superset_group }),
+      sets,
+    }
+  })
+}
+
+/** The ladder is one per session: any change to the list renumbers it top to bottom. */
+function laddered(exercises: readonly WorkingExercise[]): readonly WorkingExercise[] {
+  let order = 0
+  return exercises.map((exercise) => ({
+    ...exercise,
+    sets: exercise.sets.map((set) => ({ ...set, order: (order += 1) })),
+  }))
+}
+
+/** Takes an exercise out, closes the gap, and dissolves a superset left with one. */
+export function withoutExercise(
+  exercises: readonly WorkingExercise[],
+  position: number,
+): readonly WorkingExercise[] {
+  return laddered(settled(renumbered(exercises.filter((one) => one.position !== position))))
+}
+
+/** A drag, with a superset travelling whole: the editor's rule, from `chain-order`. */
+export function movedExercise(
+  exercises: readonly WorkingExercise[],
+  from: number,
+  to: number,
+): readonly WorkingExercise[] {
+  return laddered(movedTo(exercises, from, to))
+}
+
+export function chainedExercise(
+  exercises: readonly WorkingExercise[],
+  position: number,
+  mate: number,
+): readonly WorkingExercise[] {
+  return laddered(chainedBy(exercises, position, mate, (one) => one.key ?? one.position))
+}
+
+export function unchainedExercise(
+  exercises: readonly WorkingExercise[],
+  position: number,
+): readonly WorkingExercise[] {
+  return laddered(unchained(exercises, position))
+}
+
+/**
  * Appends what the picker handed back, each with three empty rows, and renumbers.
  *
- * Nothing is saved here: an added exercise reaches the server with its first ticked
- * set, like every other, because a set nobody ticked is not a set that happened.
+ * It joins the session's list, which the screen saves at once, so an added exercise
+ * with nothing ticked survives a restart like any other (ADR-034).
  */
 export function withAddedExercises(
   exercises: readonly WorkingExercise[],
@@ -217,9 +325,11 @@ export function withAddedExercises(
   const appended = picked
     .filter((one) => !present.has(one.id))
     .map((one, index) => ({
+      key: `added-${one.id}-${last + index + 1}`,
       position: last + index + 1,
       movementId: one.id,
       movement: one.name,
+      plannedStepId: null,
       sets: Array.from({ length: DEFAULT_SETS }, () => ({
         order: 0,
         loadKg: '',
@@ -234,24 +344,6 @@ export function withAddedExercises(
     ...exercise,
     sets: exercise.sets.map((set) => ({ ...set, order: (order += 1) })),
   }))
-}
-
-const added = new Map<string, readonly PickedMovement[]>()
-
-/**
- * Kept for the life of the process, per session.
- *
- * An added exercise with nothing ticked exists nowhere but on screen, and minimising
- * unmounts the screen. Without this, coming back would quietly drop it.
- */
-export function rememberAdded(executionId: string, picked: readonly PickedMovement[]): void {
-  const before = added.get(executionId) ?? []
-  const known = new Set(before.map((one) => one.id))
-  added.set(executionId, [...before, ...picked.filter((one) => !known.has(one.id))])
-}
-
-export function addedDuring(executionId: string): readonly PickedMovement[] {
-  return added.get(executionId) ?? []
 }
 
 function orderOf(left: unknown, right: unknown): number {
@@ -457,6 +549,12 @@ export function elapsedLabel(seconds: number): string {
  * here could only contradict what is already recorded.
  */
 export function resultsFrom(exercises: readonly WorkingExercise[]): ExecutionResults {
+  const listed = exercises.map((exercise) => ({
+    position: exercise.position,
+    movement_id: exercise.movementId,
+    planned_step_id: exercise.plannedStepId ?? null,
+    superset_group: exercise.supersetGroup ?? null,
+  }))
   const strength = exercises.flatMap((exercise) =>
     exercise.sets
       .filter((set) => set.done)
@@ -472,10 +570,11 @@ export function resultsFrom(exercises: readonly WorkingExercise[]): ExecutionRes
             : {}),
           ...(set.rpe === undefined ? {} : { rpe: set.rpe }),
           kind: set.kind,
+          exercise_position: exercise.position,
         }
       }),
   )
-  return { strength_sets: strength }
+  return { strength_sets: strength, exercises: listed }
 }
 
 /** Nothing ticked is nothing to close, which is what the server refuses. */

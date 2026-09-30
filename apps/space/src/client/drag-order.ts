@@ -24,9 +24,14 @@ export const ROW_SPAN = 80
  * nearer place: a drag of forty-one points has visibly crossed its neighbour, and
  * truncating would leave the row exactly where it started.
  */
-export function placeOf(position: number, translation: number, count: number): number {
+export function placeOf(
+  position: number,
+  translation: number,
+  count: number,
+  span: number = ROW_SPAN,
+): number {
   'worklet'
-  const places = Math.round(translation / ROW_SPAN)
+  const places = Math.round(translation / span)
   return Math.min(count, Math.max(1, position + places))
 }
 
@@ -42,12 +47,13 @@ export function aside(
   lifted: number,
   translation: number,
   count: number,
+  span: number = ROW_SPAN,
 ): number {
   'worklet'
   if (position === lifted) return 0
-  const to = placeOf(lifted, translation, count)
-  if (lifted < position && position <= to) return -ROW_SPAN
-  if (to <= position && position < lifted) return ROW_SPAN
+  const to = placeOf(lifted, translation, count, span)
+  if (lifted < position && position <= to) return -span
+  if (to <= position && position < lifted) return span
   return 0
 }
 

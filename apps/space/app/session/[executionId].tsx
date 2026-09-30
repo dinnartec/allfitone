@@ -33,7 +33,7 @@
  * somebody typed about their body would be worse than its absence.
  */
 
-import { badgeToneColor } from '@allfitone/react-native/badge'
+import { Badge, badgeToneColor, identityTone, type BadgeTone } from '@allfitone/react-native/badge'
 import { Button } from '@allfitone/react-native/button'
 import { IconButton } from '@allfitone/react-native/icon-button'
 import { InlineAlert } from '@allfitone/react-native/inline-alert'
@@ -54,6 +54,9 @@ import Animated, {
   FadeInUp,
   interpolateColor,
   LayoutAnimationConfig,
+  LinearTransition,
+  ReduceMotion,
+  SlideOutLeft,
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
@@ -83,8 +86,10 @@ import {
   withoutSet,
   workingStateFrom,
   withAddedExercises,
-  rememberAdded,
-  addedDuring,
+  withoutExercise,
+  movedExercise,
+  chainedExercise,
+  unchainedExercise,
   setMark,
   withSetKind,
   withTick,
@@ -99,6 +104,8 @@ import {
   SET_KIND_TONES,
   type SetKind,
 } from '../../src/client/set-scheme'
+import { chainLetters } from '../../src/client/chain-order'
+import { DraggableRow } from '../../src/components/draggable-row'
 import { RpeSheetBody } from '../../src/components/rpe-sheet'
 import { SheetChoice } from '../../src/components/sheet-choice'
 
@@ -142,6 +149,20 @@ const REVEAL_MARGIN = 24
 /** Long enough for the new row to lay out, short enough to feel like one motion. */
 const REVEAL_DELAY_MS = 80
 
+/** Room between exercises, so a list of shut rows reads as rows rather than a block. */
+const EXERCISE_GAP = 14
+
+/** A shut exercise's 44-point header plus the gap: one place in the list. */
+const EXERCISE_SPAN = 44 + EXERCISE_GAP
+
+/** Out the way its sets go, so removing an exercise reads as the same gesture, larger. */
+const EXERCISE_EXIT = SlideOutLeft.duration(200).reduceMotion(ReduceMotion.System)
+
+/** The rows below closing the gap, or moving to the place a drop gave them. */
+const REFLOW = LinearTransition.duration(220)
+  .easing(Easing.bezier(0.23, 1, 0.32, 1))
+  .reduceMotion(ReduceMotion.System)
+
 /** How far a done set steps back: still legible, no longer leading. */
 const DIMMED = 0.5
 
@@ -164,7 +185,8 @@ export default function Session() {
   const flow = useMemo(() => createSpaceExecutionFlow(), [])
 
   const [exercises, setExercises] = useState<readonly WorkingExercise[]>([])
-  const [openPosition, setOpenPosition] = useState(1)
+  /** By key, not place: a move renumbers every place, and the open one has to stay open. */
+  const [openKey, setOpenKey] = useState<string | undefined>(undefined)
   const [title, setTitle] = useState('')
   const [caption, setCaption] = useState('')
   const [startedAt, setStartedAt] = useState<number | undefined>(undefined)
@@ -172,11 +194,17 @@ export default function Session() {
   const [failure, setFailure] = useState<string | undefined>(undefined)
   const [closing, setClosing] = useState(false)
   const [deciding, setDeciding] = useState(false)
-  /** Which set a sheet is asking about: its kind, or how hard it was. */
+  /** What the one sheet on screen is about: a set's kind or effort, or an exercise. */
   const [asking, setAsking] = useState<
     | { readonly about: 'kind' | 'effort'; readonly position: number; readonly order: number }
+    | { readonly about: 'menu' | 'chain'; readonly position: number }
     | undefined
   >(undefined)
+
+  const [dragging, setDragging] = useState(false)
+  const [settling, setSettling] = useState(false)
+  const liftedFrom = useSharedValue(0)
+  const liftedBy = useSharedValue(0)
 
   /** Each movement's demonstration, by id: the catalogue's, not the session's. */
   const [previews, setPreviews] = useState<ReadonlyMap<string, string | null>>(new Map())
@@ -208,12 +236,11 @@ export default function Session() {
             : '',
         )
         setStartedAt(Date.parse(current.started_at))
-        setExercises(
-          workingStateFrom(current, {
-            names: new Map(movements.map((one) => [one.id, one.name])),
-            added: addedDuring(executionId),
-          }),
-        )
+        const opened = workingStateFrom(current, {
+          names: new Map(movements.map((one) => [one.id, one.name])),
+        })
+        setExercises(opened)
+        setOpenKey(opened[0] ? keyOf(opened[0]) : undefined)
       })
       .catch(() => {
         if (active) setFailure(READ_FAILED)
@@ -223,37 +250,6 @@ export default function Session() {
       active = false
     }
   }, [flow, executionId])
-
-  // The picker hands its selection back through the same mailbox the routine editor
-  // reads, and this screen collects it when it is looked at again.
-  useFocusEffect(
-    useCallback(() => {
-      const picked = takeExercisePick()
-      if (picked.length === 0) return
-      rememberAdded(executionId, picked)
-      const next = withAddedExercises(exercises, picked)
-      setExercises(next)
-      // Open the first one added: it is the one somebody is about to do.
-      const first = next[exercises.length]
-      if (first) setOpenPosition(first.position)
-    }, [executionId, exercises]),
-  )
-
-  const addExercise = () => {
-    declareAlreadyIn(exercises.flatMap((exercise) => exercise.movementId ?? []))
-    declareReplacing(undefined)
-    router.push('/routines/exercises')
-  }
-
-  // Driven from the session's own start, not from a counter: a screen that slept for
-  // ten minutes has to come back showing ten minutes, not the ticks it missed.
-  useEffect(() => {
-    if (startedAt === undefined) return
-    const tick = () => setSeconds((Date.now() - startedAt) / 1000)
-    tick()
-    const timer = setInterval(tick, 1_000)
-    return () => clearInterval(timer)
-  }, [startedAt])
 
   const save = useCallback(
     (next: readonly WorkingExercise[]) => {
@@ -274,6 +270,38 @@ export default function Session() {
     },
     [flow, executionId],
   )
+
+  // The picker hands its selection back through the same mailbox the routine editor
+  // reads, and this screen collects it when it is looked at again.
+  useFocusEffect(
+    useCallback(() => {
+      const picked = takeExercisePick()
+      if (picked.length === 0) return
+      const next = withAddedExercises(exercises, picked)
+      // Saved now, not at the first tick: the list is the session's, and it survives.
+      setExercises(next)
+      save(next)
+      // Open the first one added: it is the one somebody is about to do.
+      const first = next[exercises.length]
+      if (first) setOpenKey(keyOf(first))
+    }, [exercises, save]),
+  )
+
+  const addExercise = () => {
+    declareAlreadyIn(exercises.flatMap((exercise) => exercise.movementId ?? []))
+    declareReplacing(undefined)
+    router.push('/routines/exercises')
+  }
+
+  // Driven from the session's own start, not from a counter: a screen that slept for
+  // ten minutes has to come back showing ten minutes, not the ticks it missed.
+  useEffect(() => {
+    if (startedAt === undefined) return
+    const tick = () => setSeconds((Date.now() - startedAt) / 1000)
+    tick()
+    const timer = setInterval(tick, 1_000)
+    return () => clearInterval(timer)
+  }, [startedAt])
 
   const edit = (
     position: number,
@@ -306,11 +334,57 @@ export default function Session() {
     if (changed?.done) save(next)
   }
 
-  const askedSet = asking
-    ? exercises
-        .find((exercise) => exercise.position === asking.position)
-        ?.sets.find((set) => set.order === asking.order)
-    : undefined
+  // Removing, moving and chaining change the list, and the list is saved like a tick.
+  const restructure = (next: readonly WorkingExercise[]) => {
+    setExercises(next)
+    save(next)
+  }
+
+  const removeExercise = (position: number) => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+    setAsking(undefined)
+    restructure(withoutExercise(exercises, position))
+  }
+
+  // Committed while the reflow is stood down, so React places the rows where the
+  // transforms already showed them; the shared values go back a frame later.
+  const drop = (from: number, to: number) => {
+    if (to !== from) {
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+      restructure(movedExercise(exercises, from, to))
+    }
+    setSettling(true)
+  }
+
+  useEffect(() => {
+    if (!settling) return
+    liftedFrom.set(0)
+    liftedBy.set(0)
+    setSettling(false)
+    setDragging(false)
+  }, [settling, liftedFrom, liftedBy])
+
+  // Recomputed from the list rather than stored, like the editor's.
+  const letters = chainLetters(exercises)
+  const chainMark = (group: number | undefined) => {
+    if (group === undefined) return undefined
+    const letter = letters.get(group)
+    if (letter === undefined) return undefined
+    const tone = identityTone([...letters.keys()].indexOf(group))
+    return { letter, tone, color: badgeToneColor(theme, tone) }
+  }
+
+  const asked =
+    asking?.about === 'menu' || asking?.about === 'chain'
+      ? exercises.find((exercise) => exercise.position === asking.position)
+      : undefined
+
+  const askedSet =
+    asking?.about === 'kind' || asking?.about === 'effort'
+      ? exercises
+          .find((exercise) => exercise.position === asking.position)
+          ?.sets.find((set) => set.order === asking.order)
+      : undefined
 
   // A tick is always a write, and it fills an empty weight from last time or the set above.
   const tick = (position: number, order: number) => {
@@ -460,22 +534,45 @@ export default function Session() {
         }}
       >
         {exercises.map((exercise) => (
-          <Exercise
-            key={exercise.position}
-            exercise={exercise}
-            picture={exercise.movementId ? (previews.get(exercise.movementId) ?? null) : null}
-            open={exercise.position === openPosition}
-            onToggle={() =>
-              setOpenPosition((current) => (current === exercise.position ? 0 : exercise.position))
-            }
-            onEdit={(order, change) => edit(exercise.position, order, change)}
-            onTick={(order) => tick(exercise.position, order)}
-            onAddSet={(button) => addSet(exercise.position, button)}
-            onRemoveSet={(order) => removeSet(exercise.position, order)}
-            onKind={(order) => setAsking({ about: 'kind', position: exercise.position, order })}
-            onEffort={(order) => setAsking({ about: 'effort', position: exercise.position, order })}
-            onExplain={explainer(exercise.movementId)}
-          />
+          <DraggableRow
+            key={keyOf(exercise)}
+            position={exercise.position}
+            count={exercises.length}
+            open={keyOf(exercise) === openKey}
+            span={EXERCISE_SPAN}
+            exiting={EXERCISE_EXIT}
+            {...(dragging ? {} : { layout: REFLOW })}
+            from={liftedFrom}
+            travel={liftedBy}
+            onLift={() => {
+              // Everything shut while it moves: a place in the list is one shut row.
+              Keyboard.dismiss()
+              void Haptics.selectionAsync()
+              setOpenKey(undefined)
+              setDragging(true)
+            }}
+            onDrop={(to) => drop(exercise.position, to)}
+          >
+            <Exercise
+              exercise={exercise}
+              picture={exercise.movementId ? (previews.get(exercise.movementId) ?? null) : null}
+              open={keyOf(exercise) === openKey}
+              chain={chainMark(exercise.supersetGroup)}
+              onToggle={() =>
+                setOpenKey((current) => (current === keyOf(exercise) ? undefined : keyOf(exercise)))
+              }
+              onMenu={() => setAsking({ about: 'menu', position: exercise.position })}
+              onEdit={(order, change) => edit(exercise.position, order, change)}
+              onTick={(order) => tick(exercise.position, order)}
+              onAddSet={(button) => addSet(exercise.position, button)}
+              onRemoveSet={(order) => removeSet(exercise.position, order)}
+              onKind={(order) => setAsking({ about: 'kind', position: exercise.position, order })}
+              onEffort={(order) =>
+                setAsking({ about: 'effort', position: exercise.position, order })
+              }
+              onExplain={explainer(exercise.movementId)}
+            />
+          </DraggableRow>
         ))}
 
         {/* The routine editor's own picker. What it adds is not written to the plan:
@@ -523,7 +620,7 @@ export default function Session() {
               detail={SET_KIND_DETAILS[kind]}
               selected={askedSet?.kind === kind}
               onPress={() => {
-                if (asking) {
+                if (asking?.about === 'kind') {
                   reshape(
                     withSetKind(exercises, asking.position, asking.order, kind),
                     asking.position,
@@ -545,7 +642,7 @@ export default function Session() {
         <RpeSheetBody
           value={askedSet?.rpe}
           onChoose={(rpe) => {
-            if (asking) {
+            if (asking?.about === 'effort') {
               reshape(
                 withSetRpe(exercises, asking.position, asking.order, rpe),
                 asking.position,
@@ -557,8 +654,78 @@ export default function Session() {
           }}
         />
       </Sheet>
+
+      {/* One sheet for both steps: iOS will not present a second while the first leaves. */}
+      <Sheet
+        visible={asking?.about === 'menu' || asking?.about === 'chain'}
+        onDismiss={() => setAsking(undefined)}
+        title={asking?.about === 'chain' ? 'Superserie' : (asked?.movement ?? 'Ejercicio')}
+      >
+        {asking?.about === 'menu' ? (
+          <View style={styles.decisions}>
+            {asked?.supersetGroup !== undefined ? (
+              <SheetChoice
+                name="Quitar de la superserie"
+                detail="Deja de encadenarse con su vecino"
+                onPress={() => {
+                  if (asked) restructure(unchainedExercise(exercises, asked.position))
+                  setAsking(undefined)
+                }}
+              />
+            ) : (
+              <SheetChoice
+                name="Hacer superserie"
+                detail={
+                  exercises.length < 2
+                    ? 'Necesitas otro ejercicio en la sesión'
+                    : 'Encadenarlo con otro ejercicio'
+                }
+                disabled={exercises.length < 2}
+                onPress={() => {
+                  if (asked) setAsking({ about: 'chain', position: asked.position })
+                }}
+              />
+            )}
+            {/* No confirmation: it is one exercise, and the add button brings it back. */}
+            <SheetChoice
+              name="Eliminar ejercicio"
+              detail="Se quita de esta sesión con sus series"
+              onPress={() => {
+                if (asked) removeExercise(asked.position)
+              }}
+            />
+          </View>
+        ) : (
+          <View style={styles.decisions}>
+            <Text role="body" size="sm" color="muted">
+              Se hacen seguidos, sin descanso entre medias. El que elijas queda al lado de este.
+            </Text>
+            {exercises
+              .filter((mate) => mate.position !== asked?.position)
+              .map((mate) => (
+                <SheetChoice
+                  key={keyOf(mate)}
+                  name={mate.movement}
+                  {...(chainMark(mate.supersetGroup) === undefined
+                    ? {}
+                    : { edge: chainMark(mate.supersetGroup)?.color })}
+                  onPress={() => {
+                    if (asked)
+                      restructure(chainedExercise(exercises, asked.position, mate.position))
+                    setAsking(undefined)
+                  }}
+                />
+              ))}
+          </View>
+        )}
+      </Sheet>
     </Screen>
   )
+}
+
+/** What a row is known by across moves; a list read before ADR-034 has only places. */
+function keyOf(exercise: WorkingExercise): string {
+  return exercise.key ?? `place-${exercise.position}`
 }
 
 function Score({
@@ -594,7 +761,9 @@ function Exercise({
   exercise,
   picture,
   open,
+  chain,
   onToggle,
+  onMenu,
   onEdit,
   onAddSet,
   onRemoveSet,
@@ -606,7 +775,11 @@ function Exercise({
   readonly exercise: WorkingExercise
   readonly picture: string | null
   readonly open: boolean
+  /** The superset it belongs to, with the letter and colour the list gives it. */
+  readonly chain:
+    { readonly letter: string; readonly tone: BadgeTone; readonly color: string } | undefined
   readonly onToggle: () => void
+  readonly onMenu: () => void
   readonly onEdit: (
     order: number,
     change: Partial<{ loadKg: string; reps: string; done: boolean }>,
@@ -669,9 +842,12 @@ function Exercise({
 
   const summary = useAnimatedStyle(() => ({ opacity: 1 - progress.value }))
 
+  // A chain takes the thread in its own colour and keeps it open, like the editor's edge.
+  const chainColor = chain?.color
   const thread = useAnimatedStyle(() => ({
-    opacity: 1 - progress.value,
-    backgroundColor: complete ? theme.color.status.success : theme.color.border.default,
+    opacity: chainColor ? 1 : 1 - progress.value,
+    backgroundColor:
+      chainColor ?? (complete ? theme.color.status.success : theme.color.border.default),
   }))
 
   const body = (
@@ -770,14 +946,25 @@ function Exercise({
         <Pressable
           accessibilityRole="button"
           accessibilityState={{ expanded: open }}
-          accessibilityLabel={exercise.movement}
+          accessibilityLabel={
+            chain ? `${exercise.movement}, superserie ${chain.letter}` : exercise.movement
+          }
           onPress={onToggle}
           style={styles.headerToggle}
         >
-          <View style={[styles.headerTitle, styles.headerOpen]}>
-            <Text role="control" size="md" numberOfLines={1} style={styles.headerFlex}>
+          {/* The badge under the name, not beside it: beside, both were cut to nothing.
+              Stacked, it still fits the 44 points, so every shut row stays one place. */}
+          <View style={styles.headerTitle}>
+            <Text role="control" size="md" numberOfLines={1}>
               {exercise.movement}
             </Text>
+            {chain ? (
+              <Badge
+                label={`Superserie ${chain.letter}`}
+                tone={chain.tone}
+                style={styles.chainBadge}
+              />
+            ) : null}
           </View>
           <Animated.View style={[styles.summary, summary]}>
             {/* A tick as well as the colour. Green alone is a difference some people
@@ -795,9 +982,17 @@ function Exercise({
             </Text>
           </Animated.View>
           <Animated.View style={chevron}>
-            <FoundationIcon name="expand" size="xs" color={theme.color.icon.secondary} decorative />
+            <FoundationIcon name="expand" size="sm" color={theme.color.icon.secondary} decorative />
           </Animated.View>
         </Pressable>
+        {/* Beside the toggle, not inside it, so VoiceOver reaches both. */}
+        <IconButton
+          icon="more"
+          size="sm"
+          variant="plain"
+          accessibilityLabel={`Opciones de ${exercise.movement}`}
+          onPress={onMenu}
+        />
       </View>
 
       <Animated.View style={[styles.drawer, drawer]}>
@@ -1120,16 +1315,15 @@ const styles = StyleSheet.create({
   },
   score: { flex: 1, alignItems: 'center', gap: 1 },
   divider: { width: 1, height: 30 },
-  list: { gap: 6, paddingTop: 16, paddingBottom: 32 },
+  list: { gap: EXERCISE_GAP, paddingTop: 16, paddingBottom: 32 },
   shell: { borderRadius: 22, paddingHorizontal: CARD_INSET },
   exerciseHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, height: 44 },
-  headerTitle: { flex: 1 },
+  headerTitle: { flex: 1, gap: 2 },
+  chainBadge: { alignSelf: 'flex-start' },
   headerToggle: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12, height: 44 },
   // Below the row's 44, so the open card keeps a margin above it.
   preview: { width: 40, height: 40, borderRadius: 10 },
   summary: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  headerOpen: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  headerFlex: { flexShrink: 1 },
   // Over the picture's corner, where it reads as «this plays» without hiding it.
   play: {
     position: 'absolute',
