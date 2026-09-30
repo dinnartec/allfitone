@@ -17,6 +17,8 @@
 
 import type { AllfitV1Schemas } from '@allfitone/contracts'
 
+import type { PickedMovement } from './exercise-pick'
+
 export type Execution = AllfitV1Schemas['SpaceExecution']
 export type ExecutionResults = AllfitV1Schemas['ExecutionResultsReplace']
 export type PlannedStep = AllfitV1Schemas['SpaceProgramStep']
@@ -74,7 +76,15 @@ function previousLabel(step: PlannedStep, index: number): string {
  * who did five sets of four has done five, and rebuilding from the plan alone would
  * quietly drop the fifth.
  */
-export function workingStateFrom(execution: Execution): readonly WorkingExercise[] {
+export function workingStateFrom(
+  execution: Execution,
+  extra: {
+    /** What the library calls each movement: a recorded set carries only its id. */
+    readonly names?: ReadonlyMap<string, string>
+    /** Added during this session, recorded or not. */
+    readonly added?: readonly PickedMovement[]
+  } = {},
+): readonly WorkingExercise[] {
   const byMovement = new Map<string, Record<string, unknown>[]>()
   const unattributed: Record<string, unknown>[] = []
   for (const entry of [...execution.results].sort(orderOf)) {
@@ -91,7 +101,7 @@ export function workingStateFrom(execution: Execution): readonly WorkingExercise
   }
 
   let order = 0
-  return execution.planned.map((step) => {
+  const planned = execution.planned.map((step) => {
     const done = step.movement_id ? (byMovement.get(step.movement_id) ?? []) : unattributed
     const reps = targetReps(step)
     const rows = Math.max(targetSets(step), done.length)
@@ -118,6 +128,97 @@ export function workingStateFrom(execution: Execution): readonly WorkingExercise
       sets,
     }
   })
+
+  // Whatever the plan never had: recorded sets first, in the order they were logged,
+  // then what was added and has nothing recorded yet.
+  const inPlan = new Set(execution.planned.map((step) => step.movement_id))
+  const addedNames = new Map((extra.added ?? []).map((one) => [one.id, one.name]))
+  const extras = [
+    ...[...byMovement.keys()].filter((id) => !inPlan.has(id)),
+    ...(extra.added ?? []).map((one) => one.id).filter((id) => !inPlan.has(id)),
+  ].filter((id, index, all) => all.indexOf(id) === index)
+
+  const last = planned.at(-1)?.position ?? 0
+  return [
+    ...planned,
+    ...extras.map((id, index) => {
+      const done = byMovement.get(id) ?? []
+      const rows = Math.max(DEFAULT_SETS, done.length)
+      const sets: WorkingSet[] = []
+      for (let row = 0; row < rows; row += 1) {
+        order += 1
+        const recorded = done[row]
+        sets.push({
+          order,
+          loadKg:
+            recorded && typeof recorded.load_value === 'number' ? String(recorded.load_value) : '',
+          reps:
+            recorded && typeof recorded.achieved_reps === 'number'
+              ? String(recorded.achieved_reps)
+              : '',
+          done: recorded !== undefined,
+          previous: '—',
+        })
+      }
+      return {
+        position: last + index + 1,
+        movementId: id,
+        movement: extra.names?.get(id) ?? addedNames.get(id) ?? 'Ejercicio',
+        sets,
+      }
+    }),
+  ]
+}
+
+/**
+ * Appends what the picker handed back, each with three empty rows, and renumbers.
+ *
+ * Nothing is saved here: an added exercise reaches the server with its first ticked
+ * set, like every other, because a set nobody ticked is not a set that happened.
+ */
+export function withAddedExercises(
+  exercises: readonly WorkingExercise[],
+  picked: readonly PickedMovement[],
+): readonly WorkingExercise[] {
+  const present = new Set(exercises.map((exercise) => exercise.movementId))
+  const last = exercises.at(-1)?.position ?? 0
+  const appended = picked
+    .filter((one) => !present.has(one.id))
+    .map((one, index) => ({
+      position: last + index + 1,
+      movementId: one.id,
+      movement: one.name,
+      sets: Array.from({ length: DEFAULT_SETS }, () => ({
+        order: 0,
+        loadKg: '',
+        reps: '',
+        done: false,
+        previous: '—',
+      })),
+    }))
+  let order = 0
+  return [...exercises, ...appended].map((exercise) => ({
+    ...exercise,
+    sets: exercise.sets.map((set) => ({ ...set, order: (order += 1) })),
+  }))
+}
+
+const added = new Map<string, readonly PickedMovement[]>()
+
+/**
+ * Kept for the life of the process, per session.
+ *
+ * An added exercise with nothing ticked exists nowhere but on screen, and minimising
+ * unmounts the screen. Without this, coming back would quietly drop it.
+ */
+export function rememberAdded(executionId: string, picked: readonly PickedMovement[]): void {
+  const before = added.get(executionId) ?? []
+  const known = new Set(before.map((one) => one.id))
+  added.set(executionId, [...before, ...picked.filter((one) => !known.has(one.id))])
+}
+
+export function addedDuring(executionId: string): readonly PickedMovement[] {
+  return added.get(executionId) ?? []
 }
 
 function orderOf(left: unknown, right: unknown): number {

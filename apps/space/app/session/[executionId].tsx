@@ -43,7 +43,7 @@ import { useTheme } from '@allfitone/react-native/theme'
 import { transparent } from '@allfitone/react-native/tokens'
 import { FoundationIcon } from '@allfitone/react-native/icons'
 import { Image } from 'expo-image'
-import { useLocalSearchParams, useRouter } from 'expo-router'
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Keyboard, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
@@ -58,7 +58,12 @@ import Animated, {
 
 import { ApiError } from '../../src/client'
 import { createSpaceContentFlow } from '../../src/client/content-transport'
-import { FROM_SESSION } from '../../src/client/exercise-pick'
+import {
+  declareAlreadyIn,
+  declareReplacing,
+  FROM_SESSION,
+  takeExercisePick,
+} from '../../src/client/exercise-pick'
 import { readExerciseLibrary } from '../../src/client/exercise-library'
 import { createSpaceExecutionFlow } from '../../src/client/execution-transport'
 import { SPRING } from '../../src/client/motion'
@@ -71,6 +76,9 @@ import {
   withExtraSet,
   withoutSet,
   workingStateFrom,
+  withAddedExercises,
+  rememberAdded,
+  addedDuring,
   type WorkingExercise,
   type WorkingSet,
 } from '../../src/client/session-form'
@@ -140,29 +148,23 @@ export default function Session() {
   /** Each movement's demonstration, by id: the catalogue's, not the session's. */
   const [previews, setPreviews] = useState<ReadonlyMap<string, string | null>>(new Map())
 
-  // Behind the session, not in front of it: the sets are what somebody came to log.
-  useEffect(() => {
-    let active = true
-    readExerciseLibrary(createSpaceContentFlow())
-      .then((library) => {
-        if (active) setPreviews(new Map(library.movements.map((one) => [one.id, one.demo_url])))
-      })
-      .catch(() => undefined)
-    return () => {
-      active = false
-    }
-  }, [])
-
   const revision = useRef(0)
   const pending = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   useEffect(() => {
     let active = true
 
-    flow
-      .readExecution(executionId)
-      .then((current) => {
+    // With the library, because an exercise added mid-session comes back as a bare id
+    // and the library is what names it. It is a process cache, and a failure only
+    // costs the pictures and those names.
+    Promise.all([
+      flow.readExecution(executionId),
+      readExerciseLibrary(createSpaceContentFlow()).catch(() => undefined),
+    ])
+      .then(([current, library]) => {
         if (!active) return
+        const movements = library?.movements ?? []
+        setPreviews(new Map(movements.map((one) => [one.id, one.demo_url])))
         revision.current = current.revision_number
         setTitle(current.title ?? 'Sesión')
         // The program and the week, not the discipline code: a code is an identifier,
@@ -173,7 +175,12 @@ export default function Session() {
             : '',
         )
         setStartedAt(Date.parse(current.started_at))
-        setExercises(workingStateFrom(current))
+        setExercises(
+          workingStateFrom(current, {
+            names: new Map(movements.map((one) => [one.id, one.name])),
+            added: addedDuring(executionId),
+          }),
+        )
       })
       .catch(() => {
         if (active) setFailure(READ_FAILED)
@@ -183,6 +190,27 @@ export default function Session() {
       active = false
     }
   }, [flow, executionId])
+
+  // The picker hands its selection back through the same mailbox the routine editor
+  // reads, and this screen collects it when it is looked at again.
+  useFocusEffect(
+    useCallback(() => {
+      const picked = takeExercisePick()
+      if (picked.length === 0) return
+      rememberAdded(executionId, picked)
+      const next = withAddedExercises(exercises, picked)
+      setExercises(next)
+      // Open the first one added: it is the one somebody is about to do.
+      const first = next[exercises.length]
+      if (first) setOpenPosition(first.position)
+    }, [executionId, exercises]),
+  )
+
+  const addExercise = () => {
+    declareAlreadyIn(exercises.flatMap((exercise) => exercise.movementId ?? []))
+    declareReplacing(undefined)
+    router.push('/routines/exercises')
+  }
 
   // Driven from the session's own start, not from a counter: a screen that slept for
   // ten minutes has to come back showing ten minutes, not the ticks it missed.
@@ -365,16 +393,10 @@ export default function Session() {
           />
         ))}
 
-        {/* Its place in the layout, and nothing more. There is no operation for adding a
-            movement to a session in flight — not in the contract, not in the database —
-            so an enabled button would be a promise the app cannot keep. Disabled and
-            said out loud is the same answer the discipline carousel gives for the five
-            that are not built. */}
+        {/* The routine editor's own picker. What it adds is not written to the plan:
+            a set recorded against a movement the plan never had is simply unplanned. */}
         <View style={styles.addExercise}>
-          <Button label="Añadir ejercicio" variant="secondary" disabled onPress={() => undefined} />
-          <Text role="body" size="sm" color="muted">
-            Todavía no. Por ahora la sesión es la que trae tu rutina.
-          </Text>
+          <Button label="Añadir ejercicio" icon="add" variant="secondary" onPress={addExercise} />
         </View>
       </ScrollView>
 

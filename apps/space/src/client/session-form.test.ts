@@ -1,11 +1,14 @@
 import { describe, expect, test } from 'bun:test'
 
 import {
+  addedDuring,
   canFinish,
+  rememberAdded,
   elapsedLabel,
   resultsFrom,
   setsProgress,
   totalVolumeKg,
+  withAddedExercises,
   withExtraSet,
   withoutSet,
   workingStateFrom,
@@ -292,5 +295,76 @@ describe('what travels to the server', () => {
 
     expect(sent.segments).toBeUndefined()
     expect(sent.strength_sets).toEqual([{ order: 1 }])
+  })
+})
+
+describe('exercises added while the session runs', () => {
+  const ADDED = '019e4000-0000-7000-8000-000000000603'
+
+  test('T-SPC-UNIT-90 lands at the end with three empty rows on the next rungs', () => {
+    const next = withAddedExercises(workingStateFrom(execution()), [
+      { id: ADDED, name: 'Curl de bíceps' },
+    ])
+
+    expect(next).toHaveLength(3)
+    expect(next[2]).toMatchObject({ position: 3, movementId: ADDED, movement: 'Curl de bíceps' })
+    // Four and three planned rows before it, so its ladder starts at eight.
+    expect(next[2]?.sets.map((set) => set.order)).toEqual([8, 9, 10])
+    expect(next[2]?.sets.every((set) => !set.done && set.loadKg === '')).toBe(true)
+  })
+
+  test('T-SPC-UNIT-91 a movement already in the session is not added twice', () => {
+    const next = withAddedExercises(workingStateFrom(execution()), [
+      { id: MOVEMENT, name: 'Press de banca' },
+    ])
+
+    expect(next).toHaveLength(2)
+  })
+
+  test('T-SPC-UNIT-92 comes back from its recorded sets, named by the library', () => {
+    const resumed = workingStateFrom(
+      execution({
+        results: [
+          {
+            family: 'strength',
+            set_order: 8,
+            movement_id: ADDED,
+            achieved_reps: 10,
+            load_value: 12,
+          },
+        ],
+      }),
+      { names: new Map([[ADDED, 'Curl de bíceps']]) },
+    )
+
+    expect(resumed).toHaveLength(3)
+    expect(resumed[2]).toMatchObject({ movementId: ADDED, movement: 'Curl de bíceps' })
+    expect(resumed[2]?.sets[0]).toMatchObject({ loadKg: '12', reps: '10', done: true })
+    // The recorded set plus the empty rows an added exercise opens with.
+    expect(resumed[2]?.sets).toHaveLength(3)
+  })
+
+  test('T-SPC-UNIT-93 keeps one added but not yet recorded, so minimising does not lose it', () => {
+    const resumed = workingStateFrom(execution(), {
+      added: [{ id: ADDED, name: 'Curl de bíceps' }],
+    })
+
+    expect(resumed.map((exercise) => exercise.movementId)).toEqual([MOVEMENT, OTHER, ADDED])
+  })
+
+  test('T-SPC-UNIT-94 an added movement the library does not name still gets a label', () => {
+    const resumed = workingStateFrom(
+      execution({ results: [{ family: 'strength', set_order: 8, movement_id: ADDED }] }),
+    )
+
+    expect(resumed[2]?.movement).toBe('Ejercicio')
+  })
+
+  test('T-SPC-UNIT-95 what was added is remembered per session, not across them', () => {
+    rememberAdded('session-a', [{ id: ADDED, name: 'Curl de bíceps' }])
+    rememberAdded('session-a', [{ id: OTHER, name: 'Fondos' }])
+
+    expect(addedDuring('session-a').map((one) => one.id)).toEqual([ADDED, OTHER])
+    expect(addedDuring('session-b')).toEqual([])
   })
 })
