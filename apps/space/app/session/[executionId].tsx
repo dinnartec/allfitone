@@ -78,7 +78,6 @@ import { createSpaceExecutionFlow } from '../../src/client/execution-transport'
 import { SPRING } from '../../src/client/motion'
 import {
   canFinish,
-  elapsedLabel,
   resultsFrom,
   setsProgress,
   totalVolumeKg,
@@ -114,6 +113,7 @@ import { adjusted, rememberRest, restFor, started, type Rest } from '../../src/c
 import { chainLetters } from '../../src/client/chain-order'
 import { DraggableRow } from '../../src/components/draggable-row'
 import { RestBar } from '../../src/components/rest-bar'
+import { SessionScoreboard } from '../../src/components/session-scoreboard'
 import { RestSheetBody } from '../../src/components/rest-sheet'
 import { RpeSheetBody } from '../../src/components/rpe-sheet'
 import { SheetChoice } from '../../src/components/sheet-choice'
@@ -565,21 +565,12 @@ export default function Session() {
         />
       </View>
 
-      <View
-        style={[
-          styles.scoreboard,
-          {
-            backgroundColor: theme.color.background.surface,
-            borderColor: theme.color.border.subtle,
-          },
-        ]}
-      >
-        <Score label="TIEMPO" value={elapsedLabel(seconds)} accent />
-        <View style={[styles.divider, { backgroundColor: theme.color.border.subtle }]} />
-        <Score label="VOLUMEN" value={`${Math.round(volume).toLocaleString('es-CO')} kg`} />
-        <View style={[styles.divider, { backgroundColor: theme.color.border.subtle }]} />
-        <Score label="SERIES" value={`${progress.done} / ${progress.planned}`} />
-      </View>
+      <SessionScoreboard
+        seconds={seconds}
+        volumeKg={volume}
+        done={progress.done}
+        planned={progress.planned}
+      />
 
       {failure ? <InlineAlert message={failure} /> : null}
 
@@ -815,27 +806,6 @@ export default function Session() {
 /** What a row is known by across moves; a list read before ADR-034 has only places. */
 function keyOf(exercise: WorkingExercise): string {
   return exercise.key ?? `place-${exercise.position}`
-}
-
-function Score({
-  label,
-  value,
-  accent = false,
-}: {
-  readonly label: string
-  readonly value: string
-  readonly accent?: boolean
-}) {
-  return (
-    <View style={styles.score}>
-      <Text role="data" size="2xl" color={accent ? 'accent' : 'primary'}>
-        {value}
-      </Text>
-      <Text role="eyebrow" size="xs" color="muted">
-        {label}
-      </Text>
-    </View>
-  )
 }
 
 /**
@@ -1428,20 +1398,6 @@ function Field({
 const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   heading: { flex: 1, gap: 1 },
-  scoreboard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    // The clock is what somebody reads from a metre away with a bar in their hands, so
-    // 16px in a 44pt strip was too small — and 30 in 78 was too far the other way, most
-    // of it padding. 24 leads to 26, the label to 15, so the content is 42 and the strip
-    // gives it 8 either side.
-    height: 58,
-    borderRadius: 14,
-    borderWidth: 1,
-    marginTop: 14,
-  },
-  score: { flex: 1, alignItems: 'center', gap: 1 },
-  divider: { width: 1, height: 30 },
   list: { gap: EXERCISE_GAP, paddingTop: 16, paddingBottom: 32 },
   shell: { borderRadius: 22, paddingHorizontal: CARD_INSET },
   exerciseHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, height: 44 },

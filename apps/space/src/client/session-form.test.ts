@@ -13,6 +13,7 @@ import {
   withSetKind,
   withSetRpe,
   canFinish,
+  clockParts,
   elapsedLabel,
   resultsFrom,
   setsProgress,
@@ -301,6 +302,13 @@ describe('what the screen can say about a session in progress', () => {
     expect(elapsedLabel(65)).toBe('1:05')
     expect(elapsedLabel(3_725)).toBe('1:02:05')
     expect(elapsedLabel(-4)).toBe('0:00')
+  })
+
+  test('T-SPC-UNIT-147 past an hour the clock leads with hours and minutes, seconds aside', () => {
+    expect(clockParts(3_725)).toEqual({ lead: '1:02', tail: ':05' })
+    // Under an hour, minutes and seconds are the whole clock.
+    expect(clockParts(65)).toEqual({ lead: '1:05', tail: '' })
+    expect(clockParts(-4)).toEqual({ lead: '0:00', tail: '' })
   })
 })
 

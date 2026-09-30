@@ -608,6 +608,22 @@ export function elapsedLabel(seconds: number): string {
 }
 
 /**
+ * The clock split for a scoreboard that leads with what is read from a distance.
+ *
+ * Past an hour the lead is hours and minutes and the seconds sit aside, smaller; under
+ * an hour the minutes and seconds are the whole clock.
+ */
+export function clockParts(seconds: number): { readonly lead: string; readonly tail: string } {
+  const whole = Math.max(0, Math.floor(seconds))
+  const pad = (value: number) => String(value).padStart(2, '0')
+  const hours = Math.floor(whole / 3600)
+  const minutes = Math.floor(whole / 60) % 60
+  return hours > 0
+    ? { lead: `${hours}:${pad(minutes)}`, tail: `:${pad(whole % 60)}` }
+    : { lead: `${minutes}:${pad(whole % 60)}`, tail: '' }
+}
+
+/**
  * What travels to the server: the ticked sets, and nothing else.
  *
  * No `segments`, and so no `segment_position`. The activity type was frozen onto the
