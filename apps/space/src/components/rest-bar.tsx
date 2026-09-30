@@ -15,6 +15,9 @@
  * and the end, when the ring fills green with a tick. The bar is where the eye already
  * goes between sets, so it says all three.
  *
+ * **The middle of a rest has some personality.** The line says what comes next at the
+ * start and the end, and a short phrase in between (`rest-lines`), crossfading.
+ *
  * **The last seconds are felt, not only seen.** The number pulses once a second for the
  * final five, which is what makes somebody pick the bar up again mid-sip.
  */
@@ -27,6 +30,7 @@ import { Pressable, StyleSheet, View } from 'react-native'
 import Animated, {
   Easing,
   FadeInDown,
+  FadeOutUp,
   FadeOutDown,
   ReduceMotion,
   useAnimatedProps,
@@ -38,11 +42,22 @@ import Animated, {
 } from 'react-native-reanimated'
 import Svg, { Circle } from 'react-native-svg'
 
+import { restLine, type RestLine } from '../client/rest-lines'
 import { countdownLabel, remaining, type Rest } from '../client/rest-timer'
 
 const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1)
 const ENTER = FadeInDown.duration(260).easing(EASE_OUT).reduceMotion(ReduceMotion.System)
 const EXIT = FadeOutDown.duration(180).reduceMotion(ReduceMotion.System)
+/**
+ * A roll, not a swap: the old line rises away as the new one comes up from below, a beat
+ * behind it, so the eye follows one movement instead of seeing a blink.
+ */
+const SWAP_IN = FadeInDown.duration(420)
+  .delay(60)
+  .easing(EASE_OUT)
+  .withInitialValues({ opacity: 0, transform: [{ translateY: 10 }] })
+  .reduceMotion(ReduceMotion.System)
+const SWAP_OUT = FadeOutUp.duration(240).easing(EASE_OUT).reduceMotion(ReduceMotion.System)
 
 const RING = 64
 const STROKE = 5
@@ -111,6 +126,8 @@ export function RestBar({
   const eyebrow =
     moment.kind === 'done' ? '¡A DARLE!' : chained ? 'SUPERSERIE · DESCANSO' : 'DESCANSO'
   const line = !next ? '' : chained ? `Ahora: ${next}` : `Sigue con ${next}`
+  // While it counts, the long middle says something with some personality (rest-lines).
+  const shown: RestLine = rest ? restLine(rest, now, line) : { kind: 'next', text: line }
 
   return (
     <Animated.View
@@ -176,10 +193,28 @@ export function RestBar({
           <Text role="eyebrow" size="xs" color="muted">
             {eyebrow}
           </Text>
-          {line ? (
-            <Text role="control" size="sm" numberOfLines={1}>
-              {line}
-            </Text>
+          {/* Keyed by what it says; both lines share one fixed slot while they cross, so
+              the bar never grows by a line mid-change. */}
+          {shown.text ? (
+            <View style={styles.slot}>
+              <Animated.View
+                key={shown.text}
+                entering={SWAP_IN}
+                exiting={SWAP_OUT}
+                style={styles.line}
+              >
+                <Text
+                  role={shown.kind === 'phrase' ? 'body' : 'control'}
+                  size="sm"
+                  color={shown.kind === 'phrase' ? 'secondary' : 'primary'}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.85}
+                >
+                  {shown.text}
+                </Text>
+              </Animated.View>
+            </View>
           ) : null}
         </View>
         {moment.kind === 'rest' ? (
@@ -256,6 +291,8 @@ const styles = StyleSheet.create({
   svg: { position: 'absolute' },
   body: { flex: 1, gap: 8 },
   words: { gap: 2 },
+  slot: { height: 22, overflow: 'hidden' },
+  line: { position: 'absolute', left: 0, right: 0, top: 0 },
   actions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   nudge: {
     minWidth: 56,
