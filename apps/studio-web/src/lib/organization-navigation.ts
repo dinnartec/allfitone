@@ -34,5 +34,8 @@ export function resolveWorkspaceRoute(
   if (pathname === `${teamPath}/roles`) {
     return { title: 'Roles y permisos' }
   }
+  if (pathname === `${basePath}/clients`) {
+    return { title: 'Clientes' }
+  }
   return { title: 'Studio' }
 }
