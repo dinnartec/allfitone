@@ -5407,6 +5407,8 @@ export interface components {
        */
       planned_step_id?: string | null
       superset_group?: number | null
+      /** @description Rest after this exercise's sets, today's and not the routine's (ADR-035). */
+      rest_seconds?: number | null
     }
     SpaceSessionExercise: {
       position: number
@@ -5416,6 +5418,8 @@ export interface components {
       /** Format: uuid */
       planned_step_id: string | null
       superset_group: number | null
+      /** @description Rest after this exercise's sets, today's and not the routine's (ADR-035). */
+      rest_seconds: number | null
       /** @description The routine step's target; null for an exercise added in the session. */
       target: {
         [key: string]: unknown

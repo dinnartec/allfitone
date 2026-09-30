@@ -13551,10 +13551,15 @@ components:
         superset_group:
           type: [integer, 'null']
           minimum: 1
+        rest_seconds:
+          type: [integer, 'null']
+          minimum: 0
+          maximum: 3600
+          description: Rest after this exercise's sets, today's and not the routine's (ADR-035).
     SpaceSessionExercise:
       type: object
       additionalProperties: false
-      required: [position, movement_id, movement, planned_step_id, superset_group, target, previous, sets]
+      required: [position, movement_id, movement, planned_step_id, superset_group, rest_seconds, target, previous, sets]
       properties:
         position:
           type: integer
@@ -13569,6 +13574,11 @@ components:
           format: uuid
         superset_group:
           type: [integer, 'null']
+        rest_seconds:
+          type: [integer, 'null']
+          minimum: 0
+          maximum: 3600
+          description: Rest after this exercise's sets, today's and not the routine's (ADR-035).
         target:
           oneOf:
             - type: object

@@ -113,7 +113,7 @@ describe('the results list binding', () => {
       results: {
         strength_sets: [{ order: 1, movement_id: MOVEMENT_ID, exercise_position: 2 }],
         exercises: [
-          { position: 1, movement_id: MOVEMENT_ID, superset_group: 1 },
+          { position: 1, movement_id: MOVEMENT_ID, superset_group: 1, rest_seconds: 90 },
           { position: 2, movement_id: MOVEMENT_ID, planned_step_id: null, superset_group: 1 },
         ],
       } as never,
@@ -124,8 +124,21 @@ describe('the results list binding', () => {
     const [sent] = JSON.parse(String(values[3])) as Record<string, unknown>[]
     expect(sent).toMatchObject({ exercise_position: 2 })
     expect(JSON.parse(String(values[7]))).toEqual([
-      { position: 1, movement_id: MOVEMENT_ID, planned_step_id: null, superset_group: 1 },
-      { position: 2, movement_id: MOVEMENT_ID, planned_step_id: null, superset_group: 1 },
+      {
+        position: 1,
+        movement_id: MOVEMENT_ID,
+        planned_step_id: null,
+        superset_group: 1,
+        rest_seconds: 90,
+      },
+      // Unsaid is no rest, not a default: the database keeps it null (ADR-035).
+      {
+        position: 2,
+        movement_id: MOVEMENT_ID,
+        planned_step_id: null,
+        superset_group: 1,
+        rest_seconds: null,
+      },
     ])
   })
 

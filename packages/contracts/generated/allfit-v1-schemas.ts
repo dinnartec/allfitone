@@ -6017,6 +6017,12 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         type: ['integer', 'null'],
         minimum: 1,
       },
+      rest_seconds: {
+        type: ['integer', 'null'],
+        minimum: 0,
+        maximum: 3600,
+        description: "Rest after this exercise's sets, today's and not the routine's (ADR-035).",
+      },
     },
   },
   SessionTemplate: {
@@ -7763,6 +7769,7 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       'movement',
       'planned_step_id',
       'superset_group',
+      'rest_seconds',
       'target',
       'previous',
       'sets',
@@ -7785,6 +7792,12 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
       superset_group: {
         type: ['integer', 'null'],
+      },
+      rest_seconds: {
+        type: ['integer', 'null'],
+        minimum: 0,
+        maximum: 3600,
+        description: "Rest after this exercise's sets, today's and not the routine's (ADR-035).",
       },
       target: {
         oneOf: [

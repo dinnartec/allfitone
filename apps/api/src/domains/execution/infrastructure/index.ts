@@ -170,6 +170,7 @@ function exercisesOf(results: ExecutionResultsReplace): string | null {
       movement_id: exercise.movement_id ?? null,
       planned_step_id: exercise.planned_step_id ?? null,
       superset_group: exercise.superset_group ?? null,
+      rest_seconds: exercise.rest_seconds ?? null,
     })),
   )
 }
