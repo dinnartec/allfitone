@@ -18,6 +18,7 @@
 import type { AllfitV1Schemas } from '@allfitone/contracts'
 
 import type { PickedMovement } from './exercise-pick'
+import type { SetKind } from './set-scheme'
 
 export type Execution = AllfitV1Schemas['SpaceExecution']
 export type ExecutionResults = AllfitV1Schemas['ExecutionResultsReplace']
@@ -31,6 +32,22 @@ export interface WorkingSet {
   readonly done: boolean
   /** What this set weighed last time, already written: "60 × 12", or "—". */
   readonly previous: string
+  /** That weight alone, for filling the set when it is ticked empty. */
+  readonly previousLoad?: string | undefined
+  /** Proposed by the routine and changed by whoever trained it (ADR-033). */
+  readonly kind: SetKind
+  /** How hard it felt, 1 to 10. Absent is undeclared, never zero. */
+  readonly rpe?: number | undefined
+}
+
+const KINDS: readonly SetKind[] = ['normal', 'warmup', 'to_failure', 'drop']
+
+function kindOf(value: unknown): SetKind | undefined {
+  return KINDS.find((kind) => kind === value)
+}
+
+function rpeOf(recorded: Record<string, unknown> | undefined): number | undefined {
+  return recorded && typeof recorded.rpe === 'number' ? recorded.rpe : undefined
 }
 
 export interface WorkingExercise {
@@ -52,6 +69,11 @@ function targetReps(step: PlannedStep): string {
   const target = step.target as Record<string, unknown>
   const reps = target.target_reps
   return typeof reps === 'number' ? String(reps) : ''
+}
+
+function previousLoadOf(step: PlannedStep, index: number): string | undefined {
+  const load = step.previous?.[index]?.load_value
+  return typeof load === 'number' ? String(load) : undefined
 }
 
 /** "60 × 12", or an em dash when the movement has no history. */
@@ -104,11 +126,16 @@ export function workingStateFrom(
   const planned = execution.planned.map((step) => {
     const done = step.movement_id ? (byMovement.get(step.movement_id) ?? []) : unattributed
     const reps = targetReps(step)
-    const rows = Math.max(targetSets(step), done.length)
+    // The routine's own sets when it wrote them; a step published before sets existed
+    // only has its summary, and opens that many plain rows.
+    const prescribed = step.sets ?? []
+    const rows = Math.max(prescribed.length || targetSets(step), done.length)
     const sets: WorkingSet[] = []
     for (let index = 0; index < rows; index += 1) {
       order += 1
       const recorded = done[index]
+      const asked = prescribed[index]
+      const askedReps = asked ? (asked.target_reps === null ? '' : String(asked.target_reps)) : reps
       sets.push({
         order,
         loadKg:
@@ -116,9 +143,12 @@ export function workingStateFrom(
         reps:
           recorded && typeof recorded.achieved_reps === 'number'
             ? String(recorded.achieved_reps)
-            : reps,
+            : askedReps,
         done: recorded !== undefined,
         previous: previousLabel(step, index),
+        previousLoad: previousLoadOf(step, index),
+        kind: kindOf(recorded?.kind) ?? asked?.kind ?? 'normal',
+        rpe: rpeOf(recorded),
       })
     }
     return {
@@ -158,6 +188,8 @@ export function workingStateFrom(
               : '',
           done: recorded !== undefined,
           previous: '—',
+          kind: kindOf(recorded?.kind) ?? 'normal',
+          rpe: rpeOf(recorded),
         })
       }
       return {
@@ -194,6 +226,7 @@ export function withAddedExercises(
         reps: '',
         done: false,
         previous: '—',
+        kind: 'normal' as const,
       })),
     }))
   let order = 0
@@ -266,25 +299,121 @@ export function withExtraSet(
       exercise.position === position
         ? [
             ...exercise.sets,
-            { order: 0, loadKg: '', reps: last?.reps ?? '', done: false, previous: '—' },
+            {
+              order: 0,
+              loadKg: '',
+              reps: last?.reps ?? '',
+              done: false,
+              previous: '—',
+              kind: 'normal' as const,
+            },
           ]
         : exercise.sets
     return { ...exercise, sets: rows.map((set) => ({ ...set, order: (order += 1) })) }
   })
 }
 
-/** How many sets are ticked, and how many the session planned. */
+/** How many working sets are ticked, and how many the session holds. A warmup is not one. */
 export function setsProgress(exercises: readonly WorkingExercise[]): {
   done: number
   planned: number
 } {
   return exercises.reduce(
-    (total, exercise) => ({
-      done: total.done + exercise.sets.filter((set) => set.done).length,
-      planned: total.planned + exercise.sets.length,
-    }),
+    (total, exercise) => {
+      const working = exercise.sets.filter((set) => set.kind !== 'warmup')
+      return {
+        done: total.done + working.filter((set) => set.done).length,
+        planned: total.planned + working.length,
+      }
+    },
     { done: 0, planned: 0 },
   )
+}
+
+/**
+ * Ticks a set, or unticks it, and fills an empty weight on the way in.
+ *
+ * Somebody who ticks without typing lifted something, and it was most likely what
+ * they lifted last time, or else what the set above carried. A warmup lends nothing to
+ * a working set: its weight is the light one on purpose.
+ */
+export function withTick(
+  exercises: readonly WorkingExercise[],
+  position: number,
+  order: number,
+): readonly WorkingExercise[] {
+  return exercises.map((exercise) => {
+    if (exercise.position !== position) return exercise
+    const index = exercise.sets.findIndex((set) => set.order === order)
+    const set = exercise.sets[index]
+    if (!set) return exercise
+    const done = !set.done
+    const above = exercise.sets
+      .slice(0, index)
+      .reverse()
+      .find((one) => one.loadKg !== '' && (set.kind === 'warmup' || one.kind !== 'warmup'))
+    const loadKg =
+      done && set.loadKg === '' ? (set.previousLoad ?? above?.loadKg ?? '') : set.loadKg
+    return {
+      ...exercise,
+      sets: exercise.sets.map((one) => (one.order === order ? { ...one, done, loadKg } : one)),
+    }
+  })
+}
+
+/** Changes one set's kind. Reps stay: what was done to failure still has a count. */
+export function withSetKind(
+  exercises: readonly WorkingExercise[],
+  position: number,
+  order: number,
+  kind: SetKind,
+): readonly WorkingExercise[] {
+  return changeSet(exercises, position, order, (set) => ({ ...set, kind }))
+}
+
+/** Marks how hard one set felt, or takes it back. */
+export function withSetRpe(
+  exercises: readonly WorkingExercise[],
+  position: number,
+  order: number,
+  rpe: number | undefined,
+): readonly WorkingExercise[] {
+  return changeSet(exercises, position, order, (set) => ({ ...set, rpe }))
+}
+
+function changeSet(
+  exercises: readonly WorkingExercise[],
+  position: number,
+  order: number,
+  change: (set: WorkingSet) => WorkingSet,
+): readonly WorkingExercise[] {
+  return exercises.map((exercise) =>
+    exercise.position !== position
+      ? exercise
+      : {
+          ...exercise,
+          sets: exercise.sets.map((set) => (set.order === order ? change(set) : set)),
+        },
+  )
+}
+
+const MARKS: Readonly<Record<Exclude<SetKind, 'normal'>, string>> = {
+  warmup: 'W',
+  drop: 'D',
+  to_failure: 'F',
+}
+
+/**
+ * What the set's cell says: its number, or the letter of its kind.
+ *
+ * A warmup does not take a number, so the first working set is still the first; the
+ * letters are the ones Strong and Hevy use, so nobody has to learn a new code.
+ */
+export function setMark(sets: readonly WorkingSet[], index: number): string {
+  const set = sets[index]
+  if (!set) return ''
+  if (set.kind !== 'normal') return MARKS[set.kind]
+  return String(sets.slice(0, index + 1).filter((one) => one.kind !== 'warmup').length)
 }
 
 /**
@@ -299,7 +428,7 @@ export function totalVolumeKg(exercises: readonly WorkingExercise[]): number {
     (total, exercise) =>
       total +
       exercise.sets.reduce((inner, set) => {
-        if (!set.done) return inner
+        if (!set.done || set.kind === 'warmup') return inner
         const load = Number(set.loadKg)
         const reps = Number(set.reps)
         if (!Number.isFinite(load) || !Number.isFinite(reps) || load <= 0 || reps <= 0) return inner
@@ -339,6 +468,8 @@ export function resultsFrom(exercises: readonly WorkingExercise[]): ExecutionRes
           ...(Number.isFinite(load) && load > 0
             ? { load: { value: load, unit: 'kg' as const } }
             : {}),
+          ...(set.rpe === undefined ? {} : { rpe: set.rpe }),
+          kind: set.kind,
         }
       }),
   )

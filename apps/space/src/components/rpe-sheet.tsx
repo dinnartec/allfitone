@@ -1,5 +1,5 @@
 /**
- * La escala de esfuerzo, abierta y explicada — `HU-SP-043` criterio 5.
+ * La escala de esfuerzo, abierta y explicada — `HU-SP-055` criterio 8.
  *
  * **Se explica antes de preguntar.** Un campo del 1 al 10 sin nada más es una pregunta en
  * un idioma que la mitad de la gente no habla; arriba dice qué se mide, y debajo de los

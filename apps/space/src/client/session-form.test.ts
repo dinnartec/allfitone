@@ -2,6 +2,10 @@ import { describe, expect, test } from 'bun:test'
 
 import {
   addedDuring,
+  withTick,
+  setMark,
+  withSetKind,
+  withSetRpe,
   canFinish,
   rememberAdded,
   elapsedLabel,
@@ -187,7 +191,7 @@ describe('the working state a session screen holds', () => {
           position: 1,
           movementId: MOVEMENT,
           movement: 'Press de banca',
-          sets: [{ order: 1, loadKg: '', reps: '8', done: false, previous: '—' }],
+          sets: [{ order: 1, loadKg: '', reps: '8', done: false, previous: '—', kind: 'normal' }],
         },
       ],
       1,
@@ -218,16 +222,16 @@ describe('what the screen can say about a session in progress', () => {
       movementId: MOVEMENT,
       movement: 'Press de banca',
       sets: [
-        { order: 1, loadKg: '80', reps: '10', done: true, previous: '—' },
-        { order: 2, loadKg: '80', reps: '8', done: true, previous: '—' },
-        { order: 3, loadKg: '', reps: '8', done: false, previous: '—' },
+        { order: 1, loadKg: '80', reps: '10', done: true, previous: '—', kind: 'normal' },
+        { order: 2, loadKg: '80', reps: '8', done: true, previous: '—', kind: 'normal' },
+        { order: 3, loadKg: '', reps: '8', done: false, previous: '—', kind: 'normal' },
       ],
     },
     {
       position: 2,
       movementId: null,
       movement: 'Fondos',
-      sets: [{ order: 4, loadKg: '', reps: '12', done: true, previous: '—' }],
+      sets: [{ order: 4, loadKg: '', reps: '12', done: true, previous: '—', kind: 'normal' }],
     },
   ]
 
@@ -272,14 +276,21 @@ describe('what travels to the server', () => {
         movementId: MOVEMENT,
         movement: 'Press de banca',
         sets: [
-          { order: 1, loadKg: '80', reps: '10', done: true, previous: '—' },
-          { order: 2, loadKg: '80', reps: '8', done: false, previous: '—' },
+          { order: 1, loadKg: '80', reps: '10', done: true, previous: '—', kind: 'normal' },
+          { order: 2, loadKg: '80', reps: '8', done: false, previous: '—', kind: 'normal' },
         ],
       },
     ])
 
+    // The kind always travels: the screen knows it, and the database would guess normal.
     expect(sent.strength_sets).toEqual([
-      { order: 1, movement_id: MOVEMENT, achieved_reps: 10, load: { value: 80, unit: 'kg' } },
+      {
+        order: 1,
+        movement_id: MOVEMENT,
+        achieved_reps: 10,
+        load: { value: 80, unit: 'kg' },
+        kind: 'normal',
+      },
     ])
   })
 
@@ -289,12 +300,12 @@ describe('what travels to the server', () => {
         position: 1,
         movementId: null,
         movement: 'Plancha',
-        sets: [{ order: 1, loadKg: '', reps: '', done: true, previous: '—' }],
+        sets: [{ order: 1, loadKg: '', reps: '', done: true, previous: '—', kind: 'normal' }],
       },
     ])
 
     expect(sent.segments).toBeUndefined()
-    expect(sent.strength_sets).toEqual([{ order: 1 }])
+    expect(sent.strength_sets).toEqual([{ order: 1, kind: 'normal' }])
   })
 })
 
@@ -366,5 +377,165 @@ describe('exercises added while the session runs', () => {
 
     expect(addedDuring('session-a').map((one) => one.id)).toEqual([ADDED, OTHER])
     expect(addedDuring('session-b')).toEqual([])
+  })
+})
+
+describe('what kind each set is, and how hard it was', () => {
+  const planned = execution({
+    planned: [
+      {
+        position: 1,
+        movement_id: MOVEMENT,
+        movement: 'Sentadilla',
+        target: { family: 'strength', target_sets: 3, target_reps: 8 },
+        sets: [
+          {
+            set_order: 1,
+            kind: 'warmup',
+            target_reps: 12,
+            target_load_value: null,
+            target_load_unit_code: null,
+          },
+          {
+            set_order: 2,
+            kind: 'normal',
+            target_reps: 8,
+            target_load_value: null,
+            target_load_unit_code: null,
+          },
+          {
+            set_order: 3,
+            kind: 'to_failure',
+            target_reps: null,
+            target_load_value: null,
+            target_load_unit_code: null,
+          },
+        ],
+      },
+    ],
+  })
+
+  test('T-SPC-UNIT-96 each row opens with the kind and reps the routine asked for', () => {
+    const [first] = workingStateFrom(planned)
+
+    expect(first?.sets.map((set) => set.kind)).toEqual(['warmup', 'normal', 'to_failure'])
+    // To failure has no number to aim for: the number is whatever comes.
+    expect(first?.sets.map((set) => set.reps)).toEqual(['12', '8', ''])
+  })
+
+  test('T-SPC-UNIT-97 what was recorded wins over what was planned, the kind too', () => {
+    const [first] = workingStateFrom({
+      ...planned,
+      results: [
+        {
+          family: 'strength',
+          set_order: 1,
+          movement_id: MOVEMENT,
+          achieved_reps: 10,
+          kind: 'normal',
+          rpe: 7,
+        },
+      ],
+    })
+
+    expect(first?.sets[0]).toMatchObject({ kind: 'normal', reps: '10', done: true, rpe: 7 })
+  })
+
+  test("T-SPC-UNIT-98 changing one set's kind leaves the rest alone", () => {
+    const next = withSetKind(workingStateFrom(planned), 1, 2, 'drop')
+
+    expect(next[0]?.sets.map((set) => set.kind)).toEqual(['warmup', 'drop', 'to_failure'])
+  })
+
+  test('T-SPC-UNIT-99 an effort can be marked and taken back', () => {
+    const marked = withSetRpe(workingStateFrom(planned), 1, 2, 8)
+    expect(marked[0]?.sets[1]?.rpe).toBe(8)
+
+    const cleared = withSetRpe(marked, 1, 2, undefined)
+    expect(cleared[0]?.sets[1]?.rpe).toBeUndefined()
+  })
+
+  test('T-SPC-UNIT-100 sends the kind and the effort, and no effort when none was marked', () => {
+    const ticked = workingStateFrom(planned).map((exercise) => ({
+      ...exercise,
+      sets: exercise.sets.map((set) => ({ ...set, done: true, loadKg: '100', reps: '5' })),
+    }))
+    const sent = resultsFrom(withSetRpe(ticked, 1, 2, 9)).strength_sets ?? []
+
+    expect(sent.map((set) => set.kind)).toEqual(['warmup', 'normal', 'to_failure'])
+    expect(sent.map((set) => set.rpe)).toEqual([undefined, 9, undefined])
+  })
+
+  test('T-SPC-UNIT-101 a warmup is not work: not in the count, not in the volume', () => {
+    const ticked = workingStateFrom(planned).map((exercise) => ({
+      ...exercise,
+      sets: exercise.sets.map((set) => ({ ...set, done: true, loadKg: '100', reps: '5' })),
+    }))
+
+    expect(setsProgress(ticked)).toEqual({ done: 2, planned: 2 })
+    expect(totalVolumeKg(ticked)).toBe(2 * 100 * 5)
+  })
+
+  test('T-SPC-UNIT-102 the mark numbers the working sets and letters the rest', () => {
+    const sets = withSetKind(workingStateFrom(planned), 1, 2, 'drop')[0]?.sets ?? []
+
+    expect(sets.map((_, index) => setMark(sets, index))).toEqual(['W', 'D', 'F'])
+    const plain = withSetKind(workingStateFrom(planned), 1, 2, 'normal')[0]?.sets ?? []
+    expect(plain.map((_, index) => setMark(plain, index))).toEqual(['W', '1', 'F'])
+  })
+})
+
+describe('ticking a set with no weight typed', () => {
+  const withHistory = execution({
+    planned: [
+      {
+        position: 1,
+        movement_id: MOVEMENT,
+        movement: 'Press de banca',
+        target: { family: 'strength', target_sets: 3, target_reps: 8 },
+        previous: [
+          { load_value: 60, achieved_reps: 8 },
+          { load_value: null, achieved_reps: 8 },
+        ],
+      },
+    ],
+  })
+
+  test('T-SPC-UNIT-103 takes the weight it lifted last time', () => {
+    const next = withTick(workingStateFrom(withHistory), 1, 1)
+
+    expect(next[0]?.sets[0]).toMatchObject({ done: true, loadKg: '60' })
+  })
+
+  test('T-SPC-UNIT-104 or, with no last time, the weight of the set above', () => {
+    const first = withTick(workingStateFrom(withHistory), 1, 1)
+    const next = withTick(first, 1, 2)
+
+    expect(next[0]?.sets[1]).toMatchObject({ done: true, loadKg: '60' })
+  })
+
+  test('T-SPC-UNIT-105 a weight somebody typed is theirs and stays', () => {
+    const typed = workingStateFrom(withHistory).map((exercise) => ({
+      ...exercise,
+      sets: exercise.sets.map((set) => (set.order === 1 ? { ...set, loadKg: '62.5' } : set)),
+    }))
+
+    expect(withTick(typed, 1, 1)[0]?.sets[0]?.loadKg).toBe('62.5')
+  })
+
+  test('T-SPC-UNIT-106 unticking leaves the weight where it was', () => {
+    const ticked = withTick(workingStateFrom(withHistory), 1, 1)
+    const unticked = withTick(ticked, 1, 1)
+
+    expect(unticked[0]?.sets[0]).toMatchObject({ done: false, loadKg: '60' })
+  })
+
+  test('T-SPC-UNIT-107 a warmup lends no weight to a working set', () => {
+    const warm = withSetKind(workingStateFrom(execution()), 1, 1, 'warmup').map((exercise) => ({
+      ...exercise,
+      sets: exercise.sets.map((set) => (set.order === 1 ? { ...set, loadKg: '20' } : set)),
+    }))
+
+    expect(withTick(warm, 1, 2)[0]?.sets[1]).toMatchObject({ done: true, loadKg: '' })
   })
 })

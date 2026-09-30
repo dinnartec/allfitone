@@ -33,6 +33,7 @@
  * somebody typed about their body would be worse than its absence.
  */
 
+import { badgeToneColor } from '@allfitone/react-native/badge'
 import { Button } from '@allfitone/react-native/button'
 import { IconButton } from '@allfitone/react-native/icon-button'
 import { InlineAlert } from '@allfitone/react-native/inline-alert'
@@ -42,6 +43,7 @@ import { Text } from '@allfitone/react-native/text'
 import { useTheme } from '@allfitone/react-native/theme'
 import { transparent } from '@allfitone/react-native/tokens'
 import { FoundationIcon } from '@allfitone/react-native/icons'
+import * as Haptics from 'expo-haptics'
 import { Image } from 'expo-image'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -49,12 +51,13 @@ import { Keyboard, Pressable, ScrollView, StyleSheet, TextInput, View } from 're
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import Animated, {
   interpolateColor,
-  runOnJS,
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
   withSpring,
+  withTiming,
 } from 'react-native-reanimated'
+import { scheduleOnRN } from 'react-native-worklets'
 
 import { ApiError } from '../../src/client'
 import { createSpaceContentFlow } from '../../src/client/content-transport'
@@ -79,9 +82,22 @@ import {
   withAddedExercises,
   rememberAdded,
   addedDuring,
+  setMark,
+  withSetKind,
+  withTick,
+  withSetRpe,
   type WorkingExercise,
   type WorkingSet,
 } from '../../src/client/session-form'
+import { rpeCopy, rpeShown } from '../../src/client/rpe-scale'
+import {
+  SET_KIND_DETAILS,
+  SET_KIND_NAMES,
+  SET_KIND_TONES,
+  type SetKind,
+} from '../../src/client/set-scheme'
+import { RpeSheetBody } from '../../src/components/rpe-sheet'
+import { SheetChoice } from '../../src/components/sheet-choice'
 
 const READ_FAILED = 'No pudimos abrir la sesión. Inténtalo otra vez.'
 const SAVE_FAILED = 'No pudimos guardar. Lo intentamos otra vez en un momento.'
@@ -106,16 +122,17 @@ const SAVE_DELAY_MS = 1_200
  * then animates between zero and that number. Nothing else can animate a height that
  * depends on how many sets an exercise has.
  */
-/**
- * How far a row travels to offer its delete.
- *
- * Short on purpose: the gesture reveals an action, it does not open a drawer, and a
- * long throw would fight the vertical scroll it shares the surface with.
- */
-const REVEAL = 12
+/** How far a row slides to uncover «Eliminar»: the width of the red behind it. */
+const DELETE_WIDTH = 96
 
-/** Past this much of the throw the row commits rather than springing back. */
-const REVEAL_THRESHOLD = 24
+/** Past this much of the throw, letting go deletes rather than settling open. */
+const DELETE_COMMIT = 200
+
+/** Where a deleted row slides out to before it goes, clear of any screen's edge. */
+const ROW_EXIT = 480
+
+/** How far a done set steps back: still legible, no longer leading. */
+const DIMMED = 0.5
 
 /** The open card's bottom padding, which grows with the drawer rather than snapping. */
 const OPEN_PADDING = 16
@@ -144,6 +161,11 @@ export default function Session() {
   const [failure, setFailure] = useState<string | undefined>(undefined)
   const [closing, setClosing] = useState(false)
   const [deciding, setDeciding] = useState(false)
+  /** Which set a sheet is asking about: its kind, or how hard it was. */
+  const [asking, setAsking] = useState<
+    | { readonly about: 'kind' | 'effort'; readonly position: number; readonly order: number }
+    | undefined
+  >(undefined)
 
   /** Each movement's demonstration, by id: the catalogue's, not the session's. */
   const [previews, setPreviews] = useState<ReadonlyMap<string, string | null>>(new Map())
@@ -261,6 +283,29 @@ export default function Session() {
       if (change.done !== undefined || next.some((e) => e.sets.some((s) => s.done))) save(next)
       return next
     })
+  }
+
+  // A ticked set is already recorded, so changing it is a write; an unticked one waits
+  // for its tick like everything else typed into it.
+  const reshape = (next: readonly WorkingExercise[], position: number, order: number) => {
+    setExercises(next)
+    const changed = next
+      .find((exercise) => exercise.position === position)
+      ?.sets.find((set) => set.order === order)
+    if (changed?.done) save(next)
+  }
+
+  const askedSet = asking
+    ? exercises
+        .find((exercise) => exercise.position === asking.position)
+        ?.sets.find((set) => set.order === asking.order)
+    : undefined
+
+  // A tick is always a write, and it fills an empty weight from last time or the set above.
+  const tick = (position: number, order: number) => {
+    const next = withTick(exercises, position, order)
+    setExercises(next)
+    save(next)
   }
 
   const addSet = (position: number) => {
@@ -387,8 +432,11 @@ export default function Session() {
               setOpenPosition((current) => (current === exercise.position ? 0 : exercise.position))
             }
             onEdit={(order, change) => edit(exercise.position, order, change)}
+            onTick={(order) => tick(exercise.position, order)}
             onAddSet={() => addSet(exercise.position)}
             onRemoveSet={(order) => removeSet(exercise.position, order)}
+            onKind={(order) => setAsking({ about: 'kind', position: exercise.position, order })}
+            onEffort={(order) => setAsking({ about: 'effort', position: exercise.position, order })}
             onExplain={explainer(exercise.movementId)}
           />
         ))}
@@ -422,6 +470,55 @@ export default function Session() {
 
           <Button label="Regresar" variant="ghost" onPress={() => setDeciding(false)} />
         </View>
+      </Sheet>
+
+      <Sheet
+        visible={asking?.about === 'kind'}
+        onDismiss={() => setAsking(undefined)}
+        title="Tipo de serie"
+      >
+        <View style={styles.decisions}>
+          {(['normal', 'warmup', 'to_failure', 'drop'] as const).map((kind: SetKind) => (
+            <SheetChoice
+              key={kind}
+              name={SET_KIND_NAMES[kind]}
+              tone={SET_KIND_TONES[kind]}
+              detail={SET_KIND_DETAILS[kind]}
+              selected={askedSet?.kind === kind}
+              onPress={() => {
+                if (asking) {
+                  reshape(
+                    withSetKind(exercises, asking.position, asking.order, kind),
+                    asking.position,
+                    asking.order,
+                  )
+                }
+                setAsking(undefined)
+              }}
+            />
+          ))}
+        </View>
+      </Sheet>
+
+      <Sheet
+        visible={asking?.about === 'effort'}
+        onDismiss={() => setAsking(undefined)}
+        title="Esfuerzo de la serie"
+      >
+        <RpeSheetBody
+          value={askedSet?.rpe}
+          onChoose={(rpe) => {
+            if (asking) {
+              reshape(
+                withSetRpe(exercises, asking.position, asking.order, rpe),
+                asking.position,
+                asking.order,
+              )
+            }
+            // One tap is the answer; the sheet has nothing else to say.
+            setAsking(undefined)
+          }}
+        />
       </Sheet>
     </Screen>
   )
@@ -464,6 +561,9 @@ function Exercise({
   onEdit,
   onAddSet,
   onRemoveSet,
+  onKind,
+  onEffort,
+  onTick,
   onExplain,
 }: {
   readonly exercise: WorkingExercise
@@ -476,6 +576,9 @@ function Exercise({
   ) => void
   readonly onAddSet: () => void
   readonly onRemoveSet: (order: number) => void
+  readonly onKind: (order: number) => void
+  readonly onEffort: (order: number) => void
+  readonly onTick: (order: number) => void
   /** Absent when the step names no catalogue movement: there is nothing to explain. */
   readonly onExplain: (() => void) | undefined
 }) {
@@ -484,8 +587,10 @@ function Exercise({
   const drawerHeight = useSharedValue(0)
   const reduceMotion = useReducedMotion()
 
-  const done = exercise.sets.filter((set) => set.done).length
-  const complete = done === exercise.sets.length && done > 0
+  // A warmup is not work, so it is not what «3 de 3» counts.
+  const working = exercise.sets.filter((set) => set.kind !== 'warmup')
+  const done = working.filter((set) => set.done).length
+  const complete = done === working.length && done > 0
 
   useEffect(() => {
     // Reduced motion keeps the change and drops the travel: which exercise is open is
@@ -546,6 +651,9 @@ function Exercise({
         <Text role="eyebrow" size="xs" color="muted" align="center" style={styles.colInput}>
           REPS
         </Text>
+        <Text role="eyebrow" size="xs" color="muted" align="center" style={styles.colRpe}>
+          RPE
+        </Text>
         <View style={styles.colTick} />
       </View>
 
@@ -554,6 +662,10 @@ function Exercise({
           key={set.order}
           set={set}
           index={index}
+          mark={setMark(exercise.sets, index)}
+          onKind={() => onKind(set.order)}
+          onEffort={() => onEffort(set.order)}
+          onTick={() => onTick(set.order)}
           onEdit={(change) => onEdit(set.order, change)}
           onRemove={() => onRemoveSet(set.order)}
         />
@@ -632,7 +744,7 @@ function Exercise({
               />
             ) : null}
             <Text role="control" size="xs" color={complete ? 'success' : 'muted'}>
-              {`${done} de ${exercise.sets.length}`}
+              {`${done} de ${working.length}`}
             </Text>
           </Animated.View>
           <Animated.View style={chevron}>
@@ -662,148 +774,250 @@ function Exercise({
 /**
  * One set, and the delete it hides.
  *
- * Sliding left turns the tick into a delete. It is the same cell and the same size —
- * what changes is what it means — so nothing reflows and the row still reads as a
- * row. The throw is short and the gesture only claims the horizontal axis, or it
- * would fight the vertical scroll it sits inside.
+ * **Sliding left uncovers a delete that says so.** The row travels far enough to show
+ * «Eliminar» on red behind it, and a long throw deletes outright, the way a mail list
+ * does. It follows the finger and settles on a spring that carries the throw's
+ * velocity, so a flick opens it and a slow drag decides at the halfway mark. Only the
+ * horizontal axis is claimed, or it would fight the scroll it sits inside.
+ *
+ * **Done is the whole row, not the box.** A ticked set tints its row, so a glance down
+ * the table reads what is finished; the fields keep their look, because a finished set
+ * can still be corrected.
  */
 function SetRow({
   set,
   index,
+  mark,
+  onKind,
+  onEffort,
+  onTick,
   onEdit,
   onRemove,
 }: {
   readonly set: WorkingSet
   readonly index: number
-  readonly onEdit: (change: Partial<{ loadKg: string; reps: string; done: boolean }>) => void
+  /** Its number, or W, D or F: what kind of set it is, where the number was. */
+  readonly mark: string
+  readonly onKind: () => void
+  readonly onEffort: () => void
+  readonly onTick: () => void
+  readonly onEdit: (change: Partial<{ loadKg: string; reps: string }>) => void
   readonly onRemove: () => void
 }) {
   const theme = useTheme()
-  const revealed = useSharedValue(0)
-  const [armed, setArmed] = useState(false)
+  const offset = useSharedValue(0)
+  const [open, setOpen] = useState(false)
+
+  const settle = (to: number, velocity = 0) => {
+    'worklet'
+    offset.value = withSpring(to, { ...SPRING, velocity })
+  }
 
   const swipe = Gesture.Pan()
     // Only the horizontal axis: the vertical one belongs to the scroll.
     .activeOffsetX([-12, 12])
     .failOffsetY([-8, 8])
     .onUpdate((event) => {
-      const pulled = Math.min(Math.max(-event.translationX, 0), REVEAL_THRESHOLD)
-      revealed.value = pulled / REVEAL_THRESHOLD
+      const from = open ? -DELETE_WIDTH : 0
+      const pulled = Math.min(0, from + event.translationX)
+      // Past the delete it keeps following, but slower: the edge is felt, not hit.
+      offset.value = pulled < -DELETE_WIDTH ? -DELETE_WIDTH + (pulled + DELETE_WIDTH) * 0.6 : pulled
     })
     .onEnd((event) => {
-      const open = -event.translationX > REVEAL_THRESHOLD / 2 || event.velocityX < -400
-      revealed.value = withSpring(open ? 1 : 0, SPRING)
-      runOnJS(setArmed)(open)
+      if (offset.value < -DELETE_COMMIT) {
+        // Out first, then gone: removing it mid-slide would hide the slide.
+        offset.value = withTiming(-ROW_EXIT, { duration: 180 }, (finished) => {
+          if (finished) scheduleOnRN(commitDelete)
+        })
+        return
+      }
+      const reveal = offset.value < -DELETE_WIDTH / 2 || event.velocityX < -500
+      settle(reveal ? -DELETE_WIDTH : 0, event.velocityX)
+      scheduleOnRN(setOpen, reveal)
+      if (reveal && !open) scheduleOnRN(opened)
     })
 
-  const row = useAnimatedStyle(() => ({
-    transform: [{ translateX: -REVEAL * revealed.value }],
-  }))
-
-  const tick = useAnimatedStyle(() => ({ opacity: 1 - revealed.value }))
-  const bin = useAnimatedStyle(() => ({ opacity: revealed.value }))
-
-  const close = () => {
-    revealed.value = withSpring(0, SPRING)
-    setArmed(false)
+  function opened() {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
   }
 
+  function commitDelete() {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+    onRemove()
+    // Rows are keyed by order and the ladder renumbers, so this one is about to show
+    // the set below it: it has to be back in place, not slid out.
+    offset.value = 0
+    setOpen(false)
+  }
+
+  const close = () => {
+    settle(0)
+    setOpen(false)
+  }
+
+  const row = useAnimatedStyle(() => ({ transform: [{ translateX: offset.value }] }))
+  // The red grows in with the throw, so the action is announced before it is reached.
+  const action = useAnimatedStyle(() => ({
+    opacity: Math.min(1, -offset.value / (DELETE_WIDTH * 0.6)),
+  }))
+
+  const tint = theme.color.accent.tonal
+
   return (
-    <GestureDetector gesture={swipe}>
-      <Animated.View style={[styles.setRow, row]}>
-        <Text role="control" size="md" align="center" style={styles.colSet}>
-          {index + 1}
-        </Text>
-        {/* What it weighed last time, so nobody has to remember the number they hit a
-            week ago. That is what a log is for. */}
-        <Text role="body" size="xs" color="muted" numberOfLines={1} style={styles.colPrevious}>
-          {set.previous}
-        </Text>
-        <Field
-          value={set.loadKg}
-          label={`Kilos de la serie ${index + 1}`}
-          done={set.done}
-          onChange={(loadKg) => onEdit({ loadKg })}
-        />
-        <Field
-          value={set.reps}
-          label={`Repeticiones de la serie ${index + 1}`}
-          done={set.done}
-          onChange={(reps) => onEdit({ reps })}
-        />
-
-        <View style={styles.colTick}>
-          <Animated.View
-            style={[StyleSheet.absoluteFill, tick]}
-            pointerEvents={armed ? 'none' : 'auto'}
-          >
-            <Pressable
-              accessibilityRole="checkbox"
-              accessibilityState={{ checked: set.done }}
-              accessibilityLabel={`Marcar la serie ${index + 1}`}
-              onPress={() => {
-                // The set is over; the keyboard would sit over the ones still to come.
-                Keyboard.dismiss()
-                onEdit({ done: !set.done })
-              }}
-              style={[
-                styles.cell,
-                {
-                  backgroundColor: set.done
-                    ? theme.color.accent.tonal
-                    : theme.color.background.canvas,
-                  borderColor: set.done ? theme.color.border.accent : theme.color.border.default,
-                  borderWidth: set.done ? 1.5 : 1,
-                },
-              ]}
-            >
-              {set.done ? (
-                <FoundationIcon name="check" size="xs" color={theme.color.icon.accent} decorative />
-              ) : null}
-            </Pressable>
-          </Animated.View>
-
-          <Animated.View
-            style={[StyleSheet.absoluteFill, bin]}
-            pointerEvents={armed ? 'auto' : 'none'}
-          >
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Eliminar la serie ${index + 1}`}
-              onPress={onRemove}
-              onLongPress={close}
-              style={[
-                styles.cell,
-                {
-                  backgroundColor: theme.color.background.canvas,
-                  borderColor: theme.color.status.danger,
-                  borderWidth: 1.5,
-                },
-              ]}
-            >
-              <FoundationIcon
-                name="remove"
-                size="xs"
-                color={theme.color.status.danger}
-                decorative
-              />
-            </Pressable>
-          </Animated.View>
-        </View>
+    <View style={styles.setWrap}>
+      <Animated.View
+        style={[styles.deleteAction, { backgroundColor: theme.color.status.danger }, action]}
+      >
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Eliminar la serie ${index + 1}`}
+          onPress={() => {
+            // The same exit as the long throw: the row leaves the way it was pushed.
+            offset.value = withTiming(-ROW_EXIT, { duration: 220 }, (finished) => {
+              if (finished) scheduleOnRN(commitDelete)
+            })
+          }}
+          style={styles.deletePress}
+        >
+          <FoundationIcon name="remove" size="xs" color={theme.color.text.primary} decorative />
+          <Text role="control" size="sm" style={{ color: theme.color.text.primary }}>
+            Eliminar
+          </Text>
+        </Pressable>
       </Animated.View>
-    </GestureDetector>
+
+      <GestureDetector gesture={swipe}>
+        <Animated.View
+          style={[
+            styles.setRow,
+            // Opaque, so the red stays hidden until the row moves off it.
+            { backgroundColor: theme.color.background.surface },
+            row,
+          ]}
+        >
+          <View
+            pointerEvents="none"
+            style={[
+              StyleSheet.absoluteFill,
+              styles.doneTint,
+              { backgroundColor: set.done ? tint : transparent(tint) },
+            ]}
+          />
+          {/* A chip with a caret, so it reads as something to press: the bare number
+              looked like a label, and nobody guessed it opened the kinds. */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Serie ${index + 1}: ${SET_KIND_NAMES[set.kind]}. Cambiar el tipo`}
+            onPress={open ? close : onKind}
+            hitSlop={4}
+            style={[
+              styles.colSet,
+              styles.kindChip,
+              { backgroundColor: theme.color.background.canvas },
+              set.done ? styles.dimmed : null,
+            ]}
+          >
+            <Text
+              role="control"
+              size="md"
+              style={
+                set.kind === 'normal'
+                  ? undefined
+                  : { color: badgeToneColor(theme, SET_KIND_TONES[set.kind]) }
+              }
+            >
+              {mark}
+            </Text>
+            <FoundationIcon
+              name="expand"
+              customSize={10}
+              color={theme.color.icon.secondary}
+              decorative
+            />
+          </Pressable>
+          {/* What it weighed last time, so nobody has to remember the number they hit a
+              week ago. That is what a log is for. */}
+          <Text
+            role="body"
+            size="xs"
+            color="muted"
+            numberOfLines={1}
+            style={[styles.colPrevious, set.done ? styles.dimmed : null]}
+          >
+            {set.previous}
+          </Text>
+          {/* A done set steps back so the ones still to do lead; it stays editable. */}
+          <Field
+            value={set.loadKg}
+            label={`Kilos de la serie ${index + 1}`}
+            dimmed={set.done}
+            onChange={(loadKg) => onEdit({ loadKg })}
+          />
+          <Field
+            value={set.reps}
+            label={`Repeticiones de la serie ${index + 1}`}
+            dimmed={set.done}
+            onChange={(reps) => onEdit({ reps })}
+          />
+          {/* Optional, and a button rather than a field: the scale opens explained. */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Esfuerzo de la serie ${index + 1}`}
+            accessibilityHint={rpeCopy(set.rpe)}
+            onPress={onEffort}
+            hitSlop={4}
+            style={[
+              styles.colRpe,
+              styles.effort,
+              { backgroundColor: theme.color.background.canvas },
+              set.done ? styles.dimmed : null,
+            ]}
+          >
+            {/* A value like any other: accent is for action and focus, not for a number. */}
+            <Text role="data" size="sm" color={set.rpe === undefined ? 'muted' : 'primary'}>
+              {rpeShown(set.rpe)}
+            </Text>
+          </Pressable>
+
+          <Pressable
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: set.done }}
+            accessibilityLabel={`Marcar la serie ${index + 1}`}
+            onPress={() => {
+              if (open) return close()
+              // The set is over; the keyboard would sit over the ones still to come.
+              Keyboard.dismiss()
+              onTick()
+            }}
+            style={[
+              styles.colTick,
+              styles.tick,
+              {
+                backgroundColor: set.done ? tint : theme.color.background.canvas,
+                borderColor: set.done ? theme.color.border.accent : theme.color.border.default,
+                borderWidth: set.done ? 1.5 : 1,
+              },
+            ]}
+          >
+            {set.done ? (
+              <FoundationIcon name="check" size="xs" color={theme.color.icon.accent} decorative />
+            ) : null}
+          </Pressable>
+        </Animated.View>
+      </GestureDetector>
+    </View>
   )
 }
 
 function Field({
   value,
   label,
-  done,
+  dimmed,
   onChange,
 }: {
   readonly value: string
   readonly label: string
-  readonly done: boolean
+  readonly dimmed: boolean
   readonly onChange: (value: string) => void
 }) {
   const theme = useTheme()
@@ -824,13 +1038,15 @@ function Field({
         styles.field,
         styles.colInput,
         {
-          backgroundColor: done
-            ? theme.color.background.surfaceSubtle
-            : theme.color.background.canvas,
+          // The same whether ticked or not: the row says it is done, and the field
+          // stays one that can still be corrected.
+          backgroundColor: theme.color.background.canvas,
           // Accent is for focus, not for emptiness. Every empty field outlined in cyan
           // turned the card into an alarm and left nothing to mark where the cursor is.
-          borderColor: focused ? theme.color.border.accent : theme.color.border.subtle,
-          borderWidth: focused ? 1.5 : 1,
+          // No border at rest; the one that appears marks where the cursor is.
+          borderColor: focused ? theme.color.border.accent : transparent(theme.color.border.accent),
+          borderWidth: 1.5,
+          opacity: dimmed && !focused ? DIMMED : 1,
           color: theme.color.text.primary,
         },
       ]}
@@ -879,24 +1095,65 @@ const styles = StyleSheet.create({
   // Clipped, so the animated height is what reveals the drawer.
   drawer: { overflow: 'hidden' },
   measure: { position: 'absolute', left: 0, right: 0, top: 0, gap: 10, paddingTop: 6 },
-  columns: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  setRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  // 'SERIE' at the eyebrow's 0.2em tracking needs the room, and the numbers ride the
-  // same column centred, so the two never drift apart. Five characters want about 41pt
-  // at 10 and 49 at 12, which is what wrapped the word when the header grew.
-  colSet: { width: 54 },
-  // Wide enough for `ANTERIOR` at the eyebrow's 0.2em tracking, which is what wrapped
-  // it: eight characters need about 66pt at 10 and 79 at 12, so the column grew with
-  // the type rather than clipping the one word that names it.
+  // The same inset as a row, or every title sits four points off its column.
+  columns: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 4 },
+  setWrap: { borderRadius: 12, overflow: 'hidden' },
+  setRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 4,
+    paddingHorizontal: 4,
+    borderRadius: 12,
+  },
+  doneTint: { borderRadius: 12, transitionProperty: 'backgroundColor', transitionDuration: 200 },
+  deleteAction: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    borderRadius: 12,
+  },
+  deletePress: {
+    width: DELETE_WIDTH,
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+  },
+  dimmed: { opacity: DIMMED },
+  tick: { borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  kindChip: {
+    height: 34,
+    borderRadius: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 3,
+  },
+  // Narrowed to make room for RPE: 'SERIE' wants about 41pt at the eyebrow's size and
+  // tracking, and the number or letter under it rides the same column centred.
+  colSet: { width: 46, alignItems: 'center' },
+  // `ANTERIOR` at the eyebrow's tracking clipped at 76 once RPE took a column; the
+  // inputs have room to spare, so they give it back.
   colPrevious: { width: 88 },
   addSet: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingTop: 4 },
   colInput: { flex: 1, textAlign: 'center' },
   colTick: { width: 34, height: 34 },
+  colRpe: { width: 38, textAlign: 'center' },
+  effort: {
+    height: 34,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   // 16 rather than the 13 that was typed here: it is the only size in this file that
   // never came from the scale, and it is the number somebody enters mid-set. The height
   // stays 34 so the row keeps aligning with the tick beside it.
   field: { height: 34, borderRadius: 10, fontSize: 16, paddingVertical: 0 },
-  cell: { flex: 1, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   thread: { width: 2.5, height: 28, borderRadius: 1.5 },
   finish: { paddingHorizontal: 0, minWidth: 104 },
   decisions: { gap: 10, paddingBottom: 8 },
