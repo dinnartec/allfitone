@@ -77,6 +77,8 @@ function OrganizationSidebar({ basePath, pathname }: { basePath: string; pathnam
   const organizationActive = pathname.startsWith(organizationHref)
   const teamHref = `${basePath}/team`
   const teamActive = pathname.startsWith(teamHref)
+  const clientsHref = `${basePath}/clients`
+  const clientsActive = pathname.startsWith(clientsHref)
 
   function closeMobileNavigation() {
     setOpenMobile(false)
@@ -198,6 +200,16 @@ function OrganizationSidebar({ basePath, pathname }: { basePath: string; pathnam
                 >
                   <FoundationIcon name="people" decorative />
                   <span>Equipo</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  render={<Link href={clientsHref} onClick={closeMobileNavigation} />}
+                  isActive={clientsActive}
+                  aria-current={clientsActive ? 'page' : undefined}
+                >
+                  <FoundationIcon name="person" decorative />
+                  <span>Clientes</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>

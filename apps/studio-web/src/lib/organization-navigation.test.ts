@@ -51,4 +51,15 @@ describe('organization workspace navigation', () => {
       title: 'Nueva invitación',
     })
   })
+
+  /*
+   * A route missing from this map does not fail anywhere — it silently falls
+   * through to "Studio", and the screen ships with the product's name where its
+   * own title belongs. That is exactly what happened to the client directory.
+   */
+  test('resolves the client directory title rather than falling through to the default', () => {
+    expect(resolveWorkspaceRoute(`${basePath}/clients`, organizationId)).toEqual({
+      title: 'Clientes',
+    })
+  })
 })

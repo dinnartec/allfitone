@@ -211,6 +211,7 @@
 [data-studio-form],
 [data-invitation-waiting],
 [data-team-page],
+[data-client-page],
 [data-team-section],
 [data-profile-section],
 [data-profile-state],
@@ -342,6 +343,24 @@
   width: 14%;
 }
 
+/* The person column is the widest share because it is the only one holding a
+   value nobody chose the length of: a masked contact runs far longer than a
+   name. Declaring no shares at all left the four columns at an even quarter,
+   which is not enough for that contact — it kept its line and the badge in the
+   next column landed on top of it. */
+[data-studio-register='clients'] col:nth-child(1) {
+  width: 44%;
+}
+
+[data-studio-register='clients'] col:nth-child(2) {
+  width: 18%;
+}
+
+[data-studio-register='clients'] col:nth-child(3),
+[data-studio-register='clients'] col:nth-child(4) {
+  width: 19%;
+}
+
 [data-studio-register='invitations'] col:nth-child(6) {
   width: 12%;
 }
@@ -432,11 +451,21 @@
 
 [data-ready-later-item],
 [data-team-member-identity],
+[data-client-identity],
 [data-overview-team-identity] {
   display: flex;
   min-width: 0;
   align-items: center;
   gap: var(--afo-space-3);
+}
+
+/* A masked contact is one unbroken token — `b***@ejemplo.test` has nowhere the
+   browser will break it — so without this it paints straight out of its cell
+   and over whatever sits beside it, while every measurement of the cell itself
+   still reports the right width. */
+[data-client-identity] > strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 /* `data-account-track` marks a Card, so it may only place it — never lay it
@@ -474,6 +503,7 @@
 [data-team-invitation-summary] dt,
 [data-ownership-invitation-summary] dt,
 [data-team-member-facts] dt,
+[data-client-facts] dt,
 [data-credential-details] dt {
   font-family: var(--afo-typography-label-font-family);
   font-size: var(--afo-font-size-xs);
@@ -493,7 +523,8 @@
   margin-block-start: var(--afo-space-4);
 }
 
-[data-team-member-facts] {
+[data-team-member-facts],
+[data-client-facts] {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
@@ -543,6 +574,7 @@
 [data-overview-team-list],
 [data-organization-site-list],
 [data-team-directory-card-list],
+[data-client-directory-card-list],
 [data-role-capability-list] {
   display: grid;
   gap: var(--afo-space-3);
@@ -611,7 +643,8 @@
 
 /* -------------------------------------------------------------------- team */
 
-[data-team-directory-cards] {
+[data-team-directory-cards],
+[data-client-directory-cards] {
   display: grid;
   gap: var(--afo-space-4);
 }
@@ -620,7 +653,13 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-[data-team-member-identity] {
+/* Grid, not the flex above: `minmax(0, 1fr)` is what lets the name track
+   shrink below its content. As flex, a value with no break opportunity — a
+   masked contact like `c***@correo-institucional-muy-largo.example.test` —
+   keeps the track at its full width and paints straight over the badge in the
+   next column, which is what happened here. */
+[data-team-member-identity],
+[data-client-identity] {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
 }
@@ -629,12 +668,14 @@
   margin-block: var(--afo-space-3);
 }
 
-[data-team-pagination] {
+[data-team-pagination],
+[data-client-pagination] {
   display: flex;
   justify-content: center;
 }
 
-[data-team-directory-note] {
+[data-team-directory-note],
+[data-client-directory-note] {
   max-width: var(--studio-measure);
 }
 
