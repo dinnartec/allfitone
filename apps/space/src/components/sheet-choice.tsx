@@ -18,6 +18,7 @@ export function SheetChoice({
   selected,
   disabled,
   edge,
+  destructive,
   onPress,
 }: {
   readonly name: string
@@ -30,6 +31,8 @@ export function SheetChoice({
   readonly disabled?: boolean
   /** A rule down the leading edge, for a choice that already belongs to something. */
   readonly edge?: string | undefined
+  /** Takes something away: the name is drawn in the danger colour, so it reads before it is pressed. */
+  readonly destructive?: boolean
   readonly onPress: () => void
 }) {
   const theme = useTheme()
@@ -54,7 +57,11 @@ export function SheetChoice({
     >
       <View style={styles.choiceText}>
         {tone === undefined ? (
-          <Text role="control" size="md">
+          <Text
+            role="control"
+            size="md"
+            {...(destructive ? { style: { color: theme.color.status.danger } } : {})}
+          >
             {name}
           </Text>
         ) : (

@@ -669,8 +669,6 @@ export default function Session() {
       >
         <View style={styles.decisions}>
           <Button label="Guardar entrenamiento" onPress={finish} disabled={!recorded} />
-          {/* Said plainly, because the word promises more than it does: the attempt
-              stays in the history with whatever it reached. */}
           <Text role="body" size="xs" color="muted">
             {recorded
               ? 'Se guarda como terminado y cuenta en tu semana.'
@@ -678,9 +676,6 @@ export default function Session() {
           </Text>
 
           <Button label="Descartar entrenamiento" variant="secondary" onPress={leave} />
-          <Text role="body" size="sm" color="muted">
-            No se borra. Queda en tu historial como una sesión sin terminar.
-          </Text>
 
           <Button label="Regresar" variant="ghost" onPress={() => setDeciding(false)} />
         </View>
@@ -781,6 +776,7 @@ export default function Session() {
             )}
             {/* No confirmation: it is one exercise, and the add button brings it back. */}
             <SheetChoice
+              destructive
               name="Eliminar ejercicio"
               detail="Se quita de esta sesión con sus series"
               onPress={() => {
