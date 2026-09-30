@@ -2676,7 +2676,7 @@ paths:
     post:
       tags: [Space Identity]
       operationId: resolveSpaceClientInvitation
-      x-allfit-operation: OP-REL-002
+      x-allfit-operation: OP-REL-015
       x-allfit-cache: no-store
       summary: Read what a client invitation is asking for
       description: >-

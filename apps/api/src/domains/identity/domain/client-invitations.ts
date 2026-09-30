@@ -1,6 +1,6 @@
 /**
  * Inviting somebody to become a client, and how they answer: OP-REL-001,
- * OP-REL-002 and OP-IDN-009 for service relationships (`HU-STUDIO-023`).
+ * OP-REL-015 and OP-IDN-009 for service relationships (`HU-STUDIO-023`).
  *
  * The shape that matters here is that a scope is asked for and answered one at
  * a time. An invitation carries a list of offers; a decision carries one answer

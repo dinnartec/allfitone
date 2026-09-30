@@ -401,7 +401,7 @@ export const allfitV1ContractManifest = {
       method: 'POST',
       path: '/space/v1/client-invitations/resolve',
       operationId: 'resolveSpaceClientInvitation',
-      allfitOperation: 'OP-REL-002',
+      allfitOperation: 'OP-REL-015',
       responses: ['200', '400', '401', '403', '404', '422', '503'],
     },
     {

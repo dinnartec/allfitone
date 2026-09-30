@@ -61,7 +61,7 @@ export function spaceClientInvitationRoutes(
   })
 
   /*
-   * OP-REL-002. Each scope comes back on its own, with the purpose it was asked
+   * OP-REL-015. Each scope comes back on its own, with the purpose it was asked
    * for and the contract as it was presented, because the person answers them
    * one at a time and cannot answer what they were not shown.
    */
