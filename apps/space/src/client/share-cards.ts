@@ -173,7 +173,7 @@ export function recordFigure(record: ShareRecord): RecordFigure {
   const big = kilos(record.value)
   switch (record.kind) {
     case 'heaviest':
-      return { big, unit: 'KG', tail: record.reps ? `× ${record.reps}` : '', label: 'MÁS PESO' }
+      return { big, unit: 'KG', tail: record.reps ? `× ${record.reps}` : '', label: 'PESO MÁXIMO' }
     case 'e1rm':
       return {
         big: kilos(Math.round(record.value)),
@@ -269,3 +269,39 @@ export function storyRoute(
 /** What undoing a picked background offers: the routine's photo back, or none. */
 export const restoreLabel = (cover: string | null) =>
   cover ? 'Volver a la foto de la rutina' : 'Quitar mi foto'
+
+/** The most steps the streak card draws; a longer streak shows its last ones. */
+const MOST_STEPS = 5
+
+/** Which weeks the steps show: the last `shown` of the streak, from week `first`. */
+export function streakSteps(weeks: number): { readonly first: number; readonly shown: number } {
+  const shown = Math.min(weeks, MOST_STEPS)
+  return { first: weeks - shown + 1, shown }
+}
+
+const LONG_MONTHS = [
+  'ENERO',
+  'FEBRERO',
+  'MARZO',
+  'ABRIL',
+  'MAYO',
+  'JUNIO',
+  'JULIO',
+  'AGOSTO',
+  'SEPTIEMBRE',
+  'OCTUBRE',
+  'NOVIEMBRE',
+  'DICIEMBRE',
+]
+
+/**
+ * «EL 28 DE SEPTIEMBRE»: the Monday of the week `weeksBack` before the session's, in
+ * the person's zone, which is where the streak counts its ISO weeks.
+ */
+export function weekStartLabel(summary: ShareSummary, timeZone: string, weeksBack: number): string {
+  const local = new Intl.DateTimeFormat('en-CA', { timeZone }).format(new Date(summary.started_at))
+  const day = new Date(`${local}T00:00:00Z`)
+  const isoWeekday = day.getUTCDay() === 0 ? 7 : day.getUTCDay()
+  day.setUTCDate(day.getUTCDate() - (isoWeekday - 1) - 7 * weeksBack)
+  return `EL ${String(day.getUTCDate())} DE ${LONG_MONTHS[day.getUTCMonth()] ?? ''}`
+}

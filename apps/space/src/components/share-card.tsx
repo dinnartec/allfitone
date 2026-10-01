@@ -19,8 +19,8 @@
  * phone «NUEVO RÉCORD» in brush read as informal, not as an achievement. Sizes are the
  * design's, set by eye, not the type scale.
  *
- * **The strokes are the design's geometry**, copied from its paths rather than drawn
- * again, and the logo is the Design System's — never redrawn.
+ * **The brush is generated, not drawn:** a seeded dry-brush swash, the same on every
+ * render. The logo is the Design System's — never redrawn.
  */
 
 import { BrandLogoCarrier, ProductLockup } from '@allfitone/react-native/brand'
@@ -28,9 +28,9 @@ import { nativeFontFamily } from '@allfitone/react-native/fonts'
 import { FoundationIcon, type IconName } from '@allfitone/react-native/icons'
 import { color } from '@allfitone/react-native/tokens'
 import { Image } from 'expo-image'
-import type { ReactNode } from 'react'
+import { useMemo, type ReactNode } from 'react'
 import { StyleSheet, Text, View, type TextStyle } from 'react-native'
-import Svg, { Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg'
+import Svg, { Defs, G, LinearGradient, Path, Rect, Stop, Text as SvgText } from 'react-native-svg'
 
 import type { Movement, MuscleTerm } from '../client/content'
 import { litSlugsFor } from '../client/exercise-catalogue'
@@ -47,6 +47,8 @@ import {
   recordJump,
   routineTitle,
   shortDay,
+  streakSteps,
+  weekStartLabel,
   whenLine,
   workedMuscles,
   type CardKind,
@@ -66,6 +68,8 @@ const INK = {
   glow: '#0D1D28',
   panel: color.ink.panel,
   rule: '#86BEC824',
+  ash: color.neutral.ash,
+  deep: color.brand.turquoiseDark,
   rim: '#86BEC840',
   divider: '#86BEC855',
 } as const
@@ -185,17 +189,6 @@ function Frame({
   )
 }
 
-const STROKES = {
-  short: {
-    viewBox: '0 -2 600 95',
-    d: 'M54 2l14-3 452-1 18 4-18 3-452 0z m10 8l14-4 403 0 18 4-18 4-403 0z m24 5l14-3 189 0 18 3-18 3-189 0z m214 0l14-4 255 0 18 4-18 3-255 0z m-285 4l14-3 456 0 18 3-18 3-456 0z m2 7l14-4 328 0 18 4-18 4-328 0z m402 2l14-4 83 0 18 4-18 5-83 0z m-400 5l14-4 138-1 18 5-18 5-138 0z m182-1l14-5 347 0 18 5-18 4-347 0z m-190 7l14-4 365 0 18 4-18 3-365 0z m429-3l14-4 57 0 18 4-18 4-57 0z m-397 9l14-5 512 0 18 5-18 4-512 0z m-12 3l14-3 514-1 18 4-18 3-514 0z m10 7l14-3 184-1 18 4-18 3-184 0z m260-1l14-5 192 0 18 5-18 4-192 0z m-290 4l14-3 502 0 18 3-18 3-502 0z m28 9l14-4 476-1 18 5-18 4-476 0z m-16 3l14-4 338 0 18 4-18 4-338 0z m414 1l14-3 59 0 18 3-18 3-59 0z m-394 8l14-4 436-1 18 5-18 4-436 0z m-11 8l14-4 495 0 18 4-18 3-495 0z',
-  },
-  band: {
-    viewBox: '0 0 1000 205',
-    d: 'M89 10l14-4 868 0 18 4-18 4-868 0z m21 4l14-4 287 0 18 4-18 4-287 0z m342 2l14-3 168-1 18 4-18 4-168 0z m241 0l14-4 215 0 18 4-18 4-215 0z m-622 4l14-3 833-1 18 4-18 3-833 0z m64 8l14-4 826-1 18 5-18 5-826 0z m-20 4l14-4 189 0 18 4-18 3-189 0z m258 3l14-4 267 0 18 4-18 5-267 0z m345 1l14-5 74 0 18 5-18 4-74 0z m-631 4l14-3 831 0 18 3-18 3-831 0z m-14 6l14-5 648 0 18 5-18 4-648 0z m581 2l14-5 168 0 18 5-18 4-168 0z m-533 2l14-3 231-1 18 4-18 3-231 0z m304 1l14-4 458-1 18 5-18 4-458 0z m-385 8l14-5 533 0 18 5-18 5-533 0z m369-2l14-5 496 0 18 5-18 4-496 0z m-318 4l14-3 346-1 18 4-18 3-346 0z m424 3l14-5 78 0 18 5-18 5-78 0z m154 0l14-4 222 0 18 4-18 3-222 0z m-563 3l14-4 791 0 18 4-18 3-791 0z m-7 9l14-4 826 0 18 4-18 3-826 0z m-74 5l14-5 425 0 18 5-18 5-425 0z m503-1l14-5 423 0 18 5-18 4-423 0z m-470 6l14-4 576 0 18 4-18 4-576 0z m635-1l14-4 236 0 18 4-18 4-236 0z m-620 8l14-4 836 0 18 4-18 3-836 0z m-46 5l14-4 880 0 18 4-18 3-880 0z m15 7l14-4 894-1 18 5-18 5-894 0z m-6 6l14-4 628-1 18 5-18 3-628 0z m540-1l14-3 351 0 18 3-18 3-351 0z m-557 4l14-4 854 0 18 4-18 4-854 0z m72 9l14-4 381-1 18 5-18 5-381 0z m440-3l14-3 322-1 18 4-18 4-322 0z m-465 7l14-5 430 0 18 5-18 4-430 0z m509 1l14-4 258 0 18 4-18 5-258 0z m-516 7l14-4 574-1 18 5-18 4-574 0z m573-2l14-3 266-1 18 4-18 3-266 0z m-540 6l14-3 552 0 18 3-18 4-552 0z m623 0l14-4 126 0 18 4-18 5-126 0z m-651 6l14-4 650-1 18 5-18 5-650 0z m591 1l14-5 258 0 18 5-18 4-258 0z m-567 7l14-5 203 0 18 5-18 5-203 0z m256-5l14-3 390 0 18 3-18 4-390 0z m458 1l14-4 12 0 18 4-18 4-12 0z m-722 6l14-3 777 0 18 3-18 4-777 0z m-57 9l14-4 907 0 18 4-18 4-907 0z m30 6l14-5 387 0 18 5-18 5-387 0z m439-2l14-3 285 0 18 3-18 3-285 0z m-396 5l14-4 280 0 18 4-18 4-280 0z m352 1l14-4 467 0 18 4-18 4-467 0z m-304 8l14-4 767-1 18 5-18 5-767 0z m-122 5l14-4 825 0 18 4-18 5-825 0z m26 6l14-4 804-1 18 5-18 4-804 0z m38 5l14-3 523-1 18 4-18 4-523 0z m567 1l14-5 120 0 18 5-18 4-120 0z',
-  },
-} as const
-
 interface Box {
   readonly x: number
   readonly y: number
@@ -232,22 +225,88 @@ function Turned({
   )
 }
 
-/** One of the design's strokes, in the accent. */
-function Stroke({
-  shape,
-  opacity = 1,
+/** Deterministic noise, so a card draws the same brush every time it renders. */
+function seeded(seed: number): () => number {
+  let state = seed >>> 0
+  return () => {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0
+    return state / 2 ** 32
+  }
+}
+
+interface Bristle {
+  readonly d: string
+  readonly width: number
+  readonly alpha: number
+}
+
+/**
+ * A dry-brush swash (prototype 54): a few hundred bristles, each a tapered stroke that
+ * starts late, ends early and skips where the paint ran out. Even rows of bars read as
+ * stripes; this reads as one stroke of a dry brush.
+ */
+function bristlesOf(width: number, height: number, seed: number): readonly Bristle[] {
+  const rnd = seeded(seed)
+  const rows = Math.round(height / 1.6)
+  const out: Bristle[] = []
+  for (let row = 0; row < rows; row += 1) {
+    const t = row / (rows - 1)
+    const edge = Math.min(t, 1 - t) * 2
+    const y = t * height + (rnd() - 0.5) * 1.2
+    const start = (1 - edge) * 0.12 * width + rnd() * 0.06 * width
+    const end = width - (1 - edge) * 0.1 * width - rnd() * 0.08 * width
+    let at = start
+    while (at < end) {
+      const stop = Math.min(end, at + (0.25 + rnd() * 0.75) * (end - start))
+      const bow = (rnd() - 0.5) * 2.4
+      out.push({
+        d: `M${at.toFixed(1)} ${y.toFixed(1)}Q${((at + stop) / 2).toFixed(1)} ${(y + bow).toFixed(1)} ${stop.toFixed(1)} ${(y + bow * 0.3).toFixed(1)}`,
+        width: 0.5 + rnd() * 1.6 * (0.4 + edge),
+        alpha: (0.35 + rnd() * 0.65) * (0.45 + 0.55 * edge),
+      })
+      at = stop + rnd() * 0.07 * width
+    }
+  }
+  return out
+}
+
+/** The swash at the design's coordinates, turned as pen.dev turns and faded at its ends. */
+function Swash({
+  seed,
+  opacity,
   ...box
 }: Box & {
-  readonly shape: keyof typeof STROKES
   readonly width: number
   readonly height: number
-  readonly opacity?: number
+  readonly seed: number
+  readonly opacity: number
 }) {
-  const { viewBox, d } = STROKES[shape]
+  const bristles = useMemo(
+    () => bristlesOf(box.width, box.height, seed),
+    [box.width, box.height, seed],
+  )
+  const id = `swash${String(seed)}`
   return (
     <Turned {...box}>
-      <Svg width={box.width} height={box.height} viewBox={viewBox} preserveAspectRatio="none">
-        <Path d={d} fill={INK.accent} opacity={opacity} />
+      <Svg width={box.width} height={box.height + 8}>
+        <Defs>
+          <LinearGradient id={id} x1="0" y1="0" x2="1" y2="0">
+            <Stop offset="0" stopColor={INK.accent} stopOpacity={0} />
+            <Stop offset="0.18" stopColor={INK.accent} />
+            <Stop offset="0.85" stopColor={INK.accent} />
+            <Stop offset="1" stopColor={INK.accent} stopOpacity={0.2} />
+          </LinearGradient>
+        </Defs>
+        <G fill="none" stroke={`url(#${id})`} strokeLinecap="round" opacity={opacity}>
+          {bristles.map((bristle, index) => (
+            <Path
+              key={index}
+              d={bristle.d}
+              strokeWidth={bristle.width}
+              strokeOpacity={bristle.alpha}
+            />
+          ))}
+        </G>
       </Svg>
     </Turned>
   )
@@ -348,8 +407,8 @@ const kilos = (value: number | null) =>
   (value ?? 0).toLocaleString('es-CO', { maximumFractionDigits: 0 })
 
 /** Where the plain card's title block sits, for a title of two lines and of one. */
-const TWO_LINE_BLOCK = { kicker: 84, title: 108, stroke: 124, strokeHeight: 92, detail: 206 }
-const SINGLE_LINE_BLOCK = { kicker: 108, title: 128, stroke: 116, strokeHeight: 62, detail: 186 }
+const TWO_LINE_BLOCK = { kicker: 94, title: 118, detail: 216 }
+const SINGLE_LINE_BLOCK = { kicker: 116, title: 136, detail: 194 }
 
 /** A title in one line when short, else two lines as even as its words allow. */
 function balancedLines(title: string): string {
@@ -370,26 +429,25 @@ const sentence = (title: string) => {
   return lower.charAt(0).toUpperCase() + lower.slice(1)
 }
 
-/** The band of four figures, level and in four centred columns of one size. */
-function FigureBand({ figures }: { readonly figures: readonly (readonly [string, string])[] }) {
-  const size = bandFigureSize(figures.map(([, value]) => value))
+/**
+ * The four figures as a row of fields (prototype 55): small label over a big figure,
+ * between two hairlines. It replaced a cyan band whose brush read as scratches.
+ */
+function FigureRow({ figures }: { readonly figures: readonly (readonly [string, string])[] }) {
+  const size = Math.min(24, bandFigureSize(figures.map(([, value]) => value)))
   return (
-    <>
-      {/* Solid under the figures: the brush's gaps ran through the labels. */}
-      <View style={[styles.at, styles.bandFill]} />
-      <View style={[styles.at, styles.bandFigures]}>
-        {figures.map(([label, value]) => (
-          <View key={label} style={styles.bandFigure}>
-            <Text numberOfLines={1} style={type(BODY_HEAVY, 7.5, INK.ink, { tracking: 0.6 })}>
-              {label}
-            </Text>
-            <Text numberOfLines={1} style={type(POSTER, size, INK.ink)}>
-              {value}
-            </Text>
-          </View>
-        ))}
-      </View>
-    </>
+    <View style={[styles.at, styles.fieldRow]}>
+      {figures.map(([label, value]) => (
+        <View key={label} style={styles.field}>
+          <Text numberOfLines={1} style={type(BODY_HEAVY, 7, INK.muted, { tracking: 1.2 })}>
+            {label}
+          </Text>
+          <Text numberOfLines={1} style={type(POSTER, size, INK.text, { leading: 1 })}>
+            {value}
+          </Text>
+        </View>
+      ))}
+    </View>
   )
 }
 
@@ -416,7 +474,7 @@ function MainCard({
     <Frame photo={withPhoto ? photo : null}>
       <Header title={groups} when={whenLine(summary, timeZone)} />
       {withPhoto ? (
-        <View style={[styles.at, styles.who, { left: 20, top: 190 }]}>
+        <View style={[styles.at, styles.who, { left: 20, top: 214 }]}>
           <Text style={type(BODY_HEAVY, 10, INK.accent, { tracking: 2.4 })}>
             ENTRENO COMPLETADO
           </Text>
@@ -433,15 +491,6 @@ function MainCard({
         </View>
       ) : (
         <>
-          <Stroke
-            shape="short"
-            x={4}
-            y={block.stroke}
-            width={290}
-            height={block.strokeHeight}
-            turn={-7}
-            opacity={0.14}
-          />
           <Kicker x={22} y={block.kicker}>
             ENTRENO COMPLETADO
           </Kicker>
@@ -466,8 +515,7 @@ function MainCard({
           </View>
         </>
       )}
-      <Stroke shape="band" x={-30} y={276} width={370} height={96} turn={-6} />
-      <FigureBand
+      <FigureRow
         figures={[
           ['DURACIÓN', durationLabel(summary.duration_seconds)],
           ['SERIES', String(summary.work_sets)],
@@ -475,7 +523,7 @@ function MainCard({
           ['KG TOTALES', kilos(summary.total_volume_kg)],
         ]}
       />
-      <View style={[styles.at, styles.list, { left: 20, top: 390 }]}>
+      <View style={[styles.at, styles.list, { left: 20, top: 378 }]}>
         <Text style={type(BODY_HEAVY, 8.5, INK.accent, { tracking: 1.6 })}>EJERCICIOS</Text>
         {summary.exercises.slice(0, 4).map((exercise) => (
           <View key={exercise.position} style={styles.listRow}>
@@ -535,7 +583,7 @@ function RecordCard({ summary, catalogue, timeZone }: ShareCardProps) {
       >
         {record.movement.toUpperCase()}
       </Text>
-      <Stroke shape="short" x={40} y={150} width={260} height={110} opacity={0.14} />
+      <Swash x={4} y={150} width={270} height={96} turn={-7} seed={11} opacity={0.32} />
       <View style={[styles.at, styles.hero]}>
         {/* Room on both sides: the italic leans past its box and iOS clipped the «1». */}
         <Text
@@ -606,71 +654,152 @@ function RecordCard({ summary, catalogue, timeZone }: ShareCardProps) {
 
 // ———————————————————————————————————————————— 2 · streak
 
-/** The strip shows the last eight weeks; a longer streak still says its number. */
-const WEEKS_SHOWN = 8
+/** The steps' geometry: one a week, each a rise higher, on a shared floor. */
+const STEP = { width: 36, gap: 4, left: 30, floor: 446, rise: 26 } as const
+const stepX = (index: number) => STEP.left + index * (STEP.width + STEP.gap) + STEP.width / 2
+const stepTop = (index: number) => STEP.floor - STEP.rise * (index + 1)
 
-/** «2 · Racha»: the weeks as a number and as a strip of the last eight, this one last. */
+/**
+ * «2 · Racha» as steps (prototype 54): a step a week, each higher than the last, and the
+ * next one drawn and waiting. Two callouts name where it started and where it stands.
+ */
 function StreakCard({ summary, catalogue, timeZone }: ShareCardProps) {
   const weeks = summary.streak_weeks
+  const { first, shown } = streakSteps(weeks)
+  const last = shown - 1
+  // Both callouts hang the same way: left-aligned, their line `CALL_INSET` in from the
+  // text's edge, so the two read as one system rather than two placements.
+  const nowCall = { left: stepX(last) - CALL_INSET, top: stepTop(last) - 82 }
   return (
     <Frame>
-      <Stroke shape="short" x={60} y={106} width={240} height={120} opacity={0.14} />
       <Header title={routineTitle(summary, catalogue)} when={whenLine(summary, timeZone)} />
       <Kicker x={22} y={70}>
         RACHA ACTIVA
       </Kicker>
-      <View style={[styles.at, styles.streakTitle]}>
-        <Text
-          numberOfLines={1}
-          adjustsFontSizeToFit
-          style={[type(POSTER, 176, INK.accent, { leading: 0.9 }), styles.streakNumber]}
-        >
-          {String(weeks)}
-        </Text>
-        <View style={styles.streakWords}>
-          <Text style={type(POSTER, 44, INK.text, { leading: 0.9 })}>SEMANAS</Text>
-          <Text style={type(POSTER, 44, INK.text, { leading: 0.9 })}>SEGUIDAS</Text>
-        </View>
-      </View>
-      <View style={[styles.at, styles.strip]}>
-        <Text style={type(BODY_HEAVY, 8, INK.muted, { tracking: 1.6 })}>
-          TUS ÚLTIMAS {WEEKS_SHOWN} SEMANAS
-        </Text>
-        <View style={styles.weeks}>
-          {Array.from({ length: WEEKS_SHOWN }, (_, index) => {
-            const trained = WEEKS_SHOWN - index <= weeks
-            return (
-              <View
-                key={index}
-                style={[
-                  styles.week,
-                  trained ? styles.weekOn : styles.weekOff,
-                  index === WEEKS_SHOWN - 1 ? styles.weekNow : null,
-                ]}
+      <Text
+        numberOfLines={1}
+        style={[
+          styles.at,
+          { left: 18, top: 100 },
+          type(POSTER, 56, INK.text, { tracking: -1, leading: 0.9 }),
+        ]}
+      >
+        {weeks} SEMANAS
+      </Text>
+      <Text style={[styles.at, { left: 22, top: 152 }, type(POSTER, 15, INK.muted)]}>
+        + SIN SALTARTE NINGUNA
+      </Text>
+      <Svg width={CARD_WIDTH} height={CARD_HEIGHT} style={StyleSheet.absoluteFill}>
+        <Defs>
+          <LinearGradient id="stepRest" x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0" stopColor={INK.ash} />
+            <Stop offset="1" stopColor={INK.ash} stopOpacity={0.5} />
+          </LinearGradient>
+          <LinearGradient id="stepLit" x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0" stopColor={INK.accent} />
+            <Stop offset="1" stopColor={INK.deep} />
+          </LinearGradient>
+        </Defs>
+        {Array.from({ length: shown + 1 }, (_, index) => {
+          const x = STEP.left + index * (STEP.width + STEP.gap)
+          const height = STEP.rise * (index + 1)
+          const next = index === shown
+          const now = index === last
+          return (
+            <G key={index}>
+              <Rect
+                x={x}
+                y={STEP.floor - height}
+                width={STEP.width}
+                height={height}
+                rx={3}
+                fill={next ? 'none' : now ? 'url(#stepLit)' : 'url(#stepRest)'}
+                stroke={next ? INK.accent : INK.ink}
+                strokeOpacity={next ? 0.55 : 1}
+                {...(next ? { strokeDasharray: '3 3' } : {})}
               />
-            )
-          })}
-        </View>
-        <View style={styles.weekEnds}>
-          <Text style={type(BODY_HEAVY, 7.5, INK.muted, { tracking: 1 })}>
-            HACE {WEEKS_SHOWN - 1} SEM.
-          </Text>
-          <Text style={type(BODY_HEAVY, 7.5, INK.accent, { tracking: 1 })}>ESTA SEMANA</Text>
-        </View>
-      </View>
-      <View style={[styles.at, styles.quote]}>
-        <View style={styles.quoteBar} />
-        <View style={styles.quoteText}>
-          <Text style={type(POSTER, 27, INK.text, { leading: 0.95 })}>
-            {`${String(weeks)} SEMANAS SIN PARAR.\nVAMOS POR LA ${String(weeks + 1)}.`}
-          </Text>
-          <Text style={type(BODY_BOLD, 10.5, INK.muted)}>
-            Un entreno por semana la mantiene viva.
-          </Text>
-        </View>
-      </View>
+              <SvgText
+                x={x + STEP.width / 2}
+                y={STEP.floor - height + 14}
+                textAnchor="middle"
+                fontFamily={POSTER}
+                fontSize={13}
+                fill={next ? INK.accent : INK.ink}
+                fillOpacity={next ? 0.7 : now ? 1 : 0.55}
+              >
+                {String(first + index)}
+              </SvgText>
+            </G>
+          )
+        })}
+        <Path
+          d={`M${String(stepX(0))} ${String(stepTop(0) - 4)}L${String(stepX(0))} 258`}
+          stroke={INK.accent}
+          strokeWidth={0.8}
+        />
+        <Path
+          d={`M${String(stepX(last))} ${String(stepTop(last) - 4)}L${String(stepX(last))} ${String(nowCall.top + CALLOUT_HEIGHT)}`}
+          stroke={INK.accent}
+          strokeWidth={0.8}
+        />
+        <Path
+          d={`M${String(stepX(shown))} ${String(stepTop(shown) - 4)}L${String(stepX(shown))} ${String(stepTop(shown) - 16)}`}
+          stroke={INK.accent}
+          strokeOpacity={0.55}
+          strokeWidth={0.8}
+        />
+      </Svg>
+      <Callout
+        number={first}
+        name={`SEMANA ${String(first)}`}
+        caption={weekStartLabel(summary, timeZone, weeks - first)}
+        style={{ left: stepX(0) - CALL_INSET, top: 214, width: 110 }}
+      />
+      <Callout
+        number={weeks}
+        name="ESTA SEMANA"
+        caption="CUMPLIDA"
+        style={{ ...nowCall, width: 90 }}
+      />
+      <Text
+        style={[
+          styles.at,
+          { left: 22, top: 456 },
+          type(BODY_HEAVY, 7, INK.accent, { tracking: 1 }),
+        ]}
+      >
+        VAMOS POR LA {weeks + 1}
+      </Text>
       <Foot symbolAt={490} />
     </Frame>
+  )
+}
+
+/** A callout's height, number to caption: a straight line stops just under it. */
+const CALLOUT_HEIGHT = 46
+/** How far in from a callout's left edge its line falls. */
+const CALL_INSET = 26
+
+/** A numbered callout, as the anatomical plate labels its muscles. */
+function Callout({
+  number,
+  name,
+  caption,
+  style,
+}: {
+  readonly number: number
+  readonly name: string
+  readonly caption: string
+  readonly style: { readonly left: number; readonly top: number; readonly width: number }
+}) {
+  return (
+    <View style={[styles.at, styles.callout, style]}>
+      <Text style={type(BODY_HEAVY, 7.5, INK.accent, { tracking: 1 })}>
+        {String(number).padStart(2, '0')}
+      </Text>
+      <Text style={type(POSTER, 15, INK.text, { leading: 1 })}>{name}</Text>
+      <Text style={type(BODY_HEAVY, 7, INK.muted, { tracking: 1 })}>{caption}</Text>
+    </View>
   )
 }
 
@@ -678,19 +807,35 @@ function StreakCard({ summary, catalogue, timeZone }: ShareCardProps) {
 
 const METRIC_ICONS: readonly IconName[] = ['time', 'frequency', 'training', 'target']
 
-/** «3 · La sesión»: four figures with their icons, and the list below. */
+/** Each face of the session's figure: 200 × 400 units at scale 1, so 74 × 148 here. */
+const SESSION_FIGURE = 0.37
+
+/**
+ * «3 · Entreno de hoy» (prototype 54, «punto medio»): the title on a dry-brush swash,
+ * the four figures in a grid, and the body lit where the session worked in place of a
+ * list of exercises.
+ */
 function SessionCard({ summary, catalogue, timeZone }: ShareCardProps) {
   const metrics: readonly (readonly [string, string])[] = [
-    ['DURACIÓN', durationLabel(summary.duration_seconds)],
-    ['SERIES', String(summary.work_sets)],
-    ['EJERCICIOS', String(summary.exercise_count)],
-    ['LEVANTADOS', `${kilos(summary.total_volume_kg)} kg`],
+    [durationLabel(summary.duration_seconds), 'DURACIÓN'],
+    [String(summary.work_sets), 'SERIES'],
+    [String(summary.exercise_count), 'EJERCICIOS'],
+    [`${kilos(summary.total_volume_kg)} kg`, 'LEVANTADOS'],
   ]
+  const worked = workedMuscles(summary, catalogue)
+  const main = worked.filter((muscle) => muscle.main)
+  const lit = litSlugsFor(
+    catalogue.muscles,
+    main.map((muscle) => muscle.code),
+  )
+  const helping = litSlugsFor(
+    catalogue.muscles,
+    worked.filter((muscle) => !muscle.main).map((muscle) => muscle.code),
+  )
   return (
     <Frame>
-      {/* Behind the two lines of the title, not above them. */}
-      <Stroke shape="short" x={40} y={94} width={260} height={84} opacity={0.14} />
       <Header title={routineTitle(summary, catalogue)} when={whenLine(summary, timeZone)} />
+      <Swash x={30} y={96} width={270} height={84} turn={-7} seed={23} opacity={0.3} />
       <Kicker x={22} y={62}>
         RESUMEN DE LA SESIÓN
       </Kicker>
@@ -704,35 +849,49 @@ function SessionCard({ summary, catalogue, timeZone }: ShareCardProps) {
       >
         DE HOY
       </Text>
-      <View style={[styles.at, styles.metrics, { left: 26, top: 194 }]}>
-        {metrics.map(([label, value], index) => (
-          <View key={label} style={styles.metric}>
+      <View style={[styles.at, styles.grid]}>
+        {metrics.map(([value, label], index) => (
+          <View key={label} style={styles.gridCell}>
             <FoundationIcon
               name={METRIC_ICONS[index] ?? 'target'}
-              customSize={24}
+              customSize={22}
               color={INK.accent}
               decorative
             />
             <View style={styles.metricText}>
-              <Text style={type(POSTER, 27, INK.text, { leading: 1 })}>{value}</Text>
-              <Text style={type(BODY_HEAVY, 7.5, INK.muted, { tracking: 1.2 })}>{label}</Text>
+              <Text numberOfLines={1} style={type(POSTER, 27, INK.text, { leading: 1 })}>
+                {value}
+              </Text>
+              <Text style={type(BODY_HEAVY, 7, INK.muted, { tracking: 1 })}>{label}</Text>
             </View>
           </View>
         ))}
       </View>
-      <View style={[styles.at, styles.box, { left: 20, top: 390 }]}>
-        <Text style={type(BODY_HEAVY, 8.5, INK.accent, { tracking: 1.6 })}>EJERCICIOS</Text>
-        {summary.exercises.slice(0, 4).map((exercise) => (
-          <View key={exercise.position} style={styles.boxRow}>
-            <Text numberOfLines={1} style={[type(BODY_BOLD, 10.5, INK.text), styles.grow]}>
-              {exercise.movement ?? 'Ejercicio'}
-            </Text>
-            <Text style={type(POSTER, 15, INK.text, { leading: 1 })}>
-              {exerciseShape(exercise)}
-            </Text>
-          </View>
+      <View style={[styles.at, styles.sessionBody]}>
+        {(['front', 'back'] as const).map((side) => (
+          <BodyFigure
+            key={side}
+            side={side}
+            gender="male"
+            scale={SESSION_FIGURE}
+            lit={lit}
+            secondary={helping}
+            inert={INERT_SLUGS}
+            onPressSlug={() => undefined}
+          />
         ))}
       </View>
+      <View style={[styles.at, styles.sessionMuscles]}>
+        {main.slice(0, 3).map((muscle) => (
+          <Text
+            key={muscle.code}
+            style={type(BODY_HEAVY, 7, INK.text, { tracking: 1, leading: 1.7 })}
+          >
+            {muscle.name.toUpperCase()}
+          </Text>
+        ))}
+      </View>
+      <Foot />
     </Frame>
   )
 }
@@ -888,69 +1047,74 @@ function MusclesCard({ summary, catalogue, timeZone }: ShareCardProps) {
 
 // ———————————————————————————————————————————— 5 · number
 
-/** «5 · Entreno número»: the count as a race bib, what was trained on the band. */
+/** The numeral's box: the design sets it at 230 on a 300-wide card. */
+const NUMERAL = { top: 100, height: 210, size: 230 } as const
+
+/**
+ * «5 · Entreno número» (prototype 52, option C): the count as an outlined numeral, the
+ * routine under it, and the figures as numbered callouts in the anatomical plate's way.
+ * The outline is SVG text: React Native's text has no stroke.
+ */
 function NumberCard({ summary, catalogue, timeZone }: ShareCardProps) {
-  const title = groupsTitle(summary, catalogue)
   const figures: readonly (readonly [string, string])[] = [
-    ['SERIES', String(summary.work_sets)],
-    ['EJERCICIOS', String(summary.exercise_count)],
-    ['LEVANTADOS', `${kilos(summary.total_volume_kg)} kg`],
+    [String(summary.work_sets), 'SERIES'],
+    [String(summary.exercise_count), 'EJERCICIOS'],
+    [`${kilos(summary.total_volume_kg)} KG`, 'LEVANTADOS'],
   ]
-  const size = bandFigureSize(figures.map(([, value]) => value))
   return (
     <Frame>
-      <Header title={title} when={whenLine(summary, timeZone)} />
+      <Header title={groupsTitle(summary, catalogue)} when={whenLine(summary, timeZone)} />
       <Text
         style={[
           styles.at,
           styles.wide,
           { top: 84 },
-          type(BODY_HEAVY, 10.5, INK.accent, { tracking: 3, leading: 1.2 }),
+          type(BODY_HEAVY, 10, INK.accent, { tracking: 2.4, leading: 1.2 }),
         ]}
       >
         ESTE FUE TU ENTRENO NÚMERO
       </Text>
+      <Svg width={CARD_WIDTH} height={NUMERAL.height} style={[styles.at, { top: NUMERAL.top }]}>
+        <SvgText
+          x={CARD_WIDTH / 2}
+          y={NUMERAL.height * 0.86}
+          textAnchor="middle"
+          fontFamily={POSTER}
+          fontSize={NUMERAL.size}
+          fill="none"
+          stroke={INK.accent}
+          strokeOpacity={0.85}
+          strokeWidth={1.2}
+        >
+          {String(summary.session_number)}
+        </SvgText>
+      </Svg>
       <Text
         numberOfLines={1}
         adjustsFontSizeToFit
-        style={[
-          styles.at,
-          styles.wide,
-          { top: 112 },
-          type(POSTER, 230, INK.text, { tracking: -6, leading: 0.9 }),
-        ]}
+        style={[styles.at, styles.routine, type(POSTER, 30, INK.text, { leading: 1 })]}
       >
-        {String(summary.session_number)}
+        {routineTitle(summary, catalogue)}
       </Text>
-      <Stroke shape="band" x={-40} y={262} width={390} height={92} turn={-8} />
-      {/* Solid under the words: the brush's dark gaps swallowed the letters. */}
-      <Turned x={-20} y={300} width={340} height={40} turn={-8}>
-        <View style={styles.wordFill} />
-      </Turned>
-      {/* The routine, centred on the band and shrunk to fit so a long name stays on it. */}
-      <Turned x={40} y={313} width={220} turn={-8}>
-        <Text
-          numberOfLines={1}
-          adjustsFontSizeToFit
-          style={[type(POSTER, 22, INK.ink, { tracking: 2, leading: 0.9 }), styles.centre]}
-        >
-          {routineTitle(summary, catalogue)}
-        </Text>
-      </Turned>
-      <View style={[styles.at, styles.numberFigures]}>
-        {figures.map(([label, value], index) => (
-          <View key={label} style={[styles.numberFigure, index > 0 ? styles.numberDivider : null]}>
-            <Text numberOfLines={1} style={type(POSTER, size - 4, INK.text, { leading: 1 })}>
-              {value}
-            </Text>
-            <Text style={type(BODY_HEAVY, 7.5, INK.muted, { tracking: 1.2 })}>{label}</Text>
-          </View>
-        ))}
-      </View>
+      <View style={[styles.at, styles.hairline]} />
+      {figures.map(([value, label], index) => (
+        <View key={label} style={[styles.at, styles.numberCall, { left: CALL_LEFTS[index] }]}>
+          <Text style={type(BODY_HEAVY, 7.5, INK.accent, { tracking: 1 })}>
+            {String(index + 1).padStart(2, '0')}
+          </Text>
+          <Text numberOfLines={1} style={type(POSTER, 24, INK.text, { leading: 1 })}>
+            {value}
+          </Text>
+          <Text style={type(BODY_HEAVY, 7.5, INK.muted, { tracking: 1 })}>{label}</Text>
+        </View>
+      ))}
       <Foot motto="mismo yo, mejor versión" />
     </Frame>
   )
 }
+
+/** The three callouts' columns, as the prototype spaces them. */
+const CALL_LEFTS = [20, 112, 196] as const
 
 const styles = StyleSheet.create({
   card: { width: CARD_WIDTH, height: CARD_HEIGHT, borderRadius: 24, overflow: 'hidden' },
@@ -970,9 +1134,18 @@ const styles = StyleSheet.create({
   symbol: { position: 'absolute', left: 16 },
   motto: { position: 'absolute', left: 120, width: 164, textAlign: 'right' },
   who: { gap: 4, width: 260 },
-  bandFill: { left: 0, top: 313, width: CARD_WIDTH, height: 46, backgroundColor: INK.accent },
-  bandFigures: { left: 16, top: 316, width: 268, flexDirection: 'row' },
-  bandFigure: { flex: 1, alignItems: 'center', gap: 2 },
+  fieldRow: {
+    left: 20,
+    top: 300,
+    width: 260,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: INK.rim,
+  },
+  field: { gap: 4 },
   list: { width: 260, gap: 6 },
   listRow: {
     flexDirection: 'row',
@@ -983,7 +1156,7 @@ const styles = StyleSheet.create({
     borderBottomColor: INK.rule,
   },
   hero: { left: 18, top: 150, flexDirection: 'row', alignItems: 'flex-end', gap: 10 },
-  heroSide: { paddingBottom: 18, gap: 4 },
+  heroSide: { paddingBottom: 34, gap: 4 },
   bars: { left: 22, top: 318, width: 256, gap: 10 },
   barRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   barWhen: { width: 44 },
@@ -1004,33 +1177,11 @@ const styles = StyleSheet.create({
   },
   stats: { left: 22, top: 452, width: 256, flexDirection: 'row', gap: 16 },
   stat: { gap: 2 },
-  streakTitle: { left: 18, top: 100, width: 270, flexDirection: 'row' },
-  streakNumber: { maxWidth: 170 },
-  streakWords: { marginLeft: 14, marginTop: 32, gap: 6 },
-  strip: { left: 26, top: 286, width: 248, gap: 8 },
-  weeks: { flexDirection: 'row', justifyContent: 'space-between' },
-  week: { width: 25, height: 36, borderRadius: 6 },
-  weekOn: { backgroundColor: INK.accent },
-  weekOff: { borderWidth: 1, borderColor: INK.rim },
-  weekNow: { borderWidth: 2, borderColor: INK.text },
-  weekEnds: { flexDirection: 'row', justifyContent: 'space-between' },
-  quote: { left: 28, top: 392, width: 250, flexDirection: 'row', gap: 12 },
-  quoteBar: { width: 3, height: 66, backgroundColor: INK.accent },
-  quoteText: { flex: 1, gap: 8 },
-  metrics: { gap: 6 },
-  metric: { flexDirection: 'row', alignItems: 'center', gap: 12, height: 38 },
   metricText: { gap: 1 },
-  box: {
-    width: 260,
-    height: 124,
-    borderWidth: 1,
-    borderRadius: 8,
-    borderColor: '#55EFFB59',
-    backgroundColor: '#0B141DB3',
-    padding: 12,
-    gap: 7,
-  },
-  boxRow: { flexDirection: 'row', alignItems: 'center', gap: 8, height: 15 },
+  grid: { left: 22, top: 204, width: 256, flexDirection: 'row', flexWrap: 'wrap', rowGap: 14 },
+  gridCell: { width: '50%', flexDirection: 'row', alignItems: 'center', gap: 10 },
+  sessionBody: { left: 52, top: 322, flexDirection: 'row' },
+  sessionMuscles: { left: 206, top: 368 },
   plate: { left: PLATE.x, top: PLATE.y, width: PLATE.width, height: PLATE.height },
   callout: { width: 66, gap: 2 },
   calloutLeft: { left: 16 },
@@ -1045,8 +1196,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: INK.rim,
   },
-  wordFill: { flex: 1, backgroundColor: INK.accent },
-  numberFigures: { left: 20, top: 404, flexDirection: 'row', width: 260, height: 39 },
-  numberFigure: { flex: 1, alignItems: 'center', gap: 3 },
-  numberDivider: { borderLeftWidth: 1, borderLeftColor: INK.divider },
+  routine: { left: 20, top: 318, width: 260, textAlign: 'center' },
+  hairline: { left: 20, top: 372, width: 260, height: 1, backgroundColor: INK.rim },
+  numberCall: { top: 388, gap: 3 },
 })

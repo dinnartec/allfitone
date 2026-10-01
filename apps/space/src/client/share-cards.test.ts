@@ -17,6 +17,8 @@ import {
   routineTitle,
   shortDay,
   storyRoute,
+  streakSteps,
+  weekStartLabel,
   shareSubtitle,
   workedMuscles,
   whenLine,
@@ -180,7 +182,7 @@ describe('the record card', () => {
       big: '10',
       unit: 'KG',
       tail: '× 6',
-      label: 'MÁS PESO',
+      label: 'PESO MÁXIMO',
     })
     expect(e1rm && recordFigure(e1rm)).toEqual({
       big: '84',
@@ -281,4 +283,18 @@ test('T-SPC-UNIT-172 Historias goes straight to Instagram only with an app id an
 test('T-SPC-UNIT-173 undoing a picked background says what comes back', () => {
   expect(restoreLabel('https://media.example/back.webp')).toBe('Volver a la foto de la rutina')
   expect(restoreLabel(null)).toBe('Quitar mi foto')
+})
+
+describe('the streak as steps', () => {
+  test('T-SPC-UNIT-174 at most five weeks are drawn, the last ones, numbered as they were', () => {
+    expect(streakSteps(2)).toEqual({ first: 1, shown: 2 })
+    expect(streakSteps(5)).toEqual({ first: 1, shown: 5 })
+    expect(streakSteps(8)).toEqual({ first: 4, shown: 5 })
+  })
+
+  test("T-SPC-UNIT-175 a week is named by its Monday, in the person's zone", () => {
+    // 17:00 UTC on Tuesday the 29th is noon in Bogotá: that week began Monday the 28th.
+    expect(weekStartLabel(summary, 'America/Bogota', 0)).toBe('EL 28 DE SEPTIEMBRE')
+    expect(weekStartLabel(summary, 'America/Bogota', 7)).toBe('EL 10 DE AGOSTO')
+  })
 })
