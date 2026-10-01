@@ -19,6 +19,8 @@
 import type { AllfitV1Schemas } from '@allfitone/contracts'
 import type { CommandHeaders } from '@allfitone/contracts/commands'
 
+import type { HistoryFilters, HistoryMonth, HistoryPage } from './history'
+
 export type Today = AllfitV1Schemas['SpaceToday']
 export type TodaySession = AllfitV1Schemas['SpaceTodaySession']
 export type WeekSummary = AllfitV1Schemas['SpaceWeekSummary']
@@ -34,6 +36,8 @@ export interface ExecutionTransport {
   readToday(timezone: string): Promise<Today>
   readExecution(executedSessionId: string): Promise<Execution>
   readSummary(executedSessionId: string, timezone: string): Promise<ExecutionSummary>
+  listHistory(filters: HistoryFilters): Promise<HistoryPage>
+  readHistoryMonth(month: string, timezone: string): Promise<HistoryMonth>
   startAttempt(
     command: CommandHeaders,
     plannedSessionId: string,
@@ -64,6 +68,10 @@ export interface ExecutionFlow {
   readExecution(executedSessionId: string): Promise<Execution>
   /** What «Compártelo» says about a finished session, its weeks in the device's zone. */
   readSummary(executedSessionId: string, timezone: string): Promise<ExecutionSummary>
+  /** One page of the finished sessions, newest first (`OP-EXE-014`). */
+  listHistory(filters: HistoryFilters): Promise<HistoryPage>
+  /** One month's totals and weeks (`OP-EXE-022`), its dates in the device's zone. */
+  readHistoryMonth(month: string, timezone: string): Promise<HistoryMonth>
   start(plannedSessionId: string, timezone: string): Promise<string>
   save(
     executedSessionId: string,
@@ -84,6 +92,8 @@ export function createExecutionFlow(dependencies: ExecutionFlowDependencies): Ex
     readToday: (timezone) => dependencies.transport.readToday(timezone),
     readExecution: (id) => dependencies.transport.readExecution(id),
     readSummary: (id, timezone) => dependencies.transport.readSummary(id, timezone),
+    listHistory: (filters) => dependencies.transport.listHistory(filters),
+    readHistoryMonth: (month, timezone) => dependencies.transport.readHistoryMonth(month, timezone),
 
     async start(plannedSessionId, timezone) {
       let command = starting.get(plannedSessionId)

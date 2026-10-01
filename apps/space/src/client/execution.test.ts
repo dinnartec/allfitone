@@ -19,6 +19,12 @@ function harness(overrides: Partial<ExecutionTransport> = {}) {
     readSummary: async () => {
       throw new Error('not used')
     },
+    listHistory: async () => {
+      throw new Error('not used')
+    },
+    readHistoryMonth: async () => {
+      throw new Error('not used')
+    },
     startAttempt: async (command) => {
       sent.keys.push(command.idempotencyKey)
       return {

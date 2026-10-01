@@ -58,7 +58,8 @@ import {
   type ProgramSummary,
   type TrainingProfile,
 } from '../../src/client/program-catalogue'
-import { longDateLabel, shortDayLabel, trainedLabel } from '../../src/client/week'
+import { longDateLabel, trainedLabel } from '../../src/client/week'
+import { weekGroups, type HistoryItem } from '../../src/client/history'
 import { deviceTimezone } from '../../src/client/timezone'
 import { createSpaceContentFlow } from '../../src/client/content-transport'
 import { readExerciseLibrary, type ExerciseLibrary } from '../../src/client/exercise-library'
@@ -78,6 +79,7 @@ import {
   type WeekDay,
 } from '../../src/client/week-plan'
 import { elapsedLabel } from '../../src/client/session-form'
+import { HistoryGroupHeader, HistoryPanel, HistoryRow } from '../../src/components/history-row'
 import { HomeCard } from '../../src/components/home-card'
 import { OfferRow } from '../../src/components/offer-row'
 import { PHOTO_COVER } from '../../src/client/routine-cover'
@@ -86,6 +88,12 @@ import { ProgramPoster } from '../../src/components/program-poster'
 import { DOCK_HEIGHT } from '../../src/components/tab-bar'
 
 const EXPIRED = 'Tu sesión venció. Vuelve a entrar para continuar.'
+/** How many of the latest sessions Hoy shows before «Ver todo». */
+const HOME_HISTORY = 4
+
+/** Today's calendar date in the person's zone, which is how history rows are dated. */
+const localToday = (timezone: string) =>
+  new Intl.DateTimeFormat('en-CA', { timeZone: timezone }).format(new Date())
 const READ_FAILED = 'No pudimos cargar tu día. Inténtalo otra vez.'
 const START_FAILED = 'No pudimos empezar la sesión. Inténtalo otra vez.'
 const DISCARD_FAILED = 'No pudimos descartar el entrenamiento. Inténtalo otra vez.'
@@ -97,7 +105,6 @@ const PENDING: Record<string, string> = {
   food: 'Comida llega con el registro de nutrición.',
   progress: 'Tu progreso llega con el historial.',
   notices: 'Tus avisos llegan con las notificaciones.',
-  history: 'El historial completo llega con su propia pantalla.',
 }
 
 /** El margen de la pantalla cuando hay programa. El carrusel lo sangra para asomar. */
@@ -128,6 +135,8 @@ export default function Today() {
   const timezone = useMemo(() => deviceTimezone(), [])
 
   const [today, setToday] = useState<TodayPayload | undefined>(undefined)
+  /** The latest finished sessions for the history section; undefined until read. */
+  const [recent, setRecent] = useState<readonly HistoryItem[] | undefined>(undefined)
   const [catalogue, setCatalogue] = useState<ProgramCatalogue | undefined>(undefined)
   // La semana y la biblioteca, que es de donde sale el carrusel: la agenda dice qué
   // sesiones hay y la biblioteca con qué portada se dibuja cada una.
@@ -183,6 +192,11 @@ export default function Today() {
               setLibrary(read)
             })
             .catch(() => undefined)
+          // Apart from the rest: a history that fails to load must not take the week with it.
+          void training
+            .listHistory({ timezone, limit: HOME_HISTORY })
+            .then((page) => active && setRecent(page.data))
+            .catch(() => active && setRecent([]))
           return undefined
         })
         .then((available) => {
@@ -433,17 +447,17 @@ export default function Today() {
           />
         ) : null}
 
-        {assigned && today ? (
+        {assigned && today && recent ? (
           <View style={styles.section}>
             <View style={styles.sectionHead}>
               <Text role="control" size="md">
                 Historial
               </Text>
-              {today.week.history.length > 0 ? (
+              {recent.length > 0 ? (
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel="Ver todo el historial"
-                  onPress={() => setPending(PENDING.history)}
+                  onPress={() => router.push('/history')}
                 >
                   <Text role="control" size="xs" color="accent">
                     Ver todo
@@ -451,20 +465,24 @@ export default function Today() {
                 </Pressable>
               ) : null}
             </View>
-            {today.week.history.length > 0 ? (
-              // Un panel y no filas sueltas: lo que hay debajo del rótulo es una cosa
-              // —lo entrenado— y el filete entre sesiones es lo que las separa.
-              <Panel>
-                {today.week.history.map((trained, index) => (
-                  <TrainedRow
-                    key={trained.executed_session_id}
-                    first={index === 0}
-                    day={shortDayLabel(trained.trained_on)}
-                    title={trained.title ?? 'Sesión'}
-                    detail={`${trained.sets_recorded} ${trained.sets_recorded === 1 ? 'serie' : 'series'}`}
-                  />
-                ))}
-              </Panel>
+            {recent.length > 0 ? (
+              // Grouped by week, each week its own panel: H-2 draws the break between
+              // them, so «semana pasada» reads as a heading and not as another row.
+              weekGroups(recent, localToday(timezone)).map((group) => (
+                <View key={group.weekStartsOn} style={styles.historyGroup}>
+                  <HistoryGroupHeader label={group.label} />
+                  <HistoryPanel>
+                    {group.items.map((item, index) => (
+                      <HistoryRow
+                        key={item.executed_session_id}
+                        item={item}
+                        first={index === 0}
+                        size="home"
+                      />
+                    ))}
+                  </HistoryPanel>
+                </View>
+              ))
             ) : (
               // The section stays rather than disappearing: an absent section reads as
               // a screen that is still loading, and "nothing yet" is an answer.
@@ -759,9 +777,9 @@ function Week({
   const theme = useTheme()
   const planned = Math.max(week.sessions_planned, 1)
   const done = Math.min(week.sessions_completed, planned)
-  // Las series de la semana salen del propio historial: es lo que se registró, no una
-  // estimación de nada.
-  const sets = week.history.reduce((total, trained) => total + trained.sets_recorded, 0)
+  // The week's own work sets. Adding up `history` counted the latest sessions of any
+  // week, so a quiet week could show last month's sets.
+  const sets = week.work_sets
 
   return (
     <View style={styles.section}>
@@ -861,62 +879,6 @@ function Figure({
   )
 }
 
-/** La caja donde van las sesiones entrenadas, con su filo y su fondo. */
-function Panel({ children }: { readonly children: React.ReactNode }) {
-  const theme = useTheme()
-
-  return (
-    <View
-      style={[
-        styles.panel,
-        {
-          backgroundColor: theme.color.background.surface,
-          borderColor: theme.color.border.subtle,
-        },
-      ]}
-    >
-      {children}
-    </View>
-  )
-}
-
-function TrainedRow({
-  first,
-  day,
-  title,
-  detail,
-}: {
-  /** La primera no lleva filete: un filete arriba del todo es el borde del panel. */
-  readonly first: boolean
-  readonly day: string
-  readonly title: string
-  readonly detail: string
-}) {
-  const theme = useTheme()
-
-  return (
-    <View
-      style={[
-        styles.trained,
-        { borderColor: theme.color.border.subtle, borderTopWidth: first ? 0 : 1 },
-      ]}
-    >
-      <Text role="control" size="xs" color="muted" style={styles.trainedDay}>
-        {day}
-      </Text>
-      <View style={styles.trainedBody}>
-        <Text role="control" size="sm">
-          {title}
-        </Text>
-        <Text role="body" size="xs" color="muted">
-          {detail}
-        </Text>
-      </View>
-      <FoundationIcon name="success" size="xs" color={theme.color.status.success} decorative />
-    </View>
-  )
-}
-
 /** Glass, not a solid chip: it sits on a photograph, where a solid one reads as a sticker. */
 function Bell({ onPress }: { readonly onPress: () => void }) {
   const theme = useTheme()
@@ -977,8 +939,5 @@ const styles = StyleSheet.create({
   bar: { flex: 1, height: 7, borderRadius: 3.5 },
   figures: { flexDirection: 'row', gap: 10 },
   figure: { flex: 1, gap: 6, borderWidth: 1, borderRadius: 20, padding: 12 },
-  panel: { borderWidth: 1, borderRadius: 22, paddingHorizontal: 14 },
-  trained: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 9 },
-  trainedDay: { width: 52 },
-  trainedBody: { flex: 1, gap: 1 },
+  historyGroup: { gap: 10 },
 })

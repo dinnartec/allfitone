@@ -21,6 +21,7 @@ import {
   type ResultsState,
   type Today,
 } from './execution'
+import { historyPath, type HistoryMonth, type HistoryPage } from './history'
 import { readSession, storeSession } from './session'
 import { withRefresh } from './with-refresh'
 
@@ -42,6 +43,15 @@ export function createSpaceExecutionFlow(): ExecutionFlow {
         authenticated((token) =>
           authorizedGet<ExecutionSummary>(
             `/space/v1/executions/${id}/summary?timezone=${encodeURIComponent(timezone)}`,
+            token,
+          ),
+        ),
+      listHistory: (filters) =>
+        authenticated((token) => authorizedGet<HistoryPage>(historyPath(filters), token)),
+      readHistoryMonth: (month, timezone) =>
+        authenticated((token) =>
+          authorizedGet<HistoryMonth>(
+            `/space/v1/history/months/${month}?timezone=${encodeURIComponent(timezone)}`,
             token,
           ),
         ),
