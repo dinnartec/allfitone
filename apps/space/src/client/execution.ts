@@ -31,6 +31,14 @@ export type ResultsState = AllfitV1Schemas['ExecutionResultsState']
 export type Finalized = AllfitV1Schemas['ExecutionFinalized']
 export type Abandoned = AllfitV1Schemas['ExecutionAbandoned']
 export type ExecutionSummary = AllfitV1Schemas['SpaceExecutionSummary']
+export type FinishedExecution = AllfitV1Schemas['SpaceFinishedExecution']
+export type FinishedExercise = AllfitV1Schemas['SpaceFinishedExercise']
+export type FinishedSet = AllfitV1Schemas['SpaceFinishedSet']
+export type ExecutionRevision = AllfitV1Schemas['ExecutionRevision']
+export type Revised = AllfitV1Schemas['ExecutionRevised']
+export type Invalidated = AllfitV1Schemas['ExecutionInvalidated']
+export type InvalidationPreview = AllfitV1Schemas['SpaceInvalidationPreview']
+export type Repeated = AllfitV1Schemas['ExecutionRepeated']
 
 export interface ExecutionTransport {
   readToday(timezone: string): Promise<Today>
@@ -56,6 +64,20 @@ export interface ExecutionTransport {
   ): Promise<ResultsState>
   finish(command: CommandHeaders, executedSessionId: string, endedAt: string): Promise<Finalized>
   abandon(command: CommandHeaders, executedSessionId: string, endedAt: string): Promise<Abandoned>
+  readFinished(executedSessionId: string, timezone: string): Promise<FinishedExecution>
+  readAnnulmentPreview(executedSessionId: string, timezone: string): Promise<InvalidationPreview>
+  revise(
+    command: CommandHeaders,
+    executedSessionId: string,
+    revisionNumber: number,
+    revision: ExecutionRevision,
+  ): Promise<Revised>
+  annul(command: CommandHeaders, executedSessionId: string): Promise<Invalidated>
+  repeat(
+    command: CommandHeaders,
+    executedSessionId: string,
+    start: { started_at: string; timezone: string },
+  ): Promise<Repeated>
 }
 
 export interface ExecutionFlowDependencies {
@@ -81,12 +103,34 @@ export interface ExecutionFlow {
   finish(executedSessionId: string): Promise<void>
   /** Leaves the session without finishing it. What was recorded stays. */
   abandon(executedSessionId: string): Promise<void>
+  /** A finished session set by set (`OP-EXE-023`). */
+  readFinished(executedSessionId: string, timezone: string): Promise<FinishedExecution>
+  /** What annulling it would change, said before confirming (`OP-EXE-024`). */
+  readAnnulmentPreview(executedSessionId: string, timezone: string): Promise<InvalidationPreview>
+  /** Corrects a finished session; answers the new revision (`OP-EXE-007`). */
+  revise(
+    executedSessionId: string,
+    revisionNumber: number,
+    revision: ExecutionRevision,
+  ): Promise<number>
+  /** What Space calls deleting: it stops counting and nothing is erased (`OP-EXE-009`). */
+  annul(executedSessionId: string): Promise<void>
+  /** Opens another attempt with the session's exercises; answers its id (`OP-EXE-025`). */
+  repeat(executedSessionId: string, timezone: string): Promise<string>
 }
 
 export function createExecutionFlow(dependencies: ExecutionFlowDependencies): ExecutionFlow {
   // Per planned session, and never renewed: a retry must answer the session already
   // started rather than open a second one against the same day.
   const starting = new Map<string, CommandHeaders>()
+  // Same reason: annulling twice is harmless, opening two repeats is not.
+  const annulling = new Map<string, CommandHeaders>()
+  const repeating = new Map<string, CommandHeaders>()
+  const held = (keys: Map<string, CommandHeaders>, id: string) => {
+    const found = keys.get(id) ?? dependencies.newCommand()
+    keys.set(id, found)
+    return found
+  }
 
   return {
     readToday: (timezone) => dependencies.transport.readToday(timezone),
@@ -131,6 +175,35 @@ export function createExecutionFlow(dependencies: ExecutionFlowDependencies): Ex
         executedSessionId,
         new Date().toISOString(),
       )
+    },
+
+    readFinished: (id, timezone) => dependencies.transport.readFinished(id, timezone),
+    readAnnulmentPreview: (id, timezone) =>
+      dependencies.transport.readAnnulmentPreview(id, timezone),
+
+    async revise(executedSessionId, revisionNumber, revision) {
+      const revised = await dependencies.transport.revise(
+        dependencies.newCommand(),
+        executedSessionId,
+        revisionNumber,
+        revision,
+      )
+      return revised.revision_number
+    },
+
+    async annul(executedSessionId) {
+      await dependencies.transport.annul(held(annulling, executedSessionId), executedSessionId)
+      annulling.delete(executedSessionId)
+    },
+
+    async repeat(executedSessionId, timezone) {
+      const repeated = await dependencies.transport.repeat(
+        held(repeating, executedSessionId),
+        executedSessionId,
+        { started_at: new Date().toISOString(), timezone },
+      )
+      repeating.delete(executedSessionId)
+      return repeated.id
     },
 
     async abandon(executedSessionId) {

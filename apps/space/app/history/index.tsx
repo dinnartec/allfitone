@@ -27,8 +27,8 @@ import { Sheet } from '@allfitone/react-native/sheet'
 import { Text } from '@allfitone/react-native/text'
 import { TextField } from '@allfitone/react-native/text-field'
 import { useTheme } from '@allfitone/react-native/theme'
-import { useRouter } from 'expo-router'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useFocusEffect, useRouter } from 'expo-router'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, View } from 'react-native'
 
 import { createSpaceExecutionFlow } from '../../src/client/execution-transport'
@@ -92,6 +92,16 @@ export default function HistoryScreen() {
   /** Set once the person picks a month; until then an empty month gives way to the latest. */
   const picked = useRef(false)
 
+  // Coming back from a session that was edited or deleted, the month and list read again.
+  const [seen, setSeen] = useState(0)
+  const shown = useRef(false)
+  useFocusEffect(
+    useCallback(() => {
+      if (shown.current) setSeen((count) => count + 1)
+      shown.current = true
+    }, []),
+  )
+
   useEffect(() => {
     const pause = setTimeout(() => setQuery(typed), SEARCH_PAUSE_MS)
     return () => clearTimeout(pause)
@@ -117,7 +127,7 @@ export default function HistoryScreen() {
     return () => {
       active = false
     }
-  }, [flow, month, timezone])
+  }, [flow, month, timezone, seen])
 
   const request = (after: string | null): HistoryFilters => ({
     timezone,
@@ -142,7 +152,7 @@ export default function HistoryScreen() {
       })
       .catch(() => asked.current === id && setFailure(READ_FAILED))
     // `request` reads exactly these, so the list is asked again when any of them changes.
-  }, [flow, month, day, filters, query, timezone])
+  }, [flow, month, day, filters, query, timezone, seen])
 
   const loadMore = () => {
     if (!cursor || loadingMore || !items) return
@@ -260,6 +270,12 @@ export default function HistoryScreen() {
                     item={item}
                     first={index === 0}
                     size="list"
+                    onPress={() =>
+                      router.push({
+                        pathname: '/history/[executionId]',
+                        params: { executionId: item.executed_session_id },
+                      })
+                    }
                   />
                 ))}
               </HistoryPanel>

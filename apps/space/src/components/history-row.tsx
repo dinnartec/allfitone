@@ -24,7 +24,7 @@ import { Text } from '@allfitone/react-native/text'
 import { useTheme } from '@allfitone/react-native/theme'
 import { Image } from 'expo-image'
 import type { ReactNode } from 'react'
-import { StyleSheet, View } from 'react-native'
+import { Pressable, StyleSheet, View } from 'react-native'
 
 import { dayParts, historyDetail, recordsLine, type HistoryItem } from '../client/history'
 
@@ -86,6 +86,7 @@ export function HistoryRow({
   size,
   tag,
   extra,
+  onPress,
 }: {
   readonly item: HistoryItem
   /** The first in its panel has no rule above it: that rule is the panel's rim. */
@@ -93,6 +94,8 @@ export function HistoryRow({
   readonly size: HistoryRowSize
   readonly tag?: HistoryTag
   readonly extra?: string
+  /** Opens the session's detail (FIN-18). */
+  readonly onPress?: () => void
 }) {
   const theme = useTheme()
   const measure = SIZES[size]
@@ -103,11 +106,15 @@ export function HistoryRow({
   const below = records ?? extra
 
   return (
-    <View
+    <Pressable
       accessible
+      accessibilityRole={onPress ? 'button' : undefined}
       accessibilityLabel={[name, detail, below, `${weekday} ${day}`].filter(Boolean).join(', ')}
-      style={[
+      disabled={!onPress}
+      onPress={onPress}
+      style={({ pressed }) => [
         styles.row,
+        { opacity: pressed ? 0.7 : 1 },
         {
           minHeight: measure.row,
           gap: 12,
@@ -203,7 +210,7 @@ export function HistoryRow({
           {day}
         </Text>
       </View>
-    </View>
+    </Pressable>
   )
 }
 

@@ -478,6 +478,12 @@ export default function Today() {
                         item={item}
                         first={index === 0}
                         size="home"
+                        onPress={() =>
+                          router.push({
+                            pathname: '/history/[executionId]',
+                            params: { executionId: item.executed_session_id },
+                          })
+                        }
                       />
                     ))}
                   </HistoryPanel>
