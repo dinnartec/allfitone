@@ -27,6 +27,7 @@ import type {
   ExecutionDatabase,
   ExecutionResultsReplace,
   Finalized,
+  SummaryRow,
   WeekSummary,
 } from '../domain/index.js'
 
@@ -66,6 +67,28 @@ interface FinalizedRow {
   is_primary: boolean
   result_contract_id: string
   contract_version: number
+}
+
+/** `numeric` arrives as a string and timestamps as dates; the contract wants neither. */
+type RawSummaryRow = Omit<
+  SummaryRow,
+  'duration_seconds' | 'total_volume_kg' | 'started_at' | 'ended_at'
+> & {
+  duration_seconds: string | number
+  total_volume_kg: string | number | null
+  started_at: Date | string
+  ended_at: Date | string
+}
+
+function summaryOf(row: RawSummaryRow): SummaryRow {
+  return {
+    ...row,
+    started_at: new Date(row.started_at).toISOString(),
+    ended_at: new Date(row.ended_at).toISOString(),
+    duration_seconds: Number(row.duration_seconds),
+    // Null stays null: nothing weighed is not zero lifted.
+    total_volume_kg: row.total_volume_kg === null ? null : Number(row.total_volume_kg),
+  }
 }
 
 interface WeekRow {
@@ -157,6 +180,16 @@ export function createExecutionDatabase(): ExecutionDatabase {
           select * from execution.read_week_summary(${input.personId}::uuid, ${input.timezone})
         `
         return week(row)
+      }),
+
+    readSummary: (input) =>
+      transact(sql, input.personId, input.requestId, async (transaction) => {
+        const [row] = await transaction<RawSummaryRow[]>`
+          select * from execution.read_execution_summary(
+            ${input.personId}::uuid, ${input.executedSessionId}::uuid, ${input.timezone}
+          )
+        `
+        return row ? summaryOf(row) : null
       }),
   }
 }

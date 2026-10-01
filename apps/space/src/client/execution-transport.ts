@@ -16,6 +16,7 @@ import {
   type Attempt,
   type Execution,
   type ExecutionFlow,
+  type ExecutionSummary,
   type Finalized,
   type ResultsState,
   type Today,
@@ -37,6 +38,13 @@ export function createSpaceExecutionFlow(): ExecutionFlow {
         ),
       readExecution: (id) =>
         authenticated((token) => authorizedGet<Execution>(`/space/v1/executions/${id}`, token)),
+      readSummary: (id, timezone) =>
+        authenticated((token) =>
+          authorizedGet<ExecutionSummary>(
+            `/space/v1/executions/${id}/summary?timezone=${encodeURIComponent(timezone)}`,
+            token,
+          ),
+        ),
       startAttempt: (command, plannedSessionId, start) =>
         authenticated((token) =>
           authorizedPost<Attempt>(

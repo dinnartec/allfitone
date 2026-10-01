@@ -4,7 +4,7 @@ import { Hono } from 'hono'
 
 import { SpaceActorError, type SpaceActorResolver } from '../../identity/index.js'
 import type { SpaceExecutionService } from '../application/index.js'
-import type { Execution } from '../domain/index.js'
+import type { Execution, ExecutionSummary } from '../domain/index.js'
 import { spaceExecutionRoutes } from './space.js'
 
 const PERSON_ID = '019e4000-0000-7000-8000-000000000001'
@@ -64,6 +64,25 @@ const execution: Execution = {
   exercises: [],
 }
 
+const summary: ExecutionSummary = {
+  executed_session_id: EXECUTION_ID,
+  started_at: '2026-09-01T12:00:00.000Z',
+  ended_at: '2026-09-01T12:48:12.000Z',
+  duration_seconds: 2892,
+  title: 'Tirón',
+  work_sets: 12,
+  exercise_count: 4,
+  total_volume_kg: 3840,
+  exercises: [],
+  records: [],
+  streak_weeks: 8,
+  session_number: 14,
+  given_name: 'Walberto',
+  username: 'walberto',
+  cover_url: null,
+  algorithm_version: 1,
+}
+
 function harness(overrides?: Partial<SpaceExecutionService>, actorFails = false): Hono {
   const service: SpaceExecutionService = {
     startAttempt: async () => attempt,
@@ -71,6 +90,7 @@ function harness(overrides?: Partial<SpaceExecutionService>, actorFails = false)
     finalize: async () => finalized,
     abandon: async () => abandonedState,
     readExecution: async () => execution,
+    readSummary: async () => summary,
     readWeekSummary: async () => ({
       trained_seconds: 0,
       sessions_completed: 0,
@@ -127,6 +147,7 @@ describe('the Space execution surface honours the contract', () => {
       'OP-EXE-005',
       'OP-EXE-006',
       'OP-EXE-015',
+      'OP-EXE-021',
     ])
   })
 })
@@ -324,5 +345,45 @@ describe('GET /space/v1/executions/{id}', () => {
     )
 
     expect(response.status).toBe(403)
+  })
+})
+
+describe('GET /space/v1/executions/{id}/summary', () => {
+  const read = (path: string, overrides?: Partial<SpaceExecutionService>) =>
+    harness(overrides).request(path, { headers: authorized })
+
+  test('T-EXE-API-SUM-04 answers the summary of a finished session', async () => {
+    const response = await read(
+      `/space/v1/executions/${EXECUTION_ID}/summary?timezone=America/Bogota`,
+    )
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual(summary)
+  })
+
+  test('T-EXE-API-SUM-05 refuses without the zone that weeks are counted in', async () => {
+    expect((await read(`/space/v1/executions/${EXECUTION_ID}/summary`)).status).toBe(400)
+  })
+
+  test("T-EXE-API-SUM-06 answers not-found for one that is not this person's", async () => {
+    const response = await read(
+      `/space/v1/executions/${EXECUTION_ID}/summary?timezone=America/Bogota`,
+      { readSummary: async () => null },
+    )
+
+    expect(response.status).toBe(404)
+  })
+
+  test('T-EXE-API-SUM-07 answers conflict for a session still open', async () => {
+    const response = await read(
+      `/space/v1/executions/${EXECUTION_ID}/summary?timezone=America/Bogota`,
+      {
+        readSummary: async () => {
+          throw Object.assign(new Error('execution is not finished'), { code: '55000' })
+        },
+      },
+    )
+
+    expect(response.status).toBe(409)
   })
 })

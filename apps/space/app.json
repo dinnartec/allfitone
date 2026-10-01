@@ -12,7 +12,8 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.dinnartec.allfitspace",
       "infoPlist": {
-        "CADisableMinimumFrameDurationOnPhone": true
+        "CADisableMinimumFrameDurationOnPhone": true,
+        "LSApplicationQueriesSchemes": ["instagram-stories", "instagram"]
       }
     },
     "android": {
@@ -24,7 +25,27 @@
       },
       "softwareKeyboardLayoutMode": "pan"
     },
-    "plugins": ["expo-router", "expo-secure-store", "expo-image"],
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-image",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allfit Space usa tus fotos solo para poner una de fondo en la tarjeta que compartes. La foto no sale de tu teléfono.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allfit Space usa tus fotos solo para poner una de fondo en la tarjeta que compartes. La foto no sale de tu teléfono.",
+          "savePhotosPermission": "Allfit Space guarda en tus fotos la tarjeta de tu entreno.",
+          "isAccessMediaLocationEnabled": false
+        }
+      ]
+    ],
     "experiments": {
       "typedRoutes": true
     },

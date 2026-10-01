@@ -100,6 +100,33 @@ export function spaceExecutionRoutes(
     }
   })
 
+  routes.get('/executions/:executionId/summary', async (c) => {
+    c.header('Cache-Control', 'no-store')
+
+    const token = await verified(c, verify)
+    if (!token) return fail(c, 'unauthenticated')
+
+    const executedSessionId = c.req.param('executionId')
+    // The zone decides which week a session falls in, so a streak cannot be counted without it.
+    const timezone = (c.req.query('timezone') ?? '').trim()
+    if (!UUID_V7.test(executedSessionId)) return fail(c, 'invalid-request')
+    if (timezone === '' || timezone.length > MAX_TIMEZONE) return fail(c, 'invalid-request')
+
+    try {
+      const personId = await actors().personFor(token.subject)
+      const found = await execution().readSummary({
+        personId,
+        executedSessionId,
+        timezone,
+        requestId: c.req.header('x-request-id') ?? '',
+      })
+      if (!found) return fail(c, 'not-found')
+      return c.json(found, 200)
+    } catch (cause) {
+      return failure(c, cause)
+    }
+  })
+
   routes.put('/executions/:executionId/results', async (c) => {
     c.header('Cache-Control', 'no-store')
 
@@ -191,6 +218,8 @@ function failure(c: Context, cause: unknown): Response {
     if (code === '22023' || code === '23514') return fail(c, 'invalid-request')
     // A stale revision is a conflict, not a failure: the client re-reads and retries.
     if (code === '40001' || code === '23505') return fail(c, 'conflict')
+    // Not in the state the read needs: a summary of a session still open.
+    if (code === '55000') return fail(c, 'conflict')
   }
   console.warn('[execution] space request failed', { detail: String(cause).slice(0, 160) })
   return fail(c, 'upstream-unavailable')

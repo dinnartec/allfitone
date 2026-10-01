@@ -523,7 +523,10 @@ export default function Session() {
         revision.current = revised
         return flow.finish(executionId)
       })
-      .then(() => router.replace('/today'))
+      // Replaced, not pushed: the session is closed and there is no going back to it.
+      .then(() =>
+        router.replace({ pathname: '/session/share/[executionId]', params: { executionId } }),
+      )
       .catch(() => {
         setClosing(false)
         setFailure(CLOSE_FAILED)
@@ -1303,12 +1306,13 @@ function SetRow({
           </Pressable>
           {/* What it weighed last time, so nobody has to remember the number they hit a
               week ago. That is what a log is for. */}
+          {/* Readable at a glance and never dimmed: it is the reference for the set. */}
           <Text
             role="body"
-            size="xs"
-            color="muted"
+            size="sm"
+            color="secondary"
             numberOfLines={1}
-            style={[styles.colPrevious, set.done ? styles.dimmed : null]}
+            style={styles.colPrevious}
           >
             {set.previous}
           </Text>

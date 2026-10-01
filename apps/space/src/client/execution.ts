@@ -28,10 +28,12 @@ export type Attempt = AllfitV1Schemas['Attempt']
 export type ResultsState = AllfitV1Schemas['ExecutionResultsState']
 export type Finalized = AllfitV1Schemas['ExecutionFinalized']
 export type Abandoned = AllfitV1Schemas['ExecutionAbandoned']
+export type ExecutionSummary = AllfitV1Schemas['SpaceExecutionSummary']
 
 export interface ExecutionTransport {
   readToday(timezone: string): Promise<Today>
   readExecution(executedSessionId: string): Promise<Execution>
+  readSummary(executedSessionId: string, timezone: string): Promise<ExecutionSummary>
   startAttempt(
     command: CommandHeaders,
     plannedSessionId: string,
@@ -60,6 +62,8 @@ export interface ExecutionFlowDependencies {
 export interface ExecutionFlow {
   readToday(timezone: string): Promise<Today>
   readExecution(executedSessionId: string): Promise<Execution>
+  /** What «Compártelo» says about a finished session, its weeks in the device's zone. */
+  readSummary(executedSessionId: string, timezone: string): Promise<ExecutionSummary>
   start(plannedSessionId: string, timezone: string): Promise<string>
   save(
     executedSessionId: string,
@@ -79,6 +83,7 @@ export function createExecutionFlow(dependencies: ExecutionFlowDependencies): Ex
   return {
     readToday: (timezone) => dependencies.transport.readToday(timezone),
     readExecution: (id) => dependencies.transport.readExecution(id),
+    readSummary: (id, timezone) => dependencies.transport.readSummary(id, timezone),
 
     async start(plannedSessionId, timezone) {
       let command = starting.get(plannedSessionId)
