@@ -4658,7 +4658,9 @@ export interface components {
       version_number: number
       /** @description What to call the permission on screen. */
       display_name: string
-      /** @description What it covers and, as importantly, what it does not reach. */
+      /** @description One line for the professional building the invitation. Keeps the boundary — what the permission does not reach — because that is the half that stops somebody asking for more than they meant to. */
+      summary: string
+      /** @description The whole thing, for the person deciding. What it covers and, as importantly, where it stops. */
       description: string
       /** @description Why it is being asked for. Fixed by the catalogue, not written per invitation. */
       default_purpose: string
@@ -4676,7 +4678,9 @@ export interface components {
       /** @description Why this organization is asking, in the person's language. */
       purpose: string
       /** @description The contract text exactly as the person will be shown it. Stored verbatim so a later edit to the scope catalogue cannot change what somebody already agreed to. */
-      presented_snapshot: Record<string, never>
+      presented_snapshot: {
+        [key: string]: unknown
+      }
     }
     ClientInvitationCreate: {
       /** @enum {string} */
@@ -4704,7 +4708,9 @@ export interface components {
       offered_access_level: components['schemas']['AccessLevel']
       purpose: string
       presented_snapshot_schema_version: number
-      presented_snapshot: Record<string, never>
+      presented_snapshot: {
+        [key: string]: unknown
+      }
       /**
        * @description Null until the person answers this scope.
        * @enum {string|null}

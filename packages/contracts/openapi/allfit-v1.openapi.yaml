@@ -11973,7 +11973,7 @@ components:
       type: object
       additionalProperties: false
       required:
-        [scope_definition_id, scope_code, version_number, display_name, description,
+        [scope_definition_id, scope_code, version_number, display_name, summary, description,
          default_purpose]
       properties:
         scope_definition_id:
@@ -11988,10 +11988,20 @@ components:
           type: string
           minLength: 1
           description: What to call the permission on screen.
+        summary:
+          type: string
+          minLength: 1
+          maxLength: 120
+          description: >-
+            One line for the professional building the invitation. Keeps the
+            boundary — what the permission does not reach — because that is the
+            half that stops somebody asking for more than they meant to.
         description:
           type: string
           minLength: 1
-          description: What it covers and, as importantly, what it does not reach.
+          description: >-
+            The whole thing, for the person deciding. What it covers and, as
+            importantly, where it stops.
         default_purpose:
           type: string
           minLength: 1
@@ -12032,6 +12042,11 @@ components:
           description: Why this organization is asking, in the person's language.
         presented_snapshot:
           type: object
+          # Open on purpose: the snapshot is whatever the screen showed, frozen
+          # verbatim. Without this the generator reads a bare `object` as one
+          # that admits no properties at all, and the published contract then
+          # says this field must be empty.
+          additionalProperties: true
           description: >-
             The contract text exactly as the person will be shown it. Stored
             verbatim so a later edit to the scope catalogue cannot change what
@@ -12097,6 +12112,7 @@ components:
           type: integer
         presented_snapshot:
           type: object
+          additionalProperties: true
         decision:
           type: [string, 'null']
           enum: [accepted, rejected, null]

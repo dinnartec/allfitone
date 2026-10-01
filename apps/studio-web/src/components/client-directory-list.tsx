@@ -3,7 +3,7 @@
 import { Alert, AlertAction, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
 import { Avatar, AvatarFallback } from '@allfitone/react/components/avatar'
 import { Badge } from '@allfitone/react/components/badge'
-import { Button } from '@allfitone/react/components/button'
+import { Button, buttonVariants } from '@allfitone/react/components/button'
 import { Card, CardContent, CardHeader } from '@allfitone/react/components/card'
 import {
   Empty,
@@ -24,10 +24,12 @@ import {
 } from '@allfitone/react/components/table'
 import { ToggleGroup, ToggleGroupItem } from '@allfitone/react/components/toggle-group'
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query'
+import Link from 'next/link'
 import { useState } from 'react'
 
 import { useOrganizationContext } from './organization-context'
 import { WorkspacePageHeader } from './workspace-page-header'
+import { canInviteClients } from '@/lib/client-invitations'
 import {
   canViewClientDirectory,
   clientInitials,
@@ -63,6 +65,7 @@ export function ClientDirectoryList() {
   const rolesQuery = useQuery(organizationRolesQueryOptions(current.organization_id))
   const canView = canViewClientDirectory(current.roles, rolesQuery.data?.items)
   const everyClient = seesEveryClient(current.roles, rolesQuery.data?.items)
+  const canInvite = canInviteClients(current.roles, rolesQuery.data?.items)
   const [filter, setFilter] = useState<ClientFilter>('all')
   const options = organizationClientsQueryOptions(current.organization_id, filter, PAGE_SIZE)
   const query = useInfiniteQuery({ ...options, enabled: canView })
@@ -150,6 +153,18 @@ export function ClientDirectoryList() {
           everyClient
             ? `Consulta las personas vinculadas con ${current.display_name} y a quienes invitaron.`
             : 'Consulta las personas que atiendes y las invitaciones que enviaste.'
+        }
+        actions={
+          canInvite ? (
+            <Link
+              href={`/organizations/${current.organization_id}/clients/invitations/new`}
+              data-slot="button"
+              data-variant="default"
+              className={buttonVariants()}
+            >
+              Invitar cliente
+            </Link>
+          ) : null
         }
       />
 

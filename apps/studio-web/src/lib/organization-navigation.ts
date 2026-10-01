@@ -37,5 +37,8 @@ export function resolveWorkspaceRoute(
   if (pathname === `${basePath}/clients`) {
     return { title: 'Clientes' }
   }
+  if (pathname === `${basePath}/clients/invitations/new`) {
+    return { title: 'Invitar cliente' }
+  }
   return { title: 'Studio' }
 }

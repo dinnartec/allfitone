@@ -17,6 +17,7 @@ const BODY_PROGRESS: OfferableScope = {
   scope_code: 'body_progress',
   version_number: 1,
   display_name: 'Progreso corporal',
+  summary: 'Medidas y las fotos que elija, sin datos de salud.',
   description:
     'Medidas, composición corporal, tendencias y las fotos que tú selecciones. No incluye tu galería, ni la ubicación de las fotos, ni datos de salud.',
   default_purpose: 'Seguir cómo cambia tu cuerpo y ajustar el plan a lo que muestren las medidas.',
@@ -84,6 +85,20 @@ describe('the offerable permission catalogue', () => {
     const response = await app().fetch(get())
     const payload = (await response.json()) as { items: OfferableScope[] }
     expect(payload.items[0]?.description).toContain('No incluye')
+  })
+
+  /*
+   * Two texts for two readers: the summary is what the professional building
+   * the invitation reads, the description what the person deciding reads. If
+   * they were the same, one of them would be reading the other's.
+   */
+  test('carries a short summary distinct from the full description', async () => {
+    const response = await app().fetch(get())
+    const payload = (await response.json()) as { items: OfferableScope[] }
+    const scope = payload.items[0]
+    expect(scope?.summary).toBeTruthy()
+    expect(scope?.summary).not.toBe(scope?.description)
+    expect(scope?.summary).toContain('sin datos de salud')
   })
 
   test('carries the purpose, so the client never writes one', async () => {
