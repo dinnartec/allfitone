@@ -441,6 +441,13 @@ export const allfitV1ContractManifest = {
     },
     {
       method: 'GET',
+      path: '/space/v1/executions/{executionId}/summary',
+      operationId: 'getMyExecutionSummary',
+      allfitOperation: 'OP-EXE-021',
+      responses: ['200', '400', '401', '403', '404', '409', '503'],
+    },
+    {
+      method: 'GET',
       path: '/space/v1/my-content',
       operationId: 'listMyContent',
       allfitOperation: 'OP-PLN-025',

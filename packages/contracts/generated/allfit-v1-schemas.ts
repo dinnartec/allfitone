@@ -6732,6 +6732,128 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  SpaceExecutionSummary: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'executed_session_id',
+      'started_at',
+      'ended_at',
+      'duration_seconds',
+      'title',
+      'work_sets',
+      'exercise_count',
+      'total_volume_kg',
+      'exercises',
+      'records',
+      'streak_weeks',
+      'session_number',
+      'given_name',
+      'username',
+      'cover_url',
+      'algorithm_version',
+    ],
+    description:
+      'A finished session as «Compártelo» tells it. Work sets only: a warmup is neither a set here nor kilos lifted, and never a record.',
+    properties: {
+      executed_session_id: {
+        type: 'string',
+        format: 'uuid',
+      },
+      started_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      ended_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      duration_seconds: {
+        type: 'number',
+        minimum: 0,
+      },
+      title: {
+        type: ['string', 'null'],
+        description: "The routine's name; null for a session that came from none.",
+      },
+      work_sets: {
+        type: 'integer',
+        minimum: 0,
+      },
+      exercise_count: {
+        type: 'integer',
+        minimum: 0,
+      },
+      total_volume_kg: {
+        type: ['number', 'null'],
+        description: 'Null when nothing was weighed, which is not zero lifted.',
+      },
+      exercises: {
+        type: 'array',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['position', 'movement_id', 'movement', 'work_sets', 'reps_min', 'reps_max'],
+          properties: {
+            position: {
+              type: 'integer',
+              minimum: 1,
+            },
+            movement_id: {
+              type: ['string', 'null'],
+              format: 'uuid',
+            },
+            movement: {
+              type: ['string', 'null'],
+            },
+            work_sets: {
+              type: 'integer',
+              minimum: 1,
+            },
+            reps_min: {
+              type: ['integer', 'null'],
+            },
+            reps_max: {
+              type: ['integer', 'null'],
+            },
+          },
+        },
+      },
+      records: {
+        type: 'array',
+        description:
+          "Each record this session beat, against the person's earlier finished sessions. A first time is none, and equalling the best is not beating it.",
+        items: {
+          $ref: '#/components/schemas/SpaceSessionRecord',
+        },
+      },
+      streak_weeks: {
+        type: 'integer',
+        minimum: 0,
+        description: "Weeks in a row, back from this session's, with a finished session.",
+      },
+      session_number: {
+        type: 'integer',
+        minimum: 1,
+        description: 'How many finished sessions the person has, counting this one.',
+      },
+      given_name: {
+        type: 'string',
+      },
+      username: {
+        type: ['string', 'null'],
+      },
+      cover_url: {
+        type: ['string', 'null'],
+        format: 'uri',
+        description: "The routine's photograph, the same Hoy shows.",
+      },
+      algorithm_version: {
+        type: 'integer',
+        minimum: 1,
+      },
+    },
+  },
   SpaceFocusAreas: {
     type: 'object',
     additionalProperties: false,
@@ -7981,6 +8103,40 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
             },
           },
         },
+      },
+    },
+  },
+  SpaceSessionRecord: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['movement_id', 'movement', 'kind', 'value', 'reps', 'previous_value', 'previous_on'],
+    properties: {
+      movement_id: {
+        type: 'string',
+        format: 'uuid',
+      },
+      movement: {
+        type: 'string',
+      },
+      kind: {
+        type: 'string',
+        enum: ['heaviest', 'e1rm', 'best_set', 'session_volume'],
+        description:
+          'heaviest is kilograms; e1rm is an Epley estimate in kilograms; best_set and session_volume are kilograms times repetitions.',
+      },
+      value: {
+        type: 'number',
+      },
+      reps: {
+        type: ['integer', 'null'],
+        description: 'The repetitions of the heaviest set; null for the other kinds.',
+      },
+      previous_value: {
+        type: 'number',
+      },
+      previous_on: {
+        type: 'string',
+        format: 'date',
       },
     },
   },

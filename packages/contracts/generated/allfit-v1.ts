@@ -2573,6 +2573,26 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/space/v1/executions/{executionId}/summary': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Read the summary of one of my finished sessions, to share it
+     * @description What «Compártelo» reads after a session is saved: what it achieved, the records it beat, the streak and the session number. Records, streak and number are derived when read, never stored (ADR-036).
+     */
+    get: operations['getMyExecutionSummary']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/space/v1/planned-sessions/{plannedSessionId}/attempts': {
     parameters: {
       query?: never
@@ -3956,6 +3976,61 @@ export interface components {
       status: string
       /** @description The attempt already open on today's session, if there is one. It is what turns "Empezar" into "Continuar" and what stops a second attempt being started by accident. */
       executed_session_id: components['schemas']['UuidV7'] | null
+    }
+    /** @description A finished session as «Compártelo» tells it. Work sets only: a warmup is neither a set here nor kilos lifted, and never a record. */
+    SpaceExecutionSummary: {
+      /** Format: uuid */
+      executed_session_id: string
+      /** Format: date-time */
+      started_at: string
+      /** Format: date-time */
+      ended_at: string
+      duration_seconds: number
+      /** @description The routine's name; null for a session that came from none. */
+      title: string | null
+      work_sets: number
+      exercise_count: number
+      /** @description Null when nothing was weighed, which is not zero lifted. */
+      total_volume_kg: number | null
+      exercises: {
+        position: number
+        /** Format: uuid */
+        movement_id: string | null
+        movement: string | null
+        work_sets: number
+        reps_min: number | null
+        reps_max: number | null
+      }[]
+      /** @description Each record this session beat, against the person's earlier finished sessions. A first time is none, and equalling the best is not beating it. */
+      records: components['schemas']['SpaceSessionRecord'][]
+      /** @description Weeks in a row, back from this session's, with a finished session. */
+      streak_weeks: number
+      /** @description How many finished sessions the person has, counting this one. */
+      session_number: number
+      given_name: string
+      username: string | null
+      /**
+       * Format: uri
+       * @description The routine's photograph, the same Hoy shows.
+       */
+      cover_url: string | null
+      algorithm_version: number
+    }
+    SpaceSessionRecord: {
+      /** Format: uuid */
+      movement_id: string
+      movement: string
+      /**
+       * @description heaviest is kilograms; e1rm is an Epley estimate in kilograms; best_set and session_volume are kilograms times repetitions.
+       * @enum {string}
+       */
+      kind: 'heaviest' | 'e1rm' | 'best_set' | 'session_volume'
+      value: number
+      /** @description The repetitions of the heaviest set; null for the other kinds. */
+      reps: number | null
+      previous_value: number
+      /** Format: date */
+      previous_on: string
     }
     /** @description The calendar week in progress, Monday to Sunday, in the person's zone. The week is the unit and the day inside it is a suggestion, so what counts is how much of the week is done — and what is left undone does not carry over. */
     SpaceWeekSummary: {
@@ -11325,6 +11400,38 @@ export interface operations {
       401: components['responses']['Unauthenticated']
       403: components['responses']['Forbidden']
       404: components['responses']['NotFound']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  getMyExecutionSummary: {
+    parameters: {
+      query: {
+        /** @description The device's zone. Weeks and dates are local questions: a streak counted in UTC would break on a Sunday evening in Bogotá. */
+        timezone: components['schemas']['IanaTimeZone']
+      }
+      header?: never
+      path: {
+        executionId: components['parameters']['ExecutionId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The summary as its owner sees it */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SpaceExecutionSummary']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
       503: components['responses']['UpstreamUnavailable']
     }
   }
