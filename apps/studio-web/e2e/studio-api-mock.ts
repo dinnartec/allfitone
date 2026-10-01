@@ -22,6 +22,7 @@ export interface StudioApiFixture {
   session: unknown
   memberships: unknown[]
   organizationMemberships: unknown[]
+  organizationClients: unknown[]
   organization: unknown
   organizationRoles: unknown[]
   organizationTypes: unknown[]
@@ -74,6 +75,43 @@ export const terminatedMembership = {
   joined_at: '2023-01-01T16:45:22.870Z',
   ended_at: '2025-06-01T21:08:44.319Z',
   roles: ['staff'],
+}
+
+/*
+ * A directory entry is one of two kinds. The invitation one deliberately has no
+ * `display_name` and no `person_id`: until somebody accepts, no person exists,
+ * and a fixture that invented a name here would let the screen render something
+ * the API can never send.
+ */
+export const activeClient = {
+  kind: 'relationship',
+  relationship_id: '01991600-7000-7000-8000-000000000101',
+  person_id: '01991600-7000-7000-8000-000000000201',
+  display_name: 'Ana Álvarez',
+  relationship_status: 'active',
+  invitation_status: 'accepted',
+  started_at: '2025-03-04T15:12:44.118Z',
+  ended_at: null,
+}
+
+export const terminatedClient = {
+  kind: 'relationship',
+  relationship_id: '01991600-7000-7000-8000-000000000102',
+  person_id: '01991600-7000-7000-8000-000000000202',
+  display_name: 'Bruno Bello',
+  relationship_status: 'terminated',
+  invitation_status: 'accepted',
+  started_at: '2024-11-20T17:05:03.771Z',
+  ended_at: '2025-06-30T22:41:19.204Z',
+}
+
+/* A long masked contact, because that is the value with nowhere to break. */
+export const pendingClientInvitation = {
+  kind: 'invitation',
+  invitation_id: '01991600-7000-7000-8000-000000000103',
+  contact_hint: 'c***@correo-institucional-muy-largo.example.test',
+  invitation_status: 'pending',
+  invited_at: '2025-07-02T19:33:58.640Z',
 }
 
 export const activeTeamMember = {
@@ -311,6 +349,7 @@ export function createStudioApiFixture(
     },
     memberships: [],
     organizationMemberships: [activeTeamMember, terminatedTeamMember],
+    organizationClients: [activeClient, pendingClientInvitation, terminatedClient],
     /*
      * A copy, not the shared object. Sites are now editable, and the mock
      * writes the change into this fixture so the screen the form returns to
@@ -437,6 +476,26 @@ function defaultResponse(
             membership.status === status,
         )
       : fixture.organizationMemberships
+    return { status: 200, body: { data, page: { has_more: false, next_cursor: null } } }
+  }
+  if (
+    request.method === 'GET' &&
+    /^\/studio\/v1\/organizations\/[^/]+\/clients$/.test(request.path)
+  ) {
+    const status = new URLSearchParams(request.search).get('status')
+    // The filter is one value over two kinds of row: `invited` selects the
+    // invitations, the other two select relationships by their own state.
+    const data = status
+      ? fixture.organizationClients.filter((entry) => {
+          if (typeof entry !== 'object' || entry === null || !('kind' in entry)) return false
+          if (status === 'invited') return entry.kind === 'invitation'
+          return (
+            entry.kind === 'relationship' &&
+            'relationship_status' in entry &&
+            entry.relationship_status === status
+          )
+        })
+      : fixture.organizationClients
     return { status: 200, body: { data, page: { has_more: false, next_cursor: null } } }
   }
   if (

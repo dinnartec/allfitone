@@ -1,4 +1,4 @@
--- T-REL-RESOLVE-01 — OP-REL-002.
+-- T-REL-RESOLVE-01 — OP-REL-015.
 --
 -- Reading an invitation is not a neutral act here: what comes back is the list
 -- of health-data categories an organization wants access to. So most of this

@@ -34,6 +34,11 @@ export type TeamInvitationStatus = AllfitV1Schemas['TeamInvitationStatus']
 export type OrganizationMembership = AllfitV1Schemas['OrganizationMembershipListItem']
 export type OrganizationMembershipPage = AllfitV1Schemas['OrganizationMembershipPage']
 export type OrganizationMembershipStatus = AllfitV1Schemas['OrganizationMembershipStatus']
+export type ClientDirectoryPage = AllfitV1Schemas['ClientDirectoryPage']
+export type ClientDirectoryItem = AllfitV1Schemas['ClientDirectoryItem']
+export type ClientDirectoryRelationship = AllfitV1Schemas['ClientDirectoryRelationship']
+export type ClientDirectoryInvitation = AllfitV1Schemas['ClientDirectoryInvitation']
+export type ClientDirectoryGroup = AllfitV1Schemas['ClientDirectoryGroup']
 export type Organization = AllfitV1Schemas['Organization']
 export type OrganizationSite = AllfitV1Schemas['OrganizationSite']
 export type OrganizationSiteStatus = AllfitV1Schemas['OrganizationSiteStatus']
@@ -262,6 +267,25 @@ export const studioApi = {
     const suffix = query.size ? `?${query.toString()}` : ''
     return request<OrganizationMembershipPage>(
       `/studio/v1/organizations/${organizationId}/memberships${suffix}`,
+      {
+        cache: 'no-store',
+        ...(signal ? { signal } : {}),
+      },
+    )
+  },
+
+  organizationClients: (
+    organizationId: string,
+    options: { status?: ClientDirectoryGroup; limit?: number; cursor?: string } = {},
+    signal?: AbortSignal,
+  ) => {
+    const query = new URLSearchParams()
+    if (options.status) query.set('status', options.status)
+    if (options.limit) query.set('limit', String(options.limit))
+    if (options.cursor) query.set('cursor', options.cursor)
+    const suffix = query.size ? `?${query.toString()}` : ''
+    return request<ClientDirectoryPage>(
+      `/studio/v1/organizations/${organizationId}/clients${suffix}`,
       {
         cache: 'no-store',
         ...(signal ? { signal } : {}),

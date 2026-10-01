@@ -792,6 +792,58 @@ export const SCREENS: Screen[] = [
       await expect(page.getByText('No pudimos cargar el estado de tu organización')).toBeVisible()
     },
   },
+  // --- `/organizations/[id]/clients` · HU-024 ---
+  {
+    // Both kinds of entry on one screen: two people who accepted and one who
+    // has not answered. The unanswered one has no name at all, which is the
+    // part worth looking at.
+    stories: 'HU-024 · the client directory with people and an unanswered invitation',
+    path: `${workspace}/clients`,
+    fixture: () => createStudioApiFixture({ memberships: [activeMembership] }),
+    settled: async (page) => {
+      await settledByHeading(page)
+      // `exact`, or it also matches the "Invitados" filter button.
+      await expect(page.getByText('Invitado', { exact: true })).toBeVisible()
+    },
+  },
+  {
+    // The filter that only shows what nobody answered. The masked contact here
+    // is deliberately long and has nowhere to break, which is the shape that
+    // painted over its neighbour the last time.
+    stories: 'HU-024 · only the invitations nobody answered',
+    path: `${workspace}/clients`,
+    fixture: () => createStudioApiFixture({ memberships: [activeMembership] }),
+    reveal: async (page) => {
+      await page.getByRole('button', { name: 'Invitados' }).click()
+      await expect(page.getByText(/correo-institucional-muy-largo/)).toBeVisible()
+    },
+  },
+  {
+    stories: 'HU-024 · a directory with nobody in it yet',
+    path: `${workspace}/clients`,
+    fixture: () =>
+      createStudioApiFixture({ memberships: [activeMembership], organizationClients: [] }),
+    settled: async (page) => {
+      await settledByHeading(page)
+      await expect(page.getByText('Todavía no hay personas vinculadas')).toBeVisible()
+    },
+  },
+  {
+    // A coach reads a directory too — their own. The wording has to say so, or
+    // a short list reads as clients gone missing.
+    stories: 'HU-024 · the directory a coach reads',
+    path: `/organizations/${secondActiveMembership.organization_id}/clients`,
+    fixture: () => createStudioApiFixture({ memberships: [secondActiveMembership] }),
+  },
+  {
+    stories: 'HU-024 · the directory could not be read',
+    path: `${workspace}/clients`,
+    fixture: failingFor([activeMembership], /\/organizations\/[^/]+\/clients$/),
+    settled: async (page) => {
+      await settledByHeading(page)
+      await expect(page.getByText('No pudimos cargar los clientes')).toBeVisible()
+    },
+  },
   // --- `/organizations/[id]/organization` · HU-011 ---
   {
     stories: 'HU-011 · the organization and its sites',
