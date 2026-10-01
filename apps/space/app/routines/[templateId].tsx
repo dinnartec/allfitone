@@ -44,10 +44,9 @@
  */
 
 import { Button } from '@allfitone/react-native/button'
-import { Badge, badgeToneColor, identityTone, type BadgeTone } from '@allfitone/react-native/badge'
+import { Badge, badgeToneColor, identityTone } from '@allfitone/react-native/badge'
 import { Chip } from '@allfitone/react-native/chip'
 import { Sheet } from '@allfitone/react-native/sheet'
-import { Stepper } from '@allfitone/react-native/stepper'
 import { FoundationIcon } from '@allfitone/react-native/icons'
 import { IconButton } from '@allfitone/react-native/icon-button'
 import { InlineAlert } from '@allfitone/react-native/inline-alert'
@@ -58,9 +57,8 @@ import { TextField } from '@allfitone/react-native/text-field'
 import { useTheme } from '@allfitone/react-native/theme'
 import { Image } from 'expo-image'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native'
-import { Gesture, GestureDetector } from 'react-native-gesture-handler'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Pressable, StyleSheet, View } from 'react-native'
 import Animated, {
   Easing,
   FadeIn,
@@ -70,23 +68,20 @@ import Animated, {
   measure,
   scrollTo,
   useAnimatedRef,
-  useAnimatedStyle,
   useFrameCallback,
   useScrollOffset,
   useSharedValue,
-  withTiming,
-  type SharedValue,
 } from 'react-native-reanimated'
-
-import { scheduleOnRN } from 'react-native-worklets'
 
 import { ApiError } from '../../src/client'
 import { createSpaceContentFlow } from '../../src/client/content-transport'
-import { aside, edgeScroll, nextOffset, placeOf } from '../../src/client/drag-order'
+import { edgeScroll, nextOffset } from '../../src/client/drag-order'
 import { createQueue } from '../../src/client/queue'
 import { discardFailure, saveFailure } from '../../src/client/save-failure'
 import { offerPublishedRoutine } from '../../src/client/routine-handoff'
 import { revealOffset, type Frame } from '../../src/client/reveal'
+import { DraggableRow } from '../../src/components/draggable-row'
+import { RestSheetBody } from '../../src/components/rest-sheet'
 import { readExerciseLibrary } from '../../src/client/exercise-library'
 import {
   declareAlreadyIn,
@@ -111,27 +106,21 @@ import {
 } from '../../src/client/routine-draft'
 import {
   OPENING_UNIT,
-  REST_MAX_SECONDS,
   REST_OPENING_SECONDS,
-  REST_PRESETS,
-  REST_STEP_SECONDS,
   SET_KIND_DETAILS,
   SET_KIND_NAMES,
   SET_KIND_TONES,
   otherUnit,
   restLabel,
-  restPresetLabel,
   setsLabel,
   withKind,
   withLoad,
   withReps,
-  withRpe,
   type MassUnit,
   type WorkingSet,
 } from '../../src/client/set-scheme'
 import { ScreenHeader } from '../../src/components/screen-header'
-import { RpeSheetBody } from '../../src/components/rpe-sheet'
-import { rpeCopy, rpeShown } from '../../src/client/rpe-scale'
+import { SheetChoice } from '../../src/components/sheet-choice'
 
 const SUGGESTIONS = ['Empuje', 'Tirón', 'Pierna', 'Full body']
 
@@ -149,9 +138,6 @@ const PRESS_MS = 120
 
 /** `ease-out`, never `ease-in`: a slow start delays the moment the finger asks about. */
 const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1)
-
-/** Quick enough that a row reads as answering the finger rather than following it. */
-const STEP_ASIDE = { duration: 160, easing: EASE_OUT }
 
 /** Gone rather than vanished. Opacity only, which is what survives reduced motion. */
 const EXIT = FadeOut.duration(140).reduceMotion(ReduceMotion.System)
@@ -199,7 +185,6 @@ type Sheeted =
   | { readonly kind: 'rest'; readonly position: number }
   | { readonly kind: 'superset'; readonly position: number }
   | { readonly kind: 'set-kind'; readonly position: number; readonly order: number }
-  | { readonly kind: 'effort'; readonly position: number; readonly order: number }
 
 const LOAD_FAILED = 'No pudimos abrir el borrador. Revisa tu conexión.'
 
@@ -585,7 +570,6 @@ export default function RoutineEditor() {
     if (sheet?.kind === 'leaving') return '¿Guardas esta rutina?'
     if (sheet?.kind === 'discarding') return '¿Descartar cambios?'
     if (sheet?.kind === 'set-kind') return 'Tipo de serie'
-    if (sheet?.kind === 'effort') return 'Esfuerzo de la serie'
     if (sheet?.kind === 'rest') return 'Descanso entre series'
     if (sheet?.kind === 'superset') return 'Superserie'
     if (sheet?.kind === 'menu') return 'Ejercicio'
@@ -761,10 +745,12 @@ export default function RoutineEditor() {
           steps.map((step) => (
             <DraggableRow
               key={step.movementId}
-              step={step}
+              position={step.position}
               count={steps.length}
               open={open === step.position}
-              dragging={dragging}
+              // The row it leaves behind closes the gap rather than snapping shut.
+              exiting={EXIT}
+              {...(dragging ? {} : { layout: REFLOW })}
               from={liftedFrom}
               travel={liftedBy}
               finger={fingerY}
@@ -870,9 +856,6 @@ export default function RoutineEditor() {
                   <SetTable
                     step={step}
                     onChangeSets={(sets) => change(withSets(steps, step.position, sets))}
-                    onEffort={(order) =>
-                      setSheet({ kind: 'effort', position: step.position, order })
-                    }
                     onKind={(order) =>
                       setSheet({ kind: 'set-kind', position: step.position, order })
                     }
@@ -996,46 +979,10 @@ export default function RoutineEditor() {
         ) : null}
 
         {sheet?.kind === 'rest' ? (
-          <View style={styles.sheet}>
-            <Text role="body" size="sm" color="muted">
-              Cuánto esperas antes de la siguiente serie.
-            </Text>
-
-            {/* Any rest, not one of seven. The presets below are a shortcut to the
-                common answers, never the whole set of them. */}
-            <Stepper
-              accessibilityLabel="Descanso entre series"
-              value={restAt(steps, sheet)}
-              min={0}
-              max={REST_MAX_SECONDS}
-              step={REST_STEP_SECONDS}
-              format={restPresetLabel}
-              caption={`de ${REST_STEP_SECONDS} en ${REST_STEP_SECONDS} segundos`}
-              grow
-              style={{ borderColor: theme.color.border.accent }}
-              onChange={(seconds) => {
-                if (sheet?.kind !== 'rest') return
-                change(withRest(steps, sheet.position, seconds))
-              }}
-            />
-
-            <Text role="control" size="sm" color="secondary">
-              O elige uno habitual
-            </Text>
-            <View style={styles.chips}>
-              {REST_PRESETS.map((preset) => (
-                <Chip
-                  key={preset}
-                  label={restPresetLabel(preset)}
-                  selected={restAt(steps, sheet) === preset}
-                  onPress={() => {
-                    if (sheet?.kind !== 'rest') return
-                    change(withRest(steps, sheet.position, preset))
-                  }}
-                />
-              ))}
-            </View>
-          </View>
+          <RestSheetBody
+            value={restAt(steps, sheet)}
+            onChange={(seconds) => change(withRest(steps, sheet.position, seconds))}
+          />
         ) : null}
 
         {sheet?.kind === 'superset' ? (
@@ -1060,27 +1007,6 @@ export default function RoutineEditor() {
               />
             ))}
           </View>
-        ) : null}
-
-        {sheet?.kind === 'effort' ? (
-          <RpeSheetBody
-            value={steps.find((one) => one.position === sheet.position)?.sets[sheet.order]?.rpe}
-            onChoose={(rpe) => {
-              if (sheet.kind !== 'effort') return
-              change(
-                steps.map((one) =>
-                  one.position === sheet.position
-                    ? {
-                        ...one,
-                        sets: one.sets.map((set, at) =>
-                          at === sheet.order ? withRpe(set, rpe) : set,
-                        ),
-                      }
-                    : one,
-                ),
-              )
-            }}
-          />
         ) : null}
 
         {sheet?.kind === 'menu' ? (
@@ -1138,71 +1064,6 @@ export default function RoutineEditor() {
 }
 
 /** One line of a sheet: what it is, why, and what it will look like. */
-function SheetChoice({
-  name,
-  detail,
-  shape,
-  tone,
-  selected,
-  disabled,
-  edge,
-  onPress,
-}: {
-  readonly name: string
-  /** Absent leaves the name alone, for a list where the name is the whole answer. */
-  readonly detail?: string
-  readonly shape?: string
-  /** Draws the name as its badge instead of as a word, for a choice that has one. */
-  readonly tone?: BadgeTone
-  readonly selected?: boolean
-  readonly disabled?: boolean
-  /** A rule down the leading edge, for a choice that already belongs to something. */
-  readonly edge?: string | undefined
-  readonly onPress: () => void
-}) {
-  const theme = useTheme()
-
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={name}
-      {...(detail === undefined ? {} : { accessibilityHint: detail })}
-      accessibilityState={{ selected: selected ?? false, disabled: disabled ?? false }}
-      disabled={disabled ?? false}
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.choice,
-        {
-          borderColor: selected ? theme.color.border.accent : theme.color.border.subtle,
-          backgroundColor: theme.color.background.surface,
-          opacity: disabled ? 0.45 : pressed ? 0.7 : 1,
-        },
-        edge === undefined ? null : { borderLeftWidth: 3, borderLeftColor: edge },
-      ]}
-    >
-      <View style={styles.choiceText}>
-        {tone === undefined ? (
-          <Text role="control" size="md">
-            {name}
-          </Text>
-        ) : (
-          <Badge label={name} tone={tone} />
-        )}
-        {detail === undefined ? null : (
-          <Text role="body" size="sm" color="muted">
-            {detail}
-          </Text>
-        )}
-      </View>
-      {shape === undefined ? null : (
-        <Text role="body" size="sm" color="accent">
-          {shape}
-        </Text>
-      )}
-    </Pressable>
-  )
-}
-
 /** Only the exercise before and the one after: `IX-46` refuses anything else. */
 /** Everything the superset sheet can offer: the whole routine but this exercise. */
 function others(steps: readonly WorkingStep[], sheet: Sheeted | undefined) {
@@ -1261,7 +1122,6 @@ function SetTable({
   step,
   onChangeSets,
   onKind,
-  onEffort,
   onUnit,
   onRest,
   onMenu,
@@ -1269,7 +1129,6 @@ function SetTable({
   readonly step: WorkingStep
   readonly onChangeSets: (sets: readonly WorkingSet[]) => void
   readonly onKind: (order: number) => void
-  readonly onEffort: (order: number) => void
   readonly onUnit: () => void
   readonly onRest: () => void
   readonly onMenu: () => void
@@ -1295,13 +1154,6 @@ function SetTable({
         <View style={styles.colCell}>
           <Text role="eyebrow" size="xs" color="muted">
             Reps
-          </Text>
-        </View>
-        {/* El esfuerzo que se pide. Sin unidad en el rótulo porque RPE no la tiene:
-            es una escala, y escribir «/10» en cada fila la repite diez veces. */}
-        <View style={styles.colEffort}>
-          <Text role="eyebrow" size="xs" color="muted">
-            RPE
           </Text>
         </View>
         <Pressable
@@ -1342,28 +1194,6 @@ function SetTable({
             {...(one.kind === 'to_failure' ? { fixedAs: 'máx' } : {})}
             onChange={(reps) => edit(order, withReps(one, reps))}
           />
-          {/* Un botón y no un campo: el número solo no dice nada, y la escala se abre
-              explicada. Además devuelve el ancho que la quinta columna le quitaba al
-              badge del tipo. */}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Esfuerzo de la serie ${order + 1}`}
-            accessibilityHint={rpeCopy(one.rpe)}
-            hitSlop={PRESS_SLOP}
-            onPress={() => onEffort(order)}
-            style={[
-              styles.effort,
-              {
-                backgroundColor: theme.color.background.surface,
-                borderColor:
-                  one.rpe === undefined ? theme.color.border.subtle : theme.color.border.accent,
-              },
-            ]}
-          >
-            <Text role="data" size="md" color={one.rpe === undefined ? 'muted' : 'accent'}>
-              {rpeShown(one.rpe)}
-            </Text>
-          </Pressable>
           <NumberField
             accessibilityLabel={`Peso de la serie ${order + 1} en ${unit}`}
             value={one.load}
@@ -1418,128 +1248,6 @@ function SetTable({
         <IconButton icon="more" size="sm" accessibilityLabel="Más opciones" onPress={onMenu} />
       </View>
     </View>
-  )
-}
-
-/**
- * A row that can be picked up, with every other row getting out of its way as it goes.
- *
- * **The whole list moves during the drag, not after it.** Two shared values say it:
- * which position is in the air and how far it has travelled. Every row reads both in
- * its own `useAnimatedStyle` and works out whether the one in the air has passed over
- * it — if it has, the row steps aside by exactly one place. That computation is a
- * worklet, so it runs per frame on the UI runtime and React renders nothing at all
- * between picking up and putting down.
- *
- * **Held, not pressed.** The pan activates after a quarter of a second of stillness,
- * which is what both platforms use for reorder and what keeps this gesture from
- * fighting the scroll view it lives in — a pan that won immediately would make the
- * list unscrollable wherever a finger happened to land on a grip.
- *
- * **The layout animation stands down while a drag is on.** `REFLOW` animates a row
- * from where it used to be to where it now is, which is exactly the wrong thing at the
- * moment of dropping: the transform has already put the row in its new place, so the
- * two would fight and the row would jump back a slot before sliding forward again. It
- * comes back a frame after the order is committed, which is one `setState` per gesture
- * rather than per frame.
- */
-function DraggableRow({
-  step,
-  count,
-  open,
-  dragging,
-  from,
-  travel,
-  finger,
-  onLift,
-  onDrop,
-  onFrame,
-  style,
-  children,
-}: {
-  readonly step: WorkingStep
-  readonly count: number
-  /** An open row is not draggable: its own content takes the long press. */
-  readonly open: boolean
-  readonly dragging: boolean
-  readonly from: SharedValue<number>
-  readonly travel: SharedValue<number>
-  /** Where the finger is on screen, which is what the edges are measured against. */
-  readonly finger: SharedValue<number>
-  readonly onLift: () => void
-  readonly onDrop: (to: number) => void
-  /** Where it sits in the list, so whatever opens can be scrolled into view. */
-  readonly onFrame: (frame: Frame) => void
-  readonly style: StyleProp<ViewStyle>
-  readonly children: ReactNode
-}) {
-  const position = step.position
-
-  const drag = Gesture.Pan()
-    // Shut only. Open, the row holds a table of number fields, and a long press on one
-    // of them would lift the whole exercise instead of putting a caret in it.
-    .enabled(!open)
-    .activateAfterLongPress(250)
-    .onStart((event) => {
-      from.set(position)
-      travel.set(0)
-      finger.set(event.absoluteY)
-      // The frame loop is started from `onLift`, on the other side of `scheduleOnRN`.
-      // `setActive` closes over the registry and a React ref, both of which exist only
-      // on the RN runtime; called from here it writes to a copy, and the UI side then
-      // times a callback it has no record of.
-      scheduleOnRN(onLift)
-    })
-    // `onChange` rather than `onUpdate`: what is added is the movement since the last
-    // frame. The frame loop puts what the list scrolled into the same number, and
-    // assigning the whole translation would throw that away sixty times a second —
-    // the row would sit still while the list ran underneath it.
-    .onChange((event) => {
-      finger.set(event.absoluteY)
-      travel.set(travel.get() + event.changeY)
-    })
-    .onEnd((_event, success) => {
-      const landed = success ? placeOf(position, travel.get(), count) : position
-      scheduleOnRN(onDrop, landed)
-    })
-
-  const moving = useAnimatedStyle(() => {
-    const lifted = from.get()
-    if (lifted === 0) return { transform: [{ translateY: 0 }, { scale: 1 }], opacity: 1, zIndex: 0 }
-    if (lifted === position) {
-      return {
-        transform: [{ translateY: travel.get() }, { scale: 1.02 }],
-        opacity: 0.94,
-        zIndex: 2,
-      }
-    }
-    return {
-      transform: [
-        { translateY: withTiming(aside(position, lifted, travel.get(), count), STEP_ASIDE) },
-        { scale: 1 },
-      ],
-      opacity: 1,
-      zIndex: 0,
-    }
-  })
-
-  return (
-    <GestureDetector gesture={drag}>
-      <Animated.View
-        // The row it leaves behind closes the gap rather than snapping shut, and both
-        // honour the system setting rather than deciding for it.
-        exiting={EXIT}
-        {...(dragging ? {} : { layout: REFLOW })}
-        // Fires again when the exercise opens, which is the measurement that matters:
-        // the shut height says nothing about what has to be brought into view.
-        onLayout={(event) =>
-          onFrame({ y: event.nativeEvent.layout.y, height: event.nativeEvent.layout.height })
-        }
-        style={[style, moving]}
-      >
-        {children}
-      </Animated.View>
-    </GestureDetector>
   )
 }
 
@@ -1742,32 +1450,8 @@ const styles = StyleSheet.create({
   // Cincuenta y ocho y no sesenta y dos: con la columna de esfuerzo, al badge de
   // «Calentamiento» le faltaban diez puntos y se cortaba a «Calentam…».
   colCell: { minWidth: 58, alignItems: 'center' },
-  // Más estrecha que las otras dos: la escala llega a diez, así que caben dos cifras
-  // y no hace falta sitio para una unidad.
-  // Estrecha: la escala llega a diez y el botón no lleva unidad. Se probó bajarla
-  // más para que «Calentamiento» dejara de cortarse y no lo consigue — el badge no
-  // recoge lo que se le suelta —, así que se queda en lo cómodo de tocar.
-  colEffort: { minWidth: 46, alignItems: 'center' },
-  effort: {
-    minWidth: 46,
-    height: 44,
-    borderRadius: 12,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   colClose: { width: 20 },
   sheet: { gap: 10, paddingBottom: 8 },
-  choice: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    borderWidth: 1,
-    borderRadius: 14,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-  },
-  choiceText: { flex: 1, gap: 2 },
   // A transition rather than a worklet: the value is a two-state flip, not a gesture.
   remove: { transitionProperty: 'transform', transitionDuration: PRESS_MS },
   chevron: { transitionProperty: 'transform', transitionDuration: 200 },

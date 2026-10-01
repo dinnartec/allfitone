@@ -4165,6 +4165,8 @@ export interface components {
       /** @description Derived from the assignment's start date, not stored: the same number kept in two places is one of them wrong. */
       week: number | null
       planned: components['schemas']['SpaceProgramStep'][]
+      /** @description The session's own exercises, in the order they are trained (ADR-034). Copied from the routine when the attempt started, with its supersets, and changed only by the person since; `planned` is kept for older clients. */
+      exercises: components['schemas']['SpaceSessionExercise'][]
       results: {
         [key: string]: unknown
       }[]
@@ -4208,7 +4210,20 @@ export interface components {
         load_value: number | null
         achieved_reps: number | null
       }[]
+      /** @description The sets the routine asked for, in order, with their kind. The session opens each row with it and the person can change it (ADR-033). Empty for a step published before sets existed, where `target` is all there is; absent on the program detail. */
+      sets?: {
+        set_order: number
+        kind: components['schemas']['SetKind']
+        target_reps: number | null
+        target_load_value: number | null
+        target_load_unit_code: string | null
+      }[]
     }
+    /**
+     * @description What a set is: `planning.set_kind`, shared by the plan and by what was done (ADR-030, ADR-033). A warmup is recorded but never counted as work.
+     * @enum {string}
+     */
+    SetKind: 'normal' | 'warmup' | 'to_failure' | 'drop'
     SpaceProgramChoice: {
       program_version_id: components['schemas']['UuidV7']
       /** @description An IANA zone. The start date is **not** sent: it is always today in this zone, and a client-supplied date could backdate a plan into a history that never happened. */
@@ -5390,6 +5405,8 @@ export interface components {
       interval_results?: components['schemas']['IntervalResultReplace'][]
       mobility_results?: components['schemas']['MobilityResultReplace'][]
       strength_sets: components['schemas']['StrengthSet'][]
+      /** @description The session's exercise list, replaced with the sets. Omitted, the session keeps the list it has. Exercises sharing a superset group must be contiguous (IX-50). */
+      exercises?: components['schemas']['SessionExerciseReplace'][]
     }
     ExecutionSegment: {
       position: number
@@ -5406,6 +5423,49 @@ export interface components {
       achieved_reps?: number | null
       load?: components['schemas']['Load'] | null
       rpe?: number | null
+      /** @description What the set was. Omitted, it is recorded as `normal` (ADR-033). */
+      kind?: components['schemas']['SetKind']
+      /** @description The position of the exercise the set belongs to, in `exercises`. Omitted, it lands on the first exercise of its movement. */
+      exercise_position?: number
+    }
+    SessionExerciseReplace: {
+      position: number
+      /** Format: uuid */
+      movement_id?: string | null
+      /**
+       * Format: uuid
+       * @description The routine step it came from; null for one added during the session.
+       */
+      planned_step_id?: string | null
+      superset_group?: number | null
+      /** @description Rest after this exercise's sets, today's and not the routine's (ADR-035). */
+      rest_seconds?: number | null
+    }
+    SpaceSessionExercise: {
+      position: number
+      /** Format: uuid */
+      movement_id: string | null
+      movement: string | null
+      /** Format: uuid */
+      planned_step_id: string | null
+      superset_group: number | null
+      /** @description Rest after this exercise's sets, today's and not the routine's (ADR-035). */
+      rest_seconds: number | null
+      /** @description The routine step's target; null for an exercise added in the session. */
+      target: {
+        [key: string]: unknown
+      } | null
+      previous: {
+        load_value: number | null
+        achieved_reps: number | null
+      }[]
+      sets: {
+        set_order: number
+        kind: components['schemas']['SetKind']
+        target_reps: number | null
+        target_load_value: number | null
+        target_load_unit_code: string | null
+      }[]
     }
     Load: {
       value: number

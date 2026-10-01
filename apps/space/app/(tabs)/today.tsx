@@ -508,9 +508,6 @@ export default function Today() {
               if (id) discard(id)
             }}
           />
-          <Text role="body" size="sm" color="muted">
-            No se borra. Queda en tu historial como una sesión sin terminar.
-          </Text>
           <Button label="Seguir entrenando" variant="ghost" onPress={() => setDiscarding(false)} />
         </View>
       </Sheet>

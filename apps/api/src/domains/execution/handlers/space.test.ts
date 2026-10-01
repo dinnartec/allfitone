@@ -61,6 +61,7 @@ const execution: Execution = {
   week: 1,
   planned: [],
   results: [],
+  exercises: [],
 }
 
 function harness(overrides?: Partial<SpaceExecutionService>, actorFails = false): Hono {
@@ -240,6 +241,30 @@ describe('PUT /space/v1/executions/{id}/results', () => {
     })
 
     expect(response.status).toBe(409)
+  })
+
+  test('T-EXE-API-EXER-03 takes the exercise list with the sets', async () => {
+    const withList = {
+      ...results,
+      exercises: [{ position: 1, movement_id: null, superset_group: null }],
+    }
+
+    expect((await put(withList, { ...commanded, 'if-match': '2' })).status).toBe(200)
+  })
+
+  test('T-EXE-API-EXER-05 takes each exercise with its rest', async () => {
+    const withRest = {
+      ...results,
+      exercises: [{ position: 1, movement_id: null, superset_group: null, rest_seconds: 90 }],
+    }
+
+    expect((await put(withRest, { ...commanded, 'if-match': '2' })).status).toBe(200)
+  })
+
+  test('T-EXE-API-EXER-04 refuses an exercise list that is not a list', async () => {
+    const response = await put({ ...results, exercises: 'none' }, { ...commanded, 'if-match': '2' })
+
+    expect(response.status).toBe(400)
   })
 })
 

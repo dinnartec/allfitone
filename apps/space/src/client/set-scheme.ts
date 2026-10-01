@@ -33,15 +33,7 @@ export interface WorkingSet {
   readonly reps?: number
   /** Absent until somebody says it: nothing invents a weight for another person. */
   readonly load?: number
-  /**
-   * El esfuerzo que se pide, de 0 a 10, y **ausente mientras nadie lo diga**.
-   *
-   * Va por serie y no por ejercicio, como las repeticiones y el peso, porque es donde
-   * la base lo guarda y porque un calentamiento y una serie al fallo no se piden con el
-   * mismo esfuerzo: un valor por ejercicio tendría que escribirle a la de calentamiento
-   * un número que es falso.
-   */
-  readonly rpe?: number
+  // No effort here: it is what a set felt like, so the session records it (ADR-033).
 }
 
 const NORMAL = (reps: number): WorkingSet => ({ kind: 'normal', reps })
@@ -103,11 +95,6 @@ export function withReps(set: WorkingSet, reps: number | undefined): WorkingSet 
 export function withLoad(set: WorkingSet, load: number | undefined): WorkingSet {
   const { load: _was, ...rest } = set
   return load === undefined ? rest : { ...rest, load }
-}
-
-export function withRpe(set: WorkingSet, rpe: number | undefined): WorkingSet {
-  const { rpe: _was, ...rest } = set
-  return rpe === undefined ? rest : { ...rest, rpe }
 }
 
 /** What the weight column shows. A set nobody has loaded says so, not «0». */

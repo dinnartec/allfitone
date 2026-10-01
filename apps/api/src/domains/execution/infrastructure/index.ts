@@ -41,6 +41,7 @@ interface ExecutionRow {
   week: number | null
   planned: Execution['planned']
   results: Execution['results']
+  exercises: Execution['exercises'] | null
 }
 
 interface AttemptRow {
@@ -99,7 +100,8 @@ export function createExecutionDatabase(): ExecutionDatabase {
           select * from execution.replace_execution_results(
             ${input.personId}::uuid, ${input.executedSessionId}::uuid,
             ${input.revisionNumber}::bigint, ${JSON.stringify(flatten(input.results))}::text::jsonb,
-            ${input.idempotencyKey}::uuid, ${input.commandId}::uuid, ${input.requestHash}
+            ${input.idempotencyKey}::uuid, ${input.commandId}::uuid, ${input.requestHash},
+            ${exercisesOf(input.results)}::text::jsonb
           )
         `
         if (!row) throw new Error('PostgreSQL did not replace the results')
@@ -159,6 +161,20 @@ export function createExecutionDatabase(): ExecutionDatabase {
   }
 }
 
+/** The session's exercise list, or null so the command keeps the one it has (ADR-034). */
+function exercisesOf(results: ExecutionResultsReplace): string | null {
+  if (!results.exercises) return null
+  return JSON.stringify(
+    results.exercises.map((exercise) => ({
+      position: exercise.position,
+      movement_id: exercise.movement_id ?? null,
+      planned_step_id: exercise.planned_step_id ?? null,
+      superset_group: exercise.superset_group ?? null,
+      rest_seconds: exercise.rest_seconds ?? null,
+    })),
+  )
+}
+
 /** The contract keeps the families apart; the command takes them as one list. */
 function flatten(results: ExecutionResultsReplace): Record<string, unknown>[] {
   const strength = (results.strength_sets ?? []).map((entry) => ({
@@ -169,6 +185,8 @@ function flatten(results: ExecutionResultsReplace): Record<string, unknown>[] {
     load_value: entry.load?.value ?? null,
     load_unit_code: entry.load?.unit ?? null,
     rpe: entry.rpe ?? null,
+    kind: entry.kind ?? null,
+    exercise_position: entry.exercise_position ?? null,
   }))
   const endurance = (results.endurance_laps ?? []).map((entry) => ({
     family: 'endurance',
@@ -233,6 +251,7 @@ function execution(row: ExecutionRow): Execution {
     week: row.week === null ? null : Number(row.week),
     planned: row.planned ?? [],
     results: row.results ?? [],
+    exercises: row.exercises ?? [],
   }
 }
 
