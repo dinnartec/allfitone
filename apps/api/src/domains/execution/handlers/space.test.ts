@@ -4,7 +4,13 @@ import { Hono } from 'hono'
 
 import { SpaceActorError, type SpaceActorResolver } from '../../identity/index.js'
 import type { SpaceExecutionService } from '../application/index.js'
-import type { Execution, ExecutionSummary, HistoryMonth, HistoryPage } from '../domain/index.js'
+import type {
+  Execution,
+  ExecutionSummary,
+  FinishedExecution,
+  HistoryMonth,
+  HistoryPage,
+} from '../domain/index.js'
 import { spaceExecutionRoutes } from './space.js'
 
 const PERSON_ID = '019e4000-0000-7000-8000-000000000001'
@@ -125,6 +131,48 @@ const historyMonth: HistoryMonth = {
   disciplines: [{ code: 'strength', name: 'Fuerza' }],
 }
 
+const finished: FinishedExecution = {
+  executed_session_id: EXECUTION_ID,
+  revision_number: 4,
+  started_at: '2026-09-29T23:02:00.000Z',
+  ended_at: '2026-09-29T23:50:00.000Z',
+  duration_seconds: 2880,
+  title: 'Tirón',
+  planned_session_id: PLANNED_ID,
+  repeatable: true,
+  session_number: 14,
+  work_sets: 12,
+  total_volume_kg: 3840,
+  record_count: 2,
+  previous: {
+    executed_session_id: '019e4000-0000-7000-8000-000000000202',
+    started_at: '2026-09-17T23:00:00.000Z',
+    total_volume_kg: 3690,
+    change_percent: 4,
+  },
+  exercises: [
+    {
+      position: 1,
+      movement_id: '019e4000-0000-7000-8000-000000000501',
+      movement: 'Remo con barra',
+      superset_group: null,
+      record: true,
+      best_set: { load_kg: 70, reps: 8 },
+      sets: [
+        {
+          set_order: 1,
+          kind: 'normal',
+          load_value: 70,
+          load_unit_code: 'kg',
+          achieved_reps: 8,
+          rpe: null,
+          best_ever: true,
+        },
+      ],
+    },
+  ],
+}
+
 function harness(overrides?: Partial<SpaceExecutionService>, actorFails = false): Hono {
   const service: SpaceExecutionService = {
     startAttempt: async () => attempt,
@@ -143,6 +191,16 @@ function harness(overrides?: Partial<SpaceExecutionService>, actorFails = false)
     }),
     listHistory: async () => historyPage,
     readHistoryMonth: async () => historyMonth,
+    readFinished: async () => finished,
+    revise: async () => ({ id: EXECUTION_ID, revision_number: 5, result_count: 12 }),
+    annul: async () => ({ id: EXECUTION_ID, annulled_at: '2026-10-01T12:00:00.000Z' }),
+    readAnnulmentPreview: async () => ({ records: 2, streak_weeks: 8, streak_weeks_after: 7 }),
+    repeat: async () => ({
+      id: COMMAND_ID,
+      attempt_number: 2,
+      status: 'in_progress' as const,
+      revision_number: 0,
+    }),
     ...overrides,
   }
   const actors: SpaceActorResolver = {
@@ -191,9 +249,14 @@ describe('the Space execution surface honours the contract', () => {
       'OP-EXE-003',
       'OP-EXE-005',
       'OP-EXE-006',
+      'OP-EXE-007',
+      'OP-EXE-009',
       'OP-EXE-014',
       'OP-EXE-015',
       'OP-EXE-021',
+      'OP-EXE-023',
+      'OP-EXE-024',
+      'OP-EXE-025',
     ])
   })
 })
@@ -552,5 +615,145 @@ describe('GET /space/v1/history/months/{month}', () => {
       400,
     )
     expect((await read('/space/v1/history/months/2026-09-01')).status).toBe(400)
+  })
+})
+
+describe('a finished session: its detail, corrections, annulment and repeat', () => {
+  const path = (tail: string) => `/space/v1/executions/${EXECUTION_ID}/${tail}`
+  const post = (
+    tail: string,
+    body: unknown,
+    headers: Record<string, string>,
+    overrides?: Partial<SpaceExecutionService>,
+  ) =>
+    harness(overrides).request(path(tail), { method: 'POST', headers, body: JSON.stringify(body) })
+  const revision = {
+    started_at: '2026-09-29T23:02:00.000Z',
+    ended_at: '2026-09-29T23:50:00.000Z',
+    strength_sets: [{ order: 1, exercise_position: 1 }],
+    exercises: [{ position: 1, movement_id: null, superset_group: null }],
+  }
+
+  test('T-EXE-API-FIN-01 answers the detail in the zone it was asked in', async () => {
+    let zone: string | undefined
+    const response = await harness({
+      readFinished: async (input) => {
+        zone = input.timezone
+        return finished
+      },
+    }).request(path('detail?timezone=America/Bogota'), { headers: authorized })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual(finished)
+    expect(zone).toBe('America/Bogota')
+  })
+
+  test('T-EXE-API-FIN-02 an annulled, unfinished or foreign session is not found', async () => {
+    const response = await harness({ readFinished: async () => null }).request(
+      path('detail?timezone=America/Bogota'),
+      { headers: authorized },
+    )
+
+    expect(response.status).toBe(404)
+    expect((await harness().request(path('detail'), { headers: authorized })).status).toBe(400)
+  })
+
+  test('T-EXE-API-FIN-03 a correction passes the session whole, under its revision', async () => {
+    let asked: Parameters<SpaceExecutionService['revise']>[0] | undefined
+    const response = await post(
+      'revisions',
+      revision,
+      { ...commanded, 'if-match': '4' },
+      {
+        revise: async (input) => {
+          asked = input
+          return { id: EXECUTION_ID, revision_number: 5, result_count: 1 }
+        },
+      },
+    )
+
+    expect(response.status).toBe(200)
+    expect(asked).toMatchObject({
+      personId: PERSON_ID,
+      executedSessionId: EXECUTION_ID,
+      revisionNumber: 4,
+      revision,
+    })
+  })
+
+  test('T-EXE-API-FIN-04 refuses a correction it cannot honour', async () => {
+    const headers = { ...commanded, 'if-match': '4' }
+    expect((await post('revisions', revision, commanded)).status).toBe(400)
+    expect((await post('revisions', { ...revision, ended_at: 'later' }, headers)).status).toBe(400)
+    expect((await post('revisions', { ...revision, strength_sets: [] }, headers)).status).toBe(400)
+    expect((await post('revisions', { ...revision, extra: true }, headers)).status).toBe(400)
+  })
+
+  test('T-EXE-API-FIN-05 a stale correction is a conflict', async () => {
+    const response = await post(
+      'revisions',
+      revision,
+      { ...commanded, 'if-match': '3' },
+      {
+        revise: async () => {
+          throw Object.assign(new Error('stale-execution'), { code: '40001' })
+        },
+      },
+    )
+
+    expect(response.status).toBe(409)
+  })
+
+  test('T-EXE-API-FIN-06 annuls with the reason, or with none', async () => {
+    const reasons: (string | null)[] = []
+    const annul: Partial<SpaceExecutionService> = {
+      annul: async (input) => {
+        reasons.push(input.reason)
+        return { id: EXECUTION_ID, annulled_at: '2026-10-01T12:00:00.000Z' }
+      },
+    }
+
+    expect((await post('invalidation', {}, commanded, annul)).status).toBe(200)
+    expect(
+      (await post('invalidation', { reason: ' Fue una prueba ' }, commanded, annul)).status,
+    ).toBe(200)
+    expect(reasons).toEqual([null, 'Fue una prueba'])
+    expect((await post('invalidation', { reason: 7 }, commanded)).status).toBe(400)
+    expect((await post('invalidation', {}, authorized)).status).toBe(400)
+  })
+
+  test('T-EXE-API-FIN-07 answers what annulling would change', async () => {
+    const response = await harness().request(path('invalidation-preview?timezone=America/Bogota'), {
+      headers: authorized,
+    })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ records: 2, streak_weeks: 8, streak_weeks_after: 7 })
+  })
+
+  test('T-EXE-API-FIN-08 a repeat starts another attempt, its id the Command-Id', async () => {
+    const response = await post(
+      'repetitions',
+      { started_at: '2026-10-01T12:00:00.000Z', timezone: 'America/Bogota' },
+      commanded,
+    )
+
+    expect(response.status).toBe(201)
+    expect(((await response.json()) as { id: string }).id).toBe(COMMAND_ID)
+  })
+
+  test('T-EXE-API-FIN-09 another session still open is a conflict', async () => {
+    const response = await post(
+      'repetitions',
+      { started_at: '2026-10-01T12:00:00.000Z', timezone: 'America/Bogota' },
+      commanded,
+      {
+        repeat: async () => {
+          throw Object.assign(new Error('another session is still open'), { code: '55006' })
+        },
+      },
+    )
+
+    expect(response.status).toBe(409)
   })
 })

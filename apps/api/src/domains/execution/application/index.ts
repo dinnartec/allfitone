@@ -28,6 +28,11 @@ export interface SpaceExecutionService {
   ): Promise<ExecutionSummary | null>
   listHistory(input: HistoryQuery): Promise<HistoryPage>
   readHistoryMonth: ExecutionDatabase['readHistoryMonth']
+  readFinished: ExecutionDatabase['readFinished']
+  revise: ExecutionDatabase['revise']
+  annul: ExecutionDatabase['annul']
+  readAnnulmentPreview: ExecutionDatabase['readAnnulmentPreview']
+  repeat: ExecutionDatabase['repeat']
 }
 
 export type { Execution, ExecutionSummary, HistoryMonth, HistoryPage, HistoryQuery, WeekSummary }
@@ -66,5 +71,10 @@ export function createSpaceExecutionService(
       }
     },
     readHistoryMonth: (input) => database.readHistoryMonth(input),
+    readFinished: (input) => database.readFinished(input),
+    revise: (input) => database.revise(input),
+    annul: (input) => database.annul(input),
+    readAnnulmentPreview: (input) => database.readAnnulmentPreview(input),
+    repeat: (input) => database.repeat(input),
   }
 }

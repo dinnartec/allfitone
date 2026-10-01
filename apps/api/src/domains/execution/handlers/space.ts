@@ -3,7 +3,8 @@
  *
  * All of them the person's own: start an attempt, read it, replace what has been
  * recorded, close it, or leave it; and read back what was trained, one session's summary
- * or the history and its months (`OP-EXE-014`, `OP-EXE-022`).
+ * or the history and its months (`OP-EXE-014`, `OP-EXE-022`). A finished session is read
+ * set by set, corrected, annulled or repeated (`OP-EXE-023`, `007`, `009`, `024`, `025`).
  *
  * **Leaving is not deleting.** `OP-EXE-003` closes the attempt as abandoned and keeps
  * what it recorded: training that happened stays in the history, marked as unfinished
@@ -30,7 +31,7 @@ import {
 import { authProvider } from '../../../platform/auth/index.js'
 import { spaceExecutionService } from '../dependencies.js'
 import type { SpaceExecutionService } from '../application/index.js'
-import type { ExecutionResultsReplace } from '../domain/index.js'
+import type { ExecutionResultsReplace, ExecutionRevision } from '../domain/index.js'
 
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const UUID_V7 = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -254,6 +255,136 @@ export function spaceExecutionRoutes(
     }
   })
 
+  // `OP-EXE-023`. Absent, foreign, unfinished and annulled are the same 404.
+  routes.get('/executions/:executionId/detail', async (c) => {
+    c.header('Cache-Control', 'no-store')
+
+    const token = await verified(c, verify)
+    if (!token) return fail(c, 'unauthenticated')
+
+    const executedSessionId = c.req.param('executionId')
+    const timezone = readTimezone(c)
+    if (!UUID_V7.test(executedSessionId) || !timezone) return fail(c, 'invalid-request')
+
+    try {
+      const personId = await actors().personFor(token.subject)
+      const found = await execution().readFinished({
+        personId,
+        executedSessionId,
+        timezone,
+        requestId: c.req.header('x-request-id') ?? '',
+      })
+      return found ? c.json(found, 200) : fail(c, 'not-found')
+    } catch (cause) {
+      return failure(c, cause)
+    }
+  })
+
+  routes.post('/executions/:executionId/revisions', async (c) => {
+    c.header('Cache-Control', 'no-store')
+
+    const token = await verified(c, verify)
+    if (!token) return fail(c, 'unauthenticated')
+
+    const executedSessionId = c.req.param('executionId')
+    const body = await readJson(c)
+    const revision = readRevision(body)
+    const command = commandContext(c, body)
+    const revisionNumber = Number(c.req.header('if-match'))
+    if (!UUID_V7.test(executedSessionId) || !revision || !command) return fail(c, 'invalid-request')
+    if (!Number.isInteger(revisionNumber) || revisionNumber < 0) return fail(c, 'invalid-request')
+
+    try {
+      const personId = await actors().personFor(token.subject)
+      const revised = await execution().revise({
+        personId,
+        executedSessionId,
+        revisionNumber,
+        revision,
+        ...command,
+      })
+      return c.json(revised, 200)
+    } catch (cause) {
+      return failure(c, cause)
+    }
+  })
+
+  routes.post('/executions/:executionId/invalidation', async (c) => {
+    c.header('Cache-Control', 'no-store')
+
+    const token = await verified(c, verify)
+    if (!token) return fail(c, 'unauthenticated')
+
+    const executedSessionId = c.req.param('executionId')
+    const body = await readJson(c)
+    const reason = readReason(body)
+    const command = commandContext(c, body)
+    if (!UUID_V7.test(executedSessionId) || reason === undefined || !command) {
+      return fail(c, 'invalid-request')
+    }
+
+    try {
+      const personId = await actors().personFor(token.subject)
+      const annulled = await execution().annul({ personId, executedSessionId, reason, ...command })
+      return c.json(annulled, 200)
+    } catch (cause) {
+      return failure(c, cause)
+    }
+  })
+
+  routes.get('/executions/:executionId/invalidation-preview', async (c) => {
+    c.header('Cache-Control', 'no-store')
+
+    const token = await verified(c, verify)
+    if (!token) return fail(c, 'unauthenticated')
+
+    const executedSessionId = c.req.param('executionId')
+    const timezone = readTimezone(c)
+    if (!UUID_V7.test(executedSessionId) || !timezone) return fail(c, 'invalid-request')
+
+    try {
+      const personId = await actors().personFor(token.subject)
+      const preview = await execution().readAnnulmentPreview({
+        personId,
+        executedSessionId,
+        timezone,
+        requestId: c.req.header('x-request-id') ?? '',
+      })
+      return preview ? c.json(preview, 200) : fail(c, 'not-found')
+    } catch (cause) {
+      return failure(c, cause)
+    }
+  })
+
+  // `Command-Id` is the new session's identity, as on the start (`OP-EXE-001`).
+  routes.post('/executions/:executionId/repetitions', async (c) => {
+    c.header('Cache-Control', 'no-store')
+
+    const token = await verified(c, verify)
+    if (!token) return fail(c, 'unauthenticated')
+
+    const executedSessionId = c.req.param('executionId')
+    const body = await readJson(c)
+    const repetition = readRepetition(body)
+    const command = commandContext(c, body)
+    if (!UUID_V7.test(executedSessionId) || !repetition || !command) {
+      return fail(c, 'invalid-request')
+    }
+
+    try {
+      const personId = await actors().personFor(token.subject)
+      const repeated = await execution().repeat({
+        personId,
+        executedSessionId,
+        ...repetition,
+        ...command,
+      })
+      return c.json(repeated, 201)
+    } catch (cause) {
+      return failure(c, cause)
+    }
+  })
+
   return routes
 }
 
@@ -317,8 +448,9 @@ function failure(c: Context, cause: unknown): Response {
     if (code === '22023' || code === '23514') return fail(c, 'invalid-request')
     // A stale revision is a conflict, not a failure: the client re-reads and retries.
     if (code === '40001' || code === '23505') return fail(c, 'conflict')
-    // Not in the state the read needs: a summary of a session still open.
-    if (code === '55000') return fail(c, 'conflict')
+    // Not in the state the read needs: a summary of a session still open, or a repeat
+    // while another session is open.
+    if (code === '55000' || code === '55006') return fail(c, 'conflict')
   }
   console.warn('[execution] space request failed', { detail: String(cause).slice(0, 160) })
   return fail(c, 'upstream-unavailable')
@@ -387,6 +519,47 @@ function readResults(body: unknown): ExecutionResultsReplace | undefined {
     if (candidate[optional] !== undefined && !Array.isArray(candidate[optional])) return undefined
   }
   return candidate as unknown as ExecutionResultsReplace
+}
+
+const isInstant = (value: unknown): value is string =>
+  typeof value === 'string' && !Number.isNaN(Date.parse(value))
+
+/** The session whole, with its time; an empty one is an annulment, which is its own command. */
+function readRevision(body: unknown): ExecutionRevision | undefined {
+  if (typeof body !== 'object' || body === null) return undefined
+  const candidate = body as Record<string, unknown>
+  const allowed = new Set(['started_at', 'ended_at', 'strength_sets', 'exercises'])
+  if (Object.keys(candidate).some((key) => !allowed.has(key))) return undefined
+  if (!isInstant(candidate.started_at) || !isInstant(candidate.ended_at)) return undefined
+  if (!Array.isArray(candidate.strength_sets) || candidate.strength_sets.length === 0) {
+    return undefined
+  }
+  if (candidate.exercises !== undefined && !Array.isArray(candidate.exercises)) return undefined
+  return candidate as unknown as ExecutionRevision
+}
+
+const MAX_REASON = 200
+
+/** Null is «no reason given»; undefined is a body the command cannot take. */
+function readReason(body: unknown): string | null | undefined {
+  if (typeof body !== 'object' || body === null) return undefined
+  const keys = Object.keys(body)
+  if (keys.some((key) => key !== 'reason')) return undefined
+  const value = (body as { reason?: unknown }).reason
+  if (value === undefined || value === null) return null
+  if (typeof value !== 'string' || value.length > MAX_REASON) return undefined
+  return value.trim() || null
+}
+
+function readRepetition(body: unknown): { startedAt: string; timezone: string } | undefined {
+  if (typeof body !== 'object' || body === null) return undefined
+  const keys = Object.keys(body)
+  if (keys.length !== 2) return undefined
+  const { started_at: startedAt, timezone } = body as Record<string, unknown>
+  if (!isInstant(startedAt) || typeof timezone !== 'string') return undefined
+  const zone = timezone.trim()
+  if (zone === '' || zone.length > MAX_TIMEZONE) return undefined
+  return { startedAt, timezone: zone }
 }
 
 function readEndedAt(body: unknown): string | undefined {
