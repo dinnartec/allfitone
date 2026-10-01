@@ -174,3 +174,56 @@ describe('the results list binding', () => {
     expect(following.startsWith('::text::jsonb')).toBe(true)
   })
 })
+
+describe('the summary read (ADR-036)', () => {
+  test("T-EXE-API-SUM-01 asks for the session in the person's zone and reads numerics as numbers", async () => {
+    const captured: CapturedQuery[] = []
+    const client = Object.assign(
+      (strings: TemplateStringsArray, ...values: unknown[]) => {
+        captured.push({ strings: [...strings], values })
+        return Promise.resolve([
+          {
+            executed_session_id: EXECUTION_ID,
+            started_at: new Date('2026-09-29T12:00:00.000Z'),
+            ended_at: new Date('2026-09-29T12:48:12.000Z'),
+            duration_seconds: '2892',
+            title: 'Tirón',
+            work_sets: 12,
+            exercise_count: 4,
+            total_volume_kg: '3840.00',
+            exercises: [],
+            records: [],
+            streak_weeks: 8,
+            session_number: 14,
+            given_name: 'Walberto',
+            username: 'walberto',
+            cover_object_key: 'routines/back.webp',
+            algorithm_version: 1,
+          },
+        ])
+      },
+      {
+        begin: (operation: (transaction: unknown) => Promise<unknown>) => operation(client),
+        json: (value: unknown) => ({ json: value }),
+        end: () => Promise.resolve(),
+      },
+    )
+    await setDatabase(client as unknown as ReturnType<typeof postgres>)
+
+    const summary = await createExecutionDatabase().readSummary({
+      personId: PERSON_ID,
+      executedSessionId: EXECUTION_ID,
+      timezone: 'America/Bogota',
+      requestId: 'r',
+    })
+
+    expect(captured.at(-1)?.values.slice(0, 3)).toEqual([PERSON_ID, EXECUTION_ID, 'America/Bogota'])
+    expect(summary).toMatchObject({
+      duration_seconds: 2892,
+      total_volume_kg: 3840,
+      started_at: '2026-09-29T12:00:00.000Z',
+      ended_at: '2026-09-29T12:48:12.000Z',
+      cover_object_key: 'routines/back.webp',
+    })
+  })
+})

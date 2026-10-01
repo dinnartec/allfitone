@@ -14,6 +14,10 @@ export type Finalized = AllfitV1Schemas['ExecutionFinalized']
 export type Abandoned = AllfitV1Schemas['ExecutionAbandoned']
 export type ExecutionResultsReplace = AllfitV1Schemas['ExecutionResultsReplace']
 export type WeekSummary = AllfitV1Schemas['SpaceWeekSummary']
+export type ExecutionSummary = AllfitV1Schemas['SpaceExecutionSummary']
+
+/** The summary as PostgreSQL holds it: the photograph is still a storage key. */
+export type SummaryRow = Omit<ExecutionSummary, 'cover_url'> & { cover_object_key: string | null }
 
 export interface ExecutionCommand {
   idempotencyKey: string
@@ -57,4 +61,14 @@ export interface ExecutionDatabase {
     timezone: string
     requestId: string
   }): Promise<WeekSummary>
+  /**
+   * Null when it does not exist or is not this person's. A session still open is refused
+   * by PostgreSQL with SQLSTATE 55000 (ADR-036).
+   */
+  readSummary(input: {
+    personId: string
+    executedSessionId: string
+    timezone: string
+    requestId: string
+  }): Promise<SummaryRow | null>
 }
