@@ -2541,6 +2541,67 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  ExecutionInvalidated: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['id', 'annulled_at'],
+    properties: {
+      id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      annulled_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+    },
+  },
+  ExecutionInvalidation: {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      reason: {
+        type: ['string', 'null'],
+        maxLength: 200,
+        description: 'Optional. Without one it is recorded as «La persona lo eliminó».',
+      },
+    },
+  },
+  ExecutionRepeated: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['id', 'attempt_number', 'status', 'revision_number'],
+    properties: {
+      id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      attempt_number: {
+        type: 'integer',
+        minimum: 1,
+      },
+      status: {
+        type: 'string',
+        enum: ['in_progress'],
+      },
+      revision_number: {
+        type: 'integer',
+        minimum: 0,
+      },
+    },
+  },
+  ExecutionRepetition: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['started_at', 'timezone'],
+    properties: {
+      started_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      timezone: {
+        $ref: '#/components/schemas/IanaTimeZone',
+      },
+    },
+  },
   ExecutionResultsReplace: {
     type: 'object',
     additionalProperties: false,
@@ -2646,6 +2707,56 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         type: 'integer',
         minimum: 0,
         description: 'Zero on a session somebody has opened and not yet recorded into.',
+      },
+    },
+  },
+  ExecutionRevised: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['id', 'revision_number', 'result_count'],
+    properties: {
+      id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      revision_number: {
+        type: 'integer',
+        minimum: 1,
+      },
+      result_count: {
+        type: 'integer',
+        minimum: 1,
+      },
+    },
+  },
+  ExecutionRevision: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['started_at', 'ended_at', 'strength_sets'],
+    description:
+      'A finished session as it now stands, whole: its time, its sets and, when given, its exercise list, with the rules of `ExecutionResultsReplace`.',
+    properties: {
+      started_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      ended_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      strength_sets: {
+        type: 'array',
+        minItems: 1,
+        maxItems: 1000,
+        items: {
+          $ref: '#/components/schemas/StrengthSet',
+        },
+      },
+      exercises: {
+        type: 'array',
+        maxItems: 100,
+        items: {
+          $ref: '#/components/schemas/SessionExerciseReplace',
+        },
       },
     },
   },
@@ -6409,6 +6520,21 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
     },
     description: 'The Fitness ID, the same one on every retry.',
   },
+  SpaceBestSet: {
+    type: 'object',
+    additionalProperties: false,
+    description: 'The work set with the highest estimated max, the first of equals.',
+    required: ['load_kg', 'reps'],
+    properties: {
+      load_kg: {
+        type: 'number',
+      },
+      reps: {
+        type: 'integer',
+        minimum: 1,
+      },
+    },
+  },
   SpaceBiologicalSex: {
     type: 'object',
     additionalProperties: false,
@@ -6854,6 +6980,205 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  SpaceFinishedExecution: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'executed_session_id',
+      'revision_number',
+      'started_at',
+      'ended_at',
+      'duration_seconds',
+      'title',
+      'planned_session_id',
+      'repeatable',
+      'session_number',
+      'work_sets',
+      'total_volume_kg',
+      'record_count',
+      'previous',
+      'exercises',
+    ],
+    properties: {
+      executed_session_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      revision_number: {
+        type: 'integer',
+        minimum: 0,
+        description: 'What `If-Match` carries to correct it.',
+      },
+      started_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      ended_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      duration_seconds: {
+        type: 'integer',
+        minimum: 0,
+      },
+      title: {
+        type: ['string', 'null'],
+        description: "The routine's name; null for a free session.",
+      },
+      planned_session_id: {
+        type: ['string', 'null'],
+        format: 'uuid',
+      },
+      repeatable: {
+        type: 'boolean',
+        description: 'Whether `OP-EXE-025` can start another attempt at it.',
+      },
+      session_number: {
+        type: 'integer',
+        minimum: 1,
+      },
+      work_sets: {
+        type: 'integer',
+        minimum: 0,
+      },
+      total_volume_kg: {
+        type: ['number', 'null'],
+        minimum: 0,
+        description: 'Kilos lifted without warmups. Null when nothing was weighed.',
+      },
+      record_count: {
+        type: 'integer',
+        minimum: 0,
+      },
+      previous: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/SpaceFinishedPrevious',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      exercises: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/SpaceFinishedExercise',
+        },
+      },
+    },
+  },
+  SpaceFinishedExercise: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'position',
+      'movement_id',
+      'movement',
+      'superset_group',
+      'record',
+      'best_set',
+      'sets',
+    ],
+    properties: {
+      position: {
+        type: 'integer',
+        minimum: 1,
+      },
+      movement_id: {
+        type: ['string', 'null'],
+        format: 'uuid',
+      },
+      movement: {
+        type: ['string', 'null'],
+      },
+      superset_group: {
+        type: ['integer', 'null'],
+        minimum: 1,
+      },
+      record: {
+        type: 'boolean',
+        description: 'Whether the exercise beat anything before it (ADR-036).',
+      },
+      best_set: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/SpaceBestSet',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      sets: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/SpaceFinishedSet',
+        },
+      },
+    },
+  },
+  SpaceFinishedPrevious: {
+    type: 'object',
+    additionalProperties: false,
+    description: 'The last time the same routine was finished, before this one.',
+    required: ['executed_session_id', 'started_at', 'total_volume_kg', 'change_percent'],
+    properties: {
+      executed_session_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      started_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      total_volume_kg: {
+        type: ['number', 'null'],
+        minimum: 0,
+      },
+      change_percent: {
+        type: ['number', 'null'],
+        description:
+          "This session's kilos against those, rounded. Null when either weighed nothing.",
+      },
+    },
+  },
+  SpaceFinishedSet: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'set_order',
+      'kind',
+      'load_value',
+      'load_unit_code',
+      'achieved_reps',
+      'rpe',
+      'best_ever',
+    ],
+    properties: {
+      set_order: {
+        type: 'integer',
+        minimum: 1,
+      },
+      kind: {
+        $ref: '#/components/schemas/SetKind',
+      },
+      load_value: {
+        type: ['number', 'null'],
+      },
+      load_unit_code: {
+        type: ['string', 'null'],
+      },
+      achieved_reps: {
+        type: ['integer', 'null'],
+      },
+      rpe: {
+        type: ['number', 'null'],
+      },
+      best_ever: {
+        type: 'boolean',
+        description: "The exercise's best set, when it is also a record it holds.",
+      },
+    },
+  },
   SpaceFocusAreas: {
     type: 'object',
     additionalProperties: false,
@@ -7116,6 +7441,28 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         minimum: 0,
         description:
           'Of those planned, how many were finished that week, each once however many times it was done.',
+      },
+    },
+  },
+  SpaceInvalidationPreview: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['records', 'streak_weeks', 'streak_weeks_after'],
+    properties: {
+      records: {
+        type: 'integer',
+        minimum: 0,
+        description: 'The records this session holds, which go with it.',
+      },
+      streak_weeks: {
+        type: 'integer',
+        minimum: 0,
+        description: 'Weeks in a row trained, as of today.',
+      },
+      streak_weeks_after: {
+        type: 'integer',
+        minimum: 0,
+        description: 'The same, were this session annulled.',
       },
     },
   },

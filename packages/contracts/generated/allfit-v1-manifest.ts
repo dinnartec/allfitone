@@ -433,6 +433,13 @@ export const allfitV1ContractManifest = {
       responses: ['200', '400', '401', '403', '404', '409'],
     },
     {
+      method: 'GET',
+      path: '/space/v1/executions/{executionId}/detail',
+      operationId: 'getMyFinishedExecution',
+      allfitOperation: 'OP-EXE-023',
+      responses: ['200', '400', '401', '403', '404', '409', '503'],
+    },
+    {
       method: 'POST',
       path: '/space/v1/executions/{executionId}/finalize',
       operationId: 'finalizeExecution',
@@ -440,11 +447,39 @@ export const allfitV1ContractManifest = {
       responses: ['200', '400', '401', '404', '409', '422', '428'],
     },
     {
+      method: 'GET',
+      path: '/space/v1/executions/{executionId}/invalidation-preview',
+      operationId: 'getMyInvalidationPreview',
+      allfitOperation: 'OP-EXE-024',
+      responses: ['200', '400', '401', '403', '404', '409', '503'],
+    },
+    {
+      method: 'POST',
+      path: '/space/v1/executions/{executionId}/invalidation',
+      operationId: 'annulMyExecution',
+      allfitOperation: 'OP-EXE-009',
+      responses: ['200', '400', '401', '403', '404', '409', '503'],
+    },
+    {
+      method: 'POST',
+      path: '/space/v1/executions/{executionId}/repetitions',
+      operationId: 'repeatMyExecution',
+      allfitOperation: 'OP-EXE-025',
+      responses: ['201', '400', '401', '403', '404', '409', '503'],
+    },
+    {
       method: 'PUT',
       path: '/space/v1/executions/{executionId}/results',
       operationId: 'replaceExecutionResults',
       allfitOperation: 'OP-EXE-005',
       responses: ['200', '400', '401', '404', '409', '422', '428'],
+    },
+    {
+      method: 'POST',
+      path: '/space/v1/executions/{executionId}/revisions',
+      operationId: 'reviseMyExecution',
+      allfitOperation: 'OP-EXE-007',
+      responses: ['200', '400', '401', '403', '404', '409', '503'],
     },
     {
       method: 'GET',

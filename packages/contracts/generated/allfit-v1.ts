@@ -2650,6 +2650,106 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/space/v1/executions/{executionId}/detail': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Read one of my finished sessions, set by set
+     * @description What the history opens on: every set with its kind, the best set of each exercise, the set that beat everything before, and the last time the same routine was done. Records are derived when read (ADR-036), so a correction shows at once. Annulled and unfinished sessions answer 404.
+     */
+    get: operations['getMyFinishedExecution']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/executions/{executionId}/revisions': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Correct one of my finished sessions, keeping what it was
+     * @description The session as it now stands, whole, with its start and end. Append-only: the previous state is kept as a revision and never overwritten (ADR-022, ADR-038). Emptying a session is annulling it, which is `OP-EXE-009`.
+     */
+    post: operations['reviseMyExecution']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/executions/{executionId}/invalidation': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Annul one of my finished sessions
+     * @description What Space calls deleting. Nothing is deleted: the session stops counting in the history, records, streak and totals, and keeps its sets. Without a reason it is recorded as «La persona lo eliminó».
+     */
+    post: operations['annulMyExecution']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/executions/{executionId}/invalidation-preview': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Say what annulling one of my sessions would change
+     * @description Asked before confirming: the records that go with it, and the streak today with and without it.
+     */
+    get: operations['getMyInvalidationPreview']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/executions/{executionId}/repetitions': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Start another attempt at a finished session, with its exercises
+     * @description Another attempt at the same planned session (HU-SP-051), opening with the exercises the session ended with and no sets. `Command-Id` is the new session's identity. A free session has nothing to repeat; another session still open is a conflict.
+     */
+    post: operations['repeatMyExecution']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/space/v1/executions/{executionId}/results': {
     parameters: {
       query?: never
@@ -5648,6 +5748,107 @@ export interface components {
       strength_sets: components['schemas']['StrengthSet'][]
       /** @description The session's exercise list, replaced with the sets. Omitted, the session keeps the list it has. Exercises sharing a superset group must be contiguous (IX-50). */
       exercises?: components['schemas']['SessionExerciseReplace'][]
+    }
+    SpaceFinishedExecution: {
+      executed_session_id: components['schemas']['Uuid']
+      /** @description What `If-Match` carries to correct it. */
+      revision_number: number
+      /** Format: date-time */
+      started_at: string
+      /** Format: date-time */
+      ended_at: string
+      duration_seconds: number
+      /** @description The routine's name; null for a free session. */
+      title: string | null
+      /** Format: uuid */
+      planned_session_id: string | null
+      /** @description Whether `OP-EXE-025` can start another attempt at it. */
+      repeatable: boolean
+      session_number: number
+      work_sets: number
+      /** @description Kilos lifted without warmups. Null when nothing was weighed. */
+      total_volume_kg: number | null
+      record_count: number
+      previous: components['schemas']['SpaceFinishedPrevious'] | null
+      exercises: components['schemas']['SpaceFinishedExercise'][]
+    }
+    /** @description The last time the same routine was finished, before this one. */
+    SpaceFinishedPrevious: {
+      executed_session_id: components['schemas']['Uuid']
+      /** Format: date-time */
+      started_at: string
+      total_volume_kg: number | null
+      /** @description This session's kilos against those, rounded. Null when either weighed nothing. */
+      change_percent: number | null
+    }
+    SpaceFinishedExercise: {
+      position: number
+      /** Format: uuid */
+      movement_id: string | null
+      movement: string | null
+      superset_group: number | null
+      /** @description Whether the exercise beat anything before it (ADR-036). */
+      record: boolean
+      best_set: components['schemas']['SpaceBestSet'] | null
+      sets: components['schemas']['SpaceFinishedSet'][]
+    }
+    /** @description The work set with the highest estimated max, the first of equals. */
+    SpaceBestSet: {
+      load_kg: number
+      reps: number
+    }
+    SpaceFinishedSet: {
+      set_order: number
+      kind: components['schemas']['SetKind']
+      load_value: number | null
+      load_unit_code: string | null
+      achieved_reps: number | null
+      rpe: number | null
+      /** @description The exercise's best set, when it is also a record it holds. */
+      best_ever: boolean
+    }
+    /** @description A finished session as it now stands, whole: its time, its sets and, when given, its exercise list, with the rules of `ExecutionResultsReplace`. */
+    ExecutionRevision: {
+      /** Format: date-time */
+      started_at: string
+      /** Format: date-time */
+      ended_at: string
+      strength_sets: components['schemas']['StrengthSet'][]
+      exercises?: components['schemas']['SessionExerciseReplace'][]
+    }
+    ExecutionRevised: {
+      id: components['schemas']['Uuid']
+      revision_number: number
+      result_count: number
+    }
+    ExecutionInvalidation: {
+      /** @description Optional. Without one it is recorded as «La persona lo eliminó». */
+      reason?: string | null
+    }
+    ExecutionInvalidated: {
+      id: components['schemas']['Uuid']
+      /** Format: date-time */
+      annulled_at: string
+    }
+    SpaceInvalidationPreview: {
+      /** @description The records this session holds, which go with it. */
+      records: number
+      /** @description Weeks in a row trained, as of today. */
+      streak_weeks: number
+      /** @description The same, were this session annulled. */
+      streak_weeks_after: number
+    }
+    ExecutionRepetition: {
+      /** Format: date-time */
+      started_at: string
+      timezone: components['schemas']['IanaTimeZone']
+    }
+    ExecutionRepeated: {
+      id: components['schemas']['Uuid']
+      attempt_number: number
+      /** @enum {string} */
+      status: 'in_progress'
+      revision_number: number
     }
     ExecutionSegment: {
       position: number
@@ -11672,6 +11873,190 @@ export interface operations {
       404: components['responses']['NotFound']
       409: components['responses']['Conflict']
       422: components['responses']['ValidationFailed']
+    }
+  }
+  getMyFinishedExecution: {
+    parameters: {
+      query: {
+        /** @description The device's zone, which weeks and dates are counted in. */
+        timezone: components['schemas']['IanaTimeZone']
+      }
+      header?: never
+      path: {
+        executionId: components['parameters']['ExecutionId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The session as its owner sees it */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SpaceFinishedExecution']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  reviseMyExecution: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+        /** @description Strong ETag for the execution revision used as the command base. */
+        'If-Match': components['parameters']['IfMatch']
+      }
+      path: {
+        executionId: components['parameters']['ExecutionId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ExecutionRevision']
+      }
+    }
+    responses: {
+      /** @description Corrected, under a new revision */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          ETag: components['headers']['ETag']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ExecutionRevised']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  annulMyExecution: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        executionId: components['parameters']['ExecutionId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ExecutionInvalidation']
+      }
+    }
+    responses: {
+      /** @description Annulled */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ExecutionInvalidated']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  getMyInvalidationPreview: {
+    parameters: {
+      query: {
+        /** @description The device's zone, which weeks and dates are counted in. */
+        timezone: components['schemas']['IanaTimeZone']
+      }
+      header?: never
+      path: {
+        executionId: components['parameters']['ExecutionId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description What would change */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SpaceInvalidationPreview']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  repeatMyExecution: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        executionId: components['parameters']['ExecutionId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ExecutionRepetition']
+      }
+    }
+    responses: {
+      /** @description Started */
+      201: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ExecutionRepeated']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      503: components['responses']['UpstreamUnavailable']
     }
   }
   replaceExecutionResults: {
