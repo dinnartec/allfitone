@@ -41,7 +41,7 @@ import { Screen } from '@allfitone/react-native/screen'
 import { Sheet } from '@allfitone/react-native/sheet'
 import { Text } from '@allfitone/react-native/text'
 import { useTheme } from '@allfitone/react-native/theme'
-import { transparent } from '@allfitone/react-native/tokens'
+import { transparent, withAlpha } from '@allfitone/react-native/tokens'
 import { FoundationIcon } from '@allfitone/react-native/icons'
 import * as Haptics from 'expo-haptics'
 import { Image } from 'expo-image'
@@ -78,6 +78,7 @@ import { createSpaceExecutionFlow } from '../../src/client/execution-transport'
 import { SPRING } from '../../src/client/motion'
 import {
   canFinish,
+  musclesLine,
   resultsFrom,
   setsProgress,
   totalVolumeKg,
@@ -158,19 +159,36 @@ const REVEAL_MARGIN = 24
 /** Long enough for the new row to lay out, short enough to feel like one motion. */
 const REVEAL_DELAY_MS = 80
 
-/** Room between exercises, so a list of shut rows reads as rows rather than a block. */
-const EXERCISE_GAP = 14
+/**
+ * Every exercise is a card of its own (prototipo 49, «A»).
+ *
+ * Bare rows floating around one open card read as a jumble: nothing said where one
+ * exercise ended and the next began. Cards with a small gap between them do, and the
+ * open one lifts — its edge fades into a soft shadow, the fill unchanged — on the drawer's spring.
+ */
+const EXERCISE_GAP = 12
 
-/** A shut exercise's 44-point header plus the gap: one place in the list. */
-const EXERCISE_SPAN = 44 + EXERCISE_GAP
+/** Above and below a shut card's 44-point header. */
+const CARD_PAD = 6
+
+/** A shut card, its hairline edges and the gap: one place in the list, for the drag. */
+const EXERCISE_SPAN = 44 + CARD_PAD * 2 + 2 + EXERCISE_GAP
 
 /** Out the way its sets go, so removing an exercise reads as the same gesture, larger. */
 const EXERCISE_EXIT = SlideOutLeft.duration(200).reduceMotion(ReduceMotion.System)
 
-/** The rows below closing the gap, or moving to the place a drop gave them. */
+/**
+ * The cards below closing the gap a deleted exercise leaves.
+ *
+ * Only then. Left on, it also chased every drawer opening a beat late, and the cards
+ * below slid over the one opening; without it they follow the drawer frame by frame.
+ */
 const REFLOW = LinearTransition.duration(220)
   .easing(Easing.bezier(0.23, 1, 0.32, 1))
   .reduceMotion(ReduceMotion.System)
+
+/** How long the reflow stays on after a delete: the exit plus the gap closing. */
+const REFLOW_MS = 480
 
 /** How long «¡A darle!», or a superset's next, stays on the bar before it goes. */
 const RESTED_MS = 2_400
@@ -200,7 +218,6 @@ export default function Session() {
   /** By key, not place: a move renumbers every place, and the open one has to stay open. */
   const [openKey, setOpenKey] = useState<string | undefined>(undefined)
   const [title, setTitle] = useState('')
-  const [caption, setCaption] = useState('')
   const [startedAt, setStartedAt] = useState<number | undefined>(undefined)
   const [seconds, setSeconds] = useState(0)
   const [failure, setFailure] = useState<string | undefined>(undefined)
@@ -221,12 +238,19 @@ export default function Session() {
   >(undefined)
 
   const [dragging, setDragging] = useState(false)
+  /** Set for the moment a deleted exercise's gap closes; see `REFLOW`. */
+  const [reflowing, setReflowing] = useState(false)
   const [settling, setSettling] = useState(false)
   const liftedFrom = useSharedValue(0)
   const liftedBy = useSharedValue(0)
 
   /** Each movement's demonstration, by id: the catalogue's, not the session's. */
   const [previews, setPreviews] = useState<ReadonlyMap<string, string | null>>(new Map())
+  /** The catalogue's muscles, for the line under the name; empty if it did not load. */
+  const [catalogue, setCatalogue] = useState<{
+    readonly movements: readonly { readonly id: string; readonly muscles: readonly string[] }[]
+    readonly muscles: readonly { readonly code: string; readonly name: string }[]
+  }>({ movements: [], muscles: [] })
 
   const revision = useRef(0)
   const pending = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
@@ -245,15 +269,9 @@ export default function Session() {
         if (!active) return
         const movements = library?.movements ?? []
         setPreviews(new Map(movements.map((one) => [one.id, one.demo_url])))
+        setCatalogue({ movements, muscles: library?.muscles ?? [] })
         revision.current = current.revision_number
         setTitle(current.title ?? 'Sesión')
-        // The program and the week, not the discipline code: a code is an identifier,
-        // and putting one on screen is showing somebody the plumbing.
-        setCaption(
-          current.program_title
-            ? `${current.program_title}${current.week ? ` · semana ${current.week}` : ''}`
-            : '',
-        )
         setStartedAt(Date.parse(current.started_at))
         const opened = workingStateFrom(current, {
           names: new Map(movements.map((one) => [one.id, one.name])),
@@ -362,8 +380,15 @@ export default function Session() {
   const removeExercise = (position: number) => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
     setAsking(undefined)
+    setReflowing(true)
     restructure(withoutExercise(exercises, position))
   }
+
+  useEffect(() => {
+    if (!reflowing) return
+    const off = setTimeout(() => setReflowing(false), REFLOW_MS)
+    return () => clearTimeout(off)
+  }, [reflowing])
 
   // Committed while the reflow is stood down, so React places the rows where the
   // transforms already showed them; the shared values go back a frame later.
@@ -533,6 +558,7 @@ export default function Session() {
   const minimize = () => (router.canGoBack() ? router.back() : router.replace('/today'))
 
   const progress = setsProgress(exercises)
+  const trains = musclesLine(exercises, catalogue.movements, catalogue.muscles)
   const volume = totalVolumeKg(exercises)
   const recorded = canFinish(exercises)
 
@@ -542,12 +568,13 @@ export default function Session() {
         {/* Down, not back: the session is set aside, still open, and Hoy carries it. */}
         <IconButton icon="expand" accessibilityLabel="Minimizar la sesión" onPress={minimize} />
         <View style={styles.heading}>
-          <Text role="control" size="lg" numberOfLines={2} accessibilityRole="header">
+          <Text role="control" size="lg" numberOfLines={1} accessibilityRole="header">
             {title}
           </Text>
-          {caption ? (
-            <Text role="body" size="sm" color="muted">
-              {caption}
+          {/* Recomputed from the list, so it follows an exercise added, moved or taken out. */}
+          {trains ? (
+            <Text role="body" size="sm" color="muted" numberOfLines={1}>
+              {trains}
             </Text>
           ) : null}
         </View>
@@ -598,7 +625,7 @@ export default function Session() {
             open={keyOf(exercise) === openKey}
             span={EXERCISE_SPAN}
             exiting={EXERCISE_EXIT}
-            {...(dragging ? {} : { layout: REFLOW })}
+            {...(reflowing && !dragging ? { layout: REFLOW } : {})}
             from={liftedFrom}
             travel={liftedBy}
             onLift={() => {
@@ -871,15 +898,21 @@ function Exercise({
     progress.value = reduceMotion ? target : withSpring(target, SPRING)
   }, [open, progress, reduceMotion])
 
-  // Each fade ramps the alpha of the token it lands on, so nothing in between is a
-  // colour the Design System does not have. Fading from `transparent` instead would
-  // run both of these through black.
+  // Both ends are Design System tokens, so nothing in between is a colour it lacks.
   const surface = theme.color.background.surface
-  const noSurface = transparent(surface)
+  // Half the subtle border's own 14 %: enough to tell one shut card from the next.
+  // `withAlpha` sets the alpha, it does not scale it, so this is the absolute value.
+  const edge = withAlpha(theme.color.border.subtle, 0.07)
+  // Open, the edge fades out and the shadow alone sets the card apart; the width stays,
+  // so nothing inside it shifts.
+  const noEdge = transparent(edge)
 
   const shell = useAnimatedStyle(() => ({
-    backgroundColor: interpolateColor(progress.value, [0, 1], [noSurface, surface]),
-    paddingBottom: OPEN_PADDING * progress.value,
+    // One fill open or shut, the same as the set rows: a third tone read as a jumble.
+    backgroundColor: surface,
+    borderColor: interpolateColor(progress.value, [0, 1], [edge, noEdge]),
+    shadowOpacity: 0.35 * progress.value,
+    paddingBottom: CARD_PAD + (OPEN_PADDING - CARD_PAD) * progress.value,
   }))
 
   const drawer = useAnimatedStyle(() => ({
@@ -903,14 +936,6 @@ function Exercise({
 
   const summary = useAnimatedStyle(() => ({ opacity: 1 - progress.value }))
 
-  // A chain takes the thread in its own colour and keeps it open, like the editor's edge.
-  const chainColor = chain?.color
-  const thread = useAnimatedStyle(() => ({
-    opacity: chainColor ? 1 : 1 - progress.value,
-    backgroundColor:
-      chainColor ?? (complete ? theme.color.status.success : theme.color.border.default),
-  }))
-
   // What the timer will count: the routine's, or the opening rest when it said nothing.
   const effectiveRest = exercise.restSeconds ?? REST_OPENING_SECONDS
 
@@ -926,6 +951,7 @@ function Exercise({
         style={({ pressed }) => [
           styles.restPill,
           {
+            // A step past the card it sits on, so it still reads as a control.
             backgroundColor: theme.color.background.surfaceSubtle,
             transform: [{ scale: pressed ? 0.96 : 1 }],
           },
@@ -1008,7 +1034,6 @@ function Exercise({
       {/* Two controls side by side, not one inside the other: nested, VoiceOver folds the
           picture into the row and the explanation cannot be reached. */}
       <View style={styles.exerciseHeader}>
-        <Animated.View style={[styles.thread, thread]} />
         {/* Still, like the routine editor. The picture explains, open or shut, and the
             rest of the row opens and closes: the play mark promises what a tap does. */}
         <Pressable
@@ -1310,7 +1335,11 @@ function SetRow({
             style={[
               styles.colRpe,
               styles.effort,
-              { backgroundColor: theme.color.background.canvas },
+              {
+                backgroundColor: set.done
+                  ? transparent(theme.color.background.canvas)
+                  : theme.color.background.canvas,
+              },
               set.done ? styles.dimmed : null,
             ]}
           >
@@ -1379,9 +1408,11 @@ function Field({
         styles.field,
         styles.colInput,
         {
-          // The same whether ticked or not: the row says it is done, and the field
-          // stays one that can still be corrected.
-          backgroundColor: theme.color.background.canvas,
+          // Ticked, the well goes and the number reads as a label; a tap still edits it.
+          backgroundColor:
+            dimmed && !focused
+              ? transparent(theme.color.background.canvas)
+              : theme.color.background.canvas,
           // Accent is for focus, not for emptiness. Every empty field outlined in cyan
           // turned the card into an alarm and left nothing to mark where the cursor is.
           // No border at rest; the one that appears marks where the cursor is.
@@ -1399,7 +1430,15 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   heading: { flex: 1, gap: 1 },
   list: { gap: EXERCISE_GAP, paddingTop: 16, paddingBottom: 32 },
-  shell: { borderRadius: 22, paddingHorizontal: CARD_INSET },
+  shell: {
+    borderRadius: 18,
+    borderWidth: 1,
+    paddingHorizontal: CARD_INSET,
+    paddingTop: CARD_PAD,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 14,
+  },
   exerciseHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, height: 44 },
   headerTitle: { flex: 1, gap: 2 },
   chainMark: { flexDirection: 'row', alignItems: 'center', gap: 6 },
@@ -1501,7 +1540,6 @@ const styles = StyleSheet.create({
   // never came from the scale, and it is the number somebody enters mid-set. The height
   // stays 34 so the row keeps aligning with the tick beside it.
   field: { height: 34, borderRadius: 10, fontSize: 16, paddingVertical: 0 },
-  thread: { width: 2.5, height: 28, borderRadius: 1.5 },
   finish: { paddingHorizontal: 0, minWidth: 104 },
   decisions: { gap: 10, paddingBottom: 8 },
   addExercise: { gap: 8, paddingTop: 10 },

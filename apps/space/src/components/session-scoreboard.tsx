@@ -6,10 +6,11 @@
  * the large figure, its seconds set aside in grey; volume and sets are compact on the
  * right, where they are glanced at rather than read.
  *
- * **Sets as a bar, not as dots.** One dot per set was legible at twelve and a smear at
- * thirty, and a session can grow while it runs; a continuous bar reads the same at any
- * count. It fills with the success colour on the UI thread, by `scaleX`, so ticking a
- * set never re-lays anything out.
+ * **Three figures on one line, and the sets' bar under all of them.** Time, volume and
+ * sets share a baseline; the bar runs the board's width, where one dot per set was a
+ * smear at thirty and a short bar wrapped its label. It reads the same at any count.
+ * It fills in a quiet grey, because green is for a finished exercise, and it grows by
+ * `scaleX` on the UI thread, so ticking a set never re-lays anything out.
  *
  * **The live dot is the only thing that moves on its own.** It says the session is
  * running while minimised views look alike; reduced motion keeps it, still.
@@ -66,58 +67,74 @@ export function SessionScoreboard({
 
   return (
     <View
-      style={[styles.board, { borderBottomColor: theme.color.border.subtle }]}
+      style={styles.wrap}
       accessible
-      accessibilityLabel={`En curso, ${clock.lead}${clock.tail}. ${Math.round(volumeKg)} kilos. ${done} de ${planned} series`}
+      accessibilityLabel={`Sesión en curso, ${clock.lead}${clock.tail}. ${Math.round(volumeKg)} kilos. ${done} de ${planned} series`}
     >
-      <View style={styles.clock}>
-        <View style={styles.live}>
-          <View style={styles.dotWrap}>
-            <Animated.View
-              style={[styles.dot, styles.halo, { backgroundColor: theme.color.icon.accent }, halo]}
-            />
-            <View style={[styles.dot, { backgroundColor: theme.color.icon.accent }]} />
-          </View>
-          <Text role="eyebrow" size="xs" color="accent">
-            EN CURSO
-          </Text>
-        </View>
-        <View style={styles.time}>
-          <Text role="data" size="5xl">
-            {clock.lead}
-          </Text>
-          {clock.tail ? (
-            <Text role="data" size="2xl" color="muted" style={styles.tail}>
-              {clock.tail}
+      <View style={styles.board}>
+        <View style={styles.clock}>
+          <View style={styles.live}>
+            <View style={styles.dotWrap}>
+              <Animated.View
+                style={[
+                  styles.dot,
+                  styles.halo,
+                  { backgroundColor: theme.color.icon.accent },
+                  halo,
+                ]}
+              />
+              <View style={[styles.dot, { backgroundColor: theme.color.icon.accent }]} />
+            </View>
+            <Text role="eyebrow" size="xs" color="muted">
+              EN CURSO
             </Text>
-          ) : null}
+          </View>
+          <View style={styles.time}>
+            <Text role="data" size="3xl">
+              {clock.lead}
+            </Text>
+            {clock.tail ? (
+              <Text role="data" size="lg" color="muted" style={styles.tail}>
+                {clock.tail}
+              </Text>
+            ) : null}
+          </View>
+        </View>
+
+        <View style={styles.side}>
+          <View style={styles.figure}>
+            <View style={styles.amount}>
+              <Text role="data" size="xl">
+                {Math.round(volumeKg).toLocaleString('es-CO')}
+              </Text>
+              <Text role="control" size="xs" color="muted">
+                kg
+              </Text>
+            </View>
+            <Text role="eyebrow" size="xs" color="muted">
+              VOLUMEN
+            </Text>
+          </View>
+          <View style={styles.figure}>
+            <View style={styles.amount}>
+              <Text role="data" size="xl">
+                {String(done)}
+              </Text>
+              <Text role="control" size="xs" color="muted">
+                {`/ ${planned}`}
+              </Text>
+            </View>
+            <Text role="eyebrow" size="xs" color="muted">
+              SERIES
+            </Text>
+          </View>
         </View>
       </View>
-
-      <View style={styles.side}>
-        <View style={styles.figure}>
-          <View style={styles.amount}>
-            <Text role="data" size="xl">
-              {Math.round(volumeKg).toLocaleString('es-CO')}
-            </Text>
-            <Text role="control" size="xs" color="muted">
-              kg
-            </Text>
-          </View>
-          <Text role="eyebrow" size="xs" color="muted">
-            VOLUMEN
-          </Text>
-        </View>
-        <View style={styles.figure}>
-          <View style={[styles.track, { backgroundColor: theme.color.background.surfaceSubtle }]}>
-            <Animated.View
-              style={[styles.bar, { backgroundColor: theme.color.status.success }, filled]}
-            />
-          </View>
-          <Text role="eyebrow" size="xs" color="muted">
-            {`${done} DE ${planned} SERIES`}
-          </Text>
-        </View>
+      {/* The sets' progress runs the width of the board and is its edge with the list. */}
+      <View style={[styles.track, { backgroundColor: theme.color.background.surfaceSubtle }]}>
+        <Animated.View
+          style={[styles.bar, { backgroundColor: theme.color.icon.secondary }, filled]}
+        />
       </View>
     </View>
   )
@@ -126,15 +143,13 @@ export function SessionScoreboard({
 const DOT = 7
 
 const styles = StyleSheet.create({
+  wrap: { marginTop: 14, gap: 12 },
   board: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'space-between',
     gap: 16,
-    marginTop: 14,
     paddingHorizontal: 4,
-    paddingBottom: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   clock: { gap: 2 },
   live: { flexDirection: 'row', alignItems: 'center', gap: 7 },
@@ -143,10 +158,11 @@ const styles = StyleSheet.create({
   halo: { opacity: 0 },
   time: { flexDirection: 'row', alignItems: 'baseline' },
   tail: { marginLeft: 1 },
-  side: { width: 132, gap: 10, paddingBottom: 6 },
+  // Volume and sets side by side, on the clock's baseline: one line of three figures.
+  side: { flexDirection: 'row', alignItems: 'flex-end', gap: 22, paddingBottom: 4 },
   figure: { alignItems: 'flex-end', gap: 4 },
   amount: { flexDirection: 'row', alignItems: 'baseline', gap: 3 },
-  track: { alignSelf: 'stretch', height: 5, borderRadius: 3, overflow: 'hidden' },
+  track: { height: 4, borderRadius: 2, overflow: 'hidden' },
   // Grows from the left edge, where the first set is.
   bar: {
     position: 'absolute',

@@ -13,6 +13,7 @@ import {
   withSetKind,
   withSetRpe,
   canFinish,
+  musclesLine,
   clockParts,
   elapsedLabel,
   resultsFrom,
@@ -811,5 +812,66 @@ describe('the rest between sets (ADR-035)', () => {
 
     expect(added.at(-1)?.restSeconds).toBeUndefined()
     expect(resultsFrom(added).exercises?.at(-1)?.rest_seconds).toBeNull()
+  })
+})
+
+describe('what the session trains, under its name', () => {
+  const muscles = [
+    { code: 'quads', name: 'Cuádriceps', region: 'lower' as const, body_slug: null },
+    { code: 'chest', name: 'Pecho', region: 'upper' as const, body_slug: null },
+    { code: 'back', name: 'Espalda', region: 'upper' as const, body_slug: null },
+    { code: 'abs', name: 'Abdomen', region: 'general' as const, body_slug: null },
+  ]
+  const movements = [
+    { id: 'squat', muscles: ['quads', 'abs'] },
+    { id: 'press', muscles: ['chest'] },
+    { id: 'row', muscles: ['back'] },
+    { id: 'plank', muscles: ['abs'] },
+    { id: 'mystery', muscles: [] },
+  ]
+  const sets = (count: number) =>
+    Array.from({ length: count }, (_, index) => ({
+      order: index + 1,
+      loadKg: '',
+      reps: '',
+      done: false,
+      previous: '—',
+      kind: 'normal' as const,
+    }))
+  const working = (position: number, movementId: string, count: number) => ({
+    position,
+    movementId,
+    movement: movementId,
+    sets: sets(count),
+  })
+
+  test('T-SPC-UNIT-148 names the main muscle of each exercise, most worked first', () => {
+    const line = musclesLine(
+      [working(1, 'press', 2), working(2, 'squat', 4), working(3, 'row', 3)],
+      movements,
+      muscles,
+    )
+
+    expect(line).toBe('Cuádriceps · Espalda · Pecho')
+  })
+
+  test('T-SPC-UNIT-149 stops at three, and an exercise with no muscles adds nothing', () => {
+    const line = musclesLine(
+      [
+        working(1, 'press', 1),
+        working(2, 'squat', 4),
+        working(3, 'row', 3),
+        working(4, 'plank', 2),
+        working(5, 'mystery', 9),
+      ],
+      movements,
+      muscles,
+    )
+
+    expect(line).toBe('Cuádriceps · Espalda · Abdomen')
+  })
+
+  test('T-SPC-UNIT-150 a session with nothing curated has no line at all', () => {
+    expect(musclesLine([working(1, 'mystery', 3)], movements, muscles)).toBe('')
   })
 })

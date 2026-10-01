@@ -607,6 +607,40 @@ export function elapsedLabel(seconds: number): string {
   return hours > 0 ? `${hours}:${pad(minutes)}:${pad(whole % 60)}` : `${minutes}:${pad(whole % 60)}`
 }
 
+/** How many muscles the line under the session's name may name before it is a list. */
+const MUSCLES_NAMED = 3
+
+/**
+ * «Cuádriceps · Espalda · Pecho»: what the session trains, most worked first.
+ *
+ * Each exercise counts its sets for its main muscle, the rule Hoy's preview uses, so the
+ * two never disagree about what a routine is. An exercise the catalogue has not curated
+ * adds nothing: inventing an «otros» would be inventing a muscle group.
+ */
+export function musclesLine(
+  exercises: readonly WorkingExercise[],
+  movements: readonly { readonly id: string; readonly muscles: readonly string[] }[],
+  muscles: readonly { readonly code: string; readonly name: string }[],
+): string {
+  const mainOf = new Map(movements.map((movement) => [movement.id, movement.muscles[0]]))
+  const named = new Map(muscles.map((muscle) => [muscle.code, muscle.name]))
+  const load = new Map<string, number>()
+  for (const exercise of exercises) {
+    const code = exercise.movementId ? mainOf.get(exercise.movementId) : undefined
+    if (code === undefined) continue
+    load.set(code, (load.get(code) ?? 0) + exercise.sets.length)
+  }
+  return (
+    [...load.entries()]
+      .map(([code, sets]) => ({ name: named.get(code) ?? code, sets }))
+      // The name breaks ties, so two muscles with the same sets do not swap places.
+      .sort((one, other) => other.sets - one.sets || one.name.localeCompare(other.name, 'es'))
+      .slice(0, MUSCLES_NAMED)
+      .map((one) => one.name)
+      .join(' · ')
+  )
+}
+
 /**
  * The clock split for a scoreboard that leads with what is read from a distance.
  *
