@@ -11,6 +11,8 @@ import type postgres from 'postgres'
 import { database } from '../../../platform/db/index.js'
 import { measureRequestPhase } from '../../../platform/observability/index.js'
 import type {
+  OfferableScope,
+  OfferableScopeDatabase,
   AccessEvent,
   AccessEventPage,
   AccessLogDatabase,
@@ -106,4 +108,34 @@ function inTransaction<T>(
     })
     return result.value
   })
+}
+
+/**
+ * PostgreSQL access for the offerable permission catalogue.
+ *
+ * Runs as the person actor, not as support: this is a professional reading the
+ * product's own vocabulary, and `list_offerable_scopes` returns nothing to any
+ * other kind of actor.
+ */
+export function createOfferableScopeDatabase(
+  sql: ReturnType<typeof database> = database(),
+): OfferableScopeDatabase {
+  return {
+    listOfferable: (input) =>
+      measureRequestPhase('business-db', async () => {
+        const result = await sql.begin(async (transaction) => {
+          await transaction`
+            select set_config('app.actor_kind', 'person', true),
+                   set_config('app.actor_person_id', ${input.actorPersonId}, true),
+                   set_config('app.request_id', ${input.requestId}, true)
+          `
+          return {
+            rows: await transaction<OfferableScope[]>`
+              select * from privacy.list_offerable_scopes()
+            `,
+          }
+        })
+        return [...result.rows]
+      }),
+  }
 }

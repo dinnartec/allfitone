@@ -1628,6 +1628,30 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/studio/v1/offerable-scopes': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * List the permissions an invitation may ask a person for
+     * @description The vocabulary a professional builds an invitation from: every published permission, with the words to name it and the contract version an offer has to be frozen against.
+     *
+     *     Each one carries its own **purpose**, fixed by the catalogue rather than written per invitation. A gym composing its own justification for wanting health data writes it with nobody reviewing it, and two people asked for the same permission would read different reasons.
+     *
+     *     The description states what the permission does **not** reach as well as what it covers. Somebody deciding whether a gym may read their injuries is owed the boundary, not only the request.
+     */
+    get: operations['listStudioOfferableScopes']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/studio/v1/organizations/{organizationId}/roles': {
     parameters: {
       query?: never
@@ -4551,6 +4575,21 @@ export interface components {
         membership_id: string | null
       }
       replayed: boolean
+    }
+    OfferableScope: {
+      scope_definition_id: components['schemas']['UuidV7']
+      scope_code: components['schemas']['ScopeCode']
+      /** @description The contract version an offer is frozen against. */
+      version_number: number
+      /** @description What to call the permission on screen. */
+      display_name: string
+      /** @description What it covers and, as importantly, what it does not reach. */
+      description: string
+      /** @description Why it is being asked for. Fixed by the catalogue, not written per invitation. */
+      default_purpose: string
+    }
+    OfferableScopeCatalog: {
+      items: components['schemas']['OfferableScope'][]
     }
     ClientInvitationToken: {
       /** @description Opaque token transported in JSON, never in the URL. */
@@ -9485,6 +9524,30 @@ export interface operations {
       404: components['responses']['NotFound']
       409: components['responses']['Conflict']
       422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listStudioOfferableScopes: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Every permission that can be offered today */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['PrivateNoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['OfferableScopeCatalog']
+        }
+      }
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
       503: components['responses']['UpstreamUnavailable']
     }
   }

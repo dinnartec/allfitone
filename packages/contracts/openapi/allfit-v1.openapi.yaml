@@ -3919,6 +3919,47 @@ paths:
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
 
+  /studio/v1/offerable-scopes:
+    get:
+      tags: [Studio Relationships]
+      operationId: listStudioOfferableScopes
+      x-allfit-operation: OP-REL-016
+      x-allfit-cache: private-no-store
+      summary: List the permissions an invitation may ask a person for
+      description: >-
+        The vocabulary a professional builds an invitation from: every published
+        permission, with the words to name it and the contract version an offer
+        has to be frozen against.
+
+
+        Each one carries its own **purpose**, fixed by the catalogue rather than
+        written per invitation. A gym composing its own justification for wanting
+        health data writes it with nobody reviewing it, and two people asked for
+        the same permission would read different reasons.
+
+
+        The description states what the permission does **not** reach as well as
+        what it covers. Somebody deciding whether a gym may read their injuries
+        is owed the boundary, not only the request.
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Every permission that can be offered today
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/PrivateNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OfferableScopeCatalog'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
   /studio/v1/organizations/{organizationId}/roles:
     get:
       tags: [Studio Organizations]
@@ -11773,6 +11814,42 @@ components:
               format: uuid
         replayed:
           type: boolean
+    OfferableScope:
+      type: object
+      additionalProperties: false
+      required:
+        [scope_definition_id, scope_code, version_number, display_name, description,
+         default_purpose]
+      properties:
+        scope_definition_id:
+          $ref: '#/components/schemas/UuidV7'
+        scope_code:
+          $ref: '#/components/schemas/ScopeCode'
+        version_number:
+          type: integer
+          minimum: 1
+          description: The contract version an offer is frozen against.
+        display_name:
+          type: string
+          minLength: 1
+          description: What to call the permission on screen.
+        description:
+          type: string
+          minLength: 1
+          description: What it covers and, as importantly, what it does not reach.
+        default_purpose:
+          type: string
+          minLength: 1
+          description: Why it is being asked for. Fixed by the catalogue, not written per invitation.
+    OfferableScopeCatalog:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OfferableScope'
     ClientInvitationToken:
       type: object
       additionalProperties: false
