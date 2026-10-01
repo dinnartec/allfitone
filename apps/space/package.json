@@ -15,10 +15,10 @@
   "dependencies": {
     "@allfitone/brand": "0.3.0",
     "@allfitone/contracts": "workspace:*",
-    "@allfitone/icons": "0.3.0",
-    "@allfitone/react-native": "0.7.0",
+    "@allfitone/icons": "0.4.0",
+    "@allfitone/react-native": "0.8.0",
     "@allfitone/telemetry": "workspace:*",
-    "@allfitone/tokens": "0.3.0",
+    "@allfitone/tokens": "0.4.0",
     "expo": "57.0.11",
     "expo-blur": "57.0.2",
     "expo-clipboard": "57.0.2",
