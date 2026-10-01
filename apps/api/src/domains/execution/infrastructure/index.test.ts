@@ -227,3 +227,39 @@ describe('the summary read (ADR-036)', () => {
     })
   })
 })
+
+describe('the history binding', () => {
+  test('T-EXE-API-HIST-09 sends every filter in the function order, a missing one as null', async () => {
+    const captured: CapturedQuery[] = []
+    await setDatabase(recordingDatabase(captured))
+
+    await createExecutionDatabase().listHistory({
+      personId: PERSON_ID,
+      timezone: 'America/Bogota',
+      month: '2026-09-01',
+      discipline: null,
+      withRecord: true,
+      free: null,
+      query: 'press',
+      cursor: null,
+      limit: 20,
+      day: '2026-09-30',
+      requestId: 'r',
+    })
+
+    const listed = captured.find((query) => query.strings.join('').includes('list_my_executions'))
+    expect(listed?.values).toEqual([
+      PERSON_ID,
+      'America/Bogota',
+      '2026-09-01',
+      null,
+      true,
+      null,
+      'press',
+      null,
+      20,
+      '2026-09-30',
+    ])
+    expect(listed?.strings.join('?')).toContain('?::date')
+  })
+})

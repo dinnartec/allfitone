@@ -4,7 +4,7 @@ import { Hono } from 'hono'
 
 import { SpaceActorError, type SpaceActorResolver } from '../../identity/index.js'
 import type { SpaceExecutionService } from '../application/index.js'
-import type { Execution, ExecutionSummary } from '../domain/index.js'
+import type { Execution, ExecutionSummary, HistoryMonth, HistoryPage } from '../domain/index.js'
 import { spaceExecutionRoutes } from './space.js'
 
 const PERSON_ID = '019e4000-0000-7000-8000-000000000001'
@@ -83,6 +83,48 @@ const summary: ExecutionSummary = {
   algorithm_version: 1,
 }
 
+const historyPage: HistoryPage = {
+  data: [
+    {
+      executed_session_id: EXECUTION_ID,
+      status: 'completed',
+      started_at: '2026-09-01T12:00:00.000Z',
+      trained_on: '2026-09-01',
+      title: 'Empuje',
+      is_free: false,
+      discipline_code: 'strength',
+      duration_seconds: 3120,
+      work_sets: 14,
+      total_volume_kg: 4410,
+      record_count: 1,
+      thumbnail_url: 'https://media.example/movements/press/demo.webp',
+    },
+  ],
+  page: { next_cursor: null, has_more: false },
+}
+
+const historyMonth: HistoryMonth = {
+  month: '2026-09-01',
+  sessions: 1,
+  trained_seconds: 3120,
+  work_sets: 14,
+  total_volume_kg: 4410,
+  records: 1,
+  weeks: [{ week_starts_on: '2026-08-31', completed: 1, planned: 3, fulfilled: 1 }],
+  days: [
+    {
+      trained_on: '2026-09-02',
+      sessions: 1,
+      trained_seconds: 3120,
+      work_sets: 14,
+      volume_kg: 4410,
+      records: 1,
+    },
+  ],
+  months_available: ['2026-09-01'],
+  disciplines: [{ code: 'strength', name: 'Fuerza' }],
+}
+
 function harness(overrides?: Partial<SpaceExecutionService>, actorFails = false): Hono {
   const service: SpaceExecutionService = {
     startAttempt: async () => attempt,
@@ -97,7 +139,10 @@ function harness(overrides?: Partial<SpaceExecutionService>, actorFails = false)
       sessions_planned: 0,
       tonnage_kg: 5120.5,
       history: [],
+      work_sets: 0,
     }),
+    listHistory: async () => historyPage,
+    readHistoryMonth: async () => historyMonth,
     ...overrides,
   }
   const actors: SpaceActorResolver = {
@@ -146,6 +191,7 @@ describe('the Space execution surface honours the contract', () => {
       'OP-EXE-003',
       'OP-EXE-005',
       'OP-EXE-006',
+      'OP-EXE-014',
       'OP-EXE-015',
       'OP-EXE-021',
     ])
@@ -385,5 +431,126 @@ describe('GET /space/v1/executions/{id}/summary', () => {
     )
 
     expect(response.status).toBe(409)
+  })
+})
+
+describe('GET /space/v1/executions', () => {
+  const read = (path: string, overrides?: Partial<SpaceExecutionService>) =>
+    harness(overrides).request(path, { headers: authorized })
+
+  test('T-EXE-API-HIST-01 answers one page of the history, filters passed through', async () => {
+    let asked: Parameters<SpaceExecutionService['listHistory']>[0] | undefined
+    const response = await read(
+      '/space/v1/executions?timezone=America/Bogota&month=2026-09-15&discipline=strength&with_record=true&free=false&q=%20press%20&limit=10&day=2026-09-30',
+      {
+        listHistory: async (input) => {
+          asked = input
+          return historyPage
+        },
+      },
+    )
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual(historyPage)
+    expect(asked).toEqual({
+      personId: PERSON_ID,
+      timezone: 'America/Bogota',
+      month: '2026-09-15',
+      discipline: 'strength',
+      withRecord: true,
+      free: false,
+      query: 'press',
+      cursor: null,
+      limit: 10,
+      day: '2026-09-30',
+      requestId: '',
+    })
+  })
+
+  test('T-EXE-API-HIST-02 with nothing but the zone, every filter is off and the page is 20', async () => {
+    let asked: Parameters<SpaceExecutionService['listHistory']>[0] | undefined
+    await read('/space/v1/executions?timezone=America/Bogota', {
+      listHistory: async (input) => {
+        asked = input
+        return historyPage
+      },
+    })
+
+    expect(asked).toMatchObject({
+      month: null,
+      discipline: null,
+      withRecord: null,
+      free: null,
+      query: null,
+      cursor: null,
+      limit: 20,
+      day: null,
+    })
+  })
+
+  test('T-EXE-API-HIST-03 refuses a request it cannot answer truthfully', async () => {
+    for (const path of [
+      '/space/v1/executions',
+      '/space/v1/executions?timezone=America/Bogota&month=2026-13-01',
+      '/space/v1/executions?timezone=America/Bogota&day=30-09-2026',
+      '/space/v1/executions?timezone=America/Bogota&with_record=maybe',
+      '/space/v1/executions?timezone=America/Bogota&limit=51',
+      '/space/v1/executions?timezone=America/Bogota&cursor=short',
+    ]) {
+      expect((await read(path)).status).toBe(400)
+    }
+  })
+
+  test('T-EXE-API-HIST-04 a cursor PostgreSQL cannot read is a bad request, not a page', async () => {
+    const response = await read(
+      '/space/v1/executions?timezone=America/Bogota&cursor=bm90LWEtcmVhbC1jdXJzb3I=',
+      {
+        listHistory: async () => {
+          throw Object.assign(new Error('invalid cursor'), { code: '22023' })
+        },
+      },
+    )
+
+    expect(response.status).toBe(400)
+  })
+
+  test('T-EXE-API-HIST-05 somebody not registered gets nothing', async () => {
+    const response = await harness(undefined, true).request(
+      '/space/v1/executions?timezone=America/Bogota',
+      { headers: authorized },
+    )
+
+    expect(response.status).toBe(403)
+  })
+})
+
+describe('GET /space/v1/history/months/{month}', () => {
+  const read = (path: string, overrides?: Partial<SpaceExecutionService>) =>
+    harness(overrides).request(path, { headers: authorized })
+
+  test('T-EXE-API-HIST-06 answers the month', async () => {
+    let asked: Parameters<SpaceExecutionService['readHistoryMonth']>[0] | undefined
+    const response = await read('/space/v1/history/months/2026-09-01?timezone=America/Bogota', {
+      readHistoryMonth: async (input) => {
+        asked = input
+        return historyMonth
+      },
+    })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual(historyMonth)
+    expect(asked).toEqual({
+      personId: PERSON_ID,
+      timezone: 'America/Bogota',
+      month: '2026-09-01',
+      requestId: '',
+    })
+  })
+
+  test('T-EXE-API-HIST-07 refuses a month that is not a date, or no zone', async () => {
+    expect((await read('/space/v1/history/months/septiembre?timezone=America/Bogota')).status).toBe(
+      400,
+    )
+    expect((await read('/space/v1/history/months/2026-09-01')).status).toBe(400)
   })
 })

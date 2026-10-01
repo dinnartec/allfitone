@@ -1,8 +1,9 @@
 /**
  * `/space/v1` for training that happens.
  *
- * Five routes, all of them the person's own: start an attempt, read it, replace what
- * has been recorded, close it, or leave it.
+ * All of them the person's own: start an attempt, read it, replace what has been
+ * recorded, close it, or leave it; and read back what was trained, one session's summary
+ * or the history and its months (`OP-EXE-014`, `OP-EXE-022`).
  *
  * **Leaving is not deleting.** `OP-EXE-003` closes the attempt as abandoned and keeps
  * what it recorded: training that happened stays in the history, marked as unfinished
@@ -127,6 +128,54 @@ export function spaceExecutionRoutes(
     }
   })
 
+  // `OP-EXE-014`. Every filter is optional; the zone is not, because it decides the month.
+  routes.get('/executions', async (c) => {
+    c.header('Cache-Control', 'no-store')
+
+    const token = await verified(c, verify)
+    if (!token) return fail(c, 'unauthenticated')
+
+    const query = readHistoryQuery(c)
+    if (!query) return fail(c, 'invalid-request')
+
+    try {
+      const personId = await actors().personFor(token.subject)
+      const page = await execution().listHistory({
+        personId,
+        ...query,
+        requestId: c.req.header('x-request-id') ?? '',
+      })
+      return c.json(page, 200)
+    } catch (cause) {
+      return failure(c, cause)
+    }
+  })
+
+  // `OP-EXE-022`.
+  routes.get('/history/months/:month', async (c) => {
+    c.header('Cache-Control', 'no-store')
+
+    const token = await verified(c, verify)
+    if (!token) return fail(c, 'unauthenticated')
+
+    const month = c.req.param('month')
+    const timezone = readTimezone(c)
+    if (!isDate(month) || !timezone) return fail(c, 'invalid-request')
+
+    try {
+      const personId = await actors().personFor(token.subject)
+      const found = await execution().readHistoryMonth({
+        personId,
+        timezone,
+        month,
+        requestId: c.req.header('x-request-id') ?? '',
+      })
+      return c.json(found, 200)
+    } catch (cause) {
+      return failure(c, cause)
+    }
+  })
+
   routes.put('/executions/:executionId/results', async (c) => {
     c.header('Cache-Control', 'no-store')
 
@@ -206,6 +255,56 @@ export function spaceExecutionRoutes(
   })
 
   return routes
+}
+
+const HISTORY_LIMIT = { default: 20, max: 50 } as const
+const MAX_QUERY = 80
+const MAX_DISCIPLINE = 64
+// The contract's bounds for an opaque cursor; anything else cannot be one of ours.
+const CURSOR_LENGTH = { min: 16, max: 1024 } as const
+
+function readTimezone(c: Context): string | null {
+  const timezone = (c.req.query('timezone') ?? '').trim()
+  return timezone === '' || timezone.length > MAX_TIMEZONE ? null : timezone
+}
+
+/** A calendar date that exists: `2026-02-30` is a shape, not a day. */
+function isDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+  const parsed = new Date(`${value}T00:00:00Z`)
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value
+}
+
+/** Absent is no filter; anything but `true` or `false` is a request it cannot answer. */
+function readFlag(raw: string | undefined): boolean | null | undefined {
+  if (raw === undefined) return null
+  if (raw === 'true') return true
+  if (raw === 'false') return false
+  return undefined
+}
+
+function readHistoryQuery(c: Context) {
+  const timezone = readTimezone(c)
+  const month = c.req.query('month') ?? null
+  const day = c.req.query('day') ?? null
+  const discipline = (c.req.query('discipline') ?? '').trim() || null
+  const withRecord = readFlag(c.req.query('with_record'))
+  const free = readFlag(c.req.query('free'))
+  const query = (c.req.query('q') ?? '').trim() || null
+  const cursor = c.req.query('cursor') ?? null
+  const rawLimit = c.req.query('limit')
+  const limit = rawLimit === undefined ? HISTORY_LIMIT.default : Number(rawLimit)
+
+  if (!timezone || (month !== null && !isDate(month))) return null
+  if (day !== null && !isDate(day)) return null
+  if (discipline !== null && discipline.length > MAX_DISCIPLINE) return null
+  if (withRecord === undefined || free === undefined) return null
+  if (query !== null && query.length > MAX_QUERY) return null
+  if (cursor !== null && (cursor.length < CURSOR_LENGTH.min || cursor.length > CURSOR_LENGTH.max)) {
+    return null
+  }
+  if (!Number.isInteger(limit) || limit < 1 || limit > HISTORY_LIMIT.max) return null
+  return { timezone, month, discipline, withRecord, free, query, cursor, limit, day }
 }
 
 function failure(c: Context, cause: unknown): Response {

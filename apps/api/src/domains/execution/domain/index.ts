@@ -18,6 +18,32 @@ export type ExecutionSummary = AllfitV1Schemas['SpaceExecutionSummary']
 
 /** The summary as PostgreSQL holds it: the photograph is still a storage key. */
 export type SummaryRow = Omit<ExecutionSummary, 'cover_url'> & { cover_object_key: string | null }
+export type HistoryItem = AllfitV1Schemas['SpaceHistoryItem']
+export type HistoryPage = AllfitV1Schemas['SpaceHistoryPage']
+export type HistoryMonth = AllfitV1Schemas['SpaceHistoryMonth']
+/** A history row as PostgreSQL answers it: the thumbnail's key, never its address. */
+export type HistoryRow = Omit<HistoryItem, 'thumbnail_url'> & {
+  thumbnail_object_key: string | null
+}
+export interface HistoryRowPage {
+  readonly data: readonly HistoryRow[]
+  readonly page: HistoryPage['page']
+}
+export interface HistoryQuery {
+  personId: string
+  timezone: string
+  /** Any day of the month, in the person's zone; null for every month. */
+  month: string | null
+  discipline: string | null
+  withRecord: boolean | null
+  free: boolean | null
+  query: string | null
+  cursor: string | null
+  limit: number
+  /** A day picked on the month's calendar; null for the whole month. */
+  day: string | null
+  requestId: string
+}
 
 export interface ExecutionCommand {
   idempotencyKey: string
@@ -71,4 +97,13 @@ export interface ExecutionDatabase {
     timezone: string
     requestId: string
   }): Promise<SummaryRow | null>
+  /** `OP-EXE-014`. A malformed cursor is refused by PostgreSQL with SQLSTATE 22023. */
+  listHistory(input: HistoryQuery): Promise<HistoryRowPage>
+  /** `OP-EXE-022`. A month with nothing in it answers zeros, never null. */
+  readHistoryMonth(input: {
+    personId: string
+    timezone: string
+    month: string
+    requestId: string
+  }): Promise<HistoryMonth>
 }

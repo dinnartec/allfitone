@@ -27,6 +27,8 @@ import type {
   ExecutionDatabase,
   ExecutionResultsReplace,
   Finalized,
+  HistoryMonth,
+  HistoryRowPage,
   SummaryRow,
   WeekSummary,
 } from '../domain/index.js'
@@ -97,6 +99,7 @@ interface WeekRow {
   sessions_planned: number | null
   tonnage_kg: string | number | null
   history: WeekSummary['history']
+  work_sets: number | null
 }
 
 export function createExecutionDatabase(): ExecutionDatabase {
@@ -190,6 +193,31 @@ export function createExecutionDatabase(): ExecutionDatabase {
           )
         `
         return row ? summaryOf(row) : null
+      }),
+
+    // Both answer jsonb, so numbers arrive as numbers and dates as ISO strings.
+    listHistory: (input) =>
+      transact(sql, input.personId, input.requestId, async (transaction) => {
+        const [row] = await transaction<{ page: HistoryRowPage }[]>`
+          select execution.list_my_executions(
+            ${input.personId}::uuid, ${input.timezone}, ${input.month}::date,
+            ${input.discipline}, ${input.withRecord}::boolean, ${input.free}::boolean,
+            ${input.query}, ${input.cursor}, ${input.limit}::integer, ${input.day}::date
+          ) as page
+        `
+        if (!row) throw new Error('PostgreSQL did not list the history')
+        return row.page
+      }),
+
+    readHistoryMonth: (input) =>
+      transact(sql, input.personId, input.requestId, async (transaction) => {
+        const [row] = await transaction<{ month: HistoryMonth }[]>`
+          select execution.read_history_month(
+            ${input.personId}::uuid, ${input.timezone}, ${input.month}::date
+          ) as month
+        `
+        if (!row) throw new Error('PostgreSQL did not read the month')
+        return row.month
       }),
   }
 }
@@ -296,6 +324,7 @@ function week(row: WeekRow | undefined): WeekSummary {
       sessions_planned: 0,
       tonnage_kg: null,
       history: [],
+      work_sets: 0,
     }
   }
   return {
@@ -306,6 +335,7 @@ function week(row: WeekRow | undefined): WeekSummary {
     // y `Number(null)` sería cero.
     tonnage_kg: row.tonnage_kg === null ? null : Number(row.tonnage_kg),
     history: row.history ?? [],
+    work_sets: row.work_sets ?? 0,
   }
 }
 
