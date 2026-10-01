@@ -7,6 +7,8 @@
  */
 
 import type {
+  OfferableScope,
+  OfferableScopeDatabase,
   AccessEventFilters,
   AccessEventPage,
   AccessLogDatabase,
@@ -45,5 +47,22 @@ export function createScopeDefinitionService(
   return {
     publish: (curator, input) => database.publish({ ...curator, ...input }),
     list: (curator, input) => database.list({ ...curator, ...input }),
+  }
+}
+
+export interface OfferableScopeService {
+  list(input: { actorPersonId: string; requestId: string }): Promise<OfferableScope[]>
+}
+
+/*
+ * No authorization branch, deliberately. Who may read this is decided in
+ * PostgreSQL — `list_offerable_scopes` answers a person actor and nobody else —
+ * and a second answer here could disagree with the one that decides.
+ */
+export function createOfferableScopeService(
+  database: OfferableScopeDatabase,
+): OfferableScopeService {
+  return {
+    list: (input) => database.listOfferable(input),
   }
 }

@@ -804,6 +804,13 @@ export const allfitV1ContractManifest = {
       responses: ['200', '400', '401', '403', '409', '422', '503'],
     },
     {
+      method: 'GET',
+      path: '/studio/v1/offerable-scopes',
+      operationId: 'listStudioOfferableScopes',
+      allfitOperation: 'OP-REL-016',
+      responses: ['200', '401', '403', '503'],
+    },
+    {
       method: 'POST',
       path: '/studio/v1/onboarding-attempts',
       operationId: 'startStudioOnboardingAttempt',

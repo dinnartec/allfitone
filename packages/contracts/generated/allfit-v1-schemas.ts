@@ -3920,6 +3920,60 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  OfferableScope: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'scope_definition_id',
+      'scope_code',
+      'version_number',
+      'display_name',
+      'description',
+      'default_purpose',
+    ],
+    properties: {
+      scope_definition_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      scope_code: {
+        $ref: '#/components/schemas/ScopeCode',
+      },
+      version_number: {
+        type: 'integer',
+        minimum: 1,
+        description: 'The contract version an offer is frozen against.',
+      },
+      display_name: {
+        type: 'string',
+        minLength: 1,
+        description: 'What to call the permission on screen.',
+      },
+      description: {
+        type: 'string',
+        minLength: 1,
+        description: 'What it covers and, as importantly, what it does not reach.',
+      },
+      default_purpose: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'Why it is being asked for. Fixed by the catalogue, not written per invitation.',
+      },
+    },
+  },
+  OfferableScopeCatalog: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['items'],
+    properties: {
+      items: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/OfferableScope',
+        },
+      },
+    },
+  },
   Organization: {
     type: 'object',
     additionalProperties: false,
