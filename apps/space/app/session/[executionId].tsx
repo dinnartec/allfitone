@@ -523,7 +523,10 @@ export default function Session() {
         revision.current = revised
         return flow.finish(executionId)
       })
-      .then(() => router.replace('/today'))
+      // Replaced, not pushed: the session is closed and there is no going back to it.
+      .then(() =>
+        router.replace({ pathname: '/session/share/[executionId]', params: { executionId } }),
+      )
       .catch(() => {
         setClosing(false)
         setFailure(CLOSE_FAILED)

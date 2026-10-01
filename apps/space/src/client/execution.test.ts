@@ -16,6 +16,9 @@ function harness(overrides: Partial<ExecutionTransport> = {}) {
     readExecution: async () => {
       throw new Error('not used')
     },
+    readSummary: async () => {
+      throw new Error('not used')
+    },
     startAttempt: async (command) => {
       sent.keys.push(command.idempotencyKey)
       return {
@@ -203,5 +206,21 @@ describe('closing it', () => {
 
     expect(endedAt).toBeDefined()
     expect(Number.isNaN(Date.parse(endedAt ?? ''))).toBe(false)
+  })
+})
+
+describe('the summary after finishing (ADR-036)', () => {
+  test('T-SPC-UNIT-162 asks for the session in the zone its weeks are counted in', async () => {
+    const asked: string[] = []
+    const { flow } = harness({
+      readSummary: async (id, timezone) => {
+        asked.push(`${id}@${timezone}`)
+        throw new Error('stop')
+      },
+    })
+
+    await flow.readSummary(EXECUTION, 'America/Bogota').catch(() => undefined)
+
+    expect(asked).toEqual([`${EXECUTION}@America/Bogota`])
   })
 })

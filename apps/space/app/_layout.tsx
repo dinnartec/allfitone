@@ -89,6 +89,11 @@ export default function RootLayout() {
                 gestureEnabled: false,
               }}
             />
+            {/* The close of a session: it replaces it, so there is nothing to swipe back to. */}
+            <Stack.Screen
+              name="session/share/[executionId]"
+              options={{ animation: 'fade', gestureEnabled: false }}
+            />
             {/* The platform's own sheet: the session it explains stays in view beneath. */}
             <Stack.Screen
               name="how-to/[movementId]"
