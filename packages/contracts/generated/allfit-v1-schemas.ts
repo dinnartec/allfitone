@@ -6887,6 +6887,238 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
     description:
       'Declaring replaces the set. It is not additive, so the client sends what the person has selected rather than a difference.',
   },
+  SpaceHistoryDay: {
+    type: 'object',
+    additionalProperties: false,
+    description: "A day of the month something was finished on, for the month card's calendar.",
+    required: ['trained_on', 'sessions', 'trained_seconds', 'work_sets', 'volume_kg', 'records'],
+    properties: {
+      trained_on: {
+        type: 'string',
+        format: 'date',
+        description: "The day in the person's time zone.",
+      },
+      sessions: {
+        type: 'integer',
+        minimum: 1,
+      },
+      trained_seconds: {
+        type: 'integer',
+        minimum: 0,
+      },
+      work_sets: {
+        type: 'integer',
+        minimum: 0,
+      },
+      volume_kg: {
+        type: ['number', 'null'],
+        minimum: 0,
+        description: 'Kilos lifted that day without warmups. Null when nothing was weighed.',
+      },
+      records: {
+        type: 'integer',
+        minimum: 0,
+      },
+    },
+  },
+  SpaceHistoryItem: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'executed_session_id',
+      'status',
+      'started_at',
+      'trained_on',
+      'title',
+      'is_free',
+      'discipline_code',
+      'duration_seconds',
+      'work_sets',
+      'total_volume_kg',
+      'record_count',
+      'thumbnail_url',
+    ],
+    properties: {
+      executed_session_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      status: {
+        type: 'string',
+        enum: ['completed'],
+        description: 'Only finished sessions for now (ADR-037); the enum grows with the history.',
+      },
+      started_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      trained_on: {
+        type: 'string',
+        format: 'date',
+        description: "The day in the person's zone.",
+      },
+      title: {
+        type: ['string', 'null'],
+        description: "The routine's name. Null for a free session.",
+      },
+      is_free: {
+        type: 'boolean',
+        description: 'True when no planned session stands behind it.',
+      },
+      discipline_code: {
+        type: 'string',
+      },
+      duration_seconds: {
+        type: 'integer',
+        minimum: 0,
+      },
+      work_sets: {
+        type: 'integer',
+        minimum: 0,
+      },
+      total_volume_kg: {
+        type: ['number', 'null'],
+        minimum: 0,
+        description: 'Kilos lifted without warmups. Null when nothing was weighed, not zero.',
+      },
+      record_count: {
+        type: 'integer',
+        minimum: 0,
+        description: "Records set, counted as the session's summary counts them (ADR-036).",
+      },
+      thumbnail_url: {
+        type: ['string', 'null'],
+        format: 'uri',
+        description:
+          "The routine's cover, the same photograph its summary shows (ADR-037). Null for a free session, which has no routine.",
+      },
+    },
+  },
+  SpaceHistoryMonth: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'month',
+      'sessions',
+      'trained_seconds',
+      'work_sets',
+      'total_volume_kg',
+      'records',
+      'weeks',
+      'days',
+      'months_available',
+      'disciplines',
+    ],
+    properties: {
+      month: {
+        type: 'string',
+        format: 'date',
+        description: 'The first day of the month.',
+      },
+      sessions: {
+        type: 'integer',
+        minimum: 0,
+      },
+      trained_seconds: {
+        type: 'integer',
+        minimum: 0,
+      },
+      work_sets: {
+        type: 'integer',
+        minimum: 0,
+      },
+      total_volume_kg: {
+        type: ['number', 'null'],
+        minimum: 0,
+      },
+      records: {
+        type: 'integer',
+        minimum: 0,
+      },
+      weeks: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/SpaceHistoryWeek',
+        },
+      },
+      days: {
+        type: 'array',
+        description: 'Only the days trained, oldest first.',
+        items: {
+          $ref: '#/components/schemas/SpaceHistoryDay',
+        },
+      },
+      months_available: {
+        type: 'array',
+        description: 'First days of the months with something finished, newest first.',
+        items: {
+          type: 'string',
+          format: 'date',
+        },
+      },
+      disciplines: {
+        type: 'array',
+        description: 'The disciplines trained that month, named as the catalogue names them.',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['code', 'name'],
+          properties: {
+            code: {
+              type: 'string',
+            },
+            name: {
+              type: 'string',
+            },
+          },
+        },
+      },
+    },
+  },
+  SpaceHistoryPage: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['data', 'page'],
+    properties: {
+      data: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/SpaceHistoryItem',
+        },
+      },
+      page: {
+        $ref: '#/components/schemas/Page',
+      },
+    },
+  },
+  SpaceHistoryWeek: {
+    type: 'object',
+    additionalProperties: false,
+    description: 'An ISO week counted whole, even where it crosses into another month.',
+    required: ['week_starts_on', 'completed', 'planned', 'fulfilled'],
+    properties: {
+      week_starts_on: {
+        type: 'string',
+        format: 'date',
+        description: 'The Monday of an ISO week that touches the month.',
+      },
+      completed: {
+        type: 'integer',
+        minimum: 0,
+        description: 'Sessions finished that week, free ones and repeats included.',
+      },
+      planned: {
+        type: 'integer',
+        minimum: 0,
+        description: 'Planned sessions scheduled that week and not cancelled or paused.',
+      },
+      fulfilled: {
+        type: 'integer',
+        minimum: 0,
+        description:
+          'Of those planned, how many were finished that week, each once however many times it was done.',
+      },
+    },
+  },
   SpaceMyProgram: {
     type: 'object',
     additionalProperties: false,
@@ -8614,6 +8846,7 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       'sessions_planned',
       'tonnage_kg',
       'history',
+      'work_sets',
     ],
     description:
       "The calendar week in progress, Monday to Sunday, in the person's zone. The week is the unit and the day inside it is a suggestion, so what counts is how much of the week is done — and what is left undone does not carry over.",
@@ -8652,6 +8885,12 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         items: {
           $ref: '#/components/schemas/SpaceTrainedSession',
         },
+      },
+      work_sets: {
+        type: 'integer',
+        minimum: 0,
+        description:
+          'Work sets finished this week, without warmups or annulled sessions. Not the sum of `history`, which is the latest sessions of any week.',
       },
     },
   },

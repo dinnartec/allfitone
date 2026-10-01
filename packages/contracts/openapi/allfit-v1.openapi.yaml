@@ -6268,6 +6268,142 @@ paths:
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
 
+  /space/v1/executions:
+    get:
+      tags: [Space Execution]
+      operationId: listMyExecutions
+      x-allfit-operation: OP-EXE-014
+      x-allfit-cache: no-store
+      summary: List my finished sessions, newest first
+      description: >-
+        The history. Each row is summarised as it is read: duration, work sets, kilos
+        without warmups, how many records it set by the rule of ADR-036, and its
+        routine's cover as a thumbnail. Finished sessions only for now
+        (ADR-037); every row says its `status` so abandoned and annulled ones can join
+        without breaking this shape.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: timezone
+          in: query
+          required: true
+          description: The device's zone, which decides the day and the month of a session.
+          schema:
+            $ref: '#/components/schemas/IanaTimeZone'
+        - name: month
+          in: query
+          required: false
+          description: Any day of the month to list, in the person's zone. Omitted, every month.
+          schema:
+            type: string
+            format: date
+        - name: day
+          in: query
+          required: false
+          description: A single day to list, in the person's zone, as picked on the month's calendar.
+          schema:
+            type: string
+            format: date
+        - name: discipline
+          in: query
+          required: false
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 64
+        - name: with_record
+          in: query
+          required: false
+          description: Only the sessions that set at least one record.
+          schema:
+            type: boolean
+        - name: free
+          in: query
+          required: false
+          description: True for the free sessions only, false for the planned ones.
+          schema:
+            type: boolean
+        - name: q
+          in: query
+          required: false
+          description: >-
+            Found in the routine's name or in its exercises', ignoring case and the
+            Spanish accents.
+          schema:
+            type: string
+            maxLength: 80
+        - $ref: '#/components/parameters/Cursor'
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+      responses:
+        '200':
+          description: One page of the history
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpaceHistoryPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /space/v1/history/months/{month}:
+    get:
+      tags: [Space Execution]
+      operationId: getMyHistoryMonth
+      x-allfit-operation: OP-EXE-022
+      x-allfit-cache: no-store
+      summary: Read one month of my history
+      description: >-
+        The month's totals, each ISO week with what was finished, planned and free, the
+        months there is something to see in, and the disciplines present (ADR-037).
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: month
+          in: path
+          required: true
+          description: Any day of the month, in the person's zone.
+          schema:
+            type: string
+            format: date
+        - name: timezone
+          in: query
+          required: true
+          schema:
+            $ref: '#/components/schemas/IanaTimeZone'
+      responses:
+        '200':
+          description: The month
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpaceHistoryMonth'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
   /space/v1/executions/{executionId}:
     get:
       tags: [Space Execution]
@@ -10462,7 +10598,7 @@ components:
     SpaceWeekSummary:
       type: object
       additionalProperties: false
-      required: [trained_seconds, sessions_completed, sessions_planned, tonnage_kg, history]
+      required: [trained_seconds, sessions_completed, sessions_planned, tonnage_kg, history, work_sets]
       description: >-
         The calendar week in progress, Monday to Sunday, in the person's zone. The week
         is the unit and the day inside it is a suggestion, so what counts is how much
@@ -10505,6 +10641,171 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/SpaceTrainedSession'
+        work_sets:
+          type: integer
+          minimum: 0
+          description: >-
+            Work sets finished this week, without warmups or annulled sessions. Not the
+            sum of `history`, which is the latest sessions of any week.
+    SpaceHistoryItem:
+      type: object
+      additionalProperties: false
+      required: [executed_session_id, status, started_at, trained_on, title, is_free, discipline_code,
+        duration_seconds, work_sets, total_volume_kg, record_count, thumbnail_url]
+      properties:
+        executed_session_id:
+          $ref: '#/components/schemas/UuidV7'
+        status:
+          type: string
+          enum: [completed]
+          description: Only finished sessions for now (ADR-037); the enum grows with the history.
+        started_at:
+          type: string
+          format: date-time
+        trained_on:
+          type: string
+          format: date
+          description: The day in the person's zone.
+        title:
+          type: [string, 'null']
+          description: The routine's name. Null for a free session.
+        is_free:
+          type: boolean
+          description: True when no planned session stands behind it.
+        discipline_code:
+          type: string
+        duration_seconds:
+          type: integer
+          minimum: 0
+        work_sets:
+          type: integer
+          minimum: 0
+        total_volume_kg:
+          type: [number, 'null']
+          minimum: 0
+          description: Kilos lifted without warmups. Null when nothing was weighed, not zero.
+        record_count:
+          type: integer
+          minimum: 0
+          description: Records set, counted as the session's summary counts them (ADR-036).
+        thumbnail_url:
+          type: [string, 'null']
+          format: uri
+          description: >-
+            The routine's cover, the same photograph its summary shows (ADR-037). Null for
+            a free session, which has no routine.
+    SpaceHistoryPage:
+      type: object
+      additionalProperties: false
+      required: [data, page]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/SpaceHistoryItem'
+        page:
+          $ref: '#/components/schemas/Page'
+    SpaceHistoryWeek:
+      type: object
+      additionalProperties: false
+      description: An ISO week counted whole, even where it crosses into another month.
+      required: [week_starts_on, completed, planned, fulfilled]
+      properties:
+        week_starts_on:
+          type: string
+          format: date
+          description: The Monday of an ISO week that touches the month.
+        completed:
+          type: integer
+          minimum: 0
+          description: Sessions finished that week, free ones and repeats included.
+        planned:
+          type: integer
+          minimum: 0
+          description: Planned sessions scheduled that week and not cancelled or paused.
+        fulfilled:
+          type: integer
+          minimum: 0
+          description: Of those planned, how many were finished that week, each once however
+            many times it was done.
+    SpaceHistoryDay:
+      type: object
+      additionalProperties: false
+      description: A day of the month something was finished on, for the month card's calendar.
+      required: [trained_on, sessions, trained_seconds, work_sets, volume_kg, records]
+      properties:
+        trained_on:
+          type: string
+          format: date
+          description: The day in the person's time zone.
+        sessions:
+          type: integer
+          minimum: 1
+        trained_seconds:
+          type: integer
+          minimum: 0
+        work_sets:
+          type: integer
+          minimum: 0
+        volume_kg:
+          type: [number, 'null']
+          minimum: 0
+          description: Kilos lifted that day without warmups. Null when nothing was weighed.
+        records:
+          type: integer
+          minimum: 0
+    SpaceHistoryMonth:
+      type: object
+      additionalProperties: false
+      required: [month, sessions, trained_seconds, work_sets, total_volume_kg, records, weeks,
+        days, months_available, disciplines]
+      properties:
+        month:
+          type: string
+          format: date
+          description: The first day of the month.
+        sessions:
+          type: integer
+          minimum: 0
+        trained_seconds:
+          type: integer
+          minimum: 0
+        work_sets:
+          type: integer
+          minimum: 0
+        total_volume_kg:
+          type: [number, 'null']
+          minimum: 0
+        records:
+          type: integer
+          minimum: 0
+        weeks:
+          type: array
+          items:
+            $ref: '#/components/schemas/SpaceHistoryWeek'
+        days:
+          type: array
+          description: Only the days trained, oldest first.
+          items:
+            $ref: '#/components/schemas/SpaceHistoryDay'
+        months_available:
+          type: array
+          description: First days of the months with something finished, newest first.
+          items:
+            type: string
+            format: date
+        disciplines:
+          type: array
+          description: The disciplines trained that month, named as the catalogue names them.
+          items:
+            type: object
+            additionalProperties: false
+            required: [code, name]
+            properties:
+              code:
+                type: string
+              name:
+                type: string
     SpaceTrainedSession:
       type: object
       additionalProperties: false

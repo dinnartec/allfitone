@@ -413,6 +413,13 @@ export const allfitV1ContractManifest = {
     },
     {
       method: 'GET',
+      path: '/space/v1/executions',
+      operationId: 'listMyExecutions',
+      allfitOperation: 'OP-EXE-014',
+      responses: ['200', '400', '401', '403', '503'],
+    },
+    {
+      method: 'GET',
       path: '/space/v1/executions/{executionId}',
       operationId: 'getMyExecution',
       allfitOperation: 'OP-EXE-015',
@@ -445,6 +452,13 @@ export const allfitV1ContractManifest = {
       operationId: 'getMyExecutionSummary',
       allfitOperation: 'OP-EXE-021',
       responses: ['200', '400', '401', '403', '404', '409', '503'],
+    },
+    {
+      method: 'GET',
+      path: '/space/v1/history/months/{month}',
+      operationId: 'getMyHistoryMonth',
+      allfitOperation: 'OP-EXE-022',
+      responses: ['200', '400', '401', '403', '503'],
     },
     {
       method: 'GET',

@@ -2551,6 +2551,46 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/space/v1/executions': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * List my finished sessions, newest first
+     * @description The history. Each row is summarised as it is read: duration, work sets, kilos without warmups, how many records it set by the rule of ADR-036, and its routine's cover as a thumbnail. Finished sessions only for now (ADR-037); every row says its `status` so abandoned and annulled ones can join without breaking this shape.
+     */
+    get: operations['listMyExecutions']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/history/months/{month}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Read one month of my history
+     * @description The month's totals, each ISO week with what was finished, planned and free, the months there is something to see in, and the disciplines present (ADR-037).
+     */
+    get: operations['getMyHistoryMonth']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/space/v1/executions/{executionId}': {
     parameters: {
       query?: never
@@ -4045,6 +4085,93 @@ export interface components {
        */
       tonnage_kg: number | null
       history: components['schemas']['SpaceTrainedSession'][]
+      /** @description Work sets finished this week, without warmups or annulled sessions. Not the sum of `history`, which is the latest sessions of any week. */
+      work_sets: number
+    }
+    SpaceHistoryItem: {
+      executed_session_id: components['schemas']['UuidV7']
+      /**
+       * @description Only finished sessions for now (ADR-037); the enum grows with the history.
+       * @enum {string}
+       */
+      status: 'completed'
+      /** Format: date-time */
+      started_at: string
+      /**
+       * Format: date
+       * @description The day in the person's zone.
+       */
+      trained_on: string
+      /** @description The routine's name. Null for a free session. */
+      title: string | null
+      /** @description True when no planned session stands behind it. */
+      is_free: boolean
+      discipline_code: string
+      duration_seconds: number
+      work_sets: number
+      /** @description Kilos lifted without warmups. Null when nothing was weighed, not zero. */
+      total_volume_kg: number | null
+      /** @description Records set, counted as the session's summary counts them (ADR-036). */
+      record_count: number
+      /**
+       * Format: uri
+       * @description The routine's cover, the same photograph its summary shows (ADR-037). Null for a free session, which has no routine.
+       */
+      thumbnail_url: string | null
+    }
+    SpaceHistoryPage: {
+      data: components['schemas']['SpaceHistoryItem'][]
+      page: components['schemas']['Page']
+    }
+    /** @description An ISO week counted whole, even where it crosses into another month. */
+    SpaceHistoryWeek: {
+      /**
+       * Format: date
+       * @description The Monday of an ISO week that touches the month.
+       */
+      week_starts_on: string
+      /** @description Sessions finished that week, free ones and repeats included. */
+      completed: number
+      /** @description Planned sessions scheduled that week and not cancelled or paused. */
+      planned: number
+      /** @description Of those planned, how many were finished that week, each once however many times it was done. */
+      fulfilled: number
+    }
+    /** @description A day of the month something was finished on, for the month card's calendar. */
+    SpaceHistoryDay: {
+      /**
+       * Format: date
+       * @description The day in the person's time zone.
+       */
+      trained_on: string
+      sessions: number
+      trained_seconds: number
+      work_sets: number
+      /** @description Kilos lifted that day without warmups. Null when nothing was weighed. */
+      volume_kg: number | null
+      records: number
+    }
+    SpaceHistoryMonth: {
+      /**
+       * Format: date
+       * @description The first day of the month.
+       */
+      month: string
+      sessions: number
+      trained_seconds: number
+      work_sets: number
+      total_volume_kg: number | null
+      records: number
+      weeks: components['schemas']['SpaceHistoryWeek'][]
+      /** @description Only the days trained, oldest first. */
+      days: components['schemas']['SpaceHistoryDay'][]
+      /** @description First days of the months with something finished, newest first. */
+      months_available: string[]
+      /** @description The disciplines trained that month, named as the catalogue names them. */
+      disciplines: {
+        code: string
+        name: string
+      }[]
     }
     SpaceTrainedSession: {
       executed_session_id: components['schemas']['UuidV7']
@@ -11371,6 +11498,77 @@ export interface operations {
           'application/json': components['schemas']['SpaceMyRoutine'][]
         }
       }
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listMyExecutions: {
+    parameters: {
+      query: {
+        /** @description The device's zone, which decides the day and the month of a session. */
+        timezone: components['schemas']['IanaTimeZone']
+        /** @description Any day of the month to list, in the person's zone. Omitted, every month. */
+        month?: string
+        /** @description A single day to list, in the person's zone, as picked on the month's calendar. */
+        day?: string
+        discipline?: string
+        /** @description Only the sessions that set at least one record. */
+        with_record?: boolean
+        /** @description True for the free sessions only, false for the planned ones. */
+        free?: boolean
+        /** @description Found in the routine's name or in its exercises', ignoring case and the Spanish accents. */
+        q?: string
+        cursor?: components['parameters']['Cursor']
+        limit?: number
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description One page of the history */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SpaceHistoryPage']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  getMyHistoryMonth: {
+    parameters: {
+      query: {
+        timezone: components['schemas']['IanaTimeZone']
+      }
+      header?: never
+      path: {
+        /** @description Any day of the month, in the person's zone. */
+        month: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The month */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SpaceHistoryMonth']
+        }
+      }
+      400: components['responses']['BadRequest']
       401: components['responses']['Unauthenticated']
       403: components['responses']['Forbidden']
       503: components['responses']['UpstreamUnavailable']
