@@ -1303,12 +1303,13 @@ function SetRow({
           </Pressable>
           {/* What it weighed last time, so nobody has to remember the number they hit a
               week ago. That is what a log is for. */}
+          {/* Readable at a glance and never dimmed: it is the reference for the set. */}
           <Text
             role="body"
-            size="xs"
-            color="muted"
+            size="sm"
+            color="secondary"
             numberOfLines={1}
-            style={[styles.colPrevious, set.done ? styles.dimmed : null]}
+            style={styles.colPrevious}
           >
             {set.previous}
           </Text>

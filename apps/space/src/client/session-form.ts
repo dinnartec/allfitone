@@ -96,11 +96,11 @@ function previousLoadOf(step: Source, index: number): string | undefined {
   return typeof load === 'number' ? String(load) : undefined
 }
 
-/** "60 × 12", or an em dash when the movement has no history. */
+/** "60 kg × 12", or an em dash when the movement has no history. */
 function previousLabel(step: Source, index: number): string {
   const entry = step.previous?.[index]
   if (!entry || entry.load_value === null || entry.achieved_reps === null) return '—'
-  return `${entry.load_value} × ${entry.achieved_reps}`
+  return `${String(entry.load_value)} kg × ${String(entry.achieved_reps)}`
 }
 
 /**

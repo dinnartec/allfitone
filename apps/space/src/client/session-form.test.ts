@@ -154,7 +154,11 @@ describe('the working state a session screen holds', () => {
       }),
     )
 
-    expect(withHistory[0]?.sets.map((set) => set.previous)).toEqual(['60 × 12', '60 × 11', '—'])
+    expect(withHistory[0]?.sets.map((set) => set.previous)).toEqual([
+      '60 kg × 12',
+      '60 kg × 11',
+      '—',
+    ])
   })
 
   test('T-SPC-UNIT-63 keeps a set that was recorded beyond the plan', () => {
