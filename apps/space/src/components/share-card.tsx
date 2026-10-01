@@ -71,7 +71,6 @@ const INK = {
   ash: color.neutral.ash,
   deep: color.brand.turquoiseDark,
   rim: '#86BEC840',
-  divider: '#86BEC855',
 } as const
 
 const POSTER = nativeFontFamily.displayExtraboldItalic
@@ -1124,8 +1123,6 @@ const styles = StyleSheet.create({
   frame: { width: CARD_WIDTH, height: CARD_HEIGHT, backgroundColor: INK.ink },
   photo: { position: 'absolute', left: 0, top: 0, width: CARD_WIDTH, height: 330 },
   at: { position: 'absolute' },
-  right: { textAlign: 'right' },
-  centre: { textAlign: 'center' },
   wide: { left: 0, width: CARD_WIDTH, textAlign: 'center' },
   grow: { flex: 1 },
   logo: { position: 'absolute', left: 12, top: 16 },

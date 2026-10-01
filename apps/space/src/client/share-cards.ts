@@ -196,13 +196,6 @@ export function daysSince(record: ShareRecord, trainedOn: string): number {
   )
 }
 
-/** «Antes: 7,5 kg · hace 12 días», counted in calendar days from the session's. */
-export function beforeLine(record: ShareRecord, trainedOn: string): string {
-  const days = daysSince(record, trainedOn)
-  const ago = days <= 0 ? 'hoy' : days === 1 ? 'ayer' : `hace ${days} días`
-  return `Antes: ${kilos(record.previous_value)} kg · ${ago}`
-}
-
 /** The design's phone and card: a 300-point card on a 390-point screen. */
 const DESIGN_SCREEN = 390
 const DESIGN_CARD = { width: 300, height: 533 } as const

@@ -2,7 +2,6 @@ import { describe, expect, test } from 'bun:test'
 
 import {
   bandFigureSize,
-  beforeLine,
   cardScale,
   cardsFor,
   daysSince,
@@ -201,17 +200,6 @@ describe('the record card', () => {
     expect(
       recordFigure({ ...heaviestRecord(), kind: 'session_volume', value: 1345.5, reps: null }),
     ).toEqual({ big: '1.345,5', unit: 'KG', tail: 'en la sesión', label: 'MÁS VOLUMEN' })
-  })
-
-  test('T-SPC-UNIT-161 what it beat, and how long ago', () => {
-    const heaviest = heaviestRecord()
-    expect(beforeLine(heaviest, '2026-09-29')).toBe('Antes: 7,5 kg · hace 12 días')
-    expect(beforeLine({ ...heaviest, previous_on: '2026-09-28' }, '2026-09-29')).toBe(
-      'Antes: 7,5 kg · ayer',
-    )
-    expect(beforeLine({ ...heaviest, previous_on: '2026-09-29' }, '2026-09-29')).toBe(
-      'Antes: 7,5 kg · hoy',
-    )
   })
 })
 
