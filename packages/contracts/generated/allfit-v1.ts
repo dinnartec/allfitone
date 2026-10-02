@@ -443,7 +443,7 @@ export interface paths {
     /**
      * Read the organization directory
      * @description Name, type, lifecycle state, active members and sites of every organization, searchable by display name. An `unclaimed` organization exists but does not operate: Allfit created it and its owner has not accepted yet.
-     *     The legal name is neither searched nor returned, because for an independent professional it is a person's name; the responsible party never leaves the database. `people_served` is null until service relationships exist — never zero, which would say the organization serves nobody.
+     *     The legal name is neither searched nor returned, because for an independent professional it is a person's name; the responsible party never leaves the database. `people_served` counts the people the gym serves now; the file of a single gym also says what state those relationships are in.
      */
     get: operations['listBackofficeOrganizations']
     put?: never
@@ -3623,8 +3623,8 @@ export interface components {
       cancelled_at: string | null
       active_member_count: number
       site_count: number
-      /** @description Null until service relationships exist. Not zero, because zero would say the organization serves nobody. */
-      people_served: number | null
+      /** @description How many people the gym serves now. The file carries the states. */
+      people_served: number
     }
     BackofficeOrganizationPage: {
       data: components['schemas']['BackofficeOrganizationSummary'][]
@@ -3680,8 +3680,13 @@ export interface components {
         /** @enum {string} */
         status: 'active' | 'inactive'
       }[]
-      /** @description Null until service relationships exist. Never zero in their place. */
-      people_served: number | null
+      /** @description How many people the gym serves now. A relationship that ended is not one of them; it is counted in `relationship_counts` instead. */
+      people_served: number
+      /** @description The state those relationships are in. A count and nothing else: reaching a person still means a break-glass window with a case reference. */
+      relationship_counts: {
+        active: number
+        terminated: number
+      }
       plans_availability: components['schemas']['ModelAvailability']
       payment_method_availability: components['schemas']['ModelAvailability']
       premium_availability: components['schemas']['ModelAvailability']

@@ -1097,6 +1097,7 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       'team_truncated',
       'sites',
       'people_served',
+      'relationship_counts',
       'plans_availability',
       'payment_method_availability',
       'premium_availability',
@@ -1246,9 +1247,27 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         },
       },
       people_served: {
-        type: ['integer', 'null'],
+        type: 'integer',
         minimum: 0,
-        description: 'Null until service relationships exist. Never zero in their place.',
+        description:
+          'How many people the gym serves now. A relationship that ended is not one of them; it is counted in `relationship_counts` instead.',
+      },
+      relationship_counts: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['active', 'terminated'],
+        description:
+          'The state those relationships are in. A count and nothing else: reaching a person still means a break-glass window with a case reference.',
+        properties: {
+          active: {
+            type: 'integer',
+            minimum: 0,
+          },
+          terminated: {
+            type: 'integer',
+            minimum: 0,
+          },
+        },
       },
       plans_availability: {
         $ref: '#/components/schemas/ModelAvailability',
@@ -1332,10 +1351,9 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         minimum: 0,
       },
       people_served: {
-        type: ['integer', 'null'],
+        type: 'integer',
         minimum: 0,
-        description:
-          'Null until service relationships exist. Not zero, because zero would say the organization serves nobody.',
+        description: 'How many people the gym serves now. The file carries the states.',
       },
     },
   },

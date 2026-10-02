@@ -6,6 +6,7 @@ import {
   memberCardHref,
   responsibleLabel,
   rolesLabel,
+  peopleServedSentence,
   siteAddress,
   teamSentence,
   type OrganizationFile,
@@ -36,7 +37,8 @@ function file(overrides: Partial<OrganizationFile> = {}): OrganizationFile {
     team_counts: { active: 3, terminated: 1 },
     team_truncated: false,
     sites: [],
-    people_served: null,
+    people_served: 0,
+    relationship_counts: { active: 0, terminated: 0 },
     plans_availability: 'not_modelled',
     payment_method_availability: 'not_modelled',
     premium_availability: 'not_modelled',
@@ -70,6 +72,32 @@ describe('organization file presentation', () => {
     expect(teamSentence(unclaimed)).toContain('nunca tuvo dueño')
     expect(handsOverHere(unclaimed)).toBeTrue()
     expect(handsOverHere(file())).toBeFalse()
+  })
+
+  test('counts the people the gym serves and the relationships that ended', () => {
+    expect(
+      peopleServedSentence(
+        file({ people_served: 12, relationship_counts: { active: 12, terminated: 3 } }),
+      ),
+    ).toBe('Atiende a 12 personas, y 3 relaciones ya terminaron.')
+    expect(
+      peopleServedSentence(
+        file({ people_served: 1, relationship_counts: { active: 1, terminated: 0 } }),
+      ),
+    ).toBe('Atiende a 1 persona.')
+  })
+
+  test('a gym that serves nobody says so, because here zero is a fact', () => {
+    expect(
+      peopleServedSentence(
+        file({ people_served: 0, relationship_counts: { active: 0, terminated: 0 } }),
+      ),
+    ).toBe('Todavía no atiende a nadie.')
+    expect(
+      peopleServedSentence(
+        file({ people_served: 0, relationship_counts: { active: 0, terminated: 4 } }),
+      ),
+    ).toBe('No atiende a nadie en este momento, y 4 relaciones ya terminaron.')
   })
 
   test('a withheld address is said to be withheld, not missing', () => {

@@ -36,6 +36,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      holds_backoffice_duty: { Args: { p_duty_code: string }; Returns: boolean }
       is_self: { Args: { target_person_id: string }; Returns: boolean }
       org: { Args: never; Returns: string }
       owns_membership: { Args: { p_membership_id: string }; Returns: boolean }

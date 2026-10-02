@@ -31,7 +31,7 @@ const summary: AllfitV1Schemas['BackofficeOrganizationSummary'] = {
   cancelled_at: null,
   active_member_count: 1,
   site_count: 2,
-  people_served: null,
+  people_served: 0,
 }
 
 const handoverResource: AllfitV1Schemas['OrganizationHandover'] = {
@@ -88,7 +88,8 @@ const fileResource: AllfitV1Schemas['BackofficeOrganizationFile'] = {
   team_counts: { active: 1, terminated: 0 },
   team_truncated: false,
   sites: [],
-  people_served: null,
+  people_served: 0,
+  relationship_counts: { active: 0, terminated: 0 },
   plans_availability: 'not_modelled',
   payment_method_availability: 'not_modelled',
   premium_availability: 'not_modelled',

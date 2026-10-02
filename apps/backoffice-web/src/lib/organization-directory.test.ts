@@ -8,31 +8,12 @@ import {
   directoryFilterIssue,
   directoryFilterIssueMessage,
   directoryMessage,
-  hasUnknownPeopleServed,
   peopleServedLabel,
   statusLabel,
   statusMeaning,
   statusTone,
   toDirectoryQuery,
-  type OrganizationSummary,
 } from './organization-directory'
-
-function organization(overrides: Partial<OrganizationSummary> = {}): OrganizationSummary {
-  return {
-    organization_id: '019a6000-0000-7000-8000-000000000001',
-    display_name: 'Gimnasio Norte',
-    type_code: 'gym',
-    type_name: 'Gimnasio',
-    status: 'active',
-    created_at: '2026-08-04T15:00:00.000Z',
-    claimed_at: '2026-08-04T15:00:00.000Z',
-    cancelled_at: null,
-    active_member_count: 1,
-    site_count: 2,
-    people_served: null,
-    ...overrides,
-  }
-}
 
 describe('organization directory presentation', () => {
   test('an unclaimed organization never reads like one that operates', () => {
@@ -49,12 +30,10 @@ describe('organization directory presentation', () => {
     }
   })
 
-  test('an unknown number of people served is never printed as zero', () => {
-    expect(peopleServedLabel(null)).toBe('Sin dato aún')
+  test('the people a gym serves are counted, and one is not "1 personas"', () => {
     expect(peopleServedLabel(0)).toBe('0 personas')
     expect(peopleServedLabel(1)).toBe('1 persona')
-    expect(hasUnknownPeopleServed([organization()])).toBe(true)
-    expect(hasUnknownPeopleServed([organization({ people_served: 0 })])).toBe(false)
+    expect(peopleServedLabel(12)).toBe('12 personas')
   })
 
   test('a one-letter search is refused before it becomes a query', () => {

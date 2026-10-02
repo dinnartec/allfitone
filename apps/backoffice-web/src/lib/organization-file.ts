@@ -55,6 +55,28 @@ export function teamSentence(file: OrganizationFile): string {
   return `${current}${former}.${truncated}`
 }
 
+/**
+ * How many people the gym serves. Unlike the business panel, zero is a fact here and
+ * is said out loud: this is one gym, not an aggregate that could single somebody out.
+ */
+export function peopleServedSentence(file: OrganizationFile): string {
+  const { active, terminated } = file.relationship_counts
+  const former =
+    terminated === 0
+      ? ''
+      : terminated === 1
+        ? ', y 1 relación ya terminó'
+        : `, y ${terminated} relaciones ya terminaron`
+
+  if (active === 0) {
+    return terminated === 0
+      ? 'Todavía no atiende a nadie.'
+      : `No atiende a nadie en este momento${former}.`
+  }
+  const current = active === 1 ? 'Atiende a 1 persona' : `Atiende a ${active} personas`
+  return `${current}${former}.`
+}
+
 export function siteAddress(site: FileSite): string {
   if (site.address) return site.address
   return site.address_withheld

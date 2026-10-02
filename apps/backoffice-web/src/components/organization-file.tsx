@@ -58,6 +58,7 @@ import {
   responsibleLabel,
   rolesLabel,
   siteAddress,
+  peopleServedSentence,
   teamSentence,
 } from '@/lib/organization-file'
 import { formatInstant } from '@/lib/platform-access'
@@ -194,6 +195,11 @@ export function OrganizationFile({ organizationId }: { organizationId: string })
           <Alert live="off" variant="info" data-file-team-summary>
             <AlertTitle>Equipo</AlertTitle>
             <AlertDescription>{teamSentence(file)}</AlertDescription>
+          </Alert>
+
+          <Alert live="off" variant="info" data-file-people-served>
+            <AlertTitle>Personas que atiende</AlertTitle>
+            <AlertDescription>{peopleServedSentence(file)}</AlertDescription>
           </Alert>
 
           {file.team.length > 0 ? (

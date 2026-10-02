@@ -64,17 +64,9 @@ export function statusTone(status: OrganizationStatus): StatusTone {
   return 'secondary'
 }
 
-export function peopleServedLabel(value: number | null): string {
-  if (value === null) return 'Sin dato aún'
+export function peopleServedLabel(value: number): string {
   return value === 1 ? '1 persona' : `${value} personas`
 }
-
-export function hasUnknownPeopleServed(organizations: readonly OrganizationSummary[]): boolean {
-  return organizations.some((organization) => organization.people_served === null)
-}
-
-export const PEOPLE_SERVED_NOTE =
-  'Cuántas personas atiende cada gimnasio se cuenta desde sus relaciones de servicio, que todavía no existen. Mientras tanto se muestra «Sin dato aún» y nunca un cero, porque un cero diría que no atiende a nadie.'
 
 export interface DirectoryFilters {
   query: string

@@ -58,13 +58,11 @@ import {
 } from '@/lib/backoffice-api'
 import {
   ORGANIZATION_STATUSES,
-  PEOPLE_SERVED_NOTE,
   directoryAnswer,
   directoryFilterIssue,
   directoryFilterIssueMessage,
   directoryFiltersFromStatus,
   directoryMessage,
-  hasUnknownPeopleServed,
   peopleServedLabel,
   statusLabel,
   statusMeaning,
@@ -299,13 +297,6 @@ export function OrganizationDirectory() {
                   ))}
                 </TableBody>
               </Table>
-            ) : null}
-
-            {hasUnknownPeopleServed(organizations) ? (
-              <Alert live="off" variant="info" data-organization-people-served-note>
-                <AlertTitle>Por qué no hay cifra de personas atendidas</AlertTitle>
-                <AlertDescription>{PEOPLE_SERVED_NOTE}</AlertDescription>
-              </Alert>
             ) : null}
 
             {appendFailure ? (

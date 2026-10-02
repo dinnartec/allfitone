@@ -401,7 +401,7 @@ export interface DirectoryOrganizationFixture {
   cancelled_at: string | null
   active_member_count: number
   site_count: number
-  people_served: number | null
+  people_served: number
 }
 
 const DIRECTORY_STATUSES: readonly string[] = ['unclaimed', 'active', 'closed', 'cancelled']
@@ -426,7 +426,7 @@ export function directoryOrganization(
     cancelled_at: status === 'cancelled' ? new Date(Date.now() - 86_400_000).toISOString() : null,
     active_member_count: status === 'active' ? 1 : 0,
     site_count: 1,
-    people_served: null,
+    people_served: 3,
     ...overrides,
   }
 }
@@ -472,7 +472,8 @@ export interface OrganizationFileRecordFixture {
     address_withheld: boolean
     status: 'active' | 'inactive'
   }>
-  people_served: number | null
+  people_served: number
+  relationship_counts: { active: number; terminated: number }
   plans_availability: 'not_modelled'
   payment_method_availability: 'not_modelled'
   premium_availability: 'not_modelled'
@@ -503,7 +504,8 @@ export function organizationFileRecord(
     team_counts: { active: 0, terminated: 0 },
     team_truncated: false,
     sites: [],
-    people_served: null,
+    people_served: 3,
+    relationship_counts: { active: 3, terminated: 1 },
     plans_availability: 'not_modelled',
     payment_method_availability: 'not_modelled',
     premium_availability: 'not_modelled',
