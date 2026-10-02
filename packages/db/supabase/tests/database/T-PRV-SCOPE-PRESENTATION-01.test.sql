@@ -8,7 +8,7 @@
 
 begin;
 
-select plan(11);
+select plan(14);
 
 insert into identity.people (id, given_name, family_name, status)
 values ('019b3000-0000-7000-8000-000000000011', 'Olivia', 'Owner', 'active');
@@ -54,6 +54,31 @@ select isnt(
    where scope_code = 'health_context'),
   null,
   'y una descripción de qué cubre'
+);
+
+/*
+ * Dos textos para dos lectores. El resumen es la línea que lee quien invita; la
+ * descripción, lo que lee quien decide sobre sus datos. Si fueran el mismo, uno
+ * de los dos estaría leyendo el texto del otro.
+ */
+select isnt(
+  (select summary from privacy.list_offerable_scopes() where scope_code = 'health_context'),
+  (select description from privacy.list_offerable_scopes() where scope_code = 'health_context'),
+  'el resumen y la descripción no son el mismo texto'
+);
+
+select ok(
+  (select char_length(summary) <= 120 from privacy.list_offerable_scopes()
+   where scope_code = 'relationship_training'),
+  'el resumen cabe en una línea'
+);
+
+-- Con una sola línea, el límite es la mitad que más vale conservar: sin él,
+-- alguien marca «Progreso corporal» creyendo que alcanza sus lesiones.
+select ok(
+  (select summary like '%sin datos de salud%' from privacy.list_offerable_scopes()
+   where scope_code = 'body_progress'),
+  'y aun así dice dónde para el permiso'
 );
 
 -- Lo que un scope excluye importa tanto como lo que incluye: quien decide si un

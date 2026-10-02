@@ -9,6 +9,7 @@ import {
   StudioApiError,
   studioApi,
   type ClientDirectoryGroup,
+  type OfferableScopeCatalog,
   type ClientDirectoryItem,
   type ClientDirectoryPage,
   type OrganizationMembership,
@@ -48,6 +49,7 @@ export const studioQueryKeys = {
     [...ROOT_KEY, 'organization', organizationId, 'memberships'] as const,
   organizationMemberships: (organizationId: string, status: MembershipFilter, limit: number) =>
     [...ROOT_KEY, 'organization', organizationId, 'memberships', { status, limit }] as const,
+  offerableScopes: () => [...ROOT_KEY, 'offerable-scopes'] as const,
   organizationClientsRoot: (organizationId: string) =>
     [...ROOT_KEY, 'organization', organizationId, 'clients'] as const,
   organizationClients: (organizationId: string, status: ClientFilter, limit: number) =>
@@ -292,6 +294,19 @@ export function organizationClientsQueryOptions(
     initialPageParam: null as string | null,
     getNextPageParam: nextPageCursor,
     staleTime: STUDIO_TEAM_STALE_TIME_MS,
+  })
+}
+
+/*
+ * The permission vocabulary changes when Backoffice publishes a new scope
+ * version, which is rare and never mid-session, so it is held longer than a
+ * directory page.
+ */
+export function offerableScopesQueryOptions() {
+  return queryOptions({
+    queryKey: studioQueryKeys.offerableScopes(),
+    queryFn: ({ signal }): Promise<OfferableScopeCatalog> => studioApi.offerableScopes(signal),
+    staleTime: STUDIO_ROLE_STALE_TIME_MS,
   })
 }
 

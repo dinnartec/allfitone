@@ -23,6 +23,7 @@ export interface StudioApiFixture {
   memberships: unknown[]
   organizationMemberships: unknown[]
   organizationClients: unknown[]
+  offerableScopes: unknown[]
   organization: unknown
   organizationRoles: unknown[]
   organizationTypes: unknown[]
@@ -76,6 +77,45 @@ export const terminatedMembership = {
   ended_at: '2025-06-01T21:08:44.319Z',
   roles: ['staff'],
 }
+
+/*
+ * The permission vocabulary, as Backoffice publishes it. Three of the seven, so
+ * the picker has enough to show a list without the screen becoming a wall.
+ */
+export const offerableScopeCatalog = [
+  {
+    scope_definition_id: '01991600-7000-7000-8000-000000000301',
+    scope_code: 'relationship_training',
+    version_number: 1,
+    display_name: 'Entrenamiento con nosotros',
+    summary: 'Sesiones que le asignes y sus resultados, nada de lo que entrene por su cuenta.',
+    description:
+      'Las sesiones que te asignemos y sus resultados, solo las que ocurran dentro de esta relación. No incluye lo que entrenes por tu cuenta, ni tu cuerpo, ni tu salud.',
+    default_purpose:
+      'Prescribir tu entrenamiento y revisar cómo te va en las sesiones que te asignamos.',
+  },
+  {
+    scope_definition_id: '01991600-7000-7000-8000-000000000302',
+    scope_code: 'body_progress',
+    version_number: 1,
+    display_name: 'Progreso corporal',
+    summary: 'Medidas y las fotos que elija, sin datos de salud.',
+    description:
+      'Medidas, composición corporal, tendencias y las fotos que tú selecciones. No incluye tu galería, ni la ubicación de las fotos, ni datos de salud.',
+    default_purpose:
+      'Seguir cómo cambia tu cuerpo y ajustar el plan a lo que muestren las medidas.',
+  },
+  {
+    scope_definition_id: '01991600-7000-7000-8000-000000000303',
+    scope_code: 'health_context',
+    version_number: 1,
+    display_name: 'Contexto de salud',
+    summary: 'Dolores y lesiones que declare, sin historia clínica.',
+    description:
+      'Dolores, lesiones o limitaciones que tú declares, y tu recuperación. No incluye historia clínica, exámenes, medicamentos ni diagnósticos.',
+    default_purpose: 'Adaptar los ejercicios a tus lesiones o limitaciones para no hacerte daño.',
+  },
+]
 
 /*
  * A directory entry is one of two kinds. The invitation one deliberately has no
@@ -350,6 +390,7 @@ export function createStudioApiFixture(
     memberships: [],
     organizationMemberships: [activeTeamMember, terminatedTeamMember],
     organizationClients: [activeClient, pendingClientInvitation, terminatedClient],
+    offerableScopes: [...offerableScopeCatalog],
     /*
      * A copy, not the shared object. Sites are now editable, and the mock
      * writes the change into this fixture so the screen the form returns to
@@ -477,6 +518,27 @@ function defaultResponse(
         )
       : fixture.organizationMemberships
     return { status: 200, body: { data, page: { has_more: false, next_cursor: null } } }
+  }
+  if (request.method === 'GET' && request.path === '/studio/v1/offerable-scopes') {
+    return { status: 200, body: { items: fixture.offerableScopes } }
+  }
+  if (
+    request.method === 'POST' &&
+    /^\/studio\/v1\/organizations\/[^/]+\/client-invitations$/.test(request.path)
+  ) {
+    return {
+      status: 201,
+      body: {
+        id: '01991600-7000-7000-8000-000000000401',
+        invitation_intent_id: '01991600-7000-7000-8000-000000000402',
+        status: 'pending',
+        channel: 'email',
+        contact_hint: 'a***@example.test',
+        expires_at: '2030-01-01T12:00:00.000Z',
+        scope_codes: ['body_progress'],
+        reused: false,
+      },
+    }
   }
   if (
     request.method === 'GET' &&

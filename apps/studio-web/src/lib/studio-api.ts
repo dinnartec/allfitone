@@ -34,6 +34,10 @@ export type TeamInvitationStatus = AllfitV1Schemas['TeamInvitationStatus']
 export type OrganizationMembership = AllfitV1Schemas['OrganizationMembershipListItem']
 export type OrganizationMembershipPage = AllfitV1Schemas['OrganizationMembershipPage']
 export type OrganizationMembershipStatus = AllfitV1Schemas['OrganizationMembershipStatus']
+export type OfferableScopeCatalog = AllfitV1Schemas['OfferableScopeCatalog']
+export type OfferableScope = AllfitV1Schemas['OfferableScope']
+export type ClientInvitationCreate = AllfitV1Schemas['ClientInvitationCreate']
+export type ClientInvitation = AllfitV1Schemas['ClientInvitation']
 export type ClientDirectoryPage = AllfitV1Schemas['ClientDirectoryPage']
 export type ClientDirectoryItem = AllfitV1Schemas['ClientDirectoryItem']
 export type ClientDirectoryRelationship = AllfitV1Schemas['ClientDirectoryRelationship']
@@ -292,6 +296,23 @@ export const studioApi = {
       },
     )
   },
+
+  offerableScopes: (signal?: AbortSignal) =>
+    request<OfferableScopeCatalog>('/studio/v1/offerable-scopes', {
+      cache: 'no-store',
+      ...(signal ? { signal } : {}),
+    }),
+
+  createClientInvitation: (
+    organizationId: string,
+    body: ClientInvitationCreate,
+    command: CommandHeaders,
+  ) =>
+    request<ClientInvitation>(`/studio/v1/organizations/${organizationId}/client-invitations`, {
+      method: 'POST',
+      headers: commandHeaders(command),
+      body: JSON.stringify(body),
+    }),
 
   organization: (organizationId: string, signal?: AbortSignal) =>
     request<Organization>(`/studio/v1/organizations/${organizationId}`, signal ? { signal } : {}),

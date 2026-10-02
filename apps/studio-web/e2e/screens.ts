@@ -844,6 +844,67 @@ export const SCREENS: Screen[] = [
       await expect(page.getByText('No pudimos cargar los clientes')).toBeVisible()
     },
   },
+  // --- `/organizations/[id]/clients/invitations/new` · HU-023 ---
+  {
+    stories: 'HU-023 · inviting somebody, with the permissions to choose from',
+    path: `${workspace}/clients/invitations/new`,
+    fixture: () => createStudioApiFixture({ memberships: [activeMembership] }),
+    settled: async (page) => {
+      await settledByHeading(page)
+      await expect(page.getByText('Progreso corporal')).toBeVisible()
+    },
+  },
+  {
+    // Every box ticked, which is the widest the form ever gets and the state
+    // where its descriptions have the least room.
+    stories: 'HU-023 · asking for everything on offer',
+    path: `${workspace}/clients/invitations/new`,
+    fixture: () => createStudioApiFixture({ memberships: [activeMembership] }),
+    reveal: async (page) => {
+      // The accessible name is now "Nombre: resumen", so these match on the
+      // name rather than equalling it.
+      for (const name of [/Entrenamiento con nosotros/, /Progreso corporal/, /Contexto de salud/]) {
+        await page.getByRole('checkbox', { name }).click()
+      }
+      await expect(page.getByRole('checkbox', { name: /Contexto de salud/ })).toBeChecked()
+    },
+  },
+  {
+    // What a professional sees when the form refuses to send.
+    stories: 'HU-023 · an invitation that asks for nothing',
+    path: `${workspace}/clients/invitations/new`,
+    fixture: () => createStudioApiFixture({ memberships: [activeMembership] }),
+    reveal: async (page) => {
+      await page.getByLabel('Correo electrónico').fill('ana@example.test')
+      await page.getByRole('button', { name: 'Enviar invitación' }).click()
+      await expect(page.getByText(/Marca al menos un permiso/)).toBeVisible()
+    },
+  },
+  {
+    /*
+     * The catalogue is published from Backoffice and is empty everywhere today,
+     * production included. Until somebody curates it this is the screen every
+     * professional meets, so it is audited rather than left to chance.
+     */
+    stories: 'HU-023 · no permission has been published yet',
+    path: `${workspace}/clients/invitations/new`,
+    fixture: () => createStudioApiFixture({ memberships: [activeMembership], offerableScopes: [] }),
+    settled: async (page) => {
+      await settledByHeading(page)
+      await expect(page.getByText('Todavía no hay permisos publicados')).toBeVisible()
+    },
+  },
+  {
+    stories: 'HU-023 · the invitation is on its way',
+    path: `${workspace}/clients/invitations/new`,
+    fixture: () => createStudioApiFixture({ memberships: [activeMembership] }),
+    reveal: async (page) => {
+      await page.getByLabel('Correo electrónico').fill('ana@example.test')
+      await page.getByRole('checkbox', { name: /Progreso corporal/ }).click()
+      await page.getByRole('button', { name: 'Enviar invitación' }).click()
+      await expect(page.getByText('La invitación va en camino')).toBeVisible()
+    },
+  },
   // --- `/organizations/[id]/organization` · HU-011 ---
   {
     stories: 'HU-011 · the organization and its sites',

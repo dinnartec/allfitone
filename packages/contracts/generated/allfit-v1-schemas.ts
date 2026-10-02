@@ -1959,6 +1959,7 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
       presented_snapshot: {
         type: 'object',
+        additionalProperties: true,
       },
       decision: {
         type: ['string', 'null'],
@@ -1986,6 +1987,7 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
       presented_snapshot: {
         type: 'object',
+        additionalProperties: true,
         description:
           'The contract text exactly as the person will be shown it. Stored verbatim so a later edit to the scope catalogue cannot change what somebody already agreed to.',
       },
@@ -3937,6 +3939,7 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       'scope_code',
       'version_number',
       'display_name',
+      'summary',
       'description',
       'default_purpose',
     ],
@@ -3957,10 +3960,18 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         minLength: 1,
         description: 'What to call the permission on screen.',
       },
+      summary: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 120,
+        description:
+          'One line for the professional building the invitation. Keeps the boundary — what the permission does not reach — because that is the half that stops somebody asking for more than they meant to.',
+      },
       description: {
         type: 'string',
         minLength: 1,
-        description: 'What it covers and, as importantly, what it does not reach.',
+        description:
+          'The whole thing, for the person deciding. What it covers and, as importantly, where it stops.',
       },
       default_purpose: {
         type: 'string',
