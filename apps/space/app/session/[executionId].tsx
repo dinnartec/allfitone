@@ -1129,6 +1129,9 @@ function Exercise({
     paddingBottom: CARD_PAD + (OPEN_PADDING - CARD_PAD) * progress.value,
   }))
 
+  // A rule down the open card's leading edge, on the same spring: which one is open.
+  const rule = useAnimatedStyle(() => ({ opacity: progress.value }))
+
   const drawer = useAnimatedStyle(() => ({
     // Always a number. Falling back to `undefined` while the height was unknown let
     // a shut drawer take its natural height for a frame, which is the empty block
@@ -1245,6 +1248,15 @@ function Exercise({
 
   return (
     <Animated.View style={[styles.shell, shell]}>
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.rule,
+          // Neutral, not accent: the screen already carries enough cyan.
+          { borderLeftColor: withAlpha(theme.color.text.secondary, 0.55) },
+          rule,
+        ]}
+      />
       {/* Two controls side by side, not one inside the other: nested, VoiceOver folds the
           picture into the row and the explanation cannot be reached. */}
       <View style={styles.exerciseHeader}>
@@ -1656,6 +1668,17 @@ const styles = StyleSheet.create({
   editActions: { flexDirection: 'row', gap: 12 },
   heading: { flex: 1, gap: 1 },
   list: { gap: EXERCISE_GAP, paddingTop: 16, paddingBottom: 32 },
+  // The card's own outline with only its left side drawn, so it bends with the corners
+  // and thins out along them instead of standing as a bar.
+  rule: {
+    position: 'absolute',
+    top: -1,
+    left: -1,
+    right: -1,
+    bottom: -1,
+    borderRadius: 18,
+    borderLeftWidth: 1.5,
+  },
   shell: {
     borderRadius: 18,
     borderWidth: 1,
