@@ -2005,6 +2005,30 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/studio/v1/organizations/{organizationId}/relationships/{relationshipId}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Read how one relationship stands
+     * @description Says where the link stands, who attends this person, which substitutions exist, and **which permissions were granted and in what version**.
+     *
+     *     It never returns the content a permission covers. Knowing that `health_context` is granted is not reading anybody's injuries, and this endpoint only ever answers the first of those.
+     *
+     *     What comes back depends on who asks. A caller with `view_directory` (owner, admin, staff) sees every assignment on the relationship. A coach holds `view_assigned_directory` instead: they can read only a relationship they are effectively assigned to, and they see their own assignment rather than the full list. A relationship the caller may not see answers `404`, not `403` — telling a coach that a relationship exists but is not theirs would reveal that the organization has that client.
+     */
+    get: operations['readStudioRelationship']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/studio/v1/organizations/{organizationId}/relationships/{relationshipId}/professional-assignments': {
     parameters: {
       query?: never
@@ -5129,6 +5153,74 @@ export interface components {
     }
     /** @enum {string} */
     RelationshipStatus: 'active' | 'terminated'
+    /** @enum {string} */
+    AssignmentStatus: 'proposed' | 'active' | 'ended'
+    /**
+     * @description `frozen` is not `revoked`. Ending the relationship freezes a grant, so the organization keeps what it already had and nothing after the cut; the person revoking it ends all access. Neither is the other's synonym.
+     * @enum {string}
+     */
+    GrantStatus: 'active' | 'frozen' | 'revoked'
+    /** @description Who attends this person, under an open-ended assignment. */
+    RelationshipProfessional: {
+      assignment_id: components['schemas']['UuidV7']
+      membership_id: components['schemas']['UuidV7']
+      /** @description The professional, never the client. The two are distinct people and the names have to say which is which. */
+      professional_person_id: components['schemas']['UuidV7']
+      display_name: string
+      /**
+       * Format: date-time
+       * @description Since when this professional has attended the person.
+       */
+      valid_from: string
+    }
+    /** @description Somebody covering for the professional in charge, for a bounded period. A substitution only becomes effective once the person accepts it, so a `proposed` entry grants nothing yet. */
+    RelationshipSubstitution: {
+      assignment_id: components['schemas']['UuidV7']
+      membership_id: components['schemas']['UuidV7']
+      professional_person_id: components['schemas']['UuidV7']
+      display_name: string
+      status: components['schemas']['AssignmentStatus']
+      /** Format: date-time */
+      valid_from: string
+      /** Format: date */
+      ends_on: string | null
+      /**
+       * Format: date-time
+       * @description Null until the person has accepted this substitution.
+       */
+      accepted_by_person_at: string | null
+    }
+    /** @description A permission the person granted, and nothing it covers. Every field here describes the permission — which scope, which version, whether it still stands — so a reader learns that measurements were shared without learning a single measurement. */
+    RelationshipGrant: {
+      grant_id: components['schemas']['UuidV7']
+      scope_code: string
+      /** @description The words the person was shown when they decided. Null when no presentation has been published for this scope yet. */
+      display_name: string | null
+      /** @description The scope version that was agreed, not the latest published one. A grant never drifts onto a later version. */
+      version_number: number
+      access_level: components['schemas']['AccessLevel']
+      status: components['schemas']['GrantStatus']
+      purpose: string
+      /** Format: date-time */
+      granted_at: string
+      /** Format: date-time */
+      revoked_at: string | null
+    }
+    /** @description How one relationship stands: the link, who attends the person, the substitutions, and which permissions are in force. Cacheable for presentation, never for deciding authorization. */
+    RelationshipState: {
+      relationship_id: components['schemas']['UuidV7']
+      person_id: components['schemas']['UuidV7']
+      display_name: string
+      status: components['schemas']['RelationshipStatus']
+      /** Format: date-time */
+      started_at: string
+      /** Format: date-time */
+      ended_at: string | null
+      /** @description Null when nobody attends this person yet — which is the state assigning a professional starts from. */
+      holder: components['schemas']['RelationshipProfessional'] | null
+      substitutions: components['schemas']['RelationshipSubstitution'][]
+      grants: components['schemas']['RelationshipGrant'][]
+    }
     /** @description A directory entry is one of two things and says which. A `relationship` entry has a person behind it. An `invitation` entry does not: until somebody accepts, no person and no name exist, so it carries only the masked contact the invitation was sent to. */
     ClientDirectoryItem:
       | components['schemas']['ClientDirectoryRelationship']
@@ -10832,6 +10924,35 @@ export interface operations {
       404: components['responses']['NotFound']
       409: components['responses']['Conflict']
       415: components['responses']['UnsupportedMediaType']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  readStudioRelationship: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+        relationshipId: components['parameters']['RelationshipId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description How the relationship stands */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['PrivateNoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['RelationshipState']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
       503: components['responses']['UpstreamUnavailable']
     }
   }

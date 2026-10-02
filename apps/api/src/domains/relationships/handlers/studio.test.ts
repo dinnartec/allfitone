@@ -2,8 +2,17 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import { Hono } from 'hono'
 
 import type { StudioSessionService } from '../../identity/index.js'
-import type { ClientDirectoryService, HolderAssignmentService } from '../application/index.js'
-import type { DirectoryEntry, DirectoryPage, DirectoryQuery } from '../domain/index.js'
+import type {
+  ClientDirectoryService,
+  HolderAssignmentService,
+  RelationshipStateService,
+} from '../application/index.js'
+import type {
+  DirectoryEntry,
+  DirectoryPage,
+  DirectoryQuery,
+  RelationshipState,
+} from '../domain/index.js'
 import { studioRelationshipRoutes } from './studio.js'
 
 const ORGANIZATION = '019ad000-0000-7000-8000-000000000101'
@@ -441,5 +450,143 @@ describe('what assigning refuses', () => {
     })
     const response = await assignApp(taken).fetch(assign({ membership_id: MEMBERSHIP }))
     expect(response.status).toBe(409)
+  })
+})
+
+const STATE_PATH = `/studio/v1/organizations/${ORGANIZATION}/relationships/${RELATIONSHIP}`
+
+function states(overrides: Partial<RelationshipState> = {}): RelationshipStateService {
+  return {
+    read: async () => ({
+      relationshipId: RELATIONSHIP,
+      personId: '019ad000-0000-7000-8000-000000000001',
+      displayName: 'Ana Alvarez',
+      status: 'active',
+      startedAt: new Date('2026-01-10T14:02:11.000Z'),
+      endedAt: null,
+      holder: {
+        assignmentId: '019ad000-0000-7000-8000-000000000401',
+        membershipId: MEMBERSHIP,
+        professionalPersonId: '019ad000-0000-7000-8000-000000000012',
+        displayName: 'Camilo Coach',
+        validFrom: new Date('2026-09-20T08:00:00.000Z'),
+      },
+      substitutions: [],
+      grants: [
+        {
+          grantId: '019ad000-0000-7000-8000-000000000a01',
+          scopeCode: 'health_context',
+          displayName: 'Contexto de salud',
+          versionNumber: 2,
+          accessLevel: 'read',
+          status: 'active',
+          purpose: 'Adaptar el entrenamiento',
+          grantedAt: new Date('2026-09-21T10:00:00.000Z'),
+          revokedAt: null,
+        },
+      ],
+      ...overrides,
+    }),
+  }
+}
+
+function stateApp(service: RelationshipStateService = states(), session = sessions()): Hono {
+  const routes = new Hono()
+  routes.route('/studio/v1', studioRelationshipRoutes(directory(), session, holders(), service))
+  return routes
+}
+
+describe('reading how a relationship stands', () => {
+  test('answers with the link, who attends and what was granted', async () => {
+    const response = await stateApp().request(STATE_PATH, { headers: HEADERS })
+    expect(response.status).toBe(200)
+    const payload = (await response.json()) as Record<string, unknown>
+    expect(payload.status).toBe('active')
+    expect(payload.holder).toMatchObject({
+      display_name: 'Camilo Coach',
+      // The professional, not the client. A smoke read against PostgreSQL
+      // caught these being the same id — the assignment row's `person_id` is
+      // the client being attended.
+      professional_person_id: '019ad000-0000-7000-8000-000000000012',
+    })
+    expect(payload.grants).toHaveLength(1)
+  })
+
+  /*
+   * Criterion 2 of the story, and the reason the field exists: the version that
+   * was agreed, not the latest published one.
+   */
+  test('a grant carries the scope version it was agreed under', async () => {
+    const response = await stateApp().request(STATE_PATH, { headers: HEADERS })
+    const payload = (await response.json()) as { grants: Record<string, unknown>[] }
+    expect(payload.grants[0]?.version_number).toBe(2)
+    expect(payload.grants[0]?.scope_code).toBe('health_context')
+  })
+
+  /*
+   * Criterion 3. The response may say a health-context permission exists; it may
+   * not carry anything the permission covers. Fixing the key set here means a
+   * field added later fails this test instead of reaching a screen.
+   */
+  test('a grant carries nothing but the permission', async () => {
+    const response = await stateApp().request(STATE_PATH, { headers: HEADERS })
+    const payload = (await response.json()) as { grants: Record<string, unknown>[] }
+    expect(Object.keys(payload.grants[0] ?? {}).sort()).toEqual([
+      'access_level',
+      'display_name',
+      'grant_id',
+      'granted_at',
+      'purpose',
+      'revoked_at',
+      'scope_code',
+      'status',
+      'version_number',
+    ])
+  })
+
+  test('a client nobody attends yet says so with null', async () => {
+    const response = await stateApp(states({ holder: null })).request(STATE_PATH, {
+      headers: HEADERS,
+    })
+    const payload = (await response.json()) as Record<string, unknown>
+    expect(payload.holder).toBeNull()
+    expect(payload.substitutions).toEqual([])
+  })
+
+  test('the response is never stored', async () => {
+    const response = await stateApp().request(STATE_PATH, { headers: HEADERS })
+    expect(response.headers.get('Cache-Control')).toBe('private, no-store')
+  })
+
+  test('a relationship the caller may not see is a 404, not a 403', async () => {
+    const hidden: RelationshipStateService = {
+      read: async () => {
+        throw Object.assign(new Error('not found'), { code: 'P0002' })
+      },
+    }
+    const response = await stateApp(hidden).request(STATE_PATH, { headers: HEADERS })
+    expect(response.status).toBe(404)
+  })
+
+  test('a relationship id that is not an identifier', async () => {
+    const response = await stateApp().request(
+      `/studio/v1/organizations/${ORGANIZATION}/relationships/nope`,
+      { headers: HEADERS },
+    )
+    expect(response.status).toBe(400)
+  })
+
+  test('another origin', async () => {
+    const response = await stateApp().request(STATE_PATH, {
+      headers: { ...HEADERS, origin: 'https://evil.test' },
+    })
+    expect(response.status).toBe(403)
+  })
+
+  test('no session', async () => {
+    const response = await stateApp().request(STATE_PATH, {
+      headers: { origin: HEADERS.origin },
+    })
+    expect(response.status).toBe(401)
   })
 })
