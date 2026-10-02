@@ -134,6 +134,7 @@ describe('what the history asks the server', () => {
 const day = (trained_on: string, work_sets: number, records = 0) => ({
   trained_on,
   sessions: 1,
+  trained_seconds: 3000,
   work_sets,
   volume_kg: null,
   records,
