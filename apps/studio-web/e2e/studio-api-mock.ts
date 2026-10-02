@@ -22,6 +22,9 @@ export interface StudioApiFixture {
   session: unknown
   memberships: unknown[]
   organizationMemberships: unknown[]
+  organizationClients: unknown[]
+  offerableScopes: unknown[]
+  organization: unknown
   organizationRoles: unknown[]
   organizationTypes: unknown[]
   me: { profile: Record<string, unknown> | null; memberships: unknown[] }
@@ -73,6 +76,82 @@ export const terminatedMembership = {
   joined_at: '2023-01-01T16:45:22.870Z',
   ended_at: '2025-06-01T21:08:44.319Z',
   roles: ['staff'],
+}
+
+/*
+ * The permission vocabulary, as Backoffice publishes it. Three of the seven, so
+ * the picker has enough to show a list without the screen becoming a wall.
+ */
+export const offerableScopeCatalog = [
+  {
+    scope_definition_id: '01991600-7000-7000-8000-000000000301',
+    scope_code: 'relationship_training',
+    version_number: 1,
+    display_name: 'Entrenamiento con nosotros',
+    summary: 'Sesiones que le asignes y sus resultados, nada de lo que entrene por su cuenta.',
+    description:
+      'Las sesiones que te asignemos y sus resultados, solo las que ocurran dentro de esta relación. No incluye lo que entrenes por tu cuenta, ni tu cuerpo, ni tu salud.',
+    default_purpose:
+      'Prescribir tu entrenamiento y revisar cómo te va en las sesiones que te asignamos.',
+  },
+  {
+    scope_definition_id: '01991600-7000-7000-8000-000000000302',
+    scope_code: 'body_progress',
+    version_number: 1,
+    display_name: 'Progreso corporal',
+    summary: 'Medidas y las fotos que elija, sin datos de salud.',
+    description:
+      'Medidas, composición corporal, tendencias y las fotos que tú selecciones. No incluye tu galería, ni la ubicación de las fotos, ni datos de salud.',
+    default_purpose:
+      'Seguir cómo cambia tu cuerpo y ajustar el plan a lo que muestren las medidas.',
+  },
+  {
+    scope_definition_id: '01991600-7000-7000-8000-000000000303',
+    scope_code: 'health_context',
+    version_number: 1,
+    display_name: 'Contexto de salud',
+    summary: 'Dolores y lesiones que declare, sin historia clínica.',
+    description:
+      'Dolores, lesiones o limitaciones que tú declares, y tu recuperación. No incluye historia clínica, exámenes, medicamentos ni diagnósticos.',
+    default_purpose: 'Adaptar los ejercicios a tus lesiones o limitaciones para no hacerte daño.',
+  },
+]
+
+/*
+ * A directory entry is one of two kinds. The invitation one deliberately has no
+ * `display_name` and no `person_id`: until somebody accepts, no person exists,
+ * and a fixture that invented a name here would let the screen render something
+ * the API can never send.
+ */
+export const activeClient = {
+  kind: 'relationship',
+  relationship_id: '01991600-7000-7000-8000-000000000101',
+  person_id: '01991600-7000-7000-8000-000000000201',
+  display_name: 'Ana Álvarez',
+  relationship_status: 'active',
+  invitation_status: 'accepted',
+  started_at: '2025-03-04T15:12:44.118Z',
+  ended_at: null,
+}
+
+export const terminatedClient = {
+  kind: 'relationship',
+  relationship_id: '01991600-7000-7000-8000-000000000102',
+  person_id: '01991600-7000-7000-8000-000000000202',
+  display_name: 'Bruno Bello',
+  relationship_status: 'terminated',
+  invitation_status: 'accepted',
+  started_at: '2024-11-20T17:05:03.771Z',
+  ended_at: '2025-06-30T22:41:19.204Z',
+}
+
+/* A long masked contact, because that is the value with nowhere to break. */
+export const pendingClientInvitation = {
+  kind: 'invitation',
+  invitation_id: '01991600-7000-7000-8000-000000000103',
+  contact_hint: 'c***@correo-institucional-muy-largo.example.test',
+  invitation_status: 'pending',
+  invited_at: '2025-07-02T19:33:58.640Z',
 }
 
 export const activeTeamMember = {
@@ -220,6 +299,84 @@ export const professionalCredential = {
   },
 }
 
+interface SiteRow {
+  id: string
+  name: string
+  address: string | null
+  status: string
+  revision_number: number
+}
+
+let siteSequence = 900
+
+// Named rather than positional: the specs reach for a particular site, and
+// `sites[0]!` costs a forbidden non-null assertion to say the same thing less
+// clearly.
+export const chapineroSite = {
+  id: '01991600-2000-7000-8000-000000000001',
+  name: 'Sede Chapinero',
+  address: 'Calle 63 #11-40, Bogotá',
+  status: 'active',
+  revision_number: 2,
+}
+
+export const usaquenSite = {
+  id: '01991600-2000-7000-8000-000000000002',
+  name: 'Sede Usaquén',
+  address: null,
+  status: 'active',
+  revision_number: 1,
+}
+
+export const chicoSite = {
+  id: '01991600-2000-7000-8000-000000000003',
+  name: 'Sede Chicó',
+  address: 'Carrera 11 #93-45, Bogotá',
+  status: 'inactive',
+  revision_number: 3,
+}
+
+/*
+ * The longest a person can actually type: the form caps the name at 120
+ * characters and the address at 240. Every other fixture is comfortably short,
+ * so without this one the sweep only ever measures rows that were never going
+ * to break. The name is one unbroken word on purpose — a string with spaces
+ * wraps, and the hard case is the one that cannot.
+ */
+export const longestSite = {
+  id: '01991600-2000-7000-8000-000000000004',
+  name: `Sede ${'Villavicencio'.repeat(8)}`.slice(0, 120),
+  address: `Autopista Norte kilómetro 21 costado occidental ${'bodega 14 '.repeat(20)}`
+    .trim()
+    .slice(0, 240),
+  status: 'active',
+  revision_number: 1,
+}
+
+export const organizationWithSites = {
+  id: '01991600-1000-7000-8000-000000000002',
+  display_name: 'Allfit Gym',
+  legal_name: 'Allfit Gym SAS',
+  type_code: 'gym',
+  status: 'active',
+  revision_number: 4,
+  sites: [chapineroSite, usaquenSite, chicoSite],
+}
+
+export const organizationWithLongSite = {
+  ...organizationWithSites,
+  sites: [longestSite],
+}
+
+// No legal name and no site registered. Both absences are legitimate, and the
+// screen has to say so rather than drop the rows and leave the reader
+// wondering whether it even asked.
+export const organizationWithoutSites = {
+  ...organizationWithSites,
+  legal_name: null,
+  sites: [],
+}
+
 export function createStudioApiFixture(
   overrides: Partial<StudioApiFixture> = {},
 ): StudioApiFixture {
@@ -232,6 +389,16 @@ export function createStudioApiFixture(
     },
     memberships: [],
     organizationMemberships: [activeTeamMember, terminatedTeamMember],
+    organizationClients: [activeClient, pendingClientInvitation, terminatedClient],
+    offerableScopes: [...offerableScopeCatalog],
+    /*
+     * A copy, not the shared object. Sites are now editable, and the mock
+     * writes the change into this fixture so the screen the form returns to
+     * shows it. Handing out the module-level object let one test's rename or
+     * withdrawal reach every test that ran after it, which makes a suite whose
+     * result depends on its order.
+     */
+    organization: structuredClone(organizationWithSites),
     organizationRoles: organizationRoleCatalog,
     organizationTypes: [
       { code: 'professional_practice', name: 'Profesional independiente', description: null },
@@ -352,6 +519,47 @@ function defaultResponse(
       : fixture.organizationMemberships
     return { status: 200, body: { data, page: { has_more: false, next_cursor: null } } }
   }
+  if (request.method === 'GET' && request.path === '/studio/v1/offerable-scopes') {
+    return { status: 200, body: { items: fixture.offerableScopes } }
+  }
+  if (
+    request.method === 'POST' &&
+    /^\/studio\/v1\/organizations\/[^/]+\/client-invitations$/.test(request.path)
+  ) {
+    return {
+      status: 201,
+      body: {
+        id: '01991600-7000-7000-8000-000000000401',
+        invitation_intent_id: '01991600-7000-7000-8000-000000000402',
+        status: 'pending',
+        channel: 'email',
+        contact_hint: 'a***@example.test',
+        expires_at: '2030-01-01T12:00:00.000Z',
+        scope_codes: ['body_progress'],
+        reused: false,
+      },
+    }
+  }
+  if (
+    request.method === 'GET' &&
+    /^\/studio\/v1\/organizations\/[^/]+\/clients$/.test(request.path)
+  ) {
+    const status = new URLSearchParams(request.search).get('status')
+    // The filter is one value over two kinds of row: `invited` selects the
+    // invitations, the other two select relationships by their own state.
+    const data = status
+      ? fixture.organizationClients.filter((entry) => {
+          if (typeof entry !== 'object' || entry === null || !('kind' in entry)) return false
+          if (status === 'invited') return entry.kind === 'invitation'
+          return (
+            entry.kind === 'relationship' &&
+            'relationship_status' in entry &&
+            entry.relationship_status === status
+          )
+        })
+      : fixture.organizationClients
+    return { status: 200, body: { data, page: { has_more: false, next_cursor: null } } }
+  }
   if (
     request.method === 'GET' &&
     /^\/studio\/v1\/organizations\/[^/]+\/roles$/.test(request.path)
@@ -360,6 +568,58 @@ function defaultResponse(
       status: 200,
       body: { items: fixture.organizationRoles },
       headers: { ETag: '"organization-roles-v1"' },
+    }
+  }
+  if (
+    request.method === 'PATCH' &&
+    /^\/studio\/v1\/organizations\/[^/]+\/sites\/[^/]+$/.test(request.path)
+  ) {
+    const siteId = request.path.split('/').pop() ?? ''
+    const organization = fixture.organization as { sites: SiteRow[] } | null
+    const existing = organization?.sites.find((entry) => entry.id === siteId)
+    if (!existing) return { status: 404, body: error('not-found') }
+
+    // The server compares the revision the screen was showing with the row it
+    // holds, so the mock has to as well: without it the conflict state has no
+    // way to be reached from a test.
+    const ifMatch = request.headers['if-match']
+    if (!ifMatch) return { status: 428, body: error('precondition-required') }
+    if (ifMatch !== `"organization-site:${existing.id}:r${existing.revision_number}"`) {
+      return { status: 409, body: error('conflict') }
+    }
+
+    const patch = request.body as Partial<SiteRow> | undefined
+    if (!patch || Object.keys(patch).length === 0) {
+      return { status: 400, body: error('invalid-request') }
+    }
+    Object.assign(existing, patch, { revision_number: existing.revision_number + 1 })
+    return { status: 200, body: existing }
+  }
+  if (
+    request.method === 'POST' &&
+    /^\/studio\/v1\/organizations\/[^/]+\/sites$/.test(request.path)
+  ) {
+    const body = request.body as { name?: string; address?: string } | undefined
+    if (!body?.name?.trim()) return { status: 422, body: error('validation-failed') }
+    const site = {
+      id: `01991600-2000-7000-8000-${String(siteSequence++).padStart(12, '0')}`,
+      name: body.name.trim(),
+      address: body.address?.trim() ? body.address.trim() : null,
+      status: 'active',
+      revision_number: 1,
+    }
+    // The screen the form returns to reads the organization, so a site that is
+    // only echoed back would vanish on arrival.
+    const organization = fixture.organization as { sites: unknown[] } | null
+    if (organization) organization.sites = [...organization.sites, site]
+    return { status: 201, body: site }
+  }
+  if (request.method === 'GET' && /^\/studio\/v1\/organizations\/[^/]+$/.test(request.path)) {
+    if (fixture.organization === null) return { status: 404, body: error('not-found') }
+    return {
+      status: 200,
+      body: fixture.organization,
+      headers: { ETag: '"organization-v1"' },
     }
   }
   if (request.method === 'GET' && request.path === '/studio/v1/organization-types') {
@@ -573,8 +833,12 @@ async function fulfill(route: Route, response: MockResponse): Promise<void> {
     headers: {
       'Access-Control-Allow-Origin': STUDIO_ORIGIN,
       'Access-Control-Allow-Credentials': 'true',
-      'Access-Control-Allow-Headers': 'Content-Type, Idempotency-Key, Command-Id, If-None-Match',
-      'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS',
+      // Mirrors the API's own policy for the studio surface. A method or
+      // header missing here is refused at preflight, so the failure looks like
+      // broken client code rather than a stale fixture.
+      'Access-Control-Allow-Headers':
+        'Content-Type, Idempotency-Key, Command-Id, If-Match, If-None-Match',
+      'Access-Control-Allow-Methods': 'GET, POST, PATCH, PUT, OPTIONS',
       ...(hasBody ? { 'Content-Type': 'application/json' } : {}),
       ...response.headers,
     },

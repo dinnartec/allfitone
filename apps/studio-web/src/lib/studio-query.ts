@@ -8,6 +8,10 @@ import {
 import {
   StudioApiError,
   studioApi,
+  type ClientDirectoryGroup,
+  type OfferableScopeCatalog,
+  type ClientDirectoryItem,
+  type ClientDirectoryPage,
   type OrganizationMembership,
   type OrganizationMembershipPage,
   type OrganizationMembershipStatus,
@@ -20,10 +24,12 @@ import {
 
 export type MembershipFilter = OrganizationMembershipStatus | 'all'
 export type InvitationFilter = TeamInvitationStatus | 'all'
+export type ClientFilter = ClientDirectoryGroup | 'all'
 
 export const STUDIO_QUERY_GC_TIME_MS = 5 * 60 * 1000
 export const STUDIO_TEAM_STALE_TIME_MS = 30 * 1000
 export const STUDIO_PROFILE_STALE_TIME_MS = 2 * 60 * 1000
+export const STUDIO_ORGANIZATION_STALE_TIME_MS = 2 * 60 * 1000
 export const STUDIO_ROLE_STALE_TIME_MS = 5 * 60 * 1000
 export const STUDIO_CATALOG_STALE_TIME_MS = 60 * 60 * 1000
 
@@ -43,6 +49,11 @@ export const studioQueryKeys = {
     [...ROOT_KEY, 'organization', organizationId, 'memberships'] as const,
   organizationMemberships: (organizationId: string, status: MembershipFilter, limit: number) =>
     [...ROOT_KEY, 'organization', organizationId, 'memberships', { status, limit }] as const,
+  offerableScopes: () => [...ROOT_KEY, 'offerable-scopes'] as const,
+  organizationClientsRoot: (organizationId: string) =>
+    [...ROOT_KEY, 'organization', organizationId, 'clients'] as const,
+  organizationClients: (organizationId: string, status: ClientFilter, limit: number) =>
+    [...ROOT_KEY, 'organization', organizationId, 'clients', { status, limit }] as const,
   organizationInvitationsRoot: (organizationId: string) =>
     [...ROOT_KEY, 'organization', organizationId, 'invitations'] as const,
   organizationInvitations: (organizationId: string, status: InvitationFilter, limit: number) =>
@@ -157,6 +168,26 @@ export function isStudioForbidden(error: unknown): boolean {
   return error instanceof StudioApiError && error.status === 403
 }
 
+/**
+ * An organization this account cannot read, for either of two reasons.
+ *
+ * PostgreSQL answers the same 'organization not found' whether the row is
+ * absent or the actor holds no active membership in it, so the two arrive here
+ * as one 404 and must stay indistinguishable. A screen that told them apart
+ * would turn the address bar into a directory of which organizations exist.
+ */
+export function isStudioNotFound(error: unknown): boolean {
+  return error instanceof StudioApiError && error.status === 404
+}
+
+export function organizationQueryOptions(organizationId: string) {
+  return queryOptions({
+    queryKey: studioQueryKeys.organization(organizationId),
+    queryFn: ({ signal }) => studioApi.organization(organizationId, signal),
+    staleTime: STUDIO_ORGANIZATION_STALE_TIME_MS,
+  })
+}
+
 export function organizationTypesQueryOptions() {
   return queryOptions({
     queryKey: studioQueryKeys.organizationTypes(),
@@ -243,8 +274,66 @@ export function organizationInvitationsQueryOptions(
   })
 }
 
+export function organizationClientsQueryOptions(
+  organizationId: string,
+  status: ClientFilter,
+  limit: number,
+) {
+  return infiniteQueryOptions({
+    queryKey: studioQueryKeys.organizationClients(organizationId, status, limit),
+    queryFn: ({ pageParam, signal }) =>
+      studioApi.organizationClients(
+        organizationId,
+        {
+          ...(status === 'all' ? {} : { status }),
+          limit,
+          ...(pageParam ? { cursor: pageParam } : {}),
+        },
+        signal,
+      ),
+    initialPageParam: null as string | null,
+    getNextPageParam: nextPageCursor,
+    staleTime: STUDIO_TEAM_STALE_TIME_MS,
+  })
+}
+
+/*
+ * The permission vocabulary changes when Backoffice publishes a new scope
+ * version, which is rare and never mid-session, so it is held longer than a
+ * directory page.
+ */
+export function offerableScopesQueryOptions() {
+  return queryOptions({
+    queryKey: studioQueryKeys.offerableScopes(),
+    queryFn: ({ signal }): Promise<OfferableScopeCatalog> => studioApi.offerableScopes(signal),
+    staleTime: STUDIO_ROLE_STALE_TIME_MS,
+  })
+}
+
 export function nextPageCursor(page: { page: { next_cursor: string | null } }): string | undefined {
   return page.page.next_cursor ?? undefined
+}
+
+/**
+ * Entries are keyed by whichever id their kind carries. A relationship and an
+ * invitation can never collide, because one id comes from
+ * `service_relationships` and the other from `invitations`.
+ */
+export function flattenClientPages(
+  data: InfiniteData<ClientDirectoryPage, unknown> | undefined,
+): ClientDirectoryItem[] {
+  if (!data) return []
+  const entries: ClientDirectoryItem[] = []
+  const seen = new Set<string>()
+  for (const page of data.pages) {
+    for (const entry of page.data) {
+      const id = entry.kind === 'invitation' ? entry.invitation_id : entry.relationship_id
+      if (seen.has(id)) continue
+      seen.add(id)
+      entries.push(entry)
+    }
+  }
+  return entries
 }
 
 export function flattenMembershipPages(

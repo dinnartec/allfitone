@@ -267,6 +267,7 @@ const weekSummary = {
   sessions_planned: 5,
   tonnage_kg: 5120.5,
   history: [],
+  work_sets: 14,
 }
 
 function harness(overrides?: {

@@ -108,15 +108,24 @@ export function ExerciseCard({
   name,
   target,
   picture,
+  onPress,
 }: {
   readonly name: string
   readonly target: string
   readonly picture: string | null
+  /** Absent when the step names no catalogue movement: there is no detail to open. */
+  readonly onPress?: (() => void) | undefined
 }) {
   const theme = useTheme()
 
   return (
-    <View style={styles.exercise}>
+    <Pressable
+      style={styles.exercise}
+      disabled={!onPress}
+      onPress={onPress}
+      accessibilityRole={onPress ? 'button' : undefined}
+      accessibilityLabel={onPress ? `Ver ${name}` : undefined}
+    >
       <View
         style={[
           styles.preview,
@@ -152,7 +161,7 @@ export function ExerciseCard({
       <Text role="body" size="xs" numberOfLines={2}>
         {name}
       </Text>
-    </View>
+    </Pressable>
   )
 }
 

@@ -2148,6 +2148,398 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  ClientDirectoryGroup: {
+    type: 'string',
+    enum: ['active', 'invited', 'terminated'],
+  },
+  ClientDirectoryInvitation: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['kind', 'invitation_id', 'contact_hint', 'invitation_status', 'invited_at'],
+    properties: {
+      kind: {
+        type: 'string',
+        const: 'invitation',
+      },
+      invitation_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      contact_hint: {
+        type: 'string',
+        minLength: 1,
+        description: 'The address the invitation went to, masked. Never the full contact.',
+      },
+      invitation_status: {
+        $ref: '#/components/schemas/ClientInvitationEntryStatus',
+      },
+      invited_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+    },
+  },
+  ClientDirectoryItem: {
+    description:
+      'A directory entry is one of two things and says which. A `relationship` entry has a person behind it. An `invitation` entry does not: until somebody accepts, no person and no name exist, so it carries only the masked contact the invitation was sent to.',
+    oneOf: [
+      {
+        $ref: '#/components/schemas/ClientDirectoryRelationship',
+      },
+      {
+        $ref: '#/components/schemas/ClientDirectoryInvitation',
+      },
+    ],
+    discriminator: {
+      propertyName: 'kind',
+      mapping: {
+        relationship: '#/components/schemas/ClientDirectoryRelationship',
+        invitation: '#/components/schemas/ClientDirectoryInvitation',
+      },
+    },
+  },
+  ClientDirectoryPage: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['data', 'page'],
+    properties: {
+      data: {
+        type: 'array',
+        maxItems: 100,
+        items: {
+          $ref: '#/components/schemas/ClientDirectoryItem',
+        },
+      },
+      page: {
+        $ref: '#/components/schemas/Page',
+      },
+    },
+  },
+  ClientDirectoryRelationship: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'kind',
+      'relationship_id',
+      'person_id',
+      'display_name',
+      'relationship_status',
+      'invitation_status',
+      'started_at',
+      'ended_at',
+    ],
+    properties: {
+      kind: {
+        type: 'string',
+        const: 'relationship',
+      },
+      relationship_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      person_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      display_name: {
+        type: 'string',
+        minLength: 1,
+      },
+      relationship_status: {
+        $ref: '#/components/schemas/RelationshipStatus',
+      },
+      invitation_status: {
+        $ref: '#/components/schemas/ClientInvitationEntryStatus',
+      },
+      started_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      ended_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+    },
+  },
+  ClientInvitation: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'id',
+      'invitation_intent_id',
+      'status',
+      'channel',
+      'contact_hint',
+      'expires_at',
+      'scope_codes',
+      'reused',
+    ],
+    properties: {
+      id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      invitation_intent_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      status: {
+        $ref: '#/components/schemas/TeamInvitationStatus',
+      },
+      channel: {
+        type: 'string',
+        enum: ['email'],
+      },
+      contact_hint: {
+        type: 'string',
+        description: 'A masked form of the contact. The full address is never echoed back.',
+      },
+      expires_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      scope_codes: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/ScopeCode',
+        },
+      },
+      reused: {
+        type: 'boolean',
+        description: 'True when an equivalent pending invitation already existed.',
+      },
+    },
+  },
+  ClientInvitationCreate: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['channel', 'contact', 'scopes'],
+    properties: {
+      channel: {
+        type: 'string',
+        enum: ['email'],
+      },
+      contact: {
+        type: 'string',
+        format: 'email',
+        minLength: 3,
+        maxLength: 254,
+      },
+      scopes: {
+        type: 'array',
+        minItems: 1,
+        maxItems: 7,
+        items: {
+          $ref: '#/components/schemas/ClientInvitationScopeRequest',
+        },
+      },
+    },
+  },
+  ClientInvitationDecisionCreate: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['token', 'invitation_intent_id', 'relationship_decision'],
+    properties: {
+      token: {
+        type: 'string',
+        minLength: 43,
+        maxLength: 43,
+        pattern: '^[A-Za-z0-9_-]{43}$',
+      },
+      invitation_intent_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      relationship_decision: {
+        type: 'string',
+        enum: ['accepted', 'rejected'],
+      },
+      scope_decisions: {
+        type: 'object',
+        additionalProperties: {
+          type: 'string',
+          enum: ['accepted', 'rejected'],
+        },
+        description:
+          'One answer per scope, keyed by scope code. A scope left out counts as rejected: silence is not consent.',
+      },
+    },
+  },
+  ClientInvitationDecisionResult: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'invitation_id',
+      'invitation_status',
+      'organization_id',
+      'invitation_intent_id',
+      'intent_status',
+      'relationship_id',
+      'granted_scope_codes',
+      'replayed',
+    ],
+    properties: {
+      invitation_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      invitation_status: {
+        $ref: '#/components/schemas/TeamInvitationStatus',
+      },
+      organization_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      invitation_intent_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      intent_status: {
+        $ref: '#/components/schemas/TeamInvitationIntentStatus',
+      },
+      relationship_id: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/UuidV7',
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description: 'Null when the relationship was rejected; nothing was created.',
+      },
+      granted_scope_codes: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/ScopeCode',
+        },
+        description:
+          'Possibly empty. An accepted relationship with no granted scope is a valid outcome, not a failure.',
+      },
+      replayed: {
+        type: 'boolean',
+      },
+    },
+  },
+  ClientInvitationEntryStatus: {
+    type: 'string',
+    enum: ['pending', 'accepted', 'rejected', 'revoked', 'expired'],
+  },
+  ClientInvitationPresentation: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'id',
+      'invitation_intent_id',
+      'status',
+      'organization',
+      'expires_at',
+      'scope_options',
+    ],
+    properties: {
+      id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      invitation_intent_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      status: {
+        $ref: '#/components/schemas/TeamInvitationStatus',
+      },
+      organization: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['id', 'display_name', 'responsible_party'],
+        properties: {
+          id: {
+            $ref: '#/components/schemas/UuidV7',
+          },
+          display_name: {
+            type: 'string',
+            minLength: 1,
+          },
+          responsible_party: {
+            $ref: '#/components/schemas/ResponsibleParty',
+          },
+        },
+      },
+      expires_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      scope_options: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/ClientInvitationScopeOption',
+        },
+      },
+    },
+  },
+  ClientInvitationScopeOption: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'scope_code',
+      'offered_access_level',
+      'purpose',
+      'presented_snapshot_schema_version',
+      'presented_snapshot',
+      'decision',
+    ],
+    properties: {
+      scope_code: {
+        $ref: '#/components/schemas/ScopeCode',
+      },
+      offered_access_level: {
+        $ref: '#/components/schemas/AccessLevel',
+      },
+      purpose: {
+        type: 'string',
+      },
+      presented_snapshot_schema_version: {
+        type: 'integer',
+      },
+      presented_snapshot: {
+        type: 'object',
+        additionalProperties: true,
+      },
+      decision: {
+        type: ['string', 'null'],
+        enum: ['accepted', 'rejected', null],
+        description: 'Null until the person answers this scope.',
+      },
+    },
+  },
+  ClientInvitationScopeRequest: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['scope_code', 'access_level', 'purpose', 'presented_snapshot'],
+    properties: {
+      scope_code: {
+        $ref: '#/components/schemas/ScopeCode',
+      },
+      access_level: {
+        $ref: '#/components/schemas/AccessLevel',
+      },
+      purpose: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 500,
+        description: "Why this organization is asking, in the person's language.",
+      },
+      presented_snapshot: {
+        type: 'object',
+        additionalProperties: true,
+        description:
+          'The contract text exactly as the person will be shown it. Stored verbatim so a later edit to the scope catalogue cannot change what somebody already agreed to.',
+      },
+    },
+  },
+  ClientInvitationToken: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['token'],
+    properties: {
+      token: {
+        type: 'string',
+        minLength: 43,
+        maxLength: 43,
+        pattern: '^[A-Za-z0-9_-]{43}$',
+        description: 'Opaque token transported in JSON, never in the URL.',
+      },
+    },
+  },
   CompletenessLevel: {
     type: 'string',
     enum: ['partial', 'summary', 'detailed', 'sensor_enriched'],
@@ -3102,6 +3494,67 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  ExecutionInvalidated: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['id', 'annulled_at'],
+    properties: {
+      id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      annulled_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+    },
+  },
+  ExecutionInvalidation: {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      reason: {
+        type: ['string', 'null'],
+        maxLength: 200,
+        description: 'Optional. Without one it is recorded as «La persona lo eliminó».',
+      },
+    },
+  },
+  ExecutionRepeated: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['id', 'attempt_number', 'status', 'revision_number'],
+    properties: {
+      id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      attempt_number: {
+        type: 'integer',
+        minimum: 1,
+      },
+      status: {
+        type: 'string',
+        enum: ['in_progress'],
+      },
+      revision_number: {
+        type: 'integer',
+        minimum: 0,
+      },
+    },
+  },
+  ExecutionRepetition: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['started_at', 'timezone'],
+    properties: {
+      started_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      timezone: {
+        $ref: '#/components/schemas/IanaTimeZone',
+      },
+    },
+  },
   ExecutionResultsReplace: {
     type: 'object',
     additionalProperties: false,
@@ -3163,6 +3616,15 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
           $ref: '#/components/schemas/StrengthSet',
         },
       },
+      exercises: {
+        type: 'array',
+        maxItems: 100,
+        description:
+          "The session's exercise list, replaced with the sets. Omitted, the session keeps the list it has. Exercises sharing a superset group must be contiguous (IX-50).",
+        items: {
+          $ref: '#/components/schemas/SessionExerciseReplace',
+        },
+      },
     },
   },
   ExecutionResultsState: {
@@ -3198,6 +3660,56 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         type: 'integer',
         minimum: 0,
         description: 'Zero on a session somebody has opened and not yet recorded into.',
+      },
+    },
+  },
+  ExecutionRevised: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['id', 'revision_number', 'result_count'],
+    properties: {
+      id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      revision_number: {
+        type: 'integer',
+        minimum: 1,
+      },
+      result_count: {
+        type: 'integer',
+        minimum: 1,
+      },
+    },
+  },
+  ExecutionRevision: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['started_at', 'ended_at', 'strength_sets'],
+    description:
+      'A finished session as it now stands, whole: its time, its sets and, when given, its exercise list, with the rules of `ExecutionResultsReplace`.',
+    properties: {
+      started_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      ended_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      strength_sets: {
+        type: 'array',
+        minItems: 1,
+        maxItems: 1000,
+        items: {
+          $ref: '#/components/schemas/StrengthSet',
+        },
+      },
+      exercises: {
+        type: 'array',
+        maxItems: 100,
+        items: {
+          $ref: '#/components/schemas/SessionExerciseReplace',
+        },
       },
     },
   },
@@ -4802,6 +5314,69 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         maxLength: 14000000,
         description:
           'Base64 payload; server validates decoded size, strips EXIF/geolocation and stores only the sanitized image.',
+      },
+    },
+  },
+  OfferableScope: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'scope_definition_id',
+      'scope_code',
+      'version_number',
+      'display_name',
+      'summary',
+      'description',
+      'default_purpose',
+    ],
+    properties: {
+      scope_definition_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      scope_code: {
+        $ref: '#/components/schemas/ScopeCode',
+      },
+      version_number: {
+        type: 'integer',
+        minimum: 1,
+        description: 'The contract version an offer is frozen against.',
+      },
+      display_name: {
+        type: 'string',
+        minLength: 1,
+        description: 'What to call the permission on screen.',
+      },
+      summary: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 120,
+        description:
+          'One line for the professional building the invitation. Keeps the boundary — what the permission does not reach — because that is the half that stops somebody asking for more than they meant to.',
+      },
+      description: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The whole thing, for the person deciding. What it covers and, as importantly, where it stops.',
+      },
+      default_purpose: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'Why it is being asked for. Fixed by the catalogue, not written per invitation.',
+      },
+    },
+  },
+  OfferableScopeCatalog: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['items'],
+    properties: {
+      items: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/OfferableScope',
+        },
       },
     },
   },
@@ -6940,6 +7515,46 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  RelationshipHolder: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['assignment_id', 'relationship_id', 'membership_id', 'person_id', 'valid_from'],
+    properties: {
+      assignment_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      relationship_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      membership_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      person_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      valid_from: {
+        type: 'string',
+        format: 'date-time',
+        description:
+          "Since when this coach has attended the person. A repeated assignment of the same coach answers with the original date rather than today's.",
+      },
+    },
+  },
+  RelationshipHolderAssignment: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['membership_id'],
+    properties: {
+      membership_id: {
+        $ref: '#/components/schemas/UuidV7',
+        description: 'The membership of the coach who will attend this person.',
+      },
+    },
+  },
+  RelationshipStatus: {
+    type: 'string',
+    enum: ['active', 'terminated'],
+  },
   RequiredScope: {
     type: 'object',
     additionalProperties: false,
@@ -7340,6 +7955,36 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  SessionExerciseReplace: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['position'],
+    properties: {
+      position: {
+        type: 'integer',
+        minimum: 1,
+      },
+      movement_id: {
+        type: ['string', 'null'],
+        format: 'uuid',
+      },
+      planned_step_id: {
+        type: ['string', 'null'],
+        format: 'uuid',
+        description: 'The routine step it came from; null for one added during the session.',
+      },
+      superset_group: {
+        type: ['integer', 'null'],
+        minimum: 1,
+      },
+      rest_seconds: {
+        type: ['integer', 'null'],
+        minimum: 0,
+        maximum: 3600,
+        description: "Rest after this exercise's sets, today's and not the routine's (ADR-035).",
+      },
+    },
+  },
   SessionTemplate: {
     type: 'object',
     additionalProperties: false,
@@ -7558,6 +8203,12 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  SetKind: {
+    type: 'string',
+    enum: ['normal', 'warmup', 'to_failure', 'drop'],
+    description:
+      'What a set is: `planning.set_kind`, shared by the plan and by what was done (ADR-030, ADR-033). A warmup is recorded but never counted as work.',
+  },
   SignedMediaUrl: {
     type: 'object',
     additionalProperties: false,
@@ -7594,6 +8245,21 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
     description: 'The Fitness ID, the same one on every retry.',
+  },
+  SpaceBestSet: {
+    type: 'object',
+    additionalProperties: false,
+    description: 'The work set with the highest estimated max, the first of equals.',
+    required: ['load_kg', 'reps'],
+    properties: {
+      load_kg: {
+        type: 'number',
+      },
+      reps: {
+        type: 'integer',
+        minimum: 1,
+      },
+    },
   },
   SpaceBiologicalSex: {
     type: 'object',
@@ -7832,6 +8498,7 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       'week',
       'planned',
       'results',
+      'exercises',
     ],
     properties: {
       executed_session_id: {
@@ -7898,6 +8565,14 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
           $ref: '#/components/schemas/SpaceProgramStep',
         },
       },
+      exercises: {
+        type: 'array',
+        description:
+          "The session's own exercises, in the order they are trained (ADR-034). Copied from the routine when the attempt started, with its supersets, and changed only by the person since; `planned` is kept for older clients.",
+        items: {
+          $ref: '#/components/schemas/SpaceSessionExercise',
+        },
+      },
       results: {
         type: 'array',
         items: {
@@ -7906,6 +8581,327 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
           description:
             'A recorded result, discriminated by `family`, in the shape the replace command accepts. It travels structured so the app can render and edit it without a second endpoint.',
         },
+      },
+    },
+  },
+  SpaceExecutionSummary: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'executed_session_id',
+      'started_at',
+      'ended_at',
+      'duration_seconds',
+      'title',
+      'work_sets',
+      'exercise_count',
+      'total_volume_kg',
+      'exercises',
+      'records',
+      'streak_weeks',
+      'session_number',
+      'given_name',
+      'username',
+      'cover_url',
+      'algorithm_version',
+    ],
+    description:
+      'A finished session as «Compártelo» tells it. Work sets only: a warmup is neither a set here nor kilos lifted, and never a record.',
+    properties: {
+      executed_session_id: {
+        type: 'string',
+        format: 'uuid',
+      },
+      started_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      ended_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      duration_seconds: {
+        type: 'number',
+        minimum: 0,
+      },
+      title: {
+        type: ['string', 'null'],
+        description: "The routine's name; null for a session that came from none.",
+      },
+      work_sets: {
+        type: 'integer',
+        minimum: 0,
+      },
+      exercise_count: {
+        type: 'integer',
+        minimum: 0,
+      },
+      total_volume_kg: {
+        type: ['number', 'null'],
+        description: 'Null when nothing was weighed, which is not zero lifted.',
+      },
+      exercises: {
+        type: 'array',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['position', 'movement_id', 'movement', 'work_sets', 'reps_min', 'reps_max'],
+          properties: {
+            position: {
+              type: 'integer',
+              minimum: 1,
+            },
+            movement_id: {
+              type: ['string', 'null'],
+              format: 'uuid',
+            },
+            movement: {
+              type: ['string', 'null'],
+            },
+            work_sets: {
+              type: 'integer',
+              minimum: 1,
+            },
+            reps_min: {
+              type: ['integer', 'null'],
+            },
+            reps_max: {
+              type: ['integer', 'null'],
+            },
+          },
+        },
+      },
+      records: {
+        type: 'array',
+        description:
+          "Each record this session beat, against the person's earlier finished sessions. A first time is none, and equalling the best is not beating it.",
+        items: {
+          $ref: '#/components/schemas/SpaceSessionRecord',
+        },
+      },
+      streak_weeks: {
+        type: 'integer',
+        minimum: 0,
+        description: "Weeks in a row, back from this session's, with a finished session.",
+      },
+      session_number: {
+        type: 'integer',
+        minimum: 1,
+        description: 'How many finished sessions the person has, counting this one.',
+      },
+      given_name: {
+        type: 'string',
+      },
+      username: {
+        type: ['string', 'null'],
+      },
+      cover_url: {
+        type: ['string', 'null'],
+        format: 'uri',
+        description: "The routine's photograph, the same Hoy shows.",
+      },
+      algorithm_version: {
+        type: 'integer',
+        minimum: 1,
+      },
+    },
+  },
+  SpaceFinishedExecution: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'executed_session_id',
+      'revision_number',
+      'started_at',
+      'ended_at',
+      'duration_seconds',
+      'title',
+      'planned_session_id',
+      'repeatable',
+      'session_number',
+      'work_sets',
+      'total_volume_kg',
+      'record_count',
+      'previous',
+      'exercises',
+    ],
+    properties: {
+      executed_session_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      revision_number: {
+        type: 'integer',
+        minimum: 0,
+        description: 'What `If-Match` carries to correct it.',
+      },
+      started_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      ended_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      duration_seconds: {
+        type: 'integer',
+        minimum: 0,
+      },
+      title: {
+        type: ['string', 'null'],
+        description: "The routine's name; null for a free session.",
+      },
+      planned_session_id: {
+        type: ['string', 'null'],
+        format: 'uuid',
+      },
+      repeatable: {
+        type: 'boolean',
+        description: 'Whether `OP-EXE-025` can start another attempt at it.',
+      },
+      session_number: {
+        type: 'integer',
+        minimum: 1,
+      },
+      work_sets: {
+        type: 'integer',
+        minimum: 0,
+      },
+      total_volume_kg: {
+        type: ['number', 'null'],
+        minimum: 0,
+        description: 'Kilos lifted without warmups. Null when nothing was weighed.',
+      },
+      record_count: {
+        type: 'integer',
+        minimum: 0,
+      },
+      previous: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/SpaceFinishedPrevious',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      exercises: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/SpaceFinishedExercise',
+        },
+      },
+    },
+  },
+  SpaceFinishedExercise: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'position',
+      'movement_id',
+      'movement',
+      'superset_group',
+      'record',
+      'best_set',
+      'sets',
+    ],
+    properties: {
+      position: {
+        type: 'integer',
+        minimum: 1,
+      },
+      movement_id: {
+        type: ['string', 'null'],
+        format: 'uuid',
+      },
+      movement: {
+        type: ['string', 'null'],
+      },
+      superset_group: {
+        type: ['integer', 'null'],
+        minimum: 1,
+      },
+      record: {
+        type: 'boolean',
+        description: 'Whether the exercise beat anything before it (ADR-036).',
+      },
+      best_set: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/SpaceBestSet',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      sets: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/SpaceFinishedSet',
+        },
+      },
+    },
+  },
+  SpaceFinishedPrevious: {
+    type: 'object',
+    additionalProperties: false,
+    description: 'The last time the same routine was finished, before this one.',
+    required: ['executed_session_id', 'started_at', 'total_volume_kg', 'change_percent'],
+    properties: {
+      executed_session_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      started_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      total_volume_kg: {
+        type: ['number', 'null'],
+        minimum: 0,
+      },
+      change_percent: {
+        type: ['number', 'null'],
+        description:
+          "This session's kilos against those, rounded. Null when either weighed nothing.",
+      },
+    },
+  },
+  SpaceFinishedSet: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'set_order',
+      'kind',
+      'load_value',
+      'load_unit_code',
+      'achieved_reps',
+      'rpe',
+      'best_ever',
+    ],
+    properties: {
+      set_order: {
+        type: 'integer',
+        minimum: 1,
+      },
+      kind: {
+        $ref: '#/components/schemas/SetKind',
+      },
+      load_value: {
+        type: ['number', 'null'],
+      },
+      load_unit_code: {
+        type: ['string', 'null'],
+      },
+      achieved_reps: {
+        type: ['integer', 'null'],
+      },
+      rpe: {
+        type: ['number', 'null'],
+      },
+      best_ever: {
+        type: 'boolean',
+        description: "The exercise's best set, when it is also a record it holds.",
       },
     },
   },
@@ -7941,6 +8937,260 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
     },
     description:
       'Declaring replaces the set. It is not additive, so the client sends what the person has selected rather than a difference.',
+  },
+  SpaceHistoryDay: {
+    type: 'object',
+    additionalProperties: false,
+    description: "A day of the month something was finished on, for the month card's calendar.",
+    required: ['trained_on', 'sessions', 'trained_seconds', 'work_sets', 'volume_kg', 'records'],
+    properties: {
+      trained_on: {
+        type: 'string',
+        format: 'date',
+        description: "The day in the person's time zone.",
+      },
+      sessions: {
+        type: 'integer',
+        minimum: 1,
+      },
+      trained_seconds: {
+        type: 'integer',
+        minimum: 0,
+      },
+      work_sets: {
+        type: 'integer',
+        minimum: 0,
+      },
+      volume_kg: {
+        type: ['number', 'null'],
+        minimum: 0,
+        description: 'Kilos lifted that day without warmups. Null when nothing was weighed.',
+      },
+      records: {
+        type: 'integer',
+        minimum: 0,
+      },
+    },
+  },
+  SpaceHistoryItem: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'executed_session_id',
+      'status',
+      'started_at',
+      'trained_on',
+      'title',
+      'is_free',
+      'discipline_code',
+      'duration_seconds',
+      'work_sets',
+      'total_volume_kg',
+      'record_count',
+      'thumbnail_url',
+    ],
+    properties: {
+      executed_session_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      status: {
+        type: 'string',
+        enum: ['completed'],
+        description: 'Only finished sessions for now (ADR-037); the enum grows with the history.',
+      },
+      started_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      trained_on: {
+        type: 'string',
+        format: 'date',
+        description: "The day in the person's zone.",
+      },
+      title: {
+        type: ['string', 'null'],
+        description: "The routine's name. Null for a free session.",
+      },
+      is_free: {
+        type: 'boolean',
+        description: 'True when no planned session stands behind it.',
+      },
+      discipline_code: {
+        type: 'string',
+      },
+      duration_seconds: {
+        type: 'integer',
+        minimum: 0,
+      },
+      work_sets: {
+        type: 'integer',
+        minimum: 0,
+      },
+      total_volume_kg: {
+        type: ['number', 'null'],
+        minimum: 0,
+        description: 'Kilos lifted without warmups. Null when nothing was weighed, not zero.',
+      },
+      record_count: {
+        type: 'integer',
+        minimum: 0,
+        description: "Records set, counted as the session's summary counts them (ADR-036).",
+      },
+      thumbnail_url: {
+        type: ['string', 'null'],
+        format: 'uri',
+        description:
+          "The routine's cover, the same photograph its summary shows (ADR-037). Null for a free session, which has no routine.",
+      },
+    },
+  },
+  SpaceHistoryMonth: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'month',
+      'sessions',
+      'trained_seconds',
+      'work_sets',
+      'total_volume_kg',
+      'records',
+      'weeks',
+      'days',
+      'months_available',
+      'disciplines',
+    ],
+    properties: {
+      month: {
+        type: 'string',
+        format: 'date',
+        description: 'The first day of the month.',
+      },
+      sessions: {
+        type: 'integer',
+        minimum: 0,
+      },
+      trained_seconds: {
+        type: 'integer',
+        minimum: 0,
+      },
+      work_sets: {
+        type: 'integer',
+        minimum: 0,
+      },
+      total_volume_kg: {
+        type: ['number', 'null'],
+        minimum: 0,
+      },
+      records: {
+        type: 'integer',
+        minimum: 0,
+      },
+      weeks: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/SpaceHistoryWeek',
+        },
+      },
+      days: {
+        type: 'array',
+        description: 'Only the days trained, oldest first.',
+        items: {
+          $ref: '#/components/schemas/SpaceHistoryDay',
+        },
+      },
+      months_available: {
+        type: 'array',
+        description: 'First days of the months with something finished, newest first.',
+        items: {
+          type: 'string',
+          format: 'date',
+        },
+      },
+      disciplines: {
+        type: 'array',
+        description: 'The disciplines trained that month, named as the catalogue names them.',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['code', 'name'],
+          properties: {
+            code: {
+              type: 'string',
+            },
+            name: {
+              type: 'string',
+            },
+          },
+        },
+      },
+    },
+  },
+  SpaceHistoryPage: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['data', 'page'],
+    properties: {
+      data: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/SpaceHistoryItem',
+        },
+      },
+      page: {
+        $ref: '#/components/schemas/Page',
+      },
+    },
+  },
+  SpaceHistoryWeek: {
+    type: 'object',
+    additionalProperties: false,
+    description: 'An ISO week counted whole, even where it crosses into another month.',
+    required: ['week_starts_on', 'completed', 'planned', 'fulfilled'],
+    properties: {
+      week_starts_on: {
+        type: 'string',
+        format: 'date',
+        description: 'The Monday of an ISO week that touches the month.',
+      },
+      completed: {
+        type: 'integer',
+        minimum: 0,
+        description: 'Sessions finished that week, free ones and repeats included.',
+      },
+      planned: {
+        type: 'integer',
+        minimum: 0,
+        description: 'Planned sessions scheduled that week and not cancelled or paused.',
+      },
+      fulfilled: {
+        type: 'integer',
+        minimum: 0,
+        description:
+          'Of those planned, how many were finished that week, each once however many times it was done.',
+      },
+    },
+  },
+  SpaceInvalidationPreview: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['records', 'streak_weeks', 'streak_weeks_after'],
+    properties: {
+      records: {
+        type: 'integer',
+        minimum: 0,
+        description: 'The records this session holds, which go with it.',
+      },
+      streak_weeks: {
+        type: 'integer',
+        minimum: 0,
+        description: 'Weeks in a row trained, as of today.',
+      },
+      streak_weeks_after: {
+        type: 'integer',
+        minimum: 0,
+        description: 'The same, were this session annulled.',
+      },
+    },
   },
   SpaceMyProgram: {
     type: 'object',
@@ -8832,6 +10082,40 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
           },
         },
       },
+      sets: {
+        type: 'array',
+        description:
+          'The sets the routine asked for, in order, with their kind. The session opens each row with it and the person can change it (ADR-033). Empty for a step published before sets existed, where `target` is all there is; absent on the program detail.',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: [
+            'set_order',
+            'kind',
+            'target_reps',
+            'target_load_value',
+            'target_load_unit_code',
+          ],
+          properties: {
+            set_order: {
+              type: 'integer',
+              minimum: 1,
+            },
+            kind: {
+              $ref: '#/components/schemas/SetKind',
+            },
+            target_reps: {
+              type: ['integer', 'null'],
+            },
+            target_load_value: {
+              type: ['number', 'null'],
+            },
+            target_load_unit_code: {
+              type: ['string', 'null'],
+            },
+          },
+        },
+      },
     },
   },
   SpaceProgramSummary: {
@@ -9023,6 +10307,141 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         ],
         description:
           "Load moved, always in kilograms. **The database converts**, joining `load_unit_code` to the catalogue's canonical factor, so a session logged in pounds and one logged in kilos add up. Null for a routine that is not strength work: there is no tonnage to report, and zero would invent one.",
+      },
+    },
+  },
+  SpaceSessionExercise: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'position',
+      'movement_id',
+      'movement',
+      'planned_step_id',
+      'superset_group',
+      'rest_seconds',
+      'target',
+      'previous',
+      'sets',
+    ],
+    properties: {
+      position: {
+        type: 'integer',
+        minimum: 1,
+      },
+      movement_id: {
+        type: ['string', 'null'],
+        format: 'uuid',
+      },
+      movement: {
+        type: ['string', 'null'],
+      },
+      planned_step_id: {
+        type: ['string', 'null'],
+        format: 'uuid',
+      },
+      superset_group: {
+        type: ['integer', 'null'],
+      },
+      rest_seconds: {
+        type: ['integer', 'null'],
+        minimum: 0,
+        maximum: 3600,
+        description: "Rest after this exercise's sets, today's and not the routine's (ADR-035).",
+      },
+      target: {
+        oneOf: [
+          {
+            type: 'object',
+            additionalProperties: true,
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description: "The routine step's target; null for an exercise added in the session.",
+      },
+      previous: {
+        type: 'array',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['load_value', 'achieved_reps'],
+          properties: {
+            load_value: {
+              type: ['number', 'null'],
+            },
+            achieved_reps: {
+              type: ['integer', 'null'],
+            },
+          },
+        },
+      },
+      sets: {
+        type: 'array',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: [
+            'set_order',
+            'kind',
+            'target_reps',
+            'target_load_value',
+            'target_load_unit_code',
+          ],
+          properties: {
+            set_order: {
+              type: 'integer',
+              minimum: 1,
+            },
+            kind: {
+              $ref: '#/components/schemas/SetKind',
+            },
+            target_reps: {
+              type: ['integer', 'null'],
+            },
+            target_load_value: {
+              type: ['number', 'null'],
+            },
+            target_load_unit_code: {
+              type: ['string', 'null'],
+            },
+          },
+        },
+      },
+    },
+  },
+  SpaceSessionRecord: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['movement_id', 'movement', 'kind', 'value', 'reps', 'previous_value', 'previous_on'],
+    properties: {
+      movement_id: {
+        type: 'string',
+        format: 'uuid',
+      },
+      movement: {
+        type: 'string',
+      },
+      kind: {
+        type: 'string',
+        enum: ['heaviest', 'e1rm', 'best_set', 'session_volume'],
+        description:
+          'heaviest is kilograms; e1rm is an Epley estimate in kilograms; best_set and session_volume are kilograms times repetitions.',
+      },
+      value: {
+        type: 'number',
+      },
+      reps: {
+        type: ['integer', 'null'],
+        description: 'The repetitions of the heaviest set; null for the other kinds.',
+      },
+      previous_value: {
+        type: 'number',
+      },
+      previous_on: {
+        type: 'string',
+        format: 'date',
       },
     },
   },
@@ -9500,6 +10919,7 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       'sessions_planned',
       'tonnage_kg',
       'history',
+      'work_sets',
     ],
     description:
       "The calendar week in progress, Monday to Sunday, in the person's zone. The week is the unit and the day inside it is a suggestion, so what counts is how much of the week is done — and what is left undone does not carry over.",
@@ -9538,6 +10958,12 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         items: {
           $ref: '#/components/schemas/SpaceTrainedSession',
         },
+      },
+      work_sets: {
+        type: 'integer',
+        minimum: 0,
+        description:
+          'Work sets finished this week, without warmups or annulled sessions. Not the sum of `history`, which is the latest sessions of any week.',
       },
     },
   },
@@ -9584,6 +11010,16 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         type: ['number', 'null'],
         minimum: 0,
         maximum: 10,
+      },
+      kind: {
+        $ref: '#/components/schemas/SetKind',
+        description: 'What the set was. Omitted, it is recorded as `normal` (ADR-033).',
+      },
+      exercise_position: {
+        type: 'integer',
+        minimum: 1,
+        description:
+          'The position of the exercise the set belongs to, in `exercises`. Omitted, it lands on the first exercise of its movement.',
       },
     },
   },

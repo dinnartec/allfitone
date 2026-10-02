@@ -142,3 +142,18 @@ export function exerciseFilter(): ExerciseFilter {
 export function forgetExerciseFilter(): void {
   filter = NOTHING_FILTERED
 }
+
+/** Where the detail was opened from when it was not the picker. */
+export const FROM_PROGRAM = 'program'
+export const FROM_SESSION = 'session'
+
+/**
+ * Whether the movement detail may offer «Añadir a la rutina».
+ *
+ * Only the picker has a draft behind it. Opened from a program or a session, a deposit
+ * would sit in the mailbox and land in whichever routine somebody edits next.
+ */
+export function addsToRoutine(from: string | readonly string[] | undefined): boolean {
+  const origin = typeof from === 'string' || from === undefined ? from : from[0]
+  return origin !== FROM_PROGRAM && origin !== FROM_SESSION
+}

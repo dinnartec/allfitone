@@ -7,16 +7,19 @@
  */
 
 export { backofficePrivacyRoutes } from './handlers/backoffice.js'
+export { studioPrivacyRoutes } from './handlers/studio.js'
 export {
   accessLogService,
   erasureRequestService,
   legalHoldService,
+  offerableScopeService,
   scopeDefinitionService,
 } from './dependencies.js'
 export type {
   AccessLogService,
   ErasureRequestService,
   LegalHoldService,
+  OfferableScopeService,
   ScopeDefinitionService,
 } from './application/index.js'
 export type {
@@ -25,6 +28,7 @@ export type {
   ErasureRequest,
   ErasureRequestPage,
   LegalHold,
+  OfferableScope,
   ScopeDefinition,
   ScopeDefinitionPublication,
 } from './domain/index.js'

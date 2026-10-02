@@ -27,6 +27,11 @@ import type {
   ExecutionDatabase,
   ExecutionResultsReplace,
   Finalized,
+  FinishedExecution,
+  HistoryMonth,
+  InvalidationPreview,
+  HistoryRowPage,
+  SummaryRow,
   WeekSummary,
 } from '../domain/index.js'
 
@@ -41,6 +46,7 @@ interface ExecutionRow {
   week: number | null
   planned: Execution['planned']
   results: Execution['results']
+  exercises: Execution['exercises'] | null
 }
 
 interface AttemptRow {
@@ -67,12 +73,35 @@ interface FinalizedRow {
   contract_version: number
 }
 
+/** `numeric` arrives as a string and timestamps as dates; the contract wants neither. */
+type RawSummaryRow = Omit<
+  SummaryRow,
+  'duration_seconds' | 'total_volume_kg' | 'started_at' | 'ended_at'
+> & {
+  duration_seconds: string | number
+  total_volume_kg: string | number | null
+  started_at: Date | string
+  ended_at: Date | string
+}
+
+function summaryOf(row: RawSummaryRow): SummaryRow {
+  return {
+    ...row,
+    started_at: new Date(row.started_at).toISOString(),
+    ended_at: new Date(row.ended_at).toISOString(),
+    duration_seconds: Number(row.duration_seconds),
+    // Null stays null: nothing weighed is not zero lifted.
+    total_volume_kg: row.total_volume_kg === null ? null : Number(row.total_volume_kg),
+  }
+}
+
 interface WeekRow {
   trained_seconds: string | number | null
   sessions_completed: number | null
   sessions_planned: number | null
   tonnage_kg: string | number | null
   history: WeekSummary['history']
+  work_sets: number | null
 }
 
 export function createExecutionDatabase(): ExecutionDatabase {
@@ -99,7 +128,8 @@ export function createExecutionDatabase(): ExecutionDatabase {
           select * from execution.replace_execution_results(
             ${input.personId}::uuid, ${input.executedSessionId}::uuid,
             ${input.revisionNumber}::bigint, ${JSON.stringify(flatten(input.results))}::text::jsonb,
-            ${input.idempotencyKey}::uuid, ${input.commandId}::uuid, ${input.requestHash}
+            ${input.idempotencyKey}::uuid, ${input.commandId}::uuid, ${input.requestHash},
+            ${exercisesOf(input.results)}::text::jsonb
           )
         `
         if (!row) throw new Error('PostgreSQL did not replace the results')
@@ -156,11 +186,138 @@ export function createExecutionDatabase(): ExecutionDatabase {
         `
         return week(row)
       }),
+
+    readSummary: (input) =>
+      transact(sql, input.personId, input.requestId, async (transaction) => {
+        const [row] = await transaction<RawSummaryRow[]>`
+          select * from execution.read_execution_summary(
+            ${input.personId}::uuid, ${input.executedSessionId}::uuid, ${input.timezone}
+          )
+        `
+        return row ? summaryOf(row) : null
+      }),
+
+    // Both answer jsonb, so numbers arrive as numbers and dates as ISO strings.
+    listHistory: (input) =>
+      transact(sql, input.personId, input.requestId, async (transaction) => {
+        const [row] = await transaction<{ page: HistoryRowPage }[]>`
+          select execution.list_my_executions(
+            ${input.personId}::uuid, ${input.timezone}, ${input.month}::date,
+            ${input.discipline}, ${input.withRecord}::boolean, ${input.free}::boolean,
+            ${input.query}, ${input.cursor}, ${input.limit}::integer, ${input.day}::date
+          ) as page
+        `
+        if (!row) throw new Error('PostgreSQL did not list the history')
+        return row.page
+      }),
+
+    readFinished: (input) =>
+      transact(sql, input.personId, input.requestId, async (transaction) => {
+        const [row] = await transaction<{ detail: FinishedExecution | null }[]>`
+          select execution.read_finished_execution(
+            ${input.personId}::uuid, ${input.executedSessionId}::uuid, ${input.timezone}
+          ) as detail
+        `
+        return row?.detail ?? null
+      }),
+
+    revise: (input) =>
+      transact(sql, input.personId, '', async (transaction) => {
+        const { strength_sets, exercises } = input.revision
+        const results = { strength_sets, ...(exercises ? { exercises } : {}) }
+        const [row] = await transaction<ResultsRow[]>`
+          select * from execution.revise_execution(
+            ${input.personId}::uuid, ${input.executedSessionId}::uuid,
+            ${input.revisionNumber}::bigint, ${JSON.stringify(flatten(results))}::text::jsonb,
+            ${exercisesOf(results)}::text::jsonb,
+            ${input.revision.started_at}::timestamptz, ${input.revision.ended_at}::timestamptz,
+            ${input.idempotencyKey}::uuid, ${input.commandId}::uuid, ${input.requestHash}
+          )
+        `
+        if (!row) throw new Error('PostgreSQL did not revise the execution')
+        return {
+          id: row.id,
+          revision_number: Number(row.revision_number),
+          result_count: Number(row.result_count),
+        }
+      }),
+
+    annul: (input) =>
+      transact(sql, input.personId, '', async (transaction) => {
+        const [row] = await transaction<{ id: string; annulled_at: Date | string }[]>`
+          select * from execution.annul_execution(
+            ${input.personId}::uuid, ${input.executedSessionId}::uuid, ${input.reason},
+            ${input.idempotencyKey}::uuid, ${input.commandId}::uuid, ${input.requestHash}
+          )
+        `
+        if (!row) throw new Error('PostgreSQL did not annul the execution')
+        return { id: row.id, annulled_at: new Date(row.annulled_at).toISOString() }
+      }),
+
+    readAnnulmentPreview: (input) =>
+      transact(sql, input.personId, input.requestId, async (transaction) => {
+        const [row] = await transaction<{ preview: InvalidationPreview | null }[]>`
+          select execution.read_annulment_preview(
+            ${input.personId}::uuid, ${input.executedSessionId}::uuid, ${input.timezone}
+          ) as preview
+        `
+        return row?.preview ?? null
+      }),
+
+    repeat: (input) =>
+      transact(sql, input.personId, '', async (transaction) => {
+        const [row] = await transaction<
+          { id: string; attempt_number: number; revision_number: string | number }[]
+        >`
+          select * from execution.repeat_execution(
+            ${input.personId}::uuid, ${input.executedSessionId}::uuid,
+            ${input.startedAt}::timestamptz, ${input.timezone},
+            ${input.idempotencyKey}::uuid, ${input.commandId}::uuid, ${input.requestHash}
+          )
+        `
+        if (!row) throw new Error('PostgreSQL did not repeat the execution')
+        return {
+          id: row.id,
+          attempt_number: row.attempt_number,
+          status: 'in_progress',
+          revision_number: Number(row.revision_number),
+        }
+      }),
+
+    readHistoryMonth: (input) =>
+      transact(sql, input.personId, input.requestId, async (transaction) => {
+        const [row] = await transaction<{ month: HistoryMonth }[]>`
+          select execution.read_history_month(
+            ${input.personId}::uuid, ${input.timezone}, ${input.month}::date
+          ) as month
+        `
+        if (!row) throw new Error('PostgreSQL did not read the month')
+        return row.month
+      }),
   }
 }
 
+/** The session's exercise list, or null so the command keeps the one it has (ADR-034). */
+function exercisesOf(results: Pick<ExecutionResultsReplace, 'exercises'>): string | null {
+  if (!results.exercises) return null
+  return JSON.stringify(
+    results.exercises.map((exercise) => ({
+      position: exercise.position,
+      movement_id: exercise.movement_id ?? null,
+      planned_step_id: exercise.planned_step_id ?? null,
+      superset_group: exercise.superset_group ?? null,
+      rest_seconds: exercise.rest_seconds ?? null,
+    })),
+  )
+}
+
 /** The contract keeps the families apart; the command takes them as one list. */
-function flatten(results: ExecutionResultsReplace): Record<string, unknown>[] {
+function flatten(
+  results: Pick<
+    ExecutionResultsReplace,
+    'strength_sets' | 'endurance_laps' | 'interval_results' | 'mobility_results'
+  >,
+): Record<string, unknown>[] {
   const strength = (results.strength_sets ?? []).map((entry) => ({
     family: 'strength',
     set_order: entry.order,
@@ -169,6 +326,8 @@ function flatten(results: ExecutionResultsReplace): Record<string, unknown>[] {
     load_value: entry.load?.value ?? null,
     load_unit_code: entry.load?.unit ?? null,
     rpe: entry.rpe ?? null,
+    kind: entry.kind ?? null,
+    exercise_position: entry.exercise_position ?? null,
   }))
   const endurance = (results.endurance_laps ?? []).map((entry) => ({
     family: 'endurance',
@@ -233,6 +392,7 @@ function execution(row: ExecutionRow): Execution {
     week: row.week === null ? null : Number(row.week),
     planned: row.planned ?? [],
     results: row.results ?? [],
+    exercises: row.exercises ?? [],
   }
 }
 
@@ -244,6 +404,7 @@ function week(row: WeekRow | undefined): WeekSummary {
       sessions_planned: 0,
       tonnage_kg: null,
       history: [],
+      work_sets: 0,
     }
   }
   return {
@@ -254,6 +415,7 @@ function week(row: WeekRow | undefined): WeekSummary {
     // y `Number(null)` sería cero.
     tonnage_kg: row.tonnage_kg === null ? null : Number(row.tonnage_kg),
     history: row.history ?? [],
+    work_sets: row.work_sets ?? 0,
   }
 }
 

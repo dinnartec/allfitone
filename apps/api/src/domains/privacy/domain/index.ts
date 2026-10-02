@@ -139,3 +139,17 @@ export interface ScopeDefinitionDatabase {
   ): Promise<ScopeCommandResult>
   list(input: PrivacyCurator & { requestId: string }): Promise<ScopeDefinition[]>
 }
+
+/**
+ * A permission as a professional meets it when building an invitation: the
+ * words for it, and the contract version an offer has to be frozen against.
+ *
+ * Distinct from `ScopeDefinition`, which carries the rule set — which fields of
+ * which resources a scope reaches. That is what Backoffice curates and says
+ * nothing to the person being asked, so Studio never receives it.
+ */
+export type OfferableScope = AllfitV1Schemas['OfferableScope']
+
+export interface OfferableScopeDatabase {
+  listOfferable(input: { actorPersonId: string; requestId: string }): Promise<OfferableScope[]>
+}

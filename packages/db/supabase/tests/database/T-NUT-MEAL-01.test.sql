@@ -159,7 +159,7 @@ select throws_ok(
 create temporary table lunch on commit drop as
 select * from pg_temp.eat(
   'subject_meal', '019b7000-0000-7000-8000-000000000501',
-  timestamptz '2026-09-15 23:30:00+00', 'America/Bogota', 'dinner', 'Con poca sal',
+  ((current_date - 10)::text || ' 23:30:00+00')::timestamptz, 'America/Bogota', 'dinner', 'Con poca sal',
   '[{"position": 1, "name": "Pollo a la plancha", "quantity": 120, "quantity_unit": "g",
      "nutrients": [{"nutrient_code": "energy", "value": 198, "unit": "kcal"},
                    {"nutrient_code": "protein", "value": 37, "unit": "g"}]},
@@ -174,7 +174,7 @@ select results_eq(
   $$ select result->>'meal_type', result->>'timezone', result->>'local_date', result->>'note',
             jsonb_array_length(result->'items'), result->'has_media', replayed
      from lunch $$,
-  $$ values ('dinner'::text, 'America/Bogota'::text, '2026-09-15'::text, 'Con poca sal'::text,
+  $$ values ('dinner'::text, 'America/Bogota'::text, (current_date - 10)::text, 'Con poca sal'::text,
              3, 'false'::jsonb, false) $$,
   'a meal is recorded whole, and its day is the day where it was eaten, not in UTC'
 );
@@ -209,7 +209,7 @@ select results_eq(
 select results_eq(
   $$ select result->>'id', replayed
      from pg_temp.eat('subject_meal', '019b7000-0000-7000-8000-000000000501',
-       timestamptz '2026-09-15 23:30:00+00', 'America/Bogota', 'dinner', 'Con poca sal',
+       ((current_date - 10)::text || ' 23:30:00+00')::timestamptz, 'America/Bogota', 'dinner', 'Con poca sal',
        '[{"position": 1, "name": "Pollo a la plancha", "quantity": 120, "quantity_unit": "g",
           "nutrients": [{"nutrient_code": "energy", "value": 198, "unit": "kcal"},
                         {"nutrient_code": "protein", "value": 37, "unit": "g"}]},
@@ -390,7 +390,7 @@ select throws_ok(
 select throws_ok(
   $$ insert into nutrition.meals (id, person_id, occurred_at, timezone, local_date, meal_type)
      values (extensions.uuid_generate_v7(), '019b7000-0000-7000-8000-000000000001',
-       timestamptz '2026-09-15 23:30:00+00', 'America/Bogota', date '2026-09-16', 'dinner') $$,
+       ((current_date - 10)::text || ' 23:30:00+00')::timestamptz, 'America/Bogota', (current_date - 9), 'dinner') $$,
   '23514', null,
   'the day of a meal is the day of its moment in its zone, whoever writes it'
 );
@@ -398,7 +398,7 @@ select throws_ok(
 select throws_ok(
   $$ insert into nutrition.meals (id, person_id, occurred_at, timezone, local_date, meal_type)
      values (extensions.uuid_generate_v7(), '019b7000-0000-7000-8000-000000000001',
-       timestamptz '2026-09-15 23:30:00+00', 'Mars/Olympus_Mons', date '2026-09-15', 'dinner') $$,
+       ((current_date - 10)::text || ' 23:30:00+00')::timestamptz, 'Mars/Olympus_Mons', (current_date - 10), 'dinner') $$,
   '23514', null,
   'nor can anyone file a meal in a zone that does not exist'
 );
@@ -416,7 +416,7 @@ select * from pg_temp.eat('other_meal', '019b7000-0000-7000-8000-000000000601',
 
 select results_eq(
   $$ select entry->>'id' from jsonb_array_elements(nutrition.list_meals(
-       'workos', 'https://issuer.test', 'subject_meal', date '2026-09-01', current_date + 1, 50
+       'workos', 'https://issuer.test', 'subject_meal', current_date - 29, current_date + 1, 50
      )->'items') as entry $$,
   $$ values ('019b7000-0000-7000-8000-000000000503'::text),
             ('019b7000-0000-7000-8000-000000000502'::text),
@@ -426,14 +426,14 @@ select results_eq(
 
 select is(
   (select nutrition.list_meals('workos', 'https://issuer.test', 'subject_meal',
-     date '2026-09-01', current_date + 1, 2)->>'has_more'),
+     current_date - 29, current_date + 1, 2)->>'has_more'),
   'true',
   'the list says when there is more than it returned'
 );
 
 select results_eq(
   $$ select entry->>'id' from jsonb_array_elements(nutrition.list_meals(
-       'workos', 'https://issuer.test', 'subject_meal', date '2026-09-01', current_date + 1, 50,
+       'workos', 'https://issuer.test', 'subject_meal', current_date - 29, current_date + 1, 50,
        (select occurred_at from nutrition.meals where id = '019b7000-0000-7000-8000-000000000502'),
        '019b7000-0000-7000-8000-000000000502'
      )->'items') as entry $$,
@@ -450,7 +450,7 @@ select throws_ok(
 
 select results_eq(
   $$ select entry->>'id' from jsonb_array_elements(nutrition.list_meals(
-       'workos', 'https://issuer.test', 'subject_meal', date '2026-09-15', date '2026-09-15', 50
+       'workos', 'https://issuer.test', 'subject_meal', current_date - 10, current_date - 10, 50
      )->'items') as entry $$,
   $$ values ('019b7000-0000-7000-8000-000000000501'::text) $$,
   'a page reads the local days it names, not the UTC ones'
@@ -458,7 +458,7 @@ select results_eq(
 
 select throws_ok(
   $$ select nutrition.list_meals('workos', 'https://issuer.test', 'subject_meal',
-       date '2026-08-01', date '2026-09-15', 50) $$,
+       current_date - 40, current_date, 50) $$,
   '22023', null,
   'and never more than a month of them at once'
 );
@@ -466,7 +466,7 @@ select throws_ok(
 select ok(
   (select bool_and(not entry ? 'person_id' and not entry ? 'media_ref')
    from jsonb_array_elements(nutrition.list_meals(
-     'workos', 'https://issuer.test', 'subject_meal', date '2026-09-01', current_date + 1, 50
+     'workos', 'https://issuer.test', 'subject_meal', current_date - 29, current_date + 1, 50
    )->'items') as entry),
   'a meal never says whose it is or where its photo would be'
 );
@@ -610,7 +610,7 @@ select results_eq(
 
 select throws_ok(
   $$ select * from pg_temp.eat('subject_meal', '019b7000-0000-7000-8000-000000000501',
-       timestamptz '2026-09-15 23:30:00+00', 'America/Bogota', 'dinner', 'Con poca sal',
+       ((current_date - 10)::text || ' 23:30:00+00')::timestamptz, 'America/Bogota', 'dinner', 'Con poca sal',
        '[{"position": 1, "name": "Pollo a la plancha", "quantity": 120, "quantity_unit": "g",
           "nutrients": [{"nutrient_code": "energy", "value": 198, "unit": "kcal"},
                         {"nutrient_code": "protein", "value": 37, "unit": "g"}]},

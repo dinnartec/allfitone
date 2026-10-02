@@ -73,8 +73,12 @@ function OrganizationSidebar({ basePath, pathname }: { basePath: string; pathnam
   // On the icon rail the wordmark does not fit. Swapping to the mark keeps the
   // brand legible instead of clipping the lockup mid-letter.
   const railed = state === 'collapsed' && !isMobile
+  const organizationHref = `${basePath}/organization`
+  const organizationActive = pathname.startsWith(organizationHref)
   const teamHref = `${basePath}/team`
   const teamActive = pathname.startsWith(teamHref)
+  const clientsHref = `${basePath}/clients`
+  const clientsActive = pathname.startsWith(clientsHref)
 
   function closeMobileNavigation() {
     setOpenMobile(false)
@@ -180,12 +184,32 @@ function OrganizationSidebar({ basePath, pathname }: { basePath: string; pathnam
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton
+                  render={<Link href={organizationHref} onClick={closeMobileNavigation} />}
+                  isActive={organizationActive}
+                  aria-current={organizationActive ? 'page' : undefined}
+                >
+                  <FoundationIcon name="organization" decorative />
+                  <span>Organización</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
                   render={<Link href={teamHref} onClick={closeMobileNavigation} />}
                   isActive={teamActive}
                   aria-current={teamActive ? 'page' : undefined}
                 >
                   <FoundationIcon name="people" decorative />
                   <span>Equipo</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  render={<Link href={clientsHref} onClick={closeMobileNavigation} />}
+                  isActive={clientsActive}
+                  aria-current={clientsActive ? 'page' : undefined}
+                >
+                  <FoundationIcon name="person" decorative />
+                  <span>Clientes</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>

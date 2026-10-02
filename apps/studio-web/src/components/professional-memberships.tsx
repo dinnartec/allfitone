@@ -44,7 +44,7 @@ export function ProfessionalMemberships({ memberships }: { memberships: Membersh
         <div data-profile-section-heading-text>
           <WorkspaceEyebrow data-profile-kicker>Actividad en Studio</WorkspaceEyebrow>
           <WorkspaceTitle as="h2" id="memberships-title">
-            Mis espacios
+            Vinculaciones
           </WorkspaceTitle>
           <p data-page-header-description>
             Consulta tus vinculaciones. Esta vista no cambia roles ni permisos.
@@ -54,7 +54,7 @@ export function ProfessionalMemberships({ memberships }: { memberships: Membersh
       {/* Always two figures, so the strip always shares the row. */}
       <div data-profile-signals data-signals-multiple>
         <StatStrip>
-          <StatStripItem value={active.length} label="Espacios activos" />
+          <StatStripItem value={active.length} label="Vinculaciones activas" />
           <StatStripItem value={terminated.length} label="Vinculaciones finalizadas" />
         </StatStrip>
       </div>
@@ -64,7 +64,7 @@ export function ProfessionalMemberships({ memberships }: { memberships: Membersh
             <EmptyMedia variant="icon">
               <FoundationIcon name="organization" decorative />
             </EmptyMedia>
-            <EmptyTitle>Aún no tienes espacios</EmptyTitle>
+            <EmptyTitle>Aún no tienes vinculaciones</EmptyTitle>
             <EmptyDescription>
               Puedes crear una organización o aceptar una invitación cuando lo necesites.
             </EmptyDescription>

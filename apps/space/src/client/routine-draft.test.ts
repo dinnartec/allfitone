@@ -418,31 +418,42 @@ describe('a whole batch of exercises arrives at once', () => {
   })
 })
 
-describe('el esfuerzo viaja con la serie', () => {
-  const pierna = (): WorkingStep => ({
-    position: 1,
-    movementId: 'movement-1',
-    name: 'Sentadilla',
-    sets: [
-      { kind: 'warmup', reps: 10 },
-      { kind: 'normal', reps: 8, rpe: 7.5 },
-    ],
+describe('el esfuerzo no se planifica', () => {
+  // ADR-033: el RPE es lo que se siente al hacer la serie, y se registra al entrenar.
+  test('un borrador que traía RPE lo pierde al leerse', () => {
+    const steps = stepsFromContent({
+      title: 'Pierna',
+      activity_type_id: null,
+      steps: [
+        {
+          position: 1,
+          movement_id: 'movement-1',
+          target: {
+            family: 'strength',
+            sets: [{ set_order: 1, kind: 'normal', target_reps: 8, target_rpe: 7.5 }],
+          },
+        },
+      ],
+    } as never)
+
+    expect(Object.keys(steps[0]?.sets[0] ?? {})).not.toContain('rpe')
   })
 
-  test('el borrador lleva el RPE de cada serie', () => {
-    const content = stepsToContent('Pierna', [pierna()], null)
+  test('y el borrador que se guarda no lo lleva', () => {
+    const content = stepsToContent(
+      'Pierna',
+      [
+        {
+          position: 1,
+          movementId: 'movement-1',
+          name: 'Sentadilla',
+          sets: [{ kind: 'normal', reps: 8 }],
+        },
+      ],
+      null,
+    )
 
-    const sets = (content.steps[0]?.target as { sets: { target_rpe?: number }[] }).sets
-    expect(sets[0]?.target_rpe).toBeUndefined()
-    expect(sets[1]?.target_rpe).toBe(7.5)
-  })
-
-  test('y vuelve del borrador tal como se guardó', () => {
-    // El calentamiento se queda sin esfuerzo a propósito: pedirle a una serie de
-    // calentamiento el mismo RPE que a la de trabajo sería escribirle un número falso.
-    const steps = stepsFromContent(stepsToContent('Pierna', [pierna()], null))
-
-    expect(steps[0]?.sets[0]?.rpe).toBeUndefined()
-    expect(steps[0]?.sets[1]?.rpe).toBe(7.5)
+    const sets = (content.steps[0]?.target as { sets: Record<string, unknown>[] }).sets
+    expect(Object.keys(sets[0] ?? {})).not.toContain('target_rpe')
   })
 })

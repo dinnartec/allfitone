@@ -71,129 +71,274 @@ test('the audit detects a contrast failure', async ({ page }) => {
   expect(contrast[0]?.impact).toBe('serious')
 })
 
+/*
+ * Both viewports, not just the phone.
+ *
+ * This swept the mobile viewport alone, on the reasonable assumption that a
+ * narrow screen is where layout breaks. It is not the only place: a table gives
+ * a phone cards and a desktop columns, so the desktop path had no layout audit
+ * at all — and shipped a name painted straight over the badge in the next
+ * column, at 1440px, through a green sweep.
+ */
 test.describe('layout', () => {
-  for (const screen of SCREENS) {
-    test(`${screen.stories} fits the mobile viewport`, async ({ page }) => {
-      await openScreen(page, screen, MOBILE)
+  for (const viewport of [MOBILE, DESKTOP]) {
+    for (const screen of SCREENS) {
+      test(`${screen.stories} fits the ${viewport.name} viewport`, async ({ page }) => {
+        await openScreen(page, screen, viewport)
 
-      const overflow = await page.evaluate(() => ({
-        document: document.documentElement.scrollWidth,
-        viewport: document.documentElement.clientWidth,
-      }))
-      expect(overflow.document, `${screen.stories} overflows horizontally`).toBeLessThanOrEqual(
-        overflow.viewport,
-      )
-
-      // The document check alone misses whatever an ancestor scrolls or clips on
-      // its own, which is how a grid whose tracks could not shrink kept its cards
-      // 384px wide on a 390px screen through thirty-nine audited screens.
-      //
-      // The question is whether anything sits off the screen, not whether a box
-      // is narrower than its own content: a long word in a heading exceeds its
-      // content box and still wraps and reads perfectly. Regions that declare a
-      // horizontal scroll are exempt, because scrolling a wide table is the
-      // sanctioned pattern rather than a fault.
-      const offscreen = await page.evaluate(() => {
-        const scrollable = new Set(
-          [...document.querySelectorAll<HTMLElement>('body *')].filter((element) =>
-            ['auto', 'scroll'].includes(getComputedStyle(element).overflowX),
-          ),
+        const overflow = await page.evaluate(() => ({
+          document: document.documentElement.scrollWidth,
+          viewport: document.documentElement.clientWidth,
+        }))
+        expect(overflow.document, `${screen.stories} overflows horizontally`).toBeLessThanOrEqual(
+          overflow.viewport,
         )
-        const insideScrollRegion = (element: HTMLElement) => {
-          for (let node = element.parentElement; node; node = node.parentElement) {
-            if (scrollable.has(node)) return true
-          }
-          return false
-        }
-        return [...document.querySelectorAll<HTMLElement>('body *')]
-          .filter((element) => {
-            const box = element.getBoundingClientRect()
-            if (box.width === 0 || box.height === 0) return false
-            return Math.round(box.right) > document.documentElement.clientWidth
-          })
-          .filter((element) => !insideScrollRegion(element))
-          .map((element) => {
-            const marker = [...element.attributes]
-              .map((attribute) => attribute.name)
-              .filter((name) => name.startsWith('data-'))
-              .join(' ')
-            const past =
-              Math.round(element.getBoundingClientRect().right) -
-              document.documentElement.clientWidth
-            return `${element.tagName.toLowerCase()}${marker ? ` ${marker}` : ''} past by ${past}px`
-          })
-      })
-      expect(offscreen, `${screen.stories} puts content off the screen`).toEqual([])
 
-      // A wide table may scroll; a tab strip may not. The exemption above hides
-      // this case, because the strip is the scroll region: a tab outside it is a
-      // section the person never learns exists.
-      //
-      // Measured by scrolling rather than by comparing `scrollWidth` with
-      // `clientWidth`: both are rounded, so a strip overflowing by a fraction of
-      // a pixel reports as fitting. Known blind spot — this runs headless, where
-      // text measures slightly narrower than in a real window, so a strip that
-      // fits by a hair here can still scroll on someone's screen.
-      const clippedTabs = await page.evaluate(() =>
-        [...document.querySelectorAll<HTMLElement>('[data-slot="tabs-list"]')]
-          .map((list) => {
-            list.scrollLeft = list.scrollWidth
-            const hidden = list.scrollLeft
-            list.scrollLeft = 0
-            return { label: list.getAttribute('aria-label') ?? 'tabs', hidden }
-          })
-          .filter(({ hidden }) => hidden > 0)
-          .map(({ label, hidden }) => `${label} hides ${hidden}px`),
-      )
-      expect(clippedTabs, `${screen.stories} hides a tab behind a scroll`).toEqual([])
-
-      // The privacy control floats over the bottom corner, so whatever ends
-      // underneath it cannot be pressed. The credential card's "Retirar" lost
-      // 86x29px of its target that way, and a tap there opened the analytics
-      // panel instead.
-      //
-      // The question is reach, not position: sitting under the control is fine
-      // while the page can scroll past it. So each control is brought into view
-      // the way a person would, and only then asked what a tap at its centre
-      // would hit. The page that cannot scroll clear is the page at fault.
-      const covered = await page.evaluate(() => {
-        const control = document.querySelector('[data-analytics-controls]')
-        if (!control) return []
-        const unreachable: string[] = []
-        for (const element of document.querySelectorAll<HTMLElement>('a[href], button')) {
-          if (control.contains(element)) continue
-          const size = element.getBoundingClientRect()
-          if (size.width === 0 || size.height === 0) continue
-          element.scrollIntoView({ block: 'center', behavior: 'instant' })
-          const box = element.getBoundingClientRect()
-          const atCentre = document.elementFromPoint(
-            (box.left + box.right) / 2,
-            (box.top + box.bottom) / 2,
+        // The document check alone misses whatever an ancestor scrolls or clips on
+        // its own, which is how a grid whose tracks could not shrink kept its cards
+        // 384px wide on a 390px screen through thirty-nine audited screens.
+        //
+        // The question is whether anything sits off the screen, not whether a box
+        // is narrower than its own content: a long word in a heading exceeds its
+        // content box and still wraps and reads perfectly. Regions that declare a
+        // horizontal scroll are exempt, because scrolling a wide table is the
+        // sanctioned pattern rather than a fault.
+        const offscreen = await page.evaluate(() => {
+          const scrollable = new Set(
+            [...document.querySelectorAll<HTMLElement>('body *')].filter((element) =>
+              ['auto', 'scroll'].includes(getComputedStyle(element).overflowX),
+            ),
           )
-          if (atCentre && control.contains(atCentre)) {
-            unreachable.push((element.textContent ?? '').trim().slice(0, 30) || element.tagName)
+          const insideScrollRegion = (element: HTMLElement) => {
+            for (let node = element.parentElement; node; node = node.parentElement) {
+              if (scrollable.has(node)) return true
+            }
+            return false
+          }
+          return [...document.querySelectorAll<HTMLElement>('body *')]
+            .filter((element) => {
+              const box = element.getBoundingClientRect()
+              if (box.width === 0 || box.height === 0) return false
+              return Math.round(box.right) > document.documentElement.clientWidth
+            })
+            .filter((element) => !insideScrollRegion(element))
+            .map((element) => {
+              const marker = [...element.attributes]
+                .map((attribute) => attribute.name)
+                .filter((name) => name.startsWith('data-'))
+                .join(' ')
+              const past =
+                Math.round(element.getBoundingClientRect().right) -
+                document.documentElement.clientWidth
+              return `${element.tagName.toLowerCase()}${marker ? ` ${marker}` : ''} past by ${past}px`
+            })
+        })
+        expect(offscreen, `${screen.stories} puts content off the screen`).toEqual([])
+
+        // A wide table may scroll; a tab strip may not. The exemption above hides
+        // this case, because the strip is the scroll region: a tab outside it is a
+        // section the person never learns exists.
+        //
+        // Measured by scrolling rather than by comparing `scrollWidth` with
+        // `clientWidth`: both are rounded, so a strip overflowing by a fraction of
+        // a pixel reports as fitting. Known blind spot — this runs headless, where
+        // text measures slightly narrower than in a real window, so a strip that
+        // fits by a hair here can still scroll on someone's screen.
+        const clippedTabs = await page.evaluate(() =>
+          [...document.querySelectorAll<HTMLElement>('[data-slot="tabs-list"]')]
+            .map((list) => {
+              list.scrollLeft = list.scrollWidth
+              const hidden = list.scrollLeft
+              list.scrollLeft = 0
+              return { label: list.getAttribute('aria-label') ?? 'tabs', hidden }
+            })
+            .filter(({ hidden }) => hidden > 0)
+            .map(({ label, hidden }) => `${label} hides ${hidden}px`),
+        )
+        expect(clippedTabs, `${screen.stories} hides a tab behind a scroll`).toEqual([])
+
+        // The privacy control floats over the bottom corner, so whatever ends
+        // underneath it cannot be pressed. The credential card's "Retirar" lost
+        // 86x29px of its target that way, and a tap there opened the analytics
+        // panel instead.
+        //
+        // The question is reach, not position: sitting under the control is fine
+        // while the page can scroll past it. So each control is brought into view
+        // the way a person would, and only then asked what a tap at its centre
+        // would hit. The page that cannot scroll clear is the page at fault.
+        const covered = await page.evaluate(() => {
+          const control = document.querySelector('[data-analytics-controls]')
+          if (!control) return []
+          const unreachable: string[] = []
+          for (const element of document.querySelectorAll<HTMLElement>('a[href], button')) {
+            if (control.contains(element)) continue
+            const size = element.getBoundingClientRect()
+            if (size.width === 0 || size.height === 0) continue
+            element.scrollIntoView({ block: 'center', behavior: 'instant' })
+            const box = element.getBoundingClientRect()
+            const atCentre = document.elementFromPoint(
+              (box.left + box.right) / 2,
+              (box.top + box.bottom) / 2,
+            )
+            if (atCentre && control.contains(atCentre)) {
+              unreachable.push((element.textContent ?? '').trim().slice(0, 30) || element.tagName)
+            }
+          }
+          window.scrollTo(0, 0)
+          return unreachable
+        })
+        expect(covered, `${screen.stories}: the privacy control covers a control`).toEqual([])
+
+        // One h1 per screen: the audit brief asks for visual hierarchy, and a
+        // page with zero or several top-level headings has none to speak of. A
+        // spinner stage is exempt — it has no content to rank.
+        //
+        // A modal is the other shape this takes. It hides the page behind it from
+        // assistive technology, which is correct and takes the h1 with it, so the
+        // guarantee moves to the dialog: it must carry its own name.
+        if (screen.hasHeading ?? true) {
+          // `alertdialog` is its own role, and the confirmations use it — asking
+          // only for `dialog` sent those screens back to the h1 rule they cannot
+          // satisfy.
+          const dialog = page.locator('[role="dialog"], [role="alertdialog"]')
+          if ((await dialog.count()) > 0) {
+            await expect(dialog.first()).toHaveAccessibleName(/\S/)
+          } else {
+            await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1)
           }
         }
-        window.scrollTo(0, 0)
-        return unreachable
-      })
-      expect(covered, `${screen.stories}: the privacy control covers a control`).toEqual([])
 
-      // One h1 per screen: the audit brief asks for visual hierarchy, and a
-      // page with zero or several top-level headings has none to speak of. A
-      // spinner stage is exempt — it has no content to rank.
-      //
-      // A modal is the other shape this takes. It hides the page behind it from
-      // assistive technology, which is correct and takes the h1 with it, so the
-      // guarantee moves to the dialog: it must carry its own name.
-      if (screen.hasHeading ?? true) {
-        const dialog = page.getByRole('dialog')
-        if ((await dialog.count()) > 0) {
-          await expect(dialog.first()).toHaveAccessibleName(/\S/)
-        } else {
-          await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1)
-        }
-      }
-    })
+        /*
+         * Two things that should read as two, rendered with nothing between them.
+         *
+         * Four defects reached review this way and not one broke a rule: the
+         * contrast, the roles and the target sizes were all correct, and a site
+         * row still read "Sede ChapineroCalle 63 #11-40" as a single word. The
+         * cause each time was a container that groups two elements and never says
+         * how they sit, so they end up touching.
+         *
+         * This asks the narrow, objective half of that question: does the text of
+         * one element start on the same line where another's ends, with no space
+         * of any kind between them? A sentence built from several elements —
+         * "Vence el <span>5 de enero</span>" — carries whitespace in its own text
+         * and passes. Text with no separator at all is a defect in every case we
+         * have seen, which is why the rule stops here rather than also guessing at
+         * stacked blocks, where legitimate reasons to touch do exist.
+         */
+        const runTogether = await page.evaluate(() => {
+          const findings: string[] = []
+          const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT)
+          for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+            const parent = node as HTMLElement
+            const children = [...parent.children] as HTMLElement[]
+            if (children.length < 2) continue
+            for (let index = 0; index < children.length - 1; index += 1) {
+              const left = children[index]
+              const right = children[index + 1]
+              if (!left || !right) continue
+
+              const leftText = (left.textContent ?? '').trim()
+              const rightText = (right.textContent ?? '').trim()
+              if (!leftText || !rightText) continue
+
+              /*
+               * Measured between the glyphs, which is the only thing a reader
+               * sees. Two earlier attempts got this wrong: element boxes called
+               * every tab strip defective, and a range over an element's contents
+               * did too, because `<li><a>` puts the padding on the anchor and the
+               * range covers the anchor whole. Walking to the text node itself is
+               * what finally distinguishes a padded tab from a name welded to an
+               * address.
+               */
+              const edge = (element: HTMLElement, side: 'first' | 'last') => {
+                const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT)
+                let first: Node | null = null
+                let last: Node | null = null
+                for (let text = walker.nextNode(); text; text = walker.nextNode()) {
+                  if (!(text.textContent ?? '').trim()) continue
+                  first ??= text
+                  last = text
+                }
+                const node = side === 'last' ? last : first
+                if (!node) return null
+                const span = document.createRange()
+                span.selectNodeContents(node)
+                return span.getBoundingClientRect()
+              }
+
+              const leftBox = edge(left, 'last')
+              const rightBox = edge(right, 'first')
+              if (!leftBox || !rightBox) continue
+              if (leftBox.height === 0 || rightBox.height === 0) continue
+
+              // Same line, and the second's text starts where the first's ended.
+              const sameLine = Math.abs(leftBox.top - rightBox.top) < 2
+              if (!sameLine || rightBox.left - leftBox.right >= 1) continue
+
+              // Anything between them in the markup that renders as a space is
+              // the separator the reader sees, so the pair is fine.
+              let separated = false
+              for (
+                let between = left.nextSibling;
+                between && between !== right;
+                between = between.nextSibling
+              ) {
+                if (between.nodeType === Node.TEXT_NODE && /\s/.test(between.textContent ?? '')) {
+                  separated = true
+                }
+              }
+              if (separated) continue
+
+              findings.push(
+                `${leftText.slice(-18)}|${rightText.slice(0, 18)}`.replace(/\s+/gu, ' '),
+              )
+            }
+          }
+          return findings
+        })
+        expect(runTogether, `${screen.stories} runs two texts together`).toEqual([])
+
+        /*
+         * Text painted outside the cell that holds it.
+         *
+         * This was caught once, on the sites row, and the check was written there
+         * against that screen's own selectors — so the next table repeated the
+         * defect untouched: a masked contact with no break opportunity kept its
+         * column at full width, overflowed its own cell and ran over the badge in
+         * the next one. The guard belongs to the sweep, not to one screen.
+         *
+         * Measured on the text node rather than the element: an element box stops
+         * at the cell edge and reports nothing wrong while the glyphs carry on
+         * past it. That is precisely how five assertions passed over a defect a
+         * person could see at a glance.
+         *
+         * The horizontal edge only. A cell is free to be taller than its text,
+         * and rounding at the boundary is not a defect, so a pixel of slack.
+         */
+        const spillingCells = await page.evaluate(() => {
+          const findings: string[] = []
+          for (const cell of document.querySelectorAll<HTMLElement>('td, th, dd, dt')) {
+            const cellBox = cell.getBoundingClientRect()
+            if (cellBox.width === 0 || cellBox.height === 0) continue
+
+            const walker = document.createTreeWalker(cell, NodeFilter.SHOW_TEXT)
+            for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+              const content = (node.textContent ?? '').trim()
+              if (!content) continue
+              const span = document.createRange()
+              span.selectNodeContents(node)
+              const textBox = span.getBoundingClientRect()
+              if (textBox.width === 0) continue
+              const past = Math.round(textBox.right - cellBox.right)
+              if (past > 1) {
+                findings.push(`"${content.slice(0, 24)}" past its cell by ${past}px`)
+              }
+            }
+          }
+          return findings
+        })
+        expect(spillingCells, `${screen.stories} paints text outside its cell`).toEqual([])
+      })
+    }
   }
 })

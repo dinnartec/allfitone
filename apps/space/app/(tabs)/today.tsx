@@ -29,12 +29,14 @@
 
 import { Button } from '@allfitone/react-native/button'
 import { GlassPanel } from '@allfitone/react-native/glass'
+import { IconButton } from '@allfitone/react-native/icon-button'
 import { InlineAlert } from '@allfitone/react-native/inline-alert'
 import { Screen } from '@allfitone/react-native/screen'
+import { Sheet } from '@allfitone/react-native/sheet'
 import { Text } from '@allfitone/react-native/text'
 import { useTheme } from '@allfitone/react-native/theme'
 import { useFocusEffect, useRouter } from 'expo-router'
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native'
 import Animated, {
   useAnimatedReaction,
@@ -56,7 +58,8 @@ import {
   type ProgramSummary,
   type TrainingProfile,
 } from '../../src/client/program-catalogue'
-import { longDateLabel, shortDayLabel, trainedLabel } from '../../src/client/week'
+import { longDateLabel, trainedLabel } from '../../src/client/week'
+import { weekGroups, type HistoryItem } from '../../src/client/history'
 import { deviceTimezone } from '../../src/client/timezone'
 import { createSpaceContentFlow } from '../../src/client/content-transport'
 import { readExerciseLibrary, type ExerciseLibrary } from '../../src/client/exercise-library'
@@ -66,13 +69,17 @@ import { routineFigures, routineOfVersion } from '../../src/client/library'
 import {
   cardsFor as weekCards,
   dayChip,
+  firstCardShown,
   lastTimeShown,
   programDayOf,
+  sessionInProgress,
   startLabel,
   weekDays,
   type RoutineCard,
   type WeekDay,
 } from '../../src/client/week-plan'
+import { elapsedLabel } from '../../src/client/session-form'
+import { HistoryGroupHeader, HistoryPanel, HistoryRow } from '../../src/components/history-row'
 import { HomeCard } from '../../src/components/home-card'
 import { OfferRow } from '../../src/components/offer-row'
 import { PHOTO_COVER } from '../../src/client/routine-cover'
@@ -81,8 +88,15 @@ import { ProgramPoster } from '../../src/components/program-poster'
 import { DOCK_HEIGHT } from '../../src/components/tab-bar'
 
 const EXPIRED = 'Tu sesión venció. Vuelve a entrar para continuar.'
+/** How many of the latest sessions Hoy shows before «Ver todo». */
+const HOME_HISTORY = 4
+
+/** Today's calendar date in the person's zone, which is how history rows are dated. */
+const localToday = (timezone: string) =>
+  new Intl.DateTimeFormat('en-CA', { timeZone: timezone }).format(new Date())
 const READ_FAILED = 'No pudimos cargar tu día. Inténtalo otra vez.'
 const START_FAILED = 'No pudimos empezar la sesión. Inténtalo otra vez.'
+const DISCARD_FAILED = 'No pudimos descartar el entrenamiento. Inténtalo otra vez.'
 
 /** What a destination that does not exist yet answers, instead of a blank screen. */
 const PENDING: Record<string, string> = {
@@ -91,7 +105,6 @@ const PENDING: Record<string, string> = {
   food: 'Comida llega con el registro de nutrición.',
   progress: 'Tu progreso llega con el historial.',
   notices: 'Tus avisos llegan con las notificaciones.',
-  history: 'El historial completo llega con su propia pantalla.',
 }
 
 /** El margen de la pantalla cuando hay programa. El carrusel lo sangra para asomar. */
@@ -122,6 +135,8 @@ export default function Today() {
   const timezone = useMemo(() => deviceTimezone(), [])
 
   const [today, setToday] = useState<TodayPayload | undefined>(undefined)
+  /** The latest finished sessions for the history section; undefined until read. */
+  const [recent, setRecent] = useState<readonly HistoryItem[] | undefined>(undefined)
   const [catalogue, setCatalogue] = useState<ProgramCatalogue | undefined>(undefined)
   // La semana y la biblioteca, que es de donde sale el carrusel: la agenda dice qué
   // sesiones hay y la biblioteca con qué portada se dibuja cada una.
@@ -177,6 +192,11 @@ export default function Today() {
               setLibrary(read)
             })
             .catch(() => undefined)
+          // Apart from the rest: a history that fails to load must not take the week with it.
+          void training
+            .listHistory({ timezone, limit: HOME_HISTORY })
+            .then((page) => active && setRecent(page.data))
+            .catch(() => active && setRecent([]))
           return undefined
         })
         .then((available) => {
@@ -224,9 +244,30 @@ export default function Today() {
    * la biblioteca sabe con qué portada se dibuja; dos rutinas pueden llamarse igual, y
    * emparejarlas por el rótulo dibujaría la portada de la otra.
    */
-  const week = useMemo(() => weekCards(plan), [plan])
   const todayIs = useMemo(() => programDayOf(new Date()), [])
+  const week = useMemo(() => weekCards(plan, todayIs), [plan, todayIs])
   const days = useMemo(() => weekDays(week, todayIs), [week, todayIs])
+  const inProgress = sessionInProgress(week)
+  const [discarding, setDiscarding] = useState(false)
+  const [leaving, setLeaving] = useState(false)
+
+  /**
+   * Descartar desde aquí es lo mismo que descartar dentro de la sesión: `abandon`, y lo
+   * registrado se queda. Después se relee la semana, que es la que dice si sigue abierta.
+   */
+  const discard = (executionId: string) => {
+    setLeaving(true)
+    training
+      .abandon(executionId)
+      .then(() => Promise.all([training.readToday(timezone), programs.readWeekPlan(timezone)]))
+      .then(([current, week]) => {
+        setToday(current)
+        setPlan(week)
+        setDiscarding(false)
+      })
+      .catch(() => setFailure(DISCARD_FAILED))
+      .finally(() => setLeaving(false))
+  }
 
   /** Empezar la rutina de una tarjeta, o volver a la que quedó abierta. */
   const start = (card: RoutineCard) => {
@@ -288,6 +329,7 @@ export default function Today() {
         contentContainerStyle={[
           styles.content,
           assigned ? { paddingHorizontal: 24, paddingTop: 20 } : null,
+          inProgress ? styles.underInProgress : null,
         ]}
         showsVerticalScrollIndicator={false}
       >
@@ -405,17 +447,17 @@ export default function Today() {
           />
         ) : null}
 
-        {assigned && today ? (
+        {assigned && today && recent ? (
           <View style={styles.section}>
             <View style={styles.sectionHead}>
               <Text role="control" size="md">
                 Historial
               </Text>
-              {today.week.history.length > 0 ? (
+              {recent.length > 0 ? (
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel="Ver todo el historial"
-                  onPress={() => setPending(PENDING.history)}
+                  onPress={() => router.push('/history')}
                 >
                   <Text role="control" size="xs" color="accent">
                     Ver todo
@@ -423,20 +465,30 @@ export default function Today() {
                 </Pressable>
               ) : null}
             </View>
-            {today.week.history.length > 0 ? (
-              // Un panel y no filas sueltas: lo que hay debajo del rótulo es una cosa
-              // —lo entrenado— y el filete entre sesiones es lo que las separa.
-              <Panel>
-                {today.week.history.map((trained, index) => (
-                  <TrainedRow
-                    key={trained.executed_session_id}
-                    first={index === 0}
-                    day={shortDayLabel(trained.trained_on)}
-                    title={trained.title ?? 'Sesión'}
-                    detail={`${trained.sets_recorded} ${trained.sets_recorded === 1 ? 'serie' : 'series'}`}
-                  />
-                ))}
-              </Panel>
+            {recent.length > 0 ? (
+              // Grouped by week, each week its own panel: H-2 draws the break between
+              // them, so «semana pasada» reads as a heading and not as another row.
+              weekGroups(recent, localToday(timezone)).map((group) => (
+                <View key={group.weekStartsOn} style={styles.historyGroup}>
+                  <HistoryGroupHeader label={group.label} />
+                  <HistoryPanel>
+                    {group.items.map((item, index) => (
+                      <HistoryRow
+                        key={item.executed_session_id}
+                        item={item}
+                        first={index === 0}
+                        size="home"
+                        onPress={() =>
+                          router.push({
+                            pathname: '/history/[executionId]',
+                            params: { executionId: item.executed_session_id },
+                          })
+                        }
+                      />
+                    ))}
+                  </HistoryPanel>
+                </View>
+              ))
             ) : (
               // The section stays rather than disappearing: an absent section reads as
               // a screen that is still loading, and "nothing yet" is an answer.
@@ -453,7 +505,127 @@ export default function Today() {
           </Text>
         ) : null}
       </ScrollView>
+
+      {inProgress?.routine.open_execution_id ? (
+        <InProgress
+          executionId={inProgress.routine.open_execution_id}
+          title={inProgress.routine.title}
+          bottom={Math.max(insets.bottom, 12) + DOCK_HEIGHT + 10}
+          read={training.readExecution}
+          onResume={() => start(inProgress)}
+          onDiscard={() => setDiscarding(true)}
+        />
+      ) : null}
+
+      <Sheet
+        visible={discarding}
+        onDismiss={() => setDiscarding(false)}
+        title="¿Descartar este entrenamiento?"
+      >
+        <View style={styles.decisions}>
+          <Button
+            label="Descartar entrenamiento"
+            variant="secondary"
+            loading={leaving}
+            onPress={() => {
+              const id = inProgress?.routine.open_execution_id
+              if (id) discard(id)
+            }}
+          />
+          <Button label="Seguir entrenando" variant="ghost" onPress={() => setDiscarding(false)} />
+        </View>
+      </Sheet>
     </Screen>
+  )
+}
+
+/**
+ * La sesión minimizada: sigue abierta, y esta barra es el camino de vuelta.
+ *
+ * **Encima del menú y fuera del desplazamiento**, como se deja algo a mano: la pantalla
+ * de la sesión baja al minimizarse, y lo que la trae de vuelta sube desde el mismo borde.
+ */
+function InProgress({
+  executionId,
+  title,
+  bottom,
+  read,
+  onResume,
+  onDiscard,
+}: {
+  readonly executionId: string
+  readonly title: string
+  readonly bottom: number
+  readonly read: (id: string) => Promise<{ started_at: string }>
+  readonly onResume: () => void
+  readonly onDiscard: () => void
+}) {
+  const theme = useTheme()
+  const [startedAt, setStartedAt] = useState<number | undefined>(undefined)
+  const [seconds, setSeconds] = useState(0)
+
+  // The agenda says a session is open but not since when; the session itself does.
+  useEffect(() => {
+    let active = true
+    read(executionId)
+      .then((current) => {
+        if (active) setStartedAt(Date.parse(current.started_at))
+      })
+      .catch(() => undefined)
+    return () => {
+      active = false
+    }
+  }, [executionId, read])
+
+  // From the start and not a counter, like the session screen: both show the same time.
+  useEffect(() => {
+    if (startedAt === undefined) return
+    const tick = () => setSeconds((Date.now() - startedAt) / 1000)
+    tick()
+    const timer = setInterval(tick, 1_000)
+    return () => clearInterval(timer)
+  }, [startedAt])
+
+  return (
+    <View
+      style={[
+        styles.inProgress,
+        {
+          bottom,
+          backgroundColor: theme.color.background.surface,
+          borderColor: theme.color.border.accent,
+        },
+      ]}
+    >
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Volver a ${title}, en curso`}
+        onPress={onResume}
+        style={styles.inProgressResume}
+      >
+        <View style={[styles.live, { backgroundColor: theme.color.icon.accent }]} />
+        <View style={styles.inProgressText}>
+          <Text role="eyebrow" size="2xs" color="accent">
+            EN CURSO
+          </Text>
+          <Text role="control" size="sm" numberOfLines={1}>
+            {title}
+          </Text>
+        </View>
+        {startedAt === undefined ? null : (
+          <Text role="data" size="md" accessibilityLabel={`Llevas ${elapsedLabel(seconds)}`}>
+            {elapsedLabel(seconds)}
+          </Text>
+        )}
+        <FoundationIcon name="collapse" size="sm" color={theme.color.icon.primary} decorative />
+      </Pressable>
+      <IconButton
+        icon="close"
+        size="sm"
+        accessibilityLabel="Descartar entrenamiento"
+        onPress={onDiscard}
+      />
+    </View>
   )
 }
 
@@ -514,23 +686,25 @@ function Carousel({
    * dedo, así que el valor cambia en cada fotograma; guardarlo con `useState` sería un
    * render por cuadro justo mientras se arrastra, que es de donde venía la latencia.
    */
-  const at = useSharedValue(0)
+  // Opens on today's card, or the next day's: moved to, never reordered.
+  const opening = useMemo(() => firstCardShown(week, today), [week, today])
+  const at = useSharedValue(opening)
   const follow = useAnimatedScrollHandler((event) => {
     at.set(event.contentOffset.x / step)
   })
 
   /**
-   * Cuál va delante: enciende su filo y es lo que se lee en voz alta.
+   * Cuál va delante: el punto que se enciende y lo que se lee en voz alta.
    *
    * **Cambia al cruzar la mitad, no cuando el carrusel se para.** Estaba atado a
    * `onMomentumScrollEnd`, que no dispara hasta que la inercia termina del todo, así
-   * que el azul llegaba segundos después de que la tarjeta ya estuviera en su sitio.
+   * que la marca llegaba segundos después de que la tarjeta ya estuviera en su sitio.
    *
    * Y sigue sin ser un render por fotograma: la reacción vive en el hilo de la
    * interfaz y sólo cruza al de React cuando el número redondeado cambia, que son dos
    * o tres veces por gesto.
    */
-  const [leadingIndex, setLeadingIndex] = useState(0)
+  const [leadingIndex, setLeadingIndex] = useState(opening)
   useAnimatedReaction(
     () => Math.round(at.get()),
     (now, before) => {
@@ -547,10 +721,11 @@ function Carousel({
         snapToInterval={step}
         decelerationRate="fast"
         contentContainerStyle={{ paddingHorizontal: DECK_GUTTER, gap: CARD_GAP }}
+        contentOffset={{ x: opening * step, y: 0 }}
         onScroll={follow}
         scrollEventThrottle={16}
       >
-        {week.map((one, index) => {
+        {week.map((one) => {
           const routine = routineOfVersion(routines, one.routine.template_version_id)
           return (
             <HomeCard
@@ -574,7 +749,6 @@ function Carousel({
               // El reverso. Lo que no se respondió no viaja, y la tarjeta que se queda
               // sin las dos cosas tampoco ofrece el botón de girar.
               lastTime={lastTimeShown(one.routine.last_time, new Date())}
-              leading={index === leadingIndex}
               actions={{
                 onOpen: () => routine && onOpen(routine.template_id),
                 onStart: () => onStart(one),
@@ -609,9 +783,9 @@ function Week({
   const theme = useTheme()
   const planned = Math.max(week.sessions_planned, 1)
   const done = Math.min(week.sessions_completed, planned)
-  // Las series de la semana salen del propio historial: es lo que se registró, no una
-  // estimación de nada.
-  const sets = week.history.reduce((total, trained) => total + trained.sets_recorded, 0)
+  // The week's own work sets. Adding up `history` counted the latest sessions of any
+  // week, so a quiet week could show last month's sets.
+  const sets = week.work_sets
 
   return (
     <View style={styles.section}>
@@ -711,62 +885,6 @@ function Figure({
   )
 }
 
-/** La caja donde van las sesiones entrenadas, con su filo y su fondo. */
-function Panel({ children }: { readonly children: React.ReactNode }) {
-  const theme = useTheme()
-
-  return (
-    <View
-      style={[
-        styles.panel,
-        {
-          backgroundColor: theme.color.background.surface,
-          borderColor: theme.color.border.subtle,
-        },
-      ]}
-    >
-      {children}
-    </View>
-  )
-}
-
-function TrainedRow({
-  first,
-  day,
-  title,
-  detail,
-}: {
-  /** La primera no lleva filete: un filete arriba del todo es el borde del panel. */
-  readonly first: boolean
-  readonly day: string
-  readonly title: string
-  readonly detail: string
-}) {
-  const theme = useTheme()
-
-  return (
-    <View
-      style={[
-        styles.trained,
-        { borderColor: theme.color.border.subtle, borderTopWidth: first ? 0 : 1 },
-      ]}
-    >
-      <Text role="control" size="xs" color="muted" style={styles.trainedDay}>
-        {day}
-      </Text>
-      <View style={styles.trainedBody}>
-        <Text role="control" size="sm">
-          {title}
-        </Text>
-        <Text role="body" size="xs" color="muted">
-          {detail}
-        </Text>
-      </View>
-      <FoundationIcon name="success" size="xs" color={theme.color.status.success} decorative />
-    </View>
-  )
-}
-
 /** Glass, not a solid chip: it sits on a photograph, where a solid one reads as a sticker. */
 function Bell({ onPress }: { readonly onPress: () => void }) {
   const theme = useTheme()
@@ -793,6 +911,24 @@ const styles = StyleSheet.create({
   // queda alineada con el texto y la última no se pega al borde.
   // The dock floats over the scroll, so the last section has to clear it.
   content: { gap: 20, paddingBottom: DOCK_HEIGHT + 40 },
+  // The bar's own height and gap, so the history's last row is not left beneath it.
+  underInProgress: { paddingBottom: DOCK_HEIGHT + 40 + 72 },
+  inProgress: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    minHeight: 60,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+    borderRadius: 18,
+    borderWidth: 1,
+  },
+  live: { width: 8, height: 8, borderRadius: 4 },
+  inProgressText: { flex: 1, gap: 2 },
+  inProgressResume: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  decisions: { gap: 12 },
   header: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
   greeting: { flex: 1, gap: 4 },
   bell: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
@@ -809,8 +945,5 @@ const styles = StyleSheet.create({
   bar: { flex: 1, height: 7, borderRadius: 3.5 },
   figures: { flexDirection: 'row', gap: 10 },
   figure: { flex: 1, gap: 6, borderWidth: 1, borderRadius: 20, padding: 12 },
-  panel: { borderWidth: 1, borderRadius: 22, paddingHorizontal: 14 },
-  trained: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 9 },
-  trainedDay: { width: 52 },
-  trainedBody: { flex: 1, gap: 1 },
+  historyGroup: { gap: 10 },
 })

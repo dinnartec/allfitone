@@ -13,6 +13,15 @@ export function resolveWorkspaceRoute(
   if (pathname === basePath) {
     return { title: 'Inicio' }
   }
+  if (pathname === `${basePath}/organization`) {
+    return { title: 'Organización' }
+  }
+  if (pathname === `${basePath}/organization/sites/new`) {
+    return { title: 'Nueva sede' }
+  }
+  if (/^\/organizations\/[^/]+\/organization\/sites\/[^/]+$/.test(pathname)) {
+    return { title: 'Editar sede' }
+  }
   if (pathname === teamPath) {
     return { title: 'Integrantes' }
   }
@@ -24,6 +33,12 @@ export function resolveWorkspaceRoute(
   }
   if (pathname === `${teamPath}/roles`) {
     return { title: 'Roles y permisos' }
+  }
+  if (pathname === `${basePath}/clients`) {
+    return { title: 'Clientes' }
+  }
+  if (pathname === `${basePath}/clients/invitations/new`) {
+    return { title: 'Invitar cliente' }
   }
   return { title: 'Studio' }
 }

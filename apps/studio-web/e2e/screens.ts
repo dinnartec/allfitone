@@ -16,6 +16,8 @@ import {
   TEST_ANALYTICS_ID,
   activeMembership,
   createStudioApiFixture,
+  organizationWithLongSite,
+  organizationWithoutSites,
   error,
   installStudioApiMock,
   professionalCredential,
@@ -90,6 +92,25 @@ export async function openScreen(page: Page, screen: Screen, viewport: Viewport)
   await page.goto(screen.path)
   await (screen.settled ?? settledByHeading)(page)
   await screen.reveal?.(page)
+  await settleAnimations(page)
+}
+
+/**
+ * Audit the frame a person reads, not one on the way to it. A dialog is
+ * "visible" to Playwright the instant it has a box, while its entrance is still
+ * at `opacity: 0`, and axe composites the text against whatever shows through:
+ * the revocation dialog reported 4.30:1 mid-fade and passes once it lands.
+ *
+ * Endless animations — the spinner, the skeleton shimmer — are skipped, because
+ * a loading screen would otherwise never settle.
+ */
+async function settleAnimations(page: Page): Promise<void> {
+  await page.waitForFunction(() =>
+    document
+      .getAnimations()
+      .filter((animation) => animation.effect?.getComputedTiming().iterations !== Infinity)
+      .every((animation) => animation.playState !== 'running'),
+  )
 }
 
 const workspace = `/organizations/${activeMembership.organization_id}`
@@ -257,6 +278,18 @@ const stall = (path: string) => () =>
 const failing = (path: string, status: number, code: string) => () =>
   createStudioApiFixture({
     intercept: (request) => (request.path === path ? { status, body: error(code) } : undefined),
+  })
+
+/** A read that never answers, for a person who is already a member. */
+const stallingFor = (memberships: StudioApiFixture['memberships'], paths: RegExp) => () =>
+  createStudioApiFixture({
+    memberships,
+    intercept: async (request) => {
+      if (request.method === 'GET' && paths.test(request.path)) {
+        await new Promise((resolve) => setTimeout(resolve, 15_000))
+      }
+      return undefined
+    },
   })
 
 /**
@@ -759,6 +792,282 @@ export const SCREENS: Screen[] = [
       await expect(page.getByText('No pudimos cargar el estado de tu organización')).toBeVisible()
     },
   },
+  // --- `/organizations/[id]/clients` · HU-024 ---
+  {
+    // Both kinds of entry on one screen: two people who accepted and one who
+    // has not answered. The unanswered one has no name at all, which is the
+    // part worth looking at.
+    stories: 'HU-024 · the client directory with people and an unanswered invitation',
+    path: `${workspace}/clients`,
+    fixture: () => createStudioApiFixture({ memberships: [activeMembership] }),
+    settled: async (page) => {
+      await settledByHeading(page)
+      // `exact`, or it also matches the "Invitados" filter button.
+      await expect(page.getByText('Invitado', { exact: true })).toBeVisible()
+    },
+  },
+  {
+    // The filter that only shows what nobody answered. The masked contact here
+    // is deliberately long and has nowhere to break, which is the shape that
+    // painted over its neighbour the last time.
+    stories: 'HU-024 · only the invitations nobody answered',
+    path: `${workspace}/clients`,
+    fixture: () => createStudioApiFixture({ memberships: [activeMembership] }),
+    reveal: async (page) => {
+      await page.getByRole('button', { name: 'Invitados' }).click()
+      await expect(page.getByText(/correo-institucional-muy-largo/)).toBeVisible()
+    },
+  },
+  {
+    stories: 'HU-024 · a directory with nobody in it yet',
+    path: `${workspace}/clients`,
+    fixture: () =>
+      createStudioApiFixture({ memberships: [activeMembership], organizationClients: [] }),
+    settled: async (page) => {
+      await settledByHeading(page)
+      await expect(page.getByText('Todavía no hay personas vinculadas')).toBeVisible()
+    },
+  },
+  {
+    // A coach reads a directory too — their own. The wording has to say so, or
+    // a short list reads as clients gone missing.
+    stories: 'HU-024 · the directory a coach reads',
+    path: `/organizations/${secondActiveMembership.organization_id}/clients`,
+    fixture: () => createStudioApiFixture({ memberships: [secondActiveMembership] }),
+  },
+  {
+    stories: 'HU-024 · the directory could not be read',
+    path: `${workspace}/clients`,
+    fixture: failingFor([activeMembership], /\/organizations\/[^/]+\/clients$/),
+    settled: async (page) => {
+      await settledByHeading(page)
+      await expect(page.getByText('No pudimos cargar los clientes')).toBeVisible()
+    },
+  },
+  // --- `/organizations/[id]/clients/invitations/new` · HU-023 ---
+  {
+    stories: 'HU-023 · inviting somebody, with the permissions to choose from',
+    path: `${workspace}/clients/invitations/new`,
+    fixture: () => createStudioApiFixture({ memberships: [activeMembership] }),
+    settled: async (page) => {
+      await settledByHeading(page)
+      await expect(page.getByText('Progreso corporal')).toBeVisible()
+    },
+  },
+  {
+    // Every box ticked, which is the widest the form ever gets and the state
+    // where its descriptions have the least room.
+    stories: 'HU-023 · asking for everything on offer',
+    path: `${workspace}/clients/invitations/new`,
+    fixture: () => createStudioApiFixture({ memberships: [activeMembership] }),
+    reveal: async (page) => {
+      // The accessible name is now "Nombre: resumen", so these match on the
+      // name rather than equalling it.
+      for (const name of [/Entrenamiento con nosotros/, /Progreso corporal/, /Contexto de salud/]) {
+        await page.getByRole('checkbox', { name }).click()
+      }
+      await expect(page.getByRole('checkbox', { name: /Contexto de salud/ })).toBeChecked()
+    },
+  },
+  {
+    // What a professional sees when the form refuses to send.
+    stories: 'HU-023 · an invitation that asks for nothing',
+    path: `${workspace}/clients/invitations/new`,
+    fixture: () => createStudioApiFixture({ memberships: [activeMembership] }),
+    reveal: async (page) => {
+      await page.getByLabel('Correo electrónico').fill('ana@example.test')
+      await page.getByRole('button', { name: 'Enviar invitación' }).click()
+      await expect(page.getByText(/Marca al menos un permiso/)).toBeVisible()
+    },
+  },
+  {
+    /*
+     * The catalogue is published from Backoffice and is empty everywhere today,
+     * production included. Until somebody curates it this is the screen every
+     * professional meets, so it is audited rather than left to chance.
+     */
+    stories: 'HU-023 · no permission has been published yet',
+    path: `${workspace}/clients/invitations/new`,
+    fixture: () => createStudioApiFixture({ memberships: [activeMembership], offerableScopes: [] }),
+    settled: async (page) => {
+      await settledByHeading(page)
+      await expect(page.getByText('Todavía no hay permisos publicados')).toBeVisible()
+    },
+  },
+  {
+    stories: 'HU-023 · the invitation is on its way',
+    path: `${workspace}/clients/invitations/new`,
+    fixture: () => createStudioApiFixture({ memberships: [activeMembership] }),
+    reveal: async (page) => {
+      await page.getByLabel('Correo electrónico').fill('ana@example.test')
+      await page.getByRole('checkbox', { name: /Progreso corporal/ }).click()
+      await page.getByRole('button', { name: 'Enviar invitación' }).click()
+      await expect(page.getByText('La invitación va en camino')).toBeVisible()
+    },
+  },
+  // --- `/organizations/[id]/organization` · HU-011 ---
+  {
+    stories: 'HU-011 · the organization and its sites',
+    path: `${workspace}/organization`,
+    fixture: () => createStudioApiFixture({ memberships: [activeMembership] }),
+    settled: async (page) => {
+      await settledByHeading(page)
+      await expect(page.getByText('Allfit Gym SAS')).toBeVisible()
+      await expect(page.getByRole('list', { name: 'Sedes de la organización' })).toBeVisible()
+    },
+  },
+  {
+    // Label-above-value pairs and the site rows both reflow here: the facts
+    // drop from two columns to one, and each site stacks its address.
+    stories: 'HU-011 · the organization and its sites on a phone',
+    path: `${workspace}/organization`,
+    fixture: () => createStudioApiFixture({ memberships: [activeMembership] }),
+    viewport: MOBILE,
+    settled: async (page) => {
+      await settledByHeading(page)
+      await expect(page.getByRole('list', { name: 'Sedes de la organización' })).toBeVisible()
+    },
+  },
+  {
+    // Two absences at once. Neither is an error, and neither may silently
+    // remove its row.
+    stories: 'HU-011 · an organization with no legal name and no sites',
+    path: `${workspace}/organization`,
+    fixture: () =>
+      createStudioApiFixture({
+        memberships: [activeMembership],
+        organization: organizationWithoutSites,
+      }),
+    settled: async (page) => {
+      await settledByHeading(page)
+      await expect(page.getByText('Sin razón social registrada')).toBeVisible()
+      await expect(page.getByText('Aún no hay sedes registradas')).toBeVisible()
+    },
+  },
+  {
+    stories: 'HU-011 · the organization could not be read',
+    path: `${workspace}/organization`,
+    fixture: failingFor([activeMembership], /\/organizations\/[^/]+$/),
+    settled: async (page) => {
+      await expect(page.getByText('No pudimos cargar los datos de tu organización')).toBeVisible()
+    },
+  },
+  {
+    // Absent, or not ours to read: the API answers both with the same 404 and
+    // this screen is what keeps them indistinguishable.
+    stories: 'HU-011 · no organization to show',
+    path: `${workspace}/organization`,
+    fixture: () => createStudioApiFixture({ memberships: [activeMembership], organization: null }),
+    settled: async (page) => {
+      await expect(page.getByText('No encontramos esta organización')).toBeVisible()
+    },
+  },
+  // --- `/organizations/[id]/organization/sites/new` · HU-009 ---
+  {
+    stories: 'HU-009 · register a site',
+    path: `${workspace}/organization/sites/new`,
+    fixture: () => createStudioApiFixture({ memberships: [activeMembership] }),
+    settled: async (page) => {
+      await expect(page.getByLabel('Nombre')).toBeVisible()
+    },
+  },
+  {
+    stories: 'HU-009 · register a site on a phone',
+    path: `${workspace}/organization/sites/new`,
+    fixture: () => createStudioApiFixture({ memberships: [activeMembership] }),
+    viewport: MOBILE,
+    settled: async (page) => {
+      await expect(page.getByLabel('Nombre')).toBeVisible()
+    },
+  },
+  {
+    // The form refuses in place rather than sending the person somewhere else:
+    // a coach arriving by URL learns why, and where the sites are readable.
+    stories: 'HU-009 · a role that does not manage sites',
+    path: `/organizations/${secondActiveMembership.organization_id}/organization/sites/new`,
+    fixture: () => createStudioApiFixture({ memberships: [secondActiveMembership] }),
+    settled: async (page) => {
+      await expect(page.getByText('Tu rol no administra las sedes')).toBeVisible()
+    },
+  },
+  {
+    // The name is required, and the message has to survive on both viewports.
+    stories: 'HU-009 · the site needs a name',
+    path: `${workspace}/organization/sites/new`,
+    fixture: () => createStudioApiFixture({ memberships: [activeMembership] }),
+    reveal: async (page) => {
+      await page.getByRole('button', { name: 'Registrar sede' }).click()
+      await expect(page.getByText('Escribe el nombre de la sede.')).toBeVisible()
+    },
+  },
+  {
+    /*
+     * The longest text the form allows, on the narrowest screen. Every other
+     * site fixture is short enough that the row was never going to break, so
+     * this is the only screen that puts the edit link under real pressure.
+     */
+    stories: 'HU-011 · a site whose name and address fill the field',
+    path: `${workspace}/organization`,
+    fixture: () =>
+      createStudioApiFixture({
+        memberships: [activeMembership],
+        organization: organizationWithLongSite,
+      }),
+    settled: async (page) => {
+      await settledByHeading(page)
+      await expect(page.getByRole('link', { name: /^Editar Sede Villavicencio/ })).toBeVisible()
+    },
+  },
+  // --- `/organizations/[id]/organization/sites/[siteId]` · HU-010 ---
+  {
+    stories: 'HU-010 · edit a site',
+    path: `${workspace}/organization/sites/01991600-2000-7000-8000-000000000001`,
+    fixture: () => createStudioApiFixture({ memberships: [activeMembership] }),
+    settled: async (page) => {
+      await expect(page.getByLabel('Nombre')).toHaveValue('Sede Chapinero')
+    },
+  },
+  {
+    // The form and the withdrawal panel below it share a column here, so the
+    // rule between them carries the whole separation.
+    stories: 'HU-010 · edit a site on a phone',
+    path: `${workspace}/organization/sites/01991600-2000-7000-8000-000000000001`,
+    fixture: () => createStudioApiFixture({ memberships: [activeMembership] }),
+    viewport: MOBILE,
+    settled: async (page) => {
+      await expect(page.getByLabel('Nombre')).toHaveValue('Sede Chapinero')
+    },
+  },
+  {
+    // The confirmation carries criterion 1 of the story: what withdrawing does
+    // not touch, said to the person about to do it.
+    stories: 'HU-010 · confirming a site withdrawal',
+    path: `${workspace}/organization/sites/01991600-2000-7000-8000-000000000001`,
+    fixture: () => createStudioApiFixture({ memberships: [activeMembership] }),
+    reveal: async (page) => {
+      await page.getByRole('button', { name: 'Retirar de servicio', exact: true }).click()
+      await expect(page.getByRole('alertdialog')).toBeVisible()
+    },
+  },
+  {
+    // A withdrawn site offers the opposite action, and says what it restores.
+    stories: 'HU-010 · putting a withdrawn site back in service',
+    path: `${workspace}/organization/sites/01991600-2000-7000-8000-000000000003`,
+    fixture: () => createStudioApiFixture({ memberships: [activeMembership] }),
+    settled: async (page) => {
+      await expect(page.getByRole('button', { name: 'Poner en servicio' })).toBeVisible()
+    },
+  },
+  {
+    // A site that is not in this organization, whether it never existed or
+    // belongs to another: the screen cannot tell, and neither may the reader.
+    stories: 'HU-010 · the site is not there',
+    path: `${workspace}/organization/sites/01991600-2000-7000-8000-000000000999`,
+    fixture: () => createStudioApiFixture({ memberships: [activeMembership] }),
+    settled: async (page) => {
+      await expect(page.getByText('No encontramos esta sede')).toBeVisible()
+    },
+  },
   {
     stories: 'organization · verifying your access',
     path: workspace,
@@ -803,12 +1112,12 @@ export const SCREENS: Screen[] = [
     },
   },
   {
-    stories: 'HU-006 · my spaces',
+    stories: 'HU-006 · the memberships you hold',
     path: '/account',
     fixture: withProfile,
     reveal: async (page) => {
-      await page.getByRole('tab', { name: 'Mis espacios' }).click()
-      await expect(page.getByText('Espacios activos')).toBeVisible()
+      await page.getByRole('tab', { name: 'Vinculaciones' }).click()
+      await expect(page.getByText('Vinculaciones activas')).toBeVisible()
     },
   },
   {
@@ -872,6 +1181,19 @@ export const SCREENS: Screen[] = [
     },
   },
   {
+    // Retiring is the one credential action that cannot be undone from the
+    // screen, so it asks first. The dialog is also where issue #42's question
+    // about `AlertDialogHeader` spacing becomes answerable.
+    stories: 'HU-005 · confirming a credential retirement',
+    path: '/account',
+    fixture: withProfile,
+    reveal: async (page) => {
+      await page.getByRole('tab', { name: 'Credenciales', exact: true }).click()
+      await page.getByRole('button', { name: 'Retirar' }).click()
+      await expect(page.getByText('¿Retirar esta credencial?')).toBeVisible()
+    },
+  },
+  {
     stories: 'HU-005 · no credentials declared yet',
     path: '/account',
     fixture: withProfileAndNoCredentials,
@@ -881,12 +1203,12 @@ export const SCREENS: Screen[] = [
     },
   },
   {
-    stories: 'HU-006 · no active spaces',
+    stories: 'HU-006 · no memberships left',
     path: '/account',
     fixture: withoutActiveSpaces,
     reveal: async (page) => {
-      await page.getByRole('tab', { name: 'Mis espacios' }).click()
-      await expect(page.getByText('Aún no tienes espacios')).toBeVisible()
+      await page.getByRole('tab', { name: 'Vinculaciones' }).click()
+      await expect(page.getByText('Aún no tienes vinculaciones')).toBeVisible()
     },
   },
   {
@@ -974,6 +1296,24 @@ export const SCREENS: Screen[] = [
     },
   },
   {
+    stories: 'HU-017 · the team directory while it loads',
+    path: `${workspace}/team`,
+    fixture: stallingFor([activeMembership], /\/organizations\/[^/]+\/memberships$/),
+    settled: async (page) => {
+      await settledByHeading(page)
+      await expect(page.getByText('Cargando integrantes')).toBeVisible()
+    },
+  },
+  {
+    stories: 'HU-015 · the invitation register while it loads',
+    path: `${workspace}/team/invitations`,
+    fixture: stallingFor([activeMembership], /\/organizations\/[^/]+\/invitations$/),
+    settled: async (page) => {
+      await settledByHeading(page)
+      await expect(page.getByText('Cargando invitaciones')).toBeVisible()
+    },
+  },
+  {
     stories: 'HU-017 · the team directory could not be read',
     path: `${workspace}/team`,
     fixture: failingFor([activeMembership], /\/organizations\/[^/]+\/memberships$/),
@@ -990,6 +1330,15 @@ export const SCREENS: Screen[] = [
     settled: async (page) => {
       await settledByHeading(page)
       await expect(page.getByText('No pudimos cargar los roles')).toBeVisible()
+    },
+  },
+  {
+    stories: 'HU-016 · confirming an invitation revocation',
+    path: `${workspace}/team/invitations`,
+    fixture: withIssuedInvitations,
+    reveal: async (page) => {
+      await page.getByRole('button', { name: 'Revocar' }).first().click()
+      await expect(page.getByText('¿Revocar esta invitación?')).toBeVisible()
     },
   },
   {

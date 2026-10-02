@@ -44,7 +44,7 @@ describe('RPE_LEVELS', () => {
 
   test('T-SP-RPE-04 y el enunciado dice qué se mide antes de pedir el número', () => {
     expect(RPE_EXPLAINER).toContain('1 al 10')
-    expect(RPE_EXPLAINER).toContain('quedado')
+    expect(RPE_EXPLAINER).toContain('te quedaba')
   })
 })
 
@@ -57,7 +57,7 @@ describe('rpeShown y rpeCopy', () => {
   })
 
   test('T-SP-RPE-06 el copy cambia con lo marcado', () => {
-    expect(rpeCopy(8)).toBe('Muy duro. Quedan dos repeticiones.')
+    expect(rpeCopy(8)).toBe('Muy duro. Te quedaban dos repeticiones.')
     expect(rpeCopy(8)).not.toBe(rpeCopy(9))
   })
 

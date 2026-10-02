@@ -34,6 +34,20 @@ export type TeamInvitationStatus = AllfitV1Schemas['TeamInvitationStatus']
 export type OrganizationMembership = AllfitV1Schemas['OrganizationMembershipListItem']
 export type OrganizationMembershipPage = AllfitV1Schemas['OrganizationMembershipPage']
 export type OrganizationMembershipStatus = AllfitV1Schemas['OrganizationMembershipStatus']
+export type OfferableScopeCatalog = AllfitV1Schemas['OfferableScopeCatalog']
+export type OfferableScope = AllfitV1Schemas['OfferableScope']
+export type ClientInvitationCreate = AllfitV1Schemas['ClientInvitationCreate']
+export type ClientInvitation = AllfitV1Schemas['ClientInvitation']
+export type ClientDirectoryPage = AllfitV1Schemas['ClientDirectoryPage']
+export type ClientDirectoryItem = AllfitV1Schemas['ClientDirectoryItem']
+export type ClientDirectoryRelationship = AllfitV1Schemas['ClientDirectoryRelationship']
+export type ClientDirectoryInvitation = AllfitV1Schemas['ClientDirectoryInvitation']
+export type ClientDirectoryGroup = AllfitV1Schemas['ClientDirectoryGroup']
+export type Organization = AllfitV1Schemas['Organization']
+export type OrganizationSite = AllfitV1Schemas['OrganizationSite']
+export type OrganizationSiteStatus = AllfitV1Schemas['OrganizationSiteStatus']
+export type OrganizationSiteCreate = AllfitV1Schemas['OrganizationSiteCreate']
+export type OrganizationSiteUpdate = AllfitV1Schemas['OrganizationSiteUpdate']
 export type OrganizationRole = AllfitV1Schemas['OrganizationRole']
 export type OrganizationRoleCatalog = AllfitV1Schemas['OrganizationRoleCatalog']
 export type OrganizationRoleCode = AllfitV1Schemas['OrganizationRoleCode']
@@ -263,6 +277,75 @@ export const studioApi = {
       },
     )
   },
+
+  organizationClients: (
+    organizationId: string,
+    options: { status?: ClientDirectoryGroup; limit?: number; cursor?: string } = {},
+    signal?: AbortSignal,
+  ) => {
+    const query = new URLSearchParams()
+    if (options.status) query.set('status', options.status)
+    if (options.limit) query.set('limit', String(options.limit))
+    if (options.cursor) query.set('cursor', options.cursor)
+    const suffix = query.size ? `?${query.toString()}` : ''
+    return request<ClientDirectoryPage>(
+      `/studio/v1/organizations/${organizationId}/clients${suffix}`,
+      {
+        cache: 'no-store',
+        ...(signal ? { signal } : {}),
+      },
+    )
+  },
+
+  offerableScopes: (signal?: AbortSignal) =>
+    request<OfferableScopeCatalog>('/studio/v1/offerable-scopes', {
+      cache: 'no-store',
+      ...(signal ? { signal } : {}),
+    }),
+
+  createClientInvitation: (
+    organizationId: string,
+    body: ClientInvitationCreate,
+    command: CommandHeaders,
+  ) =>
+    request<ClientInvitation>(`/studio/v1/organizations/${organizationId}/client-invitations`, {
+      method: 'POST',
+      headers: commandHeaders(command),
+      body: JSON.stringify(body),
+    }),
+
+  organization: (organizationId: string, signal?: AbortSignal) =>
+    request<Organization>(`/studio/v1/organizations/${organizationId}`, signal ? { signal } : {}),
+
+  createOrganizationSite: (
+    organizationId: string,
+    body: OrganizationSiteCreate,
+    command: CommandHeaders,
+    signal?: AbortSignal,
+  ) =>
+    request<OrganizationSite>(`/studio/v1/organizations/${organizationId}/sites`, {
+      method: 'POST',
+      headers: commandHeaders(command),
+      body: JSON.stringify(body),
+      ...(signal ? { signal } : {}),
+    }),
+
+  updateOrganizationSite: (
+    organizationId: string,
+    siteId: string,
+    body: OrganizationSiteUpdate,
+    expectedRevision: string,
+    command: CommandHeaders,
+    signal?: AbortSignal,
+  ) =>
+    request<OrganizationSite>(`/studio/v1/organizations/${organizationId}/sites/${siteId}`, {
+      method: 'PATCH',
+      // The revision this edit was based on. Without it the server answers 428
+      // rather than guessing that the screen was current.
+      headers: { ...commandHeaders(command), 'If-Match': expectedRevision },
+      body: JSON.stringify(body),
+      ...(signal ? { signal } : {}),
+    }),
 
   organizationRoles: (organizationId: string, signal?: AbortSignal) =>
     request<OrganizationRoleCatalog>(

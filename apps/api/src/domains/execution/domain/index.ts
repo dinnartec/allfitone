@@ -14,6 +14,42 @@ export type Finalized = AllfitV1Schemas['ExecutionFinalized']
 export type Abandoned = AllfitV1Schemas['ExecutionAbandoned']
 export type ExecutionResultsReplace = AllfitV1Schemas['ExecutionResultsReplace']
 export type WeekSummary = AllfitV1Schemas['SpaceWeekSummary']
+export type ExecutionSummary = AllfitV1Schemas['SpaceExecutionSummary']
+export type FinishedExecution = AllfitV1Schemas['SpaceFinishedExecution']
+export type ExecutionRevision = AllfitV1Schemas['ExecutionRevision']
+export type Revised = AllfitV1Schemas['ExecutionRevised']
+export type Invalidated = AllfitV1Schemas['ExecutionInvalidated']
+export type InvalidationPreview = AllfitV1Schemas['SpaceInvalidationPreview']
+export type Repeated = AllfitV1Schemas['ExecutionRepeated']
+
+/** The summary as PostgreSQL holds it: the photograph is still a storage key. */
+export type SummaryRow = Omit<ExecutionSummary, 'cover_url'> & { cover_object_key: string | null }
+export type HistoryItem = AllfitV1Schemas['SpaceHistoryItem']
+export type HistoryPage = AllfitV1Schemas['SpaceHistoryPage']
+export type HistoryMonth = AllfitV1Schemas['SpaceHistoryMonth']
+/** A history row as PostgreSQL answers it: the thumbnail's key, never its address. */
+export type HistoryRow = Omit<HistoryItem, 'thumbnail_url'> & {
+  thumbnail_object_key: string | null
+}
+export interface HistoryRowPage {
+  readonly data: readonly HistoryRow[]
+  readonly page: HistoryPage['page']
+}
+export interface HistoryQuery {
+  personId: string
+  timezone: string
+  /** Any day of the month, in the person's zone; null for every month. */
+  month: string | null
+  discipline: string | null
+  withRecord: boolean | null
+  free: boolean | null
+  query: string | null
+  cursor: string | null
+  limit: number
+  /** A day picked on the month's calendar; null for the whole month. */
+  day: string | null
+  requestId: string
+}
 
 export interface ExecutionCommand {
   idempotencyKey: string
@@ -57,4 +93,63 @@ export interface ExecutionDatabase {
     timezone: string
     requestId: string
   }): Promise<WeekSummary>
+  /**
+   * Null when it does not exist or is not this person's. A session still open is refused
+   * by PostgreSQL with SQLSTATE 55000 (ADR-036).
+   */
+  readSummary(input: {
+    personId: string
+    executedSessionId: string
+    timezone: string
+    requestId: string
+  }): Promise<SummaryRow | null>
+  /** `OP-EXE-014`. A malformed cursor is refused by PostgreSQL with SQLSTATE 22023. */
+  listHistory(input: HistoryQuery): Promise<HistoryRowPage>
+  /** `OP-EXE-023`. Null when annulled, unfinished, absent or another person's. */
+  readFinished(input: {
+    personId: string
+    executedSessionId: string
+    timezone: string
+    requestId: string
+  }): Promise<FinishedExecution | null>
+  /** `OP-EXE-007`. A stale revision is refused with SQLSTATE 40001. */
+  revise(
+    input: ExecutionCommand & {
+      personId: string
+      executedSessionId: string
+      revisionNumber: number
+      revision: ExecutionRevision
+    },
+  ): Promise<Revised>
+  /** `OP-EXE-009`. Null reason is recorded as PostgreSQL's default. */
+  annul(
+    input: ExecutionCommand & {
+      personId: string
+      executedSessionId: string
+      reason: string | null
+    },
+  ): Promise<Invalidated>
+  /** `OP-EXE-024`. Null when the session cannot be annulled. */
+  readAnnulmentPreview(input: {
+    personId: string
+    executedSessionId: string
+    timezone: string
+    requestId: string
+  }): Promise<InvalidationPreview | null>
+  /** `OP-EXE-025`. Another session open is refused with SQLSTATE 55006. */
+  repeat(
+    input: ExecutionCommand & {
+      personId: string
+      executedSessionId: string
+      startedAt: string
+      timezone: string
+    },
+  ): Promise<Repeated>
+  /** `OP-EXE-022`. A month with nothing in it answers zeros, never null. */
+  readHistoryMonth(input: {
+    personId: string
+    timezone: string
+    month: string
+    requestId: string
+  }): Promise<HistoryMonth>
 }

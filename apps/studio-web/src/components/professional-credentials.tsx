@@ -100,14 +100,12 @@ type CredentialMutationVariables = {
 export function ProfessionalCredentials({
   credentials,
   credentialTypes,
-  profileExists,
   onCredentialsChange,
   onRefreshMe,
   onSessionFailure,
 }: {
   credentials: ProfessionalCredential[]
   credentialTypes: ProfessionalCatalogItem[]
-  profileExists: boolean
   onCredentialsChange: (credentials: ProfessionalCredential[]) => void
   onRefreshMe: () => Promise<StudioMe | undefined>
   onSessionFailure: (error: unknown) => boolean
@@ -191,20 +189,9 @@ export function ProfessionalCredentials({
           </p>
         </div>
         <div data-page-header-actions>
-          <Button onClick={() => setIntent({ kind: 'declare' })} disabled={!profileExists}>
-            Añadir credencial
-          </Button>
+          <Button onClick={() => setIntent({ kind: 'declare' })}>Añadir credencial</Button>
         </div>
       </div>
-
-      {!profileExists ? (
-        <Alert variant="info">
-          <AlertTitle>Primero crea tu presentación</AlertTitle>
-          <AlertDescription>
-            Necesitamos un perfil personal antes de asociar credenciales profesionales.
-          </AlertDescription>
-        </Alert>
-      ) : null}
 
       {active.length === 0 ? (
         <Empty>
@@ -216,11 +203,7 @@ export function ProfessionalCredentials({
             </EmptyDescription>
           </EmptyHeader>
           <EmptyContent>
-            <Button
-              variant="outline"
-              onClick={() => setIntent({ kind: 'declare' })}
-              disabled={!profileExists}
-            >
+            <Button variant="outline" onClick={() => setIntent({ kind: 'declare' })}>
               Declarar la primera
             </Button>
           </EmptyContent>

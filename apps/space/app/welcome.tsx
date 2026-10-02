@@ -16,9 +16,15 @@
  * the window and the asset's own ratio removes the ambiguity: the box always
  * matches the image, so there is nothing to crop.
  *
- * No ambient backdrop here. The photograph already fills the top two thirds, and
- * a wash underneath it competes instead of supporting — the blooms belong on the
- * sparse screens that have nothing else in them.
+ * **The photograph is inside the screen, not behind it.** The screen paints the
+ * canvas, and anything drawn before it is hidden under that paint — which is how
+ * the photograph disappeared once the canvas moved to the screen's outer box. Inside,
+ * with no inset and no padding, it bleeds to the edges, and the content pays its
+ * own safe area because the screen no longer does.
+ *
+ * No ambient backdrop here, and no grid. The photograph already fills the top two
+ * thirds, and a wash underneath competes instead of supporting; the scrim also ends
+ * in solid canvas, so a grid starting below it drew a seam across the copy.
  *
  * The headline promises what the person came for. An earlier version led with
  * the Fitness ID — that the history belongs to them — which is a retention
@@ -35,6 +41,7 @@ import { Text } from '@allfitone/react-native/text'
 import { useTheme } from '@allfitone/react-native/theme'
 import { Image, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native'
 import { useRouter } from 'expo-router'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import welcomeHero from '../assets/images/welcome-backlit.webp'
 
@@ -56,12 +63,13 @@ export default function Welcome() {
   const theme = useTheme()
   const router = useRouter()
   const { width } = useWindowDimensions()
+  const insets = useSafeAreaInsets()
 
   const heroHeight = width / HERO_ASPECT
   const scrimHeight = heroHeight * SCRIM_OVERHANG
 
   return (
-    <View style={[styles.root, { backgroundColor: theme.color.background.canvas }]}>
+    <Screen edges={[]} padded={false} ambient={false}>
       <Image
         source={welcomeHero}
         style={[styles.hero, { width, height: heroHeight }]}
@@ -70,7 +78,16 @@ export default function Welcome() {
       />
       <Scrim height={scrimHeight} coverage={SCRIM_COVERAGE} />
 
-      <Screen edges={['top', 'bottom']} dots style={styles.screen}>
+      <View
+        style={[
+          styles.content,
+          {
+            paddingTop: insets.top + theme.semanticSpacing.screenTop,
+            paddingBottom: insets.bottom,
+            paddingHorizontal: theme.semanticSpacing.panelInset,
+          },
+        ]}
+      >
         {/* The product lockup, not the ecosystem one: DT-001 reserves "Allfit
             One" for the ecosystem and this is a Space surface. Always the
             dark-surface variant, because it sits on imagery where a
@@ -109,22 +126,19 @@ export default function Welcome() {
             </Text>
           </Pressable>
         </GlassPanel>
-      </Screen>
-    </View>
+      </View>
+    </Screen>
   )
 }
 
 const styles = StyleSheet.create({
-  root: {
+  content: {
     flex: 1,
   },
   hero: {
     position: 'absolute',
     top: 0,
     left: 0,
-  },
-  screen: {
-    backgroundColor: 'transparent',
   },
   lockup: {
     // The safe area alone leaves the mark level with the status bar, which reads

@@ -3,9 +3,11 @@ import { describe, expect, test } from 'bun:test'
 import {
   cardsFor,
   dayChip,
+  firstCardShown,
   LAST_TIME_LABEL,
   lastTimeShown,
   programDayOf,
+  sessionInProgress,
   startLabel,
   weekDays,
   weekPlanFailure,
@@ -43,16 +45,50 @@ function plan(sessions: WeekRoutine[]): WeekPlan {
 }
 
 describe('which routine the screen reaches for', () => {
-  test('T-SPC-UNIT-70 suggests the first one still pending, in the order written', () => {
+  test('T-SPC-UNIT-70 suggests today, or the next day that still has something pending', () => {
+    // The same rule Hoy opens on, so the two screens never point at different days.
+    const week = plan([
+      routine({ title: 'Lunes', program_day: 1 }),
+      routine({ title: 'Miércoles', program_day: 3 }),
+      routine({ title: 'Viernes', program_day: 5 }),
+    ])
+
+    expect(cardsFor(week, 3).map((card) => card.state)).toEqual(['pending', 'suggested', 'pending'])
+    expect(cardsFor(week, 4).map((card) => card.state)).toEqual(['pending', 'pending', 'suggested'])
+  })
+
+  test('T-SPC-UNIT-73 a day already done hands the suggestion to the next one', () => {
     const cards = cardsFor(
       plan([
-        routine({ title: 'Torso A', done: true }),
-        routine({ title: 'Pierna A' }),
-        routine({ title: 'Torso B' }),
+        routine({ program_day: 1 }),
+        routine({ program_day: 3, done: true }),
+        routine({ program_day: 5 }),
       ]),
+      3,
     )
 
-    expect(cards.map((card) => card.state)).toEqual(['done', 'suggested', 'pending'])
+    expect(cards.map((card) => card.state)).toEqual(['pending', 'done', 'suggested'])
+  })
+
+  test('T-SPC-UNIT-74 past the last session, the first one pending of the week that follows', () => {
+    const cards = cardsFor(
+      plan([routine({ program_day: 1 }), routine({ program_day: 3 }), routine({ program_day: 5 })]),
+      6,
+    )
+
+    expect(cards.map((card) => card.state)).toEqual(['suggested', 'pending', 'pending'])
+  })
+
+  test('T-SPC-UNIT-75 two sessions on the same day suggest the first one written', () => {
+    const cards = cardsFor(
+      plan([
+        routine({ title: 'Torso', program_day: 2 }),
+        routine({ title: 'Core', program_day: 2 }),
+      ]),
+      2,
+    )
+
+    expect(cards.map((card) => card.state)).toEqual(['suggested', 'pending'])
   })
 
   test('T-SPC-UNIT-71 an attempt already open outranks the suggestion', () => {
@@ -63,13 +99,14 @@ describe('which routine the screen reaches for', () => {
         routine({ title: 'Torso A' }),
         routine({ title: 'Pierna A', open_execution_id: '019e4000-0000-7000-8000-000000000501' }),
       ]),
+      1,
     )
 
     expect(cards.map((card) => card.state)).toEqual(['pending', 'open'])
   })
 
   test('T-SPC-UNIT-72 a routine already done keeps its place and offers to be done again', () => {
-    const cards = cardsFor(plan([routine({ done: true }), routine({ done: true })]))
+    const cards = cardsFor(plan([routine({ done: true }), routine({ done: true })]), 1)
 
     expect(cards).toHaveLength(2)
     expect(cards.every((card) => card.state === 'done')).toBe(true)
@@ -105,7 +142,7 @@ describe('el carrusel de Hoy', () => {
 
   test('T-SPC-UNIT-82 la semana son siete días, y se ve dónde están los libres', () => {
     const days = weekDays(
-      cardsFor(plan([routine({ program_day: 1, done: true }), routine({ program_day: 4 })])),
+      cardsFor(plan([routine({ program_day: 1, done: true }), routine({ program_day: 4 })]), 4),
       4,
     )
 
@@ -117,7 +154,7 @@ describe('el carrusel de Hoy', () => {
 
   test('T-SPC-UNIT-83 un día con una sesión a medias no está cumplido', () => {
     const days = weekDays(
-      cardsFor(plan([routine({ program_day: 2, done: true }), routine({ program_day: 2 })])),
+      cardsFor(plan([routine({ program_day: 2, done: true }), routine({ program_day: 2 })]), 2),
       1,
     )
 
@@ -183,5 +220,61 @@ describe('lastTimeShown', () => {
     )
 
     expect(shown?.figures).toEqual([{ value: '9', unit: 'SERIES' }])
+  })
+})
+
+describe('which card the carousel opens on', () => {
+  const week = (...days: number[]) =>
+    cardsFor(plan(days.map((program_day) => routine({ program_day }))), 1)
+
+  test("today's card, wherever it sits in the week", () => {
+    expect(firstCardShown(week(1, 3, 5), 3)).toBe(1)
+    expect(firstCardShown(week(1, 3, 5), 5)).toBe(2)
+  })
+
+  test('on a rest day, the next day that asks for something', () => {
+    expect(firstCardShown(week(1, 3, 5), 2)).toBe(1)
+    expect(firstCardShown(week(1, 3, 5), 4)).toBe(2)
+  })
+
+  test('after the last session, the first one of next week', () => {
+    expect(firstCardShown(week(1, 3, 5), 6)).toBe(0)
+    expect(firstCardShown(week(2, 4), 7)).toBe(0)
+  })
+
+  test('it does not trust the order the week arrives in', () => {
+    expect(firstCardShown(week(5, 1, 3), 2)).toBe(2)
+  })
+
+  test('two sessions on the same day open on the first of them', () => {
+    expect(firstCardShown(week(1, 3, 3), 3)).toBe(1)
+  })
+
+  test('an empty week opens on nothing in particular', () => {
+    expect(firstCardShown([], 3)).toBe(0)
+  })
+})
+
+describe('the session Hoy keeps while it is minimised', () => {
+  test('the one left open, wherever it sits in the week', () => {
+    const cards = cardsFor(
+      plan([
+        routine({ title: 'Torso', program_day: 1 }),
+        routine({
+          title: 'Pierna',
+          program_day: 3,
+          open_execution_id: '019e4000-0000-7000-8000-000000000601',
+        }),
+      ]),
+      5,
+    )
+
+    expect(sessionInProgress(cards)?.routine.title).toBe('Pierna')
+  })
+
+  test('nothing when no session is open', () => {
+    expect(sessionInProgress(cardsFor(plan([routine(), routine({ done: true })]), 1))).toBe(
+      undefined,
+    )
   })
 })

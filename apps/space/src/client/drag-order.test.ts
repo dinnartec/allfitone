@@ -128,3 +128,11 @@ describe('how far the list is allowed to chase', () => {
     expect(nextOffset(500, EDGE_SPEED, 1000)).toBe(500 + EDGE_SPEED)
   })
 })
+
+describe('rows of another height', () => {
+  test('T-SP-DRAG-09 a list of shorter rows counts its places in its own height', () => {
+    // A session's shut exercises are 50 tall, not the editor's 80.
+    expect(placeOf(1, 100, 4, 50)).toBe(3)
+    expect(aside(2, 1, 100, 4, 50)).toBe(-50)
+  })
+})

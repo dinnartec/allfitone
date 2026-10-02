@@ -16,10 +16,17 @@ import {
   type Attempt,
   type Execution,
   type ExecutionFlow,
+  type ExecutionSummary,
   type Finalized,
+  type FinishedExecution,
+  type Invalidated,
+  type InvalidationPreview,
+  type Repeated,
   type ResultsState,
+  type Revised,
   type Today,
 } from './execution'
+import { historyPath, type HistoryMonth, type HistoryPage } from './history'
 import { readSession, storeSession } from './session'
 import { withRefresh } from './with-refresh'
 
@@ -37,6 +44,22 @@ export function createSpaceExecutionFlow(): ExecutionFlow {
         ),
       readExecution: (id) =>
         authenticated((token) => authorizedGet<Execution>(`/space/v1/executions/${id}`, token)),
+      readSummary: (id, timezone) =>
+        authenticated((token) =>
+          authorizedGet<ExecutionSummary>(
+            `/space/v1/executions/${id}/summary?timezone=${encodeURIComponent(timezone)}`,
+            token,
+          ),
+        ),
+      listHistory: (filters) =>
+        authenticated((token) => authorizedGet<HistoryPage>(historyPath(filters), token)),
+      readHistoryMonth: (month, timezone) =>
+        authenticated((token) =>
+          authorizedGet<HistoryMonth>(
+            `/space/v1/history/months/${month}?timezone=${encodeURIComponent(timezone)}`,
+            token,
+          ),
+        ),
       startAttempt: (command, plannedSessionId, start) =>
         authenticated((token) =>
           authorizedPost<Attempt>(
@@ -62,6 +85,48 @@ export function createSpaceExecutionFlow(): ExecutionFlow {
             `/space/v1/executions/${executedSessionId}/abandonment`,
             command,
             { ended_at: endedAt },
+            token,
+          ),
+        ),
+      readFinished: (id, timezone) =>
+        authenticated((token) =>
+          authorizedGet<FinishedExecution>(
+            `/space/v1/executions/${id}/detail?timezone=${encodeURIComponent(timezone)}`,
+            token,
+          ),
+        ),
+      readAnnulmentPreview: (id, timezone) =>
+        authenticated((token) =>
+          authorizedGet<InvalidationPreview>(
+            `/space/v1/executions/${id}/invalidation-preview?timezone=${encodeURIComponent(timezone)}`,
+            token,
+          ),
+        ),
+      revise: (command, executedSessionId, revisionNumber, revision) =>
+        authenticated((token) =>
+          authorizedPost<Revised>(
+            `/space/v1/executions/${executedSessionId}/revisions`,
+            command,
+            revision,
+            token,
+            String(revisionNumber),
+          ),
+        ),
+      annul: (command, executedSessionId) =>
+        authenticated((token) =>
+          authorizedPost<Invalidated>(
+            `/space/v1/executions/${executedSessionId}/invalidation`,
+            command,
+            {},
+            token,
+          ),
+        ),
+      repeat: (command, executedSessionId, start) =>
+        authenticated((token) =>
+          authorizedPost<Repeated>(
+            `/space/v1/executions/${executedSessionId}/repetitions`,
+            command,
+            start,
             token,
           ),
         ),

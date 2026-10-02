@@ -1077,6 +1077,54 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/space/v1/client-invitations/resolve': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Read what a client invitation is asking for
+     * @description HU-STUDIO-023, criterion 3. Returns each scope the organization asks for as its own entry, with the purpose it was asked for, the access level requested and the contract exactly as it was presented. The person needs all of that before answering, and answers each one separately.
+     *
+     *     Unlike team invitations, this one does **not** resolve anonymously. What it returns is a list of health-data categories somebody wants access to, and it is readable only by the person whose verified contact it was addressed to. Holding the token is not enough.
+     *
+     *     The token travels in the body, never in the URL, so it stays out of server logs and browser history.
+     */
+    post: operations['resolveSpaceClientInvitation']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/client-invitations/decisions': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Answer a client invitation, scope by scope
+     * @description HU-STUDIO-023, criteria 4, 5 and 8. One call decides the relationship and every scope at once, because they were presented together and a partial answer would leave the person consenting to something they never saw resolved.
+     *
+     *     **Accepting the relationship grants nothing.** Each scope carries its own answer, and a scope left out of `scope_decisions` counts as rejected. A person may accept the relationship and reject every scope: the relationship is then in force and no professional can read anything of theirs. That is a legitimate outcome, not a broken state.
+     *
+     *     Rejecting the relationship ends the invitation and no scope is granted, whatever the scope answers say.
+     */
+    post: operations['decideSpaceClientInvitation']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/space/v1/body-progress': {
     parameters: {
       query?: never
@@ -1543,6 +1591,30 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/studio/v1/organizations/{organizationId}/clients': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * List the clients of an organization the caller may see
+     * @description Returns who the organization's clients are and where each link stands. It carries no fitness data of any kind, not even aggregated, and writes no access event.
+     *
+     *     An entry is either a **relationship** — somebody who accepted — or an **invitation** nobody has answered yet. An invitation entry has no person and no name, because until somebody accepts, neither exists; it carries the masked contact instead.
+     *
+     *     What comes back depends on the caller. A role holding `view_directory` reads the whole directory and every unanswered invitation. A coach reads only the relationships they hold or stand in for, and only the invitations they themselves sent.
+     */
+    get: operations['listStudioOrganizationClients']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/studio/v1/organizations/{organizationId}/memberships/{membershipId}/roles': {
     parameters: {
       query?: never
@@ -1554,6 +1626,30 @@ export interface paths {
     put?: never
     /** Grant a non-owner role to an active organization membership */
     post: operations['grantStudioOrganizationMembershipRole']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/studio/v1/offerable-scopes': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * List the permissions an invitation may ask a person for
+     * @description The vocabulary a professional builds an invitation from: every published permission, with the words to name it and the contract version an offer has to be frozen against.
+     *
+     *     Each one carries its own **purpose**, fixed by the catalogue rather than written per invitation. A gym composing its own justification for wanting health data writes it with nobody reviewing it, and two people asked for the same permission would read different reasons.
+     *
+     *     The description states what the permission does **not** reach as well as what it covers. Somebody deciding whether a gym may read their injuries is owed the boundary, not only the request.
+     */
+    get: operations['listStudioOfferableScopes']
+    put?: never
+    post?: never
     delete?: never
     options?: never
     head?: never
@@ -1672,6 +1768,30 @@ export interface paths {
      * @description Creates or reuses a pending email invitation and its membership intent. The command never creates an account, person, profile, or membership and never reveals whether the contact already belongs to Allfit One.
      */
     post: operations['createStudioTeamInvitation']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/studio/v1/organizations/{organizationId}/client-invitations': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Invite a person to become a client of the organization
+     * @description HU-STUDIO-023. Creates an invitation and, separately, one option per scope the organization is asking for. It creates nothing else: no account, no person, no relationship, no grant. Those only exist once the person answers, and each scope is answered on its own.
+     *
+     *     Reissuing the same offer to the same contact reuses the pending invitation so the person does not receive two. Asking for a different set of scopes is a different proposal and issues a new one, because the person would be answering a different question.
+     *
+     *     The initial-program proposal in criteria 2, 6 and 7 of the story is not implemented: an organization has no way to publish a program yet.
+     */
+    post: operations['createStudioClientInvitation']
     delete?: never
     options?: never
     head?: never
@@ -1883,6 +2003,30 @@ export interface paths {
      * @description This command carries no request body. Supplying a payload is rejected with 415; the media type header itself is neither required nor used.
      */
     post: operations['deprecateOrganizationProgramVersion']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/studio/v1/organizations/{organizationId}/relationships/{relationshipId}/professional-assignments': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Put a coach in charge of a client
+     * @description Says who attends this person. It does **not** grant anything: without a live grant from the person, the professional in charge reads nothing of theirs. Being assigned and being allowed are two of the five conditions a read has to satisfy, and this command touches only the first.
+     *
+     *     The target must hold a live membership in this same organization and the coach role. A professional from another organization can never be assigned, even when the person is a client of both.
+     *
+     *     There is one holder at a time, and this command only fills an empty place. Taking the client away from the coach who already has them is a different operation (`OP-REL-003`), because it owes the person a notification this one never sends; a relationship that already has a different holder is rejected with `409`.
+     */
+    post: operations['assignRelationshipHolder']
     delete?: never
     options?: never
     head?: never
@@ -2435,6 +2579,46 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/space/v1/executions': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * List my finished sessions, newest first
+     * @description The history. Each row is summarised as it is read: duration, work sets, kilos without warmups, how many records it set by the rule of ADR-036, and its routine's cover as a thumbnail. Finished sessions only for now (ADR-037); every row says its `status` so abandoned and annulled ones can join without breaking this shape.
+     */
+    get: operations['listMyExecutions']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/history/months/{month}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Read one month of my history
+     * @description The month's totals, each ISO week with what was finished, planned and free, the months there is something to see in, and the disciplines present (ADR-037).
+     */
+    get: operations['getMyHistoryMonth']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/space/v1/executions/{executionId}': {
     parameters: {
       query?: never
@@ -2457,6 +2641,26 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/space/v1/executions/{executionId}/summary': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Read the summary of one of my finished sessions, to share it
+     * @description What «Compártelo» reads after a session is saved: what it achieved, the records it beat, the streak and the session number. Records, streak and number are derived when read, never stored (ADR-036).
+     */
+    get: operations['getMyExecutionSummary']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/space/v1/planned-sessions/{plannedSessionId}/attempts': {
     parameters: {
       query?: never
@@ -2468,6 +2672,106 @@ export interface paths {
     put?: never
     /** Start an attempt using Command-Id as executed_session.id */
     post: operations['startPlannedSessionAttempt']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/executions/{executionId}/detail': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Read one of my finished sessions, set by set
+     * @description What the history opens on: every set with its kind, the best set of each exercise, the set that beat everything before, and the last time the same routine was done. Records are derived when read (ADR-036), so a correction shows at once. Annulled and unfinished sessions answer 404.
+     */
+    get: operations['getMyFinishedExecution']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/executions/{executionId}/revisions': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Correct one of my finished sessions, keeping what it was
+     * @description The session as it now stands, whole, with its start and end. Append-only: the previous state is kept as a revision and never overwritten (ADR-022, ADR-038). Emptying a session is annulling it, which is `OP-EXE-009`.
+     */
+    post: operations['reviseMyExecution']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/executions/{executionId}/invalidation': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Annul one of my finished sessions
+     * @description What Space calls deleting. Nothing is deleted: the session stops counting in the history, records, streak and totals, and keeps its sets. Without a reason it is recorded as «La persona lo eliminó».
+     */
+    post: operations['annulMyExecution']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/executions/{executionId}/invalidation-preview': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Say what annulling one of my sessions would change
+     * @description Asked before confirming: the records that go with it, and the streak today with and without it.
+     */
+    get: operations['getMyInvalidationPreview']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/executions/{executionId}/repetitions': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Start another attempt at a finished session, with its exercises
+     * @description Another attempt at the same planned session (HU-SP-051), opening with the exercises the session ended with and no sets. `Command-Id` is the new session's identity. A free session has nothing to repeat; another session still open is a conflict.
+     */
+    post: operations['repeatMyExecution']
     delete?: never
     options?: never
     head?: never
@@ -4339,6 +4643,61 @@ export interface components {
       /** @description The attempt already open on today's session, if there is one. It is what turns "Empezar" into "Continuar" and what stops a second attempt being started by accident. */
       executed_session_id: components['schemas']['UuidV7'] | null
     }
+    /** @description A finished session as «Compártelo» tells it. Work sets only: a warmup is neither a set here nor kilos lifted, and never a record. */
+    SpaceExecutionSummary: {
+      /** Format: uuid */
+      executed_session_id: string
+      /** Format: date-time */
+      started_at: string
+      /** Format: date-time */
+      ended_at: string
+      duration_seconds: number
+      /** @description The routine's name; null for a session that came from none. */
+      title: string | null
+      work_sets: number
+      exercise_count: number
+      /** @description Null when nothing was weighed, which is not zero lifted. */
+      total_volume_kg: number | null
+      exercises: {
+        position: number
+        /** Format: uuid */
+        movement_id: string | null
+        movement: string | null
+        work_sets: number
+        reps_min: number | null
+        reps_max: number | null
+      }[]
+      /** @description Each record this session beat, against the person's earlier finished sessions. A first time is none, and equalling the best is not beating it. */
+      records: components['schemas']['SpaceSessionRecord'][]
+      /** @description Weeks in a row, back from this session's, with a finished session. */
+      streak_weeks: number
+      /** @description How many finished sessions the person has, counting this one. */
+      session_number: number
+      given_name: string
+      username: string | null
+      /**
+       * Format: uri
+       * @description The routine's photograph, the same Hoy shows.
+       */
+      cover_url: string | null
+      algorithm_version: number
+    }
+    SpaceSessionRecord: {
+      /** Format: uuid */
+      movement_id: string
+      movement: string
+      /**
+       * @description heaviest is kilograms; e1rm is an Epley estimate in kilograms; best_set and session_volume are kilograms times repetitions.
+       * @enum {string}
+       */
+      kind: 'heaviest' | 'e1rm' | 'best_set' | 'session_volume'
+      value: number
+      /** @description The repetitions of the heaviest set; null for the other kinds. */
+      reps: number | null
+      previous_value: number
+      /** Format: date */
+      previous_on: string
+    }
     /** @description The calendar week in progress, Monday to Sunday, in the person's zone. The week is the unit and the day inside it is a suggestion, so what counts is how much of the week is done — and what is left undone does not carry over. */
     SpaceWeekSummary: {
       trained_seconds: number
@@ -4352,6 +4711,93 @@ export interface components {
        */
       tonnage_kg: number | null
       history: components['schemas']['SpaceTrainedSession'][]
+      /** @description Work sets finished this week, without warmups or annulled sessions. Not the sum of `history`, which is the latest sessions of any week. */
+      work_sets: number
+    }
+    SpaceHistoryItem: {
+      executed_session_id: components['schemas']['UuidV7']
+      /**
+       * @description Only finished sessions for now (ADR-037); the enum grows with the history.
+       * @enum {string}
+       */
+      status: 'completed'
+      /** Format: date-time */
+      started_at: string
+      /**
+       * Format: date
+       * @description The day in the person's zone.
+       */
+      trained_on: string
+      /** @description The routine's name. Null for a free session. */
+      title: string | null
+      /** @description True when no planned session stands behind it. */
+      is_free: boolean
+      discipline_code: string
+      duration_seconds: number
+      work_sets: number
+      /** @description Kilos lifted without warmups. Null when nothing was weighed, not zero. */
+      total_volume_kg: number | null
+      /** @description Records set, counted as the session's summary counts them (ADR-036). */
+      record_count: number
+      /**
+       * Format: uri
+       * @description The routine's cover, the same photograph its summary shows (ADR-037). Null for a free session, which has no routine.
+       */
+      thumbnail_url: string | null
+    }
+    SpaceHistoryPage: {
+      data: components['schemas']['SpaceHistoryItem'][]
+      page: components['schemas']['Page']
+    }
+    /** @description An ISO week counted whole, even where it crosses into another month. */
+    SpaceHistoryWeek: {
+      /**
+       * Format: date
+       * @description The Monday of an ISO week that touches the month.
+       */
+      week_starts_on: string
+      /** @description Sessions finished that week, free ones and repeats included. */
+      completed: number
+      /** @description Planned sessions scheduled that week and not cancelled or paused. */
+      planned: number
+      /** @description Of those planned, how many were finished that week, each once however many times it was done. */
+      fulfilled: number
+    }
+    /** @description A day of the month something was finished on, for the month card's calendar. */
+    SpaceHistoryDay: {
+      /**
+       * Format: date
+       * @description The day in the person's time zone.
+       */
+      trained_on: string
+      sessions: number
+      trained_seconds: number
+      work_sets: number
+      /** @description Kilos lifted that day without warmups. Null when nothing was weighed. */
+      volume_kg: number | null
+      records: number
+    }
+    SpaceHistoryMonth: {
+      /**
+       * Format: date
+       * @description The first day of the month.
+       */
+      month: string
+      sessions: number
+      trained_seconds: number
+      work_sets: number
+      total_volume_kg: number | null
+      records: number
+      weeks: components['schemas']['SpaceHistoryWeek'][]
+      /** @description Only the days trained, oldest first. */
+      days: components['schemas']['SpaceHistoryDay'][]
+      /** @description First days of the months with something finished, newest first. */
+      months_available: string[]
+      /** @description The disciplines trained that month, named as the catalogue names them. */
+      disciplines: {
+        code: string
+        name: string
+      }[]
     }
     SpaceTrainedSession: {
       executed_session_id: components['schemas']['UuidV7']
@@ -4571,6 +5017,8 @@ export interface components {
       /** @description Derived from the assignment's start date, not stored: the same number kept in two places is one of them wrong. */
       week: number | null
       planned: components['schemas']['SpaceProgramStep'][]
+      /** @description The session's own exercises, in the order they are trained (ADR-034). Copied from the routine when the attempt started, with its supersets, and changed only by the person since; `planned` is kept for older clients. */
+      exercises: components['schemas']['SpaceSessionExercise'][]
       results: {
         [key: string]: unknown
       }[]
@@ -4614,7 +5062,20 @@ export interface components {
         load_value: number | null
         achieved_reps: number | null
       }[]
+      /** @description The sets the routine asked for, in order, with their kind. The session opens each row with it and the person can change it (ADR-033). Empty for a step published before sets existed, where `target` is all there is; absent on the program detail. */
+      sets?: {
+        set_order: number
+        kind: components['schemas']['SetKind']
+        target_reps: number | null
+        target_load_value: number | null
+        target_load_unit_code: string | null
+      }[]
     }
+    /**
+     * @description What a set is: `planning.set_kind`, shared by the plan and by what was done (ADR-030, ADR-033). A warmup is recorded but never counted as work.
+     * @enum {string}
+     */
+    SetKind: 'normal' | 'warmup' | 'to_failure' | 'drop'
     SpaceProgramChoice: {
       program_version_id: components['schemas']['UuidV7']
       /** @description An IANA zone. The start date is **not** sent: it is always today in this zone, and a client-supplied date could backdate a plan into a history that never happened. */
@@ -4943,6 +5404,122 @@ export interface components {
       }
       replayed: boolean
     }
+    RelationshipHolderAssignment: {
+      /** @description The membership of the coach who will attend this person. */
+      membership_id: components['schemas']['UuidV7']
+    }
+    RelationshipHolder: {
+      assignment_id: components['schemas']['UuidV7']
+      relationship_id: components['schemas']['UuidV7']
+      membership_id: components['schemas']['UuidV7']
+      person_id: components['schemas']['UuidV7']
+      /**
+       * Format: date-time
+       * @description Since when this coach has attended the person. A repeated assignment of the same coach answers with the original date rather than today's.
+       */
+      valid_from: string
+    }
+    OfferableScope: {
+      scope_definition_id: components['schemas']['UuidV7']
+      scope_code: components['schemas']['ScopeCode']
+      /** @description The contract version an offer is frozen against. */
+      version_number: number
+      /** @description What to call the permission on screen. */
+      display_name: string
+      /** @description One line for the professional building the invitation. Keeps the boundary — what the permission does not reach — because that is the half that stops somebody asking for more than they meant to. */
+      summary: string
+      /** @description The whole thing, for the person deciding. What it covers and, as importantly, where it stops. */
+      description: string
+      /** @description Why it is being asked for. Fixed by the catalogue, not written per invitation. */
+      default_purpose: string
+    }
+    OfferableScopeCatalog: {
+      items: components['schemas']['OfferableScope'][]
+    }
+    ClientInvitationToken: {
+      /** @description Opaque token transported in JSON, never in the URL. */
+      token: string
+    }
+    ClientInvitationScopeRequest: {
+      scope_code: components['schemas']['ScopeCode']
+      access_level: components['schemas']['AccessLevel']
+      /** @description Why this organization is asking, in the person's language. */
+      purpose: string
+      /** @description The contract text exactly as the person will be shown it. Stored verbatim so a later edit to the scope catalogue cannot change what somebody already agreed to. */
+      presented_snapshot: {
+        [key: string]: unknown
+      }
+    }
+    ClientInvitationCreate: {
+      /** @enum {string} */
+      channel: 'email'
+      /** Format: email */
+      contact: string
+      scopes: components['schemas']['ClientInvitationScopeRequest'][]
+    }
+    ClientInvitation: {
+      id: components['schemas']['UuidV7']
+      invitation_intent_id: components['schemas']['UuidV7']
+      status: components['schemas']['TeamInvitationStatus']
+      /** @enum {string} */
+      channel: 'email'
+      /** @description A masked form of the contact. The full address is never echoed back. */
+      contact_hint: string
+      /** Format: date-time */
+      expires_at: string
+      scope_codes: components['schemas']['ScopeCode'][]
+      /** @description True when an equivalent pending invitation already existed. */
+      reused: boolean
+    }
+    ClientInvitationScopeOption: {
+      scope_code: components['schemas']['ScopeCode']
+      offered_access_level: components['schemas']['AccessLevel']
+      purpose: string
+      presented_snapshot_schema_version: number
+      presented_snapshot: {
+        [key: string]: unknown
+      }
+      /**
+       * @description Null until the person answers this scope.
+       * @enum {string|null}
+       */
+      decision: 'accepted' | 'rejected' | null
+    }
+    ClientInvitationPresentation: {
+      id: components['schemas']['UuidV7']
+      invitation_intent_id: components['schemas']['UuidV7']
+      status: components['schemas']['TeamInvitationStatus']
+      organization: {
+        id: components['schemas']['UuidV7']
+        display_name: string
+        responsible_party: components['schemas']['ResponsibleParty']
+      }
+      /** Format: date-time */
+      expires_at: string
+      scope_options: components['schemas']['ClientInvitationScopeOption'][]
+    }
+    ClientInvitationDecisionCreate: {
+      token: string
+      invitation_intent_id: components['schemas']['UuidV7']
+      /** @enum {string} */
+      relationship_decision: 'accepted' | 'rejected'
+      /** @description One answer per scope, keyed by scope code. A scope left out counts as rejected: silence is not consent. */
+      scope_decisions?: {
+        [key: string]: 'accepted' | 'rejected'
+      }
+    }
+    ClientInvitationDecisionResult: {
+      invitation_id: components['schemas']['UuidV7']
+      invitation_status: components['schemas']['TeamInvitationStatus']
+      organization_id: components['schemas']['UuidV7']
+      invitation_intent_id: components['schemas']['UuidV7']
+      intent_status: components['schemas']['TeamInvitationIntentStatus']
+      /** @description Null when the relationship was rejected; nothing was created. */
+      relationship_id: components['schemas']['UuidV7'] | null
+      /** @description Possibly empty. An accepted relationship with no granted scope is a valid outcome, not a failure. */
+      granted_scope_codes: components['schemas']['ScopeCode'][]
+      replayed: boolean
+    }
     TeamInvitationCreate: {
       /** @enum {string} */
       channel: 'email'
@@ -5050,6 +5627,49 @@ export interface components {
     }
     OrganizationMembershipPage: {
       data: components['schemas']['OrganizationMembershipListItem'][]
+      page: components['schemas']['Page']
+    }
+    /** @enum {string} */
+    RelationshipStatus: 'active' | 'terminated'
+    /** @description A directory entry is one of two things and says which. A `relationship` entry has a person behind it. An `invitation` entry does not: until somebody accepts, no person and no name exist, so it carries only the masked contact the invitation was sent to. */
+    ClientDirectoryItem:
+      | components['schemas']['ClientDirectoryRelationship']
+      | components['schemas']['ClientDirectoryInvitation']
+    ClientDirectoryRelationship: {
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      kind: 'relationship'
+      relationship_id: components['schemas']['UuidV7']
+      person_id: components['schemas']['UuidV7']
+      display_name: string
+      relationship_status: components['schemas']['RelationshipStatus']
+      invitation_status: components['schemas']['ClientInvitationEntryStatus']
+      /** Format: date-time */
+      started_at: string
+      /** Format: date-time */
+      ended_at: string | null
+    }
+    ClientDirectoryInvitation: {
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      kind: 'invitation'
+      invitation_id: components['schemas']['UuidV7']
+      /** @description The address the invitation went to, masked. Never the full contact. */
+      contact_hint: string
+      invitation_status: components['schemas']['ClientInvitationEntryStatus']
+      /** Format: date-time */
+      invited_at: string
+    }
+    /** @enum {string} */
+    ClientInvitationEntryStatus: 'pending' | 'accepted' | 'rejected' | 'revoked' | 'expired'
+    /** @enum {string} */
+    ClientDirectoryGroup: 'active' | 'invited' | 'terminated'
+    ClientDirectoryPage: {
+      data: components['schemas']['ClientDirectoryItem'][]
       page: components['schemas']['Page']
     }
     OrganizationCapability: {
@@ -5673,6 +6293,109 @@ export interface components {
       interval_results?: components['schemas']['IntervalResultReplace'][]
       mobility_results?: components['schemas']['MobilityResultReplace'][]
       strength_sets: components['schemas']['StrengthSet'][]
+      /** @description The session's exercise list, replaced with the sets. Omitted, the session keeps the list it has. Exercises sharing a superset group must be contiguous (IX-50). */
+      exercises?: components['schemas']['SessionExerciseReplace'][]
+    }
+    SpaceFinishedExecution: {
+      executed_session_id: components['schemas']['Uuid']
+      /** @description What `If-Match` carries to correct it. */
+      revision_number: number
+      /** Format: date-time */
+      started_at: string
+      /** Format: date-time */
+      ended_at: string
+      duration_seconds: number
+      /** @description The routine's name; null for a free session. */
+      title: string | null
+      /** Format: uuid */
+      planned_session_id: string | null
+      /** @description Whether `OP-EXE-025` can start another attempt at it. */
+      repeatable: boolean
+      session_number: number
+      work_sets: number
+      /** @description Kilos lifted without warmups. Null when nothing was weighed. */
+      total_volume_kg: number | null
+      record_count: number
+      previous: components['schemas']['SpaceFinishedPrevious'] | null
+      exercises: components['schemas']['SpaceFinishedExercise'][]
+    }
+    /** @description The last time the same routine was finished, before this one. */
+    SpaceFinishedPrevious: {
+      executed_session_id: components['schemas']['Uuid']
+      /** Format: date-time */
+      started_at: string
+      total_volume_kg: number | null
+      /** @description This session's kilos against those, rounded. Null when either weighed nothing. */
+      change_percent: number | null
+    }
+    SpaceFinishedExercise: {
+      position: number
+      /** Format: uuid */
+      movement_id: string | null
+      movement: string | null
+      superset_group: number | null
+      /** @description Whether the exercise beat anything before it (ADR-036). */
+      record: boolean
+      best_set: components['schemas']['SpaceBestSet'] | null
+      sets: components['schemas']['SpaceFinishedSet'][]
+    }
+    /** @description The work set with the highest estimated max, the first of equals. */
+    SpaceBestSet: {
+      load_kg: number
+      reps: number
+    }
+    SpaceFinishedSet: {
+      set_order: number
+      kind: components['schemas']['SetKind']
+      load_value: number | null
+      load_unit_code: string | null
+      achieved_reps: number | null
+      rpe: number | null
+      /** @description The exercise's best set, when it is also a record it holds. */
+      best_ever: boolean
+    }
+    /** @description A finished session as it now stands, whole: its time, its sets and, when given, its exercise list, with the rules of `ExecutionResultsReplace`. */
+    ExecutionRevision: {
+      /** Format: date-time */
+      started_at: string
+      /** Format: date-time */
+      ended_at: string
+      strength_sets: components['schemas']['StrengthSet'][]
+      exercises?: components['schemas']['SessionExerciseReplace'][]
+    }
+    ExecutionRevised: {
+      id: components['schemas']['Uuid']
+      revision_number: number
+      result_count: number
+    }
+    ExecutionInvalidation: {
+      /** @description Optional. Without one it is recorded as «La persona lo eliminó». */
+      reason?: string | null
+    }
+    ExecutionInvalidated: {
+      id: components['schemas']['Uuid']
+      /** Format: date-time */
+      annulled_at: string
+    }
+    SpaceInvalidationPreview: {
+      /** @description The records this session holds, which go with it. */
+      records: number
+      /** @description Weeks in a row trained, as of today. */
+      streak_weeks: number
+      /** @description The same, were this session annulled. */
+      streak_weeks_after: number
+    }
+    ExecutionRepetition: {
+      /** Format: date-time */
+      started_at: string
+      timezone: components['schemas']['IanaTimeZone']
+    }
+    ExecutionRepeated: {
+      id: components['schemas']['Uuid']
+      attempt_number: number
+      /** @enum {string} */
+      status: 'in_progress'
+      revision_number: number
     }
     ExecutionSegment: {
       position: number
@@ -5689,6 +6412,49 @@ export interface components {
       achieved_reps?: number | null
       load?: components['schemas']['Load'] | null
       rpe?: number | null
+      /** @description What the set was. Omitted, it is recorded as `normal` (ADR-033). */
+      kind?: components['schemas']['SetKind']
+      /** @description The position of the exercise the set belongs to, in `exercises`. Omitted, it lands on the first exercise of its movement. */
+      exercise_position?: number
+    }
+    SessionExerciseReplace: {
+      position: number
+      /** Format: uuid */
+      movement_id?: string | null
+      /**
+       * Format: uuid
+       * @description The routine step it came from; null for one added during the session.
+       */
+      planned_step_id?: string | null
+      superset_group?: number | null
+      /** @description Rest after this exercise's sets, today's and not the routine's (ADR-035). */
+      rest_seconds?: number | null
+    }
+    SpaceSessionExercise: {
+      position: number
+      /** Format: uuid */
+      movement_id: string | null
+      movement: string | null
+      /** Format: uuid */
+      planned_step_id: string | null
+      superset_group: number | null
+      /** @description Rest after this exercise's sets, today's and not the routine's (ADR-035). */
+      rest_seconds: number | null
+      /** @description The routine step's target; null for an exercise added in the session. */
+      target: {
+        [key: string]: unknown
+      } | null
+      previous: {
+        load_value: number | null
+        achieved_reps: number | null
+      }[]
+      sets: {
+        set_order: number
+        kind: components['schemas']['SetKind']
+        target_reps: number | null
+        target_load_value: number | null
+        target_load_unit_code: string | null
+      }[]
     }
     Load: {
       value: number
@@ -9269,6 +10035,74 @@ export interface operations {
       503: components['responses']['UpstreamUnavailable']
     }
   }
+  resolveSpaceClientInvitation: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ClientInvitationToken']
+      }
+    }
+    responses: {
+      /** @description The invitation and every scope it asks for */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ClientInvitationPresentation']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  decideSpaceClientInvitation: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ClientInvitationDecisionCreate']
+      }
+    }
+    responses: {
+      /** @description The decision as it was recorded */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ClientInvitationDecisionResult']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
   listSpaceBodyProgress: {
     parameters: {
       query?: {
@@ -10167,6 +11001,39 @@ export interface operations {
       503: components['responses']['UpstreamUnavailable']
     }
   }
+  listStudioOrganizationClients: {
+    parameters: {
+      query?: {
+        /** @description Narrows to one group of entries. `invited` selects the unanswered ones. */
+        status?: components['schemas']['ClientDirectoryGroup']
+        limit?: number
+        cursor?: components['parameters']['Cursor']
+      }
+      header?: never
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Authorized client directory page */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['PrivateNoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ClientDirectoryPage']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
   grantStudioOrganizationMembershipRole: {
     parameters: {
       query?: never
@@ -10206,6 +11073,30 @@ export interface operations {
       404: components['responses']['NotFound']
       409: components['responses']['Conflict']
       422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listStudioOfferableScopes: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Every permission that can be offered today */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['PrivateNoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['OfferableScopeCatalog']
+        }
+      }
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
       503: components['responses']['UpstreamUnavailable']
     }
   }
@@ -10440,6 +11331,56 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['TeamInvitation']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      422: components['responses']['ValidationFailed']
+      429: components['responses']['RateLimited']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  createStudioClientInvitation: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ClientInvitationCreate']
+      }
+    }
+    responses: {
+      /** @description An equivalent pending invitation was reused */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ClientInvitation']
+        }
+      }
+      /** @description Invitation and scope options created atomically */
+      201: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ClientInvitation']
         }
       }
       400: components['responses']['BadRequest']
@@ -10992,6 +11933,56 @@ export interface operations {
       404: components['responses']['NotFound']
       409: components['responses']['Conflict']
       415: components['responses']['UnsupportedMediaType']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  assignRelationshipHolder: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+        relationshipId: components['parameters']['RelationshipId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['RelationshipHolderAssignment']
+      }
+    }
+    responses: {
+      /** @description That coach was already in charge; nothing changed */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['RelationshipHolder']
+        }
+      }
+      /** @description The coach is now in charge */
+      201: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['RelationshipHolder']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      422: components['responses']['ValidationFailed']
       503: components['responses']['UpstreamUnavailable']
     }
   }
@@ -11909,6 +12900,77 @@ export interface operations {
       503: components['responses']['UpstreamUnavailable']
     }
   }
+  listMyExecutions: {
+    parameters: {
+      query: {
+        /** @description The device's zone, which decides the day and the month of a session. */
+        timezone: components['schemas']['IanaTimeZone']
+        /** @description Any day of the month to list, in the person's zone. Omitted, every month. */
+        month?: string
+        /** @description A single day to list, in the person's zone, as picked on the month's calendar. */
+        day?: string
+        discipline?: string
+        /** @description Only the sessions that set at least one record. */
+        with_record?: boolean
+        /** @description True for the free sessions only, false for the planned ones. */
+        free?: boolean
+        /** @description Found in the routine's name or in its exercises', ignoring case and the Spanish accents. */
+        q?: string
+        cursor?: components['parameters']['Cursor']
+        limit?: number
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description One page of the history */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SpaceHistoryPage']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  getMyHistoryMonth: {
+    parameters: {
+      query: {
+        timezone: components['schemas']['IanaTimeZone']
+      }
+      header?: never
+      path: {
+        /** @description Any day of the month, in the person's zone. */
+        month: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The month */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SpaceHistoryMonth']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
   getMyExecution: {
     parameters: {
       query?: never
@@ -11933,6 +12995,38 @@ export interface operations {
       401: components['responses']['Unauthenticated']
       403: components['responses']['Forbidden']
       404: components['responses']['NotFound']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  getMyExecutionSummary: {
+    parameters: {
+      query: {
+        /** @description The device's zone. Weeks and dates are local questions: a streak counted in UTC would break on a Sunday evening in Bogotá. */
+        timezone: components['schemas']['IanaTimeZone']
+      }
+      header?: never
+      path: {
+        executionId: components['parameters']['ExecutionId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The summary as its owner sees it */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SpaceExecutionSummary']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
       503: components['responses']['UpstreamUnavailable']
     }
   }
@@ -11975,6 +13069,190 @@ export interface operations {
       404: components['responses']['NotFound']
       409: components['responses']['Conflict']
       422: components['responses']['ValidationFailed']
+    }
+  }
+  getMyFinishedExecution: {
+    parameters: {
+      query: {
+        /** @description The device's zone, which weeks and dates are counted in. */
+        timezone: components['schemas']['IanaTimeZone']
+      }
+      header?: never
+      path: {
+        executionId: components['parameters']['ExecutionId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The session as its owner sees it */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SpaceFinishedExecution']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  reviseMyExecution: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+        /** @description Strong ETag for the execution revision used as the command base. */
+        'If-Match': components['parameters']['IfMatch']
+      }
+      path: {
+        executionId: components['parameters']['ExecutionId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ExecutionRevision']
+      }
+    }
+    responses: {
+      /** @description Corrected, under a new revision */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          ETag: components['headers']['ETag']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ExecutionRevised']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  annulMyExecution: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        executionId: components['parameters']['ExecutionId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ExecutionInvalidation']
+      }
+    }
+    responses: {
+      /** @description Annulled */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ExecutionInvalidated']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  getMyInvalidationPreview: {
+    parameters: {
+      query: {
+        /** @description The device's zone, which weeks and dates are counted in. */
+        timezone: components['schemas']['IanaTimeZone']
+      }
+      header?: never
+      path: {
+        executionId: components['parameters']['ExecutionId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description What would change */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SpaceInvalidationPreview']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  repeatMyExecution: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        executionId: components['parameters']['ExecutionId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ExecutionRepetition']
+      }
+    }
+    responses: {
+      /** @description Started */
+      201: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ExecutionRepeated']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      503: components['responses']['UpstreamUnavailable']
     }
   }
   replaceExecutionResults: {

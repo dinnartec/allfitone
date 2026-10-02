@@ -54,6 +54,7 @@ import { deviceTimezone } from '../../src/client/timezone'
 import type { ProgramDetail } from '../../src/client/programs'
 import { sessionMinutes, targetLabel, totalExercises } from '../../src/client/program-catalogue'
 import { readExerciseLibrary } from '../../src/client/exercise-library'
+import { FROM_PROGRAM } from '../../src/client/exercise-pick'
 import { createSpaceContentFlow } from '../../src/client/content-transport'
 import { ZONE_LABEL } from '../../src/components/program-card'
 import { DayCard, ExerciseCard, Figure } from '../../src/components/program-detail'
@@ -249,14 +250,27 @@ export default function ProgramVersion() {
                   showsHorizontalScrollIndicator={false}
                   contentContainerStyle={styles.deck}
                 >
-                  {shown.steps.map((step) => (
-                    <ExerciseCard
-                      key={step.position}
-                      name={step.movement ?? 'Ejercicio'}
-                      target={targetLabel(step.target)}
-                      picture={step.movement_id ? (previews.get(step.movement_id) ?? null) : null}
-                    />
-                  ))}
+                  {shown.steps.map((step) => {
+                    const movementId = step.movement_id
+                    return (
+                      <ExerciseCard
+                        key={step.position}
+                        name={step.movement ?? 'Ejercicio'}
+                        target={targetLabel(step.target)}
+                        picture={movementId ? (previews.get(movementId) ?? null) : null}
+                        // Push, so volver lands back here with the same day open.
+                        onPress={
+                          movementId
+                            ? () =>
+                                router.push({
+                                  pathname: '/routines/exercises/[movementId]',
+                                  params: { movementId, from: FROM_PROGRAM },
+                                })
+                            : undefined
+                        }
+                      />
+                    )
+                  })}
                 </ScrollView>
               </>
             ) : null}

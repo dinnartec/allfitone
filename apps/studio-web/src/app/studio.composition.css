@@ -130,6 +130,7 @@
 [data-page-header-actions],
 [data-profile-setup-actions],
 [data-team-invitation-actions],
+[data-client-invitation-actions],
 [data-credential-actions],
 [data-card-footer-actions],
 [data-profile-form-actions] {
@@ -211,11 +212,14 @@
 [data-studio-form],
 [data-invitation-waiting],
 [data-team-page],
+[data-client-page],
+[data-client-invite-page],
 [data-team-section],
 [data-profile-section],
 [data-profile-state],
 [data-organization-state],
-[data-team-invitation-result] {
+[data-team-invitation-result],
+[data-client-invitation-result] {
   display: flex;
   min-width: 0;
   flex-direction: column;
@@ -226,6 +230,7 @@
 [data-ready-later],
 [data-role-register],
 [data-organization-overview],
+[data-organization-details],
 [data-profile-presentation],
 [data-account-map] {
   display: grid;
@@ -341,6 +346,24 @@
   width: 14%;
 }
 
+/* The person column is the widest share because it is the only one holding a
+   value nobody chose the length of: a masked contact runs far longer than a
+   name. Declaring no shares at all left the four columns at an even quarter,
+   which is not enough for that contact — it kept its line and the badge in the
+   next column landed on top of it. */
+[data-studio-register='clients'] col:nth-child(1) {
+  width: 44%;
+}
+
+[data-studio-register='clients'] col:nth-child(2) {
+  width: 18%;
+}
+
+[data-studio-register='clients'] col:nth-child(3),
+[data-studio-register='clients'] col:nth-child(4) {
+  width: 19%;
+}
+
 [data-studio-register='invitations'] col:nth-child(6) {
   width: 12%;
 }
@@ -431,11 +454,21 @@
 
 [data-ready-later-item],
 [data-team-member-identity],
+[data-client-identity],
 [data-overview-team-identity] {
   display: flex;
   min-width: 0;
   align-items: center;
   gap: var(--afo-space-3);
+}
+
+/* A masked contact is one unbroken token — `b***@ejemplo.test` has nowhere the
+   browser will break it — so without this it paints straight out of its cell
+   and over whatever sits beside it, while every measurement of the cell itself
+   still reports the right width. */
+[data-client-identity] > strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 /* `data-account-track` marks a Card, so it may only place it — never lay it
@@ -445,6 +478,7 @@
 }
 
 [data-team-invitation-summary],
+[data-client-invitation-summary],
 [data-ownership-invitation-summary],
 /* Two fixed columns left a hole whenever there was one pair to show, which on a
    membership card is the common case: a person who has not left has no end
@@ -457,6 +491,7 @@
 }
 
 [data-team-invitation-summary] > div,
+[data-client-invitation-summary] > div,
 [data-ownership-invitation-summary] > div,
 [data-credential-details] > div {
   min-width: 0;
@@ -471,8 +506,10 @@
    value in `StatStripItem`, through its own `--afo-typography-label-*` tokens,
    rather than a weight invented here. */
 [data-team-invitation-summary] dt,
+[data-client-invitation-summary] dt,
 [data-ownership-invitation-summary] dt,
 [data-team-member-facts] dt,
+[data-client-facts] dt,
 [data-credential-details] dt {
   font-family: var(--afo-typography-label-font-family);
   font-size: var(--afo-font-size-xs);
@@ -492,7 +529,8 @@
   margin-block-start: var(--afo-space-4);
 }
 
-[data-team-member-facts] {
+[data-team-member-facts],
+[data-client-facts] {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
@@ -514,6 +552,7 @@
    floated alone in the middle of 1400px. Both axes are set because these sit
    in a grid on the overview and in a flex column on the account page. */
 [data-overview-signals],
+[data-organization-signals],
 [data-profile-signals] {
   justify-self: start;
   align-self: flex-start;
@@ -527,6 +566,7 @@
    the invitation register sees one count, and one number centred in 1024px is
    what the cap was put there to prevent. */
 [data-overview-signals][data-signals-multiple],
+[data-organization-signals][data-signals-multiple],
 [data-profile-signals][data-signals-multiple] {
   min-width: 100%;
 }
@@ -538,7 +578,9 @@
 
 [data-overview-attention-list],
 [data-overview-team-list],
+[data-organization-site-list],
 [data-team-directory-card-list],
+[data-client-directory-card-list],
 [data-role-capability-list] {
   display: grid;
   gap: var(--afo-space-3);
@@ -546,6 +588,7 @@
 
 [data-overview-attention-list] > li,
 [data-overview-team-list] > li,
+[data-organization-site-list] > li,
 [data-role-capability-list] > li {
   display: flex;
   min-width: 0;
@@ -554,6 +597,7 @@
 }
 
 [data-overview-attention-contact],
+[data-organization-site-identity],
 [data-overview-team-identity] {
   min-width: 0;
   flex: 1;
@@ -605,7 +649,8 @@
 
 /* -------------------------------------------------------------------- team */
 
-[data-team-directory-cards] {
+[data-team-directory-cards],
+[data-client-directory-cards] {
   display: grid;
   gap: var(--afo-space-4);
 }
@@ -614,7 +659,13 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-[data-team-member-identity] {
+/* Grid, not the flex above: `minmax(0, 1fr)` is what lets the name track
+   shrink below its content. As flex, a value with no break opportunity — a
+   masked contact like `c***@correo-institucional-muy-largo.example.test` —
+   keeps the track at its full width and paints straight over the badge in the
+   next column, which is what happened here. */
+[data-team-member-identity],
+[data-client-identity] {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
 }
@@ -623,12 +674,14 @@
   margin-block: var(--afo-space-3);
 }
 
-[data-team-pagination] {
+[data-team-pagination],
+[data-client-pagination] {
   display: flex;
   justify-content: center;
 }
 
-[data-team-directory-note] {
+[data-team-directory-note],
+[data-client-directory-note] {
   max-width: var(--studio-measure);
 }
 
@@ -813,6 +866,7 @@
   [data-membership-context-grid],
   [data-credential-grid],
   [data-team-invitation-summary],
+  [data-client-invitation-summary],
   [data-credential-details] {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -968,4 +1022,118 @@
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+/* Label above value, the same pairing the rest of Studio uses. The grid stays
+   single-column on a phone and pairs up once there is room for two to read as
+   columns rather than as one long ladder. */
+[data-organization-facts] {
+  display: grid;
+  gap: var(--afo-space-4);
+}
+
+@media (width >= 40rem) {
+  [data-organization-facts] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+[data-organization-fact] {
+  display: grid;
+  min-width: 0;
+  gap: var(--afo-space-1);
+}
+
+[data-organization-fact] > dt {
+  color: var(--afo-color-text-muted);
+  font-size: var(--afo-font-size-sm);
+}
+
+[data-organization-fact] > dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* A fact the organization never registered is still a fact worth showing: the
+   row would otherwise vanish and the reader could not tell it was asked. */
+[data-organization-fact] > dd[data-fact-absent] {
+  color: var(--afo-color-text-muted);
+}
+
+[data-organization-sites] [data-organization-signals] {
+  margin-block-end: var(--afo-space-5);
+}
+
+/* Name over address, not name beside address. An address is long enough that
+   set on one line it either breaks mid-street or squeezes the status badge off
+   the row, and inline it ran straight into the name with nothing between. */
+[data-organization-site-identity] {
+  display: grid;
+  gap: var(--afo-space-1);
+}
+
+/* The alert states the refusal and the button acts on it; as bare siblings in
+   a section they had no space between them and read as one block. The button
+   sizes to its label rather than stretching the width of the alert. */
+[data-site-form-refusal] {
+  display: grid;
+  justify-items: start;
+  gap: var(--afo-space-5);
+}
+
+/* A site name is one word as often as not, and nothing caps how long that word
+   is. Without a break opportunity it set the column's minimum width, pushed the
+   whole identity past its own box, and painted the name and the address over
+   the status badge and the edit link beside them. */
+[data-organization-site-name] {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+[data-organization-site-address] {
+  color: var(--afo-color-text-muted);
+  font-size: var(--afo-font-size-sm);
+  overflow-wrap: anywhere;
+}
+
+[data-organization-details-placeholder] {
+  height: 4.5rem;
+  width: min(100%, 24rem);
+}
+
+[data-organization-card-placeholder] {
+  height: 12rem;
+}
+
+/* Withdrawing a site is not another field of the form above it, so it sits
+   below a rule rather than inside a card: a hairline and space say "separate
+   matter" without adding another box to the page. */
+[data-site-status-panel] {
+  display: grid;
+  justify-items: start;
+  gap: var(--afo-space-2);
+  margin-block-start: var(--afo-space-7);
+  padding-block-start: var(--afo-space-6);
+  border-block-start: 1px solid var(--afo-color-border);
+}
+
+[data-site-status-title] {
+  margin: 0;
+  font-size: var(--afo-font-size-lg);
+}
+
+[data-site-status-description] {
+  margin: 0;
+  max-width: var(--studio-measure);
+  color: var(--afo-color-text-muted);
+}
+
+/* The action, whatever element the Design System renders it as. */
+[data-site-status-panel] > :last-child {
+  margin-block-start: var(--afo-space-3);
+}
+
+[data-organization-site-edit] {
+  flex: none;
 }

@@ -244,6 +244,7 @@ const DOMAINS = [
   'payments',
   'planning',
   'privacy',
+  'relationships',
   'support',
 ]
 

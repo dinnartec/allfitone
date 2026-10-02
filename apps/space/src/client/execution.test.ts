@@ -16,6 +16,38 @@ function harness(overrides: Partial<ExecutionTransport> = {}) {
     readExecution: async () => {
       throw new Error('not used')
     },
+    readSummary: async () => {
+      throw new Error('not used')
+    },
+    listHistory: async () => {
+      throw new Error('not used')
+    },
+    readHistoryMonth: async () => {
+      throw new Error('not used')
+    },
+    readFinished: async () => {
+      throw new Error('not used')
+    },
+    readAnnulmentPreview: async () => {
+      throw new Error('not used')
+    },
+    revise: async (command, _id, revisionNumber) => {
+      sent.commands.push(command.commandId)
+      return { id: EXECUTION, revision_number: revisionNumber + 1, result_count: 1 }
+    },
+    annul: async (command) => {
+      sent.keys.push(command.idempotencyKey)
+      return { id: EXECUTION, annulled_at: '2026-10-01T12:00:00.000Z' }
+    },
+    repeat: async (command) => {
+      sent.keys.push(command.idempotencyKey)
+      return {
+        id: 'repeated',
+        attempt_number: 2,
+        status: 'in_progress' as const,
+        revision_number: 0,
+      }
+    },
     startAttempt: async (command) => {
       sent.keys.push(command.idempotencyKey)
       return {
@@ -203,5 +235,76 @@ describe('closing it', () => {
 
     expect(endedAt).toBeDefined()
     expect(Number.isNaN(Date.parse(endedAt ?? ''))).toBe(false)
+  })
+})
+
+describe('the summary after finishing (ADR-036)', () => {
+  test('T-SPC-UNIT-162 asks for the session in the zone its weeks are counted in', async () => {
+    const asked: string[] = []
+    const { flow } = harness({
+      readSummary: async (id, timezone) => {
+        asked.push(`${id}@${timezone}`)
+        throw new Error('stop')
+      },
+    })
+
+    await flow.readSummary(EXECUTION, 'America/Bogota').catch(() => undefined)
+
+    expect(asked).toEqual([`${EXECUTION}@America/Bogota`])
+  })
+})
+
+describe('a finished session (ADR-038)', () => {
+  const revision = {
+    started_at: '2026-09-29T23:02:00.000Z',
+    ended_at: '2026-09-29T23:50:00.000Z',
+    strength_sets: [{ order: 1 }],
+  }
+
+  test('T-SPC-UNIT-189 a correction is a new command under the revision it read', async () => {
+    const { flow, sent } = harness()
+
+    expect(await flow.revise(EXECUTION, 4, revision)).toBe(5)
+    await flow.revise(EXECUTION, 5, revision)
+
+    expect(sent.commands).toEqual(['command-1', 'command-2'])
+  })
+
+  test('T-SPC-UNIT-190 an annulment retried over a dropped connection keeps its key', async () => {
+    let calls = 0
+    const { flow, sent } = harness({
+      annul: async (command) => {
+        sent.keys.push(command.idempotencyKey)
+        calls += 1
+        if (calls === 1) throw new Error('offline')
+        return { id: EXECUTION, annulled_at: '2026-10-01T12:00:00.000Z' }
+      },
+    })
+
+    await flow.annul(EXECUTION).catch(() => undefined)
+    await flow.annul(EXECUTION)
+
+    expect(sent.keys).toEqual(['key-1', 'key-1'])
+  })
+
+  test('T-SPC-UNIT-191 a repeat keeps its key until a session opens, then claims a new one', async () => {
+    let calls = 0
+    const starts: { started_at: string; timezone: string }[] = []
+    const { flow, sent } = harness({
+      repeat: async (command, _source, start) => {
+        sent.keys.push(command.idempotencyKey)
+        starts.push(start)
+        calls += 1
+        if (calls === 1) throw new Error('offline')
+        return { id: 'repeated', attempt_number: 2, status: 'in_progress', revision_number: 0 }
+      },
+    })
+
+    await flow.repeat(EXECUTION, 'America/Bogota').catch(() => undefined)
+    expect(await flow.repeat(EXECUTION, 'America/Bogota')).toBe('repeated')
+    await flow.repeat(EXECUTION, 'America/Bogota')
+
+    expect(sent.keys).toEqual(['key-1', 'key-1', 'key-2'])
+    expect(starts[0]?.timezone).toBe('America/Bogota')
   })
 })

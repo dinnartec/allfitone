@@ -187,8 +187,8 @@ function AccountOverview({
         <Badge variant="success">Cuenta activa</Badge>
       </header>
 
-      {/* There used to be a "Mis espacios" card here, signposting the section
-          two hundred pixels below it on the same screen. It repeated that
+      {/* There used to be a card here signposting the memberships section two
+          hundred pixels below it on the same screen. It repeated that
           section's own heading, so the page offered the same h2 twice and a
           heading list read as two destinations for one. */}
       <Card data-account-track>
@@ -293,10 +293,10 @@ function ProfessionalArea({
         <TabsList variant="line" aria-label="Secciones de mi cuenta">
           <TabsTrigger value="presentation">Presentación</TabsTrigger>
           {/* One word, like its two siblings. "Credenciales opcionales" was
-              193px of a 358px strip and pushed "Mis espacios" behind a scroll;
+              193px of a 358px strip and left no room for the third tab;
               the panel itself opens by saying they are not required. */}
           <TabsTrigger value="credentials">Credenciales</TabsTrigger>
-          <TabsTrigger value="spaces">Mis espacios</TabsTrigger>
+          <TabsTrigger value="spaces">Vinculaciones</TabsTrigger>
         </TabsList>
         <TabsContent value="presentation">
           <ProfessionalPresentation
@@ -310,7 +310,6 @@ function ProfessionalArea({
           <ProfessionalCredentials
             credentials={profile.credentials}
             credentialTypes={credentialTypes}
-            profileExists
             onSessionFailure={onSessionFailure}
             onRefreshMe={onRefreshMe}
             onCredentialsChange={(credentials) =>
