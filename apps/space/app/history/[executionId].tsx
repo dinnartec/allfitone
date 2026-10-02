@@ -7,7 +7,7 @@
  *
  * **From here the session can be edited, repeated, shared or deleted**, the four of them
  * in the menu and the two most used on screen. Deleting is annulling: nothing is erased,
- * the session stops counting. Before it is confirmed the dialog says what goes with it —
+ * the session stops counting. Before it is confirmed the menu's second step says what goes with it —
  * the records it holds and what the streak becomes — read from the server, because both
  * depend on every other session.
  *
@@ -25,8 +25,8 @@ import { Text } from '@allfitone/react-native/text'
 import { useTheme } from '@allfitone/react-native/theme'
 import { Image } from 'expo-image'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
-import { useCallback, useMemo, useState } from 'react'
-import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { ActivityIndicator, ScrollView, StyleSheet, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { createSpaceContentFlow } from '../../src/client/content-transport'
@@ -57,8 +57,6 @@ const READ_FAILED = 'No pudimos abrir este entreno. Inténtalo otra vez.'
 const REPEAT_FAILED = 'No pudimos empezar el entreno. Inténtalo otra vez.'
 const STILL_OPEN = 'Tienes otro entreno abierto. Termínalo o déjalo antes de repetir este.'
 const ANNUL_FAILED = 'No pudimos eliminarlo. Inténtalo otra vez.'
-/** Past the sheet's exit for iOS to drop its modal, as on «Compártelo». */
-const SHEET_GONE = 350
 
 type Catalogue = ShareCatalogue & { readonly pictures: ReadonlyMap<string, string | null> }
 
@@ -77,8 +75,8 @@ export default function FinishedSessionScreen() {
     pictures: new Map(),
   })
   const [failure, setFailure] = useState<string | undefined>(undefined)
-  const [menu, setMenu] = useState(false)
-  const [deleting, setDeleting] = useState(false)
+  /** One sheet for the menu and its delete step: iOS will not present a second while the first leaves. */
+  const [sheet, setSheet] = useState<'menu' | 'delete' | undefined>(undefined)
   const [repeating, setRepeating] = useState(false)
 
   // Read again whenever it is looked at: coming back from editing it shows the correction.
@@ -109,7 +107,7 @@ export default function FinishedSessionScreen() {
   const name = detail?.title ?? 'Entreno libre'
 
   const repeat = () => {
-    setMenu(false)
+    setSheet(undefined)
     setRepeating(true)
     setFailure(undefined)
     flow
@@ -125,11 +123,11 @@ export default function FinishedSessionScreen() {
       .finally(() => setRepeating(false))
   }
   const share = () => {
-    setMenu(false)
+    setSheet(undefined)
     router.push({ pathname: '/session/share/[executionId]', params: { executionId, back: '1' } })
   }
   const edit = () => {
-    setMenu(false)
+    setSheet(undefined)
     router.push({ pathname: '/session/[executionId]', params: { executionId, mode: 'edit' } })
   }
 
@@ -154,7 +152,7 @@ export default function FinishedSessionScreen() {
           icon="more"
           accessibilityLabel="Más opciones"
           disabled={!detail}
-          onPress={() => setMenu(true)}
+          onPress={() => setSheet('menu')}
         />
       </View>
 
@@ -225,59 +223,60 @@ export default function FinishedSessionScreen() {
       ) : null}
 
       <Sheet
-        visible={menu}
-        onDismiss={() => setMenu(false)}
-        title={detail ? menuTitle(name, detail.started_at, timeZone) : 'Entreno'}
+        visible={sheet !== undefined}
+        onDismiss={() => setSheet(undefined)}
+        title={
+          sheet === 'delete'
+            ? '¿Eliminar este entreno?'
+            : detail
+              ? menuTitle(name, detail.started_at, timeZone)
+              : 'Entreno'
+        }
       >
-        <View style={styles.menu}>
-          <ActionRow
-            icon="edit"
-            name="Editar entreno"
-            detail="Corrige pesos, repeticiones o ejercicios"
-            onPress={edit}
-          />
-          {detail?.repeatable ? (
-            <ActionRow
-              icon="duplicate"
-              name="Repetir este entreno"
-              detail="Empieza uno nuevo con los mismos ejercicios, en blanco"
-              onPress={repeat}
-            />
-          ) : null}
-          <ActionRow
-            icon="share"
-            name="Compartir"
-            detail="Elige una tarjeta para tus historias"
-            onPress={share}
-          />
-          <ActionRow
-            icon="remove"
-            name="Eliminar entreno"
-            detail="Se borra de tu historial"
-            danger
-            onPress={() => {
-              setMenu(false)
-              // iOS presents no modal while the sheet's is still leaving.
-              setTimeout(() => setDeleting(true), SHEET_GONE)
+        {sheet === 'delete' && detail ? (
+          <DeleteStep
+            name={name}
+            detail={detail}
+            timeZone={timeZone}
+            onCancel={() => setSheet(undefined)}
+            onDeleted={() => {
+              setSheet(undefined)
+              if (router.canGoBack()) router.back()
+              else router.replace('/history')
             }}
           />
-        </View>
+        ) : (
+          <View style={styles.menu}>
+            <ActionRow
+              icon="edit"
+              name="Editar entreno"
+              detail="Corrige pesos, repeticiones o ejercicios"
+              onPress={edit}
+            />
+            {detail?.repeatable ? (
+              <ActionRow
+                icon="duplicate"
+                name="Repetir este entreno"
+                detail="Empieza uno nuevo con los mismos ejercicios, en blanco"
+                onPress={repeat}
+              />
+            ) : null}
+            <ActionRow
+              icon="share"
+              name="Compartir"
+              detail="Elige una tarjeta para tus historias"
+              onPress={share}
+            />
+            <ActionRow
+              icon="remove"
+              name="Eliminar entreno"
+              detail="Se borra de tu historial"
+              danger
+              onPress={() => setSheet('delete')}
+            />
+          </View>
+        )}
       </Sheet>
-
-      {detail ? (
-        <DeleteDialog
-          visible={deleting}
-          name={name}
-          detail={detail}
-          timeZone={timeZone}
-          onCancel={() => setDeleting(false)}
-          onDeleted={() => {
-            setDeleting(false)
-            if (router.canGoBack()) router.back()
-            else router.replace('/history')
-          }}
-        />
-      ) : null}
     </Screen>
   )
 }
@@ -432,12 +431,12 @@ function ExerciseCard({
             one.best_ever ? { backgroundColor: theme.color.background.surfaceMuted } : null,
           ]}
         >
-          <Text role="control" size="sm" color="muted" style={styles.setNumber}>
+          <Text role="control" size="xs" color="muted" style={styles.setNumber}>
             {one.kind === 'warmup' ? 'C' : String(index + 1)}
           </Text>
           <Text
             role="control"
-            size="md"
+            size="sm"
             color={one.best_ever ? 'primary' : 'secondary'}
             style={styles.grow}
           >
@@ -458,16 +457,14 @@ function ExerciseCard({
   )
 }
 
-/** «¿Eliminar este entreno?», with what it takes along (FIN-18c). */
-function DeleteDialog({
-  visible,
+/** The menu's second step: what deleting takes along, then the decision (FIN-18c). */
+function DeleteStep({
   name,
   detail,
   timeZone,
   onCancel,
   onDeleted,
 }: {
-  readonly visible: boolean
   readonly name: string
   readonly detail: FinishedExecution
   readonly timeZone: string
@@ -480,95 +477,60 @@ function DeleteDialog({
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState<string | undefined>(undefined)
 
-  const onShow = () => {
-    setPreview(undefined)
-    setFailure(undefined)
+  useEffect(() => {
+    let active = true
     flow
       .readAnnulmentPreview(detail.executed_session_id, timeZone)
-      .then(setPreview)
-      .catch(() => setPreview(undefined))
-  }
+      .then((read) => active && setPreview(read))
+      .catch(() => undefined)
+    return () => {
+      active = false
+    }
+  }, [flow, detail.executed_session_id, timeZone])
+
   const confirm = () => {
     setBusy(true)
     setFailure(undefined)
     flow
       .annul(detail.executed_session_id)
       .then(onDeleted)
-      .catch(() => setFailure(ANNUL_FAILED))
-      .finally(() => setBusy(false))
+      .catch(() => {
+        setBusy(false)
+        setFailure(ANNUL_FAILED)
+      })
   }
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onShow={onShow}
-      onRequestClose={onCancel}
-    >
-      {/* The scrim cancels on a tap but is no element of its own: grouped, it hid the
-          dialog's buttons from VoiceOver. The card swallows taps so they stay on it. */}
-      <Pressable
-        style={[styles.scrim, { backgroundColor: `${theme.color.background.canvas}CC` }]}
-        onPress={onCancel}
-        accessible={false}
-      >
-        <View
-          style={[
-            styles.dialog,
-            {
-              backgroundColor: theme.color.background.surface,
-              borderColor: theme.color.border.subtle,
-            },
-          ]}
-          accessibilityViewIsModal
-          onStartShouldSetResponder={() => true}
-        >
-          <View style={[styles.dangerTile, { backgroundColor: `${theme.color.status.danger}26` }]}>
-            <FoundationIcon name="remove" size="md" color={theme.color.status.danger} decorative />
-          </View>
-          <Text role="heading" size="2xl" accessibilityRole="header">
-            ¿Eliminar este entreno?
-          </Text>
-          <Text role="body" size="md" color="secondary">
-            {deletionLine(name, detail.started_at, timeZone)}
-          </Text>
-          <View
-            style={[styles.consequences, { backgroundColor: theme.color.background.surfaceMuted }]}
-          >
-            <Text role="eyebrow" size="xs" color="muted" uppercase>
-              También cambia
-            </Text>
-            {preview ? (
-              annulConsequences(preview).map((line) => (
-                <View key={line.text} style={styles.consequence}>
-                  <FoundationIcon
-                    name={line.icon}
-                    size="sm"
-                    color={theme.color.icon.secondary}
-                    decorative
-                  />
-                  <Text role="body" size="md">
-                    {line.text}
-                  </Text>
-                </View>
-              ))
-            ) : (
-              <ActivityIndicator color={theme.color.icon.accent} />
-            )}
-          </View>
-          {failure ? <InlineAlert message={failure} /> : null}
-          <View style={styles.dialogActions}>
-            <View style={styles.grow}>
-              <Button label="Cancelar" variant="secondary" onPress={onCancel} disabled={busy} />
+    <View style={styles.menu}>
+      <Text role="body" size="md" color="secondary">
+        {deletionLine(name, detail.started_at, timeZone)}
+      </Text>
+      <View style={[styles.consequences, { backgroundColor: theme.color.background.surfaceMuted }]}>
+        <Text role="eyebrow" size="xs" color="muted" uppercase>
+          También cambia
+        </Text>
+        {preview ? (
+          annulConsequences(preview).map((line) => (
+            <View key={line.text} style={styles.consequence}>
+              <FoundationIcon
+                name={line.icon}
+                size="sm"
+                color={theme.color.icon.secondary}
+                decorative
+              />
+              <Text role="body" size="md">
+                {line.text}
+              </Text>
             </View>
-            <View style={styles.grow}>
-              <Button label="Eliminar" variant="danger" loading={busy} onPress={confirm} />
-            </View>
-          </View>
-        </View>
-      </Pressable>
-    </Modal>
+          ))
+        ) : (
+          <ActivityIndicator color={theme.color.icon.accent} />
+        )}
+      </View>
+      {failure ? <InlineAlert message={failure} /> : null}
+      <Button label="Eliminar entreno" variant="danger" loading={busy} onPress={confirm} />
+      <Button label="Cancelar" variant="ghost" onPress={onCancel} disabled={busy} />
+    </View>
   )
 }
 
@@ -628,16 +590,6 @@ const styles = StyleSheet.create({
   foot: { borderTopWidth: 1, paddingHorizontal: 20, paddingTop: 12, gap: 6 },
   footRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   menu: { gap: 10, paddingBottom: 8 },
-  scrim: { flex: 1, justifyContent: 'center', paddingHorizontal: 24 },
-  dialog: { borderRadius: 28, borderWidth: 1, padding: 22, gap: 14 },
-  dangerTile: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   consequences: { borderRadius: 16, padding: 14, gap: 10 },
   consequence: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  dialogActions: { flexDirection: 'row', gap: 12, paddingTop: 4 },
 })
