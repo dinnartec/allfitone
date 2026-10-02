@@ -227,3 +227,88 @@ describe('the summary read (ADR-036)', () => {
     })
   })
 })
+
+describe('the history binding', () => {
+  test('T-EXE-API-HIST-09 sends every filter in the function order, a missing one as null', async () => {
+    const captured: CapturedQuery[] = []
+    await setDatabase(recordingDatabase(captured))
+
+    await createExecutionDatabase().listHistory({
+      personId: PERSON_ID,
+      timezone: 'America/Bogota',
+      month: '2026-09-01',
+      discipline: null,
+      withRecord: true,
+      free: null,
+      query: 'press',
+      cursor: null,
+      limit: 20,
+      day: '2026-09-30',
+      requestId: 'r',
+    })
+
+    const listed = captured.find((query) => query.strings.join('').includes('list_my_executions'))
+    expect(listed?.values).toEqual([
+      PERSON_ID,
+      'America/Bogota',
+      '2026-09-01',
+      null,
+      true,
+      null,
+      'press',
+      null,
+      20,
+      '2026-09-30',
+    ])
+    expect(listed?.strings.join('?')).toContain('?::date')
+  })
+})
+
+describe('the finished-session bindings', () => {
+  test('T-EXE-API-FIN-10 a correction sends sets, list and time in the function order', async () => {
+    const captured: CapturedQuery[] = []
+    await setDatabase(recordingDatabase(captured))
+
+    await createExecutionDatabase().revise({
+      personId: PERSON_ID,
+      executedSessionId: PERSON_ID,
+      revisionNumber: 4,
+      revision: {
+        started_at: '2026-09-29T23:02:00.000Z',
+        ended_at: '2026-09-29T23:50:00.000Z',
+        strength_sets: [{ order: 1, exercise_position: 1, achieved_reps: 8 }],
+        exercises: [{ position: 1 }],
+      },
+      idempotencyKey: '51111111-1111-4111-8111-111111111111',
+      commandId: PERSON_ID,
+      requestHash: Buffer.alloc(32),
+    })
+
+    const revised = captured.find((query) => query.strings.join('').includes('revise_execution'))
+    const values = revised?.values ?? []
+    expect(values.slice(0, 3)).toEqual([PERSON_ID, PERSON_ID, 4])
+    expect(JSON.parse(String(values[3]))).toEqual([
+      {
+        family: 'strength',
+        set_order: 1,
+        movement_id: null,
+        achieved_reps: 8,
+        load_value: null,
+        load_unit_code: null,
+        rpe: null,
+        kind: null,
+        exercise_position: 1,
+      },
+    ])
+    expect(JSON.parse(String(values[4]))).toEqual([
+      {
+        position: 1,
+        movement_id: null,
+        planned_step_id: null,
+        superset_group: null,
+        rest_seconds: null,
+      },
+    ])
+    expect(values.slice(5, 7)).toEqual(['2026-09-29T23:02:00.000Z', '2026-09-29T23:50:00.000Z'])
+  })
+})

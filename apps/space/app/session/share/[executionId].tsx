@@ -108,7 +108,7 @@ const NO_PERMISSION = 'Para guardarla, permite a Allfit añadir fotos en Ajustes
 type Notice = { readonly tone: 'done' | 'failed'; readonly text: string }
 
 export default function ShareSessionScreen() {
-  const { executionId } = useLocalSearchParams<{ executionId: string }>()
+  const { executionId, back } = useLocalSearchParams<{ executionId: string; back?: string }>()
   const router = useRouter()
   const theme = useTheme()
   const insets = useSafeAreaInsets()
@@ -150,7 +150,8 @@ export default function ShareSessionScreen() {
     }
   }, [executionId, timeZone])
 
-  const done = () => router.replace('/today')
+  // From a session's detail it goes back there; right after training, to Hoy.
+  const done = () => (back === '1' && router.canGoBack() ? router.back() : router.replace('/today'))
 
   const scale = cardScale(width, height - insets.top - insets.bottom - CHROME)
   const cardWidth = CARD_WIDTH * scale

@@ -99,8 +99,14 @@ export interface WorkedMuscle {
  * ones that only helped. The main muscle is each movement's first, as on Hoy, so the
  * two never disagree about what a routine trains.
  */
+/** What the muscles are read from: a summary, or a finished session's detail. */
+export interface WorkedSource {
+  readonly title: string | null
+  readonly exercises: readonly { readonly movement_id: string | null; readonly work_sets: number }[]
+}
+
 export function workedMuscles(
-  summary: ShareSummary,
+  summary: WorkedSource,
   catalogue: Catalogue,
 ): readonly WorkedMuscle[] {
   const musclesOf = new Map(catalogue.movements.map((movement) => [movement.id, movement.muscles]))
@@ -135,7 +141,7 @@ export function workedMuscles(
 }
 
 /** «DORSAL Y BÍCEPS»: the two main groups, the routine's name without them, never empty. */
-export function groupsTitle(summary: ShareSummary, catalogue: Catalogue): string {
+export function groupsTitle(summary: WorkedSource, catalogue: Catalogue): string {
   const leading = workedMuscles(summary, catalogue)
     .filter((muscle) => muscle.main)
     .slice(0, 2)

@@ -39,6 +39,8 @@ export interface WorkingSet {
   readonly kind: SetKind
   /** How hard it felt, 1 to 10. Absent is undeclared, never zero. */
   readonly rpe?: number | undefined
+  /** Which recorded set it was when a finished session opened for editing (ADR-038). */
+  readonly origin?: string | undefined
 }
 
 const KINDS: readonly SetKind[] = ['normal', 'warmup', 'to_failure', 'drop']

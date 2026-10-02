@@ -2543,6 +2543,67 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  ExecutionInvalidated: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['id', 'annulled_at'],
+    properties: {
+      id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      annulled_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+    },
+  },
+  ExecutionInvalidation: {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      reason: {
+        type: ['string', 'null'],
+        maxLength: 200,
+        description: 'Optional. Without one it is recorded as «La persona lo eliminó».',
+      },
+    },
+  },
+  ExecutionRepeated: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['id', 'attempt_number', 'status', 'revision_number'],
+    properties: {
+      id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      attempt_number: {
+        type: 'integer',
+        minimum: 1,
+      },
+      status: {
+        type: 'string',
+        enum: ['in_progress'],
+      },
+      revision_number: {
+        type: 'integer',
+        minimum: 0,
+      },
+    },
+  },
+  ExecutionRepetition: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['started_at', 'timezone'],
+    properties: {
+      started_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      timezone: {
+        $ref: '#/components/schemas/IanaTimeZone',
+      },
+    },
+  },
   ExecutionResultsReplace: {
     type: 'object',
     additionalProperties: false,
@@ -2648,6 +2709,56 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         type: 'integer',
         minimum: 0,
         description: 'Zero on a session somebody has opened and not yet recorded into.',
+      },
+    },
+  },
+  ExecutionRevised: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['id', 'revision_number', 'result_count'],
+    properties: {
+      id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      revision_number: {
+        type: 'integer',
+        minimum: 1,
+      },
+      result_count: {
+        type: 'integer',
+        minimum: 1,
+      },
+    },
+  },
+  ExecutionRevision: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['started_at', 'ended_at', 'strength_sets'],
+    description:
+      'A finished session as it now stands, whole: its time, its sets and, when given, its exercise list, with the rules of `ExecutionResultsReplace`.',
+    properties: {
+      started_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      ended_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      strength_sets: {
+        type: 'array',
+        minItems: 1,
+        maxItems: 1000,
+        items: {
+          $ref: '#/components/schemas/StrengthSet',
+        },
+      },
+      exercises: {
+        type: 'array',
+        maxItems: 100,
+        items: {
+          $ref: '#/components/schemas/SessionExerciseReplace',
+        },
       },
     },
   },
@@ -6420,6 +6531,21 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
     },
     description: 'The Fitness ID, the same one on every retry.',
   },
+  SpaceBestSet: {
+    type: 'object',
+    additionalProperties: false,
+    description: 'The work set with the highest estimated max, the first of equals.',
+    required: ['load_kg', 'reps'],
+    properties: {
+      load_kg: {
+        type: 'number',
+      },
+      reps: {
+        type: 'integer',
+        minimum: 1,
+      },
+    },
+  },
   SpaceBiologicalSex: {
     type: 'object',
     additionalProperties: false,
@@ -6865,6 +6991,205 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  SpaceFinishedExecution: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'executed_session_id',
+      'revision_number',
+      'started_at',
+      'ended_at',
+      'duration_seconds',
+      'title',
+      'planned_session_id',
+      'repeatable',
+      'session_number',
+      'work_sets',
+      'total_volume_kg',
+      'record_count',
+      'previous',
+      'exercises',
+    ],
+    properties: {
+      executed_session_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      revision_number: {
+        type: 'integer',
+        minimum: 0,
+        description: 'What `If-Match` carries to correct it.',
+      },
+      started_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      ended_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      duration_seconds: {
+        type: 'integer',
+        minimum: 0,
+      },
+      title: {
+        type: ['string', 'null'],
+        description: "The routine's name; null for a free session.",
+      },
+      planned_session_id: {
+        type: ['string', 'null'],
+        format: 'uuid',
+      },
+      repeatable: {
+        type: 'boolean',
+        description: 'Whether `OP-EXE-025` can start another attempt at it.',
+      },
+      session_number: {
+        type: 'integer',
+        minimum: 1,
+      },
+      work_sets: {
+        type: 'integer',
+        minimum: 0,
+      },
+      total_volume_kg: {
+        type: ['number', 'null'],
+        minimum: 0,
+        description: 'Kilos lifted without warmups. Null when nothing was weighed.',
+      },
+      record_count: {
+        type: 'integer',
+        minimum: 0,
+      },
+      previous: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/SpaceFinishedPrevious',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      exercises: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/SpaceFinishedExercise',
+        },
+      },
+    },
+  },
+  SpaceFinishedExercise: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'position',
+      'movement_id',
+      'movement',
+      'superset_group',
+      'record',
+      'best_set',
+      'sets',
+    ],
+    properties: {
+      position: {
+        type: 'integer',
+        minimum: 1,
+      },
+      movement_id: {
+        type: ['string', 'null'],
+        format: 'uuid',
+      },
+      movement: {
+        type: ['string', 'null'],
+      },
+      superset_group: {
+        type: ['integer', 'null'],
+        minimum: 1,
+      },
+      record: {
+        type: 'boolean',
+        description: 'Whether the exercise beat anything before it (ADR-036).',
+      },
+      best_set: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/SpaceBestSet',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      sets: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/SpaceFinishedSet',
+        },
+      },
+    },
+  },
+  SpaceFinishedPrevious: {
+    type: 'object',
+    additionalProperties: false,
+    description: 'The last time the same routine was finished, before this one.',
+    required: ['executed_session_id', 'started_at', 'total_volume_kg', 'change_percent'],
+    properties: {
+      executed_session_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      started_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      total_volume_kg: {
+        type: ['number', 'null'],
+        minimum: 0,
+      },
+      change_percent: {
+        type: ['number', 'null'],
+        description:
+          "This session's kilos against those, rounded. Null when either weighed nothing.",
+      },
+    },
+  },
+  SpaceFinishedSet: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'set_order',
+      'kind',
+      'load_value',
+      'load_unit_code',
+      'achieved_reps',
+      'rpe',
+      'best_ever',
+    ],
+    properties: {
+      set_order: {
+        type: 'integer',
+        minimum: 1,
+      },
+      kind: {
+        $ref: '#/components/schemas/SetKind',
+      },
+      load_value: {
+        type: ['number', 'null'],
+      },
+      load_unit_code: {
+        type: ['string', 'null'],
+      },
+      achieved_reps: {
+        type: ['integer', 'null'],
+      },
+      rpe: {
+        type: ['number', 'null'],
+      },
+      best_ever: {
+        type: 'boolean',
+        description: "The exercise's best set, when it is also a record it holds.",
+      },
+    },
+  },
   SpaceFocusAreas: {
     type: 'object',
     additionalProperties: false,
@@ -6897,6 +7222,260 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
     },
     description:
       'Declaring replaces the set. It is not additive, so the client sends what the person has selected rather than a difference.',
+  },
+  SpaceHistoryDay: {
+    type: 'object',
+    additionalProperties: false,
+    description: "A day of the month something was finished on, for the month card's calendar.",
+    required: ['trained_on', 'sessions', 'trained_seconds', 'work_sets', 'volume_kg', 'records'],
+    properties: {
+      trained_on: {
+        type: 'string',
+        format: 'date',
+        description: "The day in the person's time zone.",
+      },
+      sessions: {
+        type: 'integer',
+        minimum: 1,
+      },
+      trained_seconds: {
+        type: 'integer',
+        minimum: 0,
+      },
+      work_sets: {
+        type: 'integer',
+        minimum: 0,
+      },
+      volume_kg: {
+        type: ['number', 'null'],
+        minimum: 0,
+        description: 'Kilos lifted that day without warmups. Null when nothing was weighed.',
+      },
+      records: {
+        type: 'integer',
+        minimum: 0,
+      },
+    },
+  },
+  SpaceHistoryItem: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'executed_session_id',
+      'status',
+      'started_at',
+      'trained_on',
+      'title',
+      'is_free',
+      'discipline_code',
+      'duration_seconds',
+      'work_sets',
+      'total_volume_kg',
+      'record_count',
+      'thumbnail_url',
+    ],
+    properties: {
+      executed_session_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      status: {
+        type: 'string',
+        enum: ['completed'],
+        description: 'Only finished sessions for now (ADR-037); the enum grows with the history.',
+      },
+      started_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      trained_on: {
+        type: 'string',
+        format: 'date',
+        description: "The day in the person's zone.",
+      },
+      title: {
+        type: ['string', 'null'],
+        description: "The routine's name. Null for a free session.",
+      },
+      is_free: {
+        type: 'boolean',
+        description: 'True when no planned session stands behind it.',
+      },
+      discipline_code: {
+        type: 'string',
+      },
+      duration_seconds: {
+        type: 'integer',
+        minimum: 0,
+      },
+      work_sets: {
+        type: 'integer',
+        minimum: 0,
+      },
+      total_volume_kg: {
+        type: ['number', 'null'],
+        minimum: 0,
+        description: 'Kilos lifted without warmups. Null when nothing was weighed, not zero.',
+      },
+      record_count: {
+        type: 'integer',
+        minimum: 0,
+        description: "Records set, counted as the session's summary counts them (ADR-036).",
+      },
+      thumbnail_url: {
+        type: ['string', 'null'],
+        format: 'uri',
+        description:
+          "The routine's cover, the same photograph its summary shows (ADR-037). Null for a free session, which has no routine.",
+      },
+    },
+  },
+  SpaceHistoryMonth: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'month',
+      'sessions',
+      'trained_seconds',
+      'work_sets',
+      'total_volume_kg',
+      'records',
+      'weeks',
+      'days',
+      'months_available',
+      'disciplines',
+    ],
+    properties: {
+      month: {
+        type: 'string',
+        format: 'date',
+        description: 'The first day of the month.',
+      },
+      sessions: {
+        type: 'integer',
+        minimum: 0,
+      },
+      trained_seconds: {
+        type: 'integer',
+        minimum: 0,
+      },
+      work_sets: {
+        type: 'integer',
+        minimum: 0,
+      },
+      total_volume_kg: {
+        type: ['number', 'null'],
+        minimum: 0,
+      },
+      records: {
+        type: 'integer',
+        minimum: 0,
+      },
+      weeks: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/SpaceHistoryWeek',
+        },
+      },
+      days: {
+        type: 'array',
+        description: 'Only the days trained, oldest first.',
+        items: {
+          $ref: '#/components/schemas/SpaceHistoryDay',
+        },
+      },
+      months_available: {
+        type: 'array',
+        description: 'First days of the months with something finished, newest first.',
+        items: {
+          type: 'string',
+          format: 'date',
+        },
+      },
+      disciplines: {
+        type: 'array',
+        description: 'The disciplines trained that month, named as the catalogue names them.',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['code', 'name'],
+          properties: {
+            code: {
+              type: 'string',
+            },
+            name: {
+              type: 'string',
+            },
+          },
+        },
+      },
+    },
+  },
+  SpaceHistoryPage: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['data', 'page'],
+    properties: {
+      data: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/SpaceHistoryItem',
+        },
+      },
+      page: {
+        $ref: '#/components/schemas/Page',
+      },
+    },
+  },
+  SpaceHistoryWeek: {
+    type: 'object',
+    additionalProperties: false,
+    description: 'An ISO week counted whole, even where it crosses into another month.',
+    required: ['week_starts_on', 'completed', 'planned', 'fulfilled'],
+    properties: {
+      week_starts_on: {
+        type: 'string',
+        format: 'date',
+        description: 'The Monday of an ISO week that touches the month.',
+      },
+      completed: {
+        type: 'integer',
+        minimum: 0,
+        description: 'Sessions finished that week, free ones and repeats included.',
+      },
+      planned: {
+        type: 'integer',
+        minimum: 0,
+        description: 'Planned sessions scheduled that week and not cancelled or paused.',
+      },
+      fulfilled: {
+        type: 'integer',
+        minimum: 0,
+        description:
+          'Of those planned, how many were finished that week, each once however many times it was done.',
+      },
+    },
+  },
+  SpaceInvalidationPreview: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['records', 'streak_weeks', 'streak_weeks_after'],
+    properties: {
+      records: {
+        type: 'integer',
+        minimum: 0,
+        description: 'The records this session holds, which go with it.',
+      },
+      streak_weeks: {
+        type: 'integer',
+        minimum: 0,
+        description: 'Weeks in a row trained, as of today.',
+      },
+      streak_weeks_after: {
+        type: 'integer',
+        minimum: 0,
+        description: 'The same, were this session annulled.',
+      },
+    },
   },
   SpaceMyProgram: {
     type: 'object',
@@ -8625,6 +9204,7 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       'sessions_planned',
       'tonnage_kg',
       'history',
+      'work_sets',
     ],
     description:
       "The calendar week in progress, Monday to Sunday, in the person's zone. The week is the unit and the day inside it is a suggestion, so what counts is how much of the week is done — and what is left undone does not carry over.",
@@ -8663,6 +9243,12 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         items: {
           $ref: '#/components/schemas/SpaceTrainedSession',
         },
+      },
+      work_sets: {
+        type: 'integer',
+        minimum: 0,
+        description:
+          'Work sets finished this week, without warmups or annulled sessions. Not the sum of `history`, which is the latest sessions of any week.',
       },
     },
   },

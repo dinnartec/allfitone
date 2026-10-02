@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 
-import type { ExecutionDatabase, SummaryRow } from '../domain/index.js'
+import type { ExecutionDatabase, HistoryRowPage, SummaryRow } from '../domain/index.js'
 import { createSpaceExecutionService } from './index.js'
 
 const row: SummaryRow = {
@@ -56,5 +56,67 @@ describe('the summary as Space sees it', () => {
 
     expect(none?.cover_url).toBeNull()
     expect(missing).toBeNull()
+  })
+})
+
+describe('the history as Space sees it', () => {
+  const page: HistoryRowPage = {
+    data: [
+      {
+        executed_session_id: '019e4000-0000-7000-8000-000000000201',
+        status: 'completed',
+        started_at: '2026-09-29T12:00:00.000Z',
+        trained_on: '2026-09-29',
+        title: 'Tirón',
+        is_free: false,
+        discipline_code: 'strength',
+        duration_seconds: 2892,
+        work_sets: 12,
+        total_volume_kg: 3840,
+        record_count: 2,
+        thumbnail_object_key: 'movements/pull-up/demo.webp',
+      },
+      {
+        executed_session_id: '019e4000-0000-7000-8000-000000000202',
+        status: 'completed',
+        started_at: '2026-09-27T12:00:00.000Z',
+        trained_on: '2026-09-27',
+        title: null,
+        is_free: true,
+        discipline_code: 'strength',
+        duration_seconds: 2100,
+        work_sets: 0,
+        total_volume_kg: null,
+        record_count: 0,
+        thumbnail_object_key: null,
+      },
+    ],
+    page: { next_cursor: null, has_more: false },
+  }
+
+  test('T-EXE-API-HIST-08 a thumbnail is an address, and none stays none', async () => {
+    const database = { listHistory: async () => page } as unknown as ExecutionDatabase
+    const listed = await createSpaceExecutionService(
+      database,
+      'https://media.example/',
+    ).listHistory({
+      personId: 'p',
+      timezone: 'America/Bogota',
+      month: null,
+      discipline: null,
+      withRecord: null,
+      free: null,
+      query: null,
+      cursor: null,
+      limit: 20,
+      day: null,
+      requestId: 'r',
+    })
+
+    expect(listed.data.map((item) => item.thumbnail_url)).toEqual([
+      'https://media.example/movements/pull-up/demo.webp',
+      null,
+    ])
+    expect(listed.data[0]).not.toHaveProperty('thumbnail_object_key')
   })
 })

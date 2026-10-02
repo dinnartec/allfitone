@@ -4,7 +4,13 @@ import { Hono } from 'hono'
 
 import { SpaceActorError, type SpaceActorResolver } from '../../identity/index.js'
 import type { SpaceExecutionService } from '../application/index.js'
-import type { Execution, ExecutionSummary } from '../domain/index.js'
+import type {
+  Execution,
+  ExecutionSummary,
+  FinishedExecution,
+  HistoryMonth,
+  HistoryPage,
+} from '../domain/index.js'
 import { spaceExecutionRoutes } from './space.js'
 
 const PERSON_ID = '019e4000-0000-7000-8000-000000000001'
@@ -83,6 +89,90 @@ const summary: ExecutionSummary = {
   algorithm_version: 1,
 }
 
+const historyPage: HistoryPage = {
+  data: [
+    {
+      executed_session_id: EXECUTION_ID,
+      status: 'completed',
+      started_at: '2026-09-01T12:00:00.000Z',
+      trained_on: '2026-09-01',
+      title: 'Empuje',
+      is_free: false,
+      discipline_code: 'strength',
+      duration_seconds: 3120,
+      work_sets: 14,
+      total_volume_kg: 4410,
+      record_count: 1,
+      thumbnail_url: 'https://media.example/movements/press/demo.webp',
+    },
+  ],
+  page: { next_cursor: null, has_more: false },
+}
+
+const historyMonth: HistoryMonth = {
+  month: '2026-09-01',
+  sessions: 1,
+  trained_seconds: 3120,
+  work_sets: 14,
+  total_volume_kg: 4410,
+  records: 1,
+  weeks: [{ week_starts_on: '2026-08-31', completed: 1, planned: 3, fulfilled: 1 }],
+  days: [
+    {
+      trained_on: '2026-09-02',
+      sessions: 1,
+      trained_seconds: 3120,
+      work_sets: 14,
+      volume_kg: 4410,
+      records: 1,
+    },
+  ],
+  months_available: ['2026-09-01'],
+  disciplines: [{ code: 'strength', name: 'Fuerza' }],
+}
+
+const finished: FinishedExecution = {
+  executed_session_id: EXECUTION_ID,
+  revision_number: 4,
+  started_at: '2026-09-29T23:02:00.000Z',
+  ended_at: '2026-09-29T23:50:00.000Z',
+  duration_seconds: 2880,
+  title: 'Tirón',
+  planned_session_id: PLANNED_ID,
+  repeatable: true,
+  session_number: 14,
+  work_sets: 12,
+  total_volume_kg: 3840,
+  record_count: 2,
+  previous: {
+    executed_session_id: '019e4000-0000-7000-8000-000000000202',
+    started_at: '2026-09-17T23:00:00.000Z',
+    total_volume_kg: 3690,
+    change_percent: 4,
+  },
+  exercises: [
+    {
+      position: 1,
+      movement_id: '019e4000-0000-7000-8000-000000000501',
+      movement: 'Remo con barra',
+      superset_group: null,
+      record: true,
+      best_set: { load_kg: 70, reps: 8 },
+      sets: [
+        {
+          set_order: 1,
+          kind: 'normal',
+          load_value: 70,
+          load_unit_code: 'kg',
+          achieved_reps: 8,
+          rpe: null,
+          best_ever: true,
+        },
+      ],
+    },
+  ],
+}
+
 function harness(overrides?: Partial<SpaceExecutionService>, actorFails = false): Hono {
   const service: SpaceExecutionService = {
     startAttempt: async () => attempt,
@@ -97,6 +187,19 @@ function harness(overrides?: Partial<SpaceExecutionService>, actorFails = false)
       sessions_planned: 0,
       tonnage_kg: 5120.5,
       history: [],
+      work_sets: 0,
+    }),
+    listHistory: async () => historyPage,
+    readHistoryMonth: async () => historyMonth,
+    readFinished: async () => finished,
+    revise: async () => ({ id: EXECUTION_ID, revision_number: 5, result_count: 12 }),
+    annul: async () => ({ id: EXECUTION_ID, annulled_at: '2026-10-01T12:00:00.000Z' }),
+    readAnnulmentPreview: async () => ({ records: 2, streak_weeks: 8, streak_weeks_after: 7 }),
+    repeat: async () => ({
+      id: COMMAND_ID,
+      attempt_number: 2,
+      status: 'in_progress' as const,
+      revision_number: 0,
     }),
     ...overrides,
   }
@@ -146,8 +249,14 @@ describe('the Space execution surface honours the contract', () => {
       'OP-EXE-003',
       'OP-EXE-005',
       'OP-EXE-006',
+      'OP-EXE-007',
+      'OP-EXE-009',
+      'OP-EXE-014',
       'OP-EXE-015',
       'OP-EXE-021',
+      'OP-EXE-023',
+      'OP-EXE-024',
+      'OP-EXE-025',
     ])
   })
 })
@@ -380,6 +489,267 @@ describe('GET /space/v1/executions/{id}/summary', () => {
       {
         readSummary: async () => {
           throw Object.assign(new Error('execution is not finished'), { code: '55000' })
+        },
+      },
+    )
+
+    expect(response.status).toBe(409)
+  })
+})
+
+describe('GET /space/v1/executions', () => {
+  const read = (path: string, overrides?: Partial<SpaceExecutionService>) =>
+    harness(overrides).request(path, { headers: authorized })
+
+  test('T-EXE-API-HIST-01 answers one page of the history, filters passed through', async () => {
+    let asked: Parameters<SpaceExecutionService['listHistory']>[0] | undefined
+    const response = await read(
+      '/space/v1/executions?timezone=America/Bogota&month=2026-09-15&discipline=strength&with_record=true&free=false&q=%20press%20&limit=10&day=2026-09-30',
+      {
+        listHistory: async (input) => {
+          asked = input
+          return historyPage
+        },
+      },
+    )
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual(historyPage)
+    expect(asked).toEqual({
+      personId: PERSON_ID,
+      timezone: 'America/Bogota',
+      month: '2026-09-15',
+      discipline: 'strength',
+      withRecord: true,
+      free: false,
+      query: 'press',
+      cursor: null,
+      limit: 10,
+      day: '2026-09-30',
+      requestId: '',
+    })
+  })
+
+  test('T-EXE-API-HIST-02 with nothing but the zone, every filter is off and the page is 20', async () => {
+    let asked: Parameters<SpaceExecutionService['listHistory']>[0] | undefined
+    await read('/space/v1/executions?timezone=America/Bogota', {
+      listHistory: async (input) => {
+        asked = input
+        return historyPage
+      },
+    })
+
+    expect(asked).toMatchObject({
+      month: null,
+      discipline: null,
+      withRecord: null,
+      free: null,
+      query: null,
+      cursor: null,
+      limit: 20,
+      day: null,
+    })
+  })
+
+  test('T-EXE-API-HIST-03 refuses a request it cannot answer truthfully', async () => {
+    for (const path of [
+      '/space/v1/executions',
+      '/space/v1/executions?timezone=America/Bogota&month=2026-13-01',
+      '/space/v1/executions?timezone=America/Bogota&day=30-09-2026',
+      '/space/v1/executions?timezone=America/Bogota&with_record=maybe',
+      '/space/v1/executions?timezone=America/Bogota&limit=51',
+      '/space/v1/executions?timezone=America/Bogota&cursor=short',
+    ]) {
+      expect((await read(path)).status).toBe(400)
+    }
+  })
+
+  test('T-EXE-API-HIST-04 a cursor PostgreSQL cannot read is a bad request, not a page', async () => {
+    const response = await read(
+      '/space/v1/executions?timezone=America/Bogota&cursor=bm90LWEtcmVhbC1jdXJzb3I=',
+      {
+        listHistory: async () => {
+          throw Object.assign(new Error('invalid cursor'), { code: '22023' })
+        },
+      },
+    )
+
+    expect(response.status).toBe(400)
+  })
+
+  test('T-EXE-API-HIST-05 somebody not registered gets nothing', async () => {
+    const response = await harness(undefined, true).request(
+      '/space/v1/executions?timezone=America/Bogota',
+      { headers: authorized },
+    )
+
+    expect(response.status).toBe(403)
+  })
+})
+
+describe('GET /space/v1/history/months/{month}', () => {
+  const read = (path: string, overrides?: Partial<SpaceExecutionService>) =>
+    harness(overrides).request(path, { headers: authorized })
+
+  test('T-EXE-API-HIST-06 answers the month', async () => {
+    let asked: Parameters<SpaceExecutionService['readHistoryMonth']>[0] | undefined
+    const response = await read('/space/v1/history/months/2026-09-01?timezone=America/Bogota', {
+      readHistoryMonth: async (input) => {
+        asked = input
+        return historyMonth
+      },
+    })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual(historyMonth)
+    expect(asked).toEqual({
+      personId: PERSON_ID,
+      timezone: 'America/Bogota',
+      month: '2026-09-01',
+      requestId: '',
+    })
+  })
+
+  test('T-EXE-API-HIST-07 refuses a month that is not a date, or no zone', async () => {
+    expect((await read('/space/v1/history/months/septiembre?timezone=America/Bogota')).status).toBe(
+      400,
+    )
+    expect((await read('/space/v1/history/months/2026-09-01')).status).toBe(400)
+  })
+})
+
+describe('a finished session: its detail, corrections, annulment and repeat', () => {
+  const path = (tail: string) => `/space/v1/executions/${EXECUTION_ID}/${tail}`
+  const post = (
+    tail: string,
+    body: unknown,
+    headers: Record<string, string>,
+    overrides?: Partial<SpaceExecutionService>,
+  ) =>
+    harness(overrides).request(path(tail), { method: 'POST', headers, body: JSON.stringify(body) })
+  const revision = {
+    started_at: '2026-09-29T23:02:00.000Z',
+    ended_at: '2026-09-29T23:50:00.000Z',
+    strength_sets: [{ order: 1, exercise_position: 1 }],
+    exercises: [{ position: 1, movement_id: null, superset_group: null }],
+  }
+
+  test('T-EXE-API-FIN-01 answers the detail in the zone it was asked in', async () => {
+    let zone: string | undefined
+    const response = await harness({
+      readFinished: async (input) => {
+        zone = input.timezone
+        return finished
+      },
+    }).request(path('detail?timezone=America/Bogota'), { headers: authorized })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual(finished)
+    expect(zone).toBe('America/Bogota')
+  })
+
+  test('T-EXE-API-FIN-02 an annulled, unfinished or foreign session is not found', async () => {
+    const response = await harness({ readFinished: async () => null }).request(
+      path('detail?timezone=America/Bogota'),
+      { headers: authorized },
+    )
+
+    expect(response.status).toBe(404)
+    expect((await harness().request(path('detail'), { headers: authorized })).status).toBe(400)
+  })
+
+  test('T-EXE-API-FIN-03 a correction passes the session whole, under its revision', async () => {
+    let asked: Parameters<SpaceExecutionService['revise']>[0] | undefined
+    const response = await post(
+      'revisions',
+      revision,
+      { ...commanded, 'if-match': '4' },
+      {
+        revise: async (input) => {
+          asked = input
+          return { id: EXECUTION_ID, revision_number: 5, result_count: 1 }
+        },
+      },
+    )
+
+    expect(response.status).toBe(200)
+    expect(asked).toMatchObject({
+      personId: PERSON_ID,
+      executedSessionId: EXECUTION_ID,
+      revisionNumber: 4,
+      revision,
+    })
+  })
+
+  test('T-EXE-API-FIN-04 refuses a correction it cannot honour', async () => {
+    const headers = { ...commanded, 'if-match': '4' }
+    expect((await post('revisions', revision, commanded)).status).toBe(400)
+    expect((await post('revisions', { ...revision, ended_at: 'later' }, headers)).status).toBe(400)
+    expect((await post('revisions', { ...revision, strength_sets: [] }, headers)).status).toBe(400)
+    expect((await post('revisions', { ...revision, extra: true }, headers)).status).toBe(400)
+  })
+
+  test('T-EXE-API-FIN-05 a stale correction is a conflict', async () => {
+    const response = await post(
+      'revisions',
+      revision,
+      { ...commanded, 'if-match': '3' },
+      {
+        revise: async () => {
+          throw Object.assign(new Error('stale-execution'), { code: '40001' })
+        },
+      },
+    )
+
+    expect(response.status).toBe(409)
+  })
+
+  test('T-EXE-API-FIN-06 annuls with the reason, or with none', async () => {
+    const reasons: (string | null)[] = []
+    const annul: Partial<SpaceExecutionService> = {
+      annul: async (input) => {
+        reasons.push(input.reason)
+        return { id: EXECUTION_ID, annulled_at: '2026-10-01T12:00:00.000Z' }
+      },
+    }
+
+    expect((await post('invalidation', {}, commanded, annul)).status).toBe(200)
+    expect(
+      (await post('invalidation', { reason: ' Fue una prueba ' }, commanded, annul)).status,
+    ).toBe(200)
+    expect(reasons).toEqual([null, 'Fue una prueba'])
+    expect((await post('invalidation', { reason: 7 }, commanded)).status).toBe(400)
+    expect((await post('invalidation', {}, authorized)).status).toBe(400)
+  })
+
+  test('T-EXE-API-FIN-07 answers what annulling would change', async () => {
+    const response = await harness().request(path('invalidation-preview?timezone=America/Bogota'), {
+      headers: authorized,
+    })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ records: 2, streak_weeks: 8, streak_weeks_after: 7 })
+  })
+
+  test('T-EXE-API-FIN-08 a repeat starts another attempt, its id the Command-Id', async () => {
+    const response = await post(
+      'repetitions',
+      { started_at: '2026-10-01T12:00:00.000Z', timezone: 'America/Bogota' },
+      commanded,
+    )
+
+    expect(response.status).toBe(201)
+    expect(((await response.json()) as { id: string }).id).toBe(COMMAND_ID)
+  })
+
+  test('T-EXE-API-FIN-09 another session still open is a conflict', async () => {
+    const response = await post(
+      'repetitions',
+      { started_at: '2026-10-01T12:00:00.000Z', timezone: 'America/Bogota' },
+      commanded,
+      {
+        repeat: async () => {
+          throw Object.assign(new Error('another session is still open'), { code: '55006' })
         },
       },
     )
