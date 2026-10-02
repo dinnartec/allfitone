@@ -2005,6 +2005,30 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/studio/v1/organizations/{organizationId}/relationships/{relationshipId}/professional-assignments': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Put a coach in charge of a client
+     * @description Says who attends this person. It does **not** grant anything: without a live grant from the person, the professional in charge reads nothing of theirs. Being assigned and being allowed are two of the five conditions a read has to satisfy, and this command touches only the first.
+     *
+     *     The target must hold a live membership in this same organization and the coach role. A professional from another organization can never be assigned, even when the person is a client of both.
+     *
+     *     There is one holder at a time, and this command only fills an empty place. Taking the client away from the coach who already has them is a different operation (`OP-REL-003`), because it owes the person a notification this one never sends; a relationship that already has a different holder is rejected with `409`.
+     */
+    post: operations['assignRelationshipHolder']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/studio/v1/organizations/{organizationId}/relationships/{relationshipId}/assignments': {
     parameters: {
       query?: never
@@ -4877,6 +4901,21 @@ export interface components {
         membership_id: string | null
       }
       replayed: boolean
+    }
+    RelationshipHolderAssignment: {
+      /** @description The membership of the coach who will attend this person. */
+      membership_id: components['schemas']['UuidV7']
+    }
+    RelationshipHolder: {
+      assignment_id: components['schemas']['UuidV7']
+      relationship_id: components['schemas']['UuidV7']
+      membership_id: components['schemas']['UuidV7']
+      person_id: components['schemas']['UuidV7']
+      /**
+       * Format: date-time
+       * @description Since when this coach has attended the person. A repeated assignment of the same coach answers with the original date rather than today's.
+       */
+      valid_from: string
     }
     OfferableScope: {
       scope_definition_id: components['schemas']['UuidV7']
@@ -10793,6 +10832,56 @@ export interface operations {
       404: components['responses']['NotFound']
       409: components['responses']['Conflict']
       415: components['responses']['UnsupportedMediaType']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  assignRelationshipHolder: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+        relationshipId: components['parameters']['RelationshipId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['RelationshipHolderAssignment']
+      }
+    }
+    responses: {
+      /** @description That coach was already in charge; nothing changed */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['RelationshipHolder']
+        }
+      }
+      /** @description The coach is now in charge */
+      201: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['RelationshipHolder']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      422: components['responses']['ValidationFailed']
       503: components['responses']['UpstreamUnavailable']
     }
   }

@@ -1,5 +1,11 @@
 import type { AccountActor } from '../../identity/index.js'
-import type { ClientDirectoryDatabase, DirectoryPage, DirectoryQuery } from '../domain/index.js'
+import type {
+  ClientDirectoryDatabase,
+  CommandContext,
+  DirectoryPage,
+  DirectoryQuery,
+  HolderAssignmentDatabase,
+} from '../domain/index.js'
 
 /**
  * An account that authenticated but never completed activation has no person
@@ -32,5 +38,33 @@ export function createClientDirectoryService(
 
   return {
     listClients: (actor, query) => database.listClients(personId(actor), query),
+  }
+}
+
+export interface HolderAssignmentService {
+  assign(
+    actor: AccountActor,
+    input: CommandContext & {
+      organizationId: string
+      relationshipId: string
+      membershipId: string
+    },
+  ): ReturnType<HolderAssignmentDatabase['assignHolder']>
+}
+
+/*
+ * No authorization branch here. Who may assign, who may be assigned, and
+ * whether the relationship is still live are all resolved inside the command's
+ * own transaction, and a second answer in this layer could disagree with the
+ * one that decides.
+ */
+export function createHolderAssignmentService(
+  database: HolderAssignmentDatabase,
+): HolderAssignmentService {
+  return {
+    assign(actor, input) {
+      if (!actor.personId) throw new RelationshipsError('registration-incomplete')
+      return database.assignHolder({ actorPersonId: actor.personId, ...input })
+    },
   }
 }

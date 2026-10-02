@@ -66,3 +66,53 @@ export interface DirectoryQuery {
 export interface ClientDirectoryDatabase {
   listClients(personId: string, query: DirectoryQuery): Promise<DirectoryPage>
 }
+
+/*
+ * Declared here rather than imported: every domain carries its own command
+ * shape, and reaching into another one for it would couple two schemas over a
+ * pair of fields.
+ */
+export interface CommandContext {
+  idempotencyKey: string
+  commandId: string
+  requestHash: Uint8Array
+}
+
+export interface CommandResult<T> {
+  resource: T
+  replayed: boolean
+}
+
+/**
+ * Who attends a client. Saying so grants nothing: without a live grant from
+ * the person, the professional in charge reads nothing of theirs. Assignment
+ * and permission are two of the five conditions a read has to satisfy, and
+ * this one is only the first.
+ */
+export interface RelationshipHolder {
+  readonly assignmentId: string
+  readonly relationshipId: string
+  readonly membershipId: string
+  readonly personId: string
+  readonly validFrom: Date
+}
+
+/**
+ * `created` is false when this coach was already in charge. Asking for what is
+ * already true is not an error and writes nothing — the date they have
+ * attended this person since is a fact, not a counter to be reset.
+ */
+export interface HolderAssignmentResult extends CommandResult<RelationshipHolder> {
+  readonly created: boolean
+}
+
+export interface HolderAssignmentDatabase {
+  assignHolder(
+    input: CommandContext & {
+      actorPersonId: string
+      organizationId: string
+      relationshipId: string
+      membershipId: string
+    },
+  ): Promise<HolderAssignmentResult>
+}

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import { Hono } from 'hono'
 
 import type { StudioSessionService } from '../../identity/index.js'
-import type { ClientDirectoryService } from '../application/index.js'
+import type { ClientDirectoryService, HolderAssignmentService } from '../application/index.js'
 import type { DirectoryEntry, DirectoryPage, DirectoryQuery } from '../domain/index.js'
 import { studioRelationshipRoutes } from './studio.js'
 
@@ -270,5 +270,176 @@ describe('the client directory endpoint', () => {
       status: 'terminated',
       limit: 10,
     })
+  })
+})
+
+const ASSIGN_HEADERS = {
+  ...HEADERS,
+  'content-type': 'application/json',
+  'idempotency-key': 'e5555555-5555-4555-8555-555555555555',
+  'command-id': '019ad000-0000-7000-8000-000000000071',
+}
+const RELATIONSHIP = '019ad000-0000-7000-8000-000000000301'
+const MEMBERSHIP = '019ad000-0000-7000-8000-000000000202'
+const ASSIGN_PATH = `/studio/v1/organizations/${ORGANIZATION}/relationships/${RELATIONSHIP}/professional-assignments`
+
+function holders(overrides: Partial<HolderAssignmentService> = {}): HolderAssignmentService {
+  return {
+    assign: async () => ({
+      resource: {
+        assignmentId: '019ad000-0000-7000-8000-000000000401',
+        relationshipId: RELATIONSHIP,
+        membershipId: MEMBERSHIP,
+        personId: '019ad000-0000-7000-8000-000000000001',
+        validFrom: new Date('2026-10-02T14:00:00.000Z'),
+      },
+      created: true,
+      replayed: false,
+    }),
+    ...overrides,
+  }
+}
+
+function assignApp(service: HolderAssignmentService = holders(), session = sessions()): Hono {
+  const routes = new Hono()
+  routes.route('/studio/v1', studioRelationshipRoutes(directory(), session, service))
+  return routes
+}
+
+function assign(body: unknown, headers: Record<string, string> = ASSIGN_HEADERS): Request {
+  return new Request(`https://api.example.test${ASSIGN_PATH}`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body),
+  })
+}
+
+describe('putting a coach in charge', () => {
+  test('answers with the assignment it created', async () => {
+    const response = await assignApp().fetch(assign({ membership_id: MEMBERSHIP }))
+    expect(response.status).toBe(201)
+    const payload = (await response.json()) as Record<string, unknown>
+    expect(payload.membership_id).toBe(MEMBERSHIP)
+  })
+
+  /*
+   * `201` has to mean a row was written, or a screen cannot tell "done" from
+   * "it already was" — and the two need different words.
+   */
+  test('answers 200 when that coach was already the one in charge', async () => {
+    const unchanged = holders({
+      assign: async () => ({
+        resource: {
+          assignmentId: '019ad000-0000-7000-8000-000000000401',
+          relationshipId: RELATIONSHIP,
+          membershipId: MEMBERSHIP,
+          personId: '019ad000-0000-7000-8000-000000000001',
+          validFrom: new Date('2026-09-20T08:00:00.000Z'),
+        },
+        created: false,
+        replayed: false,
+      }),
+    })
+    const response = await assignApp(unchanged).fetch(assign({ membership_id: MEMBERSHIP }))
+    expect(response.status).toBe(200)
+    const payload = (await response.json()) as Record<string, unknown>
+    expect(payload.valid_from).toBe('2026-09-20T08:00:00.000Z')
+  })
+
+  /*
+   * The whole point of the command, and the easiest thing to break later:
+   * being in charge is not being allowed. Nothing about a grant may appear in
+   * this answer.
+   */
+  test('says nothing about what the coach may read', async () => {
+    const response = await assignApp().fetch(assign({ membership_id: MEMBERSHIP }))
+    const body = await response.text()
+    expect(body).not.toContain('grant')
+    expect(body).not.toContain('scope')
+  })
+
+  test('marks a replayed command', async () => {
+    const replayed = holders({
+      assign: async () => ({
+        resource: {
+          assignmentId: '019ad000-0000-7000-8000-000000000401',
+          relationshipId: RELATIONSHIP,
+          membershipId: MEMBERSHIP,
+          personId: '019ad000-0000-7000-8000-000000000001',
+          validFrom: new Date('2026-10-02T14:00:00.000Z'),
+        },
+        created: false,
+        replayed: true,
+      }),
+    })
+    const response = await assignApp(replayed).fetch(assign({ membership_id: MEMBERSHIP }))
+    expect(response.headers.get('Idempotent-Replay')).toBe('true')
+  })
+})
+
+describe('what assigning refuses', () => {
+  test('a body with no membership', async () => {
+    const response = await assignApp().fetch(assign({}))
+    expect(response.status).toBe(422)
+  })
+
+  test('a membership that is not an identifier', async () => {
+    const response = await assignApp().fetch(assign({ membership_id: 'nope' }))
+    expect(response.status).toBe(422)
+  })
+
+  test('a body carrying a field the contract does not declare', async () => {
+    const response = await assignApp().fetch(
+      assign({ membership_id: MEMBERSHIP, kind: 'substitute' }),
+    )
+    expect(response.status).toBe(422)
+  })
+
+  test('command headers that are missing', async () => {
+    const { 'command-id': _id, ...headers } = ASSIGN_HEADERS
+    const response = await assignApp().fetch(assign({ membership_id: MEMBERSHIP }, headers))
+    expect(response.status).toBe(400)
+  })
+
+  test('another origin', async () => {
+    const response = await assignApp().fetch(
+      assign({ membership_id: MEMBERSHIP }, { ...ASSIGN_HEADERS, origin: 'https://evil.test' }),
+    )
+    expect(response.status).toBe(403)
+  })
+
+  test('a caller PostgreSQL refuses, without inventing a reason', async () => {
+    const denied = holders({
+      assign: async () => {
+        throw Object.assign(new Error('denied'), { code: '42501' })
+      },
+    })
+    const response = await assignApp(denied).fetch(assign({ membership_id: MEMBERSHIP }))
+    expect(response.status).toBe(403)
+  })
+
+  test('a relationship that is no longer active', async () => {
+    const closed = holders({
+      assign: async () => {
+        throw Object.assign(new Error('terminated'), { code: 'P0004' })
+      },
+    })
+    const response = await assignApp(closed).fetch(assign({ membership_id: MEMBERSHIP }))
+    expect(response.status).toBe(409)
+  })
+
+  /*
+   * Taking a client away from the coach who has them is OP-REL-003, and it
+   * owes the person a notification this route never sends. Answering 409 is
+   * what keeps this endpoint from doing that quietly.
+   */
+  test('a relationship that already has a different coach in charge', async () => {
+    const taken = holders({
+      assign: async () => {
+        throw Object.assign(new Error('already has a holder'), { code: 'P0004' })
+      },
+    })
+    const response = await assignApp(taken).fetch(assign({ membership_id: MEMBERSHIP }))
+    expect(response.status).toBe(409)
   })
 })
