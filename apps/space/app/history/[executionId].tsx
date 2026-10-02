@@ -23,10 +23,20 @@ import { Screen } from '@allfitone/react-native/screen'
 import { Sheet } from '@allfitone/react-native/sheet'
 import { Text } from '@allfitone/react-native/text'
 import { useTheme } from '@allfitone/react-native/theme'
+import * as Haptics from 'expo-haptics'
 import { Image } from 'expo-image'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ActivityIndicator, ScrollView, StyleSheet, View } from 'react-native'
+import Animated, {
+  Easing,
+  FadeIn,
+  FadeInDown,
+  FadeInLeft,
+  FadeInRight,
+  LinearTransition,
+  ReduceMotion,
+} from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { createSpaceContentFlow } from '../../src/client/content-transport'
@@ -58,6 +68,24 @@ const REPEAT_FAILED = 'No pudimos empezar el entreno. Inténtalo otra vez.'
 const STILL_OPEN = 'Tienes otro entreno abierto. Termínalo o déjalo antes de repetir este.'
 const ANNUL_FAILED = 'No pudimos eliminarlo. Inténtalo otra vez.'
 
+/**
+ * The sheet's steps move like pages: forward slides in from the right, back from the
+ * left, the sheet's height following on the same curve. Reduced motion keeps the fade.
+ */
+const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1)
+const STEP_MS = 240
+const FORWARD = FadeInRight.duration(STEP_MS).easing(EASE_OUT).reduceMotion(ReduceMotion.System)
+const BACKWARD = FadeInLeft.duration(STEP_MS).easing(EASE_OUT).reduceMotion(ReduceMotion.System)
+const RESIZE = LinearTransition.duration(STEP_MS).easing(EASE_OUT).reduceMotion(ReduceMotion.System)
+/** Each consequence a beat after the one above, as the preview arrives. */
+const LINE = (index: number) =>
+  FadeInDown.duration(220)
+    .delay(index * 60)
+    .easing(EASE_OUT)
+    .reduceMotion(ReduceMotion.System)
+/** Long enough to read «Entreno eliminado», short enough not to wait for it. */
+const DELETED_MS = 900
+
 type Catalogue = ShareCatalogue & { readonly pictures: ReadonlyMap<string, string | null> }
 
 export default function FinishedSessionScreen() {
@@ -76,7 +104,9 @@ export default function FinishedSessionScreen() {
   })
   const [failure, setFailure] = useState<string | undefined>(undefined)
   /** One sheet for the menu and its delete step: iOS will not present a second while the first leaves. */
-  const [sheet, setSheet] = useState<'menu' | 'delete' | undefined>(undefined)
+  const [sheet, setSheet] = useState<'menu' | 'delete' | 'deleted' | undefined>(undefined)
+  /** Which way the menu comes back: from the left when «Cancelar» returns to it. */
+  const [back, setBack] = useState(false)
   const [repeating, setRepeating] = useState(false)
 
   // Read again whenever it is looked at: coming back from editing it shows the correction.
@@ -152,7 +182,10 @@ export default function FinishedSessionScreen() {
           icon="more"
           accessibilityLabel="Más opciones"
           disabled={!detail}
-          onPress={() => setSheet('menu')}
+          onPress={() => {
+            setBack(false)
+            setSheet('menu')
+          }}
         />
       </View>
 
@@ -226,56 +259,92 @@ export default function FinishedSessionScreen() {
         visible={sheet !== undefined}
         onDismiss={() => setSheet(undefined)}
         title={
-          sheet === 'delete'
-            ? '¿Eliminar este entreno?'
-            : detail
-              ? menuTitle(name, detail.started_at, timeZone)
-              : 'Entreno'
+          sheet === 'deleted'
+            ? 'Entreno eliminado'
+            : sheet === 'delete'
+              ? '¿Eliminar este entreno?'
+              : detail
+                ? menuTitle(name, detail.started_at, timeZone)
+                : 'Entreno'
         }
       >
-        {sheet === 'delete' && detail ? (
-          <DeleteStep
-            name={name}
-            detail={detail}
-            timeZone={timeZone}
-            onCancel={() => setSheet(undefined)}
-            onDeleted={() => {
-              setSheet(undefined)
-              if (router.canGoBack()) router.back()
-              else router.replace('/history')
-            }}
-          />
-        ) : (
-          <View style={styles.menu}>
-            <ActionRow
-              icon="edit"
-              name="Editar entreno"
-              detail="Corrige pesos, repeticiones o ejercicios"
-              onPress={edit}
-            />
-            {detail?.repeatable ? (
-              <ActionRow
-                icon="duplicate"
-                name="Repetir este entreno"
-                detail="Empieza uno nuevo con los mismos ejercicios, en blanco"
-                onPress={repeat}
+        {/* Keyed by step, so each step enters as a page and the sheet resizes to it. */}
+        <Animated.View layout={RESIZE} style={styles.steps}>
+          {sheet === 'deleted' ? (
+            <Animated.View key="deleted" entering={FORWARD} style={styles.deleted}>
+              <Animated.View
+                entering={FadeIn.duration(260).delay(80).reduceMotion(ReduceMotion.System)}
+                style={[styles.doneMark, { backgroundColor: `${theme.color.status.success}26` }]}
+              >
+                <FoundationIcon
+                  name="check"
+                  size="lg"
+                  color={theme.color.status.success}
+                  decorative
+                />
+              </Animated.View>
+              <Text role="body" size="md" color="secondary" align="center">
+                Ya no cuenta en tu historial, tus récords ni tu racha.
+              </Text>
+            </Animated.View>
+          ) : sheet === 'delete' && detail ? (
+            <Animated.View key="delete" entering={FORWARD}>
+              <DeleteStep
+                name={name}
+                detail={detail}
+                timeZone={timeZone}
+                onCancel={() => {
+                  void Haptics.selectionAsync()
+                  setBack(true)
+                  setSheet('menu')
+                }}
+                onDeleted={() => {
+                  // The moment it is gone, felt and seen together; then the way out.
+                  void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+                  setSheet('deleted')
+                  setTimeout(() => {
+                    setSheet(undefined)
+                    if (router.canGoBack()) router.back()
+                    else router.replace('/history')
+                  }, DELETED_MS)
+                }}
               />
-            ) : null}
-            <ActionRow
-              icon="share"
-              name="Compartir"
-              detail="Elige una tarjeta para tus historias"
-              onPress={share}
-            />
-            <ActionRow
-              icon="remove"
-              name="Eliminar entreno"
-              detail="Se borra de tu historial"
-              danger
-              onPress={() => setSheet('delete')}
-            />
-          </View>
-        )}
+            </Animated.View>
+          ) : (
+            <Animated.View key="menu" {...(back ? { entering: BACKWARD } : {})} style={styles.menu}>
+              <ActionRow
+                icon="edit"
+                name="Editar entreno"
+                detail="Corrige pesos, repeticiones o ejercicios"
+                onPress={edit}
+              />
+              {detail?.repeatable ? (
+                <ActionRow
+                  icon="duplicate"
+                  name="Repetir este entreno"
+                  detail="Empieza uno nuevo con los mismos ejercicios, en blanco"
+                  onPress={repeat}
+                />
+              ) : null}
+              <ActionRow
+                icon="share"
+                name="Compartir"
+                detail="Elige una tarjeta para tus historias"
+                onPress={share}
+              />
+              <ActionRow
+                icon="remove"
+                name="Eliminar entreno"
+                detail="Se borra de tu historial"
+                danger
+                onPress={() => {
+                  void Haptics.selectionAsync()
+                  setSheet('delete')
+                }}
+              />
+            </Animated.View>
+          )}
+        </Animated.View>
       </Sheet>
     </Screen>
   )
@@ -489,12 +558,15 @@ function DeleteStep({
   }, [flow, detail.executed_session_id, timeZone])
 
   const confirm = () => {
+    // A destructive action fires: felt on the press, before the network answers.
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
     setBusy(true)
     setFailure(undefined)
     flow
       .annul(detail.executed_session_id)
       .then(onDeleted)
       .catch(() => {
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
         setBusy(false)
         setFailure(ANNUL_FAILED)
       })
@@ -510,8 +582,8 @@ function DeleteStep({
           También cambia
         </Text>
         {preview ? (
-          annulConsequences(preview).map((line) => (
-            <View key={line.text} style={styles.consequence}>
+          annulConsequences(preview).map((line, index) => (
+            <Animated.View key={line.text} entering={LINE(index)} style={styles.consequence}>
               <FoundationIcon
                 name={line.icon}
                 size="sm"
@@ -521,13 +593,17 @@ function DeleteStep({
               <Text role="body" size="md">
                 {line.text}
               </Text>
-            </View>
+            </Animated.View>
           ))
         ) : (
           <ActivityIndicator color={theme.color.icon.accent} />
         )}
       </View>
-      {failure ? <InlineAlert message={failure} /> : null}
+      {failure ? (
+        <Animated.View entering={FadeIn.duration(180).reduceMotion(ReduceMotion.System)}>
+          <InlineAlert message={failure} />
+        </Animated.View>
+      ) : null}
       <Button label="Eliminar entreno" variant="danger" loading={busy} onPress={confirm} />
       <Button label="Cancelar" variant="ghost" onPress={onCancel} disabled={busy} />
     </View>
@@ -590,6 +666,15 @@ const styles = StyleSheet.create({
   foot: { borderTopWidth: 1, paddingHorizontal: 20, paddingTop: 12, gap: 6 },
   footRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   menu: { gap: 10, paddingBottom: 8 },
+  steps: { overflow: 'hidden' },
+  deleted: { alignItems: 'center', gap: 14, paddingVertical: 18 },
+  doneMark: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   consequences: { borderRadius: 16, padding: 14, gap: 10 },
   consequence: { flexDirection: 'row', alignItems: 'center', gap: 10 },
 })
