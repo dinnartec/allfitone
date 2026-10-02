@@ -40,5 +40,13 @@ export function resolveWorkspaceRoute(
   if (pathname === `${basePath}/clients/invitations/new`) {
     return { title: 'Invitar cliente' }
   }
+  /*
+   * "Vínculo" because that is the word the directory already uses for this
+   * thing — "Vínculo desde", "vínculos finalizados". The segment cannot be
+   * `invitations`, which is a path and not a relationship id.
+   */
+  if (/^\/organizations\/[^/]+\/clients\/(?!invitations$)[^/]+$/.test(pathname)) {
+    return { title: 'Vínculo' }
+  }
   return { title: 'Studio' }
 }
