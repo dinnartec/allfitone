@@ -28,6 +28,12 @@
  * screen cannot drift from the rest of the system, and Reanimated drops the animation
  * on its own when the system asks for reduced motion.
  *
+ * **A finished session is edited on this same screen** (`?mode=edit`, FIN-18d, ADR-038),
+ * so a correction looks and behaves like the training it corrects. Three things change:
+ * nothing is saved until «Guardar cambios», which sends the session whole under its
+ * revision; the clock and the rest give way to the session's time, duration and volume;
+ * and the column of last time shows each set as it was recorded.
+ *
  * **The pain report is not here.** The canvas carries a "registrar una molestia" row;
  * `execution.pain_reports` does not exist, and a row that silently discards what
  * somebody typed about their body would be worse than its absence.
@@ -67,6 +73,8 @@ import { scheduleOnRN } from 'react-native-worklets'
 
 import { ApiError } from '../../src/client'
 import { createSpaceContentFlow } from '../../src/client/content-transport'
+import { deviceTimezone } from '../../src/client/timezone'
+import { trainedLabel } from '../../src/client/week'
 import {
   declareAlreadyIn,
   declareReplacing,
@@ -74,7 +82,15 @@ import {
   takeExercisePick,
 } from '../../src/client/exercise-pick'
 import { readExerciseLibrary } from '../../src/client/exercise-library'
+import type { FinishedExecution } from '../../src/client/execution'
 import { createSpaceExecutionFlow } from '../../src/client/execution-transport'
+import {
+  changesBetween,
+  clockOf,
+  editStateFrom,
+  menuTitle,
+  withClock,
+} from '../../src/client/finished'
 import { SPRING } from '../../src/client/motion'
 import {
   canFinish,
@@ -118,12 +134,16 @@ import { SessionScoreboard } from '../../src/components/session-scoreboard'
 import { RestSheetBody } from '../../src/components/rest-sheet'
 import { RpeSheetBody } from '../../src/components/rpe-sheet'
 import { SheetChoice } from '../../src/components/sheet-choice'
+import { clockFrom, clockText, TimeWheels, type Clock } from '../../src/components/time-wheels'
 
 const READ_FAILED = 'No pudimos abrir la sesión. Inténtalo otra vez.'
 const SAVE_FAILED = 'No pudimos guardar. Lo intentamos otra vez en un momento.'
 const STALE = 'Otra pantalla cambió esta sesión. Vuelve a abrirla para seguir.'
 const CLOSE_FAILED = 'No pudimos cerrar la sesión. Inténtalo otra vez.'
 const LEAVE_FAILED = 'No pudimos dejar la sesión. Inténtalo otra vez.'
+const REVISE_FAILED = 'No pudimos guardar los cambios. Inténtalo otra vez.'
+const REVISE_STALE = 'Este entreno cambió en otro lado. Vuelve a abrirlo para editarlo.'
+const BAD_TIME = 'El entreno tiene que terminar después de empezar.'
 
 /** Long enough to stop writing on every keystroke, short enough to never lose a set. */
 const SAVE_DELAY_MS = 1_200
@@ -211,8 +231,17 @@ const CARD_INSET = 8
 export default function Session() {
   const router = useRouter()
   const theme = useTheme()
-  const { executionId } = useLocalSearchParams<{ executionId: string }>()
+  const { executionId, mode } = useLocalSearchParams<{ executionId: string; mode?: string }>()
+  const editing = mode === 'edit'
   const flow = useMemo(() => createSpaceExecutionFlow(), [])
+  const timeZone = deviceTimezone()
+
+  /** Editing only: the session as it opened, its time, and the time being turned. */
+  const [finished, setFinished] = useState<FinishedExecution | undefined>(undefined)
+  const [before, setBefore] = useState<readonly WorkingExercise[]>([])
+  const [times, setTimes] = useState<{ start: string; end: string } | undefined>(undefined)
+  const [turning, setTurning] = useState<{ start: Clock; end: Clock } | undefined>(undefined)
+  const [revising, setRevising] = useState(false)
 
   const [exercises, setExercises] = useState<readonly WorkingExercise[]>([])
   /** By key, not place: a move renumbers every place, and the open one has to stay open. */
@@ -264,18 +293,23 @@ export default function Session() {
     Promise.all([
       flow.readExecution(executionId),
       readExerciseLibrary(createSpaceContentFlow()).catch(() => undefined),
+      editing ? flow.readFinished(executionId, timeZone) : Promise.resolve(undefined),
     ])
-      .then(([current, library]) => {
+      .then(([current, library, read]) => {
         if (!active) return
         const movements = library?.movements ?? []
         setPreviews(new Map(movements.map((one) => [one.id, one.demo_url])))
         setCatalogue({ movements, muscles: library?.muscles ?? [] })
         revision.current = current.revision_number
         setTitle(current.title ?? 'Sesión')
-        setStartedAt(Date.parse(current.started_at))
-        const opened = workingStateFrom(current, {
-          names: new Map(movements.map((one) => [one.id, one.name])),
-        })
+        const names = new Map(movements.map((one) => [one.id, one.name]))
+        // A past session opens with what it recorded; there is no clock to run.
+        const opened = read ? editStateFrom(current, names) : workingStateFrom(current, { names })
+        if (read) {
+          setFinished(read)
+          setBefore(opened)
+          setTimes({ start: read.started_at, end: read.ended_at })
+        } else setStartedAt(Date.parse(current.started_at))
         setExercises(opened)
         setOpenKey(opened[0] ? keyOf(opened[0]) : undefined)
       })
@@ -286,10 +320,12 @@ export default function Session() {
     return () => {
       active = false
     }
-  }, [flow, executionId])
+  }, [flow, executionId, editing, timeZone])
 
   const save = useCallback(
     (next: readonly WorkingExercise[]) => {
+      // Editing holds every change until «Guardar cambios».
+      if (editing) return
       if (pending.current) clearTimeout(pending.current)
       pending.current = setTimeout(() => {
         flow
@@ -305,7 +341,7 @@ export default function Session() {
           })
       }, SAVE_DELAY_MS)
     },
-    [flow, executionId],
+    [flow, executionId, editing],
   )
 
   // The picker hands its selection back through the same mailbox the routine editor
@@ -452,7 +488,8 @@ export default function Session() {
       .find((one) => one.position === position)
       ?.sets.find((set) => set.order === order)?.done
     const seconds = restAfter(next, position)
-    if (!ticked) return
+    // Nobody rests between the sets of a session that already happened.
+    if (!ticked || editing) return
     const after = resumesWith(next, position)
     if (seconds !== undefined) {
       restWith(started(Date.now(), seconds), after)
@@ -560,6 +597,52 @@ export default function Session() {
   // Opened from a link there is nothing beneath it, and Hoy is where it waits.
   const minimize = () => (router.canGoBack() ? router.back() : router.replace('/today'))
 
+  const revise = () => {
+    if (!times) return
+    const results = resultsFrom(exercises)
+    setRevising(true)
+    setFailure(undefined)
+    flow
+      .revise(executionId, revision.current, {
+        started_at: times.start,
+        ended_at: times.end,
+        strength_sets: results.strength_sets,
+        ...(results.exercises ? { exercises: results.exercises } : {}),
+      })
+      .then(() => router.back())
+      .catch((cause: unknown) => {
+        setRevising(false)
+        setFailure(
+          cause instanceof ApiError && cause.failure === 'conflict' ? REVISE_STALE : REVISE_FAILED,
+        )
+      })
+  }
+
+  const turnedTimes = () => {
+    if (!turning || !finished) return
+    // A time left alone keeps its exact instant, seconds and all, and is no change.
+    const kept = (now: string, from: string, clock: Clock) =>
+      clockText(clock) === clockOf(now, timeZone)
+        ? now
+        : withClock(from, clockText(clock), timeZone)
+    const start = kept(times?.start ?? finished.started_at, finished.started_at, turning.start)
+    // Each on its own day: a session can end after midnight, or days later.
+    const end = kept(times?.end ?? finished.ended_at, finished.ended_at, turning.end)
+    if (!start || !end || Date.parse(end) <= Date.parse(start)) {
+      setFailure(BAD_TIME)
+      return
+    }
+    setFailure(undefined)
+    setTimes({ start, end })
+    setTurning(undefined)
+  }
+
+  const timeChanged =
+    finished !== undefined &&
+    times !== undefined &&
+    (times.start !== finished.started_at || times.end !== finished.ended_at)
+  const changes = editing ? changesBetween(before, exercises, timeChanged) : 0
+
   const progress = setsProgress(exercises)
   const trains = musclesLine(exercises, catalogue.movements, catalogue.muscles)
   const volume = totalVolumeKg(exercises)
@@ -569,13 +652,22 @@ export default function Session() {
     <Screen edges={['top', 'bottom']}>
       <View style={styles.header}>
         {/* Down, not back: the session is set aside, still open, and Hoy carries it. */}
-        <IconButton icon="expand" accessibilityLabel="Minimizar la sesión" onPress={minimize} />
+        {editing ? (
+          <IconButton icon="close" accessibilityLabel="Cerrar sin guardar" onPress={minimize} />
+        ) : (
+          <IconButton icon="expand" accessibilityLabel="Minimizar la sesión" onPress={minimize} />
+        )}
         <View style={styles.heading}>
           <Text role="control" size="lg" numberOfLines={1} accessibilityRole="header">
-            {title}
+            {editing ? 'Editar entreno' : title}
           </Text>
+          {editing && finished ? (
+            <Text role="body" size="sm" color="muted" numberOfLines={1}>
+              {menuTitle(title, finished.started_at, timeZone)}
+            </Text>
+          ) : null}
           {/* Recomputed from the list, so it follows an exercise added, moved or taken out. */}
-          {trains ? (
+          {trains && !editing ? (
             <Text role="body" size="sm" color="muted" numberOfLines={1}>
               {trains}
             </Text>
@@ -586,21 +678,97 @@ export default function Session() {
             Never disabled: leaving a session is a decision somebody has to be able to
             make, and a dead button gives them nowhere to go. With nothing recorded it
             drops the accent, because there is nothing to save yet. */}
-        <Button
-          label="Terminar"
-          variant={recorded ? 'primary' : 'secondary'}
-          onPress={() => setDeciding(true)}
-          loading={closing}
-          style={styles.finish}
-        />
+        {editing ? null : (
+          <Button
+            label="Terminar"
+            variant={recorded ? 'primary' : 'secondary'}
+            onPress={() => setDeciding(true)}
+            loading={closing}
+            style={styles.finish}
+          />
+        )}
       </View>
 
-      <SessionScoreboard
-        seconds={seconds}
-        volumeKg={volume}
-        done={progress.done}
-        planned={progress.planned}
-      />
+      {editing ? (
+        <View style={styles.past}>
+          <View style={[styles.notice, { backgroundColor: theme.color.background.surfaceMuted }]}>
+            <FoundationIcon name="info" size="sm" color={theme.color.icon.secondary} decorative />
+            <Text role="body" size="sm" color="secondary" style={styles.noticeText}>
+              Es un entreno pasado. Al guardar se recalculan tus récords, tu racha y tus totales.
+            </Text>
+          </View>
+          {times ? (
+            <View
+              style={[
+                styles.pastFigures,
+                {
+                  backgroundColor: theme.color.background.surface,
+                  borderColor: theme.color.border.subtle,
+                },
+              ]}
+            >
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Cambiar el horario"
+                style={styles.pastFigure}
+                onPress={() =>
+                  setTurning({
+                    start: clockFrom(clockOf(times.start, timeZone)),
+                    end: clockFrom(clockOf(times.end, timeZone)),
+                  })
+                }
+              >
+                <Text role="eyebrow" size="2xs" color="muted" uppercase>
+                  Horario
+                </Text>
+                <View style={styles.inline}>
+                  <Text role="poster" size="xl">
+                    {`${clockOf(times.start, timeZone)}–${clockOf(times.end, timeZone)}`}
+                  </Text>
+                  <FoundationIcon
+                    name="edit"
+                    size="xs"
+                    color={theme.color.icon.accent}
+                    decorative
+                  />
+                </View>
+              </Pressable>
+              {(
+                [
+                  [
+                    'Duración',
+                    trainedLabel((Date.parse(times.end) - Date.parse(times.start)) / 1000),
+                  ],
+                  ['Volumen', `${volume.toLocaleString('es-CO', { maximumFractionDigits: 0 })} kg`],
+                ] as const
+              ).map(([label, value]) => (
+                <View
+                  key={label}
+                  style={[
+                    styles.pastFigure,
+                    styles.divided,
+                    { borderLeftColor: theme.color.border.subtle },
+                  ]}
+                >
+                  <Text role="eyebrow" size="2xs" color="muted" uppercase>
+                    {label}
+                  </Text>
+                  <Text role="poster" size="xl" numberOfLines={1}>
+                    {value}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
+        </View>
+      ) : (
+        <SessionScoreboard
+          seconds={seconds}
+          volumeKg={volume}
+          done={progress.done}
+          planned={progress.planned}
+        />
+      )}
 
       {failure ? <InlineAlert message={failure} /> : null}
 
@@ -659,6 +827,7 @@ export default function Session() {
               }
               onExplain={explainer(exercise.movementId)}
               onRest={() => setAsking({ about: 'rest', position: exercise.position })}
+              pastLabel={editing ? 'ANTES' : 'ANTERIOR'}
             />
           </DraggableRow>
         ))}
@@ -670,7 +839,46 @@ export default function Session() {
         </View>
       </ScrollView>
 
-      {rest || aside ? (
+      {editing ? (
+        <View style={[styles.editFoot, { borderTopColor: theme.color.border.subtle }]}>
+          <View style={styles.changes}>
+            {changes > 0 ? (
+              <View style={[styles.changeDot, { backgroundColor: theme.color.icon.accent }]} />
+            ) : null}
+            <Text role="body" size="sm" color={changes > 0 ? 'secondary' : 'muted'}>
+              {changes === 0
+                ? 'Sin cambios todavía'
+                : `${String(changes)} ${changes === 1 ? 'cambio' : 'cambios'} · tus récords se recalculan al guardar`}
+            </Text>
+          </View>
+          <View style={styles.editActions}>
+            <Button label="Descartar" variant="secondary" onPress={minimize} disabled={revising} />
+            <View style={styles.noticeText}>
+              <Button
+                label="Guardar cambios"
+                loading={revising}
+                disabled={changes === 0 || !recorded}
+                onPress={revise}
+              />
+            </View>
+          </View>
+        </View>
+      ) : null}
+
+      <Sheet
+        visible={turning !== undefined}
+        onDismiss={() => setTurning(undefined)}
+        title="Horario del entreno"
+      >
+        {turning ? (
+          <View style={styles.decisions}>
+            <TimeWheels start={turning.start} end={turning.end} onChange={setTurning} />
+            <Button label="Listo" onPress={turnedTimes} />
+          </View>
+        ) : null}
+      </Sheet>
+
+      {!editing && (rest || aside) ? (
         <RestBar
           moment={
             rest ? { kind: 'rest', rest, ...upNext.current } : (aside ?? { kind: 'done', next: '' })
@@ -861,6 +1069,7 @@ function Exercise({
   onTick,
   onExplain,
   onRest,
+  pastLabel,
 }: {
   readonly exercise: WorkingExercise
   readonly picture: string | null
@@ -882,6 +1091,8 @@ function Exercise({
   /** Absent when the step names no catalogue movement: there is nothing to explain. */
   readonly onExplain: (() => void) | undefined
   readonly onRest: () => void
+  /** «ANTERIOR» while training; «ANTES» when correcting, over the set as recorded. */
+  readonly pastLabel: string
 }) {
   const theme = useTheme()
   const progress = useSharedValue(0)
@@ -980,7 +1191,7 @@ function Exercise({
           SERIE
         </Text>
         <Text role="eyebrow" size="xs" color="muted" numberOfLines={1} style={styles.colPrevious}>
-          ANTERIOR
+          {pastLabel}
         </Text>
         <Text role="eyebrow" size="xs" color="muted" align="center" style={styles.colInput}>
           KG
@@ -1432,6 +1643,17 @@ function Field({
 
 const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  past: { gap: 10, paddingTop: 14 },
+  notice: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 16, padding: 14 },
+  noticeText: { flex: 1 },
+  pastFigures: { flexDirection: 'row', borderRadius: 18, borderWidth: 1, paddingVertical: 12 },
+  pastFigure: { flex: 1, gap: 4, paddingHorizontal: 12 },
+  divided: { borderLeftWidth: 1 },
+  inline: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  editFoot: { borderTopWidth: 1, paddingTop: 10, gap: 10 },
+  changes: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  changeDot: { width: 8, height: 8, borderRadius: 4 },
+  editActions: { flexDirection: 'row', gap: 12 },
   heading: { flex: 1, gap: 1 },
   list: { gap: EXERCISE_GAP, paddingTop: 16, paddingBottom: 32 },
   shell: {

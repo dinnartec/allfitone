@@ -5,16 +5,15 @@
  * `Intl`'s Spanish month names, whose abbreviations vary by engine («sept.», «sep»): the
  * row on the phone has to read the same as the one in the test.
  *
- * **Editing reuses the session's own state** (`session-form.ts`), so a corrected set is
+ * **Editing is the session screen itself** (`session-form.ts`), so a corrected set is
  * written exactly as a logged one. Two things differ. A past session opens with only what
  * was recorded, never the rows the routine proposed and nobody did; and each recorded set
- * carries its `origin`, so the screen can say «antes 65» and undo a change even after
- * sets above it were removed and the ladder renumbered.
+ * carries its `origin` and shows itself as recorded where the session shows last time,
+ * so the changes can be counted even after sets were removed and the ladder renumbered.
  */
 
-import type { ExecutionResults } from './execution'
 import type { Execution, FinishedExecution, FinishedSet, InvalidationPreview } from './execution'
-import { resultsFrom, withExtraSet, workingStateFrom, type WorkingExercise } from './session-form'
+import { workingStateFrom, type WorkingExercise } from './session-form'
 
 const MONTHS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
 const WEEKDAYS = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb']
@@ -175,6 +174,10 @@ export function annulConsequences(preview: InvalidationPreview): readonly Conseq
 
 const originOf = (position: number, order: number) => `${position}:${order}`
 
+/** «65 × 8», as the session writes last time's set. */
+const recordedLine = (load: string, reps: string) =>
+  load && reps ? `${load} × ${reps}` : load ? `${load} kg` : reps ? `× ${reps}` : '—'
+
 /** What was recorded, and nothing the routine proposed that nobody did. */
 export function editStateFrom(
   execution: Execution,
@@ -190,41 +193,10 @@ export function editStateFrom(
         ...one,
         order: (order += 1),
         origin: originOf(exercise.position, one.order),
+        // «Antes» is the column the session calls «anterior»: here it is the set as recorded.
+        previous: recordedLine(one.loadKg, one.reps),
       })),
   }))
-}
-
-export function withEditedSet(
-  exercises: readonly WorkingExercise[],
-  position: number,
-  order: number,
-  patch: { readonly loadKg?: string; readonly reps?: string },
-): readonly WorkingExercise[] {
-  return exercises.map((exercise) =>
-    exercise.position !== position
-      ? exercise
-      : {
-          ...exercise,
-          sets: exercise.sets.map((one) => (one.order === order ? { ...one, ...patch } : one)),
-        },
-  )
-}
-
-/** A set added while editing is one that was done: it arrives counted. */
-export function withAddedSet(
-  exercises: readonly WorkingExercise[],
-  position: number,
-): readonly WorkingExercise[] {
-  return withExtraSet(exercises, position).map((exercise) =>
-    exercise.position !== position
-      ? exercise
-      : {
-          ...exercise,
-          sets: exercise.sets.map((one, index) =>
-            index === exercise.sets.length - 1 ? { ...one, done: true } : one,
-          ),
-        },
-  )
 }
 
 const numeric = (text: string) => {
@@ -238,7 +210,8 @@ const sameSet = (one: Set, other: Set) =>
   numeric(one.loadKg) === numeric(other.loadKg) &&
   numeric(one.reps) === numeric(other.reps) &&
   one.kind === other.kind &&
-  one.rpe === other.rpe
+  one.rpe === other.rpe &&
+  one.done === other.done
 
 const recordedSets = (exercises: readonly WorkingExercise[]) =>
   new Map(
@@ -246,11 +219,6 @@ const recordedSets = (exercises: readonly WorkingExercise[]) =>
       exercise.sets.flatMap((one) => (one.origin ? [[one.origin, one] as const] : [])),
     ),
   )
-
-/** The recorded set a working one started as, for «antes 65»; undefined for a new one. */
-export function originalOf(before: readonly WorkingExercise[], set: Set): Set | undefined {
-  return set.origin ? recordedSets(before).get(set.origin) : undefined
-}
 
 /** How many things changed: each set edited, added or removed, the order, and the time. */
 export function changesBetween(
@@ -276,52 +244,4 @@ export function changesBetween(
   const reordered = keys(after).filter((key) => order.includes(key))
   if (order.join() !== reordered.join()) changes += 1
   return changes + (timeChanged ? 1 : 0)
-}
-
-/** Puts one set back as it was recorded. */
-export function revertedSet(
-  before: readonly WorkingExercise[],
-  after: readonly WorkingExercise[],
-  position: number,
-  order: number,
-): readonly WorkingExercise[] {
-  const recorded = recordedSets(before)
-  return after.map((exercise) =>
-    exercise.position !== position
-      ? exercise
-      : {
-          ...exercise,
-          sets: exercise.sets.map((one) => {
-            const original = one.origin ? recorded.get(one.origin) : undefined
-            return one.order === order && original
-              ? {
-                  ...one,
-                  loadKg: original.loadKg,
-                  reps: original.reps,
-                  kind: original.kind,
-                  rpe: original.rpe,
-                }
-              : one
-          }),
-        },
-  )
-}
-
-/** The sets with a figure, renumbered; «67,5» is sixty-seven and a half. */
-export function editResults(exercises: readonly WorkingExercise[]): ExecutionResults {
-  let order = 0
-  return resultsFrom(
-    exercises.map((exercise) => ({
-      ...exercise,
-      sets: exercise.sets
-        .filter((one) => numeric(one.loadKg) !== null || numeric(one.reps) !== null)
-        .map((one) => ({
-          ...one,
-          order: (order += 1),
-          done: true,
-          loadKg: one.loadKg.replace(',', '.'),
-          reps: one.reps.replace(',', '.'),
-        })),
-    })),
-  )
 }

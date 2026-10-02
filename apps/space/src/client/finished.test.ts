@@ -8,18 +8,14 @@ import {
   clockOf,
   comparisonLine,
   deletionLine,
-  editResults,
   editStateFrom,
   exercisesLine,
   menuTitle,
-  revertedSet,
   setLine,
   whenRange,
-  withAddedSet,
   withClock,
-  withEditedSet,
 } from './finished'
-import { withoutSet } from './session-form'
+import { withExtraSet, withoutSet, withTick } from './session-form'
 
 const ZONE = 'America/Bogota'
 
@@ -208,42 +204,28 @@ const recorded: Execution = {
 } as unknown as Execution
 
 describe('editing a finished session (FIN-18d)', () => {
-  test('T-SPC-UNIT-198 opens with what was recorded and nothing the routine only proposed', () => {
+  test('T-SPC-UNIT-198 opens with what was recorded, each set showing itself as recorded', () => {
     const [remo] = editStateFrom(recorded)
-    expect(remo?.sets.map((one) => [one.order, one.loadKg, one.reps, one.done])).toEqual([
-      [1, '60', '8', true],
-      [2, '65', '8', true],
-    ])
-  })
-
-  test('T-SPC-UNIT-199 counts each change once, and an undone change is none', () => {
-    const before = editStateFrom(recorded)
-    const heavier = withEditedSet(before, 1, 2, { loadKg: '67,5' })
-    expect(changesBetween(before, heavier, false)).toBe(1)
-    expect(changesBetween(before, withAddedSet(heavier, 1), true)).toBe(3)
-    expect(changesBetween(before, withoutSet(before, 1, 1), false)).toBe(1)
-    const undone = withEditedSet(heavier, 1, 2, { loadKg: '65' })
-    expect(changesBetween(before, undone, false)).toBe(0)
-  })
-
-  test('T-SPC-UNIT-200 a set can go back to what it was', () => {
-    const before = editStateFrom(recorded)
-    const heavier = withEditedSet(before, 1, 2, { loadKg: '70', reps: '6' })
-    const back = revertedSet(before, heavier, 1, 2)
-    expect(back[0]?.sets[1]).toMatchObject({ loadKg: '65', reps: '8' })
-  })
-
-  test('T-SPC-UNIT-201 saves what has a figure, decimals with a comma read as decimals', () => {
-    const before = editStateFrom(recorded)
-    const edited = withAddedSet(withEditedSet(before, 1, 2, { loadKg: '67,5' }), 1)
-    const emptied = withEditedSet(edited, 1, 3, { loadKg: '', reps: '' })
-    const results = editResults(emptied)
     expect(
-      results.strength_sets.map((one) => [one.order, one.load?.value, one.achieved_reps]),
+      remo?.sets.map((one) => [one.order, one.loadKg, one.reps, one.done, one.previous]),
     ).toEqual([
-      [1, 60, 8],
-      [2, 67.5, 8],
+      [1, '60', '8', true, '60 × 8'],
+      [2, '65', '8', true, '65 × 8'],
     ])
+  })
+
+  test('T-SPC-UNIT-199 counts each change once, and a change put back is none', () => {
+    const before = editStateFrom(recorded)
+    const touch = (load: string) =>
+      before.map((exercise) => ({
+        ...exercise,
+        sets: exercise.sets.map((one) => (one.order === 2 ? { ...one, loadKg: load } : one)),
+      }))
+    expect(changesBetween(before, touch('67,5'), false)).toBe(1)
+    expect(changesBetween(before, withExtraSet(touch('67,5'), 1), true)).toBe(3)
+    expect(changesBetween(before, withoutSet(before, 1, 1), false)).toBe(1)
+    expect(changesBetween(before, withTick(before, 1, 1), false)).toBe(1)
+    expect(changesBetween(before, touch('65'), false)).toBe(0)
   })
 })
 

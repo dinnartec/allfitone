@@ -27,6 +27,7 @@ import { Image } from 'expo-image'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { useCallback, useMemo, useState } from 'react'
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { createSpaceContentFlow } from '../../src/client/content-transport'
 import { litSlugsFor } from '../../src/client/exercise-catalogue'
@@ -65,6 +66,7 @@ export default function FinishedSessionScreen() {
   const { executionId } = useLocalSearchParams<{ executionId: string }>()
   const router = useRouter()
   const theme = useTheme()
+  const insets = useSafeAreaInsets()
   const timeZone = deviceTimezone()
   const flow = useMemo(() => createSpaceExecutionFlow(), [])
 
@@ -128,11 +130,11 @@ export default function FinishedSessionScreen() {
   }
   const edit = () => {
     setMenu(false)
-    router.push({ pathname: '/history/edit/[executionId]', params: { executionId } })
+    router.push({ pathname: '/session/[executionId]', params: { executionId, mode: 'edit' } })
   }
 
   return (
-    <Screen edges={['top', 'bottom']} padded={false}>
+    <Screen edges={['top']} padded={false}>
       <View style={styles.header}>
         <IconButton
           icon="back"
@@ -140,7 +142,7 @@ export default function FinishedSessionScreen() {
           onPress={() => (router.canGoBack() ? router.back() : router.replace('/history'))}
         />
         <Text role="control" size="lg" color="secondary" style={styles.title}>
-          Historial
+          Detalle del entreno
         </Text>
         <IconButton
           icon="edit"
@@ -189,12 +191,15 @@ export default function FinishedSessionScreen() {
       )}
 
       {detail ? (
+        // To the screen's edge, its own padding over the home indicator: with the
+        // screen's bottom inset the canvas showed as a gap below it.
         <View
           style={[
             styles.foot,
             {
               borderTopColor: theme.color.border.subtle,
               backgroundColor: theme.color.background.canvas,
+              paddingBottom: Math.max(insets.bottom, 12),
             },
           ]}
         >
@@ -427,12 +432,12 @@ function ExerciseCard({
             one.best_ever ? { backgroundColor: theme.color.background.surfaceMuted } : null,
           ]}
         >
-          <Text role="control" size="md" color="muted" style={styles.setNumber}>
+          <Text role="control" size="sm" color="muted" style={styles.setNumber}>
             {one.kind === 'warmup' ? 'C' : String(index + 1)}
           </Text>
           <Text
             role="control"
-            size="lg"
+            size="md"
             color={one.best_ever ? 'primary' : 'secondary'}
             style={styles.grow}
           >
@@ -440,7 +445,7 @@ function ExerciseCard({
           </Text>
           {one.best_ever ? (
             <Text role="body" size="xs" color="primary">
-              mejor de siempre
+              Mejor de siempre
             </Text>
           ) : one.kind !== 'normal' ? (
             <Text role="body" size="xs" color="muted">
@@ -620,7 +625,7 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
   },
   setNumber: { width: 18, textAlign: 'center' },
-  foot: { borderTopWidth: 1, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 6, gap: 6 },
+  foot: { borderTopWidth: 1, paddingHorizontal: 20, paddingTop: 12, gap: 6 },
   footRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   menu: { gap: 10, paddingBottom: 8 },
   scrim: { flex: 1, justifyContent: 'center', paddingHorizontal: 24 },
