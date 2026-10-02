@@ -130,6 +130,7 @@
 [data-page-header-actions],
 [data-profile-setup-actions],
 [data-team-invitation-actions],
+[data-client-invitation-actions],
 [data-credential-actions],
 [data-card-footer-actions],
 [data-profile-form-actions] {
@@ -212,11 +213,13 @@
 [data-invitation-waiting],
 [data-team-page],
 [data-client-page],
+[data-client-invite-page],
 [data-team-section],
 [data-profile-section],
 [data-profile-state],
 [data-organization-state],
-[data-team-invitation-result] {
+[data-team-invitation-result],
+[data-client-invitation-result] {
   display: flex;
   min-width: 0;
   flex-direction: column;
@@ -475,6 +478,7 @@
 }
 
 [data-team-invitation-summary],
+[data-client-invitation-summary],
 [data-ownership-invitation-summary],
 /* Two fixed columns left a hole whenever there was one pair to show, which on a
    membership card is the common case: a person who has not left has no end
@@ -487,6 +491,7 @@
 }
 
 [data-team-invitation-summary] > div,
+[data-client-invitation-summary] > div,
 [data-ownership-invitation-summary] > div,
 [data-credential-details] > div {
   min-width: 0;
@@ -501,6 +506,7 @@
    value in `StatStripItem`, through its own `--afo-typography-label-*` tokens,
    rather than a weight invented here. */
 [data-team-invitation-summary] dt,
+[data-client-invitation-summary] dt,
 [data-ownership-invitation-summary] dt,
 [data-team-member-facts] dt,
 [data-client-facts] dt,
@@ -860,6 +866,7 @@
   [data-membership-context-grid],
   [data-credential-grid],
   [data-team-invitation-summary],
+  [data-client-invitation-summary],
   [data-credential-details] {
     grid-template-columns: minmax(0, 1fr);
   }

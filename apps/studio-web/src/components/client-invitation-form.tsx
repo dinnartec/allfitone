@@ -2,6 +2,15 @@
 
 import { Alert, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
 import { Button, buttonVariants } from '@allfitone/react/components/button'
+import { Badge } from '@allfitone/react/components/badge'
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@allfitone/react/components/card'
 import { Checkbox } from '@allfitone/react/components/checkbox'
 import {
   Field,
@@ -30,6 +39,7 @@ import { type FormEvent, useState } from 'react'
 
 import { useOrganizationContext } from './organization-context'
 import { useStudioSessionMutation } from './studio-query-provider'
+import { WorkspacePageHeader } from './workspace-page-header'
 import {
   StudioApiError,
   newCommand,
@@ -105,58 +115,64 @@ export function ClientInvitationForm() {
   }
 
   if (!rolesQuery.isPending && !allowed) {
+    // A plain section with an alert, as the directory does for the same case.
+    // `SetupPanel` is two columns and would leave half the screen empty.
     return (
-      <SetupPanel>
-        <SetupPanelIntro>
-          <SetupPanelEyebrow>Clientes</SetupPanelEyebrow>
-          <SetupPanelTitle as="h2">No puedes invitar clientes.</SetupPanelTitle>
-          <SetupPanelDescription>
+      <section data-client-invite-page aria-label="Invitar a una persona">
+        <WorkspacePageHeader description="Invitar clientes está disponible para quienes atienden personas o administran la organización." />
+        <Alert variant="warning">
+          <AlertTitle>No puedes invitar clientes</AlertTitle>
+          <AlertDescription>
             Tu rol en {current.display_name} no permite enviar invitaciones a clientes.
-          </SetupPanelDescription>
-        </SetupPanelIntro>
-        <SetupPanelContent>
-          <SetupPanelActions>
-            <Link
-              href={directoryPath}
-              data-slot="button"
-              data-variant="outline"
-              className={buttonVariants({ variant: 'outline' })}
-            >
-              Ver el directorio
-            </Link>
-          </SetupPanelActions>
-        </SetupPanelContent>
-      </SetupPanel>
+          </AlertDescription>
+        </Alert>
+      </section>
     )
   }
 
   if (sent) {
+    /*
+     * A `Card`, as the team invitation confirms, and not a `SetupPanel`. That
+     * panel is two columns on a desktop: with nothing to put in the second one
+     * it left half the screen blank beside the message.
+     */
+    const asked = catalog.filter((scope) => sent.scope_codes.includes(scope.scope_code))
     return (
-      <SetupPanel>
-        <SetupPanelIntro>
-          <SetupPanelEyebrow>Clientes</SetupPanelEyebrow>
-          <SetupPanelTitle as="h2">La invitación va en camino.</SetupPanelTitle>
-          <SetupPanelDescription>
-            {/* The honest summary: nothing exists on our side until they answer.
-                No person, no relationship, no access to anything. */}
-            Enviada a {sent.contact_hint}. Hasta que la persona responda no existe ningún vínculo ni
-            permiso. Puede aceptar unos permisos y rechazar otros, o aceptar la relación sin
-            concedernos ninguno.
-          </SetupPanelDescription>
-        </SetupPanelIntro>
-        <SetupPanelContent>
-          <SetupPanelActions>
-            <Link
-              href={directoryPath}
-              data-slot="button"
-              data-variant="default"
-              className={buttonVariants()}
-            >
-              Ver el directorio
-            </Link>
+      <Card aria-live="polite">
+        <CardHeader>
+          <CardDescription>
+            {sent.reused ? 'Invitación reenviada' : 'Invitación enviada'}
+          </CardDescription>
+          <CardTitle role="heading" aria-level={2}>
+            La invitación va en camino.
+          </CardTitle>
+          <CardAction>
+            <Badge variant="warning">Pendiente</Badge>
+          </CardAction>
+        </CardHeader>
+        <CardContent data-client-invitation-result>
+          <p>
+            {/* The honest summary: nothing exists on our side until they
+                answer. No person, no relationship, no access to anything. */}
+            Enviamos la invitación a <strong>{sent.contact_hint}</strong>. Hasta que la persona
+            responda no existe ningún vínculo ni permiso, y puede aceptar unos y rechazar otros.
+          </p>
+          <dl data-client-invitation-summary>
+            <div>
+              <dt>Permisos pedidos</dt>
+              <dd>{asked.map((scope) => scope.display_name).join(', ')}</dd>
+            </div>
+            <div>
+              <dt>Vence</dt>
+              <dd>
+                {new Intl.DateTimeFormat('es-CO', { dateStyle: 'long' }).format(
+                  new Date(sent.expires_at),
+                )}
+              </dd>
+            </div>
+          </dl>
+          <div data-client-invitation-actions>
             <Button
-              type="button"
-              variant="ghost"
               onClick={() => {
                 setSent(undefined)
                 setContact('')
@@ -167,9 +183,17 @@ export function ClientInvitationForm() {
             >
               Invitar a otra persona
             </Button>
-          </SetupPanelActions>
-        </SetupPanelContent>
-      </SetupPanel>
+            <Link
+              href={directoryPath}
+              data-slot="button"
+              data-variant="ghost"
+              className={buttonVariants({ variant: 'ghost' })}
+            >
+              Ver el directorio
+            </Link>
+          </div>
+        </CardContent>
+      </Card>
     )
   }
 
