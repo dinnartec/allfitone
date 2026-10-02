@@ -5836,6 +5836,42 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  RelationshipHolder: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['assignment_id', 'relationship_id', 'membership_id', 'person_id', 'valid_from'],
+    properties: {
+      assignment_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      relationship_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      membership_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      person_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      valid_from: {
+        type: 'string',
+        format: 'date-time',
+        description:
+          "Since when this coach has attended the person. A repeated assignment of the same coach answers with the original date rather than today's.",
+      },
+    },
+  },
+  RelationshipHolderAssignment: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['membership_id'],
+    properties: {
+      membership_id: {
+        $ref: '#/components/schemas/UuidV7',
+        description: 'The membership of the coach who will attend this person.',
+      },
+    },
+  },
   RelationshipStatus: {
     type: 'string',
     enum: ['active', 'terminated'],

@@ -3,6 +3,7 @@ import { measureStudioRequestPhase } from '../../../platform/observability/index
 import type postgres from 'postgres'
 import type {
   ClientDirectoryDatabase,
+  HolderAssignmentDatabase,
   DirectoryEntry,
   DirectoryGroup,
   InvitationStatus,
@@ -98,4 +99,59 @@ async function setPersonActor(
     select set_config('app.actor_kind', 'person', true),
            set_config('app.actor_person_id', ${personId}, true)
   `
+}
+
+/**
+ * PostgreSQL access for putting a coach in charge.
+ *
+ * The organization context is set by the function itself, not here: it checks
+ * the capability against it before anything is written, and a caller that set
+ * it from outside would be declaring the answer to the question being asked.
+ */
+export function createHolderAssignmentDatabase(
+  sql: postgres.Sql = database(),
+): HolderAssignmentDatabase {
+  return {
+    assignHolder: (input) =>
+      measureStudioRequestPhase('business-db', async () => {
+        const row = await sql.begin(async (transaction) => {
+          await setPersonActor(transaction, input.actorPersonId)
+          const [assigned] = await transaction<HolderRow[]>`
+            select * from relationships.assign_relationship_holder(
+              ${input.actorPersonId}::uuid,
+              ${input.organizationId}::uuid,
+              ${input.relationshipId}::uuid,
+              ${input.membershipId}::uuid,
+              ${input.idempotencyKey}::uuid,
+              ${input.commandId}::uuid,
+              ${input.requestHash}
+            )
+          `
+          return assigned
+        })
+
+        if (!row) throw new Error('assign_relationship_holder returned no row')
+        return {
+          resource: {
+            assignmentId: row.assignment_id,
+            relationshipId: row.relationship_id,
+            membershipId: row.membership_id,
+            personId: row.person_id,
+            validFrom: new Date(row.valid_from),
+          },
+          created: row.created,
+          replayed: row.replayed,
+        }
+      }),
+  }
+}
+
+type HolderRow = {
+  assignment_id: string
+  relationship_id: string
+  membership_id: string
+  person_id: string
+  valid_from: string
+  created: boolean
+  replayed: boolean
 }

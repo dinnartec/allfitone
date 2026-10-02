@@ -1,5 +1,6 @@
 /** Client directory routes for Studio. */
 
+import { createHash } from 'node:crypto'
 import { Hono, type Context } from 'hono'
 import { getCookie } from 'hono/cookie'
 import { cors } from 'hono/cors'
@@ -12,19 +13,27 @@ import {
   trustedStudioWebUrl,
 } from '../../identity/index.js'
 import { fail } from '../../../platform/http/index.js'
-import { clientDirectoryService } from '../dependencies.js'
-import { RelationshipsError, type ClientDirectoryService } from '../application/index.js'
+import { clientDirectoryService, holderAssignmentService } from '../dependencies.js'
+import {
+  RelationshipsError,
+  type ClientDirectoryService,
+  type HolderAssignmentService,
+} from '../application/index.js'
 import type { DirectoryEntry, DirectoryGroup } from '../domain/index.js'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+const UUID_V7 = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const DIRECTORY_GROUPS = new Set<DirectoryGroup>(['active', 'invited', 'terminated'])
 
 export function studioRelationshipRoutes(
   injectedService?: ClientDirectoryService,
   injectedSessions?: StudioSessionService,
+  injectedHolders?: HolderAssignmentService,
 ): Hono {
   const studioOrigin = new URL(trustedStudioWebUrl()).origin
   const directory = () => injectedService ?? clientDirectoryService()
+  const holders = () => injectedHolders ?? holderAssignmentService()
   const sessions = () => injectedSessions ?? studioSessionService()
   const routes = new Hono()
 
@@ -33,8 +42,8 @@ export function studioRelationshipRoutes(
     cors({
       origin: studioOrigin,
       credentials: true,
-      allowMethods: ['GET', 'OPTIONS'],
-      allowHeaders: ['Content-Type'],
+      allowMethods: ['GET', 'POST', 'OPTIONS'],
+      allowHeaders: ['Content-Type', 'Idempotency-Key', 'Command-Id'],
       maxAge: 600,
     }),
   )
@@ -90,7 +99,99 @@ export function studioRelationshipRoutes(
     }
   })
 
+  /*
+   * OP-REL-002. Says who attends this person, and nothing else: the function
+   * never touches a grant, so being in charge still reads nothing without the
+   * person's permission.
+   *
+   * Only puts a coach where there is none. Taking the client away from the
+   * coach who has them is OP-REL-003, which owes the person a notification
+   * this route never sends, so a relationship that already has a holder comes
+   * back as a conflict instead.
+   */
+  routes.post(
+    '/organizations/:organizationId/relationships/:relationshipId/professional-assignments',
+    async (c) => {
+      c.header('Cache-Control', 'no-store')
+      if (c.req.header('origin') !== studioOrigin) {
+        return fail(c, 'forbidden', 'origin is not allowed')
+      }
+      const organizationId = c.req.param('organizationId')
+      const relationshipId = c.req.param('relationshipId')
+      if (!UUID.test(organizationId) || !UUID.test(relationshipId)) {
+        return fail(c, 'invalid-request')
+      }
+      const body = await readJson(c)
+      if (!isHolderAssignment(body)) return fail(c, 'validation-failed')
+      const command = commandContext(c, body)
+      if (!command) return fail(c, 'invalid-request', 'valid command headers are required')
+
+      try {
+        const actor = await studioActor(c, sessions())
+        if (actor instanceof Response) return actor
+        const result = await holders().assign(actor, {
+          organizationId,
+          relationshipId,
+          membershipId: body.membership_id,
+          ...command,
+        })
+        if (result.replayed) c.header('Idempotent-Replay', 'true')
+        return c.json(
+          {
+            assignment_id: result.resource.assignmentId,
+            relationship_id: result.resource.relationshipId,
+            membership_id: result.resource.membershipId,
+            person_id: result.resource.personId,
+            valid_from: result.resource.validFrom.toISOString(),
+          },
+          result.created ? 201 : 200,
+        )
+      } catch (error) {
+        return failure(c, error)
+      }
+    },
+  )
+
   return routes
+}
+
+async function readJson(c: Context): Promise<unknown> {
+  try {
+    return await c.req.json()
+  } catch {
+    return undefined
+  }
+}
+
+function commandContext(c: Context, body: unknown) {
+  const idempotencyKey = c.req.header('idempotency-key') ?? ''
+  const commandId = c.req.header('command-id') ?? ''
+  if (!UUID_V4.test(idempotencyKey) || !UUID_V7.test(commandId)) return undefined
+  return {
+    idempotencyKey,
+    commandId,
+    requestHash: createHash('sha256').update(canonicalJson(body)).digest(),
+  }
+}
+
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`
+  if (isObject(value)) {
+    return `{${Object.entries(value)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, item]) => `${JSON.stringify(key)}:${canonicalJson(item)}`)
+      .join(',')}}`
+  }
+  return JSON.stringify(value)
+}
+
+function isHolderAssignment(value: unknown): value is { membership_id: string } {
+  return (
+    isObject(value) &&
+    Object.keys(value).join(',') === 'membership_id' &&
+    typeof value.membership_id === 'string' &&
+    UUID.test(value.membership_id)
+  )
 }
 
 /*
@@ -111,12 +212,24 @@ async function studioActor(c: Context, sessions: StudioSessionService) {
   }
 }
 
+/*
+ * This mapped the two states a read can fail with, because reading the
+ * directory was all this domain did. Assigning a holder can also find the
+ * relationship gone, or find it closed, or lose a race with another
+ * assignment — all of which came back as an outage before.
+ */
 function failure(c: Parameters<typeof fail>[0], error: unknown): Response {
   if (error instanceof RelationshipsError) return fail(c, error.code)
   const sqlState = isObject(error) && typeof error.code === 'string' ? error.code : undefined
   if (sqlState === '42501') return fail(c, 'forbidden')
-  if (sqlState === '22023') return fail(c, 'validation-failed')
-  console.error('[studio-relationships] directory read failed')
+  if (sqlState === 'P0002') return fail(c, 'not-found')
+  if (sqlState === 'P0004' || sqlState === '23505' || sqlState === '40001') {
+    return fail(c, 'conflict')
+  }
+  if (sqlState === '22023' || sqlState === '23514' || sqlState === '22P02') {
+    return fail(c, 'validation-failed')
+  }
+  console.error('[studio-relationships] operation failed')
   return fail(c, 'upstream-unavailable')
 }
 

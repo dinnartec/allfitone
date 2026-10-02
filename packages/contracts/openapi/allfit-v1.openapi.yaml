@@ -4978,6 +4978,77 @@ paths:
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
 
+  /studio/v1/organizations/{organizationId}/relationships/{relationshipId}/professional-assignments:
+    post:
+      tags: [Studio Relationships]
+      operationId: assignRelationshipHolder
+      x-allfit-operation: OP-REL-002
+      x-allfit-cache: no-store
+      summary: Put a coach in charge of a client
+      description: >-
+        Says who attends this person. It does **not** grant anything: without a
+        live grant from the person, the professional in charge reads nothing of
+        theirs. Being assigned and being allowed are two of the five conditions
+        a read has to satisfy, and this command touches only the first.
+
+
+        The target must hold a live membership in this same organization and the
+        coach role. A professional from another organization can never be
+        assigned, even when the person is a client of both.
+
+
+        There is one holder at a time, and this command only fills an empty
+        place. Taking the client away from the coach who already has them is a
+        different operation (`OP-REL-003`), because it owes the person a
+        notification this one never sends; a relationship that already has a
+        different holder is rejected with `409`.
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/RelationshipId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RelationshipHolderAssignment'
+      responses:
+        '200':
+          description: That coach was already in charge; nothing changed
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RelationshipHolder'
+        '201':
+          description: The coach is now in charge
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RelationshipHolder'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
   /studio/v1/organizations/{organizationId}/relationships/{relationshipId}/assignments:
     post:
       tags: [Studio Planning]
@@ -12506,6 +12577,35 @@ components:
               format: uuid
         replayed:
           type: boolean
+    RelationshipHolderAssignment:
+      type: object
+      additionalProperties: false
+      required: [membership_id]
+      properties:
+        membership_id:
+          $ref: '#/components/schemas/UuidV7'
+          description: The membership of the coach who will attend this person.
+    RelationshipHolder:
+      type: object
+      additionalProperties: false
+      required:
+        [assignment_id, relationship_id, membership_id, person_id, valid_from]
+      properties:
+        assignment_id:
+          $ref: '#/components/schemas/UuidV7'
+        relationship_id:
+          $ref: '#/components/schemas/UuidV7'
+        membership_id:
+          $ref: '#/components/schemas/UuidV7'
+        person_id:
+          $ref: '#/components/schemas/UuidV7'
+        valid_from:
+          type: string
+          format: date-time
+          description: >-
+            Since when this coach has attended the person. A repeated
+            assignment of the same coach answers with the original date rather
+            than today's.
     OfferableScope:
       type: object
       additionalProperties: false
