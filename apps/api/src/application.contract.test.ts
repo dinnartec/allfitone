@@ -53,6 +53,22 @@ describe('OpenAPI route gate', () => {
     })
   })
 
+  // HU-BO-017 is deferred by decision: no platform closure distinct from the one the
+  // owner governs, to be reconsidered with legal policy. Its V1 obligation is to prove
+  // the absence of the route, so this is that proof. T-ORG-CLOSE-01 proves the rest.
+  //
+  // `NEW-ORG-PLATFORM-CLOSE` needs no assertion of its own: the generated operation
+  // codes are a literal union, so naming it here does not compile. That is a stronger
+  // guarantee than a comparison, and it is why one is absent.
+  test('offers Backoffice no way to end a gym relationship', () => {
+    expect(
+      allfitV1ContractManifest.operations.filter(
+        (operation) =>
+          operation.path.startsWith('/backoffice/v1/') && /relationship/i.test(operation.path),
+      ),
+    ).toEqual([])
+  })
+
   // Two routers mounted on the same prefix can both claim a path. Hono answers with
   // whichever registered first, so the other becomes unreachable without failing anything.
   test('leaves no path answered by two handlers', () => {
