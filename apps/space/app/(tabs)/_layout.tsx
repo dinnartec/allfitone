@@ -22,9 +22,9 @@
  * `TabTrigger` created inside `TabBar` would never be seen. The bar is a shell now;
  * this file says where each destination leads.
  *
- * Progreso and Comida have no route to lead to, so they are plain `Tab`s among the
- * triggers — the parser skips anything that is not a trigger, and they answer with
- * what they are waiting on instead of navigating into an empty screen.
+ * Comida has no route to lead to, so it is a plain `Tab` among the triggers — the
+ * parser skips anything that is not a trigger, and it answers with what it is waiting
+ * on instead of navigating into an empty screen. Progreso left the bar (1 Oct 2026).
  */
 
 import { Text } from '@allfitone/react-native/text'
@@ -60,12 +60,6 @@ export default function TabsLayout() {
           <TabTrigger name="train" href="/train" asChild>
             <Tab icon="training" label="Entrenamiento" active={path === '/train'} />
           </TabTrigger>
-          <Tab
-            icon="progress"
-            label="Progreso"
-            active={false}
-            onPress={() => setPending(PENDING.progress)}
-          />
           {/* Cubiertos y no una cámara: Comida es dónde vive lo que registraste, y un
               obturador prometía una foto que no es lo que abre. */}
           <Tab

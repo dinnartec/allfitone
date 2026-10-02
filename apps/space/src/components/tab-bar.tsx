@@ -1,5 +1,5 @@
 /**
- * The five destinations, in one bar.
+ * The four destinations, in one bar.
  *
  * It used to be two floating objects: a glass pill with four places and the camera
  * on its own beside it, on the reading that registering a meal is an action rather
@@ -17,8 +17,12 @@
  * and one `asChild` level, and nothing else — a trigger created inside this file, or
  * nested under the glass panel, would never be found and the tab would not exist.
  *
- * **Only Hoy, Entrenamiento and Perfil lead anywhere today.** The rest answer with
- * the screen they are waiting on rather than navigating into nothing: a dead end
+ * **The glass is veiled darker than the material alone.** Over Hoy's photographs and
+ * cards the labels competed with what scrolled under them; a canvas-tinted veil inside
+ * the panel keeps the glass but lets the words read first.
+ *
+ * **Only Hoy, Entrenamiento and Perfil lead anywhere today.** Comida answers with
+ * the screen it is waiting on rather than navigating into nothing: a dead end
  * that explains itself is not the empty screen `HU-SP-090` criterion 3 forbids, and
  * a blank one would be.
  */
@@ -27,21 +31,23 @@ import { GlassPanel } from '@allfitone/react-native/glass'
 import { FoundationIcon, type IconName } from '@allfitone/react-native/icons'
 import { Text } from '@allfitone/react-native/text'
 import { useTheme } from '@allfitone/react-native/theme'
+import { withAlpha } from '@allfitone/react-native/tokens'
 import type { ReactNode } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 /** The canvas's floating bar, and the room the content has to leave under it. */
 export const DOCK_HEIGHT = 70
-// Más pegada a los bordes que cuando la cámara le robaba setenta puntos: con cinco
+// Más pegada a los bordes que cuando la cámara le robaba setenta puntos: con cuatro
 // destinos cada columna necesita todo el ancho que la pantalla pueda dar.
 const DOCK_INSET = 8
+/** How much canvas the veil lays over the glass: enough for the labels to read first. */
+const VEIL = 0.6
 
-export type TabKey = 'today' | 'train' | 'progress' | 'food' | 'profile'
+export type TabKey = 'today' | 'train' | 'food' | 'profile'
 
 /** What a destination that does not exist yet answers instead of navigating. */
-export const PENDING: Record<'progress' | 'food', string> = {
-  progress: 'Tu progreso llega con las sesiones registradas.',
+export const PENDING: Record<'food', string> = {
   food: 'Comida llega con el registro de nutrición.',
 }
 
@@ -52,10 +58,18 @@ export interface TabBarProps {
 
 export function TabBar({ children }: TabBarProps) {
   const insets = useSafeAreaInsets()
+  const theme = useTheme()
 
   return (
     <View style={[styles.dock, { bottom: Math.max(insets.bottom, 12) }]} pointerEvents="box-none">
       <GlassPanel radius="action" style={styles.glass}>
+        <View
+          pointerEvents="none"
+          style={[
+            StyleSheet.absoluteFill,
+            { backgroundColor: withAlpha(theme.color.background.canvas, VEIL) },
+          ]}
+        />
         {children}
       </GlassPanel>
     </View>
@@ -95,7 +109,7 @@ export function Tab({
         color={active ? theme.color.icon.accent : theme.color.icon.secondary}
         decorative
       />
-      {/* Las cinco al mismo cuerpo, sin que ninguna se encoja por su cuenta: dos
+      {/* Las cuatro al mismo cuerpo, sin que ninguna se encoja por su cuenta: dos
           etiquetas de tamaños distintos en la misma barra se leen como un fallo, no
           como jerarquía. Cabe porque cada columna mide su palabra, no un quinto. */}
       <Text role="control" size="2xs" color={active ? 'accent' : 'muted'} numberOfLines={1}>
