@@ -54,6 +54,8 @@ export const studioQueryKeys = {
     [...ROOT_KEY, 'organization', organizationId, 'clients'] as const,
   organizationClients: (organizationId: string, status: ClientFilter, limit: number) =>
     [...ROOT_KEY, 'organization', organizationId, 'clients', { status, limit }] as const,
+  relationship: (organizationId: string, relationshipId: string) =>
+    [...ROOT_KEY, 'organization', organizationId, 'relationship', relationshipId] as const,
   organizationInvitationsRoot: (organizationId: string) =>
     [...ROOT_KEY, 'organization', organizationId, 'invitations'] as const,
   organizationInvitations: (organizationId: string, status: InvitationFilter, limit: number) =>
@@ -185,6 +187,20 @@ export function organizationQueryOptions(organizationId: string) {
     queryKey: studioQueryKeys.organization(organizationId),
     queryFn: ({ signal }) => studioApi.organization(organizationId, signal),
     staleTime: STUDIO_ORGANIZATION_STALE_TIME_MS,
+  })
+}
+
+/**
+ * The team stale time, not the organization one. Who attends a client changes
+ * when somebody reassigns them, and a permission disappears the moment the
+ * person revokes it — both are decisions other people make while this screen is
+ * open, so it must not sit on a two-minute-old answer.
+ */
+export function relationshipQueryOptions(organizationId: string, relationshipId: string) {
+  return queryOptions({
+    queryKey: studioQueryKeys.relationship(organizationId, relationshipId),
+    queryFn: ({ signal }) => studioApi.relationshipState(organizationId, relationshipId, signal),
+    staleTime: STUDIO_TEAM_STALE_TIME_MS,
   })
 }
 

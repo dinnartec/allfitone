@@ -21,7 +21,9 @@ import {
   error,
   installStudioApiMock,
   professionalCredential,
+  endedRelationshipState,
   professionalProfile,
+  relationshipState,
   secondActiveMembership,
   terminatedMembership,
   type StudioApiFixture,
@@ -114,6 +116,7 @@ async function settleAnimations(page: Page): Promise<void> {
 }
 
 const workspace = `/organizations/${activeMembership.organization_id}`
+const relationshipId = relationshipState.relationship_id
 
 const memberOfTwo = () =>
   createStudioApiFixture({
@@ -842,6 +845,92 @@ export const SCREENS: Screen[] = [
     settled: async (page) => {
       await settledByHeading(page)
       await expect(page.getByText('No pudimos cargar los clientes')).toBeVisible()
+    },
+  },
+  // --- `/organizations/[id]/clients/[relationshipId]` · HU-025 ---
+  {
+    // The fullest the screen gets: a holder, a substitution nobody has answered
+    // yet, and three permissions in three different states. If any of these
+    // crowd each other, this is where it shows.
+    stories: 'HU-025 · how a relationship stands, with permissions in three states',
+    path: `${workspace}/clients/${relationshipId}`,
+    fixture: () => createStudioApiFixture({ memberships: [activeMembership] }),
+    settled: async (page) => {
+      await settledByHeading(page)
+      await expect(page.getByText('Camilo Restrepo')).toBeVisible()
+      await expect(page.getByText('Retirado')).toBeVisible()
+    },
+  },
+  {
+    // The relationship after it ended: that is the only state where a permission
+    // is frozen, which is what "Sin nuevos datos" names. It is also the only
+    // place the end date appears.
+    stories: 'HU-025 · a relationship that ended, and the permissions it froze',
+    path: `${workspace}/clients/${relationshipId}`,
+    fixture: () =>
+      createStudioApiFixture({
+        memberships: [activeMembership],
+        relationshipState: endedRelationshipState,
+      }),
+    settled: async (page) => {
+      await settledByHeading(page)
+      await expect(page.getByText('Sin nuevos datos').first()).toBeVisible()
+      await expect(page.getByText('Finalización')).toBeVisible()
+    },
+  },
+  {
+    // Nobody in charge and nothing granted. Both are legitimate states, and the
+    // screen has to read as a state rather than as a failure.
+    stories: 'HU-025 · a relationship with no professional and no permissions',
+    path: `${workspace}/clients/${relationshipId}`,
+    fixture: () =>
+      createStudioApiFixture({
+        memberships: [activeMembership],
+        relationshipState: {
+          ...relationshipState,
+          holder: null,
+          substitutions: [],
+          grants: [],
+        },
+      }),
+    settled: async (page) => {
+      await settledByHeading(page)
+      await expect(page.getByText('Nadie la atiende todavía')).toBeVisible()
+      await expect(page.getByText('No concedió ningún permiso')).toBeVisible()
+    },
+  },
+  {
+    // A coach reads a narrower answer: the policy shows them their own
+    // assignment and not the others, so the panel must not claim there are none.
+    stories: 'HU-025 · the relationship a coach reads',
+    path: `/organizations/${secondActiveMembership.organization_id}/clients/${relationshipId}`,
+    fixture: () =>
+      createStudioApiFixture({
+        memberships: [secondActiveMembership],
+        relationshipState: { ...relationshipState, substitutions: [] },
+      }),
+    settled: async (page) => {
+      await settledByHeading(page)
+      await expect(page.getByText(/muestra solo tu propia asignación/)).toBeVisible()
+    },
+  },
+  {
+    stories: 'HU-025 · a relationship that is not there, or not ours to read',
+    path: `${workspace}/clients/${relationshipId}`,
+    fixture: () =>
+      createStudioApiFixture({ memberships: [activeMembership], relationshipState: null }),
+    settled: async (page) => {
+      await settledByHeading(page)
+      await expect(page.getByText('No encontramos este vínculo')).toBeVisible()
+    },
+  },
+  {
+    stories: 'HU-025 · the relationship could not be read',
+    path: `${workspace}/clients/${relationshipId}`,
+    fixture: failingFor([activeMembership], /\/organizations\/[^/]+\/relationships\/[^/]+$/),
+    settled: async (page) => {
+      await settledByHeading(page)
+      await expect(page.getByText('No pudimos cargar el estado del vínculo')).toBeVisible()
     },
   },
   // --- `/organizations/[id]/clients/invitations/new` · HU-023 ---
