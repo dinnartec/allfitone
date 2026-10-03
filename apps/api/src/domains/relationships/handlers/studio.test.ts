@@ -5,6 +5,7 @@ import type { StudioSessionService } from '../../identity/index.js'
 import type {
   ClientDirectoryService,
   HolderAssignmentService,
+  HolderReassignmentService,
   RelationshipStateService,
 } from '../application/index.js'
 import type {
@@ -588,5 +589,129 @@ describe('reading how a relationship stands', () => {
       headers: { origin: HEADERS.origin },
     })
     expect(response.status).toBe(401)
+  })
+})
+
+const REASSIGN_PATH = `${ASSIGN_PATH}/reassignment`
+
+function reassignments(
+  overrides: Partial<HolderReassignmentService> = {},
+): HolderReassignmentService {
+  return {
+    reassign: async () => ({
+      resource: {
+        assignmentId: '019ad000-0000-7000-8000-000000000402',
+        relationshipId: RELATIONSHIP,
+        membershipId: MEMBERSHIP,
+        professionalPersonId: '019ad000-0000-7000-8000-000000000013',
+        validFrom: new Date('2026-10-03T09:00:00.000Z'),
+        replacedAssignmentId: '019ad000-0000-7000-8000-000000000401',
+      },
+      reassigned: true,
+      replayed: false,
+    }),
+    ...overrides,
+  }
+}
+
+function reassignApp(service: HolderReassignmentService = reassignments()): Hono {
+  const routes = new Hono()
+  routes.route(
+    '/studio/v1',
+    studioRelationshipRoutes(directory(), sessions(), holders(), states(), service),
+  )
+  return routes
+}
+
+function reassign(body: unknown, headers: Record<string, string> = ASSIGN_HEADERS): Request {
+  return new Request(`https://api.example.test${REASSIGN_PATH}`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body),
+  })
+}
+
+describe('changing which coach is in charge', () => {
+  test('answers with the new assignment and the one it replaced', async () => {
+    const response = await reassignApp().fetch(reassign({ membership_id: MEMBERSHIP }))
+    expect(response.status).toBe(201)
+    const payload = (await response.json()) as Record<string, unknown>
+    expect(payload.replaced_assignment_id).toBe('019ad000-0000-7000-8000-000000000401')
+    expect(payload.professional_person_id).toBe('019ad000-0000-7000-8000-000000000013')
+  })
+
+  /*
+   * `201` has to mean the client actually moved, because that is also the case
+   * where somebody was emailed. Naming the coach who is already in charge
+   * writes nothing and notifies nobody.
+   */
+  test('answers 200 when that coach was already in charge', async () => {
+    const unchanged = reassignments({
+      reassign: async () => ({
+        resource: {
+          assignmentId: '019ad000-0000-7000-8000-000000000401',
+          relationshipId: RELATIONSHIP,
+          membershipId: MEMBERSHIP,
+          professionalPersonId: '019ad000-0000-7000-8000-000000000012',
+          validFrom: new Date('2026-09-20T08:00:00.000Z'),
+          replacedAssignmentId: null,
+        },
+        reassigned: false,
+        replayed: false,
+      }),
+    })
+    const response = await reassignApp(unchanged).fetch(reassign({ membership_id: MEMBERSHIP }))
+    expect(response.status).toBe(200)
+  })
+
+  test('marks a replayed command', async () => {
+    const replayed = reassignments({
+      reassign: async () => ({
+        resource: {
+          assignmentId: '019ad000-0000-7000-8000-000000000402',
+          relationshipId: RELATIONSHIP,
+          membershipId: MEMBERSHIP,
+          professionalPersonId: '019ad000-0000-7000-8000-000000000013',
+          validFrom: new Date('2026-10-03T09:00:00.000Z'),
+          replacedAssignmentId: null,
+        },
+        reassigned: false,
+        replayed: true,
+      }),
+    })
+    const response = await reassignApp(replayed).fetch(reassign({ membership_id: MEMBERSHIP }))
+    expect(response.headers.get('Idempotent-Replay')).toBe('true')
+  })
+
+  // Nobody to take the client from: putting the first coach in charge is the
+  // other operation, which notifies nobody because nobody is losing anything.
+  test('a relationship with nobody in charge is a conflict', async () => {
+    const empty = reassignments({
+      reassign: async () => {
+        throw Object.assign(new Error('no holder'), { code: 'P0004' })
+      },
+    })
+    const response = await reassignApp(empty).fetch(reassign({ membership_id: MEMBERSHIP }))
+    expect(response.status).toBe(409)
+  })
+
+  test('command headers that are missing', async () => {
+    const { 'command-id': _id, ...headers } = ASSIGN_HEADERS
+    const response = await reassignApp().fetch(reassign({ membership_id: MEMBERSHIP }, headers))
+    expect(response.status).toBe(400)
+  })
+
+  test('another origin', async () => {
+    const response = await reassignApp().fetch(
+      reassign({ membership_id: MEMBERSHIP }, { ...ASSIGN_HEADERS, origin: 'https://evil.test' }),
+    )
+    expect(response.status).toBe(403)
+  })
+
+  test('a body carrying a field the contract does not declare', async () => {
+    const response = await reassignApp().fetch(
+      reassign({ membership_id: MEMBERSHIP, notify: false }),
+    )
+    expect(response.status).toBe(422)
   })
 })

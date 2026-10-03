@@ -2053,6 +2053,32 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/studio/v1/organizations/{organizationId}/relationships/{relationshipId}/professional-assignments/reassignment': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Change which coach is in charge of a client
+     * @description Takes the client away from the coach who has them and gives them to another. It exists apart from assigning for one reason: **the person is notified, and if the notice cannot be enqueued the change does not happen.** A reassignment is never silent.
+     *
+     *     The person's permissions survive untouched. Nothing a permission records has changed — not the organization, not the responsible party, not the purpose, not the category — so asking again for consent would be asking for something already given. What changes is who may exercise it.
+     *
+     *     The previous professional loses access immediately, with no cache window, and keeps authorship of whatever they recorded.
+     *
+     *     A relationship with nobody in charge is rejected with `409`: putting the first coach in charge is `OP-REL-002`, which notifies nobody because nobody is losing anything. Naming the coach who is already in charge writes nothing, notifies nobody, and answers `200`.
+     */
+    post: operations['reassignRelationshipHolder']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/studio/v1/organizations/{organizationId}/relationships/{relationshipId}/assignments': {
     parameters: {
       query?: never
@@ -5205,6 +5231,17 @@ export interface components {
       granted_at: string
       /** Format: date-time */
       revoked_at: string | null
+    }
+    /** @description The assignment now in force, and the one it replaced. `replaced_assignment_id` is null when nothing changed because that coach was already in charge. */
+    RelationshipReassignment: {
+      assignment_id: components['schemas']['UuidV7']
+      relationship_id: components['schemas']['UuidV7']
+      membership_id: components['schemas']['UuidV7']
+      professional_person_id: components['schemas']['UuidV7']
+      /** Format: date-time */
+      valid_from: string
+      /** @description The assignment this one ended, or null when nothing changed. */
+      replaced_assignment_id: components['schemas']['UuidV7'] | null
     }
     /** @description How one relationship stands: the link, who attends the person, the substitutions, and which permissions are in force. Cacheable for presentation, never for deciding authorization. */
     RelationshipState: {
@@ -10995,6 +11032,56 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['RelationshipHolder']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  reassignRelationshipHolder: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+        relationshipId: components['parameters']['RelationshipId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['RelationshipHolderAssignment']
+      }
+    }
+    responses: {
+      /** @description That coach was already in charge; nothing changed and nobody was notified */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['RelationshipReassignment']
+        }
+      }
+      /** @description The client moved to the new coach, and the person has been notified */
+      201: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['RelationshipReassignment']
         }
       }
       400: components['responses']['BadRequest']

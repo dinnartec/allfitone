@@ -5971,6 +5971,49 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  RelationshipReassignment: {
+    description:
+      'The assignment now in force, and the one it replaced. `replaced_assignment_id` is null when nothing changed because that coach was already in charge.',
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'assignment_id',
+      'relationship_id',
+      'membership_id',
+      'professional_person_id',
+      'valid_from',
+      'replaced_assignment_id',
+    ],
+    properties: {
+      assignment_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      relationship_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      membership_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      professional_person_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      valid_from: {
+        type: 'string',
+        format: 'date-time',
+      },
+      replaced_assignment_id: {
+        description: 'The assignment this one ended, or null when nothing changed.',
+        oneOf: [
+          {
+            $ref: '#/components/schemas/UuidV7',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+    },
+  },
   RelationshipState: {
     description:
       'How one relationship stands: the link, who attends the person, the substitutions, and which permissions are in force. Cacheable for presentation, never for deciding authorization.',

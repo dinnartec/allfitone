@@ -17,6 +17,7 @@ import {
   createOwnershipInvitationBatchProcessor,
   createOwnershipInvitationDeliveryDatabase,
 } from './ownership-invitations.js'
+import { createReassignmentBatchProcessor } from './professional-reassignments.js'
 import {
   createBackofficeAuthBatchProcessor,
   createBackofficeAuthCleanupDatabase,
@@ -191,6 +192,17 @@ function processorsFromEnvironment(): WorkerJobProcessors {
     publicBaseUrl,
     deliveryEnabled,
   })
+  /*
+   * The brand lockup the invitation emails already use. It is a URL on the same
+   * trusted base, not a new setting: a second place to configure the same image
+   * is a second place for it to be wrong.
+   */
+  const reassignments = createReassignmentBatchProcessor({
+    queue,
+    email,
+    brandAssetUrl: new URL('email/allfit-one-lockup-on-light.png', publicBaseUrl).toString(),
+    deliveryEnabled,
+  })
   const backofficeAuthentication = createBackofficeAuthBatchProcessor({
     queue,
     database: createBackofficeAuthCleanupDatabase(sql),
@@ -202,11 +214,15 @@ function processorsFromEnvironment(): WorkerJobProcessors {
     invitationDelivery: async () => {
       const team = await teamInvitations()
       const ownership = await ownershipInvitations()
+      // Reassignment notices ride the same job rather than a cron of their own:
+      // they are the same claim against the same outbox, and a separate
+      // schedule would be a second thing to notice when it stops running.
+      const reassigned = await reassignments()
       return {
-        claimed: team.claimed + ownership.claimed,
-        delivered: team.delivered + ownership.delivered,
-        deadOrDelayed: team.deadOrDelayed + ownership.deadOrDelayed,
-        skipped: team.skipped + ownership.skipped,
+        claimed: team.claimed + ownership.claimed + reassigned.claimed,
+        delivered: team.delivered + ownership.delivered + reassigned.delivered,
+        deadOrDelayed: team.deadOrDelayed + ownership.deadOrDelayed + reassigned.deadOrDelayed,
+        skipped: team.skipped + ownership.skipped + reassigned.skipped,
         expired: team.expired,
       }
     },
