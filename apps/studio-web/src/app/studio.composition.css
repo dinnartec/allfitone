@@ -1198,6 +1198,33 @@
   font-size: var(--afo-font-size-lg);
 }
 
+/* The form sits under the empty state it resolves, separated the way the
+   substitutions block is: a rule and space, not another card inside a card. */
+[data-relationship-assign-panel] {
+  display: grid;
+  gap: var(--afo-space-4);
+}
+
+[data-relationship-unattended] {
+  margin: 0;
+  color: var(--afo-color-text-muted);
+}
+
+/* Capped to the reading measure like every other form in Studio. Left to the
+   card, it became a 1400px control holding a person's name. */
+[data-relationship-assign] {
+  display: grid;
+  gap: var(--afo-space-4);
+  max-width: var(--studio-measure);
+}
+
+[data-relationship-assign-actions] {
+  display: flex;
+  align-items: center;
+  gap: var(--afo-space-3);
+}
+
+[data-relationship-no-coaches],
 [data-relationship-no-substitutions] {
   margin: 0;
   max-width: var(--studio-measure);

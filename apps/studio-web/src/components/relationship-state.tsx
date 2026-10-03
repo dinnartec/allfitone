@@ -47,13 +47,15 @@ import {
   TableRow,
 } from '@allfitone/react/components/table'
 import { FoundationIcon } from '@allfitone/react/icons'
-import { useQuery } from '@tanstack/react-query'
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 
 import { useOrganizationContext } from './organization-context'
+import { RelationshipHolderForm } from './relationship-holder-form'
 import { WorkspacePageHeader } from './workspace-page-header'
 import { clientInitials, seesEveryClient } from '@/lib/client-directory'
+import { assignableCoaches, canAssignProfessionals } from '@/lib/relationship-holder'
 import {
   accessLevelLabel,
   grantStatusLabel,
@@ -64,18 +66,24 @@ import {
 } from '@/lib/relationship-state'
 import { useCompactViewport } from '@/lib/use-compact-viewport'
 import type {
+  OrganizationMembership,
   RelationshipGrant,
   RelationshipState,
   RelationshipSubstitution,
 } from '@/lib/studio-api'
 import {
+  flattenMembershipPages,
   isStudioForbidden,
   isStudioNotFound,
+  organizationMembershipsQueryOptions,
   organizationRolesQueryOptions,
   relationshipQueryOptions,
 } from '@/lib/studio-query'
 
 const DATE_FORMATTER = new Intl.DateTimeFormat('es-CO', { dateStyle: 'medium' })
+// One page is enough to choose from: a gym with more than fifty active coaches
+// needs a search, which is a different story nobody has written.
+const COACH_PAGE_SIZE = 50
 
 export function RelationshipStateScreen() {
   const { current } = useOrganizationContext()
@@ -84,7 +92,18 @@ export function RelationshipStateScreen() {
   const rolesQuery = useQuery(organizationRolesQueryOptions(current.organization_id))
   const query = useQuery(relationshipQueryOptions(current.organization_id, params.relationshipId))
   const everyClient = seesEveryClient(current.roles, rolesQuery.data?.items)
+  const mayAssign = canAssignProfessionals(current.roles, rolesQuery.data?.items)
   const directoryPath = `/organizations/${current.organization_id}/clients`
+  /*
+   * Only fetched for somebody who may assign, and only while nobody is in
+   * charge. A reader of the relationship has no reason to pull the team roster
+   * down, and the command would refuse them anyway.
+   */
+  const needsCoaches = mayAssign && query.data?.status === 'active' && query.data.holder === null
+  const coachesQuery = useInfiniteQuery({
+    ...organizationMembershipsQueryOptions(current.organization_id, 'active', COACH_PAGE_SIZE),
+    enabled: needsCoaches,
+  })
 
   if (query.isPending) return <LoadingState />
   if (isStudioNotFound(query.error)) return <UnreachableState directoryPath={directoryPath} />
@@ -120,7 +139,19 @@ export function RelationshipStateScreen() {
       ) : null}
 
       <LinkPanel relationship={relationship} />
-      <ProfessionalsPanel relationship={relationship} everyClient={everyClient} />
+      <ProfessionalsPanel
+        relationship={relationship}
+        everyClient={everyClient}
+        organizationId={current.organization_id}
+        assign={
+          needsCoaches
+            ? {
+                coaches: assignableCoaches(flattenMembershipPages(coachesQuery.data)),
+                loading: coachesQuery.isPending,
+              }
+            : null
+        }
+      />
       <GrantsPanel grants={relationship.grants} compact={compact} />
     </div>
   )
@@ -172,9 +203,13 @@ function LinkPanel({ relationship }: { relationship: RelationshipState }) {
 function ProfessionalsPanel({
   relationship,
   everyClient,
+  organizationId,
+  assign,
 }: {
   relationship: RelationshipState
   everyClient: boolean
+  organizationId: string
+  assign: { coaches: readonly OrganizationMembership[]; loading: boolean } | null
 }) {
   const { holder, substitutions } = relationship
   const active = relationship.status === 'active'
@@ -205,9 +240,27 @@ function ProfessionalsPanel({
               <dd>{formatDate(holder.valid_from)}</dd>
             </dl>
           </div>
+        ) : assign ? (
+          /*
+           * One line and the form, not the empty block as well. The block's
+           * description told the reader an administrator could assign somebody
+           * — directly above the control that does exactly that, to the
+           * administrator reading it. The state is worth saying; the
+           * instruction is not.
+           */
+          <div data-relationship-assign-panel>
+            <p data-relationship-unattended>Nadie la atiende todavía.</p>
+            <RelationshipHolderForm
+              organizationId={organizationId}
+              relationshipId={relationship.relationship_id}
+              coaches={assign.coaches}
+              loadingCoaches={assign.loading}
+            />
+          </div>
         ) : (
           /* Not an error and not an empty list: it is a person nobody was put in
-             charge of, which is a state somebody has to resolve. */
+             charge of, which is a state somebody has to resolve — and this
+             reader cannot, so the block says who can. */
           <Empty data-relationship-no-holder>
             <EmptyHeader>
               <EmptyMedia variant="icon">
