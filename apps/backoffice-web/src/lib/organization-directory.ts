@@ -44,6 +44,11 @@ export function statusLabel(status: OrganizationStatus): string {
   return STATUS_LABELS[status]
 }
 
+/** What the closed filter says, including when it filters nothing. */
+export function statusFilterLabel(status: OrganizationStatus | 'any'): string {
+  return status === 'any' ? 'Todos' : STATUS_LABELS[status]
+}
+
 const STATUS_MEANINGS: Record<OrganizationStatus, string> = {
   active: 'Su dueño lo reclamó y está operando.',
   unclaimed: 'Allfit lo creó y su dueño todavía no aceptó. Existe, pero no opera.',

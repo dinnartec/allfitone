@@ -64,6 +64,7 @@ import {
   directoryFiltersFromStatus,
   directoryMessage,
   peopleServedLabel,
+  statusFilterLabel,
   statusLabel,
   statusMeaning,
   statusTone,
@@ -193,7 +194,7 @@ export function OrganizationDirectory() {
                   }
                 >
                   <SelectTrigger id="org-status">
-                    <SelectValue />
+                    <SelectValue>{statusFilterLabel(draft.status)}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value={ANY}>Todos</SelectItem>

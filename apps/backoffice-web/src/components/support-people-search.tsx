@@ -153,7 +153,7 @@ export function SupportPeopleSearch() {
                   }}
                 >
                   <SelectTrigger id="support-kind" disabled={busy}>
-                    <SelectValue />
+                    <SelectValue>{lookupLabel(kind)}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {SUPPORT_LOOKUP_KINDS.map((option) => (

@@ -59,6 +59,7 @@ import {
   BILLING_PERIOD_OPTIONS,
   PLAN_CURRENCIES,
   PLAN_KIND_OPTIONS,
+  currencyLabel,
   changeLines,
   featureLimits,
   featureName,
@@ -599,7 +600,7 @@ function ProposalForm({
                   onValueChange={(value) => setCurrency(String(value ?? 'COP'))}
                 >
                   <SelectTrigger id={`${idPrefix}-currency`} disabled={busy !== null}>
-                    <SelectValue />
+                    <SelectValue>{currencyLabel(currency)}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {PLAN_CURRENCIES.map((option) => (

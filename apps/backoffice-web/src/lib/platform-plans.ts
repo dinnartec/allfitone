@@ -91,6 +91,11 @@ function exponentOf(currency: string | null): number {
   return PLAN_CURRENCIES.find((option) => option.code === currency)?.exponent ?? 2
 }
 
+/** What the closed selector says. The code alone is not a currency to a reader. */
+export function currencyLabel(currency: string): string {
+  return PLAN_CURRENCIES.find((option) => option.code === currency)?.label ?? currency
+}
+
 /**
  * What the operator typed, in minor units, or undefined when it is not a price. Digits
  * and at most one decimal comma; a dot is refused because it could be either separator.

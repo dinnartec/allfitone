@@ -410,7 +410,7 @@ export function BreakGlassWindows() {
                   }
                 >
                   <SelectTrigger id="bg-purpose" disabled={busy}>
-                    <SelectValue />
+                    <SelectValue>{purposeLabel(purpose)}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {BREAK_GLASS_PURPOSES.map((option) => (

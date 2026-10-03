@@ -194,7 +194,7 @@ export function ScopeDefinitionPublication() {
                   onValueChange={(next) => setScope((next ?? 'body_progress') as ScopeCode)}
                 >
                   <SelectTrigger id="scope-code" disabled={busy}>
-                    <SelectValue />
+                    <SelectValue>{scopeLabel(scope)}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {SCOPE_CODES.map((code) => (
@@ -237,7 +237,7 @@ export function ScopeDefinitionPublication() {
                       aria-label={`Sensibilidad de la regla ${index + 1}`}
                       disabled={busy}
                     >
-                      <SelectValue />
+                      <SelectValue>{classificationLabel(draft.classification)}</SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       {DATA_CLASSIFICATIONS.map((code) => (
@@ -257,7 +257,7 @@ export function ScopeDefinitionPublication() {
                       aria-label={`Acción máxima de la regla ${index + 1}`}
                       disabled={busy}
                     >
-                      <SelectValue />
+                      <SelectValue>{actionLabel(draft.action)}</SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       {ACCESS_LEVELS.map((action) => (

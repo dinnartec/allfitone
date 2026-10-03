@@ -9,6 +9,7 @@ import {
   directoryFilterIssueMessage,
   directoryMessage,
   peopleServedLabel,
+  statusFilterLabel,
   statusLabel,
   statusMeaning,
   statusTone,
@@ -28,6 +29,12 @@ describe('organization directory presentation', () => {
       expect(statusMeaning(status)).not.toBe('')
       expect(['success', 'warning', 'secondary']).toContain(statusTone(status))
     }
+  })
+
+  test('a closed filter says what it filters, including when it filters nothing', () => {
+    expect(statusFilterLabel('any')).toBe('Todos')
+    expect(statusFilterLabel('active')).toBe(statusLabel('active'))
+    expect(statusFilterLabel('unclaimed')).toBe(statusLabel('unclaimed'))
   })
 
   test('the people a gym serves are counted, and one is not "1 personas"', () => {
