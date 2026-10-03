@@ -1058,6 +1058,113 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
     },
     description: 'Enrollment secrets are present only for a first-factor attempt.',
   },
+  BackofficeClientInvitation: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      "A gym's client invitation as Allfit's support sees it. The contact is a hint, never the address, and no person is named — before anyone accepts, an invitation identifies nobody. `scope_codes` is what the gym asked for: the operator has to see what is being resent, and a resend never changes it. The purpose the gym wrote and the wording the person will read stay out; they are for the person deciding, not for support.",
+    required: [
+      'invitation_id',
+      'state',
+      'scope_codes',
+      'contact_hint',
+      'created_at',
+      'expires_at',
+      'issued_by',
+      'reissues_invitation_id',
+      'resendable',
+      'last_resent_at',
+    ],
+    properties: {
+      invitation_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      state: {
+        type: 'string',
+        enum: ['pending', 'expired', 'accepted', 'rejected', 'revoked'],
+      },
+      scope_codes: {
+        type: 'array',
+        description: 'The scopes the invitation offered, in code order.',
+        items: {
+          $ref: '#/components/schemas/ScopeCode',
+        },
+      },
+      contact_hint: {
+        type: 'string',
+        maxLength: 260,
+      },
+      created_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      expires_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      issued_by: {
+        type: 'string',
+        description: '`member` when the gym sent it; `allfit` when Allfit reissued an expired one.',
+        enum: ['member', 'allfit'],
+      },
+      reissues_invitation_id: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/UuidV7',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      resendable: {
+        type: 'boolean',
+      },
+      last_resent_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+    },
+  },
+  BackofficeClientInvitationList: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['organization_id', 'items', 'truncated'],
+    properties: {
+      organization_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      items: {
+        type: 'array',
+        maxItems: 50,
+        items: {
+          $ref: '#/components/schemas/BackofficeClientInvitation',
+        },
+      },
+      truncated: {
+        type: 'boolean',
+      },
+    },
+  },
+  BackofficeClientInvitationResend: {
+    description:
+      'The invitation that went out. `redelivered` is the same invitation sent again; `reissued` is a new identical one that replaces an expired invitation and asks for exactly the same scopes.',
+    allOf: [
+      {
+        $ref: '#/components/schemas/BackofficeClientInvitation',
+      },
+      {
+        type: 'object',
+        required: ['outcome'],
+        properties: {
+          outcome: {
+            type: 'string',
+            enum: ['redelivered', 'reissued'],
+          },
+        },
+      },
+    ],
+  },
   BackofficeGlobalCatalogue: {
     type: 'object',
     additionalProperties: false,

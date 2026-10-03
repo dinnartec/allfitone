@@ -74,6 +74,8 @@ export const clientOperations = [
   'backoffice.break_glass.exercise',
   'backoffice.break_glass.list',
   'backoffice.break_glass.request',
+  'backoffice.organization.client_invitation_resend',
+  'backoffice.organization.client_invitations',
   'backoffice.organization.directory',
   'backoffice.organization.file',
   'backoffice.organization.handover_cancel',

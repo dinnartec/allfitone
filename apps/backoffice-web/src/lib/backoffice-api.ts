@@ -29,6 +29,9 @@ export type BackofficeOrganizationPage = AllfitV1Schemas['BackofficeOrganization
 export type OrganizationHandover = AllfitV1Schemas['OrganizationHandover']
 export type BackofficeOrganizationFile = AllfitV1Schemas['BackofficeOrganizationFile']
 export type OrganizationHandoverCreate = AllfitV1Schemas['OrganizationHandoverCreate']
+export type BackofficeClientInvitation = AllfitV1Schemas['BackofficeClientInvitation']
+export type BackofficeClientInvitationList = AllfitV1Schemas['BackofficeClientInvitationList']
+export type BackofficeClientInvitationResend = AllfitV1Schemas['BackofficeClientInvitationResend']
 export type BackofficeTeamInvitation = AllfitV1Schemas['BackofficeTeamInvitation']
 export type BackofficeTeamInvitationList = AllfitV1Schemas['BackofficeTeamInvitationList']
 export type BackofficeTeamInvitationResend = AllfitV1Schemas['BackofficeTeamInvitationResend']
@@ -500,6 +503,23 @@ export const backofficeApi = {
       signal ? { signal } : {},
     ),
 
+  organizationClientInvitations: (organizationId: string, signal?: AbortSignal) =>
+    requestJson<BackofficeClientInvitationList>(
+      `/backoffice/v1/organizations/${organizationId}/client-invitations`,
+      signal ? { signal } : {},
+    ),
+
+  // No body: the contact, the gym and the scopes asked for come from the invitation.
+  resendClientInvitation: (
+    organizationId: string,
+    invitationId: string,
+    command: BackofficeCommand,
+  ) =>
+    requestJson<BackofficeClientInvitationResend>(
+      `/backoffice/v1/organizations/${organizationId}/client-invitations/${invitationId}/resends`,
+      { method: 'POST', headers: commandHeaders(command), body: '{}' },
+    ),
+
   // No body: the contact, the role and the gym all come from the invitation itself.
   resendTeamInvitation: (
     organizationId: string,
@@ -723,6 +743,11 @@ function organizationOperation(route: string, method: string): ClientOperation |
       : 'backoffice.organization.directory'
   }
   if (segments.length === 4) return 'backoffice.organization.file'
+  if (segments[4] === 'client-invitations') {
+    return segments[6] === 'resends'
+      ? 'backoffice.organization.client_invitation_resend'
+      : 'backoffice.organization.client_invitations'
+  }
   if (segments[4] === 'team-invitations') {
     return segments[6] === 'resends'
       ? 'backoffice.organization.team_invitation_resend'

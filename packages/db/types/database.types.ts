@@ -2282,6 +2282,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      backoffice_client_invitation_projection: {
+        Args: { p_invitation_id: string }
+        Returns: Json
+      }
       backoffice_team_invitation_projection: {
         Args: { p_invitation_id: string }
         Returns: Json
@@ -2639,6 +2643,14 @@ export type Database = {
           reused: boolean
           status: string
         }[]
+      }
+      list_backoffice_client_invitations: {
+        Args: {
+          p_actor_person_id: string
+          p_actor_session_id: string
+          p_organization_id: string
+        }
+        Returns: Json
       }
       list_backoffice_team_invitations: {
         Args: {
@@ -3034,6 +3046,23 @@ export type Database = {
           p_person_id: string
           p_request_hash: string
           p_request_id: string
+        }
+        Returns: {
+          replayed: boolean
+          result: Json
+        }[]
+      }
+      resend_client_invitation: {
+        Args: {
+          p_actor_person_id: string
+          p_actor_session_id: string
+          p_command_id: string
+          p_idempotency_key: string
+          p_invitation_id: string
+          p_organization_id: string
+          p_request_hash: string
+          p_token_hash: string
+          p_token_key_version: number
         }
         Returns: {
           replayed: boolean

@@ -3410,6 +3410,46 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/backoffice/v1/organizations/{organizationId}/client-invitations': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Read a gym's client invitations to resend one
+     * @description `HU-BO-011`. The 50 newest client invitations of an organization, each with its state, the scopes it offered and whether it can be resent. Contacts are hints and no person is named — an invitation identifies nobody until someone accepts it — so the read records no access. Requires `diagnose_support_metadata`.
+     */
+    get: operations['listBackofficeClientInvitations']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/organizations/{organizationId}/client-invitations/{invitationId}/resends': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Send a client invitation again
+     * @description A live invitation is sent again as it is. An expired one is replaced by a new identical invitation that Allfit signs, asking for exactly the same scopes at exactly the same levels, and the expired one never works again. An accepted, declined or revoked invitation, one already reissued, or one with an equal invitation pending answers 409. Resending never changes the gym, the contact or what was asked for, and the destination limit Studio enforces applies: 429. The command carries no body.
+     */
+    post: operations['resendBackofficeClientInvitation']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/backoffice/v1/erasure-requests': {
     parameters: {
       query?: never
@@ -7164,6 +7204,38 @@ export interface components {
     }
     /** @description The invitation that went out. `redelivered` is the same invitation sent again; `reissued` is a new identical one that replaces an expired invitation. */
     BackofficeTeamInvitationResend: components['schemas']['BackofficeTeamInvitation'] & {
+      /** @enum {string} */
+      outcome: 'redelivered' | 'reissued'
+    }
+    /** @description A gym's client invitation as Allfit's support sees it. The contact is a hint, never the address, and no person is named — before anyone accepts, an invitation identifies nobody. `scope_codes` is what the gym asked for: the operator has to see what is being resent, and a resend never changes it. The purpose the gym wrote and the wording the person will read stay out; they are for the person deciding, not for support. */
+    BackofficeClientInvitation: {
+      invitation_id: components['schemas']['UuidV7']
+      /** @enum {string} */
+      state: 'pending' | 'expired' | 'accepted' | 'rejected' | 'revoked'
+      /** @description The scopes the invitation offered, in code order. */
+      scope_codes: components['schemas']['ScopeCode'][]
+      contact_hint: string
+      /** Format: date-time */
+      created_at: string
+      /** Format: date-time */
+      expires_at: string
+      /**
+       * @description `member` when the gym sent it; `allfit` when Allfit reissued an expired one.
+       * @enum {string}
+       */
+      issued_by: 'member' | 'allfit'
+      reissues_invitation_id: components['schemas']['UuidV7'] | null
+      resendable: boolean
+      /** Format: date-time */
+      last_resent_at: string | null
+    }
+    BackofficeClientInvitationList: {
+      organization_id: components['schemas']['Uuid']
+      items: components['schemas']['BackofficeClientInvitation'][]
+      truncated: boolean
+    }
+    /** @description The invitation that went out. `redelivered` is the same invitation sent again; `reissued` is a new identical one that replaces an expired invitation and asks for exactly the same scopes. */
+    BackofficeClientInvitationResend: components['schemas']['BackofficeClientInvitation'] & {
       /** @enum {string} */
       outcome: 'redelivered' | 'reissued'
     }
@@ -14576,6 +14648,76 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['BackofficeTeamInvitationResend']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
+      429: components['responses']['RateLimited']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listBackofficeClientInvitations: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+      }
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The organization's client invitations, newest first */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['BackofficeClientInvitationList']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  resendBackofficeClientInvitation: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+        invitationId: components['schemas']['UuidV7']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The invitation that went out, and whether it was redelivered or reissued */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['BackofficeClientInvitationResend']
         }
       }
       400: components['responses']['BadRequest']

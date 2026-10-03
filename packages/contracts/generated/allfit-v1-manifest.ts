@@ -182,6 +182,20 @@ export const allfitV1ContractManifest = {
     },
     {
       method: 'GET',
+      path: '/backoffice/v1/organizations/{organizationId}/client-invitations',
+      operationId: 'listBackofficeClientInvitations',
+      allfitOperation: 'NEW-IDN-CLIENT-RESEND',
+      responses: ['200', '400', '401', '403', '404', '503'],
+    },
+    {
+      method: 'POST',
+      path: '/backoffice/v1/organizations/{organizationId}/client-invitations/{invitationId}/resends',
+      operationId: 'resendBackofficeClientInvitation',
+      allfitOperation: 'OP-IDN-051',
+      responses: ['200', '400', '401', '403', '404', '409', '415', '422', '429', '503'],
+    },
+    {
+      method: 'GET',
       path: '/backoffice/v1/organizations/{organizationId}/handover',
       operationId: 'readBackofficeOrganizationHandover',
       allfitOperation: 'OP-ORG-018',

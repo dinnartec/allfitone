@@ -9,26 +9,17 @@
 
 import type { AllfitV1Schemas } from '@allfitone/contracts'
 
+import type {
+  InvitationResendCommand,
+  InvitationResendToken,
+  InvitationResender,
+} from './invitation-resends.js'
+
 export type BackofficeTeamInvitation = AllfitV1Schemas['BackofficeTeamInvitation']
 export type BackofficeTeamInvitationList = AllfitV1Schemas['BackofficeTeamInvitationList']
 export type BackofficeTeamInvitationResend = AllfitV1Schemas['BackofficeTeamInvitationResend']
 
-export interface InvitationResender {
-  actorPersonId: string
-  actorSessionId: string
-}
-
-export interface InvitationResendCommand {
-  idempotencyKey: string
-  commandId: string
-  requestId: string
-  requestHash: Uint8Array
-}
-
-export interface InvitationResendToken {
-  tokenHash: Uint8Array
-  tokenKeyVersion: number
-}
+export type { InvitationResendCommand, InvitationResendToken, InvitationResender }
 
 export interface InvitationResendResult {
   resource: BackofficeTeamInvitationResend

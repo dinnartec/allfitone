@@ -62,6 +62,11 @@ import {
 } from './application/team-invitation-resends.js'
 import { createTeamInvitationResendDatabase } from './infrastructure/team-invitation-resends.js'
 import {
+  createClientInvitationResendService,
+  type ClientInvitationResendService,
+} from './application/client-invitation-resends.js'
+import { createClientInvitationResendDatabase } from './infrastructure/client-invitation-resends.js'
+import {
   createAccountRecoveryService,
   type AccountRecoveryService,
 } from './application/account-recovery.js'
@@ -121,6 +126,15 @@ let cachedResends: TeamInvitationResendService | undefined
 export function teamInvitationResendService(): TeamInvitationResendService {
   cachedResends ??= createTeamInvitationResendService(createTeamInvitationResendDatabase())
   return cachedResends
+}
+
+let cachedClientResends: ClientInvitationResendService | undefined
+
+export function clientInvitationResendService(): ClientInvitationResendService {
+  cachedClientResends ??= createClientInvitationResendService(
+    createClientInvitationResendDatabase(),
+  )
+  return cachedClientResends
 }
 
 let cached: StudioSessionService | undefined

@@ -63,6 +63,7 @@ import {
 } from '@/lib/organization-file'
 import { formatInstant } from '@/lib/platform-access'
 
+import { OrganizationClientInvitations } from './organization-client-invitations'
 import { OrganizationTeamInvitations } from './organization-team-invitations'
 
 type LoadState = 'loading' | 'ready' | 'failed'
@@ -230,9 +231,14 @@ export function OrganizationFile({ organizationId }: { organizationId: string })
         </CardContent>
       </Card>
 
-      {/* A gym nobody claimed has no team yet, so it has no team invitations either. */}
+      {/* A gym nobody claimed has no team and no clients yet, so neither kind of
+          invitation exists for it. */}
       {handsOverHere(file) ? null : (
         <OrganizationTeamInvitations organizationId={organization.organization_id} />
+      )}
+
+      {handsOverHere(file) ? null : (
+        <OrganizationClientInvitations organizationId={organization.organization_id} />
       )}
 
       <Card>

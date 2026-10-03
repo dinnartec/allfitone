@@ -22,6 +22,7 @@ export interface BackofficeFixture {
   organizationHandover?: OrganizationHandoverFixture
   organizationFiles?: OrganizationFileFixture
   teamInvitations?: TeamInvitationFixture
+  clientInvitations?: ClientInvitationFixture
   accountRecovery?: AccountRecoveryFixture
   globalCatalogue?: GlobalCatalogueFixture
   platformPlans?: PlatformPlansFixture
@@ -724,6 +725,50 @@ export function teamInvitationRecord(
 }
 
 /**
+ * The same shape for a gym's client invitations, which carry an offer instead of a
+ * role. A reissue copies `scope_codes` exactly, because that is what the real command
+ * does and what the database refuses to let it do otherwise.
+ */
+export interface ClientInvitationFixture {
+  refusal?: { status: number; code: string }
+  resendRefusal?: { status: number; code: string }
+  /** Resends dropped by the network before any answer, consumed one per attempt. */
+  lostResends?: number
+  lists: Record<string, ClientInvitationRecordFixture[]>
+}
+
+export interface ClientInvitationRecordFixture {
+  invitation_id: string
+  state: 'pending' | 'expired' | 'accepted' | 'rejected' | 'revoked'
+  scope_codes: string[]
+  contact_hint: string
+  created_at: string
+  expires_at: string
+  issued_by: 'member' | 'allfit'
+  reissues_invitation_id: string | null
+  resendable: boolean
+  last_resent_at: string | null
+}
+
+export function clientInvitationRecord(
+  overrides: Partial<ClientInvitationRecordFixture> = {},
+): ClientInvitationRecordFixture {
+  return {
+    invitation_id: nextAssignmentId(),
+    state: 'pending',
+    scope_codes: ['body_progress', 'relationship_training'],
+    contact_hint: 'c***@example.test',
+    created_at: new Date(Date.now() - 86_400_000).toISOString(),
+    expires_at: new Date(Date.now() + 6 * 86_400_000).toISOString(),
+    issued_by: 'member',
+    reissues_invitation_id: null,
+    resendable: true,
+    last_resent_at: null,
+    ...overrides,
+  }
+}
+
+/**
  * How the business is going. Whether a figure can be given at all is the
  * database's decision, so the fixture states the answer rather than deriving it.
  */
@@ -1335,6 +1380,14 @@ export async function mockBackofficeApi(
       )
     ) {
       await routeTeamInvitations(route, request, fixture)
+      return
+    }
+    if (
+      /^\/backoffice\/v1\/organizations\/[^/]+\/client-invitations(\/[^/]+\/resends)?$/.test(
+        request.path,
+      )
+    ) {
+      await routeClientInvitations(route, request, fixture)
       return
     }
     if (request.method === 'GET' && /^\/backoffice\/v1\/organizations\/[^/]+$/.test(request.path)) {
@@ -2595,6 +2648,73 @@ async function routeTeamInvitations(
     ...target,
     invitation_id: nextAssignmentId(),
     state: 'pending',
+    created_at: now.toISOString(),
+    expires_at: renewedUntil,
+    issued_by: 'allfit',
+    reissues_invitation_id: target.invitation_id,
+    resendable: true,
+    last_resent_at: null,
+  }
+  target.resendable = false
+  target.last_resent_at = now.toISOString()
+  state.lists[organizationId] = [reissued, ...items]
+  await fulfill(route, 200, { ...reissued, outcome: 'reissued' })
+}
+
+async function routeClientInvitations(
+  route: Route,
+  request: MockRequest,
+  fixture: BackofficeFixture,
+): Promise<void> {
+  const state = fixture.clientInvitations ?? { lists: {} }
+  fixture.clientInvitations = state
+  const segments = request.path.split('/').filter(Boolean)
+  const organizationId = segments[3] ?? ''
+  const items = state.lists[organizationId] ?? []
+
+  if (request.method === 'GET') {
+    if (state.refusal) {
+      await fulfillProblem(route, state.refusal.status, state.refusal.code)
+      return
+    }
+    await fulfill(route, 200, { organization_id: organizationId, items, truncated: false })
+    return
+  }
+
+  if (state.lostResends && state.lostResends > 0) {
+    state.lostResends -= 1
+    await route.abort('failed')
+    return
+  }
+  if (state.resendRefusal) {
+    await fulfillProblem(route, state.resendRefusal.status, state.resendRefusal.code)
+    return
+  }
+  const target = items.find((item) => item.invitation_id === segments[5])
+  if (!target) {
+    await fulfillProblem(route, 404, 'not-found')
+    return
+  }
+  if (!target.resendable) {
+    await fulfillProblem(route, 409, 'conflict')
+    return
+  }
+
+  const now = new Date()
+  const renewedUntil = new Date(now.getTime() + 7 * 86_400_000).toISOString()
+  if (target.state === 'pending') {
+    target.expires_at = renewedUntil
+    target.last_resent_at = now.toISOString()
+    await fulfill(route, 200, { ...target, outcome: 'redelivered' })
+    return
+  }
+
+  const reissued: ClientInvitationRecordFixture = {
+    ...target,
+    invitation_id: nextAssignmentId(),
+    state: 'pending',
+    // The offer travels unchanged, exactly as the command copies it.
+    scope_codes: [...target.scope_codes],
     created_at: now.toISOString(),
     expires_at: renewedUntil,
     issued_by: 'allfit',

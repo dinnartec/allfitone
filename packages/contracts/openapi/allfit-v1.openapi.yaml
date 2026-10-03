@@ -8493,6 +8493,102 @@ paths:
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
 
+  /backoffice/v1/organizations/{organizationId}/client-invitations:
+    get:
+      tags: [Backoffice Organizations]
+      operationId: listBackofficeClientInvitations
+      x-allfit-operation: NEW-IDN-CLIENT-RESEND
+      x-allfit-cache: no-store
+      summary: Read a gym's client invitations to resend one
+      description: >-
+        `HU-BO-011`. The 50 newest client invitations of an organization, each with its
+        state, the scopes it offered and whether it can be resent. Contacts are hints
+        and no person is named — an invitation identifies nobody until someone accepts
+        it — so the read records no access. Requires `diagnose_support_metadata`.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/OrganizationId'
+      responses:
+        '200':
+          description: The organization's client invitations, newest first
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackofficeClientInvitationList'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/organizations/{organizationId}/client-invitations/{invitationId}/resends:
+    post:
+      tags: [Backoffice Organizations]
+      operationId: resendBackofficeClientInvitation
+      x-allfit-operation: OP-IDN-051
+      x-allfit-cache: no-store
+      summary: Send a client invitation again
+      description: >-
+        A live invitation is sent again as it is. An expired one is replaced by a new
+        identical invitation that Allfit signs, asking for exactly the same scopes at
+        exactly the same levels, and the expired one never works again. An accepted,
+        declined or revoked invitation, one already reissued, or one with an equal
+        invitation pending answers 409. Resending never changes the gym, the contact
+        or what was asked for, and the destination limit Studio enforces applies: 429.
+        The command carries no body.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/OrganizationId'
+        - name: invitationId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/UuidV7'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      responses:
+        '200':
+          description: The invitation that went out, and whether it was redelivered or reissued
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackofficeClientInvitationResend'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
   /backoffice/v1/erasure-requests:
     get:
       tags: [Backoffice Privacy]
@@ -17267,6 +17363,88 @@ components:
         `reissued` is a new identical one that replaces an expired invitation.
       allOf:
         - $ref: '#/components/schemas/BackofficeTeamInvitation'
+        - type: object
+          required: [outcome]
+          properties:
+            outcome:
+              type: string
+              enum: [redelivered, reissued]
+    BackofficeClientInvitation:
+      type: object
+      additionalProperties: false
+      description: >-
+        A gym's client invitation as Allfit's support sees it. The contact is a hint,
+        never the address, and no person is named — before anyone accepts, an invitation
+        identifies nobody. `scope_codes` is what the gym asked for: the operator has to
+        see what is being resent, and a resend never changes it. The purpose the gym
+        wrote and the wording the person will read stay out; they are for the person
+        deciding, not for support.
+      required:
+        - invitation_id
+        - state
+        - scope_codes
+        - contact_hint
+        - created_at
+        - expires_at
+        - issued_by
+        - reissues_invitation_id
+        - resendable
+        - last_resent_at
+      properties:
+        invitation_id:
+          $ref: '#/components/schemas/UuidV7'
+        state:
+          type: string
+          enum: [pending, expired, accepted, rejected, revoked]
+        scope_codes:
+          type: array
+          description: The scopes the invitation offered, in code order.
+          items:
+            $ref: '#/components/schemas/ScopeCode'
+        contact_hint:
+          type: string
+          maxLength: 260
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        issued_by:
+          type: string
+          description: >-
+            `member` when the gym sent it; `allfit` when Allfit reissued an expired one.
+          enum: [member, allfit]
+        reissues_invitation_id:
+          oneOf:
+            - $ref: '#/components/schemas/UuidV7'
+            - type: 'null'
+        resendable:
+          type: boolean
+        last_resent_at:
+          type: [string, 'null']
+          format: date-time
+    BackofficeClientInvitationList:
+      type: object
+      additionalProperties: false
+      required: [organization_id, items, truncated]
+      properties:
+        organization_id:
+          $ref: '#/components/schemas/Uuid'
+        items:
+          type: array
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/BackofficeClientInvitation'
+        truncated:
+          type: boolean
+    BackofficeClientInvitationResend:
+      description: >-
+        The invitation that went out. `redelivered` is the same invitation sent again;
+        `reissued` is a new identical one that replaces an expired invitation and asks
+        for exactly the same scopes.
+      allOf:
+        - $ref: '#/components/schemas/BackofficeClientInvitation'
         - type: object
           required: [outcome]
           properties:
