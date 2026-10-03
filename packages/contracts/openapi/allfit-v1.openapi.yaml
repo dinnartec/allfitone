@@ -5099,6 +5099,81 @@ paths:
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
 
+  /studio/v1/organizations/{organizationId}/relationships/{relationshipId}/professional-assignments/reassignment:
+    post:
+      tags: [Studio Relationships]
+      operationId: reassignRelationshipHolder
+      x-allfit-operation: OP-REL-003
+      x-allfit-cache: no-store
+      summary: Change which coach is in charge of a client
+      description: >-
+        Takes the client away from the coach who has them and gives them to
+        another. It exists apart from assigning for one reason: **the person is
+        notified, and if the notice cannot be enqueued the change does not
+        happen.** A reassignment is never silent.
+
+
+        The person's permissions survive untouched. Nothing a permission records
+        has changed — not the organization, not the responsible party, not the
+        purpose, not the category — so asking again for consent would be asking
+        for something already given. What changes is who may exercise it.
+
+
+        The previous professional loses access immediately, with no cache
+        window, and keeps authorship of whatever they recorded.
+
+
+        A relationship with nobody in charge is rejected with `409`: putting the
+        first coach in charge is `OP-REL-002`, which notifies nobody because
+        nobody is losing anything. Naming the coach who is already in charge
+        writes nothing, notifies nobody, and answers `200`.
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/RelationshipId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RelationshipHolderAssignment'
+      responses:
+        '200':
+          description: That coach was already in charge; nothing changed and nobody was notified
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RelationshipReassignment'
+        '201':
+          description: The client moved to the new coach, and the person has been notified
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RelationshipReassignment'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
   /studio/v1/organizations/{organizationId}/relationships/{relationshipId}/assignments:
     post:
       tags: [Studio Planning]
@@ -13222,6 +13297,32 @@ components:
         revoked_at:
           type: [string, 'null']
           format: date-time
+    RelationshipReassignment:
+      description: >-
+        The assignment now in force, and the one it replaced. `replaced_assignment_id`
+        is null when nothing changed because that coach was already in charge.
+      type: object
+      additionalProperties: false
+      required:
+        [assignment_id, relationship_id, membership_id, professional_person_id,
+         valid_from, replaced_assignment_id]
+      properties:
+        assignment_id:
+          $ref: '#/components/schemas/UuidV7'
+        relationship_id:
+          $ref: '#/components/schemas/UuidV7'
+        membership_id:
+          $ref: '#/components/schemas/UuidV7'
+        professional_person_id:
+          $ref: '#/components/schemas/UuidV7'
+        valid_from:
+          type: string
+          format: date-time
+        replaced_assignment_id:
+          description: The assignment this one ended, or null when nothing changed.
+          oneOf:
+            - $ref: '#/components/schemas/UuidV7'
+            - type: 'null'
     RelationshipState:
       description: >-
         How one relationship stands: the link, who attends the person, the

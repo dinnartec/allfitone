@@ -16,12 +16,14 @@ import { fail } from '../../../platform/http/index.js'
 import {
   clientDirectoryService,
   holderAssignmentService,
+  holderReassignmentService,
   relationshipStateService,
 } from '../dependencies.js'
 import {
   RelationshipsError,
   type ClientDirectoryService,
   type HolderAssignmentService,
+  type HolderReassignmentService,
   type RelationshipStateService,
 } from '../application/index.js'
 import type { DirectoryEntry, DirectoryGroup, RelationshipState } from '../domain/index.js'
@@ -36,11 +38,13 @@ export function studioRelationshipRoutes(
   injectedSessions?: StudioSessionService,
   injectedHolders?: HolderAssignmentService,
   injectedStates?: RelationshipStateService,
+  injectedReassignments?: HolderReassignmentService,
 ): Hono {
   const studioOrigin = new URL(trustedStudioWebUrl()).origin
   const directory = () => injectedService ?? clientDirectoryService()
   const holders = () => injectedHolders ?? holderAssignmentService()
   const states = () => injectedStates ?? relationshipStateService()
+  const reassignments = () => injectedReassignments ?? holderReassignmentService()
   const sessions = () => injectedSessions ?? studioSessionService()
   const routes = new Hono()
 
@@ -181,6 +185,58 @@ export function studioRelationshipRoutes(
             valid_from: result.resource.validFrom.toISOString(),
           },
           result.created ? 201 : 200,
+        )
+      } catch (error) {
+        return failure(c, error)
+      }
+    },
+  )
+
+  /*
+   * OP-REL-003. Takes the client away from the coach who has them.
+   *
+   * Its own surface rather than a flag on the assignment route, because it
+   * carries a guarantee that one does not: the person is notified, and the
+   * notice is an outbox row written inside the command's transaction. There is
+   * no path where the change commits and the notice does not.
+   */
+  routes.post(
+    '/organizations/:organizationId/relationships/:relationshipId/professional-assignments/reassignment',
+    async (c) => {
+      c.header('Cache-Control', 'no-store')
+      if (c.req.header('origin') !== studioOrigin) {
+        return fail(c, 'forbidden', 'origin is not allowed')
+      }
+      const organizationId = c.req.param('organizationId')
+      const relationshipId = c.req.param('relationshipId')
+      if (!UUID.test(organizationId) || !UUID.test(relationshipId)) {
+        return fail(c, 'invalid-request')
+      }
+      const body = await readJson(c)
+      if (!isHolderAssignment(body)) return fail(c, 'validation-failed')
+      const command = commandContext(c, body)
+      if (!command) return fail(c, 'invalid-request', 'valid command headers are required')
+
+      try {
+        const actor = await studioActor(c, sessions())
+        if (actor instanceof Response) return actor
+        const result = await reassignments().reassign(actor, {
+          organizationId,
+          relationshipId,
+          membershipId: body.membership_id,
+          ...command,
+        })
+        if (result.replayed) c.header('Idempotent-Replay', 'true')
+        return c.json(
+          {
+            assignment_id: result.resource.assignmentId,
+            relationship_id: result.resource.relationshipId,
+            membership_id: result.resource.membershipId,
+            professional_person_id: result.resource.professionalPersonId,
+            valid_from: result.resource.validFrom.toISOString(),
+            replaced_assignment_id: result.resource.replacedAssignmentId,
+          },
+          result.reassigned ? 201 : 200,
         )
       } catch (error) {
         return failure(c, error)

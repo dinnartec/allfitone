@@ -167,6 +167,37 @@ export interface RelationshipStateDatabase {
   ): Promise<RelationshipState>
 }
 
+/**
+ * The outcome of changing who attends a client. `reassigned` is false when the
+ * named coach was already in charge: nothing was written and, more to the
+ * point, **nobody was notified** — a notice saying somebody's coach changed to
+ * the same coach teaches people to ignore the real one.
+ */
+export interface RelationshipReassignment {
+  readonly assignmentId: string
+  readonly relationshipId: string
+  readonly membershipId: string
+  readonly professionalPersonId: string
+  readonly validFrom: Date
+  /** The assignment this one ended, or null when nothing changed. */
+  readonly replacedAssignmentId: string | null
+}
+
+export interface HolderReassignmentResult extends CommandResult<RelationshipReassignment> {
+  readonly reassigned: boolean
+}
+
+export interface HolderReassignmentDatabase {
+  reassignHolder(
+    input: CommandContext & {
+      actorPersonId: string
+      organizationId: string
+      relationshipId: string
+      membershipId: string
+    },
+  ): Promise<HolderReassignmentResult>
+}
+
 export interface HolderAssignmentDatabase {
   assignHolder(
     input: CommandContext & {

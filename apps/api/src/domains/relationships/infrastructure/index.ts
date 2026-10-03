@@ -4,6 +4,7 @@ import type postgres from 'postgres'
 import type {
   ClientDirectoryDatabase,
   HolderAssignmentDatabase,
+  HolderReassignmentDatabase,
   DirectoryEntry,
   DirectoryGroup,
   InvitationStatus,
@@ -222,6 +223,64 @@ type StateDocument = {
   holder: ProfessionalRow | null
   substitutions: SubstitutionRow[]
   grants: GrantRow[]
+}
+
+/**
+ * PostgreSQL access for changing who attends a client.
+ *
+ * The organization context is set by the function itself, for the same reason
+ * as assigning: it checks the capability against that organization before
+ * anything is written, and a caller that set it from outside would be declaring
+ * the answer to the question being asked.
+ */
+export function createHolderReassignmentDatabase(
+  sql: postgres.Sql = database(),
+): HolderReassignmentDatabase {
+  return {
+    reassignHolder: (input) =>
+      measureStudioRequestPhase('business-db', async () => {
+        const row = await sql.begin(async (transaction) => {
+          await setPersonActor(transaction, input.actorPersonId)
+          const [moved] = await transaction<ReassignmentRow[]>`
+            select * from relationships.reassign_relationship_holder(
+              ${input.actorPersonId}::uuid,
+              ${input.organizationId}::uuid,
+              ${input.relationshipId}::uuid,
+              ${input.membershipId}::uuid,
+              ${input.idempotencyKey}::uuid,
+              ${input.commandId}::uuid,
+              ${input.requestHash}
+            )
+          `
+          return moved
+        })
+
+        if (!row) throw new Error('reassign_relationship_holder returned no row')
+        return {
+          resource: {
+            assignmentId: row.assignment_id,
+            relationshipId: row.relationship_id,
+            membershipId: row.membership_id,
+            professionalPersonId: row.professional_person_id,
+            validFrom: new Date(row.valid_from),
+            replacedAssignmentId: row.replaced_assignment_id,
+          },
+          reassigned: row.reassigned,
+          replayed: row.replayed,
+        }
+      }),
+  }
+}
+
+type ReassignmentRow = {
+  assignment_id: string
+  relationship_id: string
+  membership_id: string
+  professional_person_id: string
+  valid_from: string
+  replaced_assignment_id: string | null
+  reassigned: boolean
+  replayed: boolean
 }
 
 /**
