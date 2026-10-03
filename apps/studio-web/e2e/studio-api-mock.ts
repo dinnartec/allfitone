@@ -24,6 +24,7 @@ export interface StudioApiFixture {
   organizationMemberships: unknown[]
   organizationClients: unknown[]
   relationshipState: unknown
+  assignmentOutcome: 'created' | 'taken' | 'forbidden'
   offerableScopes: unknown[]
   organization: unknown
   organizationRoles: unknown[]
@@ -249,6 +250,56 @@ export const activeTeamMember = {
   ended_at: null,
   roles: ['owner'],
 }
+
+export const activeCoach = {
+  membership_id: '01991600-7000-7000-8000-000000000002',
+  display_name: 'Camilo Restrepo',
+  status: 'active',
+  joined_at: '2025-02-01T10:00:00.000Z',
+  ended_at: null,
+  roles: ['coach'],
+}
+
+export const secondActiveCoach = {
+  membership_id: '01991600-7000-7000-8000-000000000003',
+  display_name: 'Daniela Hoyos',
+  status: 'active',
+  joined_at: '2025-04-12T10:00:00.000Z',
+  ended_at: null,
+  roles: ['coach'],
+}
+
+/**
+ * Active, of this organization, and **not** a coach. The command refuses this
+ * membership, so the list must never offer it — which is what the fixture is
+ * here to prove.
+ */
+export const activeStaffMember = {
+  membership_id: '01991600-7000-7000-8000-000000000004',
+  display_name: 'Sara Posada',
+  status: 'active',
+  joined_at: '2025-05-20T10:00:00.000Z',
+  ended_at: null,
+  roles: ['staff'],
+}
+
+/**
+ * The roster a gym needs to assign somebody: two coaches to choose between, an
+ * active staff member and a coach who left — both of which the command refuses,
+ * so the list must not offer them.
+ *
+ * Declared here and passed by the cases that need it, never folded into the
+ * default fixture: a routing test asserts that a brand-new organization reads
+ * "Integrante activo" in the singular, and adding members to the shared default
+ * broke it.
+ */
+export const coachedTeam = () => [
+  activeTeamMember,
+  activeCoach,
+  secondActiveCoach,
+  activeStaffMember,
+  terminatedTeamMember,
+]
 
 export const terminatedTeamMember = {
   membership_id: '01991600-7000-7000-8000-000000000002',
@@ -477,7 +528,8 @@ export function createStudioApiFixture(
     memberships: [],
     organizationMemberships: [activeTeamMember, terminatedTeamMember],
     organizationClients: [activeClient, pendingClientInvitation, terminatedClient],
-    relationshipState,
+    relationshipState: structuredClone(relationshipState),
+    assignmentOutcome: 'created',
     offerableScopes: [...offerableScopeCatalog],
     /*
      * A copy, not the shared object. Sites are now editable, and the mock
@@ -647,6 +699,40 @@ function defaultResponse(
         })
       : fixture.organizationClients
     return { status: 200, body: { data, page: { has_more: false, next_cursor: null } } }
+  }
+  if (
+    request.method === 'POST' &&
+    /^\/studio\/v1\/organizations\/[^/]+\/relationships\/[^/]+\/professional-assignments$/.test(
+      request.path,
+    )
+  ) {
+    if (fixture.assignmentOutcome !== 'created') {
+      return {
+        status: fixture.assignmentOutcome === 'taken' ? 409 : 403,
+        body: { error: fixture.assignmentOutcome === 'taken' ? 'conflict' : 'forbidden' },
+      }
+    }
+    // The screen refetches rather than trusting the answer, so the fixture has
+    // to change too: without this the panel would reappear with the form.
+    const chosen = (request.body ?? {}) as { membership_id?: string }
+    const coach = fixture.organizationMemberships.find(
+      (entry) =>
+        typeof entry === 'object' &&
+        entry !== null &&
+        'membership_id' in entry &&
+        entry.membership_id === chosen.membership_id,
+    ) as { membership_id: string; display_name: string } | undefined
+    fixture.relationshipState = {
+      ...(fixture.relationshipState as Record<string, unknown>),
+      holder: {
+        assignment_id: '01991600-7000-7000-8000-000000000399',
+        membership_id: coach?.membership_id ?? '',
+        professional_person_id: '01991600-7000-7000-8000-000000000299',
+        display_name: coach?.display_name ?? '',
+        valid_from: '2026-10-02T12:00:00.000Z',
+      },
+    }
+    return { status: 201, body: fixture.relationshipState }
   }
   if (
     request.method === 'GET' &&

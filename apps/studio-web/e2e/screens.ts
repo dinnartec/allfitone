@@ -15,6 +15,7 @@ import { expect, type Page } from '@playwright/test'
 import {
   TEST_ANALYTICS_ID,
   activeMembership,
+  coachedTeam,
   createStudioApiFixture,
   organizationWithLongSite,
   organizationWithoutSites,
@@ -897,6 +898,57 @@ export const SCREENS: Screen[] = [
       await settledByHeading(page)
       await expect(page.getByText('Nadie la atiende todavía')).toBeVisible()
       await expect(page.getByText('No concedió ningún permiso')).toBeVisible()
+    },
+  },
+  {
+    // HU-027. The form only exists where the command would succeed: a live
+    // relationship with nobody in charge, read by somebody who may assign.
+    stories: 'HU-027 · choosing the professional for a client nobody attends',
+    path: `${workspace}/clients/${relationshipId}`,
+    fixture: () =>
+      createStudioApiFixture({
+        memberships: [activeMembership],
+        organizationMemberships: coachedTeam(),
+        relationshipState: { ...relationshipState, holder: null, substitutions: [] },
+      }),
+    settled: async (page) => {
+      await settledByHeading(page)
+      await expect(page.getByText('Asignar no concede datos')).toBeVisible()
+    },
+  },
+  {
+    // The list open, which is the widest the panel ever gets and the state that
+    // paints over whatever sits under it when it does not fit.
+    stories: 'HU-027 · the coaches a client can be assigned to',
+    path: `${workspace}/clients/${relationshipId}`,
+    fixture: () =>
+      createStudioApiFixture({
+        memberships: [activeMembership],
+        organizationMemberships: coachedTeam(),
+        relationshipState: { ...relationshipState, holder: null, substitutions: [] },
+      }),
+    reveal: async (page) => {
+      await page.getByRole('combobox', { name: 'Profesional responsable' }).click()
+      await expect(page.getByRole('option', { name: 'Camilo Restrepo' })).toBeVisible()
+    },
+  },
+  {
+    // Somebody else got there first. A conflict, not an outage: the reader can
+    // see what happened and what to do, so it is said in the field.
+    stories: 'HU-027 · somebody else was assigned while the page was open',
+    path: `${workspace}/clients/${relationshipId}`,
+    fixture: () =>
+      createStudioApiFixture({
+        memberships: [activeMembership],
+        organizationMemberships: coachedTeam(),
+        relationshipState: { ...relationshipState, holder: null, substitutions: [] },
+        assignmentOutcome: 'taken',
+      }),
+    reveal: async (page) => {
+      await page.getByRole('combobox', { name: 'Profesional responsable' }).click()
+      await page.getByRole('option', { name: 'Camilo Restrepo' }).click()
+      await page.getByRole('button', { name: 'Asignar' }).click()
+      await expect(page.getByText(/Alguien lo asignó mientras tenías/)).toBeVisible()
     },
   },
   {
