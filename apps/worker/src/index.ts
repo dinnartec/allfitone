@@ -21,6 +21,10 @@ import {
   createOwnershipInvitationDeliveryDatabase,
 } from './ownership-invitations.js'
 import {
+  createClientInvitationBatchProcessor,
+  createClientInvitationDeliveryDatabase,
+} from './client-invitations.js'
+import {
   createBackofficeAuthBatchProcessor,
   createBackofficeAuthCleanupDatabase,
   type BackofficeAuthBatchResult,
@@ -206,6 +210,20 @@ function processorsFromEnvironment(): WorkerJobProcessors {
     publicBaseUrl,
     deliveryEnabled,
   })
+  // Off until Space has a screen for the person to land on. A client invitation is
+  // resolved and decided through `/space/v1`, and that screen does not exist yet, so
+  // turning this on would email somebody a link to nothing. The event stays unclaimed
+  // meanwhile, exactly as it is today, and the path above is tested and ready.
+  const clientInvitationsEnabled =
+    deliveryEnabled && process.env.CLIENT_INVITATION_DELIVERY_ENABLED === 'true'
+  const clientInvitations = clientInvitationsEnabled
+    ? createClientInvitationBatchProcessor({
+        queue,
+        database: createClientInvitationDeliveryDatabase(sql),
+        email,
+        publicBaseUrl: required('CLIENT_INVITATION_PUBLIC_BASE_URL'),
+      })
+    : async () => ({ claimed: 0, delivered: 0, deadOrDelayed: 0, skipped: 0 })
   const backofficeAuthentication = createBackofficeAuthBatchProcessor({
     queue,
     database: createBackofficeAuthCleanupDatabase(sql),
@@ -226,16 +244,17 @@ function processorsFromEnvironment(): WorkerJobProcessors {
     deliveryEnabled: recoveryEnabled,
   })
   cachedProcessors = {
-    // One delivery job for both kinds: the same page, the same switch and the same
-    // expiry, which the team batch already runs for every pending invitation.
+    // One delivery job for every kind: the same switch and the same expiry, which the
+    // team batch already runs for every pending invitation whatever it proposes.
     invitationDelivery: async () => {
       const team = await teamInvitations()
       const ownership = await ownershipInvitations()
+      const client = await clientInvitations()
       return {
-        claimed: team.claimed + ownership.claimed,
-        delivered: team.delivered + ownership.delivered,
-        deadOrDelayed: team.deadOrDelayed + ownership.deadOrDelayed,
-        skipped: team.skipped + ownership.skipped,
+        claimed: team.claimed + ownership.claimed + client.claimed,
+        delivered: team.delivered + ownership.delivered + client.delivered,
+        deadOrDelayed: team.deadOrDelayed + ownership.deadOrDelayed + client.deadOrDelayed,
+        skipped: team.skipped + ownership.skipped + client.skipped,
         expired: team.expired,
       }
     },
