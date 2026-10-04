@@ -424,6 +424,66 @@ select lives_ok(
 -- would be checked for a terminal state before the command reached one.
 set constraints all deferred;
 
+
+-- ---------------------------------------------------------------------------
+-- And the resend has somewhere to be delivered
+-- ---------------------------------------------------------------------------
+
+-- `relationship.client_invited.v1` had no consumer at all until this slice, so the
+-- projection the worker asks for is tested with the rest of the chain rather than on
+-- its own: what is being resent is exactly what has to go out.
+select throws_ok(
+  $$ select * from identity.prepare_client_invitation_delivery(
+    (select event.id from system.outbox_events as event
+     where event.event_type = 'relationship.client_invited.v1'
+       and event.aggregate_id = '019b3000-0000-7000-8000-000000000602')
+  ) $$,
+  '42501',
+  null,
+  'only the worker prepares the delivery of a client invitation'
+);
+
+select set_config('app.actor_kind', 'worker', true),
+       set_config('app.actor_person_id', '', true);
+
+select ok(
+  (select delivery.delivery_state = 'ready'
+      and delivery.contact = 'lapsed.client@example.test'
+      and delivery.organization_name = 'Reenvio Cliente'
+   from identity.prepare_client_invitation_delivery(
+     (select event.id from system.outbox_events as event
+      where event.event_type = 'relationship.client_invited.v1'
+        and event.aggregate_id = '019b3000-0000-7000-8000-000000000602')
+   ) as delivery),
+  'the reissued invitation is ready to send, to the address the original went to'
+);
+
+-- Nothing about the offer leaves: the worker cannot read it and the projection does
+-- not pretend to. A count in an inbox would need a policy on the options themselves.
+select is(
+  (select array_agg(attribute.attname::text order by attribute.attname collate "C")
+     from pg_proc as routine
+     join pg_namespace as space on space.oid = routine.pronamespace
+     cross join lateral unnest(routine.proargnames) with ordinality as attribute(attname, position)
+    where space.nspname = 'identity'
+      and routine.proname = 'prepare_client_invitation_delivery'
+      and attribute.position > 1),
+  array['contact', 'delivery_state', 'expires_at', 'invitation_id', 'organization_name',
+        'token_key_version'],
+  'and the projection carries nothing about what the invitation asked for'
+);
+
+select is(
+  (select delivery.delivery_state
+   from identity.prepare_client_invitation_delivery(
+     (select event.id from system.outbox_events as event
+      where event.event_type = 'relationship.client_invited.v1'
+        and event.aggregate_id = '019b3000-0000-7000-8000-000000000503')
+   ) as delivery),
+  'skipped',
+  'and an invitation somebody already accepted is not sent again'
+);
+
 -- ---------------------------------------------------------------------------
 -- And the person can accept what Allfit reissued
 -- ---------------------------------------------------------------------------
@@ -628,64 +688,6 @@ select is_empty(
 
 reset role;
 
--- ---------------------------------------------------------------------------
--- And the resend has somewhere to be delivered
--- ---------------------------------------------------------------------------
-
--- `relationship.client_invited.v1` had no consumer at all until this slice, so the
--- projection the worker asks for is tested with the rest of the chain rather than on
--- its own: what is being resent is exactly what has to go out.
-select throws_ok(
-  $$ select * from identity.prepare_client_invitation_delivery(
-    (select event.id from system.outbox_events as event
-     where event.event_type = 'relationship.client_invited.v1'
-       and event.aggregate_id = '019b3000-0000-7000-8000-000000000602')
-  ) $$,
-  '42501',
-  null,
-  'only the worker prepares the delivery of a client invitation'
-);
-
-select set_config('app.actor_kind', 'worker', true),
-       set_config('app.actor_person_id', '', true);
-
-select ok(
-  (select delivery.delivery_state = 'ready'
-      and delivery.contact = 'lapsed.client@example.test'
-      and delivery.organization_name = 'Reenvio Cliente'
-   from identity.prepare_client_invitation_delivery(
-     (select event.id from system.outbox_events as event
-      where event.event_type = 'relationship.client_invited.v1'
-        and event.aggregate_id = '019b3000-0000-7000-8000-000000000602')
-   ) as delivery),
-  'the reissued invitation is ready to send, to the address the original went to'
-);
-
--- Nothing about the offer leaves: the worker cannot read it and the projection does
--- not pretend to. A count in an inbox would need a policy on the options themselves.
-select is(
-  (select array_agg(attribute.attname::text order by attribute.attname collate "C")
-     from pg_proc as routine
-     join pg_namespace as space on space.oid = routine.pronamespace
-     cross join lateral unnest(routine.proargnames) with ordinality as attribute(attname, position)
-    where space.nspname = 'identity'
-      and routine.proname = 'prepare_client_invitation_delivery'
-      and attribute.position > 1),
-  array['contact', 'delivery_state', 'expires_at', 'invitation_id', 'organization_name',
-        'token_key_version'],
-  'and the projection carries nothing about what the invitation asked for'
-);
-
-select is(
-  (select delivery.delivery_state
-   from identity.prepare_client_invitation_delivery(
-     (select event.id from system.outbox_events as event
-      where event.event_type = 'relationship.client_invited.v1'
-        and event.aggregate_id = '019b3000-0000-7000-8000-000000000503')
-   ) as delivery),
-  'skipped',
-  'and an invitation somebody already accepted is not sent again'
-);
 
 select * from finish();
 

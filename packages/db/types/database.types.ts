@@ -2848,6 +2848,17 @@ export type Database = {
           provider_session_id: string
         }[]
       }
+      prepare_client_invitation_delivery: {
+        Args: { p_event_id: string }
+        Returns: {
+          contact: string
+          delivery_state: string
+          expires_at: string
+          invitation_id: string
+          organization_name: string
+          token_key_version: number
+        }[]
+      }
       prepare_ownership_invitation_delivery: {
         Args: { p_event_id: string }
         Returns: {
