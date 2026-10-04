@@ -163,3 +163,59 @@ test('sends an unauthenticated operator back to the access screen', async ({ con
 
   await expect(page.getByRole('heading', { name: 'Identifica tu acceso.' })).toBeVisible()
 })
+
+test('pasting the rules loads them for review and publishes nothing by itself', async ({
+  context,
+  page,
+}) => {
+  const fixture = createBackofficeFixture({
+    session: activeSession(),
+    scopes: { definitions: [scopeDefinition()] },
+  })
+  await mockBackofficeApi(context, fixture)
+
+  await page.goto(PATH)
+  await page.getByLabel('Pegar las reglas').fill(
+    `[{"resource":"identity.body_progress_records","field":"value_numeric",
+       "data_classification_code":"body","max_action":"read","historical_readable":true},
+      {"resource":"identity.health_context_claims","field":"*",
+       "data_classification_code":"health","max_action":"read","is_excluded":true}]`,
+  )
+  await page.getByRole('button', { name: 'Cargar para revisar' }).click()
+
+  // Loaded into the rows, with the warning that publishing cannot be undone.
+  await expect(page.locator('[data-scope-paste-notice]')).toContainText('2 reglas cargadas')
+  await expect(page.locator('[data-scope-paste-notice]')).toContainText('inmutable')
+  await expect(page.getByLabel('Recurso y campo 1')).toHaveValue('identity.body_progress_records')
+  await expect(page.getByLabel('Recurso y campo 2')).toHaveValue('identity.health_context_claims')
+  await expect(page.getByLabel('Excluir la regla 2')).toBeChecked()
+
+  // And nothing was published: loading is not publishing.
+  expect(
+    fixture.requests.filter(
+      (request) => request.method === 'POST' && request.path === '/backoffice/v1/scope-definitions',
+    ),
+  ).toHaveLength(0)
+})
+
+test('a misspelled key is refused instead of being quietly dropped', async ({ context, page }) => {
+  await mockBackofficeApi(
+    context,
+    createBackofficeFixture({
+      session: activeSession(),
+      scopes: { definitions: [scopeDefinition()] },
+    }),
+  )
+
+  await page.goto(PATH)
+  await page
+    .getByLabel('Pegar las reglas')
+    .fill(
+      '[{"resource":"nutrition.meals","field":"*","data_classification_code":"nutrition","max_action":"read","historical_readible":true}]',
+    )
+  await page.getByRole('button', { name: 'Cargar para revisar' }).click()
+
+  await expect(page.locator('[data-scope-paste-notice]')).toContainText('historical_readible')
+  // The rows are untouched, so nothing half-loaded can be published by accident.
+  await expect(page.getByLabel('Recurso y campo 1')).toHaveValue('')
+})

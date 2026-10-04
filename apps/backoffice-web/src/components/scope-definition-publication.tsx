@@ -36,6 +36,7 @@ import {
   SelectValue,
 } from '@allfitone/react/components/select'
 import { Spinner } from '@allfitone/react/components/spinner'
+import { Textarea } from '@allfitone/react/components/textarea'
 import {
   Table,
   TableBody,
@@ -66,6 +67,7 @@ import {
   groupByScope,
   includedRules,
   includesSomething,
+  parseRuleDrafts,
   ruleIssue,
   ruleIssueMessage,
   scopeDefinitionMessage,
@@ -76,7 +78,10 @@ import {
   type ScopeCode,
 } from '@/lib/scope-definitions'
 
-type LoadState = 'loading' | 'ready' | 'failed'
+const PASTE_EXAMPLE =
+  '[{"resource":"identity.body_progress_records","field":"value_numeric","data_classification_code":"body","max_action":"read"}]'
+
+type LoadState = 'loading' | 'ready' | 'failed' | 'ready' | 'failed'
 
 export function ScopeDefinitionPublication() {
   const [state, setState] = useState<LoadState>('loading')
@@ -87,6 +92,8 @@ export function ScopeDefinitionPublication() {
   const [scope, setScope] = useState<ScopeCode>('body_progress')
   const [rules, setRules] = useState<RuleDraft[]>([emptyRule()])
   const [error, setError] = useState<string | null>(null)
+  const [paste, setPaste] = useState('')
+  const [pasteNotice, setPasteNotice] = useState<string | null>(null)
 
   const load = useCallback(async (signal?: AbortSignal) => {
     try {
@@ -109,6 +116,26 @@ export function ScopeDefinitionPublication() {
     void load(controller.signal)
     return () => controller.abort()
   }, [load])
+
+  /**
+   * Loads the pasted list into the rows above, and stops there. Publishing stays a
+   * separate press on a form the operator has just read: pasting is about not
+   * mistyping a hundred fields, not about publishing without looking.
+   */
+  function loadPastedRules() {
+    const parsed = parseRuleDrafts(paste)
+    if ('issue' in parsed) {
+      setPasteNotice(parsed.issue)
+      return
+    }
+    setRules(parsed.drafts)
+    setError(null)
+    setPasteNotice(
+      `${parsed.drafts.length} regla${parsed.drafts.length === 1 ? '' : 's'} cargada${
+        parsed.drafts.length === 1 ? '' : 's'
+      }. Revísalas antes de publicar: una versión publicada es inmutable.`,
+    )
+  }
 
   function updateRule(index: number, patch: Partial<RuleDraft>) {
     setRules((current) =>
@@ -204,6 +231,28 @@ export function ScopeDefinitionPublication() {
                     ))}
                   </SelectContent>
                 </Select>
+              </Field>
+
+              <Field>
+                <FieldLabel htmlFor="scope-rule-paste">Pegar las reglas</FieldLabel>
+                <Textarea
+                  id="scope-rule-paste"
+                  value={paste}
+                  onChange={(event) => setPaste(event.target.value)}
+                  rows={4}
+                  placeholder={PASTE_EXAMPLE}
+                  disabled={busy}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={busy || paste.trim() === ''}
+                  onClick={loadPastedRules}
+                >
+                  Cargar para revisar
+                </Button>
+                {pasteNotice ? <span data-scope-paste-notice>{pasteNotice}</span> : null}
               </Field>
 
               {rules.map((draft, index) => (
