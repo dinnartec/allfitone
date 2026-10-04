@@ -249,9 +249,19 @@ async function publish(): Promise<void> {
     )
   }
 
-  const [offerable] = await sql<Array<{ count: number }>>`
-    select count(*)::integer as count from privacy.list_offerable_scopes()
-  `
+  // Inside a transaction with a person's context: `list_offerable_scopes` is a definer
+  // function owned by `allfit_owner`, which does not bypass RLS, and its policy wants
+  // both `actor_kind` and a person. Asked without them it answers zero, which reads
+  // exactly like "nothing was published" and is not that at all.
+  const [offerable] = await sql.begin(async (transaction) => {
+    await transaction`
+      select set_config('app.actor_kind', 'person', true),
+             set_config('app.actor_person_id', ${curator.person_id}, true)
+    `
+    return transaction<Array<{ count: number }>>`
+      select count(*)::integer as count from privacy.list_offerable_scopes()
+    `
+  })
   console.log(`\nStudio can now offer ${offerable?.count ?? 0} permission(s) on an invitation.`)
   console.log('These rules are the draft in .claude/HUS_BACKOFFICE/PERMISOS_V1.md, not a decision.')
 }
