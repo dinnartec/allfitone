@@ -85,6 +85,8 @@ const PHOTO_FAILED = 'La comida quedó guardada, pero sin la foto.'
 // A label is about this size (tile, name, kcal); the gap keeps two from touching.
 const LABEL_SIZE = { width: 200, height: 52 }
 const LABEL_GAP = 8
+// The meal pill's height and the gap under it: the labels start below both.
+const HEADER_CLEARANCE = 56
 const MACROS = [
   { code: 'protein', name: 'proteína' },
   { code: 'carbohydrates', name: 'carbos' },
@@ -462,6 +464,7 @@ export default function CaptureScreen() {
           saving={saving}
           failure={failure}
           bottom={insets.bottom}
+          top={pillTop + HEADER_CLEARANCE}
           onOpen={openEditing}
           onAdd={() => setTab('foods')}
           onSave={() => void save()}
@@ -671,11 +674,14 @@ function Review({
   saving,
   failure,
   bottom,
+  top,
   onOpen,
   onAdd,
   onSave,
 }: {
   readonly items: readonly CaptureItem[]
+  /** Where the labels may start: below the header, so none hides behind the meal pill. */
+  readonly top: number
   readonly totals: ReturnType<typeof captureTotals>
   readonly mealName: string
   readonly saving: boolean
@@ -701,10 +707,10 @@ function Review({
   )
   return (
     <>
-      {/* Labels over the photo, at the top 45 % of the screen the photo shows above the card. */}
+      {/* Labels over the photo, between the header and the card (the top 45 % of the screen). */}
       <View
         pointerEvents="box-none"
-        style={styles.labels}
+        style={[styles.labels, { top }]}
         onLayout={(event) => {
           const { width, height } = event.nativeEvent.layout
           setArea({ width, height })
@@ -721,14 +727,25 @@ function Review({
             >
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={`${item.name}. Ajustar`}
+                accessibilityLabel={`${item.name}${item.review ? ', por revisar' : ''}. Ajustar`}
                 onPress={() => onOpen(item)}
               >
-                <GlassPanel radius="action" material="chip" style={styles.label}>
+                {/* One to check wears an amber edge; the list says why. */}
+                <GlassPanel
+                  radius="action"
+                  material="chip"
+                  style={[
+                    styles.label,
+                    item.review && {
+                      borderWidth: 1,
+                      borderColor: `${theme.color.status.warning}99`,
+                    },
+                  ]}
+                >
                   <FoodTile icon={item.icon} food={item.food} size={26} />
                   <View>
                     <Text role="control" size="sm" numberOfLines={1}>
-                      {item.review ? `${item.name} ?` : item.name}
+                      {item.name}
                     </Text>
                     <Text
                       role="body"
@@ -1142,7 +1159,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 12,
   },
-  labels: { position: 'absolute', top: 0, left: 16, right: 16, height: '45%' },
+  labels: { position: 'absolute', left: 16, right: 16, bottom: '55%' },
   labelAnchor: { position: 'absolute', maxWidth: LABEL_SIZE.width },
   label: {
     flexDirection: 'row',
