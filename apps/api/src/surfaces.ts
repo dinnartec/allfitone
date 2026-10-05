@@ -19,6 +19,7 @@ import {
   studioCatalogRoutes,
 } from './domains/catalog/index.js'
 import { spaceExecutionRoutes } from './domains/execution/index.js'
+import { spaceNutritionRoutes } from './domains/nutrition/index.js'
 import {
   backofficeCredentialVerificationRoutes,
   backofficeIdentityRoutes,
@@ -74,6 +75,7 @@ export function mountSurfaces(app: Hono): void {
   app.route('/space/v1', spaceClientInvitationRoutes())
   app.route('/space/v1', spacePlanningRoutes())
   app.route('/space/v1', spaceExecutionRoutes())
+  app.route('/space/v1', spaceNutritionRoutes())
   app.route('/backoffice/v1', backofficeIdentityRoutes())
   app.route('/backoffice/v1', backofficeCredentialVerificationRoutes())
   app.route('/backoffice/v1', backofficePlatformAccessRoutes())

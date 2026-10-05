@@ -16,12 +16,15 @@
     "@allfitone/auth-provider": "workspace:*",
     "@allfitone/contracts": "workspace:*",
     "@allfitone/db": "workspace:*",
+    "@allfitone/food-recognition": "workspace:*",
     "@allfitone/notifications": "workspace:*",
+    "@allfitone/object-store": "workspace:*",
     "@allfitone/queue": "workspace:*",
     "@allfitone/telemetry": "workspace:*",
     "@vercel/functions": "3.9.3",
     "hono": "^4.6.0",
-    "postgres": "3.4.9"
+    "postgres": "3.4.9",
+    "sharp": "0.35.5"
   },
   "devDependencies": {
     "@hono/node-server": "^1.13.0"
