@@ -21,10 +21,8 @@
  * cards the labels competed with what scrolled under them; a canvas-tinted veil inside
  * the panel keeps the glass but lets the words read first.
  *
- * **Only Hoy, Entrenamiento and Perfil lead anywhere today.** Comida answers with
- * the screen it is waiting on rather than navigating into nothing: a dead end
- * that explains itself is not the empty screen `HU-SP-090` criterion 3 forbids, and
- * a blank one would be.
+ * **Every destination leads somewhere.** Comida was the last to answer with what it
+ * was waiting on; it has its screen now (ADR-040).
  */
 
 import { GlassPanel } from '@allfitone/react-native/glass'
@@ -45,11 +43,6 @@ const DOCK_INSET = 8
 const VEIL = 0.6
 
 export type TabKey = 'today' | 'train' | 'food' | 'profile'
-
-/** What a destination that does not exist yet answers instead of navigating. */
-export const PENDING: Record<'food', string> = {
-  food: 'Comida llega con el registro de nutrición.',
-}
 
 export interface TabBarProps {
   /** The destinations, already wrapped in whatever the router needs. */

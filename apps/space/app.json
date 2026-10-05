@@ -32,8 +32,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allfit Space usa tus fotos solo para poner una de fondo en la tarjeta que compartes. La foto no sale de tu teléfono.",
-          "cameraPermission": false,
+          "photosPermission": "Allfit Space usa tus fotos para el fondo de la tarjeta que compartes, que no sale de tu teléfono, y para la foto de tus comidas, que se guarda privada en tu cuenta.",
+          "cameraPermission": "Allfit Space usa la cámara para fotografiar tus comidas y reconocer los alimentos. La foto se guarda privada en tu cuenta, sin su ubicación.",
           "microphonePermission": false
         }
       ],
@@ -43,6 +43,13 @@
           "photosPermission": "Allfit Space usa tus fotos solo para poner una de fondo en la tarjeta que compartes. La foto no sale de tu teléfono.",
           "savePhotosPermission": "Allfit Space guarda en tus fotos la tarjeta de tu entreno.",
           "isAccessMediaLocationEnabled": false
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allfit Space usa la cámara para fotografiar tus comidas y reconocer los alimentos. La foto se guarda privada en tu cuenta, sin su ubicación.",
+          "recordAudioAndroid": false
         }
       ]
     ],

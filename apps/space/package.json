@@ -13,14 +13,15 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json"
   },
   "dependencies": {
-    "@allfitone/brand": "0.3.0",
+    "@allfitone/brand": "0.4.0",
     "@allfitone/contracts": "workspace:*",
-    "@allfitone/icons": "0.4.0",
-    "@allfitone/react-native": "0.8.0",
+    "@allfitone/icons": "file:/private/tmp/claude-501/-Users-walbert-Documents-Dinnartec/c947f4cc-22eb-48ca-a33d-261f8a574615/scratchpad/ds-pack/allfitone-icons-0.4.0.tgz",
+    "@allfitone/react-native": "file:/private/tmp/claude-501/-Users-walbert-Documents-Dinnartec/c947f4cc-22eb-48ca-a33d-261f8a574615/scratchpad/ds-pack/allfitone-react-native-0.9.0.tgz",
     "@allfitone/telemetry": "workspace:*",
     "@allfitone/tokens": "0.4.0",
     "expo": "57.0.11",
     "expo-blur": "57.0.2",
+    "expo-camera": "57.0.6",
     "expo-clipboard": "57.0.2",
     "expo-constants": "57.0.9",
     "expo-crypto": "^57.0.1",

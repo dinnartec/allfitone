@@ -22,21 +22,16 @@
  * `TabTrigger` created inside `TabBar` would never be seen. The bar is a shell now;
  * this file says where each destination leads.
  *
- * Comida has no route to lead to, so it is a plain `Tab` among the triggers — the
- * parser skips anything that is not a trigger, and it answers with what it is waiting
- * on instead of navigating into an empty screen. Progreso left the bar (1 Oct 2026).
+ * Every destination leads somewhere now: Comida got its screen with nutrition
+ * (ADR-040), and Progreso left the bar (1 Oct 2026).
  */
 
-import { Text } from '@allfitone/react-native/text'
 import { usePathname } from 'expo-router'
 import { TabList, TabSlot, TabTrigger, Tabs } from 'expo-router/ui'
-import { useState } from 'react'
-import { StyleSheet } from 'react-native'
 
-import { DOCK_HEIGHT, PENDING, Tab, TabBar } from '../../src/components/tab-bar'
+import { Tab, TabBar } from '../../src/components/tab-bar'
 
 export default function TabsLayout() {
-  const [pending, setPending] = useState<string | undefined>(undefined)
   // `TabTrigger` hands its child the press handling but never says whether it is the
   // focused one, and `usePathname` drops the group segment — so this compares against
   // the same paths the rest of the app navigates to.
@@ -45,12 +40,6 @@ export default function TabsLayout() {
   return (
     <Tabs>
       <TabSlot />
-
-      {pending ? (
-        <Text role="body" size="sm" color="muted" style={styles.pending}>
-          {pending}
-        </Text>
-      ) : null}
 
       <TabList asChild>
         <TabBar>
@@ -62,12 +51,9 @@ export default function TabsLayout() {
           </TabTrigger>
           {/* Cubiertos y no una cámara: Comida es dónde vive lo que registraste, y un
               obturador prometía una foto que no es lo que abre. */}
-          <Tab
-            icon="nutrition"
-            label="Comida"
-            active={false}
-            onPress={() => setPending(PENDING.food)}
-          />
+          <TabTrigger name="food" href="/food" asChild>
+            <Tab icon="nutrition" label="Comida" active={path === '/food'} />
+          </TabTrigger>
           <TabTrigger name="profile" href="/profile" asChild>
             <Tab icon="person" label="Perfil" active={path === '/profile'} />
           </TabTrigger>
@@ -76,15 +62,3 @@ export default function TabsLayout() {
     </Tabs>
   )
 }
-
-const styles = StyleSheet.create({
-  // Above the bar, out of the way of the content, and in one place rather than
-  // repeated in every screen that used to own this state.
-  pending: {
-    position: 'absolute',
-    left: 24,
-    right: 24,
-    bottom: DOCK_HEIGHT + 34,
-    textAlign: 'center',
-  },
-})
