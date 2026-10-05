@@ -30,43 +30,213 @@ import { FoundationIcon, type IconName } from '@allfitone/react-native/icons'
 import { Text } from '@allfitone/react-native/text'
 import { useTheme } from '@allfitone/react-native/theme'
 import { withAlpha } from '@allfitone/react-native/tokens'
-import type { ReactNode } from 'react'
-import { Pressable, StyleSheet, View } from 'react-native'
+import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect'
+import * as Haptics from 'expo-haptics'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { AccessibilityInfo, Pressable, StyleSheet, View } from 'react-native'
+import { Gesture, GestureDetector } from 'react-native-gesture-handler'
+import Animated, {
+  Easing,
+  ReduceMotion,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withSequence,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { scheduleOnRN } from 'react-native-worklets'
 
-import { DOCK_HEIGHT, dockBottom } from '../client/dock'
+import {
+  BAR_PADDING,
+  DOCK_HEIGHT,
+  dockBottom,
+  dropMaterial,
+  dropOffset,
+  nearestTab,
+  stretchFor,
+} from '../client/dock'
 
 /** The canvas's floating bar, and the room the content has to leave under it. */
 export { DOCK_HEIGHT }
 // Más pegada a los bordes que cuando la cámara le robaba setenta puntos: con cuatro
 // destinos cada columna necesita todo el ancho que la pantalla pueda dar.
 const DOCK_INSET = 8
+// Liquid Glass is iOS 26's; asked once, since the answer does not change while the app runs.
+const LIQUID_GLASS = isLiquidGlassAvailable()
 /** How much canvas the veil lays over the glass: enough for the labels to read first. */
 const VEIL = 0.6
+// The drop travels on a spring and lands with a little give, as water does.
+const TRAVEL = { duration: 460, dampingRatio: 0.82, reduceMotion: ReduceMotion.System }
+const LANDING = { duration: 420, dampingRatio: 0.52, reduceMotion: ReduceMotion.System }
+const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1)
+// How wide and how flat a drop gets at full stretch.
+const STRETCH_X = 0.24
+const STRETCH_Y = 0.1
+
+/** Whether the person asked the system for less transparency; it can change while open. */
+function useReduceTransparency(): boolean {
+  const [reduce, setReduce] = useState(false)
+  useEffect(() => {
+    let live = true
+    void AccessibilityInfo.isReduceTransparencyEnabled().then((value) => live && setReduce(value))
+    const subscription = AccessibilityInfo.addEventListener('reduceTransparencyChanged', setReduce)
+    return () => {
+      live = false
+      subscription.remove()
+    }
+  }, [])
+  return reduce
+}
 
 export type TabKey = 'today' | 'train' | 'food' | 'profile'
 
 export interface TabBarProps {
   /** The destinations, already wrapped in whatever the router needs. */
   readonly children: ReactNode
+  /** Which destination is current, where the drop rests; -1 when none is. */
+  readonly active: number
+  readonly count: number
+  /** Where a drop dragged along the bar and let go lands; the layout navigates there. */
+  readonly onSelect: (index: number) => void
 }
 
-export function TabBar({ children }: TabBarProps) {
+/**
+ * The bar, with one drop of glass over the current destination.
+ *
+ * **One drop, not one per tab.** It travels from the tab it leaves to the tab it reaches,
+ * stretching as it goes and settling with a little give, which is what makes it read as
+ * liquid. It can also be dragged along the bar: it follows the finger, stretches with the
+ * speed, ticks as it crosses each destination, and lands on the nearest one when let go.
+ * A tap still goes to the tab under it; a drag only begins past a few points sideways.
+ */
+export function TabBar({ children, active, count, onSelect }: TabBarProps) {
   const insets = useSafeAreaInsets()
   const theme = useTheme()
+  const reduced = useReducedMotion()
+  const material = dropMaterial({
+    liquidGlass: LIQUID_GLASS,
+    reduceTransparency: useReduceTransparency(),
+  })
+  const [width, setWidth] = useState(0)
+  const offset = useSharedValue(0)
+  const stretch = useSharedValue(0)
+  const origin = useSharedValue(0)
+  const over = useSharedValue(active)
+  // The first placement does not travel, and a drop that landed by dragging is already home.
+  const placed = useRef(false)
+  const landedByDrag = useRef(false)
+
+  useEffect(() => {
+    if (width === 0 || active < 0) return
+    over.set(active)
+    const target = dropOffset(active, width, count)
+    if (!placed.current || reduced) {
+      placed.current = true
+      offset.set(target)
+      return
+    }
+    if (landedByDrag.current) {
+      landedByDrag.current = false
+      return
+    }
+    offset.set(withSpring(target, TRAVEL))
+    stretch.set(
+      withSequence(withTiming(0.7, { duration: 140, easing: EASE_OUT }), withSpring(0, LANDING)),
+    )
+  }, [active, width, count, reduced, offset, stretch, over])
+
+  const tick = () => void Haptics.selectionAsync()
+  const land = (index: number) => {
+    landedByDrag.current = index !== active
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    if (index !== active) onSelect(index)
+  }
+
+  const drag = Gesture.Pan()
+    .enabled(width > 0 && active >= 0)
+    .activeOffsetX([-10, 10])
+    .onStart(() => {
+      origin.set(offset.get())
+    })
+    .onUpdate((event) => {
+      // A little past either end, as a drop pulled against an edge gives before it stops.
+      const first = dropOffset(0, width, count) - 10
+      const last = dropOffset(count - 1, width, count) + 10
+      const next = Math.min(last, Math.max(first, origin.get() + event.translationX))
+      offset.set(next)
+      stretch.set(reduced ? 0 : stretchFor(event.velocityX))
+      const tab = nearestTab(next, width, count)
+      if (tab !== over.get()) {
+        over.set(tab)
+        scheduleOnRN(tick)
+      }
+    })
+    .onEnd((event) => {
+      const tab = nearestTab(offset.get(), width, count)
+      offset.set(
+        withSpring(dropOffset(tab, width, count), { ...LANDING, velocity: event.velocityX }),
+      )
+      stretch.set(withSpring(0, LANDING))
+      scheduleOnRN(land, tab)
+    })
+
+  const column = width > 0 ? (width - BAR_PADDING * 2) / count : 0
+  const moving = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: offset.get() },
+      { scaleX: 1 + STRETCH_X * stretch.get() },
+      { scaleY: 1 - STRETCH_Y * stretch.get() },
+    ],
+  }))
 
   return (
     <View style={[styles.dock, { bottom: dockBottom(insets.bottom) }]} pointerEvents="box-none">
-      <GlassPanel radius="action" style={styles.glass}>
+      <GestureDetector gesture={drag}>
         <View
-          pointerEvents="none"
-          style={[
-            StyleSheet.absoluteFill,
-            { backgroundColor: withAlpha(theme.color.background.canvas, VEIL) },
-          ]}
-        />
-        {children}
-      </GlassPanel>
+          collapsable={false}
+          style={styles.grow}
+          onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
+        >
+          <GlassPanel radius="action" style={styles.glass}>
+            <View
+              pointerEvents="none"
+              style={[
+                StyleSheet.absoluteFill,
+                { backgroundColor: withAlpha(theme.color.background.canvas, VEIL) },
+              ]}
+            />
+            {column > 0 && active >= 0 ? (
+              <Animated.View
+                pointerEvents="none"
+                style={[styles.drop, { width: column - 4 }, moving]}
+              >
+                {material === 'glass' ? (
+                  <GlassView
+                    isInteractive
+                    colorScheme="dark"
+                    glassEffectStyle="regular"
+                    style={styles.dropFill}
+                  />
+                ) : (
+                  <View
+                    style={[
+                      styles.dropFill,
+                      {
+                        backgroundColor: theme.color.accent.tonal,
+                        borderColor: theme.color.accent.tonalBorder,
+                        borderWidth: 1,
+                      },
+                    ]}
+                  />
+                )}
+              </Animated.View>
+            ) : null}
+            {children}
+          </GlassPanel>
+        </View>
+      </GestureDetector>
     </View>
   )
 }
@@ -124,17 +294,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 14,
   },
+  grow: { flex: 1 },
+  // Clipped, so a drop bouncing off an end tab stays inside the bar's rounded edge.
   glass: {
     flex: 1,
     height: DOCK_HEIGHT,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 2,
+    paddingHorizontal: BAR_PADDING,
+    overflow: 'hidden',
   },
   // **Columnas iguales.** Se probó dejando que cada una midiera su palabra, para que
   // «Entrenamiento» cupiera entero: caber cabía, pero los iconos perdían el ritmo
   // —ciento noventa y tres puntos entre dos y ciento cincuenta y tres entre otros
   // dos— y una barra cuyos iconos no están a la misma distancia se lee rota. El
   // ritmo del icono manda sobre el largo de la palabra.
-  tab: { flex: 1, alignItems: 'center', gap: 3, minHeight: 44, justifyContent: 'center' },
+  // The whole height of the bar, so the drop wraps icon and word together.
+  tab: {
+    flex: 1,
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    gap: 3,
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  // The drop: a capsule inset from the bar, placed by its offset; untinted glass, so the
+  // accent stays on the icon and the word and never reads as a stain.
+  drop: { position: 'absolute', top: 7, bottom: 7, left: 2 },
+  dropFill: { flex: 1, borderRadius: 28 },
 })

@@ -15,3 +15,33 @@ export const dockBottom = (insetBottom: number): number => Math.max(insetBottom,
 /** The bottom of something that floats above the bar, with a gap between them. */
 export const aboveDock = (insetBottom: number, gap = 12): number =>
   dockBottom(insetBottom) + DOCK_HEIGHT + gap
+
+/** The bar's inner padding, either side of the four columns. */
+export const BAR_PADDING = 2
+
+/** What the drop is made of: Liquid Glass where the phone draws it and the person wants it. */
+export function dropMaterial(input: {
+  readonly liquidGlass: boolean
+  readonly reduceTransparency: boolean
+}): 'glass' | 'tint' {
+  return input.liquidGlass && !input.reduceTransparency ? 'glass' : 'tint'
+}
+
+/** Where the drop's left edge sits over a tab, in a bar of some width and columns. */
+export function dropOffset(index: number, width: number, count: number): number {
+  'worklet'
+  return BAR_PADDING + index * ((width - BAR_PADDING * 2) / count)
+}
+
+/** The tab a drop released at some offset lands on: the nearest column, inside the bar. */
+export function nearestTab(offset: number, width: number, count: number): number {
+  'worklet'
+  const column = (width - BAR_PADDING * 2) / count
+  return Math.min(count - 1, Math.max(0, Math.round((offset - BAR_PADDING) / column)))
+}
+
+/** How much a drop moving at some speed (points per second) stretches: 0 resting, 1 at most. */
+export function stretchFor(velocity: number): number {
+  'worklet'
+  return Math.min(1, Math.abs(velocity) / 2400)
+}

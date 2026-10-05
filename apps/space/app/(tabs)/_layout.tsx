@@ -26,23 +26,35 @@
  * (ADR-040), and Progreso left the bar (1 Oct 2026).
  */
 
-import { usePathname } from 'expo-router'
+import { usePathname, useRouter } from 'expo-router'
 import { TabList, TabSlot, TabTrigger, Tabs } from 'expo-router/ui'
 
 import { Tab, TabBar } from '../../src/components/tab-bar'
+
+// The destinations in the bar's order, for the drop that is dragged between them.
+const PATHS = ['/today', '/train', '/food', '/profile'] as const
 
 export default function TabsLayout() {
   // `TabTrigger` hands its child the press handling but never says whether it is the
   // focused one, and `usePathname` drops the group segment — so this compares against
   // the same paths the rest of the app navigates to.
   const path = usePathname()
+  const router = useRouter()
+  const active = PATHS.findIndex((one) => one === path)
 
   return (
     <Tabs>
       <TabSlot />
 
       <TabList asChild>
-        <TabBar>
+        <TabBar
+          active={active}
+          count={PATHS.length}
+          onSelect={(index) => {
+            const next = PATHS[index]
+            if (next) router.navigate(next)
+          }}
+        >
           <TabTrigger name="today" href="/today" asChild>
             <Tab icon="home" label="Hoy" active={path === '/today'} />
           </TabTrigger>
