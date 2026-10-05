@@ -25,7 +25,15 @@ import * as Haptics from 'expo-haptics'
 import { useFocusEffect, useRouter } from 'expo-router'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native'
-import Animated, { FadeInDown, FadeOut, ReduceMotion } from 'react-native-reanimated'
+import Animated, {
+  FadeInDown,
+  FadeOut,
+  ReduceMotion,
+  useAnimatedReaction,
+  useAnimatedScrollHandler,
+  useSharedValue,
+} from 'react-native-reanimated'
+import { scheduleOnRN } from 'react-native-worklets'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import type { HistoryItem } from '../../src/client/history'
@@ -526,21 +534,32 @@ function MacroCards({
 }) {
   const theme = useTheme()
   const { width } = useWindowDimensions()
-  const [page, setPage] = useState(0)
   const pages: readonly (readonly NutrientCode[])[] = [
     ['protein', 'carbohydrates', 'fat'],
     ['fiber', 'water'],
   ]
   const pageWidth = width - 40
+  // The dots follow the finger, as the routine carousel's on Hoy do: tied to the end of
+  // the momentum, the mark jumped only once the cards had already stopped.
+  const at = useSharedValue(0)
+  const follow = useAnimatedScrollHandler((event) => {
+    at.set(event.contentOffset.x / pageWidth)
+  })
+  const [page, setPage] = useState(0)
+  useAnimatedReaction(
+    () => Math.round(at.get()),
+    (now, before) => {
+      if (now !== before) scheduleOnRN(setPage, now)
+    },
+  )
   return (
     <View style={styles.macros}>
-      <ScrollView
+      <Animated.ScrollView
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
-        onMomentumScrollEnd={(event) =>
-          setPage(Math.round(event.nativeEvent.contentOffset.x / pageWidth))
-        }
+        onScroll={follow}
+        scrollEventThrottle={16}
         style={{ width: pageWidth }}
       >
         {pages.map((codes) => (
@@ -595,10 +614,11 @@ function MacroCards({
             })}
           </View>
         ))}
-      </ScrollView>
+      </Animated.ScrollView>
       <PageDots
         count={pages.length}
         active={page}
+        at={at}
         accessibilityLabel={`Página ${String(page + 1)} de ${String(pages.length)}`}
       />
     </View>
