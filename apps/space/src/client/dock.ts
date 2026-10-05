@@ -45,3 +45,9 @@ export function stretchFor(velocity: number): number {
   'worklet'
   return Math.min(1, Math.abs(velocity) / 2400)
 }
+
+/** Whether a touch at some offset lands on the drop, with 12 points of room either side. */
+export function onDrop(touch: number, dropLeft: number, dropWidth: number): boolean {
+  'worklet'
+  return touch >= dropLeft - 12 && touch <= dropLeft + dropWidth + 12
+}

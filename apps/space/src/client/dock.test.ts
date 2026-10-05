@@ -1,6 +1,14 @@
 import { describe, expect, test } from 'bun:test'
 
-import { aboveDock, dockBottom, dropMaterial, dropOffset, nearestTab, stretchFor } from './dock'
+import {
+  aboveDock,
+  dockBottom,
+  dropMaterial,
+  dropOffset,
+  nearestTab,
+  onDrop,
+  stretchFor,
+} from './dock'
 
 describe('what floats above the tab bar', () => {
   test('T-SPC-UNIT-248 the bar sits on the safe area, never closer than 12 to the edge', () => {
@@ -33,5 +41,13 @@ describe('what floats above the tab bar', () => {
     expect(stretchFor(0)).toBe(0)
     expect(stretchFor(-1200)).toBe(0.5)
     expect(stretchFor(9000)).toBe(1)
+  })
+
+  test('T-SPC-UNIT-253 a touch holds the drop when it lands on it, with a little room around', () => {
+    // A drop at 200, 95 wide.
+    expect(onDrop(250, 200, 95)).toBe(true)
+    expect(onDrop(190, 200, 95)).toBe(true)
+    expect(onDrop(305, 200, 95)).toBe(true)
+    expect(onDrop(100, 200, 95)).toBe(false)
   })
 })

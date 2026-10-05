@@ -30,7 +30,7 @@ import { FoundationIcon, type IconName } from '@allfitone/react-native/icons'
 import { Text } from '@allfitone/react-native/text'
 import { useTheme } from '@allfitone/react-native/theme'
 import { withAlpha } from '@allfitone/react-native/tokens'
-import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect'
+import { GlassContainer, GlassView, isLiquidGlassAvailable } from 'expo-glass-effect'
 import * as Haptics from 'expo-haptics'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { AccessibilityInfo, Pressable, StyleSheet, View } from 'react-native'
@@ -38,6 +38,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import Animated, {
   Easing,
   ReduceMotion,
+  useAnimatedReaction,
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
@@ -55,6 +56,7 @@ import {
   dropMaterial,
   dropOffset,
   nearestTab,
+  onDrop,
   stretchFor,
 } from '../client/dock'
 
@@ -67,13 +69,23 @@ const DOCK_INSET = 8
 const LIQUID_GLASS = isLiquidGlassAvailable()
 /** How much canvas the veil lays over the glass: enough for the labels to read first. */
 const VEIL = 0.6
-// The drop travels on a spring and lands with a little give, as water does.
+// The drop travels on a spring, and its shape answers on a looser one: it lands and keeps
+// quivering a moment, wider then taller, the way a drop of water settles.
 const TRAVEL = { duration: 460, dampingRatio: 0.82, reduceMotion: ReduceMotion.System }
-const LANDING = { duration: 420, dampingRatio: 0.52, reduceMotion: ReduceMotion.System }
+const LANDING = { duration: 420, dampingRatio: 0.6, reduceMotion: ReduceMotion.System }
+const JELLY = { duration: 760, dampingRatio: 0.3, reduceMotion: ReduceMotion.System }
+// The tail trails the drop on a softer spring, so fast moves pull it out and it rejoins.
+const TAIL = { duration: 560, dampingRatio: 0.6, reduceMotion: ReduceMotion.System }
+// Held, the drop swells like a lens lifted off the bar; let go, it wobbles back down.
+const GRAB = { duration: 260, dampingRatio: 0.62, reduceMotion: ReduceMotion.System }
+const RELEASE = { duration: 520, dampingRatio: 0.38, reduceMotion: ReduceMotion.System }
 const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1)
-// How wide and how flat a drop gets at full stretch.
-const STRETCH_X = 0.24
-const STRETCH_Y = 0.1
+// How wide and how flat a drop gets at full stretch, how much it swells when held, and
+// the tail's size beside it.
+const STRETCH_X = 0.26
+const STRETCH_Y = 0.12
+const SWELL = 0.14
+const TAIL_SHARE = 0.6
 
 /** Whether the person asked the system for less transparency; it can change while open. */
 function useReduceTransparency(): boolean {
@@ -124,6 +136,17 @@ export function TabBar({ children, active, count, onSelect }: TabBarProps) {
   const stretch = useSharedValue(0)
   const origin = useSharedValue(0)
   const over = useSharedValue(active)
+  const tail = useSharedValue(0)
+  const lift = useSharedValue(0)
+  const holding = useSharedValue(false)
+
+  // The tail always chases the drop, wherever the drop is being taken.
+  useAnimatedReaction(
+    () => offset.get(),
+    (now) => {
+      tail.set(reduced ? now : withSpring(now, TAIL))
+    },
+  )
   // The first placement does not travel, and a drop that landed by dragging is already home.
   const placed = useRef(false)
   const landedByDrag = useRef(false)
@@ -143,11 +166,13 @@ export function TabBar({ children, active, count, onSelect }: TabBarProps) {
     }
     offset.set(withSpring(target, TRAVEL))
     stretch.set(
-      withSequence(withTiming(0.7, { duration: 140, easing: EASE_OUT }), withSpring(0, LANDING)),
+      withSequence(withTiming(0.7, { duration: 140, easing: EASE_OUT }), withSpring(0, JELLY)),
     )
   }, [active, width, count, reduced, offset, stretch, over])
 
+  const column = width > 0 ? (width - BAR_PADDING * 2) / count : 0
   const tick = () => void Haptics.selectionAsync()
+  const press = () => void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Soft)
   const land = (index: number) => {
     landedByDrag.current = index !== active
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
@@ -157,6 +182,13 @@ export function TabBar({ children, active, count, onSelect }: TabBarProps) {
   const drag = Gesture.Pan()
     .enabled(width > 0 && active >= 0)
     .activeOffsetX([-10, 10])
+    .onBegin((event) => {
+      // Only a finger on the drop lifts it; a tap on another tab just goes there.
+      if (reduced || !onDrop(event.x, offset.get(), column - 4)) return
+      holding.set(true)
+      lift.set(withSpring(1, GRAB))
+      scheduleOnRN(press)
+    })
     .onStart(() => {
       origin.set(offset.get())
     })
@@ -178,18 +210,39 @@ export function TabBar({ children, active, count, onSelect }: TabBarProps) {
       offset.set(
         withSpring(dropOffset(tab, width, count), { ...LANDING, velocity: event.velocityX }),
       )
-      stretch.set(withSpring(0, LANDING))
+      stretch.set(withSpring(0, JELLY))
       scheduleOnRN(land, tab)
     })
+    .onFinalize(() => {
+      if (!holding.get()) return
+      holding.set(false)
+      lift.set(withSpring(0, RELEASE))
+    })
 
-  const column = width > 0 ? (width - BAR_PADDING * 2) / count : 0
-  const moving = useAnimatedStyle(() => ({
-    transform: [
-      { translateX: offset.get() },
-      { scaleX: 1 + STRETCH_X * stretch.get() },
-      { scaleY: 1 - STRETCH_Y * stretch.get() },
-    ],
-  }))
+  const moving = useAnimatedStyle(() => {
+    // The jelly overshoots below zero, so the drop goes taller and narrower for a moment.
+    const shape = Math.min(1, Math.max(-0.6, stretch.get()))
+    return {
+      transform: [
+        { translateX: offset.get() },
+        { scaleX: 1 + STRETCH_X * shape + SWELL * lift.get() },
+        { scaleY: 1 - STRETCH_Y * shape + SWELL * lift.get() },
+      ],
+    }
+  })
+  const trailing = useAnimatedStyle(() => {
+    // Seen only once it falls behind; at rest it sits inside the drop, merged with it.
+    const apart = Math.abs(offset.get() - tail.get())
+    const reach = column > 0 ? Math.min(1, apart / column) : 0
+    return {
+      opacity: Math.min(1, apart / 18),
+      transform: [
+        { translateX: tail.get() + ((column - 4) * (1 - TAIL_SHARE)) / 2 },
+        { scaleX: 1 + 0.5 * reach },
+        { scaleY: 1 - 0.18 * reach },
+      ],
+    }
+  })
 
   return (
     <View style={[styles.dock, { bottom: dockBottom(insets.bottom) }]} pointerEvents="box-none">
@@ -208,36 +261,48 @@ export function TabBar({ children, active, count, onSelect }: TabBarProps) {
               ]}
             />
             {column > 0 && active >= 0 ? (
-              <Animated.View
-                pointerEvents="none"
-                style={[styles.drop, { width: column - 4 }, moving]}
-              >
-                {material === 'glass' ? (
-                  <GlassView
-                    isInteractive
-                    colorScheme="dark"
-                    glassEffectStyle="regular"
-                    style={styles.dropFill}
-                  />
-                ) : (
-                  <View
-                    style={[
-                      styles.dropFill,
-                      {
-                        backgroundColor: theme.color.accent.tonal,
-                        borderColor: theme.color.accent.tonalBorder,
-                        borderWidth: 1,
-                      },
-                    ]}
-                  />
-                )}
-              </Animated.View>
+              // Glass in one container melts together when close: drop and tail read as
+              // one body that stretches, splits and joins again.
+              <GlassContainer spacing={28} pointerEvents="none" style={StyleSheet.absoluteFill}>
+                <Animated.View
+                  style={[styles.drop, { width: (column - 4) * TAIL_SHARE }, trailing]}
+                >
+                  <DropFill material={material} />
+                </Animated.View>
+                <Animated.View style={[styles.drop, { width: column - 4 }, moving]}>
+                  <DropFill material={material} />
+                </Animated.View>
+              </GlassContainer>
             ) : null}
             {children}
           </GlassPanel>
         </View>
       </GestureDetector>
     </View>
+  )
+}
+
+/** The drop's substance: interactive Liquid Glass, or a tint where there is none. */
+function DropFill({ material }: { readonly material: 'glass' | 'tint' }) {
+  const theme = useTheme()
+  return material === 'glass' ? (
+    <GlassView
+      isInteractive
+      colorScheme="dark"
+      glassEffectStyle="regular"
+      style={styles.dropFill}
+    />
+  ) : (
+    <View
+      style={[
+        styles.dropFill,
+        {
+          backgroundColor: theme.color.accent.tonal,
+          borderColor: theme.color.accent.tonalBorder,
+          borderWidth: 1,
+        },
+      ]}
+    />
   )
 }
 
