@@ -19,7 +19,7 @@ const RECOVERY_ID = '019b1000-0000-7000-8000-000000000601'
 const IDEMPOTENCY_KEY = 'a0000000-0000-4000-8000-000000000001'
 const COMMAND_ID = '019b1000-0000-7000-8000-000000000602'
 const CASE = 'CASE-2026-010'
-const OPERATIONS = ['NEW-IDN-ACTION', 'OP-IDN-046', 'OP-IDN-047', 'OP-IDN-048']
+const OPERATIONS = ['NEW-IDN-ACTION', 'OP-IDN-053', 'OP-IDN-054', 'OP-IDN-055']
 
 const recovery: AllfitV1Schemas['BackofficeAccountRecoveryRequest'] = {
   request_id: RECOVERY_ID,
@@ -146,7 +146,7 @@ beforeEach(() => {
 })
 
 describe('Backoffice account recovery API contract', () => {
-  test('T-IDN-RECOVERY-API-01 mounts NEW-IDN-ACTION and OP-IDN-046..048 with their contract methods', () => {
+  test('T-IDN-RECOVERY-API-01 mounts NEW-IDN-ACTION and OP-IDN-053..048 with their contract methods', () => {
     const contract = allfitV1ContractManifest.operations
       // Space reused these four numbers for onboarding operations. The operations
       // matrix assigns them here, so the surface is part of the filter until that

@@ -1,5 +1,5 @@
 /**
- * Resending a gym's team invitations from Backoffice: `OP-IDN-045`, `HU-BO-011`.
+ * Resending a gym's team invitations from Backoffice: `OP-IDN-052`, `HU-BO-011`.
  *
  * A resend command carries no contact, no role and no organization of its own —
  * only which invitation — so no client can use it to change what the invitation

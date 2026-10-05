@@ -1,4 +1,4 @@
--- T-IDN-RECOVERY-01 — NEW-IDN-ACTION / OP-IDN-046..048: account recovery started by support.
+-- T-IDN-RECOVERY-01 — NEW-IDN-ACTION / OP-IDN-053..048: account recovery started by support.
 --
 -- `HU-BO-010` (criteria 3, 4, 5, 10 and 12) and the recovery resend of `HU-BO-011`,
 -- over the identity action requests PRE_PHASE_5 §5 describes.

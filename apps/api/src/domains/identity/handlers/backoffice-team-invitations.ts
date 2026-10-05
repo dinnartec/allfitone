@@ -1,5 +1,5 @@
 /**
- * Backoffice team invitation routes: `NEW-IDN-RESEND` and `OP-IDN-045`.
+ * Backoffice team invitation routes: `NEW-IDN-RESEND` and `OP-IDN-052`.
  *
  * `HU-BO-011`. The handler shapes and rejects; it decides nothing. The support duty,
  * AAL2, what can be resent and whether it is redelivered or reissued are resolved

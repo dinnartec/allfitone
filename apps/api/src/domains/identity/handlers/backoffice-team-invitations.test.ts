@@ -136,14 +136,14 @@ beforeEach(() => {
 })
 
 describe('Backoffice team invitation resend API contract', () => {
-  test('T-IDN-RESEND-API-01 mounts NEW-IDN-RESEND and OP-IDN-045 with their contract methods', () => {
+  test('T-IDN-RESEND-API-01 mounts NEW-IDN-RESEND and OP-IDN-052 with their contract methods', () => {
     const contract = allfitV1ContractManifest.operations
-      // Space reused OP-IDN-045 for an onboarding operation. The operations matrix
-      // assigns it here, so the surface is part of the filter until that clash is
-      // settled in the matrix.
+      // The surface stays in the filter although `OP-IDN-052` is now Backoffice's
+      // alone: `NEW-IDN-RESEND` is a placeholder code, and a placeholder is exactly
+      // the kind of name a second surface picks up without anyone noticing.
       .filter(
         (operation) =>
-          ['NEW-IDN-RESEND', 'OP-IDN-045'].includes(operation.allfitOperation) &&
+          ['NEW-IDN-RESEND', 'OP-IDN-052'].includes(operation.allfitOperation) &&
           operation.path.startsWith('/backoffice/v1/'),
       )
       .map((operation) => `${operation.method} ${colonPath(operation.path)}`)
