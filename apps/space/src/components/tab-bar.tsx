@@ -34,8 +34,10 @@ import type { ReactNode } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
+import { DOCK_HEIGHT, dockBottom } from '../client/dock'
+
 /** The canvas's floating bar, and the room the content has to leave under it. */
-export const DOCK_HEIGHT = 70
+export { DOCK_HEIGHT }
 // Más pegada a los bordes que cuando la cámara le robaba setenta puntos: con cuatro
 // destinos cada columna necesita todo el ancho que la pantalla pueda dar.
 const DOCK_INSET = 8
@@ -54,7 +56,7 @@ export function TabBar({ children }: TabBarProps) {
   const theme = useTheme()
 
   return (
-    <View style={[styles.dock, { bottom: Math.max(insets.bottom, 12) }]} pointerEvents="box-none">
+    <View style={[styles.dock, { bottom: dockBottom(insets.bottom) }]} pointerEvents="box-none">
       <GlassPanel radius="action" style={styles.glass}>
         <View
           pointerEvents="none"

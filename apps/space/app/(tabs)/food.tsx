@@ -26,6 +26,7 @@ import { useFocusEffect, useRouter } from 'expo-router'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native'
 import Animated, { FadeInDown, FadeOut, ReduceMotion } from 'react-native-reanimated'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import type { HistoryItem } from '../../src/client/history'
 import { mondayOf } from '../../src/client/history'
@@ -59,6 +60,7 @@ import {
   PulsingPlus,
   Ring,
 } from '../../src/components/nutrition-ui'
+import { aboveDock } from '../../src/client/dock'
 import { DOCK_HEIGHT } from '../../src/components/tab-bar'
 
 const READ_FAILED = 'No pudimos cargar tu día. Inténtalo otra vez.'
@@ -87,6 +89,7 @@ type LineEntry =
 export default function FoodScreen() {
   const router = useRouter()
   const theme = useTheme()
+  const insets = useSafeAreaInsets()
   const timeZone = useMemo(() => deviceTimezone(), [])
   const nutrition = useMemo(() => createSpaceNutritionFlow(), [])
   const training = useMemo(() => createSpaceExecutionFlow(), [])
@@ -316,7 +319,7 @@ export default function FoodScreen() {
                     </View>
                     <MacroDots totals={mealTotals(entry.meal.items)} />
                     <Text role="body" size="xs" color="muted">
-                      {`${String(entry.meal.items.length)} ${entry.meal.items.length === 1 ? 'alimento' : 'alimentos'}`}
+                      {`${String(entry.meal.items.length)} ${entry.meal.items.length === 1 ? 'Alimento' : 'Alimentos'}`}
                     </Text>
                   </View>
                 </Pressable>
@@ -422,7 +425,11 @@ export default function FoodScreen() {
         <Animated.View
           entering={FadeInDown.duration(240).reduceMotion(ReduceMotion.System)}
           exiting={FadeOut.duration(160)}
-          style={[styles.saved, { backgroundColor: theme.color.status.success }]}
+          style={[
+            styles.saved,
+            // Above the bar, never behind it: the bar stands on the safe area, so must this.
+            { bottom: aboveDock(insets.bottom), backgroundColor: theme.color.status.success },
+          ]}
           accessibilityLiveRegion="polite"
         >
           <FoundationIcon name="success" size="sm" color={theme.color.text.inverse} decorative />
@@ -646,7 +653,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 20,
     right: 20,
-    bottom: DOCK_HEIGHT + 24,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
