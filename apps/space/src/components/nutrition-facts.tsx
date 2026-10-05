@@ -24,7 +24,16 @@ import { TextField } from '@allfitone/react-native/text-field'
 import { useTheme } from '@allfitone/react-native/theme'
 import { typography } from '@allfitone/react-native/tokens'
 import { useEffect, useState, type ReactNode } from 'react'
-import { Keyboard, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native'
+import {
+  Keyboard,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  View,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native'
 
 import {
   formatAmount,
@@ -62,6 +71,8 @@ const SHARES: readonly (readonly [number, string])[] = [
   [2 / 3, '⅔'],
   [3 / 4, '¾'],
 ]
+// The text field's height, which the unit button matches so the row reads as one line.
+const CONTROL_HEIGHT = 48
 const isMode = (value: string): value is AmountMode => value === 'number' || value === 'fraction'
 
 export function AmountField({
@@ -98,57 +109,61 @@ export function AmountField({
     <View style={styles.amount}>
       <View style={styles.amountRow}>
         {/* Numbers only; a fraction comes from the shortcuts, as that keyboard has no slash. */}
-        <TextField
-          label="Cantidad"
-          hideLabel
-          value={text}
-          onChangeText={(typed) => {
-            setText(typed)
-            const parsed = parseAmount(typed)
-            if (parsed !== null) onChange(parsed, unit, mode)
-          }}
-          onFocus={() => setTyping(true)}
-          onBlur={() => setTyping(false)}
-          keyboardType="decimal-pad"
-          placeholder="1"
-          style={styles.amountInput}
-        />
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Unidad: ${unitName(unit)}. Cambiar`}
-          onPress={() => {
-            Keyboard.dismiss()
-            setPicking(true)
-          }}
-          style={[
-            styles.unitPicker,
-            {
-              backgroundColor: theme.color.background.surfaceSubtle,
-              borderColor: theme.color.border.subtle,
-              borderRadius: theme.semanticRadius.control,
-              minHeight: theme.touchTarget,
-            },
-          ]}
-        >
-          <Text role="control" size="md" numberOfLines={1} style={styles.grow}>
-            {unitName(unit)}
-          </Text>
-          {unit.countable ? (
-            <Text role="body" size="sm" color="muted">
-              {`${String(Math.round(unit.grams))} g`}
+        <Labeled label="Cantidad" style={styles.amountInput}>
+          <TextField
+            label="Cantidad"
+            hideLabel
+            value={text}
+            onChangeText={(typed) => {
+              setText(typed)
+              const parsed = parseAmount(typed)
+              if (parsed !== null) onChange(parsed, unit, mode)
+            }}
+            onFocus={() => setTyping(true)}
+            onBlur={() => setTyping(false)}
+            keyboardType="decimal-pad"
+            placeholder="1"
+          />
+        </Labeled>
+        <Labeled label="Unidad" style={styles.grow}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Unidad: ${unitName(unit)}. Cambiar`}
+            onPress={() => {
+              Keyboard.dismiss()
+              setPicking(true)
+            }}
+            style={[
+              styles.unitPicker,
+              {
+                backgroundColor: theme.color.background.surfaceSubtle,
+                borderColor: theme.color.border.subtle,
+                borderRadius: theme.semanticRadius.control,
+                minHeight: CONTROL_HEIGHT,
+              },
+            ]}
+          >
+            <Text role="control" size="md" numberOfLines={1} style={styles.grow}>
+              {unitName(unit)}
             </Text>
-          ) : null}
-          <FoundationIcon name="expand" size="sm" color={theme.color.icon.secondary} decorative />
-        </Pressable>
-        <SegmentedControl
-          accessibilityLabel="Escribir la cantidad como"
-          items={MODES}
-          value={mode}
-          onChange={(next) => {
-            if (isMode(next)) onChange(amount, unit, next)
-          }}
-          style={styles.modes}
-        />
+            {unit.countable ? (
+              <Text role="body" size="sm" color="muted">
+                {`${String(Math.round(unit.grams))} g`}
+              </Text>
+            ) : null}
+            <FoundationIcon name="expand" size="sm" color={theme.color.icon.secondary} decorative />
+          </Pressable>
+        </Labeled>
+        <Labeled label="Formato" style={styles.modes}>
+          <SegmentedControl
+            accessibilityLabel="Escribir la cantidad como"
+            items={MODES}
+            value={mode}
+            onChange={(next) => {
+              if (isMode(next)) onChange(amount, unit, next)
+            }}
+          />
+        </Labeled>
       </View>
       {/* A shortcut while typing, not a row that is always there. */}
       {mode === 'fraction' && typing ? (
@@ -183,6 +198,26 @@ export function AmountField({
           ))}
         </ScrollView>
       </Sheet>
+    </View>
+  )
+}
+
+/** A control with its name above it, so a field says what it asks for before it is touched. */
+function Labeled({
+  label,
+  style,
+  children,
+}: {
+  readonly label: string
+  readonly style?: StyleProp<ViewStyle>
+  readonly children: ReactNode
+}) {
+  return (
+    <View style={[styles.labeled, style]}>
+      <Text role="body" size="xs" color="secondary">
+        {label}
+      </Text>
+      {children}
     </View>
   )
 }
@@ -513,11 +548,12 @@ function FactRow({
 const styles = StyleSheet.create({
   grow: { flex: 1 },
   amount: { gap: 10 },
-  amountRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  // Labels on one line, controls under them at one height.
+  amountRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  labeled: { gap: 6 },
   amountInput: { width: 76 },
   modes: { width: 104 },
   unitPicker: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,

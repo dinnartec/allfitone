@@ -22,7 +22,7 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
 
 import { keepItem, openedItem, settleItem } from '../../src/client/item-handover'
 import type { CaptureItem } from '../../src/client/capture'
-import { FoodTile, ItemEditor } from '../../src/components/capture-sheets'
+import { ItemEditor } from '../../src/components/capture-sheets'
 
 export default function ItemScreen() {
   const router = useRouter()
@@ -53,7 +53,6 @@ export default function ItemScreen() {
           accessibilityLabel={editing ? 'Volver a la comida' : 'Cerrar sin añadir'}
           onPress={() => router.back()}
         />
-        <FoodTile icon={item.icon} food={item.food} size={40} />
         <View style={styles.grow}>
           <Text role="control" size="lg" accessibilityRole="header" numberOfLines={1}>
             {item.name}

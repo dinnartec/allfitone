@@ -17,6 +17,7 @@ import { FoundationIcon, iconCatalog, type IconName } from '@allfitone/react-nat
 import { Sheet } from '@allfitone/react-native/sheet'
 import { Text } from '@allfitone/react-native/text'
 import { useTheme, type Theme } from '@allfitone/react-native/theme'
+import type { ReactNode } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
 import Animated, { FadeIn, FadeOut, ReduceMotion } from 'react-native-reanimated'
 
@@ -38,7 +39,7 @@ import {
   type NutrientCode,
 } from '../client/nutrition'
 import { AmountField, NutrientCells, NutritionFacts } from './nutrition-facts'
-import { macroColor, MEAL_ICON } from './nutrition-ui'
+import { CardGlow, FIGURE_TRACKING, macroColor, MEAL_ICON } from './nutrition-ui'
 
 const isIconName = (name: string): name is IconName => Object.hasOwn(iconCatalog, name)
 
@@ -101,48 +102,166 @@ export function ItemEditor({
   const estimated = isEstimated(item)
   return (
     <>
-      <AmountField
-        food={item.food}
-        amount={item.amount}
-        unit={item.unit}
-        mode={item.mode}
-        grams={item.grams}
-        onChange={(amount, unit, mode) => onChange(withAmount(item, amount, unit, mode))}
-      />
-      <NutrientCells
-        shown={shown}
-        edited={item.edited}
-        estimated={estimated}
-        onEdit={(code, value) => onChange(withEdit(item, code, value))}
-      />
-      {edited ? (
-        <Animated.View
-          entering={FadeIn.duration(180).reduceMotion(ReduceMotion.System)}
-          exiting={FadeOut.duration(120)}
-        >
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => onChange(restoreCalculated(item))}
-            style={styles.restore}
+      <ItemHero item={item} shown={shown} estimated={estimated} />
+      <Section title="¿Cuánto comiste?">
+        <AmountField
+          food={item.food}
+          amount={item.amount}
+          unit={item.unit}
+          mode={item.mode}
+          grams={item.grams}
+          onChange={(amount, unit, mode) => onChange(withAmount(item, amount, unit, mode))}
+        />
+      </Section>
+      <Section title="Valores" hint="Toca un valor para corregirlo">
+        <NutrientCells
+          shown={shown}
+          edited={item.edited}
+          estimated={estimated}
+          onEdit={(code, value) => onChange(withEdit(item, code, value))}
+        />
+        {edited ? (
+          <Animated.View
+            entering={FadeIn.duration(180).reduceMotion(ReduceMotion.System)}
+            exiting={FadeOut.duration(120)}
           >
-            <FoundationIcon name="history" size="xs" color={theme.color.icon.accent} decorative />
-            <Text role="control" size="sm" color="accent">
-              Volver a lo calculado
-            </Text>
-          </Pressable>
-        </Animated.View>
-      ) : null}
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => onChange(restoreCalculated(item))}
+              style={styles.restore}
+            >
+              <FoundationIcon name="history" size="xs" color={theme.color.icon.accent} decorative />
+              <Text role="control" size="sm" color="accent">
+                Volver a lo calculado
+              </Text>
+            </Pressable>
+          </Animated.View>
+        ) : null}
+      </Section>
       <NutritionFacts
         values={shown}
-        portion={
-          item.unit.label === 'g'
-            ? portionText(item)
-            : `${portionText(item)} (${String(Math.round(item.grams))} g)`
-        }
+        portion={portionWithGrams(item)}
         targets={targets}
         estimated={estimated}
       />
     </>
+  )
+}
+
+/** «1 vaso (240 g)», or just «35 g» when the unit is already the gram. */
+const portionWithGrams = (item: CaptureItem) =>
+  item.unit.label === 'g'
+    ? portionText(item)
+    : `${portionText(item)} (${String(Math.round(item.grams))} g)`
+
+const MACRO_PARTS = [
+  { code: 'protein', name: 'proteína' },
+  { code: 'carbohydrates', name: 'carbos' },
+  { code: 'fat', name: 'grasa' },
+] as const
+
+/**
+ * The food at a glance, as the diary's energy card: its tile on the accent's glow, the
+ * kilocalories large, where they came from, and how the macros split.
+ */
+function ItemHero({
+  item,
+  shown,
+  estimated,
+}: {
+  readonly item: CaptureItem
+  readonly shown: ReturnType<typeof shownValues>
+  readonly estimated: boolean
+}) {
+  const theme = useTheme()
+  const grams = MACRO_PARTS.map(({ code }) => shown[code] ?? 0)
+  const total = Math.max(
+    1,
+    grams.reduce((sum, value) => sum + value, 0),
+  )
+  return (
+    <View
+      style={[
+        styles.hero,
+        { backgroundColor: theme.color.background.surface, borderColor: theme.color.border.subtle },
+      ]}
+    >
+      <CardGlow size={200} right={-60} top={-70} />
+      <View style={styles.heroTop}>
+        <FoodTile icon={item.icon} food={item.food} size={52} />
+        <View style={styles.grow}>
+          <View style={styles.heroFigure}>
+            <Text role="display" tracking={FIGURE_TRACKING} size="5xl">
+              {shown.energy === undefined ? '—' : String(Math.round(shown.energy))}
+            </Text>
+            <Text role="control" size="md" color="secondary" style={styles.heroUnit}>
+              kcal
+            </Text>
+          </View>
+          <Text role="control" size="xs" color="accent">
+            {estimated ? 'Estimado con IA' : 'Calculado por Allfit'}
+          </Text>
+        </View>
+      </View>
+      <Text role="body" size="sm" color="secondary">
+        {portionWithGrams(item)}
+      </Text>
+      <View style={styles.split}>
+        {MACRO_PARTS.map(({ code }, at) => (
+          <View
+            key={code}
+            style={[
+              styles.splitPart,
+              {
+                flex: Math.max(0.02, (grams[at] ?? 0) / total),
+                backgroundColor: macroColor(theme, code),
+              },
+            ]}
+          />
+        ))}
+      </View>
+      <View style={styles.legend}>
+        {MACRO_PARTS.map(({ code, name }, at) => (
+          <View key={code} style={styles.legendItem}>
+            <View style={[styles.swatch, { backgroundColor: macroColor(theme, code) }]} />
+            <Text
+              role="control"
+              size="sm"
+            >{`${String(Math.round((grams[at] ?? 0) * 10) / 10).replace('.', ',')} g`}</Text>
+            <Text role="body" size="sm" color="muted">
+              {name}
+            </Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  )
+}
+
+/** A titled part of the item screen, with an optional line of help under the title. */
+function Section({
+  title,
+  hint,
+  children,
+}: {
+  readonly title: string
+  readonly hint?: string
+  readonly children: ReactNode
+}) {
+  return (
+    <View style={styles.section}>
+      <View style={styles.sectionHead}>
+        <Text role="control" size="lg" accessibilityRole="header">
+          {title}
+        </Text>
+        {hint ? (
+          <Text role="body" size="sm" color="muted">
+            {hint}
+          </Text>
+        ) : null}
+      </View>
+      {children}
+    </View>
   )
 }
 
@@ -264,6 +383,17 @@ export function MealMenu({
 }
 
 const styles = StyleSheet.create({
+  hero: { borderRadius: 24, borderWidth: 1, padding: 18, gap: 12, overflow: 'hidden' },
+  heroTop: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  heroFigure: { flexDirection: 'row', alignItems: 'flex-end', gap: 6 },
+  heroUnit: { paddingBottom: 8 },
+  split: { flexDirection: 'row', gap: 4, height: 6 },
+  splitPart: { borderRadius: 3 },
+  legend: { flexDirection: 'row', flexWrap: 'wrap', gap: 14 },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  swatch: { width: 8, height: 8, borderRadius: 2 },
+  section: { gap: 12 },
+  sectionHead: { gap: 2 },
   grow: { flex: 1, gap: 2 },
   tile: { alignItems: 'center', justifyContent: 'center' },
   sheet: { gap: 14, paddingBottom: 8 },
