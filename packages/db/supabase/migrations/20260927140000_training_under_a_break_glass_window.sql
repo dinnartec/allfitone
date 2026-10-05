@@ -56,7 +56,7 @@ revoke all on function access_control.reads_under_break_glass(uuid, text) from p
 
 -- Reading only. A window never writes, and this policy must never be the reason one
 -- could: `executed_sessions_all_self` stays exactly as Space wrote it.
-create policy executed_sessions_break_glass
+create policy executed_sessions_select_break_glass
   on execution.executed_sessions
   for select
   to allfit_owner

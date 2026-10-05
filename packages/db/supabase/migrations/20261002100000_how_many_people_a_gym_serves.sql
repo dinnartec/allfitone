@@ -80,7 +80,7 @@ revoke all on function access_control.counts_platform_metrics() from public;
 
 -- Reading only. A Backoffice operator never writes a relationship: ending one is the
 -- person's or the gym's, and `HU-BO-017` is deferred by decision.
-create policy service_relationships_backoffice_directory
+create policy service_relationships_select_backoffice_directory
   on relationships.service_relationships
   for select
   to allfit_owner

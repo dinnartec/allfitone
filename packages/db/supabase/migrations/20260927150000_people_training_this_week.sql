@@ -68,7 +68,7 @@ revoke all on function access_control.counts_platform_metrics() from public;
 
 -- Reading only, and only the sessions: a count needs the rows, never what hangs off
 -- them, and the child tables keep their own policies untouched.
-create policy executed_sessions_platform_metrics
+create policy executed_sessions_select_platform_metrics
   on execution.executed_sessions
   for select
   to allfit_owner

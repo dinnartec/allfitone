@@ -84,8 +84,7 @@ alter table identity.body_progress_records
   drop constraint ck_body_progress_records_metric;
 
 alter table identity.body_progress_records
-  add constraint fk_body_progress_records_metric foreign key (metric_code)
-  references identity.body_progress_metrics(code) on delete restrict;
+  add constraint fk_body_progress_records_metric foreign key (metric_code) references identity.body_progress_metrics(code) on delete restrict;
 
 alter table identity.body_progress_records
   add constraint ck_body_progress_records_original_positive check (
