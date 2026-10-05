@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0.0",
-  "brandVersion": "0.3.0",
+  "brandVersion": "0.4.0",
   "sourceOfTruth": "packages/brand/assets",
   "colors": {
     "cyan": "#55EFFB",
@@ -23,12 +23,6 @@
     {
       "path": "assets/logo/allfit-one-logo-chalk.svg",
       "type": "logo",
-      "background": "transparent",
-      "lettering": null
-    },
-    {
-      "path": "assets/logo/allfit-one-logo-carrier.svg",
-      "type": "logo-carrier",
       "background": "transparent",
       "lettering": null
     },

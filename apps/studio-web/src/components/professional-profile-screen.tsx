@@ -1,6 +1,6 @@
 'use client'
 
-import { BrandLogoCarrier, ProductWordmark } from '@allfitone/react/brand'
+import { BrandLogo, ProductWordmark } from '@allfitone/react/brand'
 import { Alert, AlertAction, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
 import { Badge } from '@allfitone/react/components/badge'
 import { Button } from '@allfitone/react/components/button'
@@ -366,12 +366,18 @@ function AccountShell({ children, onSpaces }: { children: React.ReactNode; onSpa
         <WorkspaceHeader data-profile-header>
           {/* `WorkspaceActions` is `shrink-0`, so the brand absorbs every bit of
               squeeze: the 138px wordmark rendered at 14px on a 320px phone. The
-              compact mark fits beside both labelled controls from 360px up
-              (27+125+137+gaps = 309 of 328), and below that the CSS hides it —
-              the brand is shown whole or not at all, never crushed. */}
+              compact mark fits beside both labelled controls from 360px up, and
+              below that the CSS hides it — the brand is shown whole or not at
+              all, never crushed.
+
+              The mark lost its carrier tile in @allfitone/react 0.14.0, so it is
+              now the bare glyph: 10px wide at this height instead of 27px, which
+              leaves the row with more slack than the budget above assumed. `ink`
+              rather than the default cyan, because this header is a light
+              surface and the wordmark beside it is set the same way. */}
           <span data-profile-brand>
             {compact ? (
-              <BrandLogoCarrier title="Allfit Studio" height={28} />
+              <BrandLogo variant="ink" title="Allfit Studio" height={28} />
             ) : (
               <ProductWordmark
                 product="studio"
