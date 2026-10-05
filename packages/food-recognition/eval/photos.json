@@ -1,0 +1,104 @@
+{
+  "_note": "Fotos de Wikimedia Commons, con la licencia de cada una. No se copian al repositorio: eval/run.ts las descarga a eval/.cache. 'expected' son expresiones regulares sobre los nombres normalizados (minúsculas, sin tildes) de lo que una persona ve en cada foto.",
+  "photos": [
+    {
+      "key": "bandeja1",
+      "commons": "File:Bandeja Paisa (Bogotá).jpg",
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a6/Bandeja_Paisa_%28Bogot%C3%A1%29.jpg/1280px-Bandeja_Paisa_%28Bogot%C3%A1%29.jpg",
+      "license": "CC BY 2.0",
+      "expected": [
+        "frijol",
+        "huevo",
+        "arepa",
+        "chicharr",
+        "morcilla|rellena",
+        "platano|maduro|tajada|patacon",
+        "carne molida|molida|carne en polvo"
+      ]
+    },
+    {
+      "key": "bandeja2",
+      "commons": "File:Bandeja paisa 30062011.jpg",
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/62/Bandeja_paisa_30062011.jpg/1280px-Bandeja_paisa_30062011.jpg",
+      "license": "CC BY-SA 3.0",
+      "expected": ["arroz", "frijol", "huevo", "chicharr", "arepa"]
+    },
+    {
+      "key": "ajiaco",
+      "commons": "File:Ajiaco in Bogotá.jpg",
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/05/Ajiaco_in_Bogot%C3%A1.jpg/1280px-Ajiaco_in_Bogot%C3%A1.jpg",
+      "license": "CC BY-SA 4.0",
+      "expected": ["ajiaco|sopa|caldo", "mazorca|maiz|choclo", "aguacate", "alcaparra"]
+    },
+    {
+      "key": "perico",
+      "commons": "File:Arepa perico.jpg",
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/6d/Arepa_perico.jpg/1280px-Arepa_perico.jpg",
+      "license": "CC BY-SA 4.0",
+      "expected": ["arepa", "huevo|perico"]
+    },
+    {
+      "key": "combinado",
+      "commons": "File:Combinado antioqueño.jpg",
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/62/Combinado_antioque%C3%B1o.jpg/1280px-Combinado_antioque%C3%B1o.jpg",
+      "license": "CC BY-SA 4.0",
+      "expected": [
+        "frijol",
+        "huevo",
+        "papa|papas fritas|francesa",
+        "arepa",
+        "chorizo|salchicha",
+        "carne|res|cerdo|lomo"
+      ]
+    },
+    {
+      "key": "desayuno",
+      "commons": "File:Desayuno típico.JPG",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/d/db/Desayuno_t%C3%ADpico.JPG",
+      "license": "CC BY-SA 3.0",
+      "expected": ["arepa", "huevo", "queso"]
+    },
+    {
+      "key": "patacones",
+      "commons": "File:Patacones.JPG",
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/8f/Patacones.JPG/1280px-Patacones.JPG",
+      "license": "CC BY-SA 3.0",
+      "expected": ["patacon|platano|toston"]
+    },
+    {
+      "key": "sancocho",
+      "commons": "File:Sancocho-hueso.JPG",
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/42/Sancocho-hueso.JPG/1280px-Sancocho-hueso.JPG",
+      "license": "CC BY-SA 4.0",
+      "expected": ["sancocho|sopa|caldo", "carne|res|costilla|hueso", "mazorca|maiz", "yuca"]
+    },
+    {
+      "key": "almuerzo",
+      "commons": "File:Almuerzo en restaurante Pailon en Coveñas Sucre.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/b/be/Almuerzo_en_restaurante_Pailon_en_Cove%C3%B1as_Sucre.jpg",
+      "license": "CC BY-SA 4.0",
+      "expected": ["arroz"]
+    },
+    {
+      "key": "empanadas",
+      "commons": "File:Colombian empanadas with ají.jpg",
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/43/Colombian_empanadas_with_aj%C3%AD.jpg/1280px-Colombian_empanadas_with_aj%C3%AD.jpg",
+      "license": "CC BY-SA 4.0",
+      "expected": ["empanada", "aji|salsa"]
+    },
+    {
+      "key": "changua",
+      "commons": "File:Changua 1.jpg",
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a6/Changua_1.jpg/1280px-Changua_1.jpg",
+      "license": "CC BY-SA 4.0",
+      "expected": ["changua|sopa|caldo", "pan|calado"]
+    },
+    {
+      "key": "mondongo",
+      "commons": "File:Sopetrán, 2022 - sopa de mondongo.jpg",
+      "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/fd/Sopetr%C3%A1n%2C_2022_-_sopa_de_mondongo.jpg/1280px-Sopetr%C3%A1n%2C_2022_-_sopa_de_mondongo.jpg",
+      "license": "CC BY-SA 4.0",
+      "expected": ["mondongo|sopa|callo|caldo"]
+    }
+  ]
+}

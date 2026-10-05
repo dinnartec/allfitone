@@ -1,0 +1,22 @@
+{
+  "name": "@allfitone/food-recognition",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Puerto y adaptador del reconocimiento de alimentos en una foto",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test src",
+    "eval": "bun --env-file=../../.env.local eval/run.ts"
+  },
+  "dependencies": {
+    "ai": "7.0.127",
+    "zod": "4.6.5"
+  }
+}

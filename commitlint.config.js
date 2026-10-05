@@ -23,6 +23,8 @@ export default {
         'db',
         'notifications',
         'telemetry',
+        'object-store',
+        'food-recognition',
         // domains inside apps/api
         'identity',
         'organizations',
