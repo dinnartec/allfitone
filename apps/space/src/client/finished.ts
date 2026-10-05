@@ -42,6 +42,35 @@ export function clockOf(iso: string, timeZone: string): string {
   return localParts(iso, timeZone).clock
 }
 
+/** The wheels' hour, 1 to 12, and which half of the day; 0 is twelve at night. */
+export function toTwelve(hour: number): { readonly hour: number; readonly pm: boolean } {
+  return { hour: hour % 12 === 0 ? 12 : hour % 12, pm: hour >= 12 }
+}
+
+export const fromTwelve = (hour: number, pm: boolean): number => (hour % 12) + (pm ? 12 : 0)
+
+/** «18:02» as people read it: «6:02» and «p. m.». */
+export function twelveHour(clock: string): { readonly time: string; readonly period: string } {
+  const [hour = 0, minute = '00'] = clock.split(':')
+  const twelve = toTwelve(Number(hour))
+  return { time: `${String(twelve.hour)}:${minute}`, period: twelve.pm ? 'p. m.' : 'a. m.' }
+}
+
+const label = (clock: string) => {
+  const { time, period } = twelveHour(clock)
+  return `${time} ${period}`
+}
+
+/** «6:02 p. m.», the clock an instant shows in the person's zone. */
+export const clockLabel = (iso: string, timeZone: string): string => label(clockOf(iso, timeZone))
+
+/** «6:02–6:50 p. m.», or «11:40 a. m.–12:20 p. m.» when the range crosses noon. */
+export function rangeLabel(start: string, end: string): string {
+  const from = twelveHour(start)
+  const to = twelveHour(end)
+  return from.period === to.period ? `${from.time}–${label(end)}` : `${label(start)}–${label(end)}`
+}
+
 /**
  * The instant at «HH:MM» on the same local day, in the person's zone; null for anything
  * that is not a clock. The zone's offset is read at that moment, so a change of offset
@@ -122,11 +151,11 @@ export function comparisonLine(
   return `${sign}${Math.abs(change)} % de carga frente al ${when}`
 }
 
-/** «mar 29 sep · 18:02–18:50». */
+/** «mar 29 sep · 6:02–6:50 p. m.». */
 export function whenRange(detail: FinishedExecution, timeZone: string): string {
   const start = localParts(detail.started_at, timeZone)
   const end = localParts(detail.ended_at, timeZone)
-  return `${start.weekday} ${start.day} ${start.month} · ${start.clock}–${end.clock}`
+  return `${start.weekday} ${start.day} ${start.month} · ${rangeLabel(start.clock, end.clock)}`
 }
 
 /** «Tirón · mar 29», the title of the session's menu. */

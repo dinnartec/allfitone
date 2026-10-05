@@ -5,7 +5,12 @@ import {
   annulConsequences,
   bestSetLine,
   changesBetween,
+  clockLabel,
   clockOf,
+  fromTwelve,
+  rangeLabel,
+  toTwelve,
+  twelveHour,
   comparisonLine,
   deletionLine,
   editStateFrom,
@@ -103,7 +108,7 @@ describe('what the detail of a finished session says (FIN-18)', () => {
   })
 
   test('T-SPC-UNIT-196 when it was, in the zone it was trained in', () => {
-    expect(whenRange(detail, ZONE)).toBe('mar 29 sep · 18:02–18:50')
+    expect(whenRange(detail, ZONE)).toBe('mar 29 sep · 6:02–6:50 p. m.')
     expect(menuTitle('Tirón', detail.started_at, ZONE)).toBe('Tirón · mar 29')
   })
 
@@ -237,5 +242,28 @@ describe('the time of a finished session', () => {
     expect(withClock('2026-09-29T23:02:00.000Z', '20:10', ZONE)).toBe('2026-09-30T01:10:00.000Z')
     expect(withClock('2026-09-29T23:02:00.000Z', '7:5', ZONE)).toBeNull()
     expect(withClock('2026-09-29T23:02:00.000Z', '25:00', ZONE)).toBeNull()
+  })
+})
+
+describe('the clock as people read it', () => {
+  test('T-SPC-UNIT-220 a clock reads in twelve hours, with its half of the day', () => {
+    expect(twelveHour('18:02')).toEqual({ time: '6:02', period: 'p. m.' })
+    expect(twelveHour('00:15')).toEqual({ time: '12:15', period: 'a. m.' })
+    expect(twelveHour('12:00')).toEqual({ time: '12:00', period: 'p. m.' })
+    expect(clockLabel('2026-09-29T23:02:00.000Z', ZONE)).toBe('6:02 p. m.')
+  })
+
+  test('T-SPC-UNIT-221 a range names its half of the day once when both ends share it', () => {
+    expect(rangeLabel('18:02', '18:50')).toBe('6:02–6:50 p. m.')
+    expect(rangeLabel('11:40', '12:20')).toBe('11:40 a. m.–12:20 p. m.')
+  })
+
+  test('T-SPC-UNIT-222 the wheels turn twelve hours and a half of the day, and back', () => {
+    expect(toTwelve(0)).toEqual({ hour: 12, pm: false })
+    expect(toTwelve(13)).toEqual({ hour: 1, pm: true })
+    expect(toTwelve(12)).toEqual({ hour: 12, pm: true })
+    expect(fromTwelve(12, false)).toBe(0)
+    expect(fromTwelve(12, true)).toBe(12)
+    expect(fromTwelve(7, true)).toBe(19)
   })
 })

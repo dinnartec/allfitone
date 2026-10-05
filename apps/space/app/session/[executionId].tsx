@@ -89,6 +89,7 @@ import {
   clockOf,
   editStateFrom,
   menuTitle,
+  rangeLabel,
   withClock,
 } from '../../src/client/finished'
 import { SPRING } from '../../src/client/motion'
@@ -723,7 +724,7 @@ export default function Session() {
                 </Text>
                 <View style={styles.inline}>
                   <Text role="poster" size="xl">
-                    {`${clockOf(times.start, timeZone)}–${clockOf(times.end, timeZone)}`}
+                    {rangeLabel(clockOf(times.start, timeZone), clockOf(times.end, timeZone))}
                   </Text>
                   <FoundationIcon
                     name="edit"
