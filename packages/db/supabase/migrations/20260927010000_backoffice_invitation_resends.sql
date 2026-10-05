@@ -1,4 +1,4 @@
--- NEW-IDN-RESEND / OP-IDN-052 — resending an invitation from Backoffice (`HU-BO-011`).
+-- NEW-IDN-RESEND / OP-IDN-045 — resending an invitation from Backoffice (`HU-BO-011`).
 --
 -- This is the invitation half of the story. Resending a verification or a recovery
 -- needs the identity action requests PRE_PHASE_5 §5 describes, which `HU-BO-010`
@@ -333,7 +333,7 @@ end
 $function$;
 
 -- ---------------------------------------------------------------------------
--- OP-IDN-052 — resend a team invitation
+-- OP-IDN-045 — resend a team invitation
 -- ---------------------------------------------------------------------------
 
 create or replace function identity.resend_team_invitation(
@@ -395,7 +395,7 @@ begin
   select * into receipt
   from system.begin_idempotency(
     p_actor_person_id, 'backoffice'::system.command_surface, 'backoffice',
-    'OP-IDN-052', p_idempotency_key, p_command_id, p_request_hash
+    'OP-IDN-045', p_idempotency_key, p_command_id, p_request_hash
   );
   if not receipt.claimed then
     response := identity.backoffice_team_invitation_projection(receipt.aggregate_id);

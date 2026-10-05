@@ -1,6 +1,6 @@
 -- NEW-IDN-RESEND / OP-IDN-051 — resending a gym's client invitation (`HU-BO-011`).
 --
--- The team and ownership halves shipped with `OP-IDN-052` and `OP-ORG-021`. This is
+-- The team and ownership halves shipped with `OP-IDN-045` and `OP-ORG-021`. This is
 -- the client half, which was waiting for `relationships`. The verification half is
 -- still waiting for Space to be able to change a contact: nothing creates a contact
 -- verification yet, so there is nothing to resend, and nothing here pretends there is.
