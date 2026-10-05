@@ -161,6 +161,64 @@
   font-size: var(--afo-font-size-xs);
 }
 
+[data-panel-home],
+[data-business-panel] {
+  display: grid;
+  gap: 24px;
+  align-content: start;
+}
+
+[data-business-panel] section {
+  display: grid;
+  gap: 12px;
+}
+
+[data-business-section-title] {
+  margin: 0;
+  font-size: var(--afo-font-size-lg);
+  font-weight: var(--afo-font-weight-semibold);
+}
+
+[data-business-section-description] {
+  margin: 0;
+  color: var(--afo-color-text-muted, currentColor);
+}
+
+[data-business-metrics] {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  align-items: start;
+}
+
+[data-business-body] {
+  display: grid;
+  gap: 8px;
+}
+
+[data-business-body] p {
+  margin: 0;
+}
+
+/* The number is the point of the card; the period under it is what makes it mean
+   something, so neither is allowed to read as body text. */
+[data-business-value] {
+  font-size: var(--afo-font-size-3xl, 2rem);
+  font-weight: var(--afo-font-weight-semibold);
+  line-height: 1.1;
+}
+
+[data-business-period] {
+  font-size: var(--afo-font-size-sm);
+  font-weight: var(--afo-font-weight-semibold);
+}
+
+[data-business-note],
+[data-business-hint] {
+  font-size: var(--afo-font-size-sm);
+  color: var(--afo-color-text-muted, currentColor);
+}
+
 [data-organization-directory-filters],
 [data-handover-form] {
   display: grid;
@@ -252,6 +310,94 @@
 [data-break-glass-categories] {
   display: grid;
   gap: 8px;
+}
+
+/* A declaration is the person's own sentence: it wraps instead of pushing the dates and
+   the origin out of sight. */
+[data-break-glass-declared] {
+  min-width: 14rem;
+  max-width: 18rem;
+  white-space: normal;
+}
+
+[data-break-glass-origin] {
+  max-width: 9rem;
+  white-space: normal;
+}
+
+/* A meal reads as sentences: what was eaten, what it added up to, and the note. */
+[data-break-glass-meal] {
+  min-width: 10rem;
+  max-width: 12rem;
+  white-space: normal;
+}
+
+[data-break-glass-moment] {
+  max-width: 10rem;
+  white-space: normal;
+}
+
+/* What a session held is one sentence of sums, so it wraps instead of widening. */
+[data-break-glass-done] {
+  min-width: 9rem;
+  max-width: 11rem;
+  white-space: normal;
+}
+
+[data-break-glass-level] {
+  max-width: 7rem;
+  white-space: normal;
+}
+
+/* The two halves read as one control, and wrap before they shrink. */
+[data-erasure-halves] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-2, 0.5rem);
+}
+
+[data-erasure-subject] {
+  max-width: 18rem;
+  overflow-wrap: anywhere;
+}
+
+[data-erasure-missing] {
+  min-width: 10rem;
+  max-width: 14rem;
+  white-space: normal;
+}
+
+[data-erasure-resolution] ul {
+  margin: 0;
+  padding-inline-start: var(--spacing-4, 1rem);
+}
+
+/* The actions sit under the lines they act on, and wrap before they shrink. */
+[data-erasure-actions],
+[data-erasure-confirm-actions],
+[data-erasure-hold-actions] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-2, 0.5rem);
+  margin-block-start: var(--spacing-2, 0.5rem);
+}
+
+[data-erasure-hold-categories] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2, 0.5rem);
+}
+
+[data-erasure-hold-categories] label {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2, 0.5rem);
+}
+
+[data-erasure-resolution] {
+  min-width: 12rem;
+  max-width: 18rem;
+  white-space: normal;
 }
 
 [data-access-log-filters] {

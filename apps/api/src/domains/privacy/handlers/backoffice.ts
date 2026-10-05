@@ -1,7 +1,8 @@
 /**
- * Backoffice privacy routes: `OP-PRV-011` and `OP-SUP-009`.
+ * Backoffice privacy routes: `OP-PRV-009`, `OP-PRV-010`, `OP-PRV-011`, `OP-PRV-021`
+ * and `OP-SUP-009`.
  *
- * `HU-BO-024` and `HU-BO-030`. The handler shapes and rejects; it decides
+ * `HU-BO-024`, `HU-BO-030`, `HU-BO-032` and `HU-BO-033`. The handler shapes and rejects; it decides
  * nothing. The duty each operation needs — `curate_global_catalog` to publish,
  * `audit_platform_access` to read the log — and AAL2 are resolved inside the
  * transaction, against the tables.
@@ -10,6 +11,19 @@
  * field for one — so two curators publishing at once produce two versions rather
  * than a race. And a version whose rules are all exclusions is refused before it
  * travels, because it would grant nothing while looking like a permission.
+ *
+ * The erasure panel reads the same disposition tables a person's own deletion
+ * writes, so it lives here too. It reports what is owed and never what was erased:
+ * the projection has no field for content, and the thirty days arrive as a target
+ * date, because a countdown computed on the server is a countdown in the server's
+ * zone.
+ *
+ * A legal hold is a command over the same disposition tables the panel reads, so it
+ * lives here too. The handler shapes and rejects: who may apply one, whether that
+ * officer already asked to read the person's file, and what happens to the items
+ * are all resolved in the transaction. Nothing about a hold is accepted from the
+ * request except its scope, reason, vigency and targets — the officer comes from
+ * the session.
  *
  * The access log lives here rather than in `support` because the closed queries
  * and the table are the privacy schema's, even though the operation is numbered
@@ -32,14 +46,35 @@ import {
   type BackofficeAuthenticationService,
 } from '../../identity/index.js'
 import { problem, type ApiErrorCode } from '../../../platform/http/index.js'
-import type { AccessLogService, ScopeDefinitionService } from '../application/index.js'
-import { accessLogService, scopeDefinitionService } from '../dependencies.js'
+import type {
+  AccessLogService,
+  ErasureRequestService,
+  LegalHoldService,
+  ScopeDefinitionService,
+} from '../application/index.js'
+import {
+  accessLogService,
+  erasureRequestService,
+  legalHoldService,
+  scopeDefinitionService,
+} from '../dependencies.js'
 import {
   ACCESS_LEVELS,
   DATA_CLASSIFICATIONS,
+  DEFAULT_ERASURE_PAGE,
+  ERASURE_REQUEST_STATES,
+  LEGAL_HOLD_REASONS,
+  MAX_ERASURE_PAGE,
+  MAX_HELD_ITEMS,
+  MAX_HOLD_CASE_REFERENCE,
+  MAX_HOLD_SCOPE,
   SCOPE_CODES,
   type AccessEventFilters,
   type AccessLevel,
+  type ErasureRequestFilters,
+  type ErasureRequestState,
+  type LegalHoldApplication,
+  type LegalHoldReason,
   type ScopeCode,
   type ScopeDefinitionPublication,
   type ScopeResourceRule,
@@ -55,11 +90,15 @@ export function backofficePrivacyRoutes(
   injectedScopes?: ScopeDefinitionService,
   injectedSessions?: BackofficeAuthenticationService,
   injectedLog?: AccessLogService,
+  injectedErasure?: ErasureRequestService,
+  injectedHolds?: LegalHoldService,
 ): Hono {
   const origin = new URL(trustedBackofficeWebUrl()).origin
   const scopes = () => injectedScopes ?? scopeDefinitionService()
   const sessions = () => injectedSessions ?? backofficeAuthenticationService()
   const log = () => injectedLog ?? accessLogService()
+  const erasure = () => injectedErasure ?? erasureRequestService()
+  const holds = () => injectedHolds ?? legalHoldService()
   const routes = new Hono()
 
   routes.use(
@@ -106,6 +145,76 @@ export function backofficePrivacyRoutes(
           { requestId: randomUUID(), ...filters },
         ),
       )
+    } catch (error) {
+      return operationFailure(c, error)
+    }
+  })
+
+  routes.get('/erasure-requests', async (c) => {
+    const filters = erasureRequestFilters(c)
+    if (!filters) return problem(c, 'invalid-request')
+    try {
+      const actor = await backofficeActor(c, sessions())
+      if (actor instanceof Response) return actor
+      return c.json(
+        await erasure().list(
+          { actorPersonId: actor.personId, actorSessionId: actor.sessionId },
+          { requestId: randomUUID(), ...filters },
+        ),
+      )
+    } catch (error) {
+      return operationFailure(c, error)
+    }
+  })
+
+  routes.post('/legal-holds', async (c) => {
+    if (c.req.header('origin') !== origin) return problem(c, 'forbidden')
+    if (c.req.header('content-type')?.trim().toLowerCase() !== 'application/json') {
+      return problem(c, 'unsupported-media-type')
+    }
+
+    let body: unknown
+    try {
+      body = await c.req.json<unknown>()
+    } catch {
+      return problem(c, 'validation-failed')
+    }
+
+    const application = legalHoldApplication(body)
+    if (!application) return problem(c, 'validation-failed')
+    const command = commandContext(c, application)
+    if (!command) return problem(c, 'invalid-request')
+
+    try {
+      const actor = await backofficeActor(c, sessions())
+      if (actor instanceof Response) return actor
+      const result = await holds().apply(
+        { actorPersonId: actor.personId, actorSessionId: actor.sessionId },
+        { ...command, application },
+      )
+      if (result.replayed) c.header('Idempotent-Replay', 'true')
+      return c.json(result.resource, 201)
+    } catch (error) {
+      return operationFailure(c, error)
+    }
+  })
+
+  routes.post('/legal-holds/:holdId/release', async (c) => {
+    if (c.req.header('origin') !== origin) return problem(c, 'forbidden')
+    const holdId = c.req.param('holdId')
+    if (!UUID_V7.test(holdId)) return problem(c, 'invalid-request')
+    const command = commandContext(c, { holdId })
+    if (!command) return problem(c, 'invalid-request')
+
+    try {
+      const actor = await backofficeActor(c, sessions())
+      if (actor instanceof Response) return actor
+      const result = await holds().release(
+        { actorPersonId: actor.personId, actorSessionId: actor.sessionId },
+        { ...command, holdId },
+      )
+      if (result.replayed) c.header('Idempotent-Replay', 'true')
+      return c.json(result.resource)
     } catch (error) {
       return operationFailure(c, error)
     }
@@ -235,6 +344,86 @@ const UUID_ANY = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
  * would widen the query: an auditor who mistyped a person identifier would be
  * shown the whole log instead of nothing, and would have no way to tell.
  */
+function legalHoldApplication(body: unknown): LegalHoldApplication | undefined {
+  if (typeof body !== 'object' || body === null || Array.isArray(body)) return undefined
+  const fields = body as Record<string, unknown>
+  const allowed = new Set([
+    'scope_description',
+    'reason_code',
+    'case_reference',
+    'valid_to',
+    'disposition_item_ids',
+  ])
+  if (Object.keys(fields).some((key) => !allowed.has(key))) return undefined
+
+  const scope = fields['scope_description']
+  const reason = fields['reason_code']
+  const reference = fields['case_reference']
+  const validTo = fields['valid_to']
+  const targets = fields['disposition_item_ids']
+
+  if (!isFilled(scope, MAX_HOLD_SCOPE) || !isFilled(reference, MAX_HOLD_CASE_REFERENCE)) {
+    return undefined
+  }
+  if (!LEGAL_HOLD_REASONS.includes(reason as LegalHoldReason)) return undefined
+  if (typeof validTo !== 'string' || Number.isNaN(Date.parse(validTo))) return undefined
+  if (!Array.isArray(targets) || targets.length === 0 || targets.length > MAX_HELD_ITEMS) {
+    return undefined
+  }
+  const items = new Set<string>()
+  for (const target of targets) {
+    if (typeof target !== 'string' || !UUID_V7.test(target)) return undefined
+    items.add(target)
+  }
+
+  return {
+    scope_description: (scope as string).trim(),
+    reason_code: reason as LegalHoldReason,
+    case_reference: (reference as string).trim(),
+    valid_to: new Date(Date.parse(validTo)).toISOString(),
+    disposition_item_ids: [...items],
+  }
+}
+
+/** Present, a string, and something other than spaces. */
+function isFilled(value: unknown, maximum: number): value is string {
+  return typeof value === 'string' && value.trim().length >= 3 && value.length <= maximum
+}
+
+function erasureRequestFilters(c: Context): ErasureRequestFilters | undefined {
+  const allowed = new Set(['status', 'limit', 'cursor_at', 'cursor_id'])
+  const query = c.req.query()
+  if (Object.keys(query).some((key) => !allowed.has(key))) return undefined
+
+  const status = query['status'] ?? 'open'
+  if (!ERASURE_REQUEST_STATES.includes(status as ErasureRequestState)) return undefined
+
+  let limit = DEFAULT_ERASURE_PAGE
+  const asked = query['limit']
+  if (asked !== undefined) {
+    if (!/^[0-9]{1,3}$/.test(asked)) return undefined
+    limit = Number(asked)
+    if (limit < 1 || limit > MAX_ERASURE_PAGE) return undefined
+  }
+
+  const at = query['cursor_at']
+  const id = query['cursor_id']
+  // Half a cursor would silently page from the start, which reads as "nothing else
+  // is owed" on a screen whose whole job is to say what still is.
+  if ((at === undefined) !== (id === undefined)) return undefined
+  if (at === undefined || id === undefined) {
+    return { status: status as ErasureRequestState, limit }
+  }
+  const instant = Date.parse(at)
+  if (Number.isNaN(instant) || !UUID_V7.test(id)) return undefined
+
+  return {
+    status: status as ErasureRequestState,
+    limit,
+    cursor: { at: new Date(instant).toISOString(), id },
+  }
+}
+
 function accessEventFilters(c: Context): AccessEventFilters | undefined {
   const allowed = new Set(['actor_person_id', 'subject_person_id', 'from', 'to', 'limit'])
   const query = c.req.query()
@@ -343,6 +532,9 @@ function databaseErrorCode(error: unknown): ApiErrorCode | undefined {
   const sqlState = typeof error.code === 'string' ? error.code : undefined
   if (sqlState === 'P0002') return 'not-found'
   if (sqlState === '42501') return 'forbidden'
+  // Allowed in general, refused here: whoever asked to read this person cannot hold
+  // their data. The screen says which of the two 403s it is.
+  if (sqlState === 'AF403') return 'separation-of-duties'
   if (sqlState === '22023' || sqlState === '23503') return 'validation-failed'
   // 55000 is the immutability guard: correcting means publishing the next version.
   if (sqlState === '23514' || sqlState === '23505' || sqlState === '55000') return 'conflict'

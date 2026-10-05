@@ -14,14 +14,20 @@ import type { Hono } from 'hono'
 
 import {
   backofficeCatalogRoutes,
+  backofficeGlobalCatalogueRoutes,
   catalogMovementRoutes,
   catalogSurfaceRoutes,
   studioCatalogRoutes,
 } from './domains/catalog/index.js'
 import { spaceExecutionRoutes } from './domains/execution/index.js'
 import {
+  backofficeAccountRecoveryRoutes,
   backofficeCredentialVerificationRoutes,
   backofficeIdentityRoutes,
+  backofficeClientInvitationRoutes,
+  backofficeTeamInvitationRoutes,
+  spaceBodyProgressRoutes,
+  spaceHealthContextRoutes,
   spaceIdentityRoutes,
   spaceOnboardingRoutes,
   studioIdentityRoutes,
@@ -38,6 +44,8 @@ import {
   backofficeOrganizationRoutes,
   studioOrganizationRoutes,
 } from './domains/organizations/index.js'
+import { spaceMealRoutes } from './domains/nutrition/index.js'
+import { backofficePlatformPlanRoutes } from './domains/payments/index.js'
 import { spacePlanningRoutes, studioPlanningRoutes } from './domains/planning/index.js'
 import { backofficePrivacyRoutes, studioPrivacyRoutes } from './domains/privacy/index.js'
 import { studioRelationshipRoutes } from './domains/relationships/index.js'
@@ -71,17 +79,25 @@ export function mountSurfaces(app: Hono): void {
   app.route('/studio/v1', studioPlanningRoutes())
   app.route('/space/v1', spaceIdentityRoutes())
   app.route('/space/v1', spaceOnboardingRoutes())
+  app.route('/space/v1', spaceBodyProgressRoutes())
+  app.route('/space/v1', spaceHealthContextRoutes())
+  app.route('/space/v1', spaceMealRoutes())
   app.route('/space/v1', spaceClientInvitationRoutes())
   app.route('/space/v1', spacePlanningRoutes())
   app.route('/space/v1', spaceExecutionRoutes())
   app.route('/backoffice/v1', backofficeIdentityRoutes())
   app.route('/backoffice/v1', backofficeCredentialVerificationRoutes())
+  app.route('/backoffice/v1', backofficeTeamInvitationRoutes())
+  app.route('/backoffice/v1', backofficeClientInvitationRoutes())
+  app.route('/backoffice/v1', backofficeAccountRecoveryRoutes())
   app.route('/backoffice/v1', backofficePlatformAccessRoutes())
   app.route('/backoffice/v1', backofficeSupportMetadataRoutes())
   app.route('/backoffice/v1', backofficeBreakGlassRoutes())
   app.route('/backoffice/v1', backofficePrivacyRoutes())
   app.route('/backoffice/v1', backofficeCatalogRoutes())
+  app.route('/backoffice/v1', backofficeGlobalCatalogueRoutes())
   app.route('/backoffice/v1', backofficeOrganizationRoutes())
+  app.route('/backoffice/v1', backofficePlatformPlanRoutes())
 
   // The global catalogue is one surface, not a copy per product: it has no
   // subject and no tenant, so every product reads the same mount.

@@ -134,6 +134,82 @@ export function includesSomething(drafts: readonly RuleDraft[]): boolean {
   return drafts.some((draft) => !draft.excluded)
 }
 
+/**
+ * The rules of a permission, pasted instead of typed.
+ *
+ * `relationship_training` has twenty rules of five columns each. Typing a hundred
+ * fields into a form whose result is **immutable forever** is how a misspelled
+ * `planning.planned_sets` ends up frozen granting nothing, looking published. So the
+ * list can be pasted — and then reviewed row by row in the same form, because the
+ * operator is still the one publishing it.
+ *
+ * It refuses anything it does not fully understand, including a key it does not know.
+ * Silently ignoring `historical_readible` would reintroduce exactly the mistake this
+ * exists to prevent, and quietly rather than loudly.
+ */
+const RULE_KEYS = new Set([
+  'resource',
+  'field',
+  'data_classification_code',
+  'max_action',
+  'is_excluded',
+  'historical_readable',
+])
+
+export function parseRuleDrafts(text: string): { drafts: RuleDraft[] } | { issue: string } {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(text) as unknown
+  } catch {
+    return { issue: 'Eso no es JSON válido.' }
+  }
+  if (!Array.isArray(parsed)) return { issue: 'Se espera una lista de reglas, entre corchetes.' }
+  if (parsed.length === 0) return { issue: 'La lista no trae ninguna regla.' }
+
+  const drafts: RuleDraft[] = []
+  for (const [index, entry] of parsed.entries()) {
+    const at = index + 1
+    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
+      return { issue: `La regla ${at} no es un objeto.` }
+    }
+    const rule = entry as Record<string, unknown>
+    const unknownKey = Object.keys(rule).find((key) => !RULE_KEYS.has(key))
+    if (unknownKey) {
+      return { issue: `La regla ${at} trae una llave que no existe: ${unknownKey}.` }
+    }
+    if (typeof rule.resource !== 'string' || rule.resource.trim() === '') {
+      return { issue: `La regla ${at} no dice sobre qué recurso aplica.` }
+    }
+    if (typeof rule.field !== 'string' || rule.field.trim() === '') {
+      return { issue: `La regla ${at} no dice sobre qué campo aplica.` }
+    }
+    const classification = rule.data_classification_code
+    if (typeof classification !== 'string' || !DATA_CLASSIFICATIONS.includes(classification)) {
+      return {
+        issue: `La regla ${at} clasifica el dato como «${String(classification)}», que no existe.`,
+      }
+    }
+    const action = rule.max_action
+    if (typeof action !== 'string' || !ACCESS_LEVELS.includes(action as AccessLevel)) {
+      return { issue: `La regla ${at} pide el nivel «${String(action)}», que no existe.` }
+    }
+    for (const flag of ['is_excluded', 'historical_readable'] as const) {
+      if (rule[flag] !== undefined && typeof rule[flag] !== 'boolean') {
+        return { issue: `La regla ${at} usa «${flag}» con algo que no es sí o no.` }
+      }
+    }
+    drafts.push({
+      resource: rule.resource.trim(),
+      field: rule.field.trim(),
+      classification,
+      action: action as AccessLevel,
+      excluded: rule.is_excluded === true,
+      historical: rule.historical_readable === true,
+    })
+  }
+  return { drafts }
+}
+
 export function toResourceRules(drafts: readonly RuleDraft[]): ScopeResourceRule[] {
   return drafts.map((draft) => ({
     resource: draft.resource.trim(),

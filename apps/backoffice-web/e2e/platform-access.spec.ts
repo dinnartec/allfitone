@@ -38,8 +38,10 @@ test('shows who reaches the data, with the state and window of every duty', asyn
 
   await expect(page.getByRole('heading', { name: 'Rol base' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Deberes de plataforma' })).toBeVisible()
-  await expect(page.getByText('Administrar accesos de plataforma')).toBeVisible()
-  await expect(page.getByText('Diagnosticar metadatos de soporte')).toBeVisible()
+  // Scoped to the table: the duty the grant form has selected carries the same name in
+  // its closed selector, so a loose text match finds two.
+  await expect(page.getByRole('cell', { name: 'Administrar accesos de plataforma' })).toBeVisible()
+  await expect(page.getByRole('cell', { name: 'Diagnosticar metadatos de soporte' })).toBeVisible()
   // The duty carries its mode and its required assurance, not just its name.
   await expect(page.getByRole('cell', { name: 'A12', exact: true })).toBeVisible()
   await expect(page.getByRole('cell', { name: '2', exact: true }).first()).toBeVisible()

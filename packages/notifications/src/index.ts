@@ -185,6 +185,62 @@ export function renderOwnershipInvitationEmail(input: {
 }
 
 /**
+ * The email a gym's client invitation sends (`HU-STUDIO-023`, and `HU-BO-011` when
+ * support resends it).
+ *
+ * Two things make it different from the team and ownership emails.
+ *
+ * **It is an offer over health data, so it says so up front.** The gym is asking for
+ * permission to see things about the person's body, health or food. Burying that until
+ * after they sign in would make the email a trick.
+ *
+ * **But it says nothing about what, or how much.** The message reaches an address, not
+ * a verified person. Naming the categories would tell whoever reads that inbox which
+ * health data a gym is asking about, and even a bare count would have to be read out
+ * of `privacy.invitation_scope_options` — a table whose policies admit the gym and the
+ * invited person, and nobody else. Widening the most sensitive table in the system so
+ * an email can print a number is not a trade worth making. The detail waits behind the
+ * link, where the token proves control of the address and the person is signed in.
+ */
+export function renderClientInvitationEmail(input: {
+  organizationName: string
+  invitationUrl: string
+  brandAssetUrl: string
+  expiresAt: Date
+}): { subject: string; text: string; html: string } {
+  const organization = escapeHtml(input.organizationName)
+  const expires = formatInvitationExpiry(input.expiresAt)
+  const asks = 'te pide permiso para ver información sobre ti'
+  const separately = 'Verás exactamente qué pide, y para qué, y decides cada uno por separado.'
+  const note = 'Aceptar entrenar con el gimnasio no le da acceso a tus datos.'
+  return {
+    subject: `${input.organizationName} te invitó como cliente en Allfit One`,
+    text: [
+      `${input.organizationName} quiere entrenarte en Allfit One.`,
+      `Para hacerlo ${asks}. ${separately}`,
+      `Válida hasta: ${expires}`,
+      `Revisar invitación: ${input.invitationUrl}`,
+      `${note} Abrir este correo tampoco decide nada.`,
+      'Si no esperabas esta invitación, puedes ignorar este correo.',
+    ].join('\n\n'),
+    html: invitationEmailHtml({
+      title: `${organization} te invitó como cliente en Allfit One`,
+      preheader: `${organization} quiere entrenarte y ${asks}. Revisa la invitación antes del ${expires}.`,
+      eyebrow: 'INVITACIÓN DE CLIENTE',
+      heading: `${organization} quiere entrenarte`,
+      lead: `Para hacerlo ${asks}. ${separately}`,
+      detailLabel: 'GIMNASIO',
+      detailValue: organization,
+      expires,
+      actionUrl: escapeHtml(input.invitationUrl),
+      brandAssetUrl: escapeHtml(input.brandAssetUrl),
+      note: `${note} Abrir este correo tampoco decide nada.`,
+      footer: `Puedes ignorar este correo; no se hará ningún cambio. Allfit One lo envió en nombre de ${organization}.`,
+    }),
+  }
+}
+
+/**
  * Every value arrives already escaped: the caller knows which parts came from a
  * person.
  *

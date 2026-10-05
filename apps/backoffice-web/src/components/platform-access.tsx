@@ -489,7 +489,7 @@ function DutySection({
                 onValueChange={(value) => setDutyCode(value as PlatformDutyCode)}
               >
                 <SelectTrigger id="platform-duty-code" disabled={busy}>
-                  <SelectValue />
+                  <SelectValue>{dutyLabel(dutyCode)}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {PLATFORM_DUTY_CODES.map((code) => (

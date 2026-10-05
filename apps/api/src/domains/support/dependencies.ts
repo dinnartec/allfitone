@@ -2,11 +2,13 @@ import {
   createBreakGlassService,
   createPlatformAccessService,
   createSupportAttentionService,
+  createSupportBusinessService,
   createSupportDiagnosisService,
   createSupportMetadataService,
   type BreakGlassService,
   type PlatformAccessService,
   type SupportAttentionService,
+  type SupportBusinessService,
   type SupportDiagnosisService,
   type SupportMetadataService,
 } from './application/index.js'
@@ -14,6 +16,7 @@ import {
   createBreakGlassDatabase,
   createPlatformAccessDatabase,
   createSupportAttentionDatabase,
+  createSupportBusinessDatabase,
   createSupportDiagnosisDatabase,
   createSupportMetadataDatabase,
 } from './infrastructure/index.js'
@@ -44,6 +47,13 @@ let cachedAttention: SupportAttentionService | undefined
 export function supportAttentionService(): SupportAttentionService {
   cachedAttention ??= createSupportAttentionService(createSupportAttentionDatabase())
   return cachedAttention
+}
+
+let cachedBusiness: SupportBusinessService | undefined
+
+export function supportBusinessService(): SupportBusinessService {
+  cachedBusiness ??= createSupportBusinessService(createSupportBusinessDatabase())
+  return cachedBusiness
 }
 
 let cachedBreakGlass: BreakGlassService | undefined

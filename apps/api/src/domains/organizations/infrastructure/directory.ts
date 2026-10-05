@@ -24,7 +24,7 @@ type DirectoryRow = {
   cancelled_at: Date | null
   active_member_count: number
   site_count: number
-  people_served: number | null
+  people_served: number
 }
 
 export function createOrganizationDirectoryDatabase(): OrganizationDirectoryDatabase {

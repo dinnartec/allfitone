@@ -72,6 +72,9 @@ test('opens a gym’s file with its data, owner, team and sites, and no names', 
   await expect(page.getByRole('cell', { name: 'Coach', exact: true })).toBeVisible()
   await expect(page.getByRole('cell', { name: 'Administrador', exact: true })).toBeVisible()
   await expect(page.getByText('3 personas activas, y 1 que ya no está.')).toBeVisible()
+  await expect(page.locator('[data-file-people-served]')).toContainText(
+    'Atiende a 3 personas, y 1 relación ya terminó.',
+  )
   await expect(page.getByRole('cell', { name: 'Calle 80 # 1-10' })).toBeVisible()
   await expect(page.getByText(/Sus planes publicados y sus suscriptores/)).toBeVisible()
   await expect(page.getByText(/es que Allfit aún no los guarda/)).toBeVisible()

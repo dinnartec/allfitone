@@ -13,7 +13,7 @@
 
 begin;
 
-select plan(38);
+select plan(47);
 
 insert into identity.people (id, given_name, family_name, status)
 values
@@ -437,6 +437,152 @@ select ok(
    where event.result = 'allowed'),
   'the evidence and the visible audit row are the same event, at the same instant'
 );
+
+-- ---------------------------------------------------------------------------
+-- Training: the window reads the sessions of somebody who is not the reader
+-- ---------------------------------------------------------------------------
+
+-- The whole point of the window. Every other assertion here can pass while this one
+-- fails, because a window that opens and hands back nothing still answers 'allowed'.
+
+insert into execution.executed_sessions (
+  id, person_id, activity_type_id, result_contract_id, contract_version,
+  started_at, ended_at, timezone, requested_level, capture_source
+) values
+  ('019a8000-0000-7000-8000-000000000901', '019a8000-0000-7000-8000-000000000006',
+    '019c0000-0000-7000-8000-000000000011', '019c0000-0000-7000-8000-000000000031', 1,
+    clock_timestamp() - interval '2 days', clock_timestamp() - interval '2 days' + interval '1 hour',
+    'America/Bogota', 'summary', 'manual'),
+  ('019a8000-0000-7000-8000-000000000902', '019a8000-0000-7000-8000-000000000006',
+    '019c0000-0000-7000-8000-000000000011', '019c0000-0000-7000-8000-000000000031', 1,
+    clock_timestamp() - interval '9 days', clock_timestamp() - interval '9 days' + interval '1 hour',
+    'America/Bogota', 'summary', 'manual'),
+  ('019a8000-0000-7000-8000-000000000903', '019a8000-0000-7000-8000-000000000007',
+    '019c0000-0000-7000-8000-000000000011', '019c0000-0000-7000-8000-000000000031', 1,
+    clock_timestamp() - interval '1 day', clock_timestamp() - interval '1 day' + interval '1 hour',
+    'America/Bogota', 'summary', 'manual');
+
+select support.request_break_glass(
+  '019a8000-0000-7000-8000-000000000003', '019a8000-0000-7000-8000-000000000023',
+  '019a8000-0000-7000-8000-000000000006', array['prior_training_history'],
+  'customer_support_request', 'CASE-2026-010',
+  '11111111-1111-4111-8111-111111111230', '019a8000-0000-7000-8000-000000000330',
+  decode(repeat('c1', 32), 'hex')
+);
+
+select support.decide_break_glass(
+  '019a8000-0000-7000-8000-000000000004', '019a8000-0000-7000-8000-000000000024',
+  (select id from support.break_glass_requests where case_reference = 'CASE-2026-010'),
+  'approved', 'REASON-OK',
+  '11111111-1111-4111-8111-111111111231', '019a8000-0000-7000-8000-000000000331',
+  decode(repeat('c2', 32), 'hex')
+);
+
+create temporary table training_read on commit drop as
+select support.exercise_break_glass(
+  '019a8000-0000-7000-8000-000000000003', '019a8000-0000-7000-8000-000000000023',
+  (select id from support.break_glass_requests where case_reference = 'CASE-2026-010'),
+  'prior_training_history', 'execution.executed_sessions', null
+) as answer;
+
+select results_eq(
+  $$ select entry->>'id'
+     from training_read, jsonb_array_elements(answer->'content'->'prior_training_history') as entry $$,
+  $$ values ('019a8000-0000-7000-8000-000000000901'::text),
+            ('019a8000-0000-7000-8000-000000000902'::text) $$,
+  'the approved window reads the subject''s training, most recent first'
+);
+
+select is(
+  (select count(*)::integer
+   from training_read, jsonb_array_elements(answer->'content'->'prior_training_history') as entry
+   where entry->>'id' = '019a8000-0000-7000-8000-000000000903'),
+  0,
+  'and never the training of somebody the window does not name'
+);
+
+-- A window for one category is not a key to the table it reads.
+select is(
+  (select count(*)::integer from execution.executed_sessions as session
+   where session.person_id = '019a8000-0000-7000-8000-000000000006'),
+  2,
+  'the subject trained twice, so an empty answer above would be the policy and not the data'
+);
+
+-- The floor the command stands on, asserted on its own. The command refuses a wrong
+-- category or a wrong person before the policy is ever consulted, so the only way to
+-- know the policy would refuse too is to ask it directly.
+
+select ok(
+  access_control.reads_under_break_glass(
+    '019a8000-0000-7000-8000-000000000006', 'prior_training_history'
+  ),
+  'under a live approved window, the reader may see the person it names'
+);
+
+select ok(
+  not access_control.reads_under_break_glass(
+    '019a8000-0000-7000-8000-000000000006', 'health_context'
+  ),
+  'and only for a category some live window of theirs names'
+);
+
+select ok(
+  not access_control.reads_under_break_glass(
+    '019a8000-0000-7000-8000-000000000007', 'prior_training_history'
+  ),
+  'and only for the person that window names'
+);
+
+select ok(
+  not (
+    select access_control.reads_under_break_glass(
+      '019a8000-0000-7000-8000-000000000006', 'prior_training_history'
+    )
+    from (select set_config('app.actor_person_id',
+      '019a8000-0000-7000-8000-000000000004', true)) as other_actor
+  ),
+  'and only for the one who opened it, never for whoever approved it'
+);
+
+select set_config('app.actor_person_id', '019a8000-0000-7000-8000-000000000003', true);
+
+-- Asking is not being allowed. A window nobody has approved opens nothing.
+select support.request_break_glass(
+  '019a8000-0000-7000-8000-000000000003', '019a8000-0000-7000-8000-000000000023',
+  '019a8000-0000-7000-8000-000000000007', array['prior_training_history'],
+  'customer_support_request', 'CASE-2026-011',
+  '11111111-1111-4111-8111-111111111232', '019a8000-0000-7000-8000-000000000332',
+  decode(repeat('c3', 32), 'hex')
+);
+
+select ok(
+  not access_control.reads_under_break_glass(
+    '019a8000-0000-7000-8000-000000000007', 'prior_training_history'
+  ),
+  'a window that nobody has approved yet reads nothing'
+);
+
+-- Closing is what a window in the past looks like inside a transaction: the dates
+-- stay in the future and only the status says it is over.
+select support.close_break_glass(
+  '019a8000-0000-7000-8000-000000000003', '019a8000-0000-7000-8000-000000000023',
+  (select id from support.break_glass_requests where case_reference = 'CASE-2026-010'),
+  '11111111-1111-4111-8111-111111111233', '019a8000-0000-7000-8000-000000000333',
+  decode(repeat('c4', 32), 'hex')
+);
+
+select ok(
+  not access_control.reads_under_break_glass(
+    '019a8000-0000-7000-8000-000000000006', 'prior_training_history'
+  ),
+  'and a window that has been closed reads nothing, however long it had left'
+);
+
+-- The predicate also stops reading once the window runs out, and that branch is not
+-- asserted here: `ck_break_glass_requests_window` pins the end to the start plus the
+-- duration, and both are immutable, so an expired-but-approved window cannot be built
+-- inside a transaction. Real time is the only thing that reaches it.
 
 -- ---------------------------------------------------------------------------
 -- Append-only evidence

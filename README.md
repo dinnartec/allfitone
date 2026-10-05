@@ -15,25 +15,21 @@ Normative product and architecture documentation lives in `allfitone-docs`.
 
 Be aware of the actual state before you start:
 
-|                          |                                                                                                            |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------- |
-| `apps/api`               | `GET /health` plus the Studio hosted login flow, verified end to end against a real provider environment   |
-| `apps/worker`            | Empty. Starts and exits immediately                                                                        |
-| `apps/studio-web`        | Next.js app with the Studio hosted-login entry point                                                       |
-| `apps/backoffice-web`    | Next.js app; MFA login remains blocked on the Backoffice API surface                                       |
-| `apps/space`             | Not scaffolded. README only                                                                                |
-| `packages/auth-provider` | Working. Token verification, code exchange, sessions revocation                                            |
-| `packages/queue`         | Port defined; the Postgres adapter throws until `system.outbox_events` exists                              |
-| `packages/contracts`     | Canonical OpenAPI with 18 paths. `generated/` not produced yet                                             |
-| `packages/db`            | PostgreSQL-only Supabase stack with identity, access-account and Studio-session migrations and pgTAP tests |
+|                          |                                                                                                                                     |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/api`               | The four surfaces mounted — `/space/v1`, `/studio/v1`, `/backoffice/v1`, `/catalog/v1` — plus a readiness `GET /health`             |
+| `apps/worker`            | Cron-invoked outbox jobs: invitation delivery, Backoffice authentication cleanup and account recovery                               |
+| `apps/studio-web`        | Hosted login, profile, organizations and invitations                                                                                |
+| `apps/backoffice-web`    | Password and TOTP sign-in; the home panel, people, gyms, catalogue, plans, permissions, team, access log, break glass and diagnosis |
+| `apps/space`             | Headless client of `/space/v1`: registration, sign-in and password recovery                                                         |
+| `packages/auth-provider` | Token verification, code exchange, TOTP, session revocation and recovery delivery                                                   |
+| `packages/queue`         | Port and its PostgreSQL adapter over `system.outbox_events`                                                                         |
+| `packages/contracts`     | Canonical OpenAPI with 123 paths, and the DTOs generated from it                                                                    |
+| `packages/db`            | 51 migrations and a pgTAP suite of 1082 assertions                                                                                  |
 
-Studio sign-in resolves or creates the external access account and establishes a
-persistent encrypted session. Linking that account to a domain person is a
-separate product operation and may remain pending.
-
-Lint, typecheck, formatting, OpenAPI validation and the git hooks all run. Tests
-cover the identity port, Studio login routes, physical database structure, RLS
-and persistent session functions.
+Payments holds only the catalogue of plans Allfit sells; nothing charges anybody yet.
+The Backoffice screens that need charges, planning execution or nutrition say so
+rather than showing an empty number.
 
 ## Prerequisites
 
@@ -73,14 +69,66 @@ bun run dev
 
 ```bash
 curl http://localhost:8080/health
-# {"status":"ok"}
+# {"status":"ok","checks":{"database":"ok"}}
 ```
+
+It answers 503 with `"status":"degraded"` when PostgreSQL does not answer: the API
+serves no route without it, so a probe that only proved the process was alive would
+send traffic into an outage.
 
 Any other route returns 404 until surfaces are mounted in
 `apps/api/src/surfaces.ts`.
 
-Studio runs at `http://localhost:3000` and Backoffice at
-`http://localhost:3001`.
+Studio runs at `http://localhost:3000` and Backoffice at `http://localhost:3001`.
+The API follows `PORT` (8080 by default) and the worker `WORKER_PORT` (8090), which
+is why they are separate variables: both read the same `.env.local`, so a single
+`PORT` would put the second process on a port already taken.
+
+`bun run dev` also starts Space, whose Metro bundler wants 8081. To work on one
+product, start only what it needs:
+
+```bash
+bun run dev --filter=@allfitone/api --filter=@allfitone/backoffice-web
+```
+
+### Signing in to Backoffice locally
+
+Backoffice authorises against PostgreSQL, not against the token, so a fresh
+database has nobody who can sign in — and the `allfit_admin` grant is a
+two-person ceremony precisely so that no operator can appoint themselves.
+
+Create the user in the WorkOS **Backoffice** Application, copy its user id, and
+run the ceremony against the local database:
+
+```bash
+bun --env-file=.env.local packages/db/scripts/bootstrap-local-operator.ts \
+  --subject user_01YOURID --given-name Jimmy --family-name Rozo
+```
+
+It grants `allfit_admin` to you and to a local witness, then has the witness grant
+you every duty through the same command **Equipo de Allfit** calls. The witness is
+not a shortcut: a duty is never self-assigned, so on a database with one real
+operator somebody else has to sign the grant. Pass `--duties a,b` to grant fewer.
+It refuses any database that is not on this machine. Sign in at
+`http://localhost:3001` and enrol TOTP.
+
+Duties are temporary by design — 30 days here — and every Backoffice screen
+refuses an operator whose duty expired, so "it worked yesterday" is the expected
+experience, not a bug. Run the script again: it leaves you as you are and grants
+only what is no longer in force.
+
+Backoffice reads what Studio and Space write, so a local database that never ran
+them shows empty screens. This fills that in, through the real commands wherever
+one exists, and refuses any database that is not local:
+
+```bash
+bun packages/db/scripts/seed-local-demo.ts
+```
+
+It leaves a gym with a live and a lapsed team invitation, three people — one
+without a verified email, so recovery fails closed as it should — and a
+credential waiting in the verification queue. Everything it writes is named
+`Demo`, and running it twice changes nothing.
 
 ## Commands
 
@@ -219,6 +267,11 @@ redirect URI in the WorkOS dashboard match. On macOS, Docker Desktop often holds
 task from its own workspace directory, so Bun looks for `apps/api/.env.local` and
 not the root one. The `dev` scripts pass `--env-file=../../.env.local` for exactly
 this reason; a task added without it will not see the root file.
+
+**`bun run db:test` fails after seeding demo data.** A few pgTAP assertions count
+rows across the whole database, so whatever the demo seed or the bootstrap left
+behind shifts them. Run `bun run db:reset` first — that is the database CI builds,
+and the one the result is about.
 
 **Lint passes but you expected an error.** `no-restricted-imports` does not merge
 across flat-config blocks — the last matching block wins. Patterns are composed

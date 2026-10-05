@@ -87,7 +87,7 @@ export function createClientInvitationDatabase(): ClientInvitationDatabase {
             ${input.organizationId}::uuid,
             ${input.channel},
             ${input.contact},
-            ${JSON.stringify(scopeOptions)}::jsonb,
+            ${JSON.stringify(scopeOptions)}::text::jsonb,
             ${input.tokenHash},
             ${input.tokenKeyVersion}::smallint,
             ${input.idempotencyKey}::uuid,
@@ -164,7 +164,7 @@ export function createClientInvitationDatabase(): ClientInvitationDatabase {
             ${input.tokenHash},
             ${input.intentId}::uuid,
             ${input.relationshipDecision},
-            ${JSON.stringify(input.scopeDecisions)}::jsonb,
+            ${JSON.stringify(input.scopeDecisions)}::text::jsonb,
             ${input.idempotencyKey}::uuid,
             ${input.commandId}::uuid,
             ${input.requestHash}

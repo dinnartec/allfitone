@@ -339,7 +339,7 @@ export function CredentialVerification() {
                           }
                         >
                           <SelectTrigger id="vr-method" disabled={busy}>
-                            <SelectValue />
+                            <SelectValue>{methodLabel(draft.method)}</SelectValue>
                           </SelectTrigger>
                           <SelectContent>
                             {VERIFICATION_METHODS.map((method) => (

@@ -60,7 +60,10 @@ const ROUTES: readonly WorkspaceRoute[] = [
   { href: '/break-glass', title: 'Acceso excepcional', icon: 'permissions' },
   { href: '/diagnosis', title: 'Diagnóstico técnico', icon: 'operation' },
   { href: '/team', title: 'Equipo de Allfit', icon: 'permissions' },
-  { href: '/catalogue/result-contracts', title: 'Catálogo global', icon: 'operation' },
+  { href: '/catalogue/result-contracts', title: 'Reglas de resultados', icon: 'operation' },
+  { href: '/catalogue', title: 'Catálogo global', icon: 'operation' },
+  { href: '/plans', title: 'Planes de Allfit', icon: 'operation' },
+  { href: '/erasure-requests', title: 'Solicitudes de eliminación', icon: 'permissions' },
   { href: '/permissions', title: 'Definiciones de permiso', icon: 'permissions' },
 ]
 

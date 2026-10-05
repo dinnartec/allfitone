@@ -427,4 +427,215 @@ describe('Backoffice break-glass API contract', () => {
       })
     }
   })
+
+  test('T-BG-API-21 returns the measurements an allowed read carries, and nothing else', async () => {
+    const measurement: AllfitV1Schemas['BodyProgressRecord'] = {
+      id: '019a8000-0000-7000-8000-000000000701',
+      metric_code: 'waist',
+      value: 0.82,
+      unit_code: 'm',
+      original_value: 82,
+      original_unit_code: 'cm',
+      measured_on: '2026-09-09',
+      has_media: false,
+      recorded_at: '2026-09-09T11:00:00.000Z',
+    }
+    const allowed: AllfitV1Schemas['BreakGlassExerciseOutcome'] = {
+      outcome: 'allowed',
+      reason_code: 'authorized_exercise',
+      break_glass_event_id: '019a8000-0000-7000-8000-000000000603',
+      occurred_at: '2026-09-10T18:07:00.000Z',
+      category: 'body_progress',
+      content: { body_progress: [measurement] },
+    }
+    const response = await routes(
+      windowService({
+        exercise: (_actor, input) => {
+          captured.push({ operation: 'exercise', input })
+          return Promise.resolve(allowed)
+        },
+      }),
+    ).fetch(
+      post(`/break-glass/requests/${REQUEST_ID}/reads`, {
+        body: {
+          category: 'body_progress',
+          resource_type: 'identity.body_progress_records',
+          resource_id: SUBJECT_ID,
+        },
+      }),
+    )
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('cache-control')).toBe('no-store')
+    await expect(response.json()).resolves.toEqual(allowed)
+    expect(captured[0]?.input).toMatchObject({
+      breakGlassRequestId: REQUEST_ID,
+      category: 'body_progress',
+      resourceType: 'identity.body_progress_records',
+      resourceId: SUBJECT_ID,
+    })
+  })
+
+  test('T-BG-API-22 returns the health claims an allowed read carries, as the database sent them', async () => {
+    const allowed: AllfitV1Schemas['BreakGlassExerciseOutcome'] = {
+      outcome: 'allowed',
+      reason_code: 'authorized_exercise',
+      break_glass_event_id: '019a8000-0000-7000-8000-000000000604',
+      occurred_at: '2026-09-10T18:08:00.000Z',
+      category: 'health_context',
+      content: {
+        health_context: [
+          {
+            id: '019a8000-0000-7000-8000-000000000801',
+            context_type: 'limitation',
+            description: 'No puedo levantar los brazos por encima de la cabeza',
+            body_area: 'shoulder',
+            provenance: 'person_declared',
+            valid_from: '2026-09-01T10:00:00.000Z',
+            valid_to: null,
+            recorded_at: '2026-09-01T10:05:00.000Z',
+          },
+        ],
+      },
+    }
+    const response = await routes(
+      windowService({
+        exercise: (_actor, input) => {
+          captured.push({ operation: 'exercise', input })
+          return Promise.resolve(allowed)
+        },
+      }),
+    ).fetch(
+      post(`/break-glass/requests/${REQUEST_ID}/reads`, {
+        body: { category: 'health_context', resource_type: 'identity.health_context_claims' },
+      }),
+    )
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual(allowed)
+    expect(captured[0]?.input).toMatchObject({
+      category: 'health_context',
+      resourceType: 'identity.health_context_claims',
+    })
+  })
+
+  test('T-BG-API-23 returns the meals an allowed read carries, with a photo flag and no photo', async () => {
+    const allowed: AllfitV1Schemas['BreakGlassExerciseOutcome'] = {
+      outcome: 'allowed',
+      reason_code: 'authorized_exercise',
+      break_glass_event_id: '019a8000-0000-7000-8000-000000000605',
+      occurred_at: '2026-09-10T18:09:00.000Z',
+      category: 'nutrition_intake',
+      content: {
+        nutrition_intake: [
+          {
+            id: '019a8000-0000-7000-8000-000000000901',
+            occurred_at: '2026-09-09T17:30:00+00:00',
+            local_date: '2026-09-09',
+            timezone: 'America/Bogota',
+            meal_type: 'lunch',
+            note: null,
+            revision_number: 0,
+            has_media: false,
+            items: [
+              {
+                position: 1,
+                name: 'Arroz',
+                quantity: 150,
+                quantity_unit: 'g',
+                nutrients: [{ nutrient_code: 'energy', value: 195, unit: 'kcal' }],
+              },
+            ],
+          },
+        ],
+      },
+    }
+    const response = await routes(
+      windowService({
+        exercise: (_actor, input) => {
+          captured.push({ operation: 'exercise', input })
+          return Promise.resolve(allowed)
+        },
+      }),
+    ).fetch(
+      post(`/break-glass/requests/${REQUEST_ID}/reads`, {
+        body: { category: 'nutrition_intake', resource_type: 'nutrition.meals' },
+      }),
+    )
+
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as typeof allowed
+    expect(body).toEqual(allowed)
+    expect(body.content?.nutrition_intake?.[0]).not.toHaveProperty('photo')
+    expect(captured[0]?.input).toMatchObject({
+      category: 'nutrition_intake',
+      resourceType: 'nutrition.meals',
+    })
+  })
+
+  test('T-BG-API-24 returns the training sessions an allowed read carries, as the database sent them', async () => {
+    const allowed: AllfitV1Schemas['BreakGlassExerciseOutcome'] = {
+      outcome: 'allowed',
+      reason_code: 'authorized_exercise',
+      break_glass_event_id: '019a8000-0000-7000-8000-000000000606',
+      occurred_at: '2026-09-10T18:11:00.000Z',
+      category: 'prior_training_history',
+      content: {
+        prior_training_history: [
+          {
+            id: '019a8000-0000-7000-8000-000000000a01',
+            activity_type_code: 'test_strength_session',
+            activity_type_name: 'Sesión de fuerza de prueba',
+            discipline_code: 'test_strength',
+            started_at: '2026-09-09T12:00:00+00:00',
+            ended_at: '2026-09-09T13:00:00+00:00',
+            timezone: 'America/Bogota',
+            status: 'completed',
+            validation_status: 'pending',
+            requested_level: 'detailed',
+            achieved_level: null,
+            revision_number: 3,
+            capture_source: 'manual',
+            contract: { id: '019c0000-0000-7000-8000-000000000031', version: 1 },
+            segments: [{ position: 1, activity_type_code: 'test_strength_session' }],
+            strength_sets: [
+              {
+                segment_position: 1,
+                order: 1,
+                movement_id: null,
+                movement_name: null,
+                achieved_reps: 8,
+                load: { value: 80, unit: 'kg' },
+                rpe: 7,
+              },
+            ],
+            endurance_laps: [],
+          },
+        ],
+      },
+    }
+    const response = await routes(
+      windowService({
+        exercise: (_actor, input) => {
+          captured.push({ operation: 'exercise', input })
+          return Promise.resolve(allowed)
+        },
+      }),
+    ).fetch(
+      post(`/break-glass/requests/${REQUEST_ID}/reads`, {
+        body: {
+          category: 'prior_training_history',
+          resource_type: 'execution.executed_sessions',
+        },
+      }),
+    )
+
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as typeof allowed
+    expect(body).toEqual(allowed)
+    expect(captured[0]?.input).toMatchObject({
+      category: 'prior_training_history',
+      resourceType: 'execution.executed_sessions',
+    })
+  })
 })

@@ -43,8 +43,16 @@ export interface TelemetryCommonProperties {
 
 export const clientOperations = [
   'backoffice.auth.attempt',
+  'backoffice.catalog.global_archive',
+  'backoffice.catalog.global_publish',
+  'backoffice.catalog.global_read',
   'backoffice.catalog.result_contract_deprecate',
   'backoffice.catalog.result_contract_publish',
+  'backoffice.commercial.plan_create',
+  'backoffice.commercial.plan_version_propose',
+  'backoffice.commercial.plan_version_publish',
+  'backoffice.commercial.plan_version_withdraw',
+  'backoffice.commercial.plans_read',
   'backoffice.platform.duty_grant',
   'backoffice.platform.duty_list',
   'backoffice.platform.duty_revoke',
@@ -66,18 +74,27 @@ export const clientOperations = [
   'backoffice.break_glass.exercise',
   'backoffice.break_glass.list',
   'backoffice.break_glass.request',
+  'backoffice.organization.client_invitation_resend',
+  'backoffice.organization.client_invitations',
   'backoffice.organization.directory',
   'backoffice.organization.file',
   'backoffice.organization.handover_cancel',
   'backoffice.organization.handover_create',
   'backoffice.organization.handover_read',
   'backoffice.organization.handover_resend',
+  'backoffice.organization.team_invitation_resend',
+  'backoffice.organization.team_invitations',
   'backoffice.verification.decide',
   'backoffice.verification.list',
   'backoffice.verification.renewals',
   'backoffice.privacy.scope_definition_list',
   'backoffice.privacy.scope_definition_publish',
+  'backoffice.support.account_recovery',
+  'backoffice.support.account_recovery_cancel',
+  'backoffice.support.account_recovery_resend',
+  'backoffice.support.account_recovery_start',
   'backoffice.support.attention',
+  'backoffice.support.business',
   'backoffice.support.delivery_circuits',
   'backoffice.support.operations',
   'backoffice.support.people_search',
@@ -252,7 +269,11 @@ export type TelemetryEvent =
   | TelemetryEventOf<
       'worker.job.completed.v1',
       {
-        job: 'backoffice_auth_cleanup' | 'invitation_delivery' | 'outbox_batch'
+        job:
+          | 'account_recovery_delivery'
+          | 'backoffice_auth_cleanup'
+          | 'invitation_delivery'
+          | 'outbox_batch'
         outcome: 'completed' | 'failed' | 'retrying'
         duration_ms: number
         item_count?: number
@@ -423,7 +444,12 @@ function validateSpecific(name: TelemetryEventName, properties: Record<string, u
     case 'worker.job.completed.v1':
       return (
         includes(
-          ['backoffice_auth_cleanup', 'invitation_delivery', 'outbox_batch'] as const,
+          [
+            'account_recovery_delivery',
+            'backoffice_auth_cleanup',
+            'invitation_delivery',
+            'outbox_batch',
+          ] as const,
           properties.job,
         ) &&
         includes(['completed', 'failed', 'retrying'] as const, properties.outcome) &&

@@ -275,7 +275,7 @@ export function ResultContractPublication() {
                   onValueChange={(value) => setActivityFamily(value as ActivityFamily)}
                 >
                   <SelectTrigger id="contract-family" disabled={busy}>
-                    <SelectValue />
+                    <SelectValue>{activityFamilyLabel(activityFamily)}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {ACTIVITY_FAMILIES.map((family) => (

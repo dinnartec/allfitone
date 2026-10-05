@@ -1,5 +1,7 @@
 /** Identity module composition. */
 
+import { randomUUID } from 'node:crypto'
+
 import { authProvider } from '../../platform/auth/index.js'
 import {
   createBackofficeAuthenticationService,
@@ -54,12 +56,85 @@ import {
   type StudioOwnershipInvitationService,
 } from './application/ownership-invitations.js'
 import { createOwnershipInvitationDatabase } from './infrastructure/ownership-invitations.js'
+import {
+  createTeamInvitationResendService,
+  type TeamInvitationResendService,
+} from './application/team-invitation-resends.js'
+import { createTeamInvitationResendDatabase } from './infrastructure/team-invitation-resends.js'
+import {
+  createClientInvitationResendService,
+  type ClientInvitationResendService,
+} from './application/client-invitation-resends.js'
+import { createClientInvitationResendDatabase } from './infrastructure/client-invitation-resends.js'
+import {
+  createAccountRecoveryService,
+  type AccountRecoveryService,
+} from './application/account-recovery.js'
+import { createAccountRecoveryDatabase } from './infrastructure/account-recovery.js'
+import { createBodyProgressService, type BodyProgressService } from './application/body-progress.js'
+import { createBodyProgressDatabase } from './infrastructure/body-progress.js'
+import {
+  createHealthContextService,
+  type HealthContextService,
+} from './application/health-context.js'
+import { createHealthContextDatabase } from './infrastructure/health-context.js'
+
+let cachedHealthContext: HealthContextService | undefined
+
+export function spaceHealthContextService(): HealthContextService {
+  if (cachedHealthContext) return cachedHealthContext
+  const issuer = process.env.WORKOS_ISSUER
+  if (!issuer) throw new Error('WORKOS_ISSUER is not set')
+  cachedHealthContext = createHealthContextService({
+    database: createHealthContextDatabase(),
+    issuer,
+    requestId: () => randomUUID(),
+  })
+  return cachedHealthContext
+}
+
+let cachedBodyProgress: BodyProgressService | undefined
+
+export function spaceBodyProgressService(): BodyProgressService {
+  if (cachedBodyProgress) return cachedBodyProgress
+  const issuer = process.env.WORKOS_ISSUER
+  if (!issuer) throw new Error('WORKOS_ISSUER is not set')
+  cachedBodyProgress = createBodyProgressService({
+    database: createBodyProgressDatabase(),
+    issuer,
+    requestId: () => randomUUID(),
+  })
+  return cachedBodyProgress
+}
+
+let cachedRecoveries: AccountRecoveryService | undefined
+
+export function accountRecoveryService(): AccountRecoveryService {
+  cachedRecoveries ??= createAccountRecoveryService(createAccountRecoveryDatabase())
+  return cachedRecoveries
+}
 
 let cachedOwnership: StudioOwnershipInvitationService | undefined
 
 export function studioOwnershipInvitationService(): StudioOwnershipInvitationService {
   cachedOwnership ??= createStudioOwnershipInvitationService(createOwnershipInvitationDatabase())
   return cachedOwnership
+}
+
+let cachedResends: TeamInvitationResendService | undefined
+
+export function teamInvitationResendService(): TeamInvitationResendService {
+  cachedResends ??= createTeamInvitationResendService(createTeamInvitationResendDatabase())
+  return cachedResends
+}
+
+let cachedClientResends: ClientInvitationResendService | undefined
+
+export function clientInvitationResendService(): ClientInvitationResendService {
+  cachedClientResends ??= createClientInvitationResendService(
+    createClientInvitationResendDatabase(),
+  )
+  return cachedClientResends
 }
 
 let cached: StudioSessionService | undefined

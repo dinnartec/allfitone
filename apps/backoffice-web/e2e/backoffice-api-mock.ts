@@ -17,10 +17,17 @@ export interface BackofficeFixture {
   diagnosis?: DiagnosisFixture
   scopes?: ScopeFixture
   accessLog?: AccessLogFixture
+  erasureRequests?: ErasureRequestFixture
   organizationDirectory?: OrganizationDirectoryFixture
   organizationHandover?: OrganizationHandoverFixture
   organizationFiles?: OrganizationFileFixture
+  teamInvitations?: TeamInvitationFixture
+  clientInvitations?: ClientInvitationFixture
+  accountRecovery?: AccountRecoveryFixture
+  globalCatalogue?: GlobalCatalogueFixture
+  platformPlans?: PlatformPlansFixture
   attention?: AttentionFixture
+  business?: BusinessFixture
   verification?: VerificationFixture
   breakGlass?: BreakGlassFixture
   requests: MockRequest[]
@@ -102,7 +109,120 @@ export interface BreakGlassFixture {
    * between the answer that offered the read and the click that took it.
    */
   nextExerciseDenial?: string | undefined
+  /** What the subject has recorded. Only a body_progress read returns it. */
+  bodyProgress?: BodyProgressRecordFixture[]
+  /** What the subject has declared. Only a health_context read returns it. */
+  healthContext?: HealthContextClaimFixture[]
+  /** What the subject has eaten. Only a nutrition_intake read returns it. */
+  meals?: BreakGlassMealFixture[]
+  /** What the subject has trained. Only a prior_training_history read returns it. */
+  sessions?: BreakGlassSessionFixture[]
   files: BreakGlassFileFixture[]
+}
+
+export interface ErasureRequestFixture {
+  refusal?: { status: number; code: string }
+  /** The answer the next hold command gets, consumed once. */
+  nextHoldRefusal?: { status: number; code: string } | undefined
+  requests: ErasureRequestEntryFixture[]
+}
+
+export interface ErasureRequestEntryFixture {
+  id: string
+  subject_person_id: string
+  origin: string
+  status: string
+  opened_at: string
+  closed_at: string | null
+  due_at: string
+  pending_items: number
+  suspended_items: number
+  resolved_items: number
+  categories: {
+    data_classification_code: string
+    action: string
+    status: string
+    items: number
+    item_ids: string[]
+    result: string | null
+    executed_at: string | null
+    retained_until: string | null
+    hold: { id: string; reason_code: string; valid_to: string } | null
+  }[]
+}
+
+export interface BreakGlassMealFixture {
+  id: string
+  occurred_at: string
+  local_date: string
+  timezone: string
+  meal_type: string
+  note: string | null
+  revision_number: number
+  has_media: boolean
+  items: Array<{
+    position: number
+    name: string
+    quantity: number | null
+    quantity_unit: string | null
+    nutrients: Array<{ nutrient_code: string; value: number; unit: string }>
+  }>
+}
+
+export interface BreakGlassSessionFixture {
+  id: string
+  activity_type_code: string
+  activity_type_name: string
+  discipline_code: string
+  started_at: string
+  ended_at: string | null
+  timezone: string
+  status: string
+  validation_status: string
+  requested_level: string
+  achieved_level: string | null
+  revision_number: number
+  capture_source: string
+  contract: { id: string; version: number }
+  segments: Array<{ position: number; activity_type_code: string }>
+  strength_sets: Array<{
+    segment_position: number
+    order: number
+    movement_id: string | null
+    movement_name: string | null
+    achieved_reps: number | null
+    load: { value: number; unit: string } | null
+    rpe: number | null
+  }>
+  endurance_laps: Array<{
+    segment_position: number
+    lap_number: number
+    distance: { value: number; unit: string }
+    duration_seconds: number
+  }>
+}
+
+export interface HealthContextClaimFixture {
+  id: string
+  context_type: string
+  description: string
+  body_area: string | null
+  provenance: string
+  valid_from: string
+  valid_to: string | null
+  recorded_at: string
+}
+
+export interface BodyProgressRecordFixture {
+  id: string
+  metric_code: string
+  value: number
+  unit_code: string
+  original_value: number | null
+  original_unit_code: string | null
+  measured_on: string
+  has_media: boolean
+  recorded_at: string
 }
 
 export interface BreakGlassFileFixture {
@@ -282,7 +402,7 @@ export interface DirectoryOrganizationFixture {
   cancelled_at: string | null
   active_member_count: number
   site_count: number
-  people_served: number | null
+  people_served: number
 }
 
 const DIRECTORY_STATUSES: readonly string[] = ['unclaimed', 'active', 'closed', 'cancelled']
@@ -307,7 +427,7 @@ export function directoryOrganization(
     cancelled_at: status === 'cancelled' ? new Date(Date.now() - 86_400_000).toISOString() : null,
     active_member_count: status === 'active' ? 1 : 0,
     site_count: 1,
-    people_served: null,
+    people_served: 3,
     ...overrides,
   }
 }
@@ -353,7 +473,8 @@ export interface OrganizationFileRecordFixture {
     address_withheld: boolean
     status: 'active' | 'inactive'
   }>
-  people_served: number | null
+  people_served: number
+  relationship_counts: { active: number; terminated: number }
   plans_availability: 'not_modelled'
   payment_method_availability: 'not_modelled'
   premium_availability: 'not_modelled'
@@ -384,7 +505,8 @@ export function organizationFileRecord(
     team_counts: { active: 0, terminated: 0 },
     team_truncated: false,
     sites: [],
-    people_served: null,
+    people_served: 3,
+    relationship_counts: { active: 3, terminated: 1 },
     plans_availability: 'not_modelled',
     payment_method_availability: 'not_modelled',
     premium_availability: 'not_modelled',
@@ -553,6 +675,202 @@ export function renewalDue(overrides: Partial<RenewalDueFixture> = {}): RenewalD
     holder_given_name: 'Valentina',
     holder_family_name: 'Ríos',
     last_valid_to: new Date(Date.now() - 10 * 86_400_000).toISOString(),
+    ...overrides,
+  }
+}
+
+/**
+ * A gym's team invitations. The mock reproduces the command's rules: a live
+ * invitation is redelivered as itself, an expired resendable one is replaced by a new
+ * one Allfit signs while the old one stops being resendable, and anything else is a
+ * conflict.
+ */
+export interface TeamInvitationFixture {
+  refusal?: { status: number; code: string }
+  resendRefusal?: { status: number; code: string }
+  /** Resends dropped by the network before any answer, consumed one per attempt. */
+  lostResends?: number
+  lists: Record<string, TeamInvitationRecordFixture[]>
+}
+
+export interface TeamInvitationRecordFixture {
+  invitation_id: string
+  state: 'pending' | 'expired' | 'accepted' | 'rejected' | 'revoked'
+  proposed_role_code: 'admin' | 'coach' | 'staff'
+  contact_hint: string
+  created_at: string
+  expires_at: string
+  issued_by: 'member' | 'allfit'
+  reissues_invitation_id: string | null
+  resendable: boolean
+  last_resent_at: string | null
+}
+
+export function teamInvitationRecord(
+  overrides: Partial<TeamInvitationRecordFixture> = {},
+): TeamInvitationRecordFixture {
+  return {
+    invitation_id: nextAssignmentId(),
+    state: 'pending',
+    proposed_role_code: 'coach',
+    contact_hint: 'l***@example.test',
+    created_at: new Date(Date.now() - 86_400_000).toISOString(),
+    expires_at: new Date(Date.now() + 6 * 86_400_000).toISOString(),
+    issued_by: 'member',
+    reissues_invitation_id: null,
+    resendable: true,
+    last_resent_at: null,
+    ...overrides,
+  }
+}
+
+/**
+ * The same shape for a gym's client invitations, which carry an offer instead of a
+ * role. A reissue copies `scope_codes` exactly, because that is what the real command
+ * does and what the database refuses to let it do otherwise.
+ */
+export interface ClientInvitationFixture {
+  refusal?: { status: number; code: string }
+  resendRefusal?: { status: number; code: string }
+  /** Resends dropped by the network before any answer, consumed one per attempt. */
+  lostResends?: number
+  lists: Record<string, ClientInvitationRecordFixture[]>
+}
+
+export interface ClientInvitationRecordFixture {
+  invitation_id: string
+  state: 'pending' | 'expired' | 'accepted' | 'rejected' | 'revoked'
+  scope_codes: string[]
+  contact_hint: string
+  created_at: string
+  expires_at: string
+  issued_by: 'member' | 'allfit'
+  reissues_invitation_id: string | null
+  resendable: boolean
+  last_resent_at: string | null
+}
+
+export function clientInvitationRecord(
+  overrides: Partial<ClientInvitationRecordFixture> = {},
+): ClientInvitationRecordFixture {
+  return {
+    invitation_id: nextAssignmentId(),
+    state: 'pending',
+    scope_codes: ['body_progress', 'relationship_training'],
+    contact_hint: 'c***@example.test',
+    created_at: new Date(Date.now() - 86_400_000).toISOString(),
+    expires_at: new Date(Date.now() + 6 * 86_400_000).toISOString(),
+    issued_by: 'member',
+    reissues_invitation_id: null,
+    resendable: true,
+    last_resent_at: null,
+    ...overrides,
+  }
+}
+
+/**
+ * How the business is going. Whether a figure can be given at all is the
+ * database's decision, so the fixture states the answer rather than deriving it.
+ */
+export interface BusinessFixture {
+  refusal?: { status: number; code: string }
+  panel?: BusinessPanelFixture
+}
+
+export interface BusinessMetricFixture {
+  key: string
+  availability: 'available' | 'below_threshold' | 'not_modelled'
+  value: number | null
+  reason: string | null
+  period: { kind: 'total' | 'week' | 'month'; from: string | null; to: string }
+}
+
+export interface BusinessPanelFixture {
+  generated_at: string
+  minimum_aggregate: number
+  metrics: BusinessMetricFixture[]
+}
+
+/** One of each answer: a figure, a true zero, a group too small, and four gaps. */
+export function businessPanelRecord(
+  overrides: Partial<BusinessPanelFixture> = {},
+): BusinessPanelFixture {
+  const now = new Date()
+  const to = now.toISOString()
+  const week = new Date(now.getTime() - 7 * 86_400_000).toISOString()
+  const month = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString()
+  const total = { kind: 'total', from: null, to } as const
+  const lastWeek = { kind: 'week', from: week, to } as const
+
+  return {
+    generated_at: to,
+    minimum_aggregate: 5,
+    metrics: [
+      {
+        key: 'registered_people',
+        availability: 'available',
+        value: 1284,
+        reason: null,
+        period: total,
+      },
+      {
+        key: 'new_people_this_week',
+        availability: 'available',
+        value: 37,
+        reason: null,
+        period: lastWeek,
+      },
+      {
+        key: 'active_people_this_week',
+        availability: 'available',
+        value: 118,
+        reason: null,
+        period: lastWeek,
+      },
+      {
+        key: 'studio_active_professionals_this_week',
+        availability: 'below_threshold',
+        value: null,
+        reason: null,
+        period: lastWeek,
+      },
+      { key: 'organizations', availability: 'available', value: 12, reason: null, period: total },
+      {
+        key: 'operating_organizations',
+        availability: 'available',
+        value: 9,
+        reason: null,
+        period: total,
+      },
+      {
+        key: 'unclaimed_organizations',
+        availability: 'available',
+        value: 0,
+        reason: null,
+        period: total,
+      },
+      {
+        key: 'active_subscriptions',
+        availability: 'not_modelled',
+        value: null,
+        reason: 'payments_not_modelled',
+        period: total,
+      },
+      {
+        key: 'billed_this_month',
+        availability: 'not_modelled',
+        value: null,
+        reason: 'payments_not_modelled',
+        period: { kind: 'month', from: month, to },
+      },
+      {
+        key: 'premium_people',
+        availability: 'not_modelled',
+        value: null,
+        reason: 'payments_not_modelled',
+        period: total,
+      },
+    ],
     ...overrides,
   }
 }
@@ -1041,8 +1359,35 @@ export async function mockBackofficeApi(
       await routeVerification(route, request, fixture)
       return
     }
+    if (
+      request.path === '/backoffice/v1/legal-holds' ||
+      /^\/backoffice\/v1\/legal-holds\/[^/]+\/release$/.test(request.path)
+    ) {
+      await routeLegalHolds(route, request, fixture)
+      return
+    }
+    if (request.path === '/backoffice/v1/erasure-requests') {
+      await routeErasureRequests(route, request, fixture)
+      return
+    }
     if (request.path === '/backoffice/v1/access-events') {
       await routeAccessLog(route, request, fixture)
+      return
+    }
+    if (
+      /^\/backoffice\/v1\/organizations\/[^/]+\/team-invitations(\/[^/]+\/resends)?$/.test(
+        request.path,
+      )
+    ) {
+      await routeTeamInvitations(route, request, fixture)
+      return
+    }
+    if (
+      /^\/backoffice\/v1\/organizations\/[^/]+\/client-invitations(\/[^/]+\/resends)?$/.test(
+        request.path,
+      )
+    ) {
+      await routeClientInvitations(route, request, fixture)
       return
     }
     if (request.method === 'GET' && /^\/backoffice\/v1\/organizations\/[^/]+$/.test(request.path)) {
@@ -1069,11 +1414,31 @@ export async function mockBackofficeApi(
       await routeAttention(route, fixture)
       return
     }
+    if (request.path === '/backoffice/v1/support/business') {
+      await routeBusiness(route, fixture)
+      return
+    }
     if (
       request.path === '/backoffice/v1/support/operations' ||
       request.path === '/backoffice/v1/support/delivery-circuits'
     ) {
       await routeDiagnosis(route, request, fixture)
+      return
+    }
+    if (
+      /^\/backoffice\/v1\/people\/[^/]+\/account-recover(y|ies(\/[^/]+\/(resends|cancellation))?)$/.test(
+        request.path,
+      )
+    ) {
+      await routeAccountRecovery(route, request, fixture)
+      return
+    }
+    if (/^\/backoffice\/v1\/catalogue(\/[^/]+(\/[^/]+\/archival)?)?$/.test(request.path)) {
+      await routeGlobalCatalogue(route, request, fixture)
+      return
+    }
+    if (request.path.startsWith('/backoffice/v1/platform-plans')) {
+      await routePlatformPlans(route, request, fixture)
       return
     }
     if (request.path.startsWith('/backoffice/v1/support/')) {
@@ -1092,6 +1457,15 @@ async function routeAttention(route: Route, fixture: BackofficeFixture): Promise
     return
   }
   await fulfill(route, 200, attention.panel ?? attentionPanelRecord())
+}
+
+async function routeBusiness(route: Route, fixture: BackofficeFixture): Promise<void> {
+  const business = fixture.business ?? {}
+  if (business.refusal) {
+    await fulfillProblem(route, business.refusal.status, business.refusal.code)
+    return
+  }
+  await fulfill(route, 200, business.panel ?? businessPanelRecord())
 }
 
 /**
@@ -1488,6 +1862,14 @@ async function routeBreakGlass(
   if (action === 'reads') {
     const body = request.body as { category?: string; resource_type?: string } | undefined
     const category = body?.category ?? ''
+    // A category that returns content reads only its own table.
+    const readable: Record<string, string> = {
+      body_progress: 'identity.body_progress_records',
+      health_context: 'identity.health_context_claims',
+      nutrition_intake: 'nutrition.meals',
+      prior_training_history: 'execution.executed_sessions',
+    }
+    const ownTable = readable[category]
     const forced = glass.nextExerciseDenial
     glass.nextExerciseDenial = undefined
     const denial =
@@ -1498,17 +1880,54 @@ async function routeBreakGlass(
           ? 'window_not_open'
           : !file.categories.includes(category)
             ? 'category_out_of_scope'
-            : null)
+            : ownTable !== undefined && body?.resource_type !== ownTable
+              ? 'resource_out_of_scope'
+              : null)
     // Only an authorised attempt raises the counter, matching the projection, which
     // counts events with result 'allowed'. A denial is recorded too, as an event.
     if (denial === null) file.exercise_count += 1
-    await fulfill(route, 200, {
-      outcome: denial === null ? 'content_unavailable' : 'denied',
-      reason_code: denial ?? 'execution_and_nutrition_absent',
+    const event = {
       break_glass_event_id: nextAssignmentId(),
       occurred_at: now,
       ...(category ? { category } : {}),
-    })
+    }
+    if (denial !== null) {
+      await fulfill(route, 200, { outcome: 'denied', reason_code: denial, ...event })
+    } else if (category === 'body_progress') {
+      await fulfill(route, 200, {
+        outcome: 'allowed',
+        reason_code: 'authorized_exercise',
+        ...event,
+        content: { body_progress: glass.bodyProgress ?? [] },
+      })
+    } else if (category === 'health_context') {
+      await fulfill(route, 200, {
+        outcome: 'allowed',
+        reason_code: 'authorized_exercise',
+        ...event,
+        content: { health_context: glass.healthContext ?? [] },
+      })
+    } else if (category === 'nutrition_intake') {
+      await fulfill(route, 200, {
+        outcome: 'allowed',
+        reason_code: 'authorized_exercise',
+        ...event,
+        content: { nutrition_intake: glass.meals ?? [] },
+      })
+    } else if (category === 'prior_training_history') {
+      await fulfill(route, 200, {
+        outcome: 'allowed',
+        reason_code: 'authorized_exercise',
+        ...event,
+        content: { prior_training_history: glass.sessions ?? [] },
+      })
+    } else {
+      await fulfill(route, 200, {
+        outcome: 'content_unavailable',
+        reason_code: 'category_content_absent',
+        ...event,
+      })
+    }
     return
   }
 
@@ -1524,6 +1943,88 @@ async function routeBreakGlass(
   }
 
   await fulfillProblem(route, 404, 'not-found')
+}
+
+async function routeLegalHolds(
+  route: Route,
+  request: MockRequest,
+  fixture: BackofficeFixture,
+): Promise<void> {
+  const panel = fixture.erasureRequests ?? { requests: [] }
+  fixture.erasureRequests = panel
+  const refusal = panel.nextHoldRefusal
+  panel.nextHoldRefusal = undefined
+  if (refusal) {
+    await fulfillProblem(route, refusal.status, refusal.code)
+    return
+  }
+
+  const release = /^\/backoffice\/v1\/legal-holds\/([^/]+)\/release$/.exec(request.path)
+  const holdId = release?.[1] ?? nextAssignmentId()
+  const body = request.body as
+    { reason_code?: string; valid_to?: string; disposition_item_ids?: string[] } | undefined
+
+  // The panel is what the officer sees next, so the fixture moves with the command.
+  for (const entry of panel.requests) {
+    for (const category of entry.categories) {
+      if (release && category.hold?.id === holdId) {
+        category.status = 'pending'
+        category.hold = null
+        entry.pending_items += category.items
+        entry.suspended_items = Math.max(0, entry.suspended_items - category.items)
+      }
+      if (!release && category.item_ids.some((id) => body?.disposition_item_ids?.includes(id))) {
+        category.status = 'suspended'
+        category.hold = {
+          id: holdId,
+          reason_code: body?.reason_code ?? 'judicial_order',
+          valid_to: body?.valid_to ?? new Date().toISOString(),
+        }
+        entry.pending_items = Math.max(0, entry.pending_items - category.items)
+        entry.suspended_items += category.items
+      }
+    }
+  }
+
+  await fulfill(route, release ? 200 : 201, {
+    id: holdId,
+    scope_description: 'Alcance declarado',
+    reason_code: body?.reason_code ?? 'judicial_order',
+    case_reference: 'JUZGADO-2026-114',
+    valid_from: new Date().toISOString(),
+    valid_to: body?.valid_to ?? new Date().toISOString(),
+    status: release ? 'released' : 'active',
+    applied_by_person_id: SUPPORT_SUBJECT_ID,
+    released_at: release ? new Date().toISOString() : null,
+    released_by_person_id: release ? SUPPORT_SUBJECT_ID : null,
+    suspended_items: release ? 0 : (body?.disposition_item_ids?.length ?? 0),
+    items: body?.disposition_item_ids?.length ?? 1,
+  })
+}
+
+async function routeErasureRequests(
+  route: Route,
+  request: MockRequest,
+  fixture: BackofficeFixture,
+): Promise<void> {
+  const panel = fixture.erasureRequests ?? { requests: [] }
+  fixture.erasureRequests = panel
+  if (panel.refusal) {
+    await fulfillProblem(route, panel.refusal.status, panel.refusal.code)
+    return
+  }
+
+  const status = new URLSearchParams(request.query).get('status') ?? 'open'
+  const matching = panel.requests.filter((entry) => entry.status === status)
+  // Open requests oldest first; a resolved one is read newest first.
+  const ordered = [...matching].sort((left, right) =>
+    status === 'open'
+      ? Date.parse(left.opened_at) - Date.parse(right.opened_at)
+      : Date.parse(right.closed_at ?? right.opened_at) -
+        Date.parse(left.closed_at ?? left.opened_at),
+  )
+
+  await fulfill(route, 200, { items: ordered, has_more: false })
 }
 
 async function routeAccessLog(
@@ -1648,6 +2149,429 @@ function maskedContact(email: string): string {
   return `${local.slice(0, 1)}***@${domain}`
 }
 
+/**
+ * The global catalogue as its curator sees it (`HU-BO-022`). Publishing and archiving
+ * move it the way the real commands do — a published code is refused, an archived one is
+ * republished only under the same name, and a discipline with published content is not
+ * archived — so a screen that guessed would fail here.
+ */
+export interface GlobalCatalogueFixture {
+  refusal?: { status: number; code: string }
+  commandRefusal?: { status: number; code: string }
+  lostCommands?: number
+  disciplines: CatalogueEntryFixture[]
+  activityTypes: CatalogueEntryFixture[]
+  movements: CatalogueEntryFixture[]
+}
+
+export interface CatalogueEntryFixture {
+  kind: 'discipline' | 'activity_type' | 'movement'
+  id: string
+  code: string | null
+  discipline_code: string
+  name: string
+  status: 'draft' | 'published' | 'deprecated' | 'archived'
+  created_at: string
+  in_use_count: number
+}
+
+export function catalogueEntry(
+  overrides: Partial<CatalogueEntryFixture> = {},
+): CatalogueEntryFixture {
+  const kind = overrides.kind ?? 'discipline'
+  return {
+    kind,
+    id: nextAssignmentId(),
+    code: kind === 'movement' ? null : 'test_global_yoga',
+    discipline_code: 'test_global_yoga',
+    name: 'Yoga',
+    status: 'published',
+    created_at: '2026-09-16T12:00:00.000Z',
+    in_use_count: 0,
+    ...overrides,
+  }
+}
+
+export function globalCatalogueFixture(
+  overrides: Partial<GlobalCatalogueFixture> = {},
+): GlobalCatalogueFixture {
+  return { disciplines: [], activityTypes: [], movements: [], ...overrides }
+}
+
+/**
+ * Allfit's own plans. The mock keeps the rules the screen depends on seeing — one
+ * proposal at a time, nobody publishes their own, a proposal that changes nothing is
+ * refused, publishing retires the version in force — so a screen that ignored them would
+ * be caught here rather than in production.
+ */
+export interface PlatformPlansFixture {
+  refusal?: { status: number; code: string }
+  commandRefusal?: { status: number; code: string }
+  lostCommands?: number
+  features: PlatformFeatureFixture[]
+  plans: PlatformPlanFixture[]
+}
+
+export interface PlatformFeatureFixture {
+  code: string
+  name: string
+  unit: string | null
+}
+
+export interface PlatformPlanLimitFixture {
+  feature_code: string
+  enabled: boolean
+  limit_value: number | null
+}
+
+export interface PlatformPlanVersionFixture {
+  id: string
+  version_number: number
+  status: 'draft' | 'published' | 'deprecated' | 'archived'
+  amount_minor: number
+  currency_code: string | null
+  billing_period: 'month' | 'year' | null
+  features: PlatformPlanLimitFixture[]
+  supersedes_version_id: string | null
+  changes: Array<{
+    field: 'amount_minor' | 'currency_code' | 'billing_period' | 'feature'
+    feature_code: string | null
+    before: unknown
+    after: unknown
+  }> | null
+  proposed_by_person_id: string
+  proposed_by_self: boolean
+  proposed_at: string
+  published_by_person_id: string | null
+  published_at: string | null
+  deprecated_at: string | null
+  withdrawn_by_person_id: string | null
+  withdrawn_at: string | null
+}
+
+export interface PlatformPlanFixture {
+  id: string
+  code: string
+  name: string
+  plan_kind: 'free' | 'paid'
+  status: 'draft' | 'published'
+  created_by_person_id: string
+  created_at: string
+  versions: PlatformPlanVersionFixture[]
+}
+
+export const PLAN_OPERATOR_ID = '019a3000-0000-7000-8000-00000000c001'
+export const PLAN_COLLEAGUE_ID = '019a3000-0000-7000-8000-00000000c002'
+
+export function platformPlanVersion(
+  overrides: Partial<PlatformPlanVersionFixture> = {},
+): PlatformPlanVersionFixture {
+  const proposedBySelf = overrides.proposed_by_self ?? false
+  return {
+    id: nextAssignmentId(),
+    version_number: 1,
+    status: 'published',
+    amount_minor: 3990000,
+    currency_code: 'COP',
+    billing_period: 'month',
+    features: [],
+    supersedes_version_id: null,
+    changes: null,
+    proposed_by_person_id: proposedBySelf ? PLAN_OPERATOR_ID : PLAN_COLLEAGUE_ID,
+    proposed_by_self: proposedBySelf,
+    proposed_at: '2026-09-18T12:00:00.000Z',
+    published_by_person_id: PLAN_OPERATOR_ID,
+    published_at: '2026-09-18T12:05:00.000Z',
+    deprecated_at: null,
+    withdrawn_by_person_id: null,
+    withdrawn_at: null,
+    ...overrides,
+  }
+}
+
+export function platformPlan(overrides: Partial<PlatformPlanFixture> = {}): PlatformPlanFixture {
+  return {
+    id: nextAssignmentId(),
+    code: 'premium',
+    name: 'Premium',
+    plan_kind: 'paid',
+    status: 'draft',
+    created_by_person_id: PLAN_OPERATOR_ID,
+    created_at: '2026-09-18T11:00:00.000Z',
+    versions: [],
+    ...overrides,
+  }
+}
+
+export function platformPlansFixture(
+  overrides: Partial<PlatformPlansFixture> = {},
+): PlatformPlansFixture {
+  return { features: [], plans: [], ...overrides }
+}
+
+function planProjection(plan: PlatformPlanFixture) {
+  const { versions, ...rest } = plan
+  return {
+    ...rest,
+    current_version: versions.find((version) => version.status === 'published') ?? null,
+    proposal: versions.find((version) => version.status === 'draft') ?? null,
+    history: [...versions].sort((left, right) => right.version_number - left.version_number),
+  }
+}
+
+function planChanges(
+  before: PlatformPlanVersionFixture,
+  after: PlatformPlanVersionFixture,
+): NonNullable<PlatformPlanVersionFixture['changes']> {
+  const changes: NonNullable<PlatformPlanVersionFixture['changes']> = []
+  for (const field of ['amount_minor', 'currency_code', 'billing_period'] as const) {
+    if (before[field] !== after[field]) {
+      changes.push({ field, feature_code: null, before: before[field], after: after[field] })
+    }
+  }
+  const codes = new Set([...before.features, ...after.features].map((entry) => entry.feature_code))
+  for (const code of [...codes].sort()) {
+    const was = before.features.find((entry) => entry.feature_code === code)
+    const is = after.features.find((entry) => entry.feature_code === code)
+    const state = (entry: PlatformPlanLimitFixture | undefined) =>
+      entry ? { enabled: entry.enabled, limit_value: entry.limit_value } : null
+    if (JSON.stringify(state(was)) !== JSON.stringify(state(is))) {
+      changes.push({ field: 'feature', feature_code: code, before: state(was), after: state(is) })
+    }
+  }
+  return changes
+}
+
+async function routePlatformPlans(
+  route: Route,
+  request: MockRequest,
+  fixture: BackofficeFixture,
+): Promise<void> {
+  const state = fixture.platformPlans ?? platformPlansFixture()
+  fixture.platformPlans = state
+  const segments = request.path.split('/').filter(Boolean)
+  const now = new Date().toISOString()
+
+  if (request.method === 'GET') {
+    if (state.refusal) {
+      await fulfillProblem(route, state.refusal.status, state.refusal.code)
+      return
+    }
+    await fulfill(route, 200, {
+      generated_at: now,
+      feature_catalog: state.features,
+      plans: [...state.plans]
+        .sort((left, right) =>
+          left.plan_kind === right.plan_kind
+            ? left.code.localeCompare(right.code)
+            : left.plan_kind === 'free'
+              ? -1
+              : 1,
+        )
+        .map(planProjection),
+    })
+    return
+  }
+
+  if (state.lostCommands && state.lostCommands > 0) {
+    state.lostCommands -= 1
+    await route.abort('failed')
+    return
+  }
+  if (state.commandRefusal) {
+    await fulfillProblem(route, state.commandRefusal.status, state.commandRefusal.code)
+    return
+  }
+
+  const body = (request.body ?? {}) as Record<string, unknown>
+
+  if (segments.length === 3) {
+    const code = String(body.code ?? '')
+    const kind = body.plan_kind === 'free' ? 'free' : 'paid'
+    if (
+      state.plans.some((plan) => plan.code === code) ||
+      (kind === 'free' && state.plans.some((plan) => plan.plan_kind === 'free'))
+    ) {
+      await fulfillProblem(route, 409, 'conflict')
+      return
+    }
+    const plan = platformPlan({ code, name: String(body.name ?? ''), plan_kind: kind })
+    state.plans.push(plan)
+    await fulfill(route, 201, planProjection(plan))
+    return
+  }
+
+  const plan = state.plans.find((candidate) => candidate.id === segments[3])
+  if (!plan) {
+    await fulfillProblem(route, 404, 'not-found')
+    return
+  }
+  const inForce = plan.versions.find((version) => version.status === 'published')
+  const open = plan.versions.find((version) => version.status === 'draft')
+
+  if (segments.length === 5) {
+    if (open) {
+      await fulfillProblem(route, 409, 'conflict')
+      return
+    }
+    const proposal = platformPlanVersion({
+      version_number: plan.versions.length + 1,
+      status: 'draft',
+      amount_minor: Number(body.amount_minor),
+      currency_code: (body.currency_code as string | null) ?? null,
+      billing_period: (body.billing_period as 'month' | 'year' | null) ?? null,
+      features: (body.features as PlatformPlanLimitFixture[]) ?? [],
+      supersedes_version_id: inForce?.id ?? null,
+      proposed_by_self: true,
+      proposed_at: now,
+      published_by_person_id: null,
+      published_at: null,
+    })
+    if (inForce) {
+      proposal.changes = planChanges(inForce, proposal)
+      if (proposal.changes.length === 0) {
+        await fulfillProblem(route, 409, 'conflict')
+        return
+      }
+    }
+    plan.versions.push(proposal)
+    await fulfill(route, 201, planProjection(plan))
+    return
+  }
+
+  if (!open || open.id !== segments[5]) {
+    await fulfillProblem(route, 409, 'conflict')
+    return
+  }
+  if (segments[6] === 'publication') {
+    if (open.proposed_by_self) {
+      await fulfillProblem(route, 403, 'forbidden')
+      return
+    }
+    if (inForce) {
+      inForce.status = 'deprecated'
+      inForce.deprecated_at = now
+    }
+    open.status = 'published'
+    open.published_at = now
+    open.published_by_person_id = PLAN_OPERATOR_ID
+    plan.status = 'published'
+  } else {
+    open.status = 'archived'
+    open.withdrawn_at = now
+    open.withdrawn_by_person_id = PLAN_OPERATOR_ID
+  }
+  await fulfill(route, 200, planProjection(plan))
+}
+
+async function routeGlobalCatalogue(
+  route: Route,
+  request: MockRequest,
+  fixture: BackofficeFixture,
+): Promise<void> {
+  const state = fixture.globalCatalogue ?? globalCatalogueFixture()
+  fixture.globalCatalogue = state
+  const segments = request.path.split('/').filter(Boolean)
+
+  if (request.method === 'GET') {
+    if (state.refusal) {
+      await fulfillProblem(route, state.refusal.status, state.refusal.code)
+      return
+    }
+    await fulfill(route, 200, {
+      disciplines: state.disciplines,
+      activity_types: state.activityTypes,
+      movements: state.movements,
+      equipment_availability: 'not_modelled',
+    })
+    return
+  }
+
+  if (state.lostCommands && state.lostCommands > 0) {
+    state.lostCommands -= 1
+    await route.abort('failed')
+    return
+  }
+  if (state.commandRefusal) {
+    await fulfillProblem(route, state.commandRefusal.status, state.commandRefusal.code)
+    return
+  }
+
+  const body = (request.body ?? {}) as Record<string, unknown>
+  const kind =
+    segments[3] === 'disciplines'
+      ? 'discipline'
+      : segments[3] === 'activity-types'
+        ? 'activity_type'
+        : 'movement'
+  const entries =
+    kind === 'discipline'
+      ? state.disciplines
+      : kind === 'activity_type'
+        ? state.activityTypes
+        : state.movements
+
+  if (segments.length === 4) {
+    const name = typeof body.name === 'string' ? body.name.trim() : ''
+    const code = typeof body.code === 'string' ? body.code : null
+    const disciplineCode =
+      typeof body.discipline_code === 'string' ? body.discipline_code : (code ?? '')
+    if (name === '' || (kind !== 'movement' && code === null)) {
+      await fulfillProblem(route, 422, 'validation-failed')
+      return
+    }
+    const existing = entries.find((entry) =>
+      kind === 'movement' ? entry.name.toLowerCase() === name.toLowerCase() : entry.code === code,
+    )
+    if (existing?.status === 'published') {
+      await fulfillProblem(route, 409, 'conflict')
+      return
+    }
+    if (existing) {
+      if (existing.name !== name) {
+        await fulfillProblem(route, 409, 'conflict')
+        return
+      }
+      existing.status = 'published'
+      await fulfill(route, 200, existing)
+      return
+    }
+    const published = catalogueEntry({
+      kind,
+      code,
+      discipline_code: disciplineCode,
+      name,
+      status: 'published',
+    })
+    entries.push(published)
+    await fulfill(route, 200, published)
+    return
+  }
+
+  const target = entries.find((entry) =>
+    kind === 'movement' ? entry.id === segments[4] : entry.code === segments[4],
+  )
+  if (!target) {
+    await fulfillProblem(route, 404, 'not-found')
+    return
+  }
+  if (target.status !== 'published') {
+    await fulfillProblem(route, 409, 'conflict')
+    return
+  }
+  if (
+    kind === 'discipline' &&
+    [...state.activityTypes, ...state.movements].some(
+      (entry) => entry.discipline_code === target.code && entry.status === 'published',
+    )
+  ) {
+    await fulfillProblem(route, 409, 'conflict')
+    return
+  }
+  target.status = 'archived'
+  await fulfill(route, 200, target)
+}
+
 async function routeOrganizationFile(
   route: Route,
   request: MockRequest,
@@ -1670,6 +2594,319 @@ async function routeOrganizationFile(
     return
   }
   await fulfill(route, 200, record)
+}
+
+async function routeTeamInvitations(
+  route: Route,
+  request: MockRequest,
+  fixture: BackofficeFixture,
+): Promise<void> {
+  const state = fixture.teamInvitations ?? { lists: {} }
+  fixture.teamInvitations = state
+  const segments = request.path.split('/').filter(Boolean)
+  const organizationId = segments[3] ?? ''
+  const items = state.lists[organizationId] ?? []
+
+  if (request.method === 'GET') {
+    if (state.refusal) {
+      await fulfillProblem(route, state.refusal.status, state.refusal.code)
+      return
+    }
+    await fulfill(route, 200, { organization_id: organizationId, items, truncated: false })
+    return
+  }
+
+  if (state.lostResends && state.lostResends > 0) {
+    state.lostResends -= 1
+    await route.abort('failed')
+    return
+  }
+  if (state.resendRefusal) {
+    await fulfillProblem(route, state.resendRefusal.status, state.resendRefusal.code)
+    return
+  }
+  const target = items.find((item) => item.invitation_id === segments[5])
+  if (!target) {
+    await fulfillProblem(route, 404, 'not-found')
+    return
+  }
+  if (!target.resendable) {
+    await fulfillProblem(route, 409, 'conflict')
+    return
+  }
+
+  const now = new Date()
+  const renewedUntil = new Date(now.getTime() + 7 * 86_400_000).toISOString()
+  if (target.state === 'pending') {
+    target.expires_at = renewedUntil
+    target.last_resent_at = now.toISOString()
+    await fulfill(route, 200, { ...target, outcome: 'redelivered' })
+    return
+  }
+
+  const reissued: TeamInvitationRecordFixture = {
+    ...target,
+    invitation_id: nextAssignmentId(),
+    state: 'pending',
+    created_at: now.toISOString(),
+    expires_at: renewedUntil,
+    issued_by: 'allfit',
+    reissues_invitation_id: target.invitation_id,
+    resendable: true,
+    last_resent_at: null,
+  }
+  target.resendable = false
+  target.last_resent_at = now.toISOString()
+  state.lists[organizationId] = [reissued, ...items]
+  await fulfill(route, 200, { ...reissued, outcome: 'reissued' })
+}
+
+async function routeClientInvitations(
+  route: Route,
+  request: MockRequest,
+  fixture: BackofficeFixture,
+): Promise<void> {
+  const state = fixture.clientInvitations ?? { lists: {} }
+  fixture.clientInvitations = state
+  const segments = request.path.split('/').filter(Boolean)
+  const organizationId = segments[3] ?? ''
+  const items = state.lists[organizationId] ?? []
+
+  if (request.method === 'GET') {
+    if (state.refusal) {
+      await fulfillProblem(route, state.refusal.status, state.refusal.code)
+      return
+    }
+    await fulfill(route, 200, { organization_id: organizationId, items, truncated: false })
+    return
+  }
+
+  if (state.lostResends && state.lostResends > 0) {
+    state.lostResends -= 1
+    await route.abort('failed')
+    return
+  }
+  if (state.resendRefusal) {
+    await fulfillProblem(route, state.resendRefusal.status, state.resendRefusal.code)
+    return
+  }
+  const target = items.find((item) => item.invitation_id === segments[5])
+  if (!target) {
+    await fulfillProblem(route, 404, 'not-found')
+    return
+  }
+  if (!target.resendable) {
+    await fulfillProblem(route, 409, 'conflict')
+    return
+  }
+
+  const now = new Date()
+  const renewedUntil = new Date(now.getTime() + 7 * 86_400_000).toISOString()
+  if (target.state === 'pending') {
+    target.expires_at = renewedUntil
+    target.last_resent_at = now.toISOString()
+    await fulfill(route, 200, { ...target, outcome: 'redelivered' })
+    return
+  }
+
+  const reissued: ClientInvitationRecordFixture = {
+    ...target,
+    invitation_id: nextAssignmentId(),
+    state: 'pending',
+    // The offer travels unchanged, exactly as the command copies it.
+    scope_codes: [...target.scope_codes],
+    created_at: now.toISOString(),
+    expires_at: renewedUntil,
+    issued_by: 'allfit',
+    reissues_invitation_id: target.invitation_id,
+    resendable: true,
+    last_resent_at: null,
+  }
+  target.resendable = false
+  target.last_resent_at = now.toISOString()
+  state.lists[organizationId] = [reissued, ...items]
+  await fulfill(route, 200, { ...reissued, outcome: 'reissued' })
+}
+
+/**
+ * The recovery state of a person's card (`HU-BO-010`). Commands move it the way the real
+ * ones do — a start opens a recovery that has not gone out, a resend keeps the same
+ * request and address, a cancellation closes it — and refuse what the server refuses.
+ * `lostCommands` drops that many command answers on the wire before applying them.
+ */
+export interface AccountRecoveryFixture {
+  refusal?: { status: number; code: string }
+  commandRefusal?: { status: number; code: string }
+  lostCommands?: number
+  states: Record<string, AccountRecoveryStateFixture>
+}
+
+export interface AccountRecoveryStateFixture {
+  person_id: string
+  availability: 'available' | 'unavailable'
+  unavailable_reason: 'person_not_active' | 'no_access_account' | 'no_verified_email' | null
+  contact_hint: string | null
+  can_start: boolean
+  requests: AccountRecoveryRequestFixture[]
+}
+
+export interface AccountRecoveryRequestFixture {
+  request_id: string
+  person_id: string
+  state: 'initiated' | 'awaiting_verification' | 'confirmed' | 'expired' | 'cancelled' | 'failed'
+  contact_hint: string
+  case_reference: string
+  created_at: string
+  delivered_at: string | null
+  expires_at: string
+  confirmed_at: string | null
+  cancelled_at: string | null
+  failed_at: string | null
+  failure_code: 'contact_changed' | 'delivery_failed' | null
+  send_count: number
+  resendable: boolean
+  cancellable: boolean
+}
+
+export function accountRecoveryState(
+  overrides: Partial<AccountRecoveryStateFixture> = {},
+): AccountRecoveryStateFixture {
+  return {
+    person_id: SUPPORT_SUBJECT_ID,
+    availability: 'available',
+    unavailable_reason: null,
+    contact_hint: '••••••••on@example.test',
+    can_start: true,
+    requests: [],
+    ...overrides,
+  }
+}
+
+export function accountRecoveryRequest(
+  overrides: Partial<AccountRecoveryRequestFixture> = {},
+): AccountRecoveryRequestFixture {
+  const now = Date.now()
+  return {
+    request_id: nextAssignmentId(),
+    person_id: SUPPORT_SUBJECT_ID,
+    state: 'awaiting_verification',
+    contact_hint: '••••••••on@example.test',
+    case_reference: 'CASE-2026-001',
+    created_at: new Date(now - 600_000).toISOString(),
+    delivered_at: new Date(now - 590_000).toISOString(),
+    expires_at: new Date(now + 900_000).toISOString(),
+    confirmed_at: null,
+    cancelled_at: null,
+    failed_at: null,
+    failure_code: null,
+    send_count: 1,
+    resendable: true,
+    cancellable: true,
+    ...overrides,
+  }
+}
+
+async function routeAccountRecovery(
+  route: Route,
+  request: MockRequest,
+  fixture: BackofficeFixture,
+): Promise<void> {
+  const state = fixture.accountRecovery ?? { states: {} }
+  fixture.accountRecovery = state
+  const segments = request.path.split('/').filter(Boolean)
+  const current = state.states[segments[3] ?? '']
+
+  if (request.method === 'GET') {
+    if (state.refusal) {
+      await fulfillProblem(route, state.refusal.status, state.refusal.code)
+      return
+    }
+    const caseReference = new URLSearchParams(request.query).get('case_reference') ?? ''
+    if (!/^[A-Z][A-Z0-9_-]{2,63}$/.test(caseReference)) {
+      await fulfillProblem(route, 400, 'invalid-request')
+      return
+    }
+    if (!current) {
+      await fulfillProblem(route, 404, 'not-found')
+      return
+    }
+    await fulfill(route, 200, current)
+    return
+  }
+
+  if (state.lostCommands && state.lostCommands > 0) {
+    state.lostCommands -= 1
+    await route.abort('failed')
+    return
+  }
+  if (state.commandRefusal) {
+    await fulfillProblem(route, state.commandRefusal.status, state.commandRefusal.code)
+    return
+  }
+  const body = (request.body ?? {}) as Record<string, unknown>
+  const caseReference = body.case_reference
+  if (
+    Object.keys(body).join() !== 'case_reference' ||
+    typeof caseReference !== 'string' ||
+    !/^[A-Z][A-Z0-9_-]{2,63}$/.test(caseReference)
+  ) {
+    await fulfillProblem(route, 422, 'validation-failed')
+    return
+  }
+  if (!current) {
+    await fulfillProblem(route, 404, 'not-found')
+    return
+  }
+
+  const now = new Date()
+  if (segments.length === 5) {
+    if (!current.can_start) {
+      await fulfillProblem(route, 409, 'conflict')
+      return
+    }
+    const started: AccountRecoveryRequestFixture = {
+      ...accountRecoveryRequest({ person_id: current.person_id }),
+      request_id: request.headers['command-id'] ?? nextAssignmentId(),
+      state: 'initiated',
+      contact_hint: current.contact_hint ?? '',
+      case_reference: caseReference,
+      created_at: now.toISOString(),
+      delivered_at: null,
+      expires_at: new Date(now.getTime() + 86_400_000).toISOString(),
+      resendable: false,
+    }
+    current.requests = [started, ...current.requests]
+    current.can_start = false
+    await fulfill(route, 200, started)
+    return
+  }
+
+  const target = current.requests.find((item) => item.request_id === segments[5])
+  if (!target) {
+    await fulfillProblem(route, 404, 'not-found')
+    return
+  }
+  if (segments[6] === 'resends') {
+    if (!target.resendable) {
+      await fulfillProblem(route, 409, 'conflict')
+      return
+    }
+    target.send_count += 1
+    await fulfill(route, 200, target)
+    return
+  }
+  if (!target.cancellable) {
+    await fulfillProblem(route, 409, 'conflict')
+    return
+  }
+  Object.assign(target, {
+    state: 'cancelled',
+    cancelled_at: now.toISOString(),
+    resendable: false,
+    cancellable: false,
+  })
+  current.can_start = current.availability === 'available'
+  await fulfill(route, 200, target)
 }
 
 async function routeOrganizationHandover(

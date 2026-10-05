@@ -8,7 +8,12 @@ import {
   type BackofficeAuthenticationService,
 } from '../../identity/index.js'
 import { mountSurfaces } from '../../../surfaces.js'
-import type { AccessLogService, ScopeDefinitionService } from '../application/index.js'
+import type {
+  AccessLogService,
+  ErasureRequestService,
+  LegalHoldService,
+  ScopeDefinitionService,
+} from '../application/index.js'
 import { backofficePrivacyRoutes } from './backoffice.js'
 
 const ORIGIN = 'https://backoffice.example.test'
@@ -99,6 +104,108 @@ function logService(overrides: Partial<AccessLogService> = {}): AccessLogService
   }
 }
 
+const erasurePage: AllfitV1Schemas['ErasureRequestPage'] = {
+  items: [
+    {
+      id: '019a7000-0000-7000-8000-000000000501',
+      subject_person_id: '019a7000-0000-7000-8000-000000000005',
+      origin: 'request',
+      status: 'open',
+      opened_at: '2026-08-28T12:00:00.000Z',
+      closed_at: null,
+      due_at: '2026-09-27T12:00:00.000Z',
+      pending_items: 1,
+      suspended_items: 0,
+      resolved_items: 2,
+      categories: [
+        {
+          data_classification_code: 'body',
+          action: 'delete',
+          status: 'executed',
+          items: 2,
+          item_ids: [
+            '019ae000-0000-7000-8000-000000000601',
+            '019ae000-0000-7000-8000-000000000602',
+          ],
+          result: 'deleted',
+          executed_at: '2026-08-28T12:00:05.000Z',
+          retained_until: null,
+          hold: null,
+        },
+        {
+          data_classification_code: 'health',
+          action: 'delete',
+          status: 'suspended',
+          items: 1,
+          item_ids: ['019ae000-0000-7000-8000-000000000603'],
+          result: null,
+          executed_at: null,
+          retained_until: null,
+          hold: {
+            id: '019ae000-0000-7000-8000-000000000701',
+            reason_code: 'judicial_order',
+            valid_to: '2026-12-22T12:00:00.000Z',
+          },
+        },
+      ],
+    },
+  ],
+  has_more: false,
+}
+
+function erasureService(overrides: Partial<ErasureRequestService> = {}): ErasureRequestService {
+  return {
+    list: (_officer, input) => {
+      captured.push(input)
+      return Promise.resolve(erasurePage)
+    },
+    ...overrides,
+  }
+}
+
+const HOLD_ID = '019ae000-0000-7000-8000-000000000701'
+const ITEM_ID = '019ae000-0000-7000-8000-000000000601'
+
+const hold: AllfitV1Schemas['LegalHold'] = {
+  id: HOLD_ID,
+  scope_description: 'Mediciones de la persona en el expediente 2026-114',
+  reason_code: 'judicial_order',
+  case_reference: 'JUZGADO-2026-114',
+  valid_from: '2026-09-23T12:00:00.000Z',
+  valid_to: '2026-12-22T12:00:00.000Z',
+  status: 'active',
+  applied_by_person_id: ACTOR_PERSON_ID,
+  released_at: null,
+  released_by_person_id: null,
+  suspended_items: 2,
+  items: 2,
+}
+
+const application = {
+  scope_description: 'Mediciones de la persona en el expediente 2026-114',
+  reason_code: 'judicial_order',
+  case_reference: 'JUZGADO-2026-114',
+  valid_to: '2026-12-22T12:00:00.000Z',
+  disposition_item_ids: [ITEM_ID],
+}
+
+function holdService(overrides: Partial<LegalHoldService> = {}): LegalHoldService {
+  return {
+    apply: (_officer, input) => {
+      captured.push(input)
+      return Promise.resolve({ resource: hold, replayed: false })
+    },
+    release: (_officer, input) => {
+      captured.push(input)
+      return Promise.resolve({
+        resource: { ...hold, status: 'released', released_at: '2026-09-24T12:00:00.000Z' },
+        replayed: false,
+      })
+    },
+    ...overrides,
+  }
+}
+
 function sessionService(
   overrides: Partial<BackofficeAuthenticationService> = {},
 ): BackofficeAuthenticationService {
@@ -112,8 +219,38 @@ function routes(
   scopes: ScopeDefinitionService = scopeService(),
   sessions: BackofficeAuthenticationService = sessionService(),
   log: AccessLogService = logService(),
+  erasure: ErasureRequestService = erasureService(),
+  holds: LegalHoldService = holdService(),
 ): Hono {
-  return new Hono().route('/backoffice/v1', backofficePrivacyRoutes(scopes, sessions, log))
+  return new Hono().route(
+    '/backoffice/v1',
+    backofficePrivacyRoutes(scopes, sessions, log, erasure, holds),
+  )
+}
+
+function holdPost(
+  path: string,
+  init: {
+    body?: unknown
+    origin?: string
+    cookie?: boolean
+    idempotencyKey?: string
+    commandId?: string
+    contentType?: string | null
+  } = {},
+): Request {
+  const headers = new Headers({ origin: init.origin ?? ORIGIN })
+  if (init.contentType !== null) headers.set('content-type', init.contentType ?? 'application/json')
+  if (init.cookie !== false) headers.set('cookie', `${BACKOFFICE_SESSION_COOKIE}=session-secret`)
+  if (init.idempotencyKey !== '') {
+    headers.set('idempotency-key', init.idempotencyKey ?? IDEMPOTENCY_KEY)
+  }
+  if (init.commandId !== '') headers.set('command-id', init.commandId ?? COMMAND_ID)
+  return new Request(`https://api.example.test/backoffice/v1${path}`, {
+    method: 'POST',
+    headers,
+    ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
+  })
 }
 
 function post(
@@ -152,6 +289,14 @@ function auditGet(query = '', init: { cookie?: boolean } = {}): Request {
   return new Request(`https://api.example.test/backoffice/v1/access-events${query}`, { headers })
 }
 
+function erasureGet(query = '', init: { cookie?: boolean } = {}): Request {
+  const headers = new Headers({ origin: ORIGIN })
+  if (init.cookie !== false) headers.set('cookie', `${BACKOFFICE_SESSION_COOKIE}=session-secret`)
+  return new Request(`https://api.example.test/backoffice/v1/erasure-requests${query}`, {
+    headers,
+  })
+}
+
 function colonPath(path: string): string {
   return path.replace(/\{([A-Za-z0-9_]+)\}/g, ':$1')
 }
@@ -166,7 +311,11 @@ beforeEach(() => {
 describe('Backoffice privacy API contract', () => {
   test('T-PRV-API-01 mounts every operation this router serves, with its contract method', () => {
     const contract = allfitV1ContractManifest.operations
-      .filter((operation) => ['OP-PRV-011', 'OP-SUP-009'].includes(operation.allfitOperation ?? ''))
+      .filter((operation) =>
+        ['OP-PRV-009', 'OP-PRV-010', 'OP-PRV-011', 'OP-PRV-021', 'OP-SUP-009'].includes(
+          operation.allfitOperation ?? '',
+        ),
+      )
       .map((operation) => `${operation.method} ${colonPath(operation.path)}`)
       .sort()
     const mounted = backofficePrivacyRoutes()
@@ -174,7 +323,7 @@ describe('Backoffice privacy API contract', () => {
       .map((route) => `${route.method} /backoffice/v1${route.path}`)
       .sort()
 
-    expect(contract).toHaveLength(3)
+    expect(contract).toHaveLength(6)
     expect(mounted).toEqual(contract)
   })
 
@@ -439,6 +588,236 @@ describe('Backoffice privacy API contract', () => {
           Promise.reject(new BackofficeAuthenticationError('unauthenticated')),
       }),
     ).fetch(auditGet())
+
+    expect([missing.status, ended.status]).toEqual([401, 401])
+    expect(captured).toEqual([])
+  })
+
+  test('T-ERA-API-01 mounts the erasure panel where the contract puts it', () => {
+    const contract = allfitV1ContractManifest.operations
+      .filter((operation) => operation.allfitOperation === 'OP-PRV-021')
+      .map((operation) => `${operation.method} ${colonPath(operation.path)}`)
+    const app = new Hono()
+    mountSurfaces(app)
+    const mounted = app.routes
+      .filter((route) => route.method !== 'ALL')
+      .map((route) => `${route.method} ${route.path}`)
+
+    expect(contract).toEqual(['GET /backoffice/v1/erasure-requests'])
+    expect(mounted).toContain('GET /backoffice/v1/erasure-requests')
+  })
+
+  test('T-ERA-API-02 reads what is still owed unless another half is asked for', async () => {
+    const byDefault = await routes().fetch(erasureGet())
+    const closed = await routes().fetch(erasureGet('?status=closed&limit=50'))
+
+    expect([byDefault.status, closed.status]).toEqual([200, 200])
+    expect(byDefault.headers.get('cache-control')).toBe('no-store')
+    await expect(byDefault.json()).resolves.toEqual(erasurePage)
+    expect(captured[0]).toMatchObject({ status: 'open', limit: 25 })
+    expect(captured[1]).toMatchObject({ status: 'closed', limit: 50 })
+  })
+
+  test('T-ERA-API-03 continues a page only when the cursor names both halves', async () => {
+    const whole = await routes().fetch(
+      erasureGet(
+        '?cursor_at=2026-08-28T12:00:00.000Z&cursor_id=019a7000-0000-7000-8000-000000000501',
+      ),
+    )
+    const half = await routes().fetch(erasureGet('?cursor_at=2026-08-28T12:00:00.000Z'))
+    const other = await routes().fetch(
+      erasureGet('?cursor_id=019a7000-0000-7000-8000-000000000501'),
+    )
+
+    expect(whole.status).toBe(200)
+    expect(captured[0]).toMatchObject({
+      cursor: { at: '2026-08-28T12:00:00.000Z', id: '019a7000-0000-7000-8000-000000000501' },
+    })
+    expect([half.status, other.status]).toEqual([400, 400])
+    expect(captured).toHaveLength(1)
+  })
+
+  test('T-ERA-API-04 refuses a query the panel does not have', async () => {
+    const answers = await Promise.all(
+      [
+        '?status=everything',
+        '?status=',
+        '?limit=0',
+        '?limit=101',
+        '?limit=ten',
+        '?subject_person_id=019a7000-0000-7000-8000-000000000005',
+        '?cursor_at=yesterday&cursor_id=019a7000-0000-7000-8000-000000000501',
+        '?cursor_at=2026-08-28T12:00:00.000Z&cursor_id=not-a-uuid',
+      ].map((query) => routes().fetch(erasureGet(query))),
+    )
+
+    expect(answers.map((response) => response.status)).toEqual([
+      400, 400, 400, 400, 400, 400, 400, 400,
+    ])
+    expect(captured).toEqual([])
+  })
+
+  test('T-ERA-API-05 answers the database verdict, and never the panel by default', async () => {
+    const refused = await routes(
+      scopeService(),
+      sessionService(),
+      logService(),
+      erasureService({
+        list: () => Promise.reject(Object.assign(new Error('no duty'), { code: '42501' })),
+      }),
+    ).fetch(erasureGet())
+    const broken = await routes(
+      scopeService(),
+      sessionService(),
+      logService(),
+      erasureService({ list: () => Promise.reject(new Error('database unavailable')) }),
+    ).fetch(erasureGet())
+
+    expect([refused.status, broken.status]).toEqual([403, 503])
+  })
+
+  test('T-ERA-API-06 never reaches the panel without a session', async () => {
+    const missing = await routes().fetch(erasureGet('', { cookie: false }))
+    const ended = await routes(
+      scopeService(),
+      sessionService({
+        resolveActor: async () =>
+          Promise.reject(new BackofficeAuthenticationError('unauthenticated')),
+      }),
+    ).fetch(erasureGet())
+
+    expect([missing.status, ended.status]).toEqual([401, 401])
+    expect(captured).toEqual([])
+  })
+
+  test('T-HOLD-API-01 mounts both hold operations where the contract puts them', () => {
+    const contract = allfitV1ContractManifest.operations
+      .filter((operation) => ['OP-PRV-009', 'OP-PRV-010'].includes(operation.allfitOperation ?? ''))
+      .map((operation) => `${operation.method} ${colonPath(operation.path)}`)
+      .sort()
+    const app = new Hono()
+    mountSurfaces(app)
+    const mounted = app.routes
+      .filter((route) => route.method !== 'ALL')
+      .map((route) => `${route.method} ${route.path}`)
+
+    expect(contract).toEqual([
+      'POST /backoffice/v1/legal-holds',
+      'POST /backoffice/v1/legal-holds/:holdId/release',
+    ])
+    for (const route of contract) expect(mounted).toContain(route)
+  })
+
+  test('T-HOLD-API-02 applies a hold under the command that names it', async () => {
+    const response = await routes().fetch(holdPost('/legal-holds', { body: application }))
+
+    expect(response.status).toBe(201)
+    await expect(response.json()).resolves.toEqual(hold)
+    expect(captured[0]).toMatchObject({
+      idempotencyKey: IDEMPOTENCY_KEY,
+      commandId: COMMAND_ID,
+      application,
+    })
+  })
+
+  test('T-HOLD-API-03 refuses a hold the database would refuse anyway', async () => {
+    const bodies: unknown[] = [
+      { ...application, reason_code: 'porque_si' },
+      { ...application, scope_description: '  ' },
+      { ...application, case_reference: '' },
+      { ...application, valid_to: 'algún día' },
+      { ...application, disposition_item_ids: [] },
+      { ...application, disposition_item_ids: ['not-a-uuid'] },
+      { ...application, until: '2026-12-22T12:00:00.000Z' },
+      { scope_description: 'Sólo el alcance' },
+    ]
+    const answers = await Promise.all(
+      bodies.map((body) => routes().fetch(holdPost('/legal-holds', { body }))),
+    )
+
+    expect(answers.map((response) => response.status)).toEqual(bodies.map(() => 422))
+    expect(captured).toEqual([])
+  })
+
+  test('T-HOLD-API-04 needs the command headers and this origin', async () => {
+    const answers = await Promise.all([
+      routes().fetch(holdPost('/legal-holds', { body: application, idempotencyKey: '' })),
+      routes().fetch(holdPost('/legal-holds', { body: application, commandId: '' })),
+      routes().fetch(
+        holdPost('/legal-holds', { body: application, origin: 'https://evil.example' }),
+      ),
+      routes().fetch(holdPost('/legal-holds', { body: application, contentType: 'text/plain' })),
+    ])
+
+    expect(answers.map((response) => response.status)).toEqual([400, 400, 403, 415])
+    expect(captured).toEqual([])
+  })
+
+  test('T-HOLD-API-05 releases a hold by its identifier', async () => {
+    const response = await routes().fetch(holdPost(`/legal-holds/${HOLD_ID}/release`))
+    const wrong = await routes().fetch(holdPost('/legal-holds/not-a-uuid/release'))
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({ status: 'released' })
+    expect(captured[0]).toMatchObject({ holdId: HOLD_ID, idempotencyKey: IDEMPOTENCY_KEY })
+    expect(wrong.status).toBe(400)
+  })
+
+  test('T-HOLD-API-06 answers the database verdict, and says nothing else', async () => {
+    const verdicts: [string, number][] = [
+      ['42501', 403],
+      ['AF403', 403],
+      ['P0002', 404],
+      ['23505', 409],
+      ['55000', 409],
+      ['22023', 422],
+      // A check violation is a conflict across the platform; the shapes this handler
+      // can see are refused as 422 before they ever reach the database.
+      ['23514', 409],
+    ]
+    const answers = await Promise.all(
+      verdicts.map(([sqlState]) =>
+        routes(
+          scopeService(),
+          sessionService(),
+          logService(),
+          erasureService(),
+          holdService({
+            apply: () => Promise.reject(Object.assign(new Error('refused'), { code: sqlState })),
+          }),
+        ).fetch(holdPost('/legal-holds', { body: application })),
+      ),
+    )
+    const broken = await routes(
+      scopeService(),
+      sessionService(),
+      logService(),
+      erasureService(),
+      holdService({ apply: () => Promise.reject(new Error('database unavailable')) }),
+    ).fetch(holdPost('/legal-holds', { body: application }))
+
+    expect(answers.map((response) => response.status)).toEqual(verdicts.map(([, code]) => code))
+    // Both are 403, and the screen has to be able to tell them apart.
+    await expect(answers[0]?.json()).resolves.toMatchObject({
+      type: 'https://errors.allfit.invalid/forbidden',
+    })
+    await expect(answers[1]?.json()).resolves.toMatchObject({
+      type: 'https://errors.allfit.invalid/separation-of-duties',
+    })
+    expect(broken.status).toBe(503)
+  })
+
+  test('T-HOLD-API-07 never reaches the command without a session', async () => {
+    const missing = await routes().fetch(
+      holdPost('/legal-holds', { body: application, cookie: false }),
+    )
+    const ended = await routes(
+      scopeService(),
+      sessionService({
+        resolveActor: async () =>
+          Promise.reject(new BackofficeAuthenticationError('unauthenticated')),
+      }),
+    ).fetch(holdPost('/legal-holds', { body: application }))
 
     expect([missing.status, ended.status]).toEqual([401, 401])
     expect(captured).toEqual([])

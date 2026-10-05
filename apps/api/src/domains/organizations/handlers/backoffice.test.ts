@@ -31,7 +31,7 @@ const summary: AllfitV1Schemas['BackofficeOrganizationSummary'] = {
   cancelled_at: null,
   active_member_count: 1,
   site_count: 2,
-  people_served: null,
+  people_served: 0,
 }
 
 const handoverResource: AllfitV1Schemas['OrganizationHandover'] = {
@@ -88,7 +88,8 @@ const fileResource: AllfitV1Schemas['BackofficeOrganizationFile'] = {
   team_counts: { active: 1, terminated: 0 },
   team_truncated: false,
   sites: [],
-  people_served: null,
+  people_served: 0,
+  relationship_counts: { active: 0, terminated: 0 },
   plans_availability: 'not_modelled',
   payment_method_availability: 'not_modelled',
   premium_availability: 'not_modelled',
@@ -226,8 +227,12 @@ beforeEach(() => {
 
 describe('Backoffice organization API contract', () => {
   test('T-ORG-API-01 mounts every Backoffice organization operation with its contract method', () => {
+    // A gym's team and client invitations live under this path but belong to identity,
+    // which mounts them.
+    const identityOwned = ['NEW-IDN-RESEND', 'OP-IDN-045', 'NEW-IDN-CLIENT-RESEND', 'OP-IDN-051']
     const contract = allfitV1ContractManifest.operations
       .filter((operation) => operation.path.startsWith('/backoffice/v1/organizations'))
+      .filter((operation) => !identityOwned.includes(operation.allfitOperation))
       .map((operation) => `${operation.method} ${colonPath(operation.path)}`)
       .sort()
     const mounted = backofficeOrganizationRoutes()

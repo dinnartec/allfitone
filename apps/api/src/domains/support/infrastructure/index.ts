@@ -22,6 +22,8 @@ import type {
   BreakGlassRequest,
   SupportAttentionDatabase,
   SupportAttentionPanel,
+  SupportBusinessDatabase,
+  SupportBusinessPanel,
   SupportDeliveryCircuit,
   SupportDiagnosisDatabase,
   SupportOperation,
@@ -298,6 +300,23 @@ export function createSupportAttentionDatabase(): SupportAttentionDatabase {
         `
         if (!row) throw new Error('PostgreSQL did not read the attention panel')
         return row.read_attention_panel
+      }),
+  }
+}
+
+export function createSupportBusinessDatabase(): SupportBusinessDatabase {
+  const sql = database()
+
+  return {
+    read: (input) =>
+      inTransaction(sql, input.actorPersonId, input.requestId, async (transaction) => {
+        const [row] = await transaction<{ read_business_panel: SupportBusinessPanel }[]>`
+          select support.read_business_panel(
+            ${input.actorPersonId}::uuid, ${input.actorSessionId}::uuid
+          )
+        `
+        if (!row) throw new Error('PostgreSQL did not read the business panel')
+        return row.read_business_panel
       }),
   }
 }

@@ -21,6 +21,12 @@ export type ScopeCode = AllfitV1Schemas['ScopeCode']
 export type AccessLevel = AllfitV1Schemas['AccessLevel']
 export type AccessEvent = AllfitV1Schemas['AccessEvent']
 export type AccessEventPage = AllfitV1Schemas['AccessEventPage']
+export type ErasureRequest = AllfitV1Schemas['ErasureRequest']
+export type ErasureRequestPage = AllfitV1Schemas['ErasureRequestPage']
+export type ErasureRequestState = AllfitV1Schemas['ErasureRequestState']
+export type LegalHold = AllfitV1Schemas['LegalHold']
+export type LegalHoldApplication = AllfitV1Schemas['LegalHoldApplication']
+export type LegalHoldReason = AllfitV1Schemas['LegalHoldReason']
 
 export const SCOPE_CODES: readonly ScopeCode[] = [
   'relationship_training',
@@ -73,6 +79,54 @@ export interface AccessEventFilters {
   from?: string | undefined
   to?: string | undefined
   limit?: number | undefined
+}
+
+export const ERASURE_REQUEST_STATES: readonly ErasureRequestState[] = ['open', 'closed']
+
+export const MAX_ERASURE_PAGE = 100
+export const DEFAULT_ERASURE_PAGE = 25
+
+export interface ErasureRequestCursor {
+  at: string
+  id: string
+}
+
+export interface ErasureRequestFilters {
+  status: ErasureRequestState
+  limit: number
+  cursor?: ErasureRequestCursor | undefined
+}
+
+export const LEGAL_HOLD_REASONS: readonly LegalHoldReason[] = [
+  'judicial_order',
+  'regulatory_request',
+  'service_dispute',
+  'tax_or_accounting_obligation',
+]
+
+export const MAX_HELD_ITEMS = 500
+export const MAX_HOLD_SCOPE = 500
+export const MAX_HOLD_CASE_REFERENCE = 120
+
+export interface LegalHoldResult {
+  resource: LegalHold
+  replayed: boolean
+}
+
+export interface LegalHoldDatabase {
+  apply(
+    input: PrivacyCurator &
+      ScopeCommandContext & { requestId: string; application: LegalHoldApplication },
+  ): Promise<LegalHoldResult>
+  release(
+    input: PrivacyCurator & ScopeCommandContext & { requestId: string; holdId: string },
+  ): Promise<LegalHoldResult>
+}
+
+export interface ErasureRequestDatabase {
+  list(
+    input: PrivacyCurator & { requestId: string } & ErasureRequestFilters,
+  ): Promise<ErasureRequestPage>
 }
 
 export interface AccessLogDatabase {
