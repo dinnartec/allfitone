@@ -26,13 +26,17 @@
  * (ADR-040), and Progreso left the bar (1 Oct 2026).
  */
 
+import { useTheme } from '@allfitone/react-native/theme'
 import { usePathname, useRouter } from 'expo-router'
+import { useEffect, useState } from 'react'
 import { TabList, TabSlot, TabTrigger, Tabs } from 'expo-router/ui'
 
 import { Tab, TabBar } from '../../src/components/tab-bar'
+import { TabScene } from '../../src/components/tab-entrance'
 
 // The destinations in the bar's order, for the drop that is dragged between them.
 const PATHS = ['/today', '/train', '/food', '/profile'] as const
+const WARM_AFTER_MS = 1200
 
 export default function TabsLayout() {
   // `TabTrigger` hands its child the press handling but never says whether it is the
@@ -41,10 +45,29 @@ export default function TabsLayout() {
   const path = usePathname()
   const router = useRouter()
   const active = PATHS.findIndex((one) => one === path)
+  const theme = useTheme()
+  // The tabs not yet visited are built a moment after launch, while nothing moves, so a
+  // first visit does not build a whole screen under the drop on its way there.
+  const [warm, setWarm] = useState(false)
+  useEffect(() => {
+    const timer = setTimeout(() => setWarm(true), WARM_AFTER_MS)
+    return () => clearTimeout(timer)
+  }, [])
 
   return (
-    <Tabs>
-      <TabSlot />
+    // The canvas behind the screens, so one arriving fades over it and not over white.
+    <Tabs style={{ flex: 1, backgroundColor: theme.color.background.canvas }}>
+      {/* Every screen stays mounted and dissolves in; see `TabScene`. */}
+      <TabSlot
+        detachInactiveScreens={false}
+        renderFn={(descriptor, { isFocused, loaded }) =>
+          loaded || isFocused || warm ? (
+            <TabScene key={descriptor.route.key} focused={isFocused}>
+              {descriptor.render()}
+            </TabScene>
+          ) : null
+        }
+      />
 
       <TabList asChild>
         <TabBar

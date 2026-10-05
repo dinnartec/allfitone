@@ -40,6 +40,7 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
 
 import { ApiError } from '../../src/client'
 import { discardFailure } from '../../src/client/save-failure'
+import { keepIfSame } from '../../src/client/same-answer'
 import { createSpaceContentFlow } from '../../src/client/content-transport'
 import { createSpaceExecutionFlow } from '../../src/client/execution-transport'
 import { createSpaceProgramFlow } from '../../src/client/programs-transport'
@@ -139,7 +140,7 @@ export default function Train() {
   const load = useCallback(() => {
     programs
       .readWeekPlan(timezone)
-      .then(setPlan)
+      .then((week) => setPlan((held) => keepIfSame(held, week)))
       .catch((cause: unknown) => {
         const meaning = weekPlanFailure(cause instanceof ApiError ? cause.failure : undefined)
         if (meaning === 'unassigned') setPlan(undefined)
@@ -147,8 +148,8 @@ export default function Train() {
       })
     Promise.all([programs.readMyPrograms(), content.readMyRoutines(), readExerciseLibrary(content)])
       .then(([programmes, mineRoutines, read]) => {
-        setMine(programmes)
-        setRoutines(mineRoutines)
+        setMine((held) => keepIfSame(held, programmes))
+        setRoutines((held) => keepIfSame(held, mineRoutines))
         setLibrary(read)
       })
       .catch((cause: unknown) => {

@@ -51,3 +51,10 @@ export function onDrop(touch: number, dropLeft: number, dropWidth: number): bool
   'worklet'
   return touch >= dropLeft - 12 && touch <= dropLeft + dropWidth + 12
 }
+
+/** The tab under a touch at some point across the bar, clamped to the bar's ends. */
+export function tabAt(touch: number, width: number, count: number): number {
+  'worklet'
+  const column = (width - BAR_PADDING * 2) / count
+  return Math.min(count - 1, Math.max(0, Math.floor((touch - BAR_PADDING) / column)))
+}

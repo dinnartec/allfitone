@@ -47,6 +47,7 @@ import {
   type NutritionMeal,
 } from '../../src/client/nutrition'
 import { createSpaceNutritionFlow } from '../../src/client/nutrition-transport'
+import { keepIfSame } from '../../src/client/same-answer'
 import { twelveHour } from '../../src/client/finished'
 import { takeSavedMeal, type SavedMeal } from '../../src/client/saved-meal'
 import { deviceTimezone } from '../../src/client/timezone'
@@ -119,19 +120,20 @@ export default function FoodScreen() {
       let active = true
       const handed = takeSavedMeal()
       if (handed) setSaved(handed)
+      // Asked again on every visit; an answer equal to what is drawn redraws nothing.
       Promise.all([
         nutrition.readDays(monday, plusDays(monday, 6), timeZone),
         nutrition.listMeals(day, day),
         nutrition.readGoals(),
         training.listHistory({ timezone: timeZone, day, limit: 20 }).catch(() => undefined),
       ])
-        .then(([days, page, read, history]) => {
+        .then(([days, page, goalsRead, history]) => {
           if (!active) return
-          setWeek(days.data)
+          setWeek((held) => keepIfSame(held, days.data))
           setStreak(days.streak_days)
-          setMeals(page.data)
-          setGoals(read)
-          setWorkouts(history?.data ?? [])
+          setMeals((held) => keepIfSame(held, page.data))
+          setGoals((held) => keepIfSame(held, goalsRead))
+          setWorkouts((held) => keepIfSame(held, history?.data ?? []))
           setFailure(undefined)
         })
         .catch(() => active && setFailure(READ_FAILED))

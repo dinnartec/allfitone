@@ -8,6 +8,7 @@ import {
   nearestTab,
   onDrop,
   stretchFor,
+  tabAt,
 } from './dock'
 
 describe('what floats above the tab bar', () => {
@@ -49,5 +50,14 @@ describe('what floats above the tab bar', () => {
     expect(onDrop(190, 200, 95)).toBe(true)
     expect(onDrop(305, 200, 95)).toBe(true)
     expect(onDrop(100, 200, 95)).toBe(false)
+  })
+
+  test('T-SPC-UNIT-262 a tap answers with the tab under the finger, inside the bar', () => {
+    // 4 columns of 100 between 2 points of padding at each end.
+    expect(tabAt(50, 404, 4)).toBe(0)
+    expect(tabAt(103, 404, 4)).toBe(1)
+    expect(tabAt(399, 404, 4)).toBe(3)
+    expect(tabAt(-5, 404, 4)).toBe(0)
+    expect(tabAt(410, 404, 4)).toBe(3)
   })
 })

@@ -32,7 +32,7 @@ import { useTheme } from '@allfitone/react-native/theme'
 import { withAlpha } from '@allfitone/react-native/tokens'
 import { GlassContainer, GlassView, isLiquidGlassAvailable } from 'expo-glass-effect'
 import * as Haptics from 'expo-haptics'
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { AccessibilityInfo, Pressable, StyleSheet, View } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import Animated, {
@@ -58,6 +58,7 @@ import {
   nearestTab,
   onDrop,
   stretchFor,
+  tabAt,
 } from '../client/dock'
 
 /** The canvas's floating bar, and the room the content has to leave under it. */
@@ -86,6 +87,9 @@ const STRETCH_X = 0.26
 const STRETCH_Y = 0.12
 const SWELL = 0.14
 const TAIL_SHARE = 0.6
+
+const tick = () => void Haptics.selectionAsync()
+const press = () => void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Soft)
 
 /** Whether the person asked the system for less transparency; it can change while open. */
 function useReduceTransparency(): boolean {
@@ -139,6 +143,8 @@ export function TabBar({ children, active, count, onSelect }: TabBarProps) {
   const tail = useSharedValue(0)
   const lift = useSharedValue(0)
   const holding = useSharedValue(false)
+  // The tab a tap already sent the drop to, so the navigation arriving later does not resend it.
+  const steered = useSharedValue(-1)
 
   // The tail always chases the drop, wherever the drop is being taken.
   useAnimatedReaction(
@@ -164,60 +170,95 @@ export function TabBar({ children, active, count, onSelect }: TabBarProps) {
       landedByDrag.current = false
       return
     }
+    if (steered.get() === active) {
+      steered.set(-1)
+      return
+    }
     offset.set(withSpring(target, TRAVEL))
     stretch.set(
       withSequence(withTiming(0.7, { duration: 140, easing: EASE_OUT }), withSpring(0, JELLY)),
     )
-  }, [active, width, count, reduced, offset, stretch, over])
+  }, [active, width, count, reduced, offset, stretch, over, steered])
 
   const column = width > 0 ? (width - BAR_PADDING * 2) / count : 0
-  const tick = () => void Haptics.selectionAsync()
-  const press = () => void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Soft)
-  const land = (index: number) => {
-    landedByDrag.current = index !== active
+  // Read when a drag lands, so the gestures need not be rebuilt each time they change.
+  const latest = useRef({ active, onSelect })
+  useEffect(() => {
+    latest.current = { active, onSelect }
+  }, [active, onSelect])
+  const land = useCallback((index: number) => {
+    const { active: current, onSelect: select } = latest.current
+    landedByDrag.current = index !== current
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-    if (index !== active) onSelect(index)
-  }
+    if (index !== current) select(index)
+  }, [])
 
-  const drag = Gesture.Pan()
-    .enabled(width > 0 && active >= 0)
-    .activeOffsetX([-10, 10])
-    .onBegin((event) => {
-      // Only a finger on the drop lifts it; a tap on another tab just goes there.
-      if (reduced || !onDrop(event.x, offset.get(), column - 4)) return
-      holding.set(true)
-      lift.set(withSpring(1, GRAB))
-      scheduleOnRN(press)
-    })
-    .onStart(() => {
-      origin.set(offset.get())
-    })
-    .onUpdate((event) => {
-      // A little past either end, as a drop pulled against an edge gives before it stops.
-      const first = dropOffset(0, width, count) - 10
-      const last = dropOffset(count - 1, width, count) + 10
-      const next = Math.min(last, Math.max(first, origin.get() + event.translationX))
-      offset.set(next)
-      stretch.set(reduced ? 0 : stretchFor(event.velocityX))
-      const tab = nearestTab(next, width, count)
-      if (tab !== over.get()) {
+  // Built once per bar size: rebuilt on every render, the gesture handlers were attached
+  // again on the UI thread at each tab switch, right while the drop was in flight.
+  const gesture = useMemo(() => {
+    // The drop answers a tap on the UI thread, the moment the finger lifts. Waiting for the
+    // new screen to render first is what made the bar react seconds late.
+    const tap = Gesture.Tap()
+      .enabled(width > 0)
+      .maxDuration(2000)
+      .onEnd((event, success) => {
+        const tab = tabAt(event.x, width, count)
+        if (!success || tab === over.get()) return
         over.set(tab)
+        steered.set(tab)
         scheduleOnRN(tick)
-      }
-    })
-    .onEnd((event) => {
-      const tab = nearestTab(offset.get(), width, count)
-      offset.set(
-        withSpring(dropOffset(tab, width, count), { ...LANDING, velocity: event.velocityX }),
-      )
-      stretch.set(withSpring(0, JELLY))
-      scheduleOnRN(land, tab)
-    })
-    .onFinalize(() => {
-      if (!holding.get()) return
-      holding.set(false)
-      lift.set(withSpring(0, RELEASE))
-    })
+        if (reduced) {
+          offset.set(dropOffset(tab, width, count))
+          return
+        }
+        offset.set(withSpring(dropOffset(tab, width, count), TRAVEL))
+        stretch.set(
+          withSequence(withTiming(0.7, { duration: 140, easing: EASE_OUT }), withSpring(0, JELLY)),
+        )
+      })
+
+    const drag = Gesture.Pan()
+      .enabled(width > 0)
+      .activeOffsetX([-10, 10])
+      .onBegin((event) => {
+        // Only a finger on the drop lifts it; a tap on another tab just goes there.
+        if (reduced || !onDrop(event.x, offset.get(), column - 4)) return
+        holding.set(true)
+        lift.set(withSpring(1, GRAB))
+        scheduleOnRN(press)
+      })
+      .onStart(() => {
+        origin.set(offset.get())
+      })
+      .onUpdate((event) => {
+        // A little past either end, as a drop pulled against an edge gives before it stops.
+        const first = dropOffset(0, width, count) - 10
+        const last = dropOffset(count - 1, width, count) + 10
+        const next = Math.min(last, Math.max(first, origin.get() + event.translationX))
+        offset.set(next)
+        stretch.set(reduced ? 0 : stretchFor(event.velocityX))
+        const tab = nearestTab(next, width, count)
+        if (tab !== over.get()) {
+          over.set(tab)
+          scheduleOnRN(tick)
+        }
+      })
+      .onEnd((event) => {
+        const tab = nearestTab(offset.get(), width, count)
+        offset.set(
+          withSpring(dropOffset(tab, width, count), { ...LANDING, velocity: event.velocityX }),
+        )
+        stretch.set(withSpring(0, JELLY))
+        scheduleOnRN(land, tab)
+      })
+      .onFinalize(() => {
+        if (!holding.get()) return
+        holding.set(false)
+        lift.set(withSpring(0, RELEASE))
+      })
+
+    return Gesture.Simultaneous(drag, tap)
+  }, [width, count, column, reduced, land, offset, stretch, origin, over, lift, holding, steered])
 
   const moving = useAnimatedStyle(() => {
     // The jelly overshoots below zero, so the drop goes taller and narrower for a moment.
@@ -246,7 +287,7 @@ export function TabBar({ children, active, count, onSelect }: TabBarProps) {
 
   return (
     <View style={[styles.dock, { bottom: dockBottom(insets.bottom) }]} pointerEvents="box-none">
-      <GestureDetector gesture={drag}>
+      <GestureDetector gesture={gesture}>
         <View
           collapsable={false}
           style={styles.grow}
@@ -350,8 +391,10 @@ export function Tab({
 }
 
 const styles = StyleSheet.create({
+  // Above the screens: they are stacked with z-indices of their own to dissolve.
   dock: {
     position: 'absolute',
+    zIndex: 10,
     left: DOCK_INSET,
     right: DOCK_INSET,
     height: DOCK_HEIGHT,
