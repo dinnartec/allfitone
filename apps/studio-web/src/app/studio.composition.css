@@ -1205,6 +1205,33 @@
   gap: var(--afo-space-4);
 }
 
+/* The name on the left, the action on the right — the same row shape the site
+   list uses, so the panel does not invent a second way to pair a thing with
+   what you do to it. */
+[data-relationship-holder-head] {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--afo-space-3);
+}
+
+[data-relationship-holder-head] > [data-relationship-subject] {
+  min-width: 0;
+  flex: 1;
+  margin-block-end: 0;
+}
+
+[data-relationship-holder-head] + [data-relationship-facts] {
+  margin-block-start: var(--afo-space-4);
+}
+
+[data-relationship-no-other-coaches] {
+  margin: 0;
+  max-width: var(--studio-measure);
+  color: var(--afo-color-text-muted);
+  font-size: var(--afo-font-size-sm);
+}
+
 [data-relationship-unattended] {
   margin: 0;
   color: var(--afo-color-text-muted);

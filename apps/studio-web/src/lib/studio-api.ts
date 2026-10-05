@@ -49,6 +49,7 @@ export type RelationshipSubstitution = AllfitV1Schemas['RelationshipSubstitution
 export type RelationshipGrant = AllfitV1Schemas['RelationshipGrant']
 export type RelationshipHolder = AllfitV1Schemas['RelationshipHolder']
 export type RelationshipHolderAssignment = AllfitV1Schemas['RelationshipHolderAssignment']
+export type RelationshipReassignment = AllfitV1Schemas['RelationshipReassignment']
 export type Organization = AllfitV1Schemas['Organization']
 export type OrganizationSite = AllfitV1Schemas['OrganizationSite']
 export type OrganizationSiteStatus = AllfitV1Schemas['OrganizationSiteStatus']
@@ -337,6 +338,21 @@ export const studioApi = {
   ) =>
     request<RelationshipHolder>(
       `/studio/v1/organizations/${organizationId}/relationships/${relationshipId}/professional-assignments`,
+      {
+        method: 'POST',
+        headers: commandHeaders(command),
+        body: JSON.stringify(body),
+      },
+    ),
+
+  reassignRelationshipHolder: (
+    organizationId: string,
+    relationshipId: string,
+    body: RelationshipHolderAssignment,
+    command: CommandHeaders,
+  ) =>
+    request<RelationshipReassignment>(
+      `/studio/v1/organizations/${organizationId}/relationships/${relationshipId}/professional-assignments/reassignment`,
       {
         method: 'POST',
         headers: commandHeaders(command),
