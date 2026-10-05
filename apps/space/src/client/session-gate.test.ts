@@ -13,7 +13,7 @@
 
 import { describe, expect, test } from 'bun:test'
 
-import { resolveEntryRoute, resolveOnboardingRoute } from './session-gate'
+import { introLeftMs, resolveEntryRoute, resolveOnboardingRoute } from './session-gate'
 
 describe('resolveEntryRoute', () => {
   test('sends somebody with no session to the welcome screen', () => {
@@ -132,5 +132,16 @@ describe('resolveOnboardingRoute past the identity step', () => {
     expect(
       resolveOnboardingRoute({ attempt: PASSED, answers: answers('identity', 'biological_sex') }),
     ).toBe('/onboarding/discipline')
+  })
+})
+
+describe('introLeftMs', () => {
+  test('T-SPC-UNIT-261 the session check runs inside the opening, not after it', () => {
+    // Checked in 600 ms: the opening still ends at 2.8 s from launch, not 3.4 s.
+    expect(introLeftMs(600, false)).toBe(2200)
+    // A check slower than the opening leaves the moment it answers.
+    expect(introLeftMs(3500, false)).toBe(0)
+    expect(introLeftMs(300, true)).toBe(500)
+    expect(introLeftMs(900, true)).toBe(0)
   })
 })

@@ -53,3 +53,15 @@ export function resolveEntryRoute(state: EntryState): EntryRoute {
   if (state.unreachable) return '/onboarding/age'
   return resolveOnboardingRoute(state.onboarding ?? null)
 }
+
+/** How long the opening lasts, from launch, with and without reduced motion. */
+export const INTRO_MS = 2800
+export const REDUCED_INTRO_MS = 800
+
+/**
+ * What is left of the opening once the session check answered. The check runs
+ * inside it: waiting for the answer before starting the clock added the two.
+ */
+export function introLeftMs(elapsedMs: number, reduceMotion: boolean): number {
+  return Math.max(0, (reduceMotion ? REDUCED_INTRO_MS : INTRO_MS) - elapsedMs)
+}

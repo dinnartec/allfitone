@@ -6,14 +6,7 @@
 import { newCommand } from '@allfitone/contracts/commands'
 import * as Crypto from 'expo-crypto'
 
-import {
-  ApiError,
-  authorizedGet,
-  authorizedPost,
-  authorizedRead,
-  authorizedSend,
-  refreshSession,
-} from './index'
+import { authorizedGet, authorizedPost, authorizedRead, authorizedSend } from './index'
 import {
   createNutritionFlow,
   type DailySummaryPage,
@@ -28,8 +21,7 @@ import {
   type RecognitionConsentState,
   type RecognitionResult,
 } from './nutrition'
-import { readSession, storeSession } from './session'
-import { withRefresh } from './with-refresh'
+import { authenticated } from './session'
 
 const query = (values: Record<string, string>) => new URLSearchParams(values).toString()
 
@@ -133,23 +125,4 @@ export function createSpaceNutritionFlow(): NutritionFlow {
         ),
     },
   })
-}
-
-function authenticated<T>(send: (token: string | undefined) => Promise<T>): Promise<T> {
-  return withRefresh(
-    {
-      session: async () => {
-        const stored = await readSession()
-        if (!stored) return null
-        return { accessToken: stored.accessToken, refreshToken: stored.refreshToken }
-      },
-      persist: (tokens) => storeSession({ ...tokens, analytics: { distinct_id: null } }),
-      refresh: async (refreshToken) => {
-        const rotated = await refreshSession(refreshToken)
-        return { accessToken: rotated.accessToken, refreshToken: rotated.refreshToken }
-      },
-      unauthorized: (error) => error instanceof ApiError && error.failure === 'unauthenticated',
-    },
-    send,
-  )
 }

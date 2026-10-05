@@ -6,7 +6,7 @@
  * decisions and stays loadable by the test runner, which is the whole reason the
  * two are separate files.
  *
- * Every call goes through `withRefresh`, so an expired access token renews itself
+ * Every call goes through the session keeper's `authenticated`, so an expired access token renews itself
  * instead of reaching the person as "your session expired" while a valid refresh
  * token sits unused. That was the real behaviour before this wiring existed.
  */
@@ -14,7 +14,7 @@
 import { newCommand, type CommandHeaders } from '@allfitone/contracts/commands'
 import * as Crypto from 'expo-crypto'
 
-import { ApiError, authorizedGet, authorizedPost, refreshSession } from './index'
+import { authorizedGet, authorizedPost } from './index'
 import {
   type BiologicalSex,
   createOnboardingFlow,
@@ -28,8 +28,7 @@ import {
   type TrainingDisciplineClaim,
   type TrainingExperienceClaim,
 } from './onboarding'
-import { readSession, storeSession } from './session'
-import { withRefresh } from './with-refresh'
+import { authenticated } from './session'
 
 export function createSpaceOnboardingFlow(): OnboardingFlow {
   return createOnboardingFlow({
@@ -141,25 +140,6 @@ export function createSpaceOnboardingFlow(): OnboardingFlow {
         ),
     },
   })
-}
-
-function authenticated<T>(send: (token: string | undefined) => Promise<T>): Promise<T> {
-  return withRefresh(
-    {
-      session: async () => {
-        const stored = await readSession()
-        if (!stored) return null
-        return { accessToken: stored.accessToken, refreshToken: stored.refreshToken }
-      },
-      persist: (tokens) => storeSession({ ...tokens, analytics: { distinct_id: null } }),
-      refresh: async (refreshToken) => {
-        const rotated = await refreshSession(refreshToken)
-        return { accessToken: rotated.accessToken, refreshToken: rotated.refreshToken }
-      },
-      unauthorized: (error) => error instanceof ApiError && error.failure === 'unauthenticated',
-    },
-    send,
-  )
 }
 
 export type { CommandHeaders }
