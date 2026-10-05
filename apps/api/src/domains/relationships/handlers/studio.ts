@@ -13,13 +13,20 @@ import {
   trustedStudioWebUrl,
 } from '../../identity/index.js'
 import { fail } from '../../../platform/http/index.js'
-import { clientDirectoryService, holderAssignmentService } from '../dependencies.js'
+import {
+  clientDirectoryService,
+  holderAssignmentService,
+  holderReassignmentService,
+  relationshipStateService,
+} from '../dependencies.js'
 import {
   RelationshipsError,
   type ClientDirectoryService,
   type HolderAssignmentService,
+  type HolderReassignmentService,
+  type RelationshipStateService,
 } from '../application/index.js'
-import type { DirectoryEntry, DirectoryGroup } from '../domain/index.js'
+import type { DirectoryEntry, DirectoryGroup, RelationshipState } from '../domain/index.js'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -30,10 +37,14 @@ export function studioRelationshipRoutes(
   injectedService?: ClientDirectoryService,
   injectedSessions?: StudioSessionService,
   injectedHolders?: HolderAssignmentService,
+  injectedStates?: RelationshipStateService,
+  injectedReassignments?: HolderReassignmentService,
 ): Hono {
   const studioOrigin = new URL(trustedStudioWebUrl()).origin
   const directory = () => injectedService ?? clientDirectoryService()
   const holders = () => injectedHolders ?? holderAssignmentService()
+  const states = () => injectedStates ?? relationshipStateService()
+  const reassignments = () => injectedReassignments ?? holderReassignmentService()
   const sessions = () => injectedSessions ?? studioSessionService()
   const routes = new Hono()
 
@@ -100,6 +111,35 @@ export function studioRelationshipRoutes(
   })
 
   /*
+   * OP-REL-011. Says where the link stands, who attends the person, and which
+   * permissions are in force — never what a permission covers.
+   *
+   * A relationship the caller may not see answers 404, which is the function's
+   * own choice: `403` would confirm to a coach that the organization has that
+   * client, undoing the narrowing the row policy exists for.
+   */
+  routes.get('/organizations/:organizationId/relationships/:relationshipId', async (c) => {
+    c.header('Cache-Control', 'private, no-store')
+    if (c.req.header('origin') !== studioOrigin) {
+      return fail(c, 'forbidden', 'origin is not allowed')
+    }
+    const organizationId = c.req.param('organizationId')
+    const relationshipId = c.req.param('relationshipId')
+    if (!UUID.test(organizationId) || !UUID.test(relationshipId)) {
+      return fail(c, 'invalid-request')
+    }
+
+    try {
+      const actor = await studioActor(c, sessions())
+      if (actor instanceof Response) return actor
+      const state = await states().read(actor, { organizationId, relationshipId })
+      return c.json(presentState(state))
+    } catch (error) {
+      return failure(c, error)
+    }
+  })
+
+  /*
    * OP-REL-002. Says who attends this person, and nothing else: the function
    * never touches a grant, so being in charge still reads nothing without the
    * person's permission.
@@ -145,6 +185,58 @@ export function studioRelationshipRoutes(
             valid_from: result.resource.validFrom.toISOString(),
           },
           result.created ? 201 : 200,
+        )
+      } catch (error) {
+        return failure(c, error)
+      }
+    },
+  )
+
+  /*
+   * OP-REL-003. Takes the client away from the coach who has them.
+   *
+   * Its own surface rather than a flag on the assignment route, because it
+   * carries a guarantee that one does not: the person is notified, and the
+   * notice is an outbox row written inside the command's transaction. There is
+   * no path where the change commits and the notice does not.
+   */
+  routes.post(
+    '/organizations/:organizationId/relationships/:relationshipId/professional-assignments/reassignment',
+    async (c) => {
+      c.header('Cache-Control', 'no-store')
+      if (c.req.header('origin') !== studioOrigin) {
+        return fail(c, 'forbidden', 'origin is not allowed')
+      }
+      const organizationId = c.req.param('organizationId')
+      const relationshipId = c.req.param('relationshipId')
+      if (!UUID.test(organizationId) || !UUID.test(relationshipId)) {
+        return fail(c, 'invalid-request')
+      }
+      const body = await readJson(c)
+      if (!isHolderAssignment(body)) return fail(c, 'validation-failed')
+      const command = commandContext(c, body)
+      if (!command) return fail(c, 'invalid-request', 'valid command headers are required')
+
+      try {
+        const actor = await studioActor(c, sessions())
+        if (actor instanceof Response) return actor
+        const result = await reassignments().reassign(actor, {
+          organizationId,
+          relationshipId,
+          membershipId: body.membership_id,
+          ...command,
+        })
+        if (result.replayed) c.header('Idempotent-Replay', 'true')
+        return c.json(
+          {
+            assignment_id: result.resource.assignmentId,
+            relationship_id: result.resource.relationshipId,
+            membership_id: result.resource.membershipId,
+            professional_person_id: result.resource.professionalPersonId,
+            valid_from: result.resource.validFrom.toISOString(),
+            replaced_assignment_id: result.resource.replacedAssignmentId,
+          },
+          result.reassigned ? 201 : 200,
         )
       } catch (error) {
         return failure(c, error)
@@ -264,6 +356,52 @@ function presentEntry(entry: DirectoryEntry): Record<string, unknown> {
     invitation_status: entry.invitationStatus,
     started_at: entry.startedAt.toISOString(),
     ended_at: entry.endedAt?.toISOString() ?? null,
+  }
+}
+
+/**
+ * Dates go out as ISO strings and nothing else changes shape. `ends_on` stays a
+ * plain date: a substitution ends on a day in the gym's calendar, not at an
+ * instant, and turning it into a timestamp would invent a timezone.
+ */
+function presentState(state: RelationshipState): Record<string, unknown> {
+  return {
+    relationship_id: state.relationshipId,
+    person_id: state.personId,
+    display_name: state.displayName,
+    status: state.status,
+    started_at: state.startedAt.toISOString(),
+    ended_at: state.endedAt?.toISOString() ?? null,
+    holder: state.holder
+      ? {
+          assignment_id: state.holder.assignmentId,
+          membership_id: state.holder.membershipId,
+          professional_person_id: state.holder.professionalPersonId,
+          display_name: state.holder.displayName,
+          valid_from: state.holder.validFrom.toISOString(),
+        }
+      : null,
+    substitutions: state.substitutions.map((entry) => ({
+      assignment_id: entry.assignmentId,
+      membership_id: entry.membershipId,
+      professional_person_id: entry.professionalPersonId,
+      display_name: entry.displayName,
+      status: entry.status,
+      valid_from: entry.validFrom.toISOString(),
+      ends_on: entry.endsOn,
+      accepted_by_person_at: entry.acceptedByPersonAt?.toISOString() ?? null,
+    })),
+    grants: state.grants.map((grant) => ({
+      grant_id: grant.grantId,
+      scope_code: grant.scopeCode,
+      display_name: grant.displayName,
+      version_number: grant.versionNumber,
+      access_level: grant.accessLevel,
+      status: grant.status,
+      purpose: grant.purpose,
+      granted_at: grant.grantedAt.toISOString(),
+      revoked_at: grant.revokedAt?.toISOString() ?? null,
+    })),
   }
 }
 

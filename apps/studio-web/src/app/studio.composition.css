@@ -232,7 +232,8 @@
 [data-organization-overview],
 [data-organization-details],
 [data-profile-presentation],
-[data-account-map] {
+[data-account-map],
+[data-relationship-state] {
   display: grid;
   min-width: 0;
   gap: var(--afo-space-5);
@@ -366,6 +367,22 @@
 
 [data-studio-register='invitations'] col:nth-child(6) {
   width: 12%;
+}
+
+/* The permission column carries a name and the version line under it, so it
+   takes the widest share. "Puede leer y registrar" is the longest value in the
+   second, and it must not wrap to two lines beside a one-line badge. */
+[data-studio-register='grants'] col:nth-child(1) {
+  width: 40%;
+}
+
+[data-studio-register='grants'] col:nth-child(2) {
+  width: 24%;
+}
+
+[data-studio-register='grants'] col:nth-child(3),
+[data-studio-register='grants'] col:nth-child(4) {
+  width: 18%;
 }
 
 /* ------------------------------------------------------------------- grids */
@@ -510,6 +527,7 @@
 [data-ownership-invitation-summary] dt,
 [data-team-member-facts] dt,
 [data-client-facts] dt,
+[data-relationship-facts] dt,
 [data-credential-details] dt {
   font-family: var(--afo-typography-label-font-family);
   font-size: var(--afo-font-size-xs);
@@ -530,7 +548,8 @@
 }
 
 [data-team-member-facts],
-[data-client-facts] {
+[data-client-facts],
+[data-relationship-facts] {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
@@ -581,6 +600,8 @@
 [data-organization-site-list],
 [data-team-directory-card-list],
 [data-client-directory-card-list],
+[data-relationship-substitution-list],
+[data-relationship-grant-cards],
 [data-role-capability-list] {
   display: grid;
   gap: var(--afo-space-3);
@@ -589,6 +610,7 @@
 [data-overview-attention-list] > li,
 [data-overview-team-list] > li,
 [data-organization-site-list] > li,
+[data-relationship-substitution-list] > li,
 [data-role-capability-list] > li {
   display: flex;
   min-width: 0;
@@ -598,6 +620,8 @@
 
 [data-overview-attention-contact],
 [data-organization-site-identity],
+[data-relationship-substitution-identity],
+[data-relationship-grant-identity],
 [data-overview-team-identity] {
   min-width: 0;
   flex: 1;
@@ -681,7 +705,8 @@
 }
 
 [data-team-directory-note],
-[data-client-directory-note] {
+[data-client-directory-note],
+[data-relationship-grant-note] {
   max-width: var(--studio-measure);
 }
 
@@ -1068,7 +1093,9 @@
 /* Name over address, not name beside address. An address is long enough that
    set on one line it either breaks mid-street or squeezes the status badge off
    the row, and inline it ran straight into the name with nothing between. */
-[data-organization-site-identity] {
+[data-organization-site-identity],
+[data-relationship-substitution-identity],
+[data-relationship-grant-identity] {
   display: grid;
   gap: var(--afo-space-1);
 }
@@ -1091,18 +1118,22 @@
   overflow-wrap: anywhere;
 }
 
-[data-organization-site-address] {
+[data-organization-site-address],
+[data-relationship-substitution-window],
+[data-relationship-grant-version] {
   color: var(--afo-color-text-muted);
   font-size: var(--afo-font-size-sm);
   overflow-wrap: anywhere;
 }
 
-[data-organization-details-placeholder] {
+[data-organization-details-placeholder],
+[data-relationship-header-placeholder] {
   height: 4.5rem;
   width: min(100%, 24rem);
 }
 
-[data-organization-card-placeholder] {
+[data-organization-card-placeholder],
+[data-relationship-card-placeholder] {
   height: 12rem;
 }
 
@@ -1136,4 +1167,89 @@
 
 [data-organization-site-edit] {
   flex: none;
+}
+
+/* ----------------------------------------------------------- relationship */
+
+/* Suplencias is a separate matter from who holds the relationship, so it sits
+   below a rule rather than inside a second card — the same device the site
+   status panel uses, at the same scale. */
+[data-relationship-substitutions] {
+  display: grid;
+  gap: var(--afo-space-3);
+  margin-block-start: var(--afo-space-6);
+  padding-block-start: var(--afo-space-5);
+  border-block-start: 1px solid var(--afo-color-border);
+}
+
+/* The person, then the facts about her. CardContent pads sideways only, so
+   without this the name sat flush on the first label. */
+[data-relationship-subject] {
+  margin-block-end: var(--afo-space-4);
+}
+
+[data-relationship-holder] {
+  display: grid;
+  gap: 0;
+}
+
+[data-relationship-subheading] {
+  margin: 0;
+  font-size: var(--afo-font-size-lg);
+}
+
+/* The form sits under the empty state it resolves, separated the way the
+   substitutions block is: a rule and space, not another card inside a card. */
+[data-relationship-assign-panel] {
+  display: grid;
+  gap: var(--afo-space-4);
+}
+
+[data-relationship-unattended] {
+  margin: 0;
+  color: var(--afo-color-text-muted);
+}
+
+/* Capped to the reading measure like every other form in Studio. Left to the
+   card, it became a 1400px control holding a person's name. */
+[data-relationship-assign] {
+  display: grid;
+  gap: var(--afo-space-4);
+  max-width: var(--studio-measure);
+}
+
+[data-relationship-assign-actions] {
+  display: flex;
+  align-items: center;
+  gap: var(--afo-space-3);
+}
+
+[data-relationship-no-coaches],
+[data-relationship-no-substitutions] {
+  margin: 0;
+  max-width: var(--studio-measure);
+  color: var(--afo-color-text-muted);
+  font-size: var(--afo-font-size-sm);
+}
+
+/* The client's name is how you open their relationship, so it has to look like
+   a link rather than rely on the cursor. It keeps the weight the name already
+   had: underlining a `strong` is enough signal without changing the type. */
+[data-client-open] {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--afo-color-border);
+  text-underline-offset: 3px;
+}
+
+[data-client-open]:hover {
+  text-decoration-color: currentcolor;
+}
+
+/* The permissions panel caps its own measure: the sentence under the title is
+   the longest thing on the screen and had no reason to run the full canvas. */
+[data-relationship-grants] [data-relationship-grant-note] {
+  margin-block-start: var(--afo-space-4);
+  color: var(--afo-color-text-muted);
+  font-size: var(--afo-font-size-sm);
 }

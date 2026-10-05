@@ -20,6 +20,7 @@ import {
   createOwnershipInvitationBatchProcessor,
   createOwnershipInvitationDeliveryDatabase,
 } from './ownership-invitations.js'
+import { createReassignmentBatchProcessor } from './professional-reassignments.js'
 import {
   createClientInvitationBatchProcessor,
   createClientInvitationDeliveryDatabase,
@@ -224,6 +225,17 @@ function processorsFromEnvironment(): WorkerJobProcessors {
         publicBaseUrl: required('CLIENT_INVITATION_PUBLIC_BASE_URL'),
       })
     : async () => ({ claimed: 0, delivered: 0, deadOrDelayed: 0, skipped: 0 })
+  /*
+   * The brand lockup the invitation emails already use. It is a URL on the same
+   * trusted base, not a new setting: a second place to configure the same image
+   * is a second place for it to be wrong.
+   */
+  const reassignments = createReassignmentBatchProcessor({
+    queue,
+    email,
+    brandAssetUrl: new URL('email/allfit-one-lockup-on-light.png', publicBaseUrl).toString(),
+    deliveryEnabled,
+  })
   const backofficeAuthentication = createBackofficeAuthBatchProcessor({
     queue,
     database: createBackofficeAuthCleanupDatabase(sql),
@@ -250,11 +262,19 @@ function processorsFromEnvironment(): WorkerJobProcessors {
       const team = await teamInvitations()
       const ownership = await ownershipInvitations()
       const client = await clientInvitations()
+      // Reassignment notices ride the same job rather than a cron of their own:
+      // they are the same claim against the same outbox, and a separate
+      // schedule would be a second thing to notice when it stops running.
+      const reassigned = await reassignments()
       return {
-        claimed: team.claimed + ownership.claimed + client.claimed,
-        delivered: team.delivered + ownership.delivered + client.delivered,
-        deadOrDelayed: team.deadOrDelayed + ownership.deadOrDelayed + client.deadOrDelayed,
-        skipped: team.skipped + ownership.skipped + client.skipped,
+        claimed: team.claimed + ownership.claimed + client.claimed + reassigned.claimed,
+        delivered: team.delivered + ownership.delivered + client.delivered + reassigned.delivered,
+        deadOrDelayed:
+          team.deadOrDelayed +
+          ownership.deadOrDelayed +
+          client.deadOrDelayed +
+          reassigned.deadOrDelayed,
+        skipped: team.skipped + ownership.skipped + client.skipped + reassigned.skipped,
         expired: team.expired,
       }
     },

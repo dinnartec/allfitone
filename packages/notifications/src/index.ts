@@ -133,7 +133,7 @@ export function renderTeamInvitationEmail(input: {
       detailLabel: 'ROL PROPUESTO',
       detailValue: role.toLocaleUpperCase('es-CO'),
       expires,
-      invitationUrl: escapeHtml(input.invitationUrl),
+      actionUrl: escapeHtml(input.invitationUrl),
       brandAssetUrl: escapeHtml(input.brandAssetUrl),
       note: 'Aceptar crea tu membresía. Abrir este correo o revisar la invitación no lo hace.',
       footer: `Puedes ignorar este correo; no se hará ningún cambio. Allfit One lo envió en nombre de ${organization}.`,
@@ -175,7 +175,7 @@ export function renderOwnershipInvitationEmail(input: {
       detailLabel: 'ORGANIZACIÓN',
       detailValue: organization,
       expires,
-      invitationUrl: escapeHtml(input.invitationUrl),
+      actionUrl: escapeHtml(input.invitationUrl),
       brandAssetUrl: escapeHtml(input.brandAssetUrl),
       note: 'Aceptar te hace su propietario. Abrir este correo o revisar la invitación no lo hace.',
       footer:
@@ -232,7 +232,7 @@ export function renderClientInvitationEmail(input: {
       detailLabel: 'GIMNASIO',
       detailValue: organization,
       expires,
-      invitationUrl: escapeHtml(input.invitationUrl),
+      actionUrl: escapeHtml(input.invitationUrl),
       brandAssetUrl: escapeHtml(input.brandAssetUrl),
       note: `${note} Abrir este correo tampoco decide nada.`,
       footer: `Puedes ignorar este correo; no se hará ningún cambio. Allfit One lo envió en nombre de ${organization}.`,
@@ -240,7 +240,15 @@ export function renderClientInvitationEmail(input: {
   }
 }
 
-/** Every value arrives already escaped: the caller knows which parts came from a person. */
+/**
+ * Every value arrives already escaped: the caller knows which parts came from a
+ * person.
+ *
+ * `expires` and the action are optional because not every message is an
+ * invitation. A notice that something already happened has no deadline and
+ * nothing to click, and giving it a fake one of either would be inventing data
+ * to fit a template.
+ */
 interface InvitationEmailParts {
   title: string
   preheader: string
@@ -249,11 +257,59 @@ interface InvitationEmailParts {
   lead: string
   detailLabel: string
   detailValue: string
-  expires: string
-  invitationUrl: string
+  expiryLabel?: string
+  expires?: string
+  actionLabel?: string
+  actionUrl?: string
   brandAssetUrl: string
   note: string
   footer: string
+}
+
+/**
+ * Telling somebody that a different professional now attends them.
+ *
+ * It carries no link and no deadline. There is nothing for the person to
+ * approve — the change already happened — and a button in an email about who
+ * can reach their data is an invitation to phish them. What they can do is talk
+ * to their gym, which the text says.
+ *
+ * It also says what did **not** change, because that is the question this email
+ * raises: their permissions are untouched, and the new professional sees
+ * exactly what the previous one did, which is whatever they allowed.
+ */
+export function renderProfessionalReassignedEmail(input: {
+  organizationName: string
+  professionalName: string
+  previousProfessionalName: string
+  brandAssetUrl: string
+}): { subject: string; text: string; html: string } {
+  const organization = escapeHtml(input.organizationName)
+  const professional = escapeHtml(input.professionalName)
+  const previous = escapeHtml(input.previousProfessionalName)
+  return {
+    subject: `${input.professionalName} es ahora tu profesional en ${input.organizationName}`,
+    text: [
+      `${input.organizationName} cambió el profesional que te atiende.`,
+      `Antes: ${input.previousProfessionalName}`,
+      `Ahora: ${input.professionalName}`,
+      'Tus permisos no cambiaron. Tu nuevo profesional ve exactamente lo que el anterior veía, que es lo que tú permitiste, y nada más.',
+      `${input.previousProfessionalName} ya no tiene acceso a tu información.`,
+      'Puedes cambiar o retirar tus permisos cuando quieras desde la app. Si no esperabas este cambio, habla con tu gimnasio.',
+    ].join('\n\n'),
+    html: invitationEmailHtml({
+      title: `${professional} es ahora tu profesional en ${organization}`,
+      preheader: `${organization} cambió quién te atiende. Tus permisos no cambiaron.`,
+      eyebrow: 'CAMBIO DE PROFESIONAL',
+      heading: `${organization} cambió el profesional que te atiende`,
+      lead: `${previous} ya no tiene acceso a tu información. Tus permisos no cambiaron: tu nuevo profesional ve exactamente lo que el anterior veía.`,
+      detailLabel: 'AHORA TE ATIENDE',
+      detailValue: professional,
+      brandAssetUrl: escapeHtml(input.brandAssetUrl),
+      note: 'Puedes cambiar o retirar tus permisos cuando quieras desde la app. Si no esperabas este cambio, habla con tu gimnasio.',
+      footer: 'Allfit One',
+    }),
+  }
 }
 
 function invitationEmailHtml(parts: InvitationEmailParts): string {
@@ -329,24 +385,32 @@ function invitationEmailHtml(parts: InvitationEmailParts): string {
                     <td colspan="2" height="1" bgcolor="#16242F" style="height:1px;background-color:#16242F;font-size:0;line-height:0;">&nbsp;</td>
                   </tr>
                   <tr>
-                    <td class="afo-detail" width="50%" valign="top" style="width:50%;padding:20px 22px 22px;">
+                    <td class="afo-detail" width="${parts.expires ? '50%' : '100%'}" valign="top" style="width:${parts.expires ? '50%' : '100%'};padding:20px 22px 22px;"${parts.expires ? '' : ' colspan="2"'}>
                       <p style="margin:0 0 7px;font-family:'Manrope',Arial,sans-serif;font-size:11px;font-weight:700;line-height:1.25;letter-spacing:1.4px;color:#9DB4BC;">${parts.detailLabel}</p>
                       <p style="margin:0;font-family:'Barlow Condensed','Arial Narrow',Arial,sans-serif;font-size:26px;font-weight:600;line-height:1;color:#EAFFFF;">${parts.detailValue}</p>
-                    </td>
+                    </td>${
+                      parts.expires
+                        ? `
                     <td class="afo-detail afo-detail-expiry" width="50%" valign="top" style="width:50%;padding:20px 22px 22px;border-left:1px solid #456069;">
-                      <p style="margin:0 0 7px;font-family:'Manrope',Arial,sans-serif;font-size:11px;font-weight:700;line-height:1.25;letter-spacing:1.4px;color:#9DB4BC;">VÁLIDA HASTA</p>
+                      <p style="margin:0 0 7px;font-family:'Manrope',Arial,sans-serif;font-size:11px;font-weight:700;line-height:1.25;letter-spacing:1.4px;color:#9DB4BC;">${parts.expiryLabel ?? 'VÁLIDA HASTA'}</p>
                       <p style="margin:0;font-family:'Manrope',Arial,sans-serif;font-size:15px;font-weight:600;line-height:1.35;color:#EAFFFF;">${parts.expires}</p>
-                    </td>
+                    </td>`
+                        : ''
+                    }
                   </tr>
                 </table>
-
+${
+  parts.actionUrl
+    ? `
                 <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:28px;border-collapse:separate;">
                   <tr>
                     <td align="center" bgcolor="#55EFFB" style="background-color:#55EFFB;border-radius:999px;">
-                      <a href="${parts.invitationUrl}" target="_blank" style="display:inline-block;padding:15px 26px;font-family:'Manrope',Arial,sans-serif;font-size:15px;font-weight:700;line-height:1;text-decoration:none;color:#06282B;border:1px solid #55EFFB;border-radius:999px;">Revisar invitación</a>
+                      <a href="${parts.actionUrl}" target="_blank" style="display:inline-block;padding:15px 26px;font-family:'Manrope',Arial,sans-serif;font-size:15px;font-weight:700;line-height:1;text-decoration:none;color:#06282B;border:1px solid #55EFFB;border-radius:999px;">${parts.actionLabel ?? 'Revisar invitación'}</a>
                     </td>
                   </tr>
-                </table>
+                </table>`
+    : ''
+}
 
                 <p style="margin:22px 0 0;font-family:'Manrope',Arial,sans-serif;font-size:13px;font-weight:400;line-height:1.55;color:#536A73;">
                   ${parts.note}

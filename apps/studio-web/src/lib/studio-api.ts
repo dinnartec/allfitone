@@ -43,6 +43,12 @@ export type ClientDirectoryItem = AllfitV1Schemas['ClientDirectoryItem']
 export type ClientDirectoryRelationship = AllfitV1Schemas['ClientDirectoryRelationship']
 export type ClientDirectoryInvitation = AllfitV1Schemas['ClientDirectoryInvitation']
 export type ClientDirectoryGroup = AllfitV1Schemas['ClientDirectoryGroup']
+export type RelationshipState = AllfitV1Schemas['RelationshipState']
+export type RelationshipProfessional = AllfitV1Schemas['RelationshipProfessional']
+export type RelationshipSubstitution = AllfitV1Schemas['RelationshipSubstitution']
+export type RelationshipGrant = AllfitV1Schemas['RelationshipGrant']
+export type RelationshipHolder = AllfitV1Schemas['RelationshipHolder']
+export type RelationshipHolderAssignment = AllfitV1Schemas['RelationshipHolderAssignment']
 export type Organization = AllfitV1Schemas['Organization']
 export type OrganizationSite = AllfitV1Schemas['OrganizationSite']
 export type OrganizationSiteStatus = AllfitV1Schemas['OrganizationSiteStatus']
@@ -297,6 +303,15 @@ export const studioApi = {
     )
   },
 
+  relationshipState: (organizationId: string, relationshipId: string, signal?: AbortSignal) =>
+    request<RelationshipState>(
+      `/studio/v1/organizations/${organizationId}/relationships/${relationshipId}`,
+      {
+        cache: 'no-store',
+        ...(signal ? { signal } : {}),
+      },
+    ),
+
   offerableScopes: (signal?: AbortSignal) =>
     request<OfferableScopeCatalog>('/studio/v1/offerable-scopes', {
       cache: 'no-store',
@@ -313,6 +328,21 @@ export const studioApi = {
       headers: commandHeaders(command),
       body: JSON.stringify(body),
     }),
+
+  assignRelationshipHolder: (
+    organizationId: string,
+    relationshipId: string,
+    body: RelationshipHolderAssignment,
+    command: CommandHeaders,
+  ) =>
+    request<RelationshipHolder>(
+      `/studio/v1/organizations/${organizationId}/relationships/${relationshipId}/professional-assignments`,
+      {
+        method: 'POST',
+        headers: commandHeaders(command),
+        body: JSON.stringify(body),
+      },
+    ),
 
   organization: (organizationId: string, signal?: AbortSignal) =>
     request<Organization>(`/studio/v1/organizations/${organizationId}`, signal ? { signal } : {}),

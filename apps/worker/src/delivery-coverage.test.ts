@@ -28,9 +28,16 @@ const WORKER_SOURCE = import.meta.dir
  * An event is a delivery when something has to leave the platform for a person to
  * receive it. Everything else the outbox carries is a domain record nobody is waiting
  * on, and the worker is right to ignore it.
+ *
+ * The list is curated on purpose. There is no syntactic tell — `invited`, `requested`,
+ * `reassigned` — that separates a message to a person from a domain record, and a
+ * pattern loose enough to catch them all would sweep in `organization.created.v1` and
+ * report an orphan that is not one. **Add a kind here when the platform starts sending
+ * a new one**, or this check will pass by ignoring it: that is how
+ * `relationship.professional_reassigned.v1` went unexamined the first time.
  */
 const DELIVERY_EVENT =
-  /^(organization\.\w*invited|relationship\.client_invited|identity\.account_recovery_requested)\.v1$/
+  /^(organization\.\w*invited|relationship\.(client_invited|professional_reassigned)|identity\.account_recovery_requested)\.v1$/
 
 function enqueuedDeliveryEvents(): string[] {
   const found = new Set<string>()
@@ -59,6 +66,7 @@ describe('outbox delivery coverage', () => {
     expect(events).toContain('organization.ownership_invited.v1')
     expect(events).toContain('identity.account_recovery_requested.v1')
     expect(events).toContain('relationship.client_invited.v1')
+    expect(events).toContain('relationship.professional_reassigned.v1')
   })
 
   test('and would notice an event the worker never mentions', () => {

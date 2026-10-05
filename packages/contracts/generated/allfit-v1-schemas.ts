@@ -409,6 +409,10 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  AssignmentStatus: {
+    type: 'string',
+    enum: ['proposed', 'active', 'ended'],
+  },
   Attempt: {
     type: 'object',
     additionalProperties: false,
@@ -3947,6 +3951,12 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         minimum: 0,
       },
     },
+  },
+  GrantStatus: {
+    description:
+      "`frozen` is not `revoked`. Ending the relationship freezes a grant, so the organization keeps what it already had and nothing after the cut; the person revoking it ends all access. Neither is the other's synonym.",
+    type: 'string',
+    enum: ['active', 'frozen', 'revoked'],
   },
   HealthContextBodyArea: {
     type: 'string',
@@ -7640,6 +7650,61 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  RelationshipGrant: {
+    description:
+      'A permission the person granted, and nothing it covers. Every field here describes the permission — which scope, which version, whether it still stands — so a reader learns that measurements were shared without learning a single measurement.',
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'grant_id',
+      'scope_code',
+      'display_name',
+      'version_number',
+      'access_level',
+      'status',
+      'purpose',
+      'granted_at',
+      'revoked_at',
+    ],
+    properties: {
+      grant_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      scope_code: {
+        type: 'string',
+        minLength: 1,
+      },
+      display_name: {
+        type: ['string', 'null'],
+        description:
+          'The words the person was shown when they decided. Null when no presentation has been published for this scope yet.',
+      },
+      version_number: {
+        type: 'integer',
+        minimum: 1,
+        description:
+          'The scope version that was agreed, not the latest published one. A grant never drifts onto a later version.',
+      },
+      access_level: {
+        $ref: '#/components/schemas/AccessLevel',
+      },
+      status: {
+        $ref: '#/components/schemas/GrantStatus',
+      },
+      purpose: {
+        type: 'string',
+        minLength: 1,
+      },
+      granted_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      revoked_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+    },
+  },
   RelationshipHolder: {
     type: 'object',
     additionalProperties: false,
@@ -7676,9 +7741,197 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  RelationshipProfessional: {
+    description: 'Who attends this person, under an open-ended assignment.',
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'assignment_id',
+      'membership_id',
+      'professional_person_id',
+      'display_name',
+      'valid_from',
+    ],
+    properties: {
+      assignment_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      membership_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      professional_person_id: {
+        $ref: '#/components/schemas/UuidV7',
+        description:
+          'The professional, never the client. The two are distinct people and the names have to say which is which.',
+      },
+      display_name: {
+        type: 'string',
+        minLength: 1,
+      },
+      valid_from: {
+        type: 'string',
+        format: 'date-time',
+        description: 'Since when this professional has attended the person.',
+      },
+    },
+  },
+  RelationshipReassignment: {
+    description:
+      'The assignment now in force, and the one it replaced. `replaced_assignment_id` is null when nothing changed because that coach was already in charge.',
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'assignment_id',
+      'relationship_id',
+      'membership_id',
+      'professional_person_id',
+      'valid_from',
+      'replaced_assignment_id',
+    ],
+    properties: {
+      assignment_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      relationship_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      membership_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      professional_person_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      valid_from: {
+        type: 'string',
+        format: 'date-time',
+      },
+      replaced_assignment_id: {
+        description: 'The assignment this one ended, or null when nothing changed.',
+        oneOf: [
+          {
+            $ref: '#/components/schemas/UuidV7',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+    },
+  },
+  RelationshipState: {
+    description:
+      'How one relationship stands: the link, who attends the person, the substitutions, and which permissions are in force. Cacheable for presentation, never for deciding authorization.',
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'relationship_id',
+      'person_id',
+      'display_name',
+      'status',
+      'started_at',
+      'ended_at',
+      'holder',
+      'substitutions',
+      'grants',
+    ],
+    properties: {
+      relationship_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      person_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      display_name: {
+        type: 'string',
+        minLength: 1,
+      },
+      status: {
+        $ref: '#/components/schemas/RelationshipStatus',
+      },
+      started_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      ended_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      holder: {
+        description:
+          'Null when nobody attends this person yet — which is the state assigning a professional starts from.',
+        oneOf: [
+          {
+            $ref: '#/components/schemas/RelationshipProfessional',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      substitutions: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/RelationshipSubstitution',
+        },
+      },
+      grants: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/RelationshipGrant',
+        },
+      },
+    },
+  },
   RelationshipStatus: {
     type: 'string',
     enum: ['active', 'terminated'],
+  },
+  RelationshipSubstitution: {
+    description:
+      'Somebody covering for the professional in charge, for a bounded period. A substitution only becomes effective once the person accepts it, so a `proposed` entry grants nothing yet.',
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'assignment_id',
+      'membership_id',
+      'professional_person_id',
+      'display_name',
+      'status',
+      'valid_from',
+      'ends_on',
+      'accepted_by_person_at',
+    ],
+    properties: {
+      assignment_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      membership_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      professional_person_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      display_name: {
+        type: 'string',
+        minLength: 1,
+      },
+      status: {
+        $ref: '#/components/schemas/AssignmentStatus',
+      },
+      valid_from: {
+        type: 'string',
+        format: 'date-time',
+      },
+      ends_on: {
+        type: ['string', 'null'],
+        format: 'date',
+      },
+      accepted_by_person_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+        description: 'Null until the person has accepted this substitution.',
+      },
+    },
   },
   RequiredScope: {
     type: 'object',

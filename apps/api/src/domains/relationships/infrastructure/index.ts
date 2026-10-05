@@ -4,10 +4,16 @@ import type postgres from 'postgres'
 import type {
   ClientDirectoryDatabase,
   HolderAssignmentDatabase,
+  HolderReassignmentDatabase,
   DirectoryEntry,
   DirectoryGroup,
   InvitationStatus,
   RelationshipStatus,
+  RelationshipGrant,
+  RelationshipProfessional,
+  RelationshipState,
+  RelationshipStateDatabase,
+  RelationshipSubstitution,
 } from '../domain/index.js'
 
 type DirectoryRow = {
@@ -99,6 +105,182 @@ async function setPersonActor(
     select set_config('app.actor_kind', 'person', true),
            set_config('app.actor_person_id', ${personId}, true)
   `
+}
+
+/**
+ * PostgreSQL access for reading how one relationship stands.
+ *
+ * The function returns one jsonb document rather than three result sets, because
+ * the holder, the substitutions and the grants have to describe the same instant
+ * — three round trips could each see a different one.
+ */
+export function createRelationshipStateDatabase(
+  sql: postgres.Sql = database(),
+): RelationshipStateDatabase {
+  return {
+    readState: (personId, query) =>
+      measureStudioRequestPhase('business-db', async () => {
+        const [row] = await sql.begin(async (transaction) => {
+          await setPersonActor(transaction, personId)
+          return transaction<{ state: StateDocument }[]>`
+            select relationships.read_relationship_state(
+              ${personId}::uuid,
+              ${query.organizationId}::uuid,
+              ${query.relationshipId}::uuid
+            ) as state
+          `
+        })
+
+        if (!row) throw new Error('read_relationship_state returned no row')
+        return presentState(row.state)
+      }),
+  }
+}
+
+/*
+ * The document is parsed field by field rather than cast. A shape that drifts
+ * should fail here, where the contract is, instead of reaching a screen as
+ * `undefined`.
+ */
+function presentState(document: StateDocument): RelationshipState {
+  return {
+    relationshipId: document.relationship_id,
+    personId: document.person_id,
+    displayName: document.display_name,
+    status: document.status,
+    startedAt: new Date(document.started_at),
+    endedAt: document.ended_at ? new Date(document.ended_at) : null,
+    holder: document.holder ? presentProfessional(document.holder) : null,
+    substitutions: document.substitutions.map((entry) => ({
+      ...presentProfessional(entry),
+      status: entry.status,
+      endsOn: entry.ends_on,
+      acceptedByPersonAt: entry.accepted_by_person_at
+        ? new Date(entry.accepted_by_person_at)
+        : null,
+    })),
+    grants: document.grants.map(presentGrant),
+  }
+}
+
+function presentProfessional(row: ProfessionalRow): RelationshipProfessional {
+  return {
+    assignmentId: row.assignment_id,
+    membershipId: row.membership_id,
+    professionalPersonId: row.professional_person_id,
+    displayName: row.display_name,
+    validFrom: new Date(row.valid_from),
+  }
+}
+
+function presentGrant(row: GrantRow): RelationshipGrant {
+  return {
+    grantId: row.grant_id,
+    scopeCode: row.scope_code,
+    displayName: row.display_name,
+    versionNumber: row.version_number,
+    accessLevel: row.access_level,
+    status: row.status,
+    purpose: row.purpose,
+    grantedAt: new Date(row.granted_at),
+    revokedAt: row.revoked_at ? new Date(row.revoked_at) : null,
+  }
+}
+
+type ProfessionalRow = {
+  assignment_id: string
+  membership_id: string
+  professional_person_id: string
+  display_name: string
+  valid_from: string
+}
+
+type SubstitutionRow = ProfessionalRow & {
+  status: RelationshipSubstitution['status']
+  ends_on: string | null
+  accepted_by_person_at: string | null
+}
+
+type GrantRow = {
+  grant_id: string
+  scope_code: string
+  display_name: string | null
+  version_number: number
+  access_level: RelationshipGrant['accessLevel']
+  status: RelationshipGrant['status']
+  purpose: string
+  granted_at: string
+  revoked_at: string | null
+}
+
+type StateDocument = {
+  relationship_id: string
+  person_id: string
+  display_name: string
+  status: RelationshipStatus
+  started_at: string
+  ended_at: string | null
+  holder: ProfessionalRow | null
+  substitutions: SubstitutionRow[]
+  grants: GrantRow[]
+}
+
+/**
+ * PostgreSQL access for changing who attends a client.
+ *
+ * The organization context is set by the function itself, for the same reason
+ * as assigning: it checks the capability against that organization before
+ * anything is written, and a caller that set it from outside would be declaring
+ * the answer to the question being asked.
+ */
+export function createHolderReassignmentDatabase(
+  sql: postgres.Sql = database(),
+): HolderReassignmentDatabase {
+  return {
+    reassignHolder: (input) =>
+      measureStudioRequestPhase('business-db', async () => {
+        const row = await sql.begin(async (transaction) => {
+          await setPersonActor(transaction, input.actorPersonId)
+          const [moved] = await transaction<ReassignmentRow[]>`
+            select * from relationships.reassign_relationship_holder(
+              ${input.actorPersonId}::uuid,
+              ${input.organizationId}::uuid,
+              ${input.relationshipId}::uuid,
+              ${input.membershipId}::uuid,
+              ${input.idempotencyKey}::uuid,
+              ${input.commandId}::uuid,
+              ${input.requestHash}
+            )
+          `
+          return moved
+        })
+
+        if (!row) throw new Error('reassign_relationship_holder returned no row')
+        return {
+          resource: {
+            assignmentId: row.assignment_id,
+            relationshipId: row.relationship_id,
+            membershipId: row.membership_id,
+            professionalPersonId: row.professional_person_id,
+            validFrom: new Date(row.valid_from),
+            replacedAssignmentId: row.replaced_assignment_id,
+          },
+          reassigned: row.reassigned,
+          replayed: row.replayed,
+        }
+      }),
+  }
+}
+
+type ReassignmentRow = {
+  assignment_id: string
+  relationship_id: string
+  membership_id: string
+  professional_person_id: string
+  valid_from: string
+  replaced_assignment_id: string | null
+  reassigned: boolean
+  replayed: boolean
 }
 
 /**

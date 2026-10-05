@@ -5,6 +5,9 @@ import type {
   DirectoryPage,
   DirectoryQuery,
   HolderAssignmentDatabase,
+  HolderReassignmentDatabase,
+  RelationshipState,
+  RelationshipStateDatabase,
 } from '../domain/index.js'
 
 /**
@@ -38,6 +41,57 @@ export function createClientDirectoryService(
 
   return {
     listClients: (actor, query) => database.listClients(personId(actor), query),
+  }
+}
+
+export interface RelationshipStateService {
+  read(
+    actor: AccountActor,
+    query: { organizationId: string; relationshipId: string },
+  ): Promise<RelationshipState>
+}
+
+/*
+ * Thin for the same reason as the directory. Whether a coach may read this
+ * relationship is the row policy's answer, and the function raises not-found
+ * when it says no — the one place that decision lives.
+ */
+export function createRelationshipStateService(
+  database: RelationshipStateDatabase,
+): RelationshipStateService {
+  return {
+    read(actor, query) {
+      if (!actor.personId) throw new RelationshipsError('registration-incomplete')
+      return database.readState(actor.personId, query)
+    },
+  }
+}
+
+export interface HolderReassignmentService {
+  reassign(
+    actor: AccountActor,
+    input: CommandContext & {
+      organizationId: string
+      relationshipId: string
+      membershipId: string
+    },
+  ): ReturnType<HolderReassignmentDatabase['reassignHolder']>
+}
+
+/*
+ * Thin for the same reason as assigning. Whether there is a holder to change,
+ * whether the new one is eligible, and whether the notice can be enqueued are
+ * all resolved inside the command's own transaction — and the last of those is
+ * the whole point of this operation existing separately.
+ */
+export function createHolderReassignmentService(
+  database: HolderReassignmentDatabase,
+): HolderReassignmentService {
+  return {
+    reassign(actor, input) {
+      if (!actor.personId) throw new RelationshipsError('registration-incomplete')
+      return database.reassignHolder({ actorPersonId: actor.personId, ...input })
+    },
   }
 }
 

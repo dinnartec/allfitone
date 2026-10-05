@@ -67,6 +67,7 @@ export function ClientDirectoryList() {
   const everyClient = seesEveryClient(current.roles, rolesQuery.data?.items)
   const canInvite = canInviteClients(current.roles, rolesQuery.data?.items)
   const [filter, setFilter] = useState<ClientFilter>('all')
+  const relationshipPath = `/organizations/${current.organization_id}/clients`
   const options = organizationClientsQueryOptions(current.organization_id, filter, PAGE_SIZE)
   const query = useInfiniteQuery({ ...options, enabled: canView })
   const forbidden = isStudioForbidden(query.error)
@@ -202,7 +203,7 @@ export function ClientDirectoryList() {
             <ul data-client-directory-card-list>
               {items.map((entry) => (
                 <li key={directoryEntryId(entry)}>
-                  <ClientCard entry={entry} />
+                  <ClientCard entry={entry} relationshipPath={relationshipPath} />
                 </li>
               ))}
             </ul>
@@ -236,7 +237,13 @@ export function ClientDirectoryList() {
             {tableState ? (
               <TableState colSpan={4} {...tableState} />
             ) : (
-              items.map((entry) => <ClientRow key={directoryEntryId(entry)} entry={entry} />)
+              items.map((entry) => (
+                <ClientRow
+                  key={directoryEntryId(entry)}
+                  entry={entry}
+                  relationshipPath={relationshipPath}
+                />
+              ))
             )}
           </TableBody>
         </Table>
@@ -279,7 +286,13 @@ export function ClientDirectoryList() {
 const DIRECTORY_NOTE =
   'Esta vista presenta el vínculo con cada persona y no expone ningún dato de entrenamiento, salud ni nutrición.'
 
-function ClientCard({ entry }: { entry: ClientDirectoryItem }) {
+function ClientCard({
+  entry,
+  relationshipPath,
+}: {
+  entry: ClientDirectoryItem
+  relationshipPath: string
+}) {
   return (
     <Card data-client-card>
       <CardHeader>
@@ -292,7 +305,13 @@ function ClientCard({ entry }: { entry: ClientDirectoryItem }) {
             </AvatarFallback>
           </Avatar>
           <strong role="heading" aria-level={3}>
-            {entry.kind === 'invitation' ? entry.contact_hint : entry.display_name}
+            {entry.kind === 'invitation' ? (
+              entry.contact_hint
+            ) : (
+              <Link href={`${relationshipPath}/${entry.relationship_id}`} data-client-open>
+                {entry.display_name}
+              </Link>
+            )}
           </strong>
         </div>
       </CardHeader>
@@ -320,7 +339,19 @@ function ClientCard({ entry }: { entry: ClientDirectoryItem }) {
   )
 }
 
-function ClientRow({ entry }: { entry: ClientDirectoryItem }) {
+/*
+ * The name is the link, rather than a fifth column holding a "Ver" button. The
+ * column shares above are tuned to four, and an invitation entry would have an
+ * empty cell in the fifth: nobody has accepted, so there is no relationship to
+ * open yet.
+ */
+function ClientRow({
+  entry,
+  relationshipPath,
+}: {
+  entry: ClientDirectoryItem
+  relationshipPath: string
+}) {
   return (
     <TableRow>
       <TableCell>
@@ -330,7 +361,15 @@ function ClientRow({ entry }: { entry: ClientDirectoryItem }) {
               {entry.kind === 'invitation' ? '@' : clientInitials(entry.display_name)}
             </AvatarFallback>
           </Avatar>
-          <strong>{entry.kind === 'invitation' ? entry.contact_hint : entry.display_name}</strong>
+          {entry.kind === 'invitation' ? (
+            <strong>{entry.contact_hint}</strong>
+          ) : (
+            <strong>
+              <Link href={`${relationshipPath}/${entry.relationship_id}`} data-client-open>
+                {entry.display_name}
+              </Link>
+            </strong>
+          )}
         </div>
       </TableCell>
       <TableCell>

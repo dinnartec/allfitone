@@ -5031,6 +5031,56 @@ paths:
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
 
+  /studio/v1/organizations/{organizationId}/relationships/{relationshipId}:
+    get:
+      tags: [Studio Relationships]
+      operationId: readStudioRelationship
+      x-allfit-operation: OP-REL-011
+      x-allfit-cache: private-no-store
+      summary: Read how one relationship stands
+      description: >-
+        Says where the link stands, who attends this person, which substitutions
+        exist, and **which permissions were granted and in what version**.
+
+
+        It never returns the content a permission covers. Knowing that
+        `health_context` is granted is not reading anybody's injuries, and this
+        endpoint only ever answers the first of those.
+
+
+        What comes back depends on who asks. A caller with `view_directory`
+        (owner, admin, staff) sees every assignment on the relationship. A coach
+        holds `view_assigned_directory` instead: they can read only a
+        relationship they are effectively assigned to, and they see their own
+        assignment rather than the full list. A relationship the caller may not
+        see answers `404`, not `403` — telling a coach that a relationship exists
+        but is not theirs would reveal that the organization has that client.
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/RelationshipId'
+      responses:
+        '200':
+          description: How the relationship stands
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/PrivateNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RelationshipState'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
   /studio/v1/organizations/{organizationId}/relationships/{relationshipId}/professional-assignments:
     post:
       tags: [Studio Relationships]
@@ -5087,6 +5137,81 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RelationshipHolder'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /studio/v1/organizations/{organizationId}/relationships/{relationshipId}/professional-assignments/reassignment:
+    post:
+      tags: [Studio Relationships]
+      operationId: reassignRelationshipHolder
+      x-allfit-operation: OP-REL-003
+      x-allfit-cache: no-store
+      summary: Change which coach is in charge of a client
+      description: >-
+        Takes the client away from the coach who has them and gives them to
+        another. It exists apart from assigning for one reason: **the person is
+        notified, and if the notice cannot be enqueued the change does not
+        happen.** A reassignment is never silent.
+
+
+        The person's permissions survive untouched. Nothing a permission records
+        has changed — not the organization, not the responsible party, not the
+        purpose, not the category — so asking again for consent would be asking
+        for something already given. What changes is who may exercise it.
+
+
+        The previous professional loses access immediately, with no cache
+        window, and keeps authorship of whatever they recorded.
+
+
+        A relationship with nobody in charge is rejected with `409`: putting the
+        first coach in charge is `OP-REL-002`, which notifies nobody because
+        nobody is losing anything. Naming the coach who is already in charge
+        writes nothing, notifies nobody, and answers `200`.
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/RelationshipId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RelationshipHolderAssignment'
+      responses:
+        '200':
+          description: That coach was already in charge; nothing changed and nobody was notified
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RelationshipReassignment'
+        '201':
+          description: The client moved to the new coach, and the person has been notified
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RelationshipReassignment'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -14573,6 +14698,179 @@ components:
     RelationshipStatus:
       type: string
       enum: [active, terminated]
+    AssignmentStatus:
+      type: string
+      enum: [proposed, active, ended]
+    GrantStatus:
+      description: >-
+        `frozen` is not `revoked`. Ending the relationship freezes a grant, so
+        the organization keeps what it already had and nothing after the cut; the
+        person revoking it ends all access. Neither is the other's synonym.
+      type: string
+      enum: [active, frozen, revoked]
+    RelationshipProfessional:
+      description: Who attends this person, under an open-ended assignment.
+      type: object
+      additionalProperties: false
+      required:
+        [assignment_id, membership_id, professional_person_id, display_name, valid_from]
+      properties:
+        assignment_id:
+          $ref: '#/components/schemas/UuidV7'
+        membership_id:
+          $ref: '#/components/schemas/UuidV7'
+        professional_person_id:
+          $ref: '#/components/schemas/UuidV7'
+          description: >-
+            The professional, never the client. The two are distinct people and
+            the names have to say which is which.
+        display_name:
+          type: string
+          minLength: 1
+        valid_from:
+          type: string
+          format: date-time
+          description: Since when this professional has attended the person.
+    RelationshipSubstitution:
+      description: >-
+        Somebody covering for the professional in charge, for a bounded period.
+        A substitution only becomes effective once the person accepts it, so a
+        `proposed` entry grants nothing yet.
+      type: object
+      additionalProperties: false
+      required:
+        [assignment_id, membership_id, professional_person_id, display_name, status,
+         valid_from, ends_on, accepted_by_person_at]
+      properties:
+        assignment_id:
+          $ref: '#/components/schemas/UuidV7'
+        membership_id:
+          $ref: '#/components/schemas/UuidV7'
+        professional_person_id:
+          $ref: '#/components/schemas/UuidV7'
+        display_name:
+          type: string
+          minLength: 1
+        status:
+          $ref: '#/components/schemas/AssignmentStatus'
+        valid_from:
+          type: string
+          format: date-time
+        ends_on:
+          type: [string, 'null']
+          format: date
+        accepted_by_person_at:
+          type: [string, 'null']
+          format: date-time
+          description: Null until the person has accepted this substitution.
+    RelationshipGrant:
+      description: >-
+        A permission the person granted, and nothing it covers. Every field here
+        describes the permission — which scope, which version, whether it still
+        stands — so a reader learns that measurements were shared without
+        learning a single measurement.
+      type: object
+      additionalProperties: false
+      required:
+        [grant_id, scope_code, display_name, version_number, access_level,
+         status, purpose, granted_at, revoked_at]
+      properties:
+        grant_id:
+          $ref: '#/components/schemas/UuidV7'
+        scope_code:
+          type: string
+          minLength: 1
+        display_name:
+          type: [string, 'null']
+          description: >-
+            The words the person was shown when they decided. Null when no
+            presentation has been published for this scope yet.
+        version_number:
+          type: integer
+          minimum: 1
+          description: >-
+            The scope version that was agreed, not the latest published one. A
+            grant never drifts onto a later version.
+        access_level:
+          $ref: '#/components/schemas/AccessLevel'
+        status:
+          $ref: '#/components/schemas/GrantStatus'
+        purpose:
+          type: string
+          minLength: 1
+        granted_at:
+          type: string
+          format: date-time
+        revoked_at:
+          type: [string, 'null']
+          format: date-time
+    RelationshipReassignment:
+      description: >-
+        The assignment now in force, and the one it replaced. `replaced_assignment_id`
+        is null when nothing changed because that coach was already in charge.
+      type: object
+      additionalProperties: false
+      required:
+        [assignment_id, relationship_id, membership_id, professional_person_id,
+         valid_from, replaced_assignment_id]
+      properties:
+        assignment_id:
+          $ref: '#/components/schemas/UuidV7'
+        relationship_id:
+          $ref: '#/components/schemas/UuidV7'
+        membership_id:
+          $ref: '#/components/schemas/UuidV7'
+        professional_person_id:
+          $ref: '#/components/schemas/UuidV7'
+        valid_from:
+          type: string
+          format: date-time
+        replaced_assignment_id:
+          description: The assignment this one ended, or null when nothing changed.
+          oneOf:
+            - $ref: '#/components/schemas/UuidV7'
+            - type: 'null'
+    RelationshipState:
+      description: >-
+        How one relationship stands: the link, who attends the person, the
+        substitutions, and which permissions are in force. Cacheable for
+        presentation, never for deciding authorization.
+      type: object
+      additionalProperties: false
+      required:
+        [relationship_id, person_id, display_name, status, started_at, ended_at,
+         holder, substitutions, grants]
+      properties:
+        relationship_id:
+          $ref: '#/components/schemas/UuidV7'
+        person_id:
+          $ref: '#/components/schemas/UuidV7'
+        display_name:
+          type: string
+          minLength: 1
+        status:
+          $ref: '#/components/schemas/RelationshipStatus'
+        started_at:
+          type: string
+          format: date-time
+        ended_at:
+          type: [string, 'null']
+          format: date-time
+        holder:
+          description: >-
+            Null when nobody attends this person yet — which is the state
+            assigning a professional starts from.
+          oneOf:
+            - $ref: '#/components/schemas/RelationshipProfessional'
+            - type: 'null'
+        substitutions:
+          type: array
+          items:
+            $ref: '#/components/schemas/RelationshipSubstitution'
+        grants:
+          type: array
+          items:
+            $ref: '#/components/schemas/RelationshipGrant'
     ClientDirectoryItem:
       description: >-
         A directory entry is one of two things and says which. A `relationship`

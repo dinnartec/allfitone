@@ -22,6 +22,12 @@ select plan(5);
 -- No permission: what the runtime may run in `relationships`, exhaustively
 -- ---------------------------------------------------------------------------
 
+-- Naming all of them, rather than asserting that no name matches `terminate%`, is the
+-- point: a closure called anything at all breaks this, and whoever adds a function to
+-- `relationships` has to say out loud that theirs is not one. It has already worked
+-- once — `read_relationship_state` and `reassign_relationship_holder` arrived with
+-- `AFO-54`/`AFO-57` and landed here before they landed anywhere else.
+--
 -- Collated explicitly: `proname` is a `name`, and comparing those without saying how
 -- to sort them is what PostgreSQL refuses.
 select is(
@@ -34,8 +40,9 @@ select is(
        and routine.prokind = 'f'
        and has_function_privilege('allfit_api', routine.oid, 'EXECUTE')
    ) as runnable),
-  'actor_is_assigned, assign_relationship_holder, list_organization_clients',
-  'the runtime reaches three relationship functions, and ending one is not among them'
+  'actor_is_assigned, assign_relationship_holder, list_organization_clients, '
+    || 'read_relationship_state, reassign_relationship_holder',
+  'the runtime reaches five relationship functions, and ending one is not among them'
 );
 
 -- ---------------------------------------------------------------------------
