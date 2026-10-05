@@ -1,5 +1,5 @@
 /**
- * Account recovery started by support: `NEW-IDN-ACTION`, `OP-IDN-046..048`, `HU-BO-010`.
+ * Account recovery started by support: `NEW-IDN-ACTION`, `OP-IDN-053..048`, `HU-BO-010`.
  *
  * A command carries only the case it answers. The person, the address and the flow come
  * from PostgreSQL, so no client can use a command to point a recovery somewhere else;

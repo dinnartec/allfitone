@@ -229,7 +229,7 @@ describe('Backoffice organization API contract', () => {
   test('T-ORG-API-01 mounts every Backoffice organization operation with its contract method', () => {
     // A gym's team and client invitations live under this path but belong to identity,
     // which mounts them.
-    const identityOwned = ['NEW-IDN-RESEND', 'OP-IDN-045', 'NEW-IDN-CLIENT-RESEND', 'OP-IDN-051']
+    const identityOwned = ['NEW-IDN-RESEND', 'OP-IDN-052', 'NEW-IDN-CLIENT-RESEND', 'OP-IDN-051']
     const contract = allfitV1ContractManifest.operations
       .filter((operation) => operation.path.startsWith('/backoffice/v1/organizations'))
       .filter((operation) => !identityOwned.includes(operation.allfitOperation))

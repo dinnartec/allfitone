@@ -1,4 +1,4 @@
--- T-IDN-RESEND-01 — NEW-IDN-RESEND / OP-IDN-045: resending an invitation from Backoffice.
+-- T-IDN-RESEND-01 — NEW-IDN-RESEND / OP-IDN-052: resending an invitation from Backoffice.
 --
 -- `HU-BO-011`, the invitation half. Verification and recovery resends need the
 -- identity action requests PRE_PHASE_5 §5 describes and are built with `HU-BO-010`.

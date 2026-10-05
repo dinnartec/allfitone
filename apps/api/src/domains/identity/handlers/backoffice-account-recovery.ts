@@ -1,5 +1,5 @@
 /**
- * Backoffice account recovery routes: `NEW-IDN-ACTION` and `OP-IDN-046..048`.
+ * Backoffice account recovery routes: `NEW-IDN-ACTION` and `OP-IDN-053..048`.
  *
  * `HU-BO-010` and the recovery resend of `HU-BO-011`. The handler shapes and rejects; it
  * decides nothing. The support duty, AAL2, whether a person can be recovered and what can

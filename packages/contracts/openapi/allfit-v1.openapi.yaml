@@ -8074,7 +8074,7 @@ paths:
     post:
       tags: [Backoffice Support]
       operationId: startBackofficeAccountRecovery
-      x-allfit-operation: OP-IDN-046
+      x-allfit-operation: OP-IDN-053
       x-allfit-cache: no-store
       summary: Send a person the official recovery flow
       description: >-
@@ -8132,7 +8132,7 @@ paths:
     post:
       tags: [Backoffice Support]
       operationId: resendBackofficeAccountRecovery
-      x-allfit-operation: OP-IDN-047
+      x-allfit-operation: OP-IDN-054
       x-allfit-cache: no-store
       summary: Send a live recovery again
       description: >-
@@ -8190,7 +8190,7 @@ paths:
     post:
       tags: [Backoffice Support]
       operationId: cancelBackofficeAccountRecovery
-      x-allfit-operation: OP-IDN-048
+      x-allfit-operation: OP-IDN-055
       x-allfit-cache: no-store
       summary: Cancel a suspicious recovery
       description: >-
@@ -8565,7 +8565,7 @@ paths:
     post:
       tags: [Backoffice Organizations]
       operationId: resendBackofficeTeamInvitation
-      x-allfit-operation: OP-IDN-045
+      x-allfit-operation: OP-IDN-052
       x-allfit-cache: no-store
       summary: Send a team invitation again
       description: >-

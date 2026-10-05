@@ -1,4 +1,4 @@
--- NEW-IDN-ACTION / OP-IDN-046..048 — account recovery started by support (`HU-BO-010`).
+-- NEW-IDN-ACTION / OP-IDN-053..048 — account recovery started by support (`HU-BO-010`).
 --
 -- The identity action requests PRE_PHASE_5 §5 describes, built for the one action
 -- Backoffice needs today: sending a person who cannot sign in the official recovery
@@ -440,7 +440,7 @@ end
 $function$;
 
 -- ---------------------------------------------------------------------------
--- OP-IDN-046 — start a recovery
+-- OP-IDN-053 — start a recovery
 -- ---------------------------------------------------------------------------
 
 create or replace function identity.start_account_recovery(
@@ -485,7 +485,7 @@ begin
   select * into receipt
   from system.begin_idempotency(
     p_actor_person_id, 'backoffice'::system.command_surface, 'backoffice',
-    'OP-IDN-046', p_idempotency_key, p_command_id, p_request_hash
+    'OP-IDN-053', p_idempotency_key, p_command_id, p_request_hash
   );
   if not receipt.claimed then
     response := identity.account_recovery_projection(receipt.aggregate_id);
@@ -566,7 +566,7 @@ end
 $function$;
 
 -- ---------------------------------------------------------------------------
--- OP-IDN-047 — resend a recovery
+-- OP-IDN-054 — resend a recovery
 -- ---------------------------------------------------------------------------
 
 create or replace function identity.resend_account_recovery(
@@ -616,7 +616,7 @@ begin
   select * into receipt
   from system.begin_idempotency(
     p_actor_person_id, 'backoffice'::system.command_surface, 'backoffice',
-    'OP-IDN-047', p_idempotency_key, p_command_id, p_request_hash
+    'OP-IDN-054', p_idempotency_key, p_command_id, p_request_hash
   );
   if not receipt.claimed then
     response := identity.account_recovery_projection(receipt.aggregate_id);
@@ -662,7 +662,7 @@ end
 $function$;
 
 -- ---------------------------------------------------------------------------
--- OP-IDN-048 — cancel a suspicious recovery
+-- OP-IDN-055 — cancel a suspicious recovery
 -- ---------------------------------------------------------------------------
 
 create or replace function identity.cancel_account_recovery(
@@ -712,7 +712,7 @@ begin
   select * into receipt
   from system.begin_idempotency(
     p_actor_person_id, 'backoffice'::system.command_surface, 'backoffice',
-    'OP-IDN-048', p_idempotency_key, p_command_id, p_request_hash
+    'OP-IDN-055', p_idempotency_key, p_command_id, p_request_hash
   );
   if not receipt.claimed then
     response := identity.account_recovery_projection(receipt.aggregate_id);
