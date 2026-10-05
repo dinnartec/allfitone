@@ -9,6 +9,7 @@ import {
   onDrop,
   stretchFor,
   tabAt,
+  travelStretch,
 } from './dock'
 
 describe('what floats above the tab bar', () => {
@@ -59,5 +60,16 @@ describe('what floats above the tab bar', () => {
     expect(tabAt(399, 404, 4)).toBe(3)
     expect(tabAt(-5, 404, 4)).toBe(0)
     expect(tabAt(410, 404, 4)).toBe(3)
+  })
+
+  test('T-SPC-UNIT-265 a travelling drop stretches with its speed, so it is longest mid-way', () => {
+    // 16 points in a 16 ms frame is 1000 points a second.
+    expect(travelStretch(16, 16)).toBeCloseTo(1000 / 1600)
+    expect(travelStretch(-16, 16)).toBeCloseTo(1000 / 1600)
+    expect(travelStretch(2, 16)).toBeLessThan(travelStretch(8, 16))
+    expect(travelStretch(64, 16)).toBe(1)
+    // A frame that did not move, or no time at all, does not stretch it.
+    expect(travelStretch(0, 16)).toBe(0)
+    expect(travelStretch(10, 0)).toBe(0)
   })
 })

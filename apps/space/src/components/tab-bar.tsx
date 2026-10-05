@@ -59,6 +59,7 @@ import {
   onDrop,
   stretchFor,
   tabAt,
+  travelStretch,
 } from '../client/dock'
 
 /** The canvas's floating bar, and the room the content has to leave under it. */
@@ -87,6 +88,9 @@ const STRETCH_X = 0.26
 const STRETCH_Y = 0.12
 const SWELL = 0.14
 const TAIL_SHARE = 0.6
+// The screen changes this long after a tap. Applying it at once stalled the UI thread
+// as the drop set off, so the drop was next seen already past the middle tab.
+const HANDOFF_MS = 200
 
 const tick = () => void Haptics.selectionAsync()
 const press = () => void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Soft)
@@ -145,13 +149,41 @@ export function TabBar({ children, active, count, onSelect }: TabBarProps) {
   const holding = useSharedValue(false)
   // The tab a tap already sent the drop to, so the navigation arriving later does not resend it.
   const steered = useSharedValue(-1)
+  // Sent to a tab rather than dragged, and when the last frame moved, for its speed.
+  const travelling = useSharedValue(false)
+  const lastFrameAt = useSharedValue(0)
 
-  // The tail always chases the drop, wherever the drop is being taken.
+  // The tail always chases the drop, wherever the drop is being taken. Sent along the bar,
+  // the drop stretches with its own speed: a fixed stretch that wobbled back while it was
+  // still crossing the middle tab read as the drop catching on it.
   useAnimatedReaction(
     () => offset.get(),
-    (now) => {
+    (now, previous) => {
       tail.set(reduced ? now : withSpring(now, TAIL))
+      const at = Date.now()
+      const ms = at - lastFrameAt.get()
+      lastFrameAt.set(at)
+      if (!travelling.get() || previous === null || ms > 100) return
+      stretch.set(travelStretch(now - previous, ms))
     },
+  )
+
+  /** Sends the drop to a tab: stretched by its speed on the way, and a quiver on landing. */
+  const travel = useCallback(
+    (target: number) => {
+      'worklet'
+      travelling.set(true)
+      offset.set(
+        withSpring(target, TRAVEL, (finished) => {
+          if (!finished) return
+          travelling.set(false)
+          stretch.set(
+            withSequence(withTiming(0.3, { duration: 90, easing: EASE_OUT }), withSpring(0, JELLY)),
+          )
+        }),
+      )
+    },
+    [offset, stretch, travelling],
   )
   // The first placement does not travel, and a drop that landed by dragging is already home.
   const placed = useRef(false)
@@ -174,11 +206,8 @@ export function TabBar({ children, active, count, onSelect }: TabBarProps) {
       steered.set(-1)
       return
     }
-    offset.set(withSpring(target, TRAVEL))
-    stretch.set(
-      withSequence(withTiming(0.7, { duration: 140, easing: EASE_OUT }), withSpring(0, JELLY)),
-    )
-  }, [active, width, count, reduced, offset, stretch, over, steered])
+    travel(target)
+  }, [active, width, count, reduced, offset, over, steered, travel])
 
   const column = width > 0 ? (width - BAR_PADDING * 2) / count : 0
   // Read when a drag lands, so the gestures need not be rebuilt each time they change.
@@ -211,10 +240,7 @@ export function TabBar({ children, active, count, onSelect }: TabBarProps) {
           offset.set(dropOffset(tab, width, count))
           return
         }
-        offset.set(withSpring(dropOffset(tab, width, count), TRAVEL))
-        stretch.set(
-          withSequence(withTiming(0.7, { duration: 140, easing: EASE_OUT }), withSpring(0, JELLY)),
-        )
+        travel(dropOffset(tab, width, count))
       })
 
     const drag = Gesture.Pan()
@@ -228,6 +254,7 @@ export function TabBar({ children, active, count, onSelect }: TabBarProps) {
         scheduleOnRN(press)
       })
       .onStart(() => {
+        travelling.set(false)
         origin.set(offset.get())
       })
       .onUpdate((event) => {
@@ -258,7 +285,22 @@ export function TabBar({ children, active, count, onSelect }: TabBarProps) {
       })
 
     return Gesture.Simultaneous(drag, tap)
-  }, [width, count, column, reduced, land, offset, stretch, origin, over, lift, holding, steered])
+  }, [
+    width,
+    count,
+    column,
+    reduced,
+    land,
+    travel,
+    offset,
+    stretch,
+    origin,
+    over,
+    lift,
+    holding,
+    steered,
+    travelling,
+  ])
 
   const moving = useAnimatedStyle(() => {
     // The jelly overshoots below zero, so the drop goes taller and narrower for a moment.
@@ -370,7 +412,7 @@ export function Tab({
       accessibilityRole="tab"
       accessibilityLabel={label}
       accessibilityState={{ selected: active }}
-      onPress={onPress}
+      onPress={onPress ? () => setTimeout(onPress, HANDOFF_MS) : undefined}
       disabled={active}
       style={styles.tab}
     >

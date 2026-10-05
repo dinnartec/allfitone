@@ -58,3 +58,13 @@ export function tabAt(touch: number, width: number, count: number): number {
   const column = (width - BAR_PADDING * 2) / count
   return Math.min(count - 1, Math.max(0, Math.floor((touch - BAR_PADDING) / column)))
 }
+
+/**
+ * How much a drop sent along the bar stretches in a frame where it moved `delta` points
+ * in `ms` milliseconds: with its speed, so it is longest mid-way and gathers as it lands.
+ */
+export function travelStretch(delta: number, ms: number): number {
+  'worklet'
+  if (ms <= 0) return 0
+  return Math.min(1, Math.abs((delta / ms) * 1000) / 1600)
+}
