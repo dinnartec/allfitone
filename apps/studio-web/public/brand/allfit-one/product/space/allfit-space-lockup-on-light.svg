@@ -1,11 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1952 480" role="img" aria-labelledby="allfit-space-lockup-title allfit-space-lockup-description">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1712 480" role="img" aria-labelledby="allfit-space-lockup-title allfit-space-lockup-description">
   <title id="allfit-space-lockup-title">Allfit Space lockup</title>
   <desc id="allfit-space-lockup-description">Shared Allfit One logo and Allfit Space outlined wordmark for light surfaces</desc>
-  <g transform="translate(44 36)">
-    <path fill="#55EFFB" d="M65 0h330l-65 408H0L65 0Z"/>
-    <path fill="#030713" d="M405 0 0 211l120 1L11 1149l324-490L405 0Z" transform="translate(142 22) scale(.318)"/>
-  </g>
+  <path fill="#55EFFB" d="M405 0 0 211l120 1L11 1149l324-490L405 0Z" transform="translate(44 58) scale(.318)"/>
   <defs>
     <path id="space-lockup-light-0" d="M325 11 312 98Q312 103 306 103H198Q192 103 192 98L180 11Q179 0 167 0H25Q12 0 15 13L160 689Q162 700 173 700H336Q347 700 349 689L493 13L494 9Q494 0 483 0H338Q326 0 325 11ZM218 231H285Q289 231 289 236L253 464Q252 468 250 468Q248 468 247 464L214 236Q214 231 218 231Z"/>
     <path id="space-lockup-light-1" d="M35 12V688Q35 693 38.5 696.5Q42 700 47 700H189Q194 700 197.5 696.5Q201 693 201 688V147Q201 142 206 142H410Q415 142 418.5 138.5Q422 135 422 130V12Q422 7 418.5 3.5Q415 0 410 0H47Q42 0 38.5 3.5Q35 7 35 12Z"/>
@@ -18,7 +15,7 @@
     <path id="space-lockup-light-8" d="M34 189V513Q34 602 88.5 655Q143 708 233 708Q324 708 378.5 655Q433 602 433 513V502Q433 497 429.5 493.5Q426 490 421 490L304 485Q292 485 292 496V522Q292 551 276 569Q260 587 233 587Q207 587 191 569Q175 551 175 522V177Q175 148 191 130.5Q207 113 233 113Q260 113 276 130.5Q292 148 292 177V204Q292 209 295.5 212.5Q299 216 304 216L421 211Q426 211 429.5 207.5Q433 204 433 199V189Q433 99 378 45.5Q323 -8 233 -8Q143 -8 88.5 45.5Q34 99 34 189Z"/>
     <path id="space-lockup-light-9" d="M399 579H190Q185 579 185 574V416Q185 411 190 411H310Q315 411 318.5 407.5Q322 404 322 399V302Q322 297 318.5 293.5Q315 290 310 290H190Q185 290 185 285V126Q185 121 190 121H399Q404 121 407.5 117.5Q411 114 411 109V12Q411 7 407.5 3.5Q404 0 399 0H56Q51 0 47.5 3.5Q44 7 44 12V688Q44 693 47.5 696.5Q51 700 56 700H399Q404 700 407.5 696.5Q411 693 411 688V591Q411 586 407.5 582.5Q404 579 399 579Z"/>
   </defs>
-  <g transform="translate(512 337) scale(.28 -.28)" fill="#030713">
+  <g transform="translate(272 337) scale(.28 -.28)" fill="#030713">
     <use href="#space-lockup-light-0" x="0"/>
     <use href="#space-lockup-light-1" x="490.143"/>
     <use href="#space-lockup-light-1" x="909.286"/>
@@ -26,7 +23,7 @@
     <use href="#space-lockup-light-3" x="1737.571"/>
     <use href="#space-lockup-light-4" x="1954.714"/>
   </g>
-  <g transform="translate(512 337) scale(.28 -.28)" fill="#55EFFB">
+  <g transform="translate(272 337) scale(.28 -.28)" fill="#55EFFB">
     <use href="#space-lockup-light-5" x="2600"/>
     <use href="#space-lockup-light-6" x="3080"/>
     <use href="#space-lockup-light-7" x="3581"/>

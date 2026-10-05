@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 460 480" role="img" aria-labelledby="logo-carrier-title logo-carrier-description">
-  <title id="logo-carrier-title">Allfit One</title>
-  <desc id="logo-carrier-description">Allfit One ink logo inside its electric cyan carrier</desc>
-  <g transform="translate(32 36)">
-    <path fill="#55EFFB" d="M65 0h330l-65 408H0L65 0Z"/>
-    <path fill="#030713" d="M405 0 0 211l120 1L11 1149l324-490L405 0Z" transform="translate(142 22) scale(.318)"/>
-  </g>
-</svg>
