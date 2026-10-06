@@ -47,6 +47,7 @@ import {
   mealTotals,
   MEAL_NAMES,
   NUTRIENT_SHORT_NAMES,
+  rangeProgress,
   remainingFor,
   type DailySummary,
   type GoalTarget,
@@ -71,6 +72,7 @@ import {
 } from '../../src/components/nutrition-ui'
 import { aboveDock } from '../../src/client/dock'
 import { DOCK_HEIGHT } from '../../src/components/tab-bar'
+import { RangeEnergyCard } from '../../src/components/range-energy-card'
 
 const READ_FAILED = 'No pudimos cargar tu día. Inténtalo otra vez.'
 const WEEK_LETTERS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'] as const
@@ -478,6 +480,8 @@ function EnergyCard({
 }) {
   const theme = useTheme()
   const remaining = goal ? remainingFor(goal, eaten) : null
+  const range = goal ? rangeProgress(goal, eaten) : null
+  if (goal && range) return <RangeEnergyCard goal={goal} eaten={eaten} range={range} />
   return (
     <View
       style={[

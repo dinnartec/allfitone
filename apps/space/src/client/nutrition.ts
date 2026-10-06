@@ -291,6 +291,43 @@ export function remainingFor(
   }
 }
 
+/** Where the day stands against an energy range, and the arc that draws it. */
+export type RangeProgress = {
+  /** Where the eaten, the minimum and the maximum fall on the arc, from 0 to 1. */
+  readonly eatenAt: number
+  readonly lowAt: number
+  readonly highAt: number
+} & (
+  | { readonly state: 'below'; readonly fromLow: number; readonly fromHigh: number }
+  | { readonly state: 'within'; readonly fromHigh: number }
+  | { readonly state: 'above'; readonly over: number }
+)
+
+/**
+ * A range goal against what was eaten; null for any other kind of goal.
+ *
+ * The arc puts the maximum at four fifths of its length, so a day that goes past the
+ * range still has somewhere to be drawn instead of pinning at the end.
+ */
+export function rangeProgress(target: GoalTarget, eaten: number): RangeProgress | null {
+  if (target.mode !== 'range' || target.minimum === null || target.maximum === null) return null
+  const low = target.minimum
+  const high = target.maximum
+  const length = high / 0.8
+  const at = (value: number) => (length <= 0 ? 0 : Math.min(1, Math.max(0, value / length)))
+  const marks = { eatenAt: at(eaten), lowAt: at(low), highAt: at(high) }
+  if (eaten < low) {
+    return {
+      ...marks,
+      state: 'below',
+      fromLow: Math.round(low - eaten),
+      fromHigh: Math.round(high - eaten),
+    }
+  }
+  if (eaten <= high) return { ...marks, state: 'within', fromHigh: Math.round(high - eaten) }
+  return { ...marks, state: 'above', over: Math.round(eaten - high) }
+}
+
 const localHour = (iso: string, timeZone: string) =>
   Number(
     new Intl.DateTimeFormat('en-GB', { timeZone, hour: '2-digit', hourCycle: 'h23' }).format(

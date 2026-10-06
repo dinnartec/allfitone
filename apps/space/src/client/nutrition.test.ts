@@ -19,6 +19,7 @@ import {
   mealPrompt,
   mealWithArticle,
   mealTotals,
+  rangeProgress,
   remainingFor,
   targetsFromForm,
   type DailySummary,
@@ -403,5 +404,37 @@ describe('a whole meal', () => {
       nutrients: [],
     }
     expect(mealGrams([weighed(250, 'g'), weighed(40, 'g'), weighed(2, 'lb'), unweighed])).toBe(290)
+  })
+})
+
+describe('progress against an energy range', () => {
+  const range: GoalTarget = {
+    nutrient_code: 'energy',
+    unit: 'kcal',
+    mode: 'range',
+    minimum: 2100,
+    maximum: 2400,
+    exact: null,
+  }
+
+  test('T-SPC-UNIT-276 below the range, what is left runs from the minimum to the maximum', () => {
+    const below = rangeProgress(range, 1420)
+    expect(below).toMatchObject({ state: 'below', fromLow: 680, fromHigh: 980 })
+    // The arc puts the maximum at four fifths, so going past it still shows.
+    expect(below?.highAt).toBeCloseTo(0.8)
+    expect(below?.lowAt).toBeCloseTo(0.7)
+    expect(below?.eatenAt).toBeCloseTo(1420 / 3000)
+  })
+
+  test('T-SPC-UNIT-277 inside the range it says the room left; past it, by how much', () => {
+    expect(rangeProgress(range, 2250)).toMatchObject({ state: 'within', fromHigh: 150 })
+    expect(rangeProgress(range, 2520)).toMatchObject({ state: 'above', over: 120 })
+    expect(rangeProgress(range, 9000)?.eatenAt).toBe(1)
+  })
+
+  test('T-SPC-UNIT-278 a goal that is not a range has no range progress', () => {
+    expect(
+      rangeProgress({ ...range, mode: 'exact', exact: 2300, minimum: null, maximum: null }, 100),
+    ).toBeNull()
   })
 })
