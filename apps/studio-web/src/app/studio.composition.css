@@ -316,21 +316,30 @@
 /* The shares live here rather than on the columns because inline visual styles
    are forbidden in this app, and the lint rule is right: a width written in
    the markup is a width nobody finds when the table changes. */
+/* Six columns since roles became editable. The action is its own column rather
+   than a control inside the roles cell: at 22% the cell could not hold a badge
+   and a 44px button side by side, so the button wrapped to a second line and
+   took the row from 70px to 130px. Every share below gives up a little to pay
+   for the last one. */
 [data-studio-register='memberships'] col:nth-child(1) {
-  width: 30%;
+  width: 27%;
 }
 
 [data-studio-register='memberships'] col:nth-child(2) {
-  width: 14%;
+  width: 12%;
 }
 
 [data-studio-register='memberships'] col:nth-child(3) {
-  width: 22%;
+  width: 20%;
 }
 
 [data-studio-register='memberships'] col:nth-child(4),
 [data-studio-register='memberships'] col:nth-child(5) {
-  width: 17%;
+  width: 14%;
+}
+
+[data-studio-register='memberships'] col:nth-child(6) {
+  width: 13%;
 }
 
 [data-studio-register='invitations'] col:nth-child(1) {

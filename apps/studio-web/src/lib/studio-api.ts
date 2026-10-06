@@ -58,6 +58,8 @@ export type OrganizationSiteUpdate = AllfitV1Schemas['OrganizationSiteUpdate']
 export type OrganizationRole = AllfitV1Schemas['OrganizationRole']
 export type OrganizationRoleCatalog = AllfitV1Schemas['OrganizationRoleCatalog']
 export type OrganizationRoleCode = AllfitV1Schemas['OrganizationRoleCode']
+export type OrganizationRoleGrant = AllfitV1Schemas['OrganizationRoleGrant']
+export type OrganizationRoleGrantCreate = AllfitV1Schemas['OrganizationRoleGrantCreate']
 
 const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080').replace(/\/$/, '')
 
@@ -353,6 +355,21 @@ export const studioApi = {
   ) =>
     request<RelationshipReassignment>(
       `/studio/v1/organizations/${organizationId}/relationships/${relationshipId}/professional-assignments/reassignment`,
+      {
+        method: 'POST',
+        headers: commandHeaders(command),
+        body: JSON.stringify(body),
+      },
+    ),
+
+  grantMembershipRole: (
+    organizationId: string,
+    membershipId: string,
+    body: OrganizationRoleGrantCreate,
+    command: CommandHeaders,
+  ) =>
+    request<OrganizationRoleGrant>(
+      `/studio/v1/organizations/${organizationId}/memberships/${membershipId}/roles`,
       {
         method: 'POST',
         headers: commandHeaders(command),

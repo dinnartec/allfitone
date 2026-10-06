@@ -1442,6 +1442,21 @@ export const SCREENS: Screen[] = [
   // --- the team section -------------------------------------------------------
   { stories: 'HU-017 · team directory', path: `${workspace}/team`, fixture: memberOfTwo },
   {
+    // HU-019. The dialog open, which is the state worth looking at: the
+    // sentence under the picker is the only place that says a role gives
+    // access to nobody's data.
+    stories: 'HU-019 · the warning before giving somebody a role',
+    path: `${workspace}/team`,
+    fixture: memberOfTwo,
+    reveal: async (page) => {
+      await page
+        .getByRole('button', { name: /Añadir un rol/ })
+        .first()
+        .click()
+      await expect(page.getByText(/Un rol no da acceso a los datos de nadie/)).toBeVisible()
+    },
+  },
+  {
     // Below 720px the directory renders a card list instead of the table, and
     // the two are separate markup rather than one behind a CSS toggle.
     stories: 'HU-017 · team directory as cards',

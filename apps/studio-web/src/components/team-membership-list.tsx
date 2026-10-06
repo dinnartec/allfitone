@@ -23,14 +23,16 @@ import {
   TableState,
 } from '@allfitone/react/components/table'
 import { ToggleGroup, ToggleGroupItem } from '@allfitone/react/components/toggle-group'
-import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query'
 import Link from 'next/link'
 import { useState } from 'react'
 
 import { useOrganizationContext } from './organization-context'
+import { TeamRoleGrant } from './team-role-grant'
 import { WorkspacePageHeader } from './workspace-page-header'
 import { canViewTeamDirectory, memberInitials, organizationRoleLabel } from '@/lib/team-directory'
 import { canInviteTeam } from '@/lib/team-invitations'
+import { canManageRoles, canReceiveARole } from '@/lib/team-roles'
 import { useCompactViewport } from '@/lib/use-compact-viewport'
 import {
   StudioApiError,
@@ -41,6 +43,7 @@ import {
   flattenMembershipPages,
   isStudioForbidden,
   organizationMembershipsQueryOptions,
+  organizationRolesQueryOptions,
 } from '@/lib/studio-query'
 
 type MembershipFilter = 'all' | OrganizationMembershipStatus
@@ -60,7 +63,16 @@ export function TeamMembershipList() {
   const { current } = useOrganizationContext()
   const compact = useCompactViewport()
   const queryClient = useQueryClient()
+  const rolesQuery = useQuery(organizationRolesQueryOptions(current.organization_id))
   const canViewDirectory = canViewTeamDirectory(current.roles)
+  /*
+   * Null unless the server's role catalogue says this reader holds
+   * `manage_roles`. Resolved once here rather than per row, so the rows only
+   * render what they are handed.
+   */
+  const roleGrantOrganizationId = canManageRoles(current.roles, rolesQuery.data?.items)
+    ? current.organization_id
+    : null
   const [filter, setFilter] = useState<MembershipFilter>('all')
   const options = organizationMembershipsQueryOptions(current.organization_id, filter, PAGE_SIZE)
   const query = useInfiniteQuery({ ...options, enabled: canViewDirectory })
@@ -202,7 +214,7 @@ export function TeamMembershipList() {
             <ul data-team-directory-card-list>
               {items.map((item) => (
                 <li key={item.membership_id}>
-                  <MembershipCard item={item} />
+                  <MembershipCard item={item} organizationId={roleGrantOrganizationId} />
                 </li>
               ))}
             </ul>
@@ -227,6 +239,7 @@ export function TeamMembershipList() {
             <col />
             <col />
             <col />
+            <col />
           </colgroup>
           <TableCaption>
             Esta vista presenta membresías organizacionales y no expone información de clientes ni
@@ -239,13 +252,20 @@ export function TeamMembershipList() {
               <TableHead>Roles</TableHead>
               <TableHead>Ingreso</TableHead>
               <TableHead>Finalización</TableHead>
+              <TableHead>Acciones</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {tableState ? (
-              <TableState colSpan={5} {...tableState} />
+              <TableState colSpan={6} {...tableState} />
             ) : (
-              items.map((item) => <MembershipRow key={item.membership_id} item={item} />)
+              items.map((item) => (
+                <MembershipRow
+                  key={item.membership_id}
+                  item={item}
+                  organizationId={roleGrantOrganizationId}
+                />
+              ))
             )}
           </TableBody>
         </Table>
@@ -285,7 +305,13 @@ export function TeamMembershipList() {
   )
 }
 
-function MembershipCard({ item }: { item: OrganizationMembership }) {
+function MembershipCard({
+  item,
+  organizationId,
+}: {
+  item: OrganizationMembership
+  organizationId: string | null
+}) {
   return (
     <Card data-team-member-card>
       <CardHeader>
@@ -329,6 +355,14 @@ function MembershipCard({ item }: { item: OrganizationMembership }) {
             </>
           ) : null}
         </dl>
+        {/* Below the facts, in the slot the invitation cards already use, not
+            beside the role badges: a 44px control inside that pairing pushed
+            the value off its own label. */}
+        {organizationId && canReceiveARole(item) ? (
+          <div data-team-invitation-actions>
+            <TeamRoleGrant organizationId={organizationId} membership={item} />
+          </div>
+        ) : null}
       </CardContent>
     </Card>
   )
@@ -367,7 +401,13 @@ function RoleBadges({ item }: { item: OrganizationMembership }) {
   )
 }
 
-function MembershipRow({ item }: { item: OrganizationMembership }) {
+function MembershipRow({
+  item,
+  organizationId,
+}: {
+  item: OrganizationMembership
+  organizationId: string | null
+}) {
   return (
     <TableRow>
       <TableCell>
@@ -386,6 +426,11 @@ function MembershipRow({ item }: { item: OrganizationMembership }) {
       </TableCell>
       <TableCell>{formatDate(item.joined_at)}</TableCell>
       <TableCell>{item.ended_at ? formatDate(item.ended_at) : '—'}</TableCell>
+      <TableCell>
+        {organizationId && canReceiveARole(item) ? (
+          <TeamRoleGrant organizationId={organizationId} membership={item} />
+        ) : null}
+      </TableCell>
     </TableRow>
   )
 }
