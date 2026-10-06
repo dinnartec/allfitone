@@ -1,20 +1,26 @@
 /**
- * Mi meta de nutrición (N-6, HU-SP-073, ADR-040).
+ * Mi meta de nutrición (N-6d, HU-SP-073, ADR-040).
  *
  * Energy leads, exact or as a range; each macro, fibre and water then takes a minimum,
- * a range, a maximum or no goal at all — «sin meta» is a choice, and it leaves the
- * nutrient out of the goal rather than setting it to zero. Publishing makes a new
- * version: the current one is superseded and stays in the history, as the foot says.
+ * an exact figure, a range, a maximum or no goal at all — «sin meta» is a choice, and it
+ * leaves the nutrient out of the goal rather than setting it to zero. Publishing makes a
+ * new version: the current one is superseded and stays in the history, as the foot says.
+ *
+ * **What a macro is worth is drawn, not left to arithmetic.** Each macro card rings its
+ * share of the day's energy and the energy card splits its bar by the same shares, so
+ * somebody setting 150 g of protein sees that it is a quarter of the day.
+ *
+ * **The value is typed.** The editor sits on the screen, under the macro it is editing,
+ * instead of in a sheet with steppers: reaching 150 g in steps of five was six presses,
+ * and a sheet lifted by the keyboard floated on device. − and + stay for small moves.
  */
 
 import { Button } from '@allfitone/react-native/button'
 import { IconButton } from '@allfitone/react-native/icon-button'
-import { FoundationIcon } from '@allfitone/react-native/icons'
+import { FoundationIcon, type IconName } from '@allfitone/react-native/icons'
 import { InlineAlert } from '@allfitone/react-native/inline-alert'
 import { Screen } from '@allfitone/react-native/screen'
-import { SegmentedControl } from '@allfitone/react-native/segmented-control'
-import { Sheet } from '@allfitone/react-native/sheet'
-import { Stepper } from '@allfitone/react-native/stepper'
+import { Tabs } from '@allfitone/react-native/tabs'
 import { Text } from '@allfitone/react-native/text'
 import { useTheme } from '@allfitone/react-native/theme'
 import * as Haptics from 'expo-haptics'
@@ -23,8 +29,19 @@ import { useEffect, useMemo, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
 
 import {
+  energyOf,
+  macroKcal,
+  macroShares,
+  MACROS,
+  modeCaption,
+  orderedRange,
+  START,
+  withMode,
+} from '../../src/client/goal-energy'
+import {
   formFromGoal,
   NUTRIENT_NAMES,
+  NUTRIENT_SHORT_NAMES,
   targetsFromForm,
   type FormMode,
   type FormTarget,
@@ -32,11 +49,16 @@ import {
   type GoalNutrient,
 } from '../../src/client/nutrition'
 import { createSpaceNutritionFlow } from '../../src/client/nutrition-transport'
-import { FIGURE_TRACKING, macroColor } from '../../src/components/nutrition-ui'
-import { SheetChoice } from '../../src/components/sheet-choice'
+import { GoalValueField } from '../../src/components/goal-value-field'
+import {
+  CardGlow,
+  FIGURE_TRACKING,
+  foodIcon,
+  macroColor,
+  Ring,
+} from '../../src/components/nutrition-ui'
 
 const PUBLISH_FAILED = 'No pudimos publicar tu meta. Inténtalo otra vez.'
-const OTHERS: readonly GoalNutrient[] = ['protein', 'carbohydrates', 'fat', 'fiber', 'water']
 const MODE_NAMES: Readonly<Record<FormMode, string>> = {
   exact: 'Exacta',
   minimum: 'Mínimo',
@@ -44,17 +66,11 @@ const MODE_NAMES: Readonly<Record<FormMode, string>> = {
   range: 'Rango',
   none: 'Sin meta',
 }
-/** Where a nutrient starts when it first gets a goal, and how far one press moves it. */
-const START: Readonly<
-  Record<GoalNutrient, { readonly value: number; readonly step: number; readonly max: number }>
-> = {
-  energy: { value: 2000, step: 50, max: 8000 },
-  protein: { value: 120, step: 5, max: 500 },
-  carbohydrates: { value: 220, step: 5, max: 900 },
-  fat: { value: 70, step: 5, max: 400 },
-  fiber: { value: 30, step: 1, max: 100 },
-  water: { value: 2500, step: 100, max: 8000 },
-}
+const MODES: readonly FormMode[] = ['minimum', 'exact', 'range', 'maximum', 'none']
+const EXTRAS: readonly { readonly code: GoalNutrient; readonly icon: IconName }[] = [
+  { code: 'fiber', icon: foodIcon('grain') },
+  { code: 'water', icon: foodIcon('water') },
+]
 const DEFAULT_FORM: GoalForm = {
   energy: { mode: 'exact', low: START.energy.value, high: null },
   protein: { mode: 'none', low: null, high: null },
@@ -64,39 +80,13 @@ const DEFAULT_FORM: GoalForm = {
   water: { mode: 'none', low: null, high: null },
 }
 
-const percent = (share: number): `${number}%` => `${share * 100}%`
 const unitOf = (code: GoalNutrient) => (code === 'energy' ? 'kcal' : code === 'water' ? 'ml' : 'g')
-const number = (value: number | null) => (value ?? 0).toLocaleString('es-CO')
+const number = (value: number | null) => Math.round(value ?? 0).toLocaleString('es-CO')
 
-function valueText(code: GoalNutrient, target: FormTarget): string {
-  if (target.mode === 'none') return ''
+function valueText(target: FormTarget): string {
+  if (target.mode === 'none') return '—'
   if (target.mode === 'range') return `${number(target.low)}–${number(target.high)}`
   return number(target.mode === 'maximum' ? target.high : target.low)
-}
-
-/** Where a target sits on its bar, scaled to itself so a range reads as a band, not a dot. */
-function trackOf(target: FormTarget): { readonly left: number; readonly right: number } | null {
-  if (target.mode === 'none') return null
-  const top = Math.max(1, target.low ?? 0, target.high ?? 0) * (5 / 3)
-  if (target.mode === 'minimum') return { left: (target.low ?? 0) / top, right: 1 }
-  if (target.mode === 'maximum') return { left: 0, right: (target.high ?? 0) / top }
-  if (target.mode === 'exact')
-    return { left: (target.low ?? 0) / top - 0.02, right: (target.low ?? 0) / top + 0.02 }
-  return { left: (target.low ?? 0) / top, right: (target.high ?? 0) / top }
-}
-
-/** A target moved to another mode keeps what it can of its values. */
-function withMode(code: GoalNutrient, target: FormTarget, mode: FormMode): FormTarget {
-  const start = START[code].value
-  const value = target.low ?? target.high ?? start
-  if (mode === 'none') return { mode, low: null, high: null }
-  if (mode === 'exact' || mode === 'minimum') return { mode, low: value, high: null }
-  if (mode === 'maximum') return { mode, low: null, high: value }
-  return {
-    mode,
-    low: target.low ?? Math.round(value * 0.9),
-    high: target.high ?? Math.round(value * 1.1),
-  }
 }
 
 export default function GoalScreen() {
@@ -105,9 +95,8 @@ export default function GoalScreen() {
   const flow = useMemo(() => createSpaceNutritionFlow(), [])
   const [form, setForm] = useState<GoalForm>(DEFAULT_FORM)
   const [hasGoal, setHasGoal] = useState(false)
-  const [editing, setEditing] = useState<
-    { readonly code: GoalNutrient; readonly about: 'mode' | 'value' } | undefined
-  >(undefined)
+  const [selected, setSelected] = useState<GoalNutrient>('protein')
+  const [typingEnergy, setTypingEnergy] = useState(false)
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState<string | undefined>(undefined)
 
@@ -119,6 +108,7 @@ export default function GoalScreen() {
         if (!active || !goals.active) return
         const read = formFromGoal(goals.active.targets)
         setForm(read.energy.mode === 'none' ? { ...read, energy: DEFAULT_FORM.energy } : read)
+        setSelected(MACROS.find((code) => read[code].mode !== 'none') ?? 'protein')
         setHasGoal(true)
       })
       .catch(() => undefined)
@@ -130,7 +120,19 @@ export default function GoalScreen() {
   const set = (code: GoalNutrient, target: FormTarget) =>
     setForm((current) => ({ ...current, [code]: target }))
   const energy = form.energy
-  const step = START.energy.step
+  const shares = macroShares(form)
+  const assigned = MACROS.reduce((sum, code) => sum + (shares[code] ?? 0), 0)
+
+  const nudgeEnergy = (by: number) => {
+    const move = (value: number | null) =>
+      Math.min(START.energy.max, Math.max(0, (value ?? START.energy.value) + by))
+    set(
+      'energy',
+      energy.mode === 'range'
+        ? { ...energy, low: move(energy.low), high: move(energy.high) }
+        : { ...energy, low: move(energy.low) },
+    )
+  }
 
   const publish = () => {
     setBusy(true)
@@ -145,7 +147,31 @@ export default function GoalScreen() {
       .finally(() => setBusy(false))
   }
 
-  const editingTarget = editing ? form[editing.code] : undefined
+  const target = form[selected]
+  const kcal = macroKcal(selected, target)
+  const fieldFor = (end: 'low' | 'high', autoFocus = false) => {
+    const caption = modeCaption(target.mode, end)
+    return (
+      <View style={styles.fieldBlock} key={end}>
+        <Text role="control" size="sm" color="secondary">
+          {caption}
+        </Text>
+        <GoalValueField
+          value={target[end]}
+          onChange={(value) => set(selected, { ...target, [end]: value })}
+          unit={unitOf(selected)}
+          step={START[selected].step}
+          max={START[selected].max}
+          accessibilityLabel={`${NUTRIENT_NAMES[selected]}, ${caption.toLowerCase()}`}
+          keyboardTitle={`${NUTRIENT_SHORT_NAMES[selected]} · ${caption.toLowerCase()}`}
+          autoFocus={autoFocus}
+          onDone={() =>
+            setForm((current) => ({ ...current, [selected]: orderedRange(current[selected]) }))
+          }
+        />
+      </View>
+    )
+  }
 
   return (
     <Screen edges={['top', 'bottom']} padded={false}>
@@ -160,150 +186,275 @@ export default function GoalScreen() {
         </Text>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.energy}>
-          <Text role="eyebrow" size="xs" color="muted" uppercase>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
+      >
+        <View
+          style={[
+            styles.energy,
+            {
+              backgroundColor: theme.color.background.surface,
+              borderColor: theme.color.border.subtle,
+            },
+          ]}
+        >
+          <CardGlow />
+          <Text role="control" size="sm" color="secondary">
             Energía diaria
           </Text>
-          {energy.mode === 'range' ? (
-            <View style={styles.range}>
-              {(['low', 'high'] as const).map((end) => (
-                <Stepper
-                  key={end}
-                  accessibilityLabel={end === 'low' ? 'Energía mínima' : 'Energía máxima'}
-                  value={energy[end] ?? START.energy.value}
-                  onChange={(value) => set('energy', { ...energy, [end]: value })}
-                  min={0}
-                  max={START.energy.max}
-                  step={step}
-                  unit="kcal"
-                  caption={end === 'low' ? 'desde' : 'hasta'}
-                />
-              ))}
-            </View>
-          ) : (
-            <View style={styles.energyRow}>
-              <IconButton
-                icon="subtract"
-                accessibilityLabel="Menos energía"
-                onPress={() =>
-                  set('energy', { ...energy, low: Math.max(0, (energy.low ?? 0) - step) })
-                }
-              />
+          <View style={styles.energyRow}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`${valueText(energy)} kcal al día. Escribir`}
+              onPress={() => energy.mode !== 'range' && setTypingEnergy(true)}
+              style={[styles.energyFigure, styles.grow]}
+            >
               <Text
                 role="display"
                 tracking={FIGURE_TRACKING}
-                size="6xl"
-                style={styles.energyNumber}
-                accessibilityLabel={`${number(energy.low)} kcal al día`}
+                size={energy.mode === 'range' ? '4xl' : '5xl'}
+                numberOfLines={1}
+                adjustsFontSizeToFit
               >
-                {number(energy.low)}
+                {valueText(energy)}
               </Text>
-              <IconButton
-                icon="add"
-                accessibilityLabel="Más energía"
-                onPress={() =>
-                  set('energy', {
-                    ...energy,
-                    low: Math.min(START.energy.max, (energy.low ?? 0) + step),
-                  })
-                }
-              />
-            </View>
-          )}
-          <Text role="body" size="md" color="secondary">
-            kcal al día
-          </Text>
-          <View style={styles.energyMode}>
-            <SegmentedControl
-              accessibilityLabel="Energía exacta o en rango"
-              items={[
-                { value: 'exact', label: 'Exacta' },
-                { value: 'range', label: 'Rango' },
-              ]}
-              value={energy.mode === 'range' ? 'range' : 'exact'}
-              onChange={(mode) => set('energy', withMode('energy', energy, mode))}
+              <Text role="control" size="md" color="secondary" style={styles.energyUnit}>
+                kcal
+              </Text>
+            </Pressable>
+            <IconButton
+              icon="add"
+              accessibilityLabel="Más energía"
+              onPress={() => nudgeEnergy(START.energy.step)}
             />
+            <IconButton
+              icon="subtract"
+              accessibilityLabel="Menos energía"
+              onPress={() => nudgeEnergy(-START.energy.step)}
+            />
+          </View>
+          {energy.mode !== 'range' && typingEnergy ? (
+            <GoalValueField
+              value={energy.low}
+              onChange={(low) => set('energy', { ...energy, low })}
+              unit="kcal"
+              step={START.energy.step}
+              max={START.energy.max}
+              accessibilityLabel="Energía diaria"
+              keyboardTitle="Energía · exacta"
+              autoFocus
+              onDone={() => setTypingEnergy(false)}
+            />
+          ) : null}
+          {energy.mode === 'range' ? (
+            <View style={styles.rangeFields}>
+              {(['low', 'high'] as const).map((end) => (
+                <View key={end} style={styles.fieldBlock}>
+                  <Text role="control" size="sm" color="secondary">
+                    {modeCaption('range', end)}
+                  </Text>
+                  <GoalValueField
+                    value={energy[end]}
+                    onChange={(value) => set('energy', { ...energy, [end]: value })}
+                    unit="kcal"
+                    step={START.energy.step}
+                    max={START.energy.max}
+                    accessibilityLabel={`Energía, ${modeCaption('range', end).toLowerCase()}`}
+                    keyboardTitle={`Energía · ${modeCaption('range', end).toLowerCase()}`}
+                    onDone={() =>
+                      setForm((current) => ({ ...current, energy: orderedRange(current.energy) }))
+                    }
+                  />
+                </View>
+              ))}
+            </View>
+          ) : null}
+          <Tabs
+            accessibilityLabel="Energía exacta o en rango"
+            items={[
+              { value: 'exact', label: 'Exacta' },
+              { value: 'range', label: 'Rango' },
+            ]}
+            value={energy.mode === 'range' ? 'range' : 'exact'}
+            onChange={(mode) => {
+              setTypingEnergy(false)
+              set('energy', withMode('energy', energy, mode))
+            }}
+            style={styles.energyTabs}
+          />
+          {/* Each macro's share of the day, in its colour; what is left unassigned stays grey. */}
+          <View
+            style={styles.split}
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+          >
+            {MACROS.map((code) =>
+              shares[code] ? (
+                <View
+                  key={code}
+                  style={[
+                    styles.piece,
+                    { flex: shares[code], backgroundColor: macroColor(theme, code) },
+                  ]}
+                />
+              ) : null,
+            )}
+            {assigned < 1 ? (
+              <View
+                style={[
+                  styles.piece,
+                  { flex: 1 - assigned, backgroundColor: theme.color.background.surfaceMuted },
+                ]}
+              />
+            ) : null}
           </View>
         </View>
 
         <Text role="control" size="lg">
-          Macros
+          Macronutrientes
         </Text>
-        {OTHERS.map((code) => {
-          const target = form[code]
-          const on = target.mode !== 'none'
-          const fill = trackOf(target)
-          return (
-            <View
-              key={code}
-              style={[
-                styles.row,
-                {
-                  backgroundColor: theme.color.background.surface,
-                  borderColor: theme.color.border.subtle,
-                },
-              ]}
-            >
-              <View style={styles.rowHead}>
-                <View
-                  style={[
-                    styles.dot,
-                    { backgroundColor: on ? macroColor(theme, code) : theme.color.border.default },
-                  ]}
-                />
-                <Text role="control" size="md" style={styles.grow}>
-                  {NUTRIENT_NAMES[code]}
-                </Text>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={`${NUTRIENT_NAMES[code]}: ${MODE_NAMES[target.mode]}. Cambiar`}
-                  onPress={() => setEditing({ code, about: 'mode' })}
-                  style={[styles.mode, { backgroundColor: theme.color.background.surfaceMuted }]}
-                >
-                  <Text role="control" size="sm" color="secondary">
-                    {MODE_NAMES[target.mode]}
+        <View style={styles.macros}>
+          {MACROS.map((code) => {
+            const share = shares[code]
+            const on = form[code].mode !== 'none'
+            const picked = selected === code
+            return (
+              <Pressable
+                key={code}
+                accessibilityRole="button"
+                accessibilityState={{ selected: picked }}
+                accessibilityLabel={`${NUTRIENT_NAMES[code]}: ${
+                  on ? `${MODE_NAMES[form[code].mode]}, ${valueText(form[code])} g` : 'sin meta'
+                }. Editar`}
+                onPress={() => setSelected(code)}
+                style={[
+                  styles.macro,
+                  {
+                    backgroundColor: theme.color.background.surface,
+                    borderColor: picked ? theme.color.border.accent : theme.color.border.subtle,
+                    borderWidth: picked ? 1.5 : 1,
+                  },
+                ]}
+              >
+                <Ring size={76} stroke={7} share={share ?? 0} color={macroColor(theme, code)}>
+                  <Text role="poster" tracking={FIGURE_TRACKING} size="lg">
+                    {share === null ? '—' : `${String(Math.round(share * 100))}%`}
                   </Text>
+                  <Text role="body" size="2xs" color="muted">
+                    de kcal
+                  </Text>
+                </Ring>
+                <Text
+                  role="poster"
+                  tracking={FIGURE_TRACKING}
+                  size="xl"
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                >
+                  {valueText(form[code])}
+                  {on ? (
+                    <Text role="body" size="xs" color="muted">
+                      {' g'}
+                    </Text>
+                  ) : null}
+                </Text>
+                <Text role="control" size="sm" style={{ color: macroColor(theme, code) }}>
+                  {NUTRIENT_SHORT_NAMES[code]}
+                </Text>
+                <View
+                  style={[styles.chip, { backgroundColor: theme.color.background.surfaceMuted }]}
+                >
+                  <Text role="body" size="2xs" color="secondary">
+                    {MODE_NAMES[form[code].mode]}
+                  </Text>
+                </View>
+              </Pressable>
+            )
+          })}
+        </View>
+
+        <View
+          style={[
+            styles.editor,
+            {
+              backgroundColor: theme.color.background.surface,
+              borderColor: theme.color.border.subtle,
+            },
+          ]}
+        >
+          <View style={styles.editorHead}>
+            <Text role="control" size="lg" style={styles.grow}>
+              {NUTRIENT_NAMES[selected]}
+            </Text>
+            {kcal !== null ? (
+              <Text role="control" size="sm" color="muted">
+                {`${number(kcal)} kcal`}
+              </Text>
+            ) : null}
+          </View>
+          <Tabs
+            accessibilityLabel={`Tipo de meta para ${NUTRIENT_NAMES[selected]}`}
+            items={MODES.map((mode) => ({ value: mode, label: MODE_NAMES[mode] }))}
+            value={target.mode}
+            onChange={(mode) => set(selected, withMode(selected, target, mode))}
+          />
+          {target.mode === 'none' ? (
+            <Text role="body" size="sm" color="muted">
+              {`${NUTRIENT_NAMES[selected]} queda fuera de tu meta.`}
+            </Text>
+          ) : target.mode === 'range' ? (
+            [fieldFor('low'), fieldFor('high')]
+          ) : (
+            fieldFor(target.mode === 'maximum' ? 'high' : 'low')
+          )}
+        </View>
+
+        <View style={styles.extras}>
+          {EXTRAS.map(({ code, icon }) => {
+            const on = form[code].mode !== 'none'
+            const picked = selected === code
+            return (
+              <Pressable
+                key={code}
+                accessibilityRole="button"
+                accessibilityState={{ selected: picked }}
+                accessibilityLabel={`${NUTRIENT_NAMES[code]}: ${
+                  on ? `${valueText(form[code])} ${unitOf(code)}` : 'sin meta'
+                }. Editar`}
+                onPress={() => setSelected(code)}
+                style={[
+                  styles.extra,
+                  {
+                    backgroundColor: theme.color.background.surface,
+                    borderColor: picked ? theme.color.border.accent : theme.color.border.subtle,
+                    borderWidth: picked ? 1.5 : 1,
+                  },
+                ]}
+              >
+                <FoundationIcon name={icon} size="md" color={macroColor(theme, code)} decorative />
+                <View style={styles.grow}>
+                  <Text role="control" size="md">
+                    {NUTRIENT_NAMES[code]}
+                  </Text>
+                  <Text role="body" size="sm" color="secondary">
+                    {on ? `${valueText(form[code])} ${unitOf(code)}` : 'Sin meta'}
+                  </Text>
+                </View>
+                {on ? null : (
                   <FoundationIcon
-                    name="expand"
-                    size="xs"
+                    name="add"
+                    size="md"
                     color={theme.color.icon.secondary}
                     decorative
                   />
-                </Pressable>
-                {on ? (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={`${valueText(code, target)} ${unitOf(code)}. Cambiar`}
-                    onPress={() => setEditing({ code, about: 'value' })}
-                    hitSlop={8}
-                  >
-                    <Text role="poster" tracking={FIGURE_TRACKING} size="xl">
-                      {valueText(code, target)}
-                      <Text role="body" size="xs" color="muted">{` ${unitOf(code)}`}</Text>
-                    </Text>
-                  </Pressable>
-                ) : null}
-              </View>
-              {fill ? (
-                <View
-                  style={[styles.track, { backgroundColor: theme.color.background.surfaceMuted }]}
-                >
-                  <View
-                    style={[
-                      styles.fill,
-                      {
-                        left: percent(Math.min(0.98, fill.left)),
-                        width: percent(Math.max(0.02, Math.min(1, fill.right - fill.left))),
-                        backgroundColor: macroColor(theme, code),
-                      },
-                    ]}
-                  />
-                </View>
-              ) : null}
-            </View>
-          )
-        })}
+                )}
+              </Pressable>
+            )
+          })}
+        </View>
 
         {failure ? <InlineAlert message={failure} /> : null}
       </ScrollView>
@@ -317,68 +468,10 @@ export default function GoalScreen() {
         <Button
           label="Publicar mi meta"
           loading={busy}
-          disabled={targetsFromForm(form).length === 0}
+          disabled={targetsFromForm(form).length === 0 || energyOf(energy) === null}
           onPress={publish}
         />
       </View>
-
-      <Sheet
-        visible={editing !== undefined}
-        onDismiss={() => setEditing(undefined)}
-        title={editing ? NUTRIENT_NAMES[editing.code] : ''}
-      >
-        {editing && editingTarget ? (
-          editing.about === 'mode' ? (
-            <View style={styles.sheet}>
-              {(['minimum', 'range', 'maximum', 'none'] as const).map((mode) => (
-                <SheetChoice
-                  key={mode}
-                  name={MODE_NAMES[mode]}
-                  selected={editingTarget.mode === mode}
-                  onPress={() => {
-                    set(editing.code, withMode(editing.code, editingTarget, mode))
-                    setEditing(mode === 'none' ? undefined : { code: editing.code, about: 'value' })
-                  }}
-                />
-              ))}
-            </View>
-          ) : (
-            <View style={styles.sheet}>
-              {editingTarget.mode !== 'maximum' ? (
-                <Stepper
-                  accessibilityLabel={editingTarget.mode === 'range' ? 'Desde' : 'Valor'}
-                  value={editingTarget.low ?? START[editing.code].value}
-                  onChange={(low) => set(editing.code, { ...editingTarget, low })}
-                  min={0}
-                  max={START[editing.code].max}
-                  step={START[editing.code].step}
-                  unit={unitOf(editing.code)}
-                  grow
-                  caption={
-                    editingTarget.mode === 'range'
-                      ? 'desde'
-                      : MODE_NAMES[editingTarget.mode].toLowerCase()
-                  }
-                />
-              ) : null}
-              {editingTarget.mode === 'maximum' || editingTarget.mode === 'range' ? (
-                <Stepper
-                  accessibilityLabel={editingTarget.mode === 'range' ? 'Hasta' : 'Máximo'}
-                  value={editingTarget.high ?? START[editing.code].value}
-                  onChange={(high) => set(editing.code, { ...editingTarget, high })}
-                  min={editingTarget.mode === 'range' ? (editingTarget.low ?? 0) : 0}
-                  max={START[editing.code].max}
-                  step={START[editing.code].step}
-                  unit={unitOf(editing.code)}
-                  grow
-                  caption={editingTarget.mode === 'range' ? 'hasta' : 'máximo'}
-                />
-              ) : null}
-              <Button label="Listo" onPress={() => setEditing(undefined)} />
-            </View>
-          )
-        ) : null}
-      </Sheet>
     </Screen>
   )
 }
@@ -393,25 +486,29 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 10,
   },
-  content: { paddingHorizontal: 20, paddingBottom: 24, gap: 12 },
-  energy: { alignItems: 'center', gap: 10, paddingVertical: 10 },
-  energyRow: { flexDirection: 'row', alignItems: 'center', gap: 20 },
-  energyNumber: { paddingHorizontal: 4 },
-  range: { flexDirection: 'row', gap: 12 },
-  energyMode: { width: 260 },
-  row: { borderRadius: 20, borderWidth: 1, padding: 14, gap: 12 },
-  rowHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  dot: { width: 10, height: 10, borderRadius: 5 },
-  mode: {
+  content: { paddingHorizontal: 20, paddingBottom: 24, gap: 14 },
+  energy: { borderRadius: 24, borderWidth: 1, padding: 20, gap: 12, overflow: 'hidden' },
+  energyRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  energyFigure: { flexDirection: 'row', alignItems: 'flex-end', gap: 6 },
+  energyUnit: { paddingBottom: 8 },
+  energyTabs: { alignSelf: 'flex-start' },
+  rangeFields: { gap: 10 },
+  split: { flexDirection: 'row', gap: 4, height: 6 },
+  piece: { borderRadius: 3 },
+  macros: { flexDirection: 'row', gap: 10 },
+  macro: { flex: 1, alignItems: 'center', borderRadius: 22, padding: 12, gap: 6 },
+  chip: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3 },
+  editor: { borderRadius: 24, borderWidth: 1, padding: 16, gap: 14 },
+  editorHead: { flexDirection: 'row', alignItems: 'center' },
+  fieldBlock: { gap: 8 },
+  extras: { flexDirection: 'row', gap: 10 },
+  extra: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
+    gap: 10,
+    borderRadius: 20,
+    padding: 14,
   },
-  track: { height: 6, borderRadius: 3, overflow: 'hidden' },
-  fill: { position: 'absolute', top: 0, bottom: 0, borderRadius: 3 },
   foot: { paddingHorizontal: 20, paddingTop: 10, gap: 10 },
-  sheet: { gap: 12, paddingBottom: 8 },
 })

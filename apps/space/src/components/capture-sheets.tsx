@@ -13,7 +13,7 @@
  */
 
 import { Button } from '@allfitone/react-native/button'
-import { FoundationIcon, iconCatalog, type IconName } from '@allfitone/react-native/icons'
+import { FoundationIcon } from '@allfitone/react-native/icons'
 import { Sheet } from '@allfitone/react-native/sheet'
 import { Text } from '@allfitone/react-native/text'
 import { useTheme, type Theme } from '@allfitone/react-native/theme'
@@ -39,9 +39,7 @@ import {
   type NutrientCode,
 } from '../client/nutrition'
 import { AmountField, NutrientCells, NutritionFacts } from './nutrition-facts'
-import { CardGlow, FIGURE_TRACKING, macroColor, MEAL_ICON } from './nutrition-ui'
-
-const isIconName = (name: string): name is IconName => Object.hasOwn(iconCatalog, name)
+import { CardGlow, FIGURE_TRACKING, foodIcon, macroColor, MEAL_ICON } from './nutrition-ui'
 
 /** A food's tile: its DS food icon, on the tint of the macro it is mostly made of. */
 export function FoodTile({
@@ -62,12 +60,7 @@ export function FoodTile({
         { width: size, height: size, borderRadius: size * 0.3, backgroundColor: `${tint}26` },
       ]}
     >
-      <FoundationIcon
-        name={isIconName(icon) ? icon : 'nutrition'}
-        customSize={size * 0.5}
-        color={tint}
-        decorative
-      />
+      <FoundationIcon name={foodIcon(icon)} customSize={size * 0.5} color={tint} decorative />
     </View>
   )
 }

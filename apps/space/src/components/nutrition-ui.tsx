@@ -6,7 +6,7 @@
  * so a macro is recognised by its colour before its name is read.
  */
 
-import { FoundationIcon } from '@allfitone/react-native/icons'
+import { FoundationIcon, iconCatalog, type IconName } from '@allfitone/react-native/icons'
 import { Text } from '@allfitone/react-native/text'
 import { useTheme } from '@allfitone/react-native/theme'
 import { Image } from 'expo-image'
@@ -31,6 +31,16 @@ type Theme = ReturnType<typeof useTheme>
  * `tracking`): a kcal total reads as one blot. Opened just enough to separate digits.
  */
 export const FIGURE_TRACKING = 0.01
+
+/**
+ * A food icon by name, or the plate when this build's Design System has not got it: the
+ * food set is newer than the published package's types, so the name is checked at runtime.
+ */
+export function foodIcon(name: string): IconName {
+  return isIconName(name) ? name : 'nutrition'
+}
+
+const isIconName = (name: string): name is IconName => Object.hasOwn(iconCatalog, name)
 
 export function macroColor(theme: Theme, code: NutrientCode): string {
   switch (code) {
