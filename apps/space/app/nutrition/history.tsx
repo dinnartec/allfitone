@@ -36,7 +36,7 @@ import { FIGURE_TRACKING, macroColor, MealThumb } from '../../src/components/nut
 const READ_FAILED = 'No pudimos cargar tu historial. Inténtalo otra vez.'
 const SPANS = [7, 14, 31] as const
 const LETTERS = ['D', 'L', 'M', 'X', 'J', 'V', 'S']
-const WEEKDAYS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado']
+const WEEKDAYS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
 const BAR_HEIGHT = 110
 
 const localDay = (timeZone: string) =>
@@ -141,7 +141,7 @@ export default function NutritionHistoryScreen() {
               </Text>
             </View>
             <Text role="body" size="sm" color="muted">
-              {`en ${String(average.days)} ${average.days === 1 ? 'día' : 'días'} con registro`}
+              {`En ${String(average.days)} ${average.days === 1 ? 'día' : 'días'} con registro`}
             </Text>
           </View>
 
@@ -156,8 +156,8 @@ export default function NutritionHistoryScreen() {
                   },
                 ]}
               >
-                <Text role="body" size="xs" color="muted" style={styles.goalLabel}>
-                  {`meta ${goalFigure(energyGoal).label}`}
+                <Text role="body" size="sm" color="muted" style={styles.goalLabel}>
+                  {`Meta ${goalFigure(energyGoal).label}`}
                 </Text>
               </View>
             ) : null}
@@ -229,7 +229,7 @@ export default function NutritionHistoryScreen() {
                   {mean.value === null ? '—' : `${String(mean.value)} g`}
                 </Text>
                 <Text role="body" size="xs" color="muted">
-                  {target ? `de ${goalFigure(target).label} g` : 'Sin meta'}
+                  {target ? `De ${goalFigure(target).label} g` : 'Sin meta'}
                 </Text>
               </View>
             )
@@ -328,7 +328,7 @@ const styles = StyleSheet.create({
   averageUnit: { paddingBottom: 6 },
   chart: { paddingTop: 18 },
   goalLine: { position: 'absolute', left: 0, right: 0, borderTopWidth: 1 },
-  goalLabel: { position: 'absolute', right: 0, top: -18 },
+  goalLabel: { position: 'absolute', right: 0, top: -22 },
   bars: { flexDirection: 'row', alignItems: 'flex-end', gap: 4 },
   barColumn: { flex: 1, alignItems: 'center', gap: 6 },
   barTrack: { width: '100%', justifyContent: 'flex-end', alignItems: 'center' },
