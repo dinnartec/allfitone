@@ -164,6 +164,26 @@ jobs:
       - name: Test database concurrency
         run: bun run db:test:concurrency
 
+      # `check:db-types` runs postgres-meta in a container of its own, and pulls
+      # it from public.ecr.aws. That registry's limit for anonymous pulls fails
+      # this job regularly — twice in twenty minutes on 2026-10-06 — and the
+      # failure says nothing about the code. The same image is published on
+      # Docker Hub, so take it from there and tag it with the name the Supabase
+      # CLI looks for; the CLI then finds it already on the machine and never
+      # calls ECR.
+      #
+      # The tag belongs to the CLI pinned in package.json ("supabase":
+      # "2.110.0"). If a CLI bump ever asks for a different one, this step turns
+      # into a no-op and the CLI pulls from ECR exactly as it does today, so a
+      # stale tag here cannot break the build. That is what continue-on-error
+      # protects: a bad or rate-limited pull must not fail the job by itself.
+      - name: Preload the type generator image
+        continue-on-error: true
+        run: |
+          image=supabase/postgres-meta:v0.96.6
+          docker pull "$image"
+          docker tag "$image" "public.ecr.aws/$image"
+
       - name: Generated database types
         run: bun run check:db-types
 
