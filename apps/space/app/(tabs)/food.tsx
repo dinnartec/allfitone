@@ -47,6 +47,7 @@ import {
   mealTotals,
   MEAL_NAMES,
   NUTRIENT_SHORT_NAMES,
+  goalLine,
   rangeProgress,
   remainingFor,
   type DailySummary,
@@ -585,8 +586,9 @@ function MacroCards({
                   ]}
                 >
                   <View style={styles.macroTop}>
+                    {/* What was eaten, always: «restante» beside a goal read as the goal itself. */}
                     <Text role="poster" tracking={FIGURE_TRACKING} size="2xl">
-                      {String(Math.round(remaining ? remaining.left : eaten))}
+                      {String(Math.round(eaten))}
                       <Text role="body" size="xs" color="muted">{` ${unit}`}</Text>
                     </Text>
                     <Ring
@@ -604,14 +606,10 @@ function MacroCards({
                     minimumFontScale={0.85}
                     style={{ color: macroColor(theme, code) }}
                   >
-                    {remaining
-                      ? `${NUTRIENT_SHORT_NAMES[code]} ${code === 'carbohydrates' ? 'restantes' : 'restante'}`
-                      : NUTRIENT_SHORT_NAMES[code]}
+                    {NUTRIENT_SHORT_NAMES[code]}
                   </Text>
                   <Text role="body" size="xs" color="muted">
-                    {goal
-                      ? `${String(Math.round(eaten))} de ${goalFigure(goal).label} ${unit}`
-                      : 'Sin meta'}
+                    {goalLine(goal, unit)}
                   </Text>
                 </View>
               )

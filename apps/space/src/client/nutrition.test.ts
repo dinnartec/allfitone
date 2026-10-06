@@ -19,6 +19,7 @@ import {
   mealPrompt,
   mealWithArticle,
   mealTotals,
+  goalLine,
   rangeProgress,
   remainingFor,
   targetsFromForm,
@@ -436,5 +437,25 @@ describe('progress against an energy range', () => {
     expect(
       rangeProgress({ ...range, mode: 'exact', exact: 2300, minimum: null, maximum: null }, 100),
     ).toBeNull()
+  })
+})
+
+describe('the goal under a macro card', () => {
+  const base = {
+    nutrient_code: 'protein',
+    unit: 'g',
+    minimum: null,
+    maximum: null,
+    exact: null,
+  } as const
+
+  test('T-SPC-UNIT-279 a card says what the eaten figure is measured against', () => {
+    expect(goalLine({ ...base, mode: 'minimum', minimum: 120 }, 'g')).toBe('De mín. 120 g')
+    expect(goalLine({ ...base, mode: 'maximum', maximum: 70 }, 'g')).toBe('De máx. 70 g')
+    expect(goalLine({ ...base, mode: 'exact', exact: 150 }, 'g')).toBe('De 150 g')
+    expect(goalLine({ ...base, mode: 'range', minimum: 200, maximum: 240 }, 'g')).toBe(
+      'De 200–240 g',
+    )
+    expect(goalLine(undefined, 'g')).toBe('Sin meta')
   })
 })

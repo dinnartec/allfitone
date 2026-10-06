@@ -291,6 +291,15 @@ export function remainingFor(
   }
 }
 
+/**
+ * The line under a macro card's eaten figure: what it is measured against.
+ * «De mín. 120 g» reads with the figure above it — 100 g, de mín. 120 g — and stands
+ * on its own line, so it starts with a capital.
+ */
+export function goalLine(goal: GoalTarget | undefined, unit: string): string {
+  return goal ? `De ${goalFigure(goal).label} ${unit}` : 'Sin meta'
+}
+
 /** Where the day stands against an energy range, and the arc that draws it. */
 export type RangeProgress = {
   /** Where the eaten, the minimum and the maximum fall on the arc, from 0 to 1. */
