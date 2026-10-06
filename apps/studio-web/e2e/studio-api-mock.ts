@@ -26,6 +26,7 @@ export interface StudioApiFixture {
   relationshipState: unknown
   assignmentOutcome: 'created' | 'taken' | 'forbidden'
   reassignmentOutcome: 'reassigned' | 'no-holder' | 'forbidden'
+  roleGrantOutcome: 'granted' | 'rejected' | 'forbidden'
   offerableScopes: unknown[]
   organization: unknown
   organizationRoles: unknown[]
@@ -532,6 +533,7 @@ export function createStudioApiFixture(
     relationshipState: structuredClone(relationshipState),
     assignmentOutcome: 'created',
     reassignmentOutcome: 'reassigned',
+    roleGrantOutcome: 'granted',
     offerableScopes: [...offerableScopeCatalog],
     /*
      * A copy, not the shared object. Sites are now editable, and the mock
@@ -788,6 +790,43 @@ function defaultResponse(
     // production never reports.
     if (fixture.relationshipState === null) return { status: 404, body: { error: 'not-found' } }
     return { status: 200, body: fixture.relationshipState }
+  }
+  if (
+    request.method === 'POST' &&
+    /^\/studio\/v1\/organizations\/[^/]+\/memberships\/[^/]+\/roles$/.test(request.path)
+  ) {
+    if (fixture.roleGrantOutcome !== 'granted') {
+      return {
+        status: fixture.roleGrantOutcome === 'rejected' ? 422 : 403,
+        body: {
+          error: fixture.roleGrantOutcome === 'rejected' ? 'validation-failed' : 'forbidden',
+        },
+      }
+    }
+    const membershipId = request.path.split('/').slice(-2, -1)[0]
+    const granted = (request.body ?? {}) as { role_code?: string }
+    // The list is re-read after a grant, so the fixture has to carry the new
+    // role or the screen would show the roles it had before.
+    fixture.organizationMemberships = fixture.organizationMemberships.map((entry) => {
+      if (
+        typeof entry !== 'object' ||
+        entry === null ||
+        !('membership_id' in entry) ||
+        entry.membership_id !== membershipId
+      ) {
+        return entry
+      }
+      const member = entry as unknown as { roles: string[] }
+      return { ...member, roles: [...member.roles, granted.role_code ?? ''] }
+    })
+    return {
+      status: 200,
+      body: {
+        membership_id: membershipId,
+        role_code: granted.role_code,
+        valid_from: '2026-10-06T10:00:00.000Z',
+      },
+    }
   }
   if (
     request.method === 'GET' &&
