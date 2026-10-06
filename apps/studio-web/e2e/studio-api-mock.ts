@@ -25,6 +25,7 @@ export interface StudioApiFixture {
   organizationClients: unknown[]
   relationshipState: unknown
   assignmentOutcome: 'created' | 'taken' | 'forbidden'
+  reassignmentOutcome: 'reassigned' | 'no-holder' | 'forbidden'
   offerableScopes: unknown[]
   organization: unknown
   organizationRoles: unknown[]
@@ -530,6 +531,7 @@ export function createStudioApiFixture(
     organizationClients: [activeClient, pendingClientInvitation, terminatedClient],
     relationshipState: structuredClone(relationshipState),
     assignmentOutcome: 'created',
+    reassignmentOutcome: 'reassigned',
     offerableScopes: [...offerableScopeCatalog],
     /*
      * A copy, not the shared object. Sites are now editable, and the mock
@@ -699,6 +701,49 @@ function defaultResponse(
         })
       : fixture.organizationClients
     return { status: 200, body: { data, page: { has_more: false, next_cursor: null } } }
+  }
+  if (
+    request.method === 'POST' &&
+    /^\/studio\/v1\/organizations\/[^/]+\/relationships\/[^/]+\/professional-assignments\/reassignment$/.test(
+      request.path,
+    )
+  ) {
+    if (fixture.reassignmentOutcome !== 'reassigned') {
+      return {
+        status: fixture.reassignmentOutcome === 'no-holder' ? 409 : 403,
+        body: { error: fixture.reassignmentOutcome === 'no-holder' ? 'conflict' : 'forbidden' },
+      }
+    }
+    const moving = (request.body ?? {}) as { membership_id?: string }
+    const incoming = fixture.organizationMemberships.find(
+      (entry) =>
+        typeof entry === 'object' &&
+        entry !== null &&
+        'membership_id' in entry &&
+        entry.membership_id === moving.membership_id,
+    ) as { membership_id: string; display_name: string } | undefined
+    const previous = (fixture.relationshipState as { holder?: { assignment_id?: string } }).holder
+    fixture.relationshipState = {
+      ...(fixture.relationshipState as Record<string, unknown>),
+      holder: {
+        assignment_id: '01991600-7000-7000-8000-000000000398',
+        membership_id: incoming?.membership_id ?? '',
+        professional_person_id: '01991600-7000-7000-8000-000000000298',
+        display_name: incoming?.display_name ?? '',
+        valid_from: '2026-10-05T12:00:00.000Z',
+      },
+    }
+    return {
+      status: 201,
+      body: {
+        assignment_id: '01991600-7000-7000-8000-000000000398',
+        relationship_id: relationshipState.relationship_id,
+        membership_id: incoming?.membership_id ?? '',
+        professional_person_id: '01991600-7000-7000-8000-000000000298',
+        valid_from: '2026-10-05T12:00:00.000Z',
+        replaced_assignment_id: previous?.assignment_id ?? null,
+      },
+    }
   }
   if (
     request.method === 'POST' &&

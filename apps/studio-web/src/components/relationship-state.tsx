@@ -52,10 +52,15 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 
 import { useOrganizationContext } from './organization-context'
+import { RelationshipHolderChange } from './relationship-holder-change'
 import { RelationshipHolderForm } from './relationship-holder-form'
 import { WorkspacePageHeader } from './workspace-page-header'
 import { clientInitials, seesEveryClient } from '@/lib/client-directory'
-import { assignableCoaches, canAssignProfessionals } from '@/lib/relationship-holder'
+import {
+  assignableCoaches,
+  canAssignProfessionals,
+  reassignableCoaches,
+} from '@/lib/relationship-holder'
 import {
   accessLevelLabel,
   grantStatusLabel,
@@ -99,7 +104,7 @@ export function RelationshipStateScreen() {
    * charge. A reader of the relationship has no reason to pull the team roster
    * down, and the command would refuse them anyway.
    */
-  const needsCoaches = mayAssign && query.data?.status === 'active' && query.data.holder === null
+  const needsCoaches = mayAssign && query.data?.status === 'active'
   const coachesQuery = useInfiniteQuery({
     ...organizationMembershipsQueryOptions(current.organization_id, 'active', COACH_PAGE_SIZE),
     enabled: needsCoaches,
@@ -143,10 +148,10 @@ export function RelationshipStateScreen() {
         relationship={relationship}
         everyClient={everyClient}
         organizationId={current.organization_id}
-        assign={
+        roster={
           needsCoaches
             ? {
-                coaches: assignableCoaches(flattenMembershipPages(coachesQuery.data)),
+                memberships: flattenMembershipPages(coachesQuery.data),
                 loading: coachesQuery.isPending,
               }
             : null
@@ -204,12 +209,13 @@ function ProfessionalsPanel({
   relationship,
   everyClient,
   organizationId,
-  assign,
+  roster,
 }: {
   relationship: RelationshipState
   everyClient: boolean
   organizationId: string
-  assign: { coaches: readonly OrganizationMembership[]; loading: boolean } | null
+  /* Only present for a reader who may assign, on a live relationship. */
+  roster: { memberships: readonly OrganizationMembership[]; loading: boolean } | null
 }) {
   const { holder, substitutions } = relationship
   const active = relationship.status === 'active'
@@ -229,18 +235,29 @@ function ProfessionalsPanel({
       <CardContent>
         {holder ? (
           <div data-relationship-holder>
-            <div data-client-identity data-relationship-subject>
-              <Avatar decorative>
-                <AvatarFallback>{clientInitials(holder.display_name)}</AvatarFallback>
-              </Avatar>
-              <strong>{holder.display_name}</strong>
+            <div data-relationship-holder-head>
+              <div data-client-identity data-relationship-subject>
+                <Avatar decorative>
+                  <AvatarFallback>{clientInitials(holder.display_name)}</AvatarFallback>
+                </Avatar>
+                <strong>{holder.display_name}</strong>
+              </div>
+              {roster ? (
+                <RelationshipHolderChange
+                  organizationId={organizationId}
+                  relationshipId={relationship.relationship_id}
+                  currentHolderName={holder.display_name}
+                  coaches={reassignableCoaches(roster.memberships, holder.membership_id)}
+                  loadingCoaches={roster.loading}
+                />
+              ) : null}
             </div>
             <dl data-relationship-facts>
               <dt>Desde</dt>
               <dd>{formatDate(holder.valid_from)}</dd>
             </dl>
           </div>
-        ) : assign ? (
+        ) : roster ? (
           /*
            * One line and the form, not the empty block as well. The block's
            * description told the reader an administrator could assign somebody
@@ -253,8 +270,8 @@ function ProfessionalsPanel({
             <RelationshipHolderForm
               organizationId={organizationId}
               relationshipId={relationship.relationship_id}
-              coaches={assign.coaches}
-              loadingCoaches={assign.loading}
+              coaches={assignableCoaches(roster.memberships)}
+              loadingCoaches={roster.loading}
             />
           </div>
         ) : (

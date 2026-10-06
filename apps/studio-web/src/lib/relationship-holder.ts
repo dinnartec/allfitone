@@ -84,3 +84,49 @@ export function refusalDescription(refusal: AssignmentRefusal): string {
   }
   return 'La conexión falló de forma temporal. Nadie quedó asignado, así que puedes intentarlo otra vez.'
 }
+
+/**
+ * Changing who attends somebody is a different operation from putting the
+ * first coach in charge, and its refusals mean different things.
+ *
+ * A conflict here is not "somebody beat you to it": it means there is nobody
+ * to take the client *from*. Either the holder was removed while this page was
+ * open, or the relationship ended. Both are states the reader can see by
+ * refreshing, so neither offers a retry.
+ */
+export function reassignRefusalTitle(refusal: AssignmentRefusal): string {
+  if (refusal === 'taken') return 'Ya no hay a quién cambiarle este cliente'
+  if (refusal === 'not-allowed') return 'No puedes cambiar el profesional responsable'
+  if (refusal === 'gone') return 'Este vínculo ya no está'
+  return 'No pudimos cambiar el profesional'
+}
+
+export function reassignRefusalDescription(refusal: AssignmentRefusal): string {
+  if (refusal === 'taken') {
+    return 'Puede que lo hayan quitado o que el vínculo haya terminado mientras tenías esta pantalla abierta. Actualiza para ver cómo está ahora.'
+  }
+  if (refusal === 'not-allowed') {
+    return 'Tu rol en esta organización no incluye cambiar al profesional responsable.'
+  }
+  if (refusal === 'gone') {
+    return 'Puede que el vínculo haya terminado. Vuelve a clientes para elegir otro.'
+  }
+  // Nothing was written and nobody was emailed, which is what makes retrying
+  // safe to offer here.
+  return 'La conexión falló de forma temporal. Nadie cambió de profesional y no se avisó a la persona, así que puedes intentarlo otra vez.'
+}
+
+/**
+ * The coaches this client can be moved *to*: everybody eligible except whoever
+ * already attends them. Leaving the current holder in the list offers a choice
+ * that changes nothing and notifies nobody — the command answers `200` and the
+ * reader is left wondering what happened.
+ */
+export function reassignableCoaches(
+  memberships: readonly OrganizationMembership[],
+  currentMembershipId: string,
+): readonly OrganizationMembership[] {
+  return assignableCoaches(memberships).filter(
+    (coach) => coach.membership_id !== currentMembershipId,
+  )
+}

@@ -14,7 +14,9 @@ import { expect, type Page } from '@playwright/test'
 
 import {
   TEST_ANALYTICS_ID,
+  activeCoach,
   activeMembership,
+  activeTeamMember,
   coachedTeam,
   createStudioApiFixture,
   organizationWithLongSite,
@@ -949,6 +951,39 @@ export const SCREENS: Screen[] = [
       await page.getByRole('option', { name: 'Camilo Restrepo' }).click()
       await page.getByRole('button', { name: 'Asignar' }).click()
       await expect(page.getByText(/Alguien lo asignó mientras tenías/)).toBeVisible()
+    },
+  },
+  {
+    // HU-028. The dialog open, which is the state worth looking at: its three
+    // sentences are the only warning an administrator gets that the client is
+    // about to be emailed.
+    stories: 'HU-028 · the warning before a client changes professional',
+    path: `${workspace}/clients/${relationshipId}`,
+    fixture: () =>
+      createStudioApiFixture({
+        memberships: [activeMembership],
+        organizationMemberships: coachedTeam(),
+        relationshipState: { ...relationshipState, substitutions: [] },
+      }),
+    reveal: async (page) => {
+      await page.getByRole('button', { name: 'Cambiar' }).click()
+      await expect(page.getByText(/A la persona le llegará un correo/)).toBeVisible()
+    },
+  },
+  {
+    // Nobody to move the client to. The gym has one coach, who already has
+    // them, so the dialog says that instead of offering an empty list.
+    stories: 'HU-028 · there is no other coach to move the client to',
+    path: `${workspace}/clients/${relationshipId}`,
+    fixture: () =>
+      createStudioApiFixture({
+        memberships: [activeMembership],
+        organizationMemberships: [activeTeamMember, activeCoach],
+        relationshipState: { ...relationshipState, substitutions: [] },
+      }),
+    reveal: async (page) => {
+      await page.getByRole('button', { name: 'Cambiar' }).click()
+      await expect(page.getByText(/No hay otro entrenador activo/)).toBeVisible()
     },
   },
   {
