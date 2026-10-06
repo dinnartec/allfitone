@@ -94,3 +94,41 @@ export function orderedRange(target: FormTarget): FormTarget {
   if (target.mode !== 'range' || target.low === null || target.high === null) return target
   return target.low > target.high ? { ...target, low: target.high, high: target.low } : target
 }
+
+// ———————————————————————————————————————— the energy slider (N-6f)
+
+export interface Scale {
+  readonly min: number
+  readonly mid: number
+  readonly max: number
+}
+
+/**
+ * The slider's scale: 1.000 to 4.000 kcal, which holds almost any adult's day.
+ *
+ * Fixed, so a handle let go stays where it was let go: a scale centred on the goal
+ * re-centred after every drag and slid the track out from under the handle. It only
+ * widens when a figure typed past an end needs room, and then only that end, to 500.
+ */
+const FLOOR = 1000
+const CEILING = 4000
+const GRAIN = 500
+
+export function energyScale(low: number, high: number): Scale {
+  const min = low < FLOOR ? Math.max(0, Math.floor(low / GRAIN) * GRAIN) : FLOOR
+  const max = high > CEILING ? Math.ceil(high / GRAIN) * GRAIN : CEILING
+  return { min, mid: (min + max) / 2, max }
+}
+
+/** Where a value sits on the scale, from 0 to 1. */
+export function fractionOf(value: number, scale: Scale): number {
+  'worklet'
+  return Math.min(1, Math.max(0, (value - scale.min) / (scale.max - scale.min)))
+}
+
+/** The value at a place on the scale, on the step. */
+export function valueAt(fraction: number, scale: Scale, step: number): number {
+  'worklet'
+  const clamped = Math.min(1, Math.max(0, fraction))
+  return Math.round((scale.min + clamped * (scale.max - scale.min)) / step) * step
+}

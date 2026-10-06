@@ -13,6 +13,9 @@ import { describe, expect, test } from 'bun:test'
 import type { FormTarget, GoalForm } from './nutrition'
 import {
   energyOf,
+  energyScale,
+  fractionOf,
+  valueAt,
   gramsOf,
   macroKcal,
   macroShares,
@@ -119,5 +122,26 @@ describe('what each kind of target is called', () => {
     expect(orderedRange(fine)).toBe(fine)
     const minimum: FormTarget = { mode: 'minimum', low: 150, high: null }
     expect(orderedRange(minimum)).toBe(minimum)
+  })
+})
+
+describe('the energy slider', () => {
+  test('T-SPC-UNIT-274 the scale stays put, and only widens to take a figure typed past it', () => {
+    // The same for any goal inside it: a handle let go stays where it was let go.
+    expect(energyScale(2100, 2400)).toEqual({ min: 1000, mid: 2500, max: 4000 })
+    expect(energyScale(1500, 1500)).toEqual({ min: 1000, mid: 2500, max: 4000 })
+    // Past an end, the end moves out to the next 500, and only that end.
+    expect(energyScale(2000, 4300)).toEqual({ min: 1000, mid: 2750, max: 4500 })
+    expect(energyScale(800, 2000)).toEqual({ min: 500, mid: 2250, max: 4000 })
+  })
+
+  test('T-SPC-UNIT-275 a value sits on the scale, and a place on it reads back on the step', () => {
+    const scale = { min: 1000, mid: 2500, max: 4000 }
+    expect(fractionOf(2500, scale)).toBe(0.5)
+    expect(fractionOf(500, scale)).toBe(0)
+    expect(fractionOf(9000, scale)).toBe(1)
+    expect(valueAt(0.5, scale, 50)).toBe(2500)
+    expect(valueAt(0.37, scale, 50)).toBe(2100)
+    expect(valueAt(-1, scale, 50)).toBe(1000)
   })
 })

@@ -49,6 +49,8 @@ import {
   type GoalNutrient,
 } from '../../src/client/nutrition'
 import { createSpaceNutritionFlow } from '../../src/client/nutrition-transport'
+import { GoalEnergyFigure } from '../../src/components/goal-energy-figure'
+import { GoalSlider } from '../../src/components/goal-slider'
 import { GoalValueField } from '../../src/components/goal-value-field'
 import {
   CardGlow,
@@ -96,7 +98,6 @@ export default function GoalScreen() {
   const [form, setForm] = useState<GoalForm>(DEFAULT_FORM)
   const [hasGoal, setHasGoal] = useState(false)
   const [selected, setSelected] = useState<GoalNutrient>('protein')
-  const [typingEnergy, setTypingEnergy] = useState(false)
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState<string | undefined>(undefined)
 
@@ -121,18 +122,11 @@ export default function GoalScreen() {
     setForm((current) => ({ ...current, [code]: target }))
   const energy = form.energy
   const shares = macroShares(form)
-  const assigned = MACROS.reduce((sum, code) => sum + (shares[code] ?? 0), 0)
-
-  const nudgeEnergy = (by: number) => {
-    const move = (value: number | null) =>
-      Math.min(START.energy.max, Math.max(0, (value ?? START.energy.value) + by))
-    set(
-      'energy',
-      energy.mode === 'range'
-        ? { ...energy, low: move(energy.low), high: move(energy.high) }
-        : { ...energy, low: move(energy.low) },
-    )
-  }
+  const low = energy.low ?? START.energy.value
+  const high = energy.high ?? low
+  // A range typed backwards is put right when typing ends, as the macros' are.
+  const settleEnergy = () =>
+    setForm((current) => ({ ...current, energy: orderedRange(current.energy) }))
 
   const publish = () => {
     setBusy(true)
@@ -192,6 +186,7 @@ export default function GoalScreen() {
         keyboardShouldPersistTaps="handled"
         automaticallyAdjustKeyboardInsets
       >
+        {/* N-6f: the same height exact or as a range, so switching moves nothing below it. */}
         <View
           style={[
             styles.energy,
@@ -202,115 +197,66 @@ export default function GoalScreen() {
           ]}
         >
           <CardGlow />
-          <Text role="control" size="sm" color="secondary">
-            Energía diaria
-          </Text>
-          <View style={styles.energyRow}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`${valueText(energy)} kcal al día. Escribir`}
-              onPress={() => energy.mode !== 'range' && setTypingEnergy(true)}
-              style={[styles.energyFigure, styles.grow]}
-            >
-              <Text
-                role="display"
-                tracking={FIGURE_TRACKING}
-                size={energy.mode === 'range' ? '4xl' : '5xl'}
-                numberOfLines={1}
-                adjustsFontSizeToFit
-              >
-                {valueText(energy)}
-              </Text>
-              <Text role="control" size="md" color="secondary" style={styles.energyUnit}>
-                kcal
-              </Text>
-            </Pressable>
-            <IconButton
-              icon="add"
-              accessibilityLabel="Más energía"
-              onPress={() => nudgeEnergy(START.energy.step)}
-            />
-            <IconButton
-              icon="subtract"
-              accessibilityLabel="Menos energía"
-              onPress={() => nudgeEnergy(-START.energy.step)}
+          <View style={styles.energyHead}>
+            <Text role="control" size="sm" color="secondary" style={styles.grow}>
+              Energía diaria
+            </Text>
+            <Tabs
+              labelStyle="control"
+              accessibilityLabel="Energía exacta o en rango"
+              items={[
+                { value: 'exact', label: 'Exacta' },
+                { value: 'range', label: 'Rango' },
+              ]}
+              value={energy.mode === 'range' ? 'range' : 'exact'}
+              onChange={(mode) => set('energy', withMode('energy', energy, mode))}
+              style={styles.energyTabs}
             />
           </View>
-          {energy.mode !== 'range' && typingEnergy ? (
-            <GoalValueField
-              value={energy.low}
-              onChange={(low) => set('energy', { ...energy, low })}
-              unit="kcal"
-              step={START.energy.step}
+          <View style={styles.energyFigures}>
+            <GoalEnergyFigure
+              value={low}
+              onChange={(value) => set('energy', { ...energy, low: value })}
               max={START.energy.max}
-              accessibilityLabel="Energía diaria"
-              keyboardTitle="Energía · exacta"
-              autoFocus
-              onDone={() => setTypingEnergy(false)}
+              label={energy.mode === 'range' ? 'Desde' : 'Exacta'}
+              keyboardTitle={energy.mode === 'range' ? 'Energía · desde' : 'Energía · exacta'}
+              onDone={settleEnergy}
             />
-          ) : null}
-          {energy.mode === 'range' ? (
-            <View style={styles.rangeFields}>
-              {(['low', 'high'] as const).map((end) => (
-                <View key={end} style={styles.fieldBlock}>
-                  <Text role="control" size="sm" color="secondary">
-                    {modeCaption('range', end)}
-                  </Text>
-                  <GoalValueField
-                    value={energy[end]}
-                    onChange={(value) => set('energy', { ...energy, [end]: value })}
-                    unit="kcal"
-                    step={START.energy.step}
-                    max={START.energy.max}
-                    accessibilityLabel={`Energía, ${modeCaption('range', end).toLowerCase()}`}
-                    keyboardTitle={`Energía · ${modeCaption('range', end).toLowerCase()}`}
-                    onDone={() =>
-                      setForm((current) => ({ ...current, energy: orderedRange(current.energy) }))
-                    }
-                  />
-                </View>
-              ))}
-            </View>
-          ) : null}
-          <Tabs
-            accessibilityLabel="Energía exacta o en rango"
-            items={[
-              { value: 'exact', label: 'Exacta' },
-              { value: 'range', label: 'Rango' },
-            ]}
-            value={energy.mode === 'range' ? 'range' : 'exact'}
-            onChange={(mode) => {
-              setTypingEnergy(false)
-              set('energy', withMode('energy', energy, mode))
-            }}
-            style={styles.energyTabs}
-          />
-          {/* Each macro's share of the day, in its colour; what is left unassigned stays grey. */}
-          <View
-            style={styles.split}
-            accessibilityElementsHidden
-            importantForAccessibility="no-hide-descendants"
-          >
-            {MACROS.map((code) =>
-              shares[code] ? (
-                <View
-                  key={code}
-                  style={[
-                    styles.piece,
-                    { flex: shares[code], backgroundColor: macroColor(theme, code) },
-                  ]}
+            {energy.mode === 'range' ? (
+              <>
+                <Text role="display" size="3xl" color="muted" style={styles.dash}>
+                  –
+                </Text>
+                <GoalEnergyFigure
+                  value={high}
+                  onChange={(value) => set('energy', { ...energy, high: value })}
+                  max={START.energy.max}
+                  label="Hasta"
+                  keyboardTitle="Energía · hasta"
+                  onDone={settleEnergy}
                 />
-              ) : null,
-            )}
-            {assigned < 1 ? (
-              <View
-                style={[
-                  styles.piece,
-                  { flex: 1 - assigned, backgroundColor: theme.color.background.surfaceMuted },
-                ]}
-              />
+              </>
             ) : null}
+            <Text role="control" size="md" color="secondary" style={styles.energyUnit}>
+              kcal
+            </Text>
           </View>
+          <GoalSlider
+            low={low}
+            high={energy.mode === 'range' ? high : null}
+            step={START.energy.step}
+            unit="kcal"
+            lowLabel={energy.mode === 'range' ? 'Energía, desde' : 'Energía diaria'}
+            highLabel="Energía, hasta"
+            onChange={(nextLow, nextHigh) =>
+              set(
+                'energy',
+                energy.mode === 'range'
+                  ? { ...energy, low: nextLow, high: nextHigh }
+                  : { ...energy, low: nextLow },
+              )
+            }
+          />
         </View>
 
         <Text role="control" size="lg">
@@ -344,7 +290,7 @@ export default function GoalScreen() {
                     {share === null ? '—' : `${String(Math.round(share * 100))}%`}
                   </Text>
                   <Text role="body" size="2xs" color="muted">
-                    de kcal
+                    De kcal
                   </Text>
                 </Ring>
                 <Text
@@ -396,6 +342,7 @@ export default function GoalScreen() {
             ) : null}
           </View>
           <Tabs
+            labelStyle="control"
             accessibilityLabel={`Tipo de meta para ${NUTRIENT_NAMES[selected]}`}
             items={MODES.map((mode) => ({ value: mode, label: MODE_NAMES[mode] }))}
             value={target.mode}
@@ -487,14 +434,12 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
   },
   content: { paddingHorizontal: 20, paddingBottom: 24, gap: 14 },
-  energy: { borderRadius: 24, borderWidth: 1, padding: 20, gap: 12, overflow: 'hidden' },
-  energyRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  energyFigure: { flexDirection: 'row', alignItems: 'flex-end', gap: 6 },
-  energyUnit: { paddingBottom: 8 },
-  energyTabs: { alignSelf: 'flex-start' },
-  rangeFields: { gap: 10 },
-  split: { flexDirection: 'row', gap: 4, height: 6 },
-  piece: { borderRadius: 3 },
+  energy: { borderRadius: 24, borderWidth: 1, padding: 20, gap: 16, overflow: 'hidden' },
+  energyHead: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  energyTabs: { width: 150 },
+  energyFigures: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  dash: { paddingTop: 8 },
+  energyUnit: { paddingTop: 22 },
   macros: { flexDirection: 'row', gap: 10 },
   macro: { flex: 1, alignItems: 'center', borderRadius: 22, padding: 12, gap: 6 },
   chip: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3 },
