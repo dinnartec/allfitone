@@ -1,10 +1,10 @@
 /**
  * Registering a meal from the camera (R-F1…R-F5, R-M, R-A0…R-A5, ADR-041).
  *
- * Three ways in, one screen: **Foto** takes or picks a photo and Allfit recognises it;
- * **Alimentos** searches the catalogue; **Plato** is the hand-written form that already
- * exists. The pill above says which meal and when — guessed from the hour, changed from
- * its menu.
+ * Two ways in, one screen: **Foto** takes or picks a photo and Allfit recognises it;
+ * **Alimentos** searches the catalogue. The hand-written form is left for correcting a
+ * meal already saved. The pill above says which meal and when — guessed from the hour,
+ * changed from its menu.
  *
  * - **Recognising needs consent**, asked once, before the first photo leaves the phone.
  *   Without it, or when the model does not answer, the person is offered the search with
@@ -305,11 +305,13 @@ export default function CaptureScreen() {
 
   // An item is edited on its own screen; this opens it, and the focus effect takes it back.
   const openEditing = (item: CaptureItem) => {
-    openItem({ item, targets, mode: 'edit', mealName })
+    openItem({ item, targets, mode: 'edit', mealType })
     router.push('/nutrition/item')
   }
+  // The + takes the food at its usual portion, without opening it.
+  const quickAdd = (food: Food) => addFood(fromFood(food))
   const openAdding = (food: Food) => {
-    openItem({ item: fromFood(food), targets, mode: 'add', mealName })
+    openItem({ item: fromFood(food), targets, mode: 'add', mealType })
     router.push('/nutrition/item')
   }
   useFocusEffect(
@@ -346,7 +348,7 @@ export default function CaptureScreen() {
       )
       handOverSavedMeal({
         id: recorded.id,
-        label: MEAL_NAMES[mealType],
+        type: mealType,
         kcal: totals.energy ?? null,
       })
       // The photo follows on its own; the screen does not wait for it to go up.
@@ -481,6 +483,7 @@ export default function CaptureScreen() {
           saving={saving}
           failure={failure}
           onChoose={openAdding}
+          onQuickAdd={quickAdd}
           onOpen={openEditing}
           onSave={() => void save()}
         />
@@ -518,7 +521,6 @@ export default function CaptureScreen() {
               [
                 ['photo', 'Foto'],
                 ['foods', 'Alimentos'],
-                ['dish', 'Plato'],
               ] as const
             ).map(([key, label]) => {
               const active = key === tab
@@ -529,12 +531,7 @@ export default function CaptureScreen() {
                   accessibilityState={{ selected: active }}
                   onPress={() => {
                     void Haptics.selectionAsync()
-                    if (key === 'dish')
-                      router.replace({
-                        pathname: '/nutrition/log',
-                        params: { day, type: mealType },
-                      })
-                    else setTab(key)
+                    setTab(key)
                   }}
                   style={styles.tab}
                 >
@@ -881,6 +878,7 @@ function Foods({
   saving,
   failure,
   onChoose,
+  onQuickAdd,
   onOpen,
   onSave,
 }: {
@@ -897,6 +895,7 @@ function Foods({
   readonly saving: boolean
   readonly failure: string | undefined
   readonly onChoose: (food: Food) => void
+  readonly onQuickAdd: (food: Food) => void
   readonly onOpen: (item: CaptureItem) => void
   readonly onSave: () => void
 }) {
@@ -933,6 +932,7 @@ function Foods({
                 food={food}
                 detail={defaultLine(food)}
                 onPress={() => onChoose(food)}
+                onQuickAdd={() => onQuickAdd(food)}
               />
             ))
           ) : (
@@ -971,6 +971,7 @@ function Foods({
                 food={one.food}
                 detail={defaultLine(one.food)}
                 onPress={() => onChoose(one.food)}
+                onQuickAdd={() => onQuickAdd(one.food)}
               />
             ))}
           </>
@@ -1030,6 +1031,7 @@ function FoodRow({
   detail,
   kcal,
   onPress,
+  onQuickAdd,
 }: {
   readonly icon: string
   readonly food: Food | null
@@ -1037,28 +1039,44 @@ function FoodRow({
   readonly detail: string
   readonly kcal?: number | undefined
   readonly onPress: () => void
+  /** The +: adds at the usual portion; the rest of the row opens the food. */
+  readonly onQuickAdd?: () => void
 }) {
   const theme = useTheme()
+  const label = name ?? food?.name ?? ''
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${name ?? food?.name ?? ''}, ${detail}`}
+      accessibilityLabel={`${label}, ${detail}`}
       onPress={onPress}
     >
       <GlassPanel radius="card" style={styles.foodRow}>
         <FoodTile icon={icon} food={food} />
         <View style={styles.grow}>
           <Text role="control" size="md" numberOfLines={1}>
-            {name ?? food?.name ?? ''}
+            {label}
           </Text>
           <Text role="body" size="xs" color="secondary">
             {detail}
           </Text>
         </View>
         {kcal === undefined ? (
-          <View style={[styles.plus, { backgroundColor: theme.color.background.surfaceMuted }]}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Añadir ${label}, ${detail}`}
+            disabled={!onQuickAdd}
+            onPress={onQuickAdd}
+            hitSlop={10}
+            style={({ pressed }) => [
+              styles.plus,
+              {
+                backgroundColor: theme.color.background.surfaceMuted,
+                transform: [{ scale: pressed ? 0.92 : 1 }],
+              },
+            ]}
+          >
             <FoundationIcon name="add" size="sm" color={theme.color.icon.primary} decorative />
-          </View>
+          </Pressable>
         ) : (
           <Text role="poster" tracking={FIGURE_TRACKING} size="xl">
             {kcalOf(kcal)}

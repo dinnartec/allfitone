@@ -17,7 +17,7 @@ const rice: Food = {
 describe('an item handed between the capture and its own screen (R-F4, R-A3)', () => {
   test('T-SPC-UNIT-245 an edited item comes back however the screen was left, once', () => {
     const item = fromFood(rice)
-    openItem({ item, targets: [], mode: 'edit', mealName: 'cena' })
+    openItem({ item, targets: [], mode: 'edit', mealType: 'dinner' })
     expect(openedItem()?.item).toBe(item)
     const more = { ...item, grams: 320 }
     keepItem(more)
@@ -27,7 +27,7 @@ describe('an item handed between the capture and its own screen (R-F4, R-A3)', (
 
   test('T-SPC-UNIT-246 a food from the search is added only when the person says so', () => {
     const item = fromFood(rice)
-    openItem({ item, targets: [], mode: 'add', mealName: 'cena' })
+    openItem({ item, targets: [], mode: 'add', mealType: 'dinner' })
     keepItem({ ...item, grams: 80 })
     expect(takeItemOutcome()).toBeNull()
     settleItem({ kind: 'added', item })
@@ -36,7 +36,7 @@ describe('an item handed between the capture and its own screen (R-F4, R-A3)', (
 
   test('T-SPC-UNIT-247 removing or changing the food says which item, and replaces what was kept', () => {
     const item = fromFood(rice)
-    openItem({ item, targets: [], mode: 'edit', mealName: 'cena' })
+    openItem({ item, targets: [], mode: 'edit', mealType: 'dinner' })
     keepItem({ ...item, grams: 10 })
     settleItem({ kind: 'removed', key: item.key })
     expect(takeItemOutcome()).toEqual({ kind: 'removed', key: item.key })

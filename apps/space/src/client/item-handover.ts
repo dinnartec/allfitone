@@ -11,14 +11,14 @@
  */
 
 import type { CaptureItem } from './capture'
-import type { GoalTarget } from './nutrition'
+import type { GoalTarget, MealType } from './nutrition'
 
 export interface OpenedItem {
   readonly item: CaptureItem
   readonly targets: readonly GoalTarget[]
   /** `edit` an item of the meal, or `add` a food picked from the search. */
   readonly mode: 'edit' | 'add'
-  readonly mealName: string
+  readonly mealType: MealType
 }
 
 export type ItemOutcome =

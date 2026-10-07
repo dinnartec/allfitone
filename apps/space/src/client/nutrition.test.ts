@@ -18,6 +18,8 @@ import {
   goalFigure,
   mealPrompt,
   mealWithArticle,
+  mealSaved,
+  addToMeal,
   mealTotals,
   goalLine,
   rangeProgress,
@@ -457,5 +459,23 @@ describe('the goal under a macro card', () => {
       'De 200–240 g',
     )
     expect(goalLine(undefined, 'g')).toBe('Sin meta')
+  })
+})
+
+describe('a meal named in a sentence', () => {
+  test('T-SPC-UNIT-286 the saved notice agrees with each meal: el desayuno, la cena', () => {
+    expect(mealSaved('breakfast')).toBe('Desayuno guardado')
+    expect(mealSaved('lunch')).toBe('Almuerzo guardado')
+    expect(mealSaved('snack')).toBe('Snack guardado')
+    expect(mealSaved('dinner')).toBe('Cena guardada')
+    expect(mealSaved('other')).toBe('Comida guardada')
+  })
+
+  test('T-SPC-UNIT-287 adding a food names the meal with its own article', () => {
+    expect(addToMeal('breakfast')).toBe('Añadir al desayuno')
+    expect(addToMeal('lunch')).toBe('Añadir al almuerzo')
+    expect(addToMeal('snack')).toBe('Añadir al snack')
+    expect(addToMeal('dinner')).toBe('Añadir a la cena')
+    expect(addToMeal('other')).toBe('Añadir a esta comida')
   })
 })

@@ -46,6 +46,8 @@ import {
   mealPrompt,
   mealTotals,
   MEAL_NAMES,
+  mealSaved,
+  mealWithArticle,
   NUTRIENT_SHORT_NAMES,
   goalLine,
   rangeProgress,
@@ -190,7 +192,7 @@ export default function FoodScreen() {
     meals.map((meal) => meal.meal_type),
   )
 
-  // R-0: the camera is the way in; typing by hand is its «Plato» tab.
+  // R-0: the camera is the way in, beside the catalogue search.
   const log = (type?: string) =>
     router.push({ pathname: '/nutrition/capture', params: { day, ...(type ? { type } : {}) } })
 
@@ -453,11 +455,11 @@ export default function FoodScreen() {
         >
           <FoundationIcon name="success" size="sm" color={theme.color.text.inverse} decorative />
           <Text role="control" size="md" color="inverse" style={styles.grow}>
-            {`${saved.label} guardada${saved.kcal === null ? '' : ` · ${String(Math.round(saved.kcal))} kcal`}`}
+            {`${mealSaved(saved.type)}${saved.kcal === null ? '' : ` · ${String(Math.round(saved.kcal))} kcal`}`}
           </Text>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`Deshacer: borrar la ${saved.label.toLowerCase()}`}
+            accessibilityLabel={`Deshacer: borrar ${mealWithArticle(saved.type)}`}
             onPress={() => undo(saved)}
             hitSlop={10}
           >

@@ -230,6 +230,15 @@ const ARTICLED: Readonly<Record<MealType, string>> = {
 /** «¿Eliminar la cena?»: Spanish gives each meal its own article, and «Otra» has none. */
 export const mealWithArticle = (type: MealType): string => ARTICLED[type]
 
+const FEMININE: ReadonlySet<MealType> = new Set(['dinner', 'other'])
+/** «Snack guardado», «Cena guardada»: the notice agrees with the meal; «Otra» reads «Comida». */
+export const mealSaved = (type: MealType): string =>
+  `${type === 'other' ? 'Comida' : MEAL_NAMES[type]} ${FEMININE.has(type) ? 'guardada' : 'guardado'}`
+
+/** «Añadir al snack», «Añadir a la cena»: «a» + «el» contracts to «al». */
+export const addToMeal = (type: MealType): string =>
+  `Añadir ${ARTICLED[type].replace(/^el /, 'al ').replace(/^(la|esta) /, 'a $1 ')}`
+
 const figure = (value: number) => Math.round(value).toLocaleString('es-CO')
 
 /** The strong validator a correction carries, rebuilt from the meal's own revision. */

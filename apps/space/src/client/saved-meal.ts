@@ -5,9 +5,11 @@
  * route parameter would replay it on every visit, so the hand-off is taken, not read.
  */
 
+import type { MealType } from './nutrition'
+
 export interface SavedMeal {
   readonly id: string
-  readonly label: string
+  readonly type: MealType
   readonly kcal: number | null
 }
 

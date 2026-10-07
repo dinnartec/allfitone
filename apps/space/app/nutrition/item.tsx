@@ -21,6 +21,7 @@ import { useEffect, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
 
 import { keepItem, openedItem, settleItem } from '../../src/client/item-handover'
+import { addToMeal } from '../../src/client/nutrition'
 import type { CaptureItem } from '../../src/client/capture'
 import { ItemEditor } from '../../src/components/capture-sheets'
 
@@ -104,7 +105,7 @@ export default function ItemScreen() {
           </>
         ) : (
           <Button
-            label={`Añadir a la ${opened.mealName}`}
+            label={addToMeal(opened.mealType)}
             disabled={item.grams <= 0}
             onPress={() => leave({ kind: 'added', item })}
           />
