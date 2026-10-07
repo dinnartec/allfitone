@@ -1,6 +1,11 @@
 import { describe, expect, test } from 'bun:test'
 
-import { createMemoryObjectStore, createObjectStoreFromEnv, ObjectStoreError } from './index.js'
+import {
+  createMemoryObjectStore,
+  createObjectStoreFromEnv,
+  createS3ObjectStore,
+  ObjectStoreError,
+} from './index.js'
 
 const env = {
   OBJECT_STORE_BUCKET: 'allfit-private',
@@ -47,5 +52,24 @@ describe('the object store', () => {
     expect(store.put('b', new Uint8Array([1]), 'image/jpeg')).rejects.toBeInstanceOf(
       ObjectStoreError,
     )
+  })
+
+  test('T-OBJ-UNIT-05 a store that does not answer fails in seconds, not minutes', async () => {
+    // A non-routable address never answers. Without limits of its own the client kept
+    // retrying for 225 s while a meal waited to be saved.
+    const store = createS3ObjectStore({
+      bucket: 'allfit-private',
+      region: 'us-east-1',
+      endpoint: 'http://10.255.255.1:9000',
+      accessKeyId: 'AKIAEXAMPLE',
+      secretAccessKey: 'secret',
+      connectTimeoutMs: 150,
+      requestTimeoutMs: 300,
+    })
+    const started = Date.now()
+    await expect(store.put('k.jpg', new Uint8Array([1]), 'image/jpeg')).rejects.toBeInstanceOf(
+      ObjectStoreError,
+    )
+    expect(Date.now() - started).toBeLessThan(3000)
   })
 })

@@ -25,7 +25,20 @@ export interface S3Settings {
   readonly secretAccessKey: string
   /** The KMS key objects are encrypted under; absent, the bucket's default applies. */
   readonly kmsKeyId?: string | undefined
+  /** How long to wait for the store to accept a connection, and for an answer. */
+  readonly connectTimeoutMs?: number | undefined
+  readonly requestTimeoutMs?: number | undefined
 }
+
+/**
+ * A store that does not answer fails in seconds. With the client's defaults an
+ * unreachable endpoint kept a meal's save waiting 225 s before it gave up. The
+ * deadline is an abort signal per operation, because the handler's own timeouts
+ * do not fire under Bun, where the API runs locally.
+ */
+const CONNECT_TIMEOUT_MS = 3_000
+const REQUEST_TIMEOUT_MS = 15_000
+const ATTEMPTS = 2
 
 export function createS3ObjectStore(settings: S3Settings): ObjectStore {
   const client = new S3Client({
@@ -36,7 +49,17 @@ export function createS3ObjectStore(settings: S3Settings): ObjectStore {
     },
     // A custom endpoint addresses buckets by path: MinIO and R2 do not route subdomains.
     ...(settings.endpoint ? { endpoint: settings.endpoint, forcePathStyle: true } : {}),
+    maxAttempts: ATTEMPTS,
+    requestHandler: {
+      connectionTimeout: settings.connectTimeoutMs ?? CONNECT_TIMEOUT_MS,
+      requestTimeout: settings.requestTimeoutMs ?? REQUEST_TIMEOUT_MS,
+    },
   })
+  // The whole operation, retries included, within one deadline.
+  const deadline = () => ({
+    abortSignal: AbortSignal.timeout(settings.requestTimeoutMs ?? REQUEST_TIMEOUT_MS),
+  })
+
   const encryption = settings.kmsKeyId
     ? { ServerSideEncryption: 'aws:kms' as const, SSEKMSKeyId: settings.kmsKeyId }
     : {}
@@ -52,6 +75,7 @@ export function createS3ObjectStore(settings: S3Settings): ObjectStore {
             ContentType: contentType,
             ...encryption,
           }),
+          deadline(),
         )
       } catch (cause) {
         throw new ObjectStoreError('put', cause)
@@ -73,7 +97,10 @@ export function createS3ObjectStore(settings: S3Settings): ObjectStore {
 
     async remove(key) {
       try {
-        await client.send(new DeleteObjectCommand({ Bucket: settings.bucket, Key: key }))
+        await client.send(
+          new DeleteObjectCommand({ Bucket: settings.bucket, Key: key }),
+          deadline(),
+        )
       } catch (cause) {
         throw new ObjectStoreError('remove', cause)
       }
