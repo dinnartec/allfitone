@@ -168,6 +168,55 @@ export interface RelationshipStateDatabase {
 }
 
 /**
+ * One moment in a relationship's past. `detail` stays loose on purpose: each
+ * kind carries different fields, and narrowing them here would mean a union the
+ * screen has to re-narrow anyway. What is fixed is that `type` names the kind
+ * and `occurredAt` places it.
+ */
+export interface RelationshipHistoryEvent {
+  readonly type:
+    | 'relationship_started'
+    | 'holder_assigned'
+    | 'holder_ended'
+    | 'substitution_proposed'
+    | 'substitution_accepted'
+    | 'substitution_ended'
+    | 'consent_decided'
+    | 'relationship_ended'
+  readonly occurredAt: Date
+  /** The row the moment was read from — not an id of the moment itself. */
+  readonly sourceId: string
+  readonly detail: Readonly<Record<string, unknown>>
+}
+
+/**
+ * A page of a relationship's history, newest first.
+ *
+ * **Shorter for a coach than for an owner, by design.** The row policy shows a
+ * coach only their own assignment, so a coach never learns who attended this
+ * person before them. A short list is not a failed read.
+ */
+export interface RelationshipHistory {
+  readonly relationshipId: string
+  readonly personId: string
+  readonly events: readonly RelationshipHistoryEvent[]
+  readonly nextCursor: string | null
+  readonly hasMore: boolean
+}
+
+export interface RelationshipHistoryDatabase {
+  readHistory(
+    actorPersonId: string,
+    query: {
+      organizationId: string
+      relationshipId: string
+      limit: number | null
+      cursor: string | null
+    },
+  ): Promise<RelationshipHistory>
+}
+
+/**
  * The outcome of changing who attends a client. `reassigned` is false when the
  * named coach was already in charge: nothing was written and, more to the
  * point, **nobody was notified** — a notice saying somebody's coach changed to

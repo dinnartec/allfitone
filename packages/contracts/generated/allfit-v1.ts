@@ -2033,6 +2033,36 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/studio/v1/organizations/{organizationId}/relationships/{relationshipId}/events': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Read what a relationship has been through
+     * @description The relationship's history as a timeline, newest first: when it opened, every change of the professional in charge, substitutions proposed, accepted and ended, each consent decision, and the close.
+     *
+     *     It never returns the content a permission covers. A `consent_decided` event names the scope that was decided and the version presented, which is metadata about the permission and not the data behind it.
+     *
+     *     **The page is shorter for a coach than for an owner**, and that is deliberate rather than a gap. A caller with `view_directory` (owner, admin, staff) sees every assignment on the relationship. A coach holds `view_assigned_directory` instead and sees only their own, so a coach never learns who attended this person before them. No total is reported for the same reason: a count the reader cannot reconcile with what they see is worse than no count.
+     *
+     *     A relationship the caller may not see answers `404`, not `403`, like reading its state — telling a coach a relationship exists but is not theirs would reveal that the organization has that client.
+     *
+     *     **The termination reason belongs to whoever declared it.** When the organization ended the relationship, `detail.reason` carries what it declared and `detail.declared_by_us` is `true`. When the person ended it, the reason is theirs: `declared_by_us` is `false` and `reason` is `null`, so the screen can say who closed it without implying nothing was said.
+     *
+     *     A `cursor` that cannot be read answers `400` rather than quietly returning the first page.
+     */
+    get: operations['listStudioRelationshipEvents']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/studio/v1/organizations/{organizationId}/relationships/{relationshipId}/professional-assignments': {
     parameters: {
       query?: never
@@ -5789,6 +5819,32 @@ export interface components {
       valid_from: string
       /** @description The assignment this one ended, or null when nothing changed. */
       replaced_assignment_id: components['schemas']['UuidV7'] | null
+    }
+    /** @description One moment in a relationship's past. `detail` carries different keys per `type`, and every one of them is metadata about the moment — never the content a permission covers. */
+    RelationshipHistoryEvent: {
+      /** @enum {string} */
+      type:
+        | 'relationship_started'
+        | 'holder_assigned'
+        | 'holder_ended'
+        | 'substitution_proposed'
+        | 'substitution_accepted'
+        | 'substitution_ended'
+        | 'consent_decided'
+        | 'relationship_ended'
+      /** Format: date-time */
+      occurred_at: string
+      /** @description The row this moment was read from, not an identifier of the moment. One assignment row produces more than one event, so the same `source_id` appears against different types. */
+      source_id: components['schemas']['UuidV7']
+      /** @description Keys vary by `type`. `holder_assigned`, `holder_ended` and the substitution kinds carry `assignment_id`, `membership_id`, `professional_person_id` and `display_name`; `consent_decided` carries `scope_code`, `decision` and `scope_definition_id`; `relationship_ended` carries `ended_by_kind`, `declared_by_us` and `reason`; `relationship_started` carries `continues_relationship_id`. */
+      detail: {
+        [key: string]: unknown
+      }
+    }
+    /** @description A page of a relationship's history, newest first. Shorter for a coach than for an owner, because a coach sees only their own assignment. */
+    RelationshipHistoryPage: {
+      data: components['schemas']['RelationshipHistoryEvent'][]
+      page: components['schemas']['Page']
     }
     /** @description How one relationship stands: the link, who attends the person, the substitutions, and which permissions are in force. Cacheable for presentation, never for deciding authorization. */
     RelationshipState: {
@@ -12162,6 +12218,40 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['RelationshipState']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listStudioRelationshipEvents: {
+    parameters: {
+      query?: {
+        /** @description Events per page. Clamped to 1–100; defaults to 50. */
+        limit?: number
+        /** @description The `next_cursor` from a previous page. Opaque. */
+        cursor?: string
+      }
+      header?: never
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+        relationshipId: components['parameters']['RelationshipId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description A page of the relationship's history, newest first */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['PrivateNoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['RelationshipHistoryPage']
         }
       }
       400: components['responses']['BadRequest']

@@ -5081,6 +5081,89 @@ paths:
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
 
+  /studio/v1/organizations/{organizationId}/relationships/{relationshipId}/events:
+    get:
+      tags: [Studio Relationships]
+      operationId: listStudioRelationshipEvents
+      x-allfit-operation: OP-REL-014
+      x-allfit-cache: private-no-store
+      summary: Read what a relationship has been through
+      description: >-
+        The relationship's history as a timeline, newest first: when it opened,
+        every change of the professional in charge, substitutions proposed,
+        accepted and ended, each consent decision, and the close.
+
+
+        It never returns the content a permission covers. A `consent_decided`
+        event names the scope that was decided and the version presented, which
+        is metadata about the permission and not the data behind it.
+
+
+        **The page is shorter for a coach than for an owner**, and that is
+        deliberate rather than a gap. A caller with `view_directory` (owner,
+        admin, staff) sees every assignment on the relationship. A coach holds
+        `view_assigned_directory` instead and sees only their own, so a coach
+        never learns who attended this person before them. No total is reported
+        for the same reason: a count the reader cannot reconcile with what they
+        see is worse than no count.
+
+
+        A relationship the caller may not see answers `404`, not `403`, like
+        reading its state — telling a coach a relationship exists but is not
+        theirs would reveal that the organization has that client.
+
+
+        **The termination reason belongs to whoever declared it.** When the
+        organization ended the relationship, `detail.reason` carries what it
+        declared and `detail.declared_by_us` is `true`. When the person ended it,
+        the reason is theirs: `declared_by_us` is `false` and `reason` is `null`,
+        so the screen can say who closed it without implying nothing was said.
+
+
+        A `cursor` that cannot be read answers `400` rather than quietly
+        returning the first page.
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/RelationshipId'
+        - name: limit
+          in: query
+          required: false
+          description: Events per page. Clamped to 1–100; defaults to 50.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+        - name: cursor
+          in: query
+          required: false
+          description: The `next_cursor` from a previous page. Opaque.
+          schema:
+            type: string
+            minLength: 16
+            maxLength: 1024
+      responses:
+        '200':
+          description: A page of the relationship's history, newest first
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/PrivateNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RelationshipHistoryPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
   /studio/v1/organizations/{organizationId}/relationships/{relationshipId}/professional-assignments:
     post:
       tags: [Studio Relationships]
@@ -14830,6 +14913,63 @@ components:
           oneOf:
             - $ref: '#/components/schemas/UuidV7'
             - type: 'null'
+    RelationshipHistoryEvent:
+      description: >-
+        One moment in a relationship's past. `detail` carries different keys per
+        `type`, and every one of them is metadata about the moment — never the
+        content a permission covers.
+      type: object
+      additionalProperties: false
+      required: [type, occurred_at, source_id, detail]
+      properties:
+        type:
+          type: string
+          enum:
+            - relationship_started
+            - holder_assigned
+            - holder_ended
+            - substitution_proposed
+            - substitution_accepted
+            - substitution_ended
+            - consent_decided
+            - relationship_ended
+        occurred_at:
+          type: string
+          format: date-time
+        source_id:
+          description: >-
+            The row this moment was read from, not an identifier of the moment.
+            One assignment row produces more than one event, so the same
+            `source_id` appears against different types.
+          allOf:
+            - $ref: '#/components/schemas/UuidV7'
+        detail:
+          type: object
+          description: >-
+            Keys vary by `type`. `holder_assigned`, `holder_ended` and the
+            substitution kinds carry `assignment_id`, `membership_id`,
+            `professional_person_id` and `display_name`; `consent_decided`
+            carries `scope_code`, `decision` and `scope_definition_id`;
+            `relationship_ended` carries `ended_by_kind`, `declared_by_us` and
+            `reason`; `relationship_started` carries
+            `continues_relationship_id`.
+          additionalProperties: true
+
+    RelationshipHistoryPage:
+      description: >-
+        A page of a relationship's history, newest first. Shorter for a coach
+        than for an owner, because a coach sees only their own assignment.
+      type: object
+      additionalProperties: false
+      required: [data, page]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/RelationshipHistoryEvent'
+        page:
+          $ref: '#/components/schemas/Page'
+
     RelationshipState:
       description: >-
         How one relationship stands: the link, who attends the person, the

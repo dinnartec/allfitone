@@ -6,6 +6,8 @@ import type {
   DirectoryQuery,
   HolderAssignmentDatabase,
   HolderReassignmentDatabase,
+  RelationshipHistory,
+  RelationshipHistoryDatabase,
   RelationshipState,
   RelationshipStateDatabase,
 } from '../domain/index.js'
@@ -63,6 +65,35 @@ export function createRelationshipStateService(
     read(actor, query) {
       if (!actor.personId) throw new RelationshipsError('registration-incomplete')
       return database.readState(actor.personId, query)
+    },
+  }
+}
+
+export interface RelationshipHistoryService {
+  read(
+    actor: AccountActor,
+    query: {
+      organizationId: string
+      relationshipId: string
+      limit: number | null
+      cursor: string | null
+    },
+  ): Promise<RelationshipHistory>
+}
+
+/*
+ * Thin for the same reason as the state read. Who may see this relationship, how
+ * far back, and whether a termination reason is theirs to read are all decided by
+ * the function and the row policies. A check here would be a second opinion with
+ * no access to the rows it is judging.
+ */
+export function createRelationshipHistoryService(
+  database: RelationshipHistoryDatabase,
+): RelationshipHistoryService {
+  return {
+    read(actor, query) {
+      if (!actor.personId) throw new RelationshipsError('registration-incomplete')
+      return database.readHistory(actor.personId, query)
     },
   }
 }

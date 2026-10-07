@@ -6,12 +6,15 @@ import type {
   ClientDirectoryService,
   HolderAssignmentService,
   HolderReassignmentService,
+  RelationshipHistoryService,
   RelationshipStateService,
 } from '../application/index.js'
 import type {
   DirectoryEntry,
   DirectoryPage,
   DirectoryQuery,
+  RelationshipHistory,
+  RelationshipHistoryEvent,
   RelationshipState,
 } from '../domain/index.js'
 import { studioRelationshipRoutes } from './studio.js'
@@ -713,5 +716,160 @@ describe('changing which coach is in charge', () => {
       reassign({ membership_id: MEMBERSHIP, notify: false }),
     )
     expect(response.status).toBe(422)
+  })
+})
+
+const EVENTS_PATH = `/studio/v1/organizations/${ORGANIZATION}/relationships/${RELATIONSHIP}/events`
+
+function historyEvents(): RelationshipHistoryEvent[] {
+  return [
+    {
+      type: 'relationship_ended',
+      occurredAt: new Date('2026-10-05T10:00:00.000Z'),
+      sourceId: RELATIONSHIP,
+      detail: { ended_by_kind: 'person', declared_by_us: false, reason: null },
+    },
+    {
+      type: 'holder_assigned',
+      occurredAt: new Date('2026-10-01T08:00:00.000Z'),
+      sourceId: '019ad000-0000-7000-8000-000000000402',
+      detail: { display_name: 'Diana Entrante' },
+    },
+  ]
+}
+
+function histories(
+  overrides: Partial<RelationshipHistory> = {},
+  capture?: (query: Record<string, unknown>) => void,
+): RelationshipHistoryService {
+  return {
+    read: async (_actor, query) => {
+      capture?.(query as unknown as Record<string, unknown>)
+      return {
+        relationshipId: RELATIONSHIP,
+        personId: '019ad000-0000-7000-8000-000000000001',
+        events: historyEvents(),
+        nextCursor: null,
+        hasMore: false,
+        ...overrides,
+      }
+    },
+  }
+}
+
+function historyApp(service: RelationshipHistoryService = histories()): Hono {
+  const routes = new Hono()
+  routes.route(
+    '/studio/v1',
+    studioRelationshipRoutes(
+      directory(),
+      sessions(),
+      holders(),
+      states(),
+      reassignments(),
+      service,
+    ),
+  )
+  return routes
+}
+
+function askHistory(query = '', headers: Record<string, string> = HEADERS): Request {
+  return new Request(`https://api.example.test${EVENTS_PATH}${query}`, { headers })
+}
+
+describe('reading what a relationship has been through', () => {
+  test('answers the timeline in the page envelope the other lists use', async () => {
+    const response = await historyApp().fetch(askHistory())
+    expect(response.status).toBe(200)
+    const payload = (await response.json()) as {
+      data: { type: string; occurred_at: string }[]
+      page: { next_cursor: string | null; has_more: boolean }
+    }
+    expect(payload.data).toHaveLength(2)
+    expect(payload.data[0]?.type).toBe('relationship_ended')
+    expect(payload.data[0]?.occurred_at).toBe('2026-10-05T10:00:00.000Z')
+    expect(payload.page).toEqual({ next_cursor: null, has_more: false })
+  })
+
+  /*
+   * The relationship's own id is in the path, so the body must not repeat it.
+   * Two sources for one fact is how they come to disagree.
+   */
+  test('does not repeat the relationship id in the body', async () => {
+    const response = await historyApp().fetch(askHistory())
+    const payload = (await response.json()) as Record<string, unknown>
+    expect(Object.keys(payload).sort()).toEqual(['data', 'page'])
+  })
+
+  /*
+   * A reason the person gave is theirs. The route must pass through what the
+   * function decided rather than reconstruct it, so this asserts the shape the
+   * screen will read: who closed it, and that no reason came with it.
+   */
+  test('carries that the person closed it without a reason for us', async () => {
+    const response = await historyApp().fetch(askHistory())
+    const payload = (await response.json()) as { data: { detail: Record<string, unknown> }[] }
+    expect(payload.data[0]?.detail).toEqual({
+      ended_by_kind: 'person',
+      declared_by_us: false,
+      reason: null,
+    })
+  })
+
+  test('passes the limit and the cursor down untouched', async () => {
+    const seen: Record<string, unknown>[] = []
+    const app = historyApp(histories({}, (query) => seen.push(query)))
+    await app.fetch(askHistory('?limit=25&cursor=b3BhcXVl'))
+    expect(seen[0]).toEqual({
+      organizationId: ORGANIZATION,
+      relationshipId: RELATIONSHIP,
+      limit: 25,
+      cursor: 'b3BhcXVl',
+    })
+  })
+
+  // No query means no opinion: the function owns the default, and sending one
+  // from here would be a second place that decides it.
+  test('sends null rather than a default when neither is given', async () => {
+    const seen: Record<string, unknown>[] = []
+    const app = historyApp(histories({}, (query) => seen.push(query)))
+    await app.fetch(askHistory())
+    expect(seen[0]?.limit).toBeNull()
+    expect(seen[0]?.cursor).toBeNull()
+  })
+
+  test('reports the cursor when there is another page', async () => {
+    const app = historyApp(histories({ nextCursor: 'bmV4dC1wYWdl', hasMore: true }))
+    const response = await app.fetch(askHistory('?limit=1'))
+    const payload = (await response.json()) as { page: Record<string, unknown> }
+    expect(payload.page).toEqual({ next_cursor: 'bmV4dC1wYWdl', has_more: true })
+  })
+
+  test('a limit that is not a number', async () => {
+    const response = await historyApp().fetch(askHistory('?limit=todos'))
+    expect(response.status).toBe(400)
+  })
+
+  test('a relationship id that is not a uuid', async () => {
+    const response = await historyApp().fetch(
+      new Request(
+        `https://api.example.test/studio/v1/organizations/${ORGANIZATION}/relationships/nope/events`,
+        { headers: HEADERS },
+      ),
+    )
+    expect(response.status).toBe(400)
+  })
+
+  test('another origin', async () => {
+    const response = await historyApp().fetch(
+      askHistory('', { ...HEADERS, origin: 'https://evil.test' }),
+    )
+    expect(response.status).toBe(403)
+  })
+
+  // The history is read for deciding, so a stale copy is worse than a slow one.
+  test('is never stored by a cache', async () => {
+    const response = await historyApp().fetch(askHistory())
+    expect(response.headers.get('cache-control')).toBe('private, no-store')
   })
 })

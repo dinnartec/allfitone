@@ -10,6 +10,9 @@ import type {
   InvitationStatus,
   RelationshipStatus,
   RelationshipGrant,
+  RelationshipHistory,
+  RelationshipHistoryDatabase,
+  RelationshipHistoryEvent,
   RelationshipProfessional,
   RelationshipState,
   RelationshipStateDatabase,
@@ -163,6 +166,60 @@ function presentState(document: StateDocument): RelationshipState {
   }
 }
 
+/**
+ * PostgreSQL access for reading what a relationship has been through.
+ *
+ * The limit goes down as the caller asked for it and the function clamps it.
+ * Clamping twice would mean two opinions about the maximum, and the one that
+ * matters is the one next to the query.
+ */
+export function createRelationshipHistoryDatabase(
+  sql: postgres.Sql = database(),
+): RelationshipHistoryDatabase {
+  return {
+    readHistory: (personId, query) =>
+      measureStudioRequestPhase('business-db', async () => {
+        const [row] = await sql.begin(async (transaction) => {
+          await setPersonActor(transaction, personId)
+          return transaction<{ history: HistoryDocument }[]>`
+            select relationships.read_relationship_history(
+              ${personId}::uuid,
+              ${query.organizationId}::uuid,
+              ${query.relationshipId}::uuid,
+              ${query.limit}::integer,
+              ${query.cursor}::text
+            ) as history
+          `
+        })
+
+        if (!row) throw new Error('read_relationship_history returned no row')
+        return presentHistory(row.history)
+      }),
+  }
+}
+
+function presentHistory(document: HistoryDocument): RelationshipHistory {
+  return {
+    relationshipId: document.relationship_id,
+    personId: document.person_id,
+    events: document.data.map(presentHistoryEvent),
+    nextCursor: document.page.next_cursor,
+    hasMore: document.page.has_more,
+  }
+}
+
+function presentHistoryEvent(row: HistoryEventRow): RelationshipHistoryEvent {
+  return {
+    type: row.type,
+    occurredAt: new Date(row.occurred_at),
+    sourceId: row.source_id,
+    // Passed through as it came. Every key in it is metadata about the moment,
+    // never content a permission covers, and the function is where that is
+    // enforced — re-listing the keys here would be a second place to forget.
+    detail: row.detail,
+  }
+}
+
 function presentProfessional(row: ProfessionalRow): RelationshipProfessional {
   return {
     assignmentId: row.assignment_id,
@@ -223,6 +280,20 @@ type StateDocument = {
   holder: ProfessionalRow | null
   substitutions: SubstitutionRow[]
   grants: GrantRow[]
+}
+
+type HistoryEventRow = {
+  type: RelationshipHistoryEvent['type']
+  occurred_at: string
+  source_id: string
+  detail: Record<string, unknown>
+}
+
+type HistoryDocument = {
+  relationship_id: string
+  person_id: string
+  data: HistoryEventRow[]
+  page: { next_cursor: string | null; has_more: boolean }
 }
 
 /**
