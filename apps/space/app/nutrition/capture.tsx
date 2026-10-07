@@ -68,8 +68,10 @@ import { createSpaceNutritionFlow } from '../../src/client/nutrition-transport'
 import { openItem, takeItemOutcome } from '../../src/client/item-handover'
 import { handOverSavedMeal } from '../../src/client/saved-meal'
 import { deviceTimezone } from '../../src/client/timezone'
+import { sendMealPhoto } from '../../src/client/meal-photos'
 import { ConsentSheet, FoodTile, MealMenu } from '../../src/components/capture-sheets'
 import { FIGURE_TRACKING, macroColor, MEAL_ICON } from '../../src/components/nutrition-ui'
+import { preparePhoto } from '../../src/components/prepare-photo'
 
 type Tab = 'photo' | 'foods'
 type Phase = 'camera' | 'recognizing' | 'review'
@@ -81,7 +83,6 @@ interface Photo {
 const RECOGNITION_FAILED =
   'No pudimos reconocer la foto. Búscalos en «Alimentos»; la foto se queda con la comida.'
 const SAVE_FAILED = 'No pudimos guardar la comida. Inténtalo otra vez.'
-const PHOTO_FAILED = 'La comida quedó guardada, pero sin la foto.'
 // A label is about this size (tile, name, kcal); the gap keeps two from touching.
 const LABEL_SIZE = { width: 200, height: 52 }
 const LABEL_GAP = 8
@@ -225,10 +226,11 @@ export default function CaptureScreen() {
 
   const shoot = async () => {
     try {
-      const picture = await camera.current?.takePictureAsync({ base64: true, quality: 0.6 })
-      if (!picture?.base64) return
+      const picture = await camera.current?.takePictureAsync({ quality: 0.8 })
+      if (!picture) return
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
-      const taken = { uri: picture.uri, base64: picture.base64 }
+      const taken = await preparePhoto(picture)
+      if (!taken) return
       setPhoto(taken)
       await recognise(taken)
     } catch {
@@ -239,12 +241,12 @@ export default function CaptureScreen() {
   const pickFromGallery = async () => {
     const picked = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
-      base64: true,
-      quality: 0.6,
+      quality: 0.8,
     })
     const asset = picked.canceled ? undefined : picked.assets[0]
-    if (!asset?.base64) return
-    const taken = { uri: asset.uri, base64: asset.base64 }
+    if (!asset) return
+    const taken = await preparePhoto(asset)
+    if (!taken) return
     setPhoto(taken)
     await recognise(taken)
   }
@@ -347,15 +349,8 @@ export default function CaptureScreen() {
         label: MEAL_NAMES[mealType],
         kcal: totals.energy ?? null,
       })
-      if (photo) {
-        try {
-          await flow.reviseMeal(recorded, {
-            photo: { content_type: 'image/jpeg', content: photo.base64 },
-          })
-        } catch {
-          setFailure(PHOTO_FAILED)
-        }
-      }
+      // The photo follows on its own; the screen does not wait for it to go up.
+      if (photo) sendMealPhoto(recorded, photo)
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
       router.back()
     } catch {

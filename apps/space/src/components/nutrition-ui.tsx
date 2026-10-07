@@ -23,6 +23,7 @@ import Animated, {
 import Svg, { Circle, Defs, Path, RadialGradient, Stop } from 'react-native-svg'
 
 import type { MealType, NutrientCode, NutritionMeal, Totals } from '../client/nutrition'
+import { useMealPhoto } from './use-meal-photo'
 
 type Theme = ReturnType<typeof useTheme>
 
@@ -246,10 +247,12 @@ export function MealThumb({
   meal,
   size,
 }: {
-  readonly meal: Pick<NutritionMeal, 'photo' | 'meal_type'>
+  readonly meal: Pick<NutritionMeal, 'id' | 'photo' | 'meal_type'>
   readonly size: number
 }) {
   const theme = useTheme()
+  // A photo still on its way up is drawn from the phone, so the meal never shows bare.
+  const pending = useMealPhoto(meal.id)
   return (
     <View
       style={[
@@ -262,7 +265,9 @@ export function MealThumb({
         },
       ]}
     >
-      {meal.photo ? (
+      {pending ? (
+        <Image source={pending.uri} style={StyleSheet.absoluteFill} contentFit="cover" />
+      ) : meal.photo ? (
         <Image source={meal.photo.url} style={StyleSheet.absoluteFill} contentFit="cover" />
       ) : (
         <FoundationIcon
@@ -272,6 +277,19 @@ export function MealThumb({
           decorative
         />
       )}
+      {pending?.kind === 'failed' ? (
+        <View
+          style={[styles.thumbFailed, { backgroundColor: theme.color.status.warning }]}
+          accessibilityLabel="La foto no se pudo subir"
+        >
+          <FoundationIcon
+            name="error"
+            customSize={12}
+            color={theme.color.background.canvas}
+            decorative
+          />
+        </View>
+      ) : null}
     </View>
   )
 }
@@ -377,6 +395,16 @@ const styles = StyleSheet.create({
   plusCore: { alignItems: 'center', justifyContent: 'center' },
   center: { alignItems: 'center', justifyContent: 'center' },
   arcMark: { position: 'absolute', width: 48, textAlign: 'center' },
+  thumbFailed: {
+    position: 'absolute',
+    right: 4,
+    bottom: 4,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   dots: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   dot: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   swatch: { width: 7, height: 7, borderRadius: 2 },

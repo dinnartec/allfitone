@@ -72,8 +72,10 @@ import {
   Ring,
 } from '../../src/components/nutrition-ui'
 import { aboveDock } from '../../src/client/dock'
+import { mealPhotos } from '../../src/client/meal-photos'
 import { DOCK_HEIGHT } from '../../src/components/tab-bar'
 import { RangeEnergyCard } from '../../src/components/range-energy-card'
+import { useMealPhoto } from '../../src/components/use-meal-photo'
 
 const READ_FAILED = 'No pudimos cargar tu día. Inténtalo otra vez.'
 const WEEK_LETTERS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'] as const
@@ -153,6 +155,9 @@ export default function FoodScreen() {
       }
     }, [nutrition, training, monday, day, timeZone, version]),
   )
+
+  // A photo that finished going up, or gave up, changes what the line should show.
+  useEffect(() => mealPhotos.subscribe(() => setVersion((current) => current + 1)), [])
 
   const undo = (meal: SavedMeal) => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
@@ -334,6 +339,7 @@ export default function FoodScreen() {
                     <Text role="body" size="xs" color="muted">
                       {`${String(entry.meal.items.length)} ${entry.meal.items.length === 1 ? 'Alimento' : 'Alimentos'}`}
                     </Text>
+                    <PhotoRetry mealId={entry.meal.id} />
                   </View>
                 </Pressable>
               </LineRow>
@@ -526,6 +532,24 @@ function EnergyCard({
         </Ring>
       ) : null}
     </View>
+  )
+}
+
+/** Under a meal whose photo could not go up: says so, and sends it again. */
+function PhotoRetry({ mealId }: { readonly mealId: string }) {
+  const state = useMealPhoto(mealId)
+  if (state?.kind !== 'failed') return null
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="La foto no se subió. Reintentar"
+      hitSlop={8}
+      onPress={() => void mealPhotos.retry(mealId)}
+    >
+      <Text role="control" size="xs" color="accent">
+        La foto no se subió · Reintentar
+      </Text>
+    </Pressable>
   )
 }
 
