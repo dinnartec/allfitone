@@ -1266,6 +1266,13 @@ export const allfitV1ContractManifest = {
       responses: ['201', '400', '401', '403', '404', '409', '422'],
     },
     {
+      method: 'GET',
+      path: '/studio/v1/organizations/{organizationId}/relationships/{relationshipId}/events',
+      operationId: 'listStudioRelationshipEvents',
+      allfitOperation: 'OP-REL-014',
+      responses: ['200', '400', '401', '403', '404', '503'],
+    },
+    {
       method: 'POST',
       path: '/studio/v1/organizations/{organizationId}/relationships/{relationshipId}/professional-assignments',
       operationId: 'assignRelationshipHolder',

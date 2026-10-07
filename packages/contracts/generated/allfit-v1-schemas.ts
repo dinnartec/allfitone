@@ -7705,6 +7705,65 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  RelationshipHistoryEvent: {
+    description:
+      "One moment in a relationship's past. `detail` carries different keys per `type`, and every one of them is metadata about the moment — never the content a permission covers.",
+    type: 'object',
+    additionalProperties: false,
+    required: ['type', 'occurred_at', 'source_id', 'detail'],
+    properties: {
+      type: {
+        type: 'string',
+        enum: [
+          'relationship_started',
+          'holder_assigned',
+          'holder_ended',
+          'substitution_proposed',
+          'substitution_accepted',
+          'substitution_ended',
+          'consent_decided',
+          'relationship_ended',
+        ],
+      },
+      occurred_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      source_id: {
+        description:
+          'The row this moment was read from, not an identifier of the moment. One assignment row produces more than one event, so the same `source_id` appears against different types.',
+        allOf: [
+          {
+            $ref: '#/components/schemas/UuidV7',
+          },
+        ],
+      },
+      detail: {
+        type: 'object',
+        description:
+          'Keys vary by `type`. `holder_assigned`, `holder_ended` and the substitution kinds carry `assignment_id`, `membership_id`, `professional_person_id` and `display_name`; `consent_decided` carries `scope_code`, `decision` and `scope_definition_id`; `relationship_ended` carries `ended_by_kind`, `declared_by_us` and `reason`; `relationship_started` carries `continues_relationship_id`.',
+        additionalProperties: true,
+      },
+    },
+  },
+  RelationshipHistoryPage: {
+    description:
+      "A page of a relationship's history, newest first. Shorter for a coach than for an owner, because a coach sees only their own assignment.",
+    type: 'object',
+    additionalProperties: false,
+    required: ['data', 'page'],
+    properties: {
+      data: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/RelationshipHistoryEvent',
+        },
+      },
+      page: {
+        $ref: '#/components/schemas/Page',
+      },
+    },
+  },
   RelationshipHolder: {
     type: 'object',
     additionalProperties: false,
