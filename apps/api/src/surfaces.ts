@@ -10,6 +10,7 @@
  * That rejection is `wrong-surface` 403.
  */
 
+import { cors } from 'hono/cors'
 import type { Hono } from 'hono'
 
 import {
@@ -57,6 +58,38 @@ import {
 import { clientTelemetryConfigRoutes } from './platform/telemetry/client-config.js'
 
 export function mountSurfaces(app: Hono): void {
+  /*
+   * One CORS answer for the whole Studio surface, declared before anything is
+   * mounted under it.
+   *
+   * Eleven sub-applications mount at `/studio/v1`, and each used to register its
+   * own `cors()` on `*`. For a real request that is merely repetitive — they all
+   * agree on origin and credentials. For a **preflight** it is not: Hono's cors
+   * middleware answers an OPTIONS request and stops, so whichever ran first
+   * decided the answer for every path on the surface, and the other ten were
+   * configuration that looked live and was not.
+   *
+   * It broke retiring a site in production. `organizations/handlers/studio.ts`
+   * carefully lists `PATCH` and `If-Match`; the browser never saw them, because
+   * a handler that serves neither answered the preflight with
+   * `GET, POST, PUT, OPTIONS`.
+   *
+   * So the methods and headers here are the union of what the surface serves.
+   * Widening them is safe: a preflight tells the browser what it may send, not
+   * what it may reach. A path that does not accept PATCH still refuses it.
+   */
+  app.use(
+    '/studio/v1/*',
+    cors({
+      origin: new URL(trustedStudioWebUrl()).origin,
+      credentials: true,
+      allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'OPTIONS'],
+      allowHeaders: ['Content-Type', 'Idempotency-Key', 'Command-Id', 'If-Match', 'If-None-Match'],
+      exposeHeaders: ['ETag', 'Server-Timing', 'Retry-After', 'Idempotent-Replay'],
+      maxAge: 600,
+    }),
+  )
+
   app.route(
     '/studio/v1',
     clientTelemetryConfigRoutes('studio', new URL(trustedStudioWebUrl()).origin),
