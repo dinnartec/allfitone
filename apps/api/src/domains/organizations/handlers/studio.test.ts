@@ -629,17 +629,13 @@ describe('Studio organization routes', () => {
     /*
      * No `ETag`, and this assertion used to say the opposite.
      *
-     * Vercel compares the request's `If-Match` against the `ETag` on our
-     * response. After a successful write those never agree — one names the
-     * revision expected, the other the revision created — so the platform threw
-     * our `200` away and answered `412 PRECONDITION_FAILED` itself, after the
-     * write had already landed. Retiring a site saved the change and then told
-     * the person it had failed, and the browser could not even read the refusal,
-     * because a response Vercel generates carries no CORS headers.
-     *
-     * The new revision belongs in the body, which is where the client reads it
-     * from anyway. That is asserted below, so this does not merely drop a
-     * guarantee: it moves it to the field that carries it.
+     * It was inverted while chasing a `412` the Edge returned for these writes,
+     * on a theory about Vercel comparing `If-Match` against our response `ETag`
+     * that turned out to be wrong. The real cause was the Edge cache; see
+     * `application.ts`. The header stays off regardless, because nothing reads
+     * it — the client takes the new revision from the body, which is asserted
+     * below, so the guarantee moved to the field that carries it rather than
+     * disappearing.
      */
     expect(response.headers.get('etag')).toBeNull()
     expect(await response.json()).toMatchObject({ revision_number: 3 })
