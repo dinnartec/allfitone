@@ -40,21 +40,31 @@ const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f
 const UUID_V7 = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const DIRECTORY_GROUPS = new Set<DirectoryGroup>(['active', 'invited', 'terminated'])
 
-export function studioRelationshipRoutes(
-  injectedService?: ClientDirectoryService,
-  injectedSessions?: StudioSessionService,
-  injectedHolders?: HolderAssignmentService,
-  injectedStates?: RelationshipStateService,
-  injectedReassignments?: HolderReassignmentService,
-  injectedHistories?: RelationshipHistoryService,
-): Hono {
+/**
+ * The services these routes stand on. Every one is optional and every one
+ * defaults to the real thing, so a caller names only what it wants to replace.
+ *
+ * Named rather than positional because they were positional until one test had
+ * to build five services it did not use in order to reach the sixth. Each new
+ * operation in this domain adds one, so the list only grows.
+ */
+export interface StudioRelationshipDependencies {
+  readonly directory?: ClientDirectoryService
+  readonly sessions?: StudioSessionService
+  readonly holders?: HolderAssignmentService
+  readonly states?: RelationshipStateService
+  readonly reassignments?: HolderReassignmentService
+  readonly histories?: RelationshipHistoryService
+}
+
+export function studioRelationshipRoutes(injected: StudioRelationshipDependencies = {}): Hono {
   const studioOrigin = new URL(trustedStudioWebUrl()).origin
-  const directory = () => injectedService ?? clientDirectoryService()
-  const holders = () => injectedHolders ?? holderAssignmentService()
-  const states = () => injectedStates ?? relationshipStateService()
-  const reassignments = () => injectedReassignments ?? holderReassignmentService()
-  const histories = () => injectedHistories ?? relationshipHistoryService()
-  const sessions = () => injectedSessions ?? studioSessionService()
+  const directory = () => injected.directory ?? clientDirectoryService()
+  const holders = () => injected.holders ?? holderAssignmentService()
+  const states = () => injected.states ?? relationshipStateService()
+  const reassignments = () => injected.reassignments ?? holderReassignmentService()
+  const histories = () => injected.histories ?? relationshipHistoryService()
+  const sessions = () => injected.sessions ?? studioSessionService()
   const routes = new Hono()
 
   routes.use(
