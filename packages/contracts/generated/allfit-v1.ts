@@ -11080,11 +11080,10 @@ export interface operations {
       }
     }
     responses: {
-      /** @description Updated organization projection, or the unchanged projection for a no-op */
+      /** @description Updated organization projection, or the unchanged projection for a no-op. The new revision is `revision_number` in the body, and there is deliberately no `ETag`: the platform compares the request's `If-Match` against it and answers `412` of its own after the write has already landed. */
       200: {
         headers: {
           'Cache-Control': components['headers']['NoStore']
-          ETag: components['headers']['ETag']
           'Idempotent-Replay': components['headers']['IdempotentReplay']
           [name: string]: unknown
         }
@@ -11168,12 +11167,11 @@ export interface operations {
       }
     }
     responses: {
-      /** @description Updated site, or the unchanged site for a no-op */
+      /** @description Updated site, or the unchanged site for a no-op. The new revision is `revision_number` in the body, and there is deliberately no `ETag` — see the organization patch above for why. */
       200: {
         headers: {
           'Cache-Control': components['headers']['NoStore']
           'Idempotent-Replay': components['headers']['IdempotentReplay']
-          ETag: components['headers']['ETag']
           [name: string]: unknown
         }
         content: {

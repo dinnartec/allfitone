@@ -297,7 +297,23 @@ export function studioOrganizationRoutes(
       })
       const organization = result.resource
       replayHeader(c, result.replayed)
-      c.header('ETag', organizationEtag(organization.id, organization.revisionNumber))
+      /*
+       * No `ETag` on a write that accepted `If-Match`, and the reason is the
+       * platform rather than the protocol.
+       *
+       * Vercel compares the request's `If-Match` against the `ETag` our response
+       * carries. On a successful write those never agree — the request names the
+       * revision it expected to find, the response names the one it just
+       * created — so Vercel replaced our `200` with a `412 PRECONDITION_FAILED`
+       * of its own. The write had already happened. The screen reported a
+       * failure for a change that was saved, and could not even read the
+       * refusal, because a response Vercel generates carries no CORS headers.
+       *
+       * Nothing needs the header: the new revision travels in the body as
+       * `revision_number`, which is where the client builds its next `If-Match`
+       * from (`organization-sites.ts`). See `cors-304-vercel` for the same
+       * platform behaviour on the read side.
+       */
       return c.json(organizationPresentation(organization))
     } catch (error) {
       return operationFailure(c, error, problem)
@@ -377,7 +393,9 @@ export function studioOrganizationRoutes(
       })
       const site = result.resource
       replayHeader(c, result.replayed)
-      c.header('ETag', organizationSiteEtag(site.id, site.revisionNumber))
+      // No `ETag` here either, and for the reason spelled out on the
+      // organization patch above: this is the route it was found on. Retiring a
+      // site saved the change and then told the person it had failed.
       return c.json(sitePresentation(site))
     } catch (error) {
       return operationFailure(c, error, problem)

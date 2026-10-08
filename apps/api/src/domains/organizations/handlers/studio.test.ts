@@ -626,7 +626,23 @@ describe('Studio organization routes', () => {
     })
 
     expect(response.status).toBe(200)
-    expect(response.headers.get('etag')).toBe(`"organization:${ORGANIZATION_ID}:r3"`)
+    /*
+     * No `ETag`, and this assertion used to say the opposite.
+     *
+     * Vercel compares the request's `If-Match` against the `ETag` on our
+     * response. After a successful write those never agree — one names the
+     * revision expected, the other the revision created — so the platform threw
+     * our `200` away and answered `412 PRECONDITION_FAILED` itself, after the
+     * write had already landed. Retiring a site saved the change and then told
+     * the person it had failed, and the browser could not even read the refusal,
+     * because a response Vercel generates carries no CORS headers.
+     *
+     * The new revision belongs in the body, which is where the client reads it
+     * from anyway. That is asserted below, so this does not merely drop a
+     * guarantee: it moves it to the field that carries it.
+     */
+    expect(response.headers.get('etag')).toBeNull()
+    expect(await response.json()).toMatchObject({ revision_number: 3 })
     expect(received).toMatchObject({
       organizationId: ORGANIZATION_ID,
       expectedRevision: 2,
@@ -749,9 +765,14 @@ describe('Studio organization routes', () => {
     )
 
     expect(created.status).toBe(201)
+    // Creating still carries it: a POST sends no `If-Match`, so there is nothing
+    // for the platform to compare it against.
     expect(created.headers.get('etag')).toBe(`"organization-site:${SITE_ID}:r0"`)
     expect(updated.status).toBe(200)
-    expect(updated.headers.get('etag')).toBe(`"organization-site:${SITE_ID}:r1"`)
+    // The patch does not, and this is the route the defect was found on. See the
+    // organization patch test above for why the header has to go, and note the
+    // revision is still asserted — on the body, where the client reads it.
+    expect(updated.headers.get('etag')).toBeNull()
     expect(missingPrecondition.status).toBe(428)
     await expect(updated.json()).resolves.toMatchObject({ status: 'inactive', revision_number: 1 })
   })
