@@ -847,20 +847,38 @@ function defaultResponse(
     const existing = organization?.sites.find((entry) => entry.id === siteId)
     if (!existing) return { status: 404, body: error('not-found') }
 
-    // The server compares the revision the screen was showing with the row it
-    // holds, so the mock has to as well: without it the conflict state has no
-    // way to be reached from a test.
-    const ifMatch = request.headers['if-match']
-    if (!ifMatch) return { status: 428, body: error('precondition-required') }
-    if (ifMatch !== `"organization-site:${existing.id}:r${existing.revision_number}"`) {
-      return { status: 409, body: error('conflict') }
-    }
-
-    const patch = request.body as Partial<SiteRow> | undefined
+    const patch = request.body as (Partial<SiteRow> & { expected_revision?: number }) | undefined
     if (!patch || Object.keys(patch).length === 0) {
       return { status: 400, body: error('invalid-request') }
     }
-    Object.assign(existing, patch, { revision_number: existing.revision_number + 1 })
+
+    /*
+     * The server compares the revision the screen was showing with the row it
+     * holds, so the mock has to as well: without it the conflict state has no
+     * way to be reached from a test.
+     *
+     * It arrives in the body now. It used to be `If-Match`, and that header made
+     * Vercel's Edge answer the write `412` before the function ran — see
+     * `studio-api.ts`. The header is still read when the body omits it, exactly
+     * as the server does, so this mock keeps covering a client that has not
+     * moved.
+     */
+    const { expected_revision: expectedRevision, ...fields } = patch
+    const ifMatch = request.headers['if-match']
+    if (expectedRevision === undefined && !ifMatch) {
+      return { status: 428, body: error('precondition-required') }
+    }
+    const expected =
+      expectedRevision ?? Number(/:r([0-9]+)"$/.exec(String(ifMatch))?.[1] ?? Number.NaN)
+    if (expected !== existing.revision_number) {
+      return { status: 409, body: error('conflict') }
+    }
+
+    // `expected_revision` says which revision to write over, not what to write.
+    if (Object.keys(fields).length === 0) {
+      return { status: 400, body: error('invalid-request') }
+    }
+    Object.assign(existing, fields, { revision_number: existing.revision_number + 1 })
     return { status: 200, body: existing }
   }
   if (
