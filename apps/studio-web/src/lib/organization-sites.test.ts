@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 
-import { canManageSites, siteChanges, siteDraftErrors, siteEtag } from './organization-sites.js'
+import { canManageSites, siteChanges, siteDraftErrors } from './organization-sites.js'
 import type { OrganizationRole, OrganizationSite } from './studio-api.js'
 
 function role(code: OrganizationRole['code'], capabilities: string[]): OrganizationRole {
@@ -83,19 +83,13 @@ function site(overrides: Partial<OrganizationSite> = {}): OrganizationSite {
   }
 }
 
-describe('the revision a site edit is based on', () => {
-  test('names the site and the revision the screen was showing', () => {
-    expect(siteEtag(site())).toBe('"organization-site:01991600-2000-7000-8000-000000000001:r4"')
-  })
-
-  /*
-   * The server rejects anything that does not match its own pattern, so a
-   * revision of zero has to survive the trip rather than be treated as absent.
-   */
-  test('a first revision is still a revision', () => {
-    expect(siteEtag(site({ revision_number: 0 }))).toContain(':r0"')
-  })
-})
+/*
+ * The two tests that stood here covered `siteEtag`, which formatted the revision
+ * for the `If-Match` header. The revision now goes in the body as a plain
+ * number, so there is no formatting left to get wrong. What still matters — that
+ * a revision of zero survives the trip rather than reading as absent — is
+ * covered where it now lives, in the studio-api client test.
+ */
 
 describe('what an edit actually sends', () => {
   test('nothing at all when nothing changed', () => {

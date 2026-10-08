@@ -52,7 +52,6 @@ import {
   canManageSites,
   siteChanges,
   siteDraftErrors,
-  siteEtag,
   siteToDraft,
   type SiteDraft,
 } from '@/lib/organization-sites'
@@ -97,7 +96,7 @@ export function OrganizationSiteEdit() {
       }: {
         siteId: string
         body: OrganizationSiteUpdate
-        revision: string
+        revision: number
         command: CommandHeaders
       },
       signal,
@@ -175,7 +174,7 @@ export function OrganizationSiteEdit() {
       await updateMutation.mutateAsync({
         siteId: site.id,
         body,
-        revision: siteEtag(site),
+        revision: site.revision_number,
         command,
       })
       onDone()
