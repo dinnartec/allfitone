@@ -5393,7 +5393,14 @@ export interface components {
       display_name?: string
       legal_name?: string | null
       type_code?: components['schemas']['OrganizationTypeCode']
+      expected_revision?: components['schemas']['ExpectedRevision']
     }
+    /**
+     * @description The `revision_number` the caller read before editing. The write is refused with `409` when the stored revision has moved on, which is what keeps two people from overwriting each other in silence.
+     *
+     *     It travels in the body rather than in `If-Match`, and that is a deployment constraint rather than a preference: this API is one function mounted at `/`, and Vercel's Edge evaluates conditional requests against that single cache key before the function runs. A write carrying `If-Match` was answered `412 Precondition Failed` by the Edge — after the row had already been written, and without CORS headers, so the browser could not read the refusal. `If-Match` is still accepted on these two routes for callers that have not moved yet, and will be dropped once none remain.
+     */
+    ExpectedRevision: number
     /** @enum {string} */
     OrganizationSiteStatus: 'active' | 'inactive'
     OrganizationSite: {
@@ -5412,6 +5419,7 @@ export interface components {
       name?: string
       address?: string | null
       status?: components['schemas']['OrganizationSiteStatus']
+      expected_revision?: components['schemas']['ExpectedRevision']
     }
     Organization: {
       id: components['schemas']['UuidV7']
@@ -8336,9 +8344,15 @@ export interface components {
     IfMatch: string
     /** @description Strong content ETag returned with the current editable draft. */
     PlanningDraftIfMatch: string
-    /** @description Strong ETag for the organization revision used as the command base. */
+    /**
+     * @deprecated
+     * @description Strong ETag for the organization revision used as the command base. **Deprecated — send `expected_revision` in the body instead.** Vercel's Edge answers a conditional write `412` before the function runs; see `ExpectedRevision`. Still read when the body omits the field, so callers that have not moved keep working.
+     */
     OrganizationIfMatch: string
-    /** @description Strong ETag for the organization site revision used as the command base. */
+    /**
+     * @deprecated
+     * @description Strong ETag for the organization site revision used as the command base. **Deprecated — send `expected_revision` in the body instead.** See `OrganizationIfMatch` for why.
+     */
     OrganizationSiteIfMatch: string
     /** @description Strong ETag for the nutrition meal revision used as the command base. */
     NutritionMealIfMatch: string
@@ -11062,8 +11076,11 @@ export interface operations {
       query?: never
       header: {
         Origin: components['parameters']['Origin']
-        /** @description Strong ETag for the organization revision used as the command base. */
-        'If-Match': components['parameters']['OrganizationIfMatch']
+        /**
+         * @deprecated
+         * @description Strong ETag for the organization revision used as the command base. **Deprecated — send `expected_revision` in the body instead.** Vercel's Edge answers a conditional write `412` before the function runs; see `ExpectedRevision`. Still read when the body omits the field, so callers that have not moved keep working.
+         */
+        'If-Match'?: components['parameters']['OrganizationIfMatch']
         /** @description UUIDv4 reused only for HTTP retries of this operation. */
         'Idempotency-Key': components['parameters']['IdempotencyKey']
         /** @description UUIDv7 durable identity generated when the user intention is created. */
@@ -11148,8 +11165,11 @@ export interface operations {
       query?: never
       header: {
         Origin: components['parameters']['Origin']
-        /** @description Strong ETag for the organization site revision used as the command base. */
-        'If-Match': components['parameters']['OrganizationSiteIfMatch']
+        /**
+         * @deprecated
+         * @description Strong ETag for the organization site revision used as the command base. **Deprecated — send `expected_revision` in the body instead.** See `OrganizationIfMatch` for why.
+         */
+        'If-Match'?: components['parameters']['OrganizationSiteIfMatch']
         /** @description UUIDv4 reused only for HTTP retries of this operation. */
         'Idempotency-Key': components['parameters']['IdempotencyKey']
         /** @description UUIDv7 durable identity generated when the user intention is created. */

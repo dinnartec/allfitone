@@ -397,16 +397,27 @@ export const studioApi = {
     organizationId: string,
     siteId: string,
     body: OrganizationSiteUpdate,
-    expectedRevision: string,
+    expectedRevision: number,
     command: CommandHeaders,
     signal?: AbortSignal,
   ) =>
     request<OrganizationSite>(`/studio/v1/organizations/${organizationId}/sites/${siteId}`, {
       method: 'PATCH',
-      // The revision this edit was based on. Without it the server answers 428
-      // rather than guessing that the screen was current.
-      headers: { ...commandHeaders(command), 'If-Match': expectedRevision },
-      body: JSON.stringify(body),
+      headers: commandHeaders(command),
+      /*
+       * The revision this edit was based on, in the body and not in `If-Match`.
+       * Without it the server answers 428 rather than guessing the screen was
+       * current.
+       *
+       * It used to be a header, and that broke the screen in production: this
+       * API is one function mounted at `/`, and Vercel's Edge evaluates
+       * conditional requests against that single cache key before the function
+       * runs. A write carrying `If-Match` was answered `412` by the Edge after
+       * the row had already been written, and with no CORS headers, so this
+       * client could not read the refusal and reported a failure for a change
+       * that was saved.
+       */
+      body: JSON.stringify({ ...body, expected_revision: expectedRevision }),
       ...(signal ? { signal } : {}),
     }),
 

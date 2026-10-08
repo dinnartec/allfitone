@@ -272,11 +272,18 @@ export function studioOrganizationRoutes(
     }
     const organizationId = c.req.param('organizationId')
     if (!UUID.test(organizationId)) return problem(c, 'invalid-request')
-    const revision = expectedRevision(c.req.header('if-match'), 'organization', organizationId)
-    if (revision === undefined) return problem(c, 'precondition-required')
-    if (revision === null) return problem(c, 'invalid-request')
+    // Body first now: the revision it carries is what this reads, and the
+    // header is only the fallback.
     const body = await readJson(c)
     if (!isOrganizationUpdate(body)) return problem(c, 'invalid-request')
+    const revision = expectedRevisionFrom(
+      c.req.header('if-match'),
+      body.expected_revision,
+      'organization',
+      organizationId,
+    )
+    if (revision === undefined) return problem(c, 'precondition-required')
+    if (revision === null) return problem(c, 'invalid-request')
     const command = commandContext(c, { organization_id: organizationId, body, revision })
     if (!command) return problem(c, 'invalid-request')
 
@@ -360,11 +367,16 @@ export function studioOrganizationRoutes(
     const organizationId = c.req.param('organizationId')
     const siteId = c.req.param('siteId')
     if (!UUID.test(organizationId) || !UUID.test(siteId)) return problem(c, 'invalid-request')
-    const revision = expectedRevision(c.req.header('if-match'), 'organization-site', siteId)
-    if (revision === undefined) return problem(c, 'precondition-required')
-    if (revision === null) return problem(c, 'invalid-request')
     const body = await readJson(c)
     if (!isOrganizationSiteUpdate(body)) return problem(c, 'invalid-request')
+    const revision = expectedRevisionFrom(
+      c.req.header('if-match'),
+      body.expected_revision,
+      'organization-site',
+      siteId,
+    )
+    if (revision === undefined) return problem(c, 'precondition-required')
+    if (revision === null) return problem(c, 'invalid-request')
     const command = commandContext(c, {
       organization_id: organizationId,
       site_id: siteId,
@@ -548,6 +560,34 @@ function organizationSiteEtag(siteId: string, revision: number): string {
   return `"organization-site:${siteId}:r${revision}"`
 }
 
+/**
+ * The revision a write expects to find, from the body first and `If-Match`
+ * after.
+ *
+ * It moved into the body because this API is one function mounted at `/`, and
+ * Vercel's Edge evaluates conditional requests against that single cache key
+ * before the function runs. A write carrying `If-Match` came back
+ * `412 Precondition Failed` from the Edge — after the row had been written, and
+ * without CORS headers, so the browser could not read the refusal and the screen
+ * reported a failure for a change that was saved. The Edge decides that whether
+ * or not it has anything cached, so no cache header avoids it; the only way out
+ * is to stop sending a conditional request.
+ *
+ * The header is still read when the body omits the field, so a page loaded
+ * before this shipped keeps working. Drop that branch once none are left.
+ */
+function expectedRevisionFrom(
+  header: string | undefined,
+  fromBody: number | undefined,
+  resource: 'organization' | 'organization-site',
+  id: string,
+): number | undefined | null {
+  if (fromBody !== undefined) {
+    return Number.isSafeInteger(fromBody) && fromBody >= 0 ? fromBody : null
+  }
+  return expectedRevision(header, resource, id)
+}
+
 function expectedRevision(
   value: string | undefined,
   resource: 'organization' | 'organization-site',
@@ -694,9 +734,15 @@ function isOrganizationUpdate(value: unknown): value is OrganizationUpdate {
   if (!isObject(value)) return false
   const keys = Object.keys(value)
   if (
-    keys.length === 0 ||
-    keys.some((key) => !['display_name', 'legal_name', 'type_code'].includes(key))
+    keys.some(
+      (key) => !['display_name', 'legal_name', 'type_code', 'expected_revision'].includes(key),
+    )
   ) {
+    return false
+  }
+  // See the site guard: a body with nothing but the revision asks for no change.
+  if (!keys.some((key) => key !== 'expected_revision')) return false
+  if (value.expected_revision !== undefined && typeof value.expected_revision !== 'number') {
     return false
   }
   return (
@@ -729,7 +775,13 @@ function isOrganizationSiteCreate(value: unknown): value is OrganizationSiteCrea
 function isOrganizationSiteUpdate(value: unknown): value is OrganizationSiteUpdate {
   if (!isObject(value)) return false
   const keys = Object.keys(value)
-  if (keys.length === 0 || keys.some((key) => !['name', 'address', 'status'].includes(key))) {
+  if (keys.some((key) => !['name', 'address', 'status', 'expected_revision'].includes(key))) {
+    return false
+  }
+  // `expected_revision` says which revision to write over, not what to write, so
+  // a body carrying only that one asks for nothing and is refused as before.
+  if (!keys.some((key) => key !== 'expected_revision')) return false
+  if (value.expected_revision !== undefined && typeof value.expected_revision !== 'number') {
     return false
   }
   return (

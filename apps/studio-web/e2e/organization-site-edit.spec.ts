@@ -28,12 +28,20 @@ test('renames a site and the list shows the new name', async ({ page }) => {
     page.getByRole('list', { name: 'Sedes de la organización' }).getByText('Sede Chapinero Norte'),
   ).toBeVisible()
 
-  // Only the field that moved, and carrying the revision the screen was on.
+  /*
+   * Only the field that moved, and carrying the revision the screen was on.
+   *
+   * The revision rides in the body rather than in `If-Match`, and the absence
+   * of that header is asserted on purpose: while it was a header, Vercel's Edge
+   * answered this write `412` before the function ran, after the row had already
+   * been written. See `studio-api.ts`.
+   */
   const saved = fixture.requests.find((entry) => entry.method === 'PATCH')
-  expect(saved?.body).toEqual({ name: 'Sede Chapinero Norte' })
-  expect(saved?.headers['if-match']).toBe(
-    `"organization-site:${chapineroSite.id}:r${chapineroSite.revision_number}"`,
-  )
+  expect(saved?.body).toEqual({
+    name: 'Sede Chapinero Norte',
+    expected_revision: chapineroSite.revision_number,
+  })
+  expect(saved?.headers['if-match']).toBeUndefined()
 })
 
 test('clearing the address sends null rather than an empty string', async ({ page }) => {
@@ -46,7 +54,7 @@ test('clearing the address sends null rather than an empty string', async ({ pag
 
   await expect(page).toHaveURL(new RegExp(`${organizationPath}$`))
   const saved = fixture.requests.find((entry) => entry.method === 'PATCH')
-  expect(saved?.body).toEqual({ address: null })
+  expect(saved?.body).toEqual({ address: null, expected_revision: chapineroSite.revision_number })
 })
 
 test('with nothing changed there is nothing to save', async ({ page }) => {
@@ -90,7 +98,10 @@ test('withdrawing a site says what it leaves alone, and keeps it on the list', a
   )
 
   const saved = fixture.requests.find((entry) => entry.method === 'PATCH')
-  expect(saved?.body).toEqual({ status: 'inactive' })
+  expect(saved?.body).toEqual({
+    status: 'inactive',
+    expected_revision: chapineroSite.revision_number,
+  })
 })
 
 test('a confirmation that is dismissed changes nothing', async ({ page }) => {

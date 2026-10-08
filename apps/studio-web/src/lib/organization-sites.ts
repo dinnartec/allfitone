@@ -51,15 +51,13 @@ export function siteDraftToRequest(draft: SiteDraft): OrganizationSiteCreate {
   }
 }
 
-/**
- * The revision an edit is based on, in the form the contract publishes:
- * `"organization-site:<id>:r<revision>"`. The server compares it with the row
- * it holds and refuses the write if someone else moved it first, which is what
- * keeps two people editing one site from overwriting each other in silence.
+/*
+ * `siteEtag` lived here and built `"organization-site:<id>:r<revision>"` for the
+ * `If-Match` header. The revision an edit is based on now travels as
+ * `expected_revision` in the body — the server compares it the same way and
+ * refuses a write someone else moved first — so there is nothing left to format.
+ * See `studio-api.ts` for why it had to leave the header.
  */
-export function siteEtag(site: OrganizationSite): string {
-  return `"organization-site:${site.id}:r${site.revision_number}"`
-}
 
 /**
  * Only the fields that actually moved, or null when none did.

@@ -3866,6 +3866,12 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
     type: 'string',
     enum: ['pending', 'valid', 'invalid', 'annulled'],
   },
+  ExpectedRevision: {
+    description:
+      "The `revision_number` the caller read before editing. The write is refused with `409` when the stored revision has moved on, which is what keeps two people from overwriting each other in silence.\n\nIt travels in the body rather than in `If-Match`, and that is a deployment constraint rather than a preference: this API is one function mounted at `/`, and Vercel's Edge evaluates conditional requests against that single cache key before the function runs. A write carrying `If-Match` was answered `412 Precondition Failed` by the Edge — after the row had already been written, and without CORS headers, so the browser could not read the refusal. `If-Match` is still accepted on these two routes for callers that have not moved yet, and will be dropped once none remain.",
+    type: 'integer',
+    minimum: 0,
+  },
   FitnessDataAccessPolicy: {
     type: 'string',
     description:
@@ -5999,6 +6005,9 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       status: {
         $ref: '#/components/schemas/OrganizationSiteStatus',
       },
+      expected_revision: {
+        $ref: '#/components/schemas/ExpectedRevision',
+      },
     },
   },
   OrganizationType: {
@@ -6050,6 +6059,9 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
       type_code: {
         $ref: '#/components/schemas/OrganizationTypeCode',
+      },
+      expected_revision: {
+        $ref: '#/components/schemas/ExpectedRevision',
       },
     },
   },

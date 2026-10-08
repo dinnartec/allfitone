@@ -343,3 +343,58 @@ function roleCatalogResponse() {
     ],
   }
 }
+
+/*
+ * The revision a site edit is based on used to travel in `If-Match`, and that
+ * broke the screen in production: the API is one function mounted at `/`, and
+ * Vercel's Edge evaluates conditional requests against that single cache key
+ * before the function runs. A write carrying `If-Match` came back `412` from
+ * the Edge after the row had already been written, and with no CORS headers, so
+ * this client could not read the refusal and reported a failure for a change
+ * that was saved.
+ *
+ * What these assert is therefore not a preference about where a field goes. It
+ * is that this request must not be a conditional request at all.
+ */
+describe('the revision a site edit is based on', () => {
+  async function patch(revision: number) {
+    const calls: Array<{ url: string; init: RequestInit }> = []
+    globalThis.fetch = (async (input, init) => {
+      calls.push({ url: String(input), init: init ?? {} })
+      return Response.json({ id: 'site', revision_number: revision + 1 })
+    }) as typeof fetch
+
+    await studioApi.updateOrganizationSite(
+      '01991600-2000-7000-8000-000000000001',
+      '01991600-2000-7000-8000-000000000002',
+      { status: 'inactive' },
+      revision,
+      newCommand(),
+    )
+
+    return {
+      body: JSON.parse(String(calls[0]?.init.body)),
+      headers: new Headers(calls[0]?.init.headers),
+    }
+  }
+
+  test('travels in the body, alongside the change it applies to', async () => {
+    const { body } = await patch(4)
+    expect(body).toEqual({ status: 'inactive', expected_revision: 4 })
+  })
+
+  test('is not sent as a condition on the request', async () => {
+    const { headers } = await patch(4)
+    expect(headers.get('if-match')).toBeNull()
+  })
+
+  /*
+   * A first revision is still a revision. Zero is falsy, so any code that
+   * forwards it through a truthiness check drops it, and the server answers
+   * `428` for an edit the screen was perfectly current about.
+   */
+  test('a first revision survives the trip', async () => {
+    const { body } = await patch(0)
+    expect(body.expected_revision).toBe(0)
+  })
+})
