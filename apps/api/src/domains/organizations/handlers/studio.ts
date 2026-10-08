@@ -298,21 +298,19 @@ export function studioOrganizationRoutes(
       const organization = result.resource
       replayHeader(c, result.replayed)
       /*
-       * No `ETag` on a write that accepted `If-Match`, and the reason is the
-       * platform rather than the protocol.
+       * No `ETag` on a write that accepted `If-Match`, though not for the reason
+       * this comment first gave.
        *
-       * Vercel compares the request's `If-Match` against the `ETag` our response
-       * carries. On a successful write those never agree — the request names the
-       * revision it expected to find, the response names the one it just
-       * created — so Vercel replaced our `200` with a `412 PRECONDITION_FAILED`
-       * of its own. The write had already happened. The screen reported a
-       * failure for a change that was saved, and could not even read the
-       * refusal, because a response Vercel generates carries no CORS headers.
+       * It was removed while chasing a `412` the Edge was returning for these
+       * writes, on the theory that Vercel compared the request's `If-Match`
+       * against our response's `ETag`. That was wrong — removing it changed
+       * nothing, and the cause turned out to be the Edge cache answering from a
+       * single entry shared by the whole API (see `application.ts`).
        *
-       * Nothing needs the header: the new revision travels in the body as
-       * `revision_number`, which is where the client builds its next `If-Match`
-       * from (`organization-sites.ts`). See `cors-304-vercel` for the same
-       * platform behaviour on the read side.
+       * It stays off because nothing reads it: the new revision travels in the
+       * body as `revision_number`, which is where the client builds its next
+       * `If-Match` from (`organization-sites.ts`). One header fewer on a write
+       * the Edge must never answer from is worth keeping.
        */
       return c.json(organizationPresentation(organization))
     } catch (error) {
@@ -393,9 +391,9 @@ export function studioOrganizationRoutes(
       })
       const site = result.resource
       replayHeader(c, result.replayed)
-      // No `ETag` here either, and for the reason spelled out on the
-      // organization patch above: this is the route it was found on. Retiring a
-      // site saved the change and then told the person it had failed.
+      // No `ETag` here either — see the organization patch above. This is the
+      // route the Edge-cache defect was found on: retiring a site saved the
+      // change and then told the person it had failed.
       return c.json(sitePresentation(site))
     } catch (error) {
       return operationFailure(c, error, problem)
