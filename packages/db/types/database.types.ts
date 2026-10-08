@@ -18,6 +18,7 @@ export type Database = {
         Args: { p_membership_id: string }
         Returns: boolean
       }
+      counts_platform_metrics: { Args: never; Returns: boolean }
       has_capability: {
         Args: { p_capability_code: string; p_organization_id: string }
         Returns: boolean
@@ -35,10 +36,15 @@ export type Database = {
         }
         Returns: boolean
       }
+      holds_backoffice_duty: { Args: { p_duty_code: string }; Returns: boolean }
       is_self: { Args: { target_person_id: string }; Returns: boolean }
       org: { Args: never; Returns: string }
       owns_membership: { Args: { p_membership_id: string }; Returns: boolean }
       person: { Args: never; Returns: string }
+      reads_under_break_glass: {
+        Args: { p_category: string; p_subject_person_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       [_ in never]: never
@@ -656,6 +662,48 @@ export type Database = {
         Args: { p_activity_type_id: string }
         Returns: Database['catalog']['Enums']['activity_family']
       }
+      archive_activity_type: {
+        Args: {
+          p_actor_person_id: string
+          p_actor_session_id: string
+          p_code: string
+          p_command_id: string
+          p_idempotency_key: string
+          p_request_hash: string
+        }
+        Returns: {
+          replayed: boolean
+          result: Json
+        }[]
+      }
+      archive_discipline: {
+        Args: {
+          p_actor_person_id: string
+          p_actor_session_id: string
+          p_code: string
+          p_command_id: string
+          p_idempotency_key: string
+          p_request_hash: string
+        }
+        Returns: {
+          replayed: boolean
+          result: Json
+        }[]
+      }
+      archive_global_movement: {
+        Args: {
+          p_actor_person_id: string
+          p_actor_session_id: string
+          p_command_id: string
+          p_idempotency_key: string
+          p_movement_id: string
+          p_request_hash: string
+        }
+        Returns: {
+          replayed: boolean
+          result: Json
+        }[]
+      }
       deprecate_result_contract: {
         Args: {
           p_actor_person_id: string
@@ -669,6 +717,10 @@ export type Database = {
           replayed: boolean
           result: Json
         }[]
+      }
+      global_catalog_entry_projection: {
+        Args: { p_id: string; p_kind: string }
+        Returns: Json
       }
       list_activity_type_result_contracts: {
         Args: { p_activity_type_id: string }
@@ -700,6 +752,10 @@ export type Database = {
           name: string
         }[]
       }
+      list_global_catalog: {
+        Args: { p_actor_person_id: string; p_actor_session_id: string }
+        Returns: Json
+      }
       list_professional_credential_types: {
         Args: never
         Returns: {
@@ -728,6 +784,52 @@ export type Database = {
         }[]
       }
       normalize_movement_name: { Args: { p_name: string }; Returns: string }
+      publish_activity_type: {
+        Args: {
+          p_actor_person_id: string
+          p_actor_session_id: string
+          p_code: string
+          p_command_id: string
+          p_discipline_code: string
+          p_idempotency_key: string
+          p_name: string
+          p_request_hash: string
+        }
+        Returns: {
+          replayed: boolean
+          result: Json
+        }[]
+      }
+      publish_discipline: {
+        Args: {
+          p_actor_person_id: string
+          p_actor_session_id: string
+          p_code: string
+          p_command_id: string
+          p_idempotency_key: string
+          p_name: string
+          p_request_hash: string
+        }
+        Returns: {
+          replayed: boolean
+          result: Json
+        }[]
+      }
+      publish_global_movement: {
+        Args: {
+          p_actor_person_id: string
+          p_actor_session_id: string
+          p_command_id: string
+          p_discipline_code: string
+          p_idempotency_key: string
+          p_name: string
+          p_request_hash: string
+        }
+        Returns: {
+          replayed: boolean
+          result: Json
+        }[]
+      }
       publish_result_contract: {
         Args: {
           p_activity_family: Database['catalog']['Enums']['activity_family']
@@ -748,6 +850,7 @@ export type Database = {
           result: Json
         }[]
       }
+      published_discipline: { Args: { p_code: string }; Returns: string }
       read_equipment: { Args: { p_person_id: string }; Returns: Json }
       read_movement: {
         Args: { p_movement_id: string; p_person_id: string }
@@ -1026,8 +1129,33 @@ export type Database = {
           },
         ]
       }
+      body_progress_metrics: {
+        Row: {
+          code: string
+          created_at: string
+          dimension: string
+          maximum_value: number
+          name: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          dimension: string
+          maximum_value: number
+          name: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          dimension?: string
+          maximum_value?: number
+          name?: string
+        }
+        Relationships: []
+      }
       body_progress_records: {
         Row: {
+          created_at: string
           has_media: boolean
           id: string
           measured_on: string
@@ -1040,6 +1168,7 @@ export type Database = {
           value_numeric: number
         }
         Insert: {
+          created_at?: string
           has_media?: boolean
           id: string
           measured_on?: string
@@ -1052,6 +1181,7 @@ export type Database = {
           value_numeric: number
         }
         Update: {
+          created_at?: string
           has_media?: boolean
           id?: string
           measured_on?: string
@@ -1064,6 +1194,13 @@ export type Database = {
           value_numeric?: number
         }
         Relationships: [
+          {
+            foreignKeyName: 'fk_body_progress_records_metric'
+            columns: ['metric_code']
+            isOneToOne: false
+            referencedRelation: 'body_progress_metrics'
+            referencedColumns: ['code']
+          },
           {
             foreignKeyName: 'fk_body_progress_records_person'
             columns: ['person_id']
@@ -1236,6 +1373,195 @@ export type Database = {
           },
         ]
       }
+      health_context_claims: {
+        Row: {
+          body_area: string | null
+          context_type: string
+          created_at: string
+          description: string
+          id: string
+          person_id: string
+          provenance: Database['identity']['Enums']['provenance']
+          valid_from: string
+          valid_to: string | null
+        }
+        Insert: {
+          body_area?: string | null
+          context_type: string
+          created_at?: string
+          description: string
+          id: string
+          person_id: string
+          provenance: Database['identity']['Enums']['provenance']
+          valid_from: string
+          valid_to?: string | null
+        }
+        Update: {
+          body_area?: string | null
+          context_type?: string
+          created_at?: string
+          description?: string
+          id?: string
+          person_id?: string
+          provenance?: Database['identity']['Enums']['provenance']
+          valid_from?: string
+          valid_to?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_health_context_claims_person'
+            columns: ['person_id']
+            isOneToOne: false
+            referencedRelation: 'people'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      identity_action_events: {
+        Row: {
+          actor_duty_assignment_id: string | null
+          actor_kind: string
+          actor_person_id: string | null
+          case_reference: string | null
+          delivery_channel: string | null
+          event_type: string
+          id: string
+          occurred_at: string
+          request_id: string
+          result_code: string | null
+        }
+        Insert: {
+          actor_duty_assignment_id?: string | null
+          actor_kind: string
+          actor_person_id?: string | null
+          case_reference?: string | null
+          delivery_channel?: string | null
+          event_type: string
+          id?: string
+          occurred_at?: string
+          request_id: string
+          result_code?: string | null
+        }
+        Update: {
+          actor_duty_assignment_id?: string | null
+          actor_kind?: string
+          actor_person_id?: string | null
+          case_reference?: string | null
+          delivery_channel?: string | null
+          event_type?: string
+          id?: string
+          occurred_at?: string
+          request_id?: string
+          result_code?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_identity_action_events_actor'
+            columns: ['actor_person_id']
+            isOneToOne: false
+            referencedRelation: 'people'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'fk_identity_action_events_request'
+            columns: ['request_id']
+            isOneToOne: false
+            referencedRelation: 'identity_action_requests'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      identity_action_requests: {
+        Row: {
+          access_account_id: string
+          action_kind: Database['identity']['Enums']['identity_action_kind']
+          cancelled_at: string | null
+          case_reference: string | null
+          confirmed_at: string | null
+          contact_fingerprint: string
+          contact_hint: string
+          created_at: string
+          delivered_at: string | null
+          delivery_channel: string
+          expires_at: string
+          failed_at: string | null
+          failure_code: string | null
+          id: string
+          initiated_by_duty_assignment_id: string | null
+          initiated_by_kind: string
+          initiated_by_person_id: string
+          person_id: string
+          status: Database['identity']['Enums']['identity_action_status']
+          updated_at: string
+        }
+        Insert: {
+          access_account_id: string
+          action_kind: Database['identity']['Enums']['identity_action_kind']
+          cancelled_at?: string | null
+          case_reference?: string | null
+          confirmed_at?: string | null
+          contact_fingerprint: string
+          contact_hint: string
+          created_at?: string
+          delivered_at?: string | null
+          delivery_channel: string
+          expires_at: string
+          failed_at?: string | null
+          failure_code?: string | null
+          id: string
+          initiated_by_duty_assignment_id?: string | null
+          initiated_by_kind: string
+          initiated_by_person_id: string
+          person_id: string
+          status?: Database['identity']['Enums']['identity_action_status']
+          updated_at?: string
+        }
+        Update: {
+          access_account_id?: string
+          action_kind?: Database['identity']['Enums']['identity_action_kind']
+          cancelled_at?: string | null
+          case_reference?: string | null
+          confirmed_at?: string | null
+          contact_fingerprint?: string
+          contact_hint?: string
+          created_at?: string
+          delivered_at?: string | null
+          delivery_channel?: string
+          expires_at?: string
+          failed_at?: string | null
+          failure_code?: string | null
+          id?: string
+          initiated_by_duty_assignment_id?: string | null
+          initiated_by_kind?: string
+          initiated_by_person_id?: string
+          person_id?: string
+          status?: Database['identity']['Enums']['identity_action_status']
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_identity_action_requests_account'
+            columns: ['access_account_id']
+            isOneToOne: false
+            referencedRelation: 'access_accounts'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'fk_identity_action_requests_initiator'
+            columns: ['initiated_by_person_id']
+            isOneToOne: false
+            referencedRelation: 'people'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'fk_identity_action_requests_person'
+            columns: ['person_id']
+            isOneToOne: false
+            referencedRelation: 'people'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       invitation_intents: {
         Row: {
           created_at: string
@@ -1283,6 +1609,61 @@ export type Database = {
           },
         ]
       }
+      invitation_resends: {
+        Row: {
+          actor_duty_assignment_id: string
+          actor_person_id: string
+          created_at: string
+          delivered_invitation_id: string
+          id: string
+          invitation_id: string
+          kind: Database['identity']['Enums']['invitation_intent_kind']
+          outcome: string
+        }
+        Insert: {
+          actor_duty_assignment_id: string
+          actor_person_id: string
+          created_at?: string
+          delivered_invitation_id: string
+          id?: string
+          invitation_id: string
+          kind: Database['identity']['Enums']['invitation_intent_kind']
+          outcome: string
+        }
+        Update: {
+          actor_duty_assignment_id?: string
+          actor_person_id?: string
+          created_at?: string
+          delivered_invitation_id?: string
+          id?: string
+          invitation_id?: string
+          kind?: Database['identity']['Enums']['invitation_intent_kind']
+          outcome?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_invitation_resends_actor'
+            columns: ['actor_person_id']
+            isOneToOne: false
+            referencedRelation: 'people'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'fk_invitation_resends_delivered'
+            columns: ['delivered_invitation_id']
+            isOneToOne: false
+            referencedRelation: 'invitations'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'fk_invitation_resends_invitation'
+            columns: ['invitation_id']
+            isOneToOne: false
+            referencedRelation: 'invitations'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       invitations: {
         Row: {
           channel: string
@@ -1295,6 +1676,7 @@ export type Database = {
           issued_by_person_id: string | null
           organization_id: string
           proposal_hash: string
+          reissues_invitation_id: string | null
           responsible_party: Json
           responsible_party_schema_version: number
           status: Database['identity']['Enums']['invitation_status']
@@ -1313,6 +1695,7 @@ export type Database = {
           issued_by_person_id?: string | null
           organization_id: string
           proposal_hash: string
+          reissues_invitation_id?: string | null
           responsible_party: Json
           responsible_party_schema_version?: number
           status?: Database['identity']['Enums']['invitation_status']
@@ -1331,6 +1714,7 @@ export type Database = {
           issued_by_person_id?: string | null
           organization_id?: string
           proposal_hash?: string
+          reissues_invitation_id?: string | null
           responsible_party?: Json
           responsible_party_schema_version?: number
           status?: Database['identity']['Enums']['invitation_status']
@@ -1344,6 +1728,13 @@ export type Database = {
             columns: ['issued_by_person_id']
             isOneToOne: false
             referencedRelation: 'people'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'fk_invitations_reissues'
+            columns: ['reissues_invitation_id']
+            isOneToOne: false
+            referencedRelation: 'invitations'
             referencedColumns: ['id']
           },
         ]
@@ -1857,6 +2248,18 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      account_recovery_contact_fingerprint: {
+        Args: { p_email: string }
+        Returns: string
+      }
+      account_recovery_projection: {
+        Args: { p_request_id: string }
+        Returns: Json
+      }
+      account_recovery_unavailable_reason: {
+        Args: { p_person_id: string }
+        Returns: string
+      }
       activate_person: {
         Args: {
           p_account_id: string
@@ -1879,6 +2282,14 @@ export type Database = {
         }
         Returns: undefined
       }
+      backoffice_client_invitation_projection: {
+        Args: { p_invitation_id: string }
+        Returns: Json
+      }
+      backoffice_team_invitation_projection: {
+        Args: { p_invitation_id: string }
+        Returns: Json
+      }
       bind_backoffice_totp_verification: {
         Args: {
           p_attempt_token_hash: string
@@ -1886,6 +2297,23 @@ export type Database = {
           p_idempotency_key: string
         }
         Returns: undefined
+      }
+      body_progress_projection: { Args: { p_record_id: string }; Returns: Json }
+      cancel_account_recovery: {
+        Args: {
+          p_actor_person_id: string
+          p_actor_session_id: string
+          p_case_reference: string
+          p_command_id: string
+          p_idempotency_key: string
+          p_person_id: string
+          p_request_hash: string
+          p_request_id: string
+        }
+        Returns: {
+          replayed: boolean
+          result: Json
+        }[]
       }
       client_invitation_projection: {
         Args: { p_invitation_id: string }
@@ -1912,6 +2340,10 @@ export type Database = {
           replayed: boolean
           session_id: string
         }[]
+      }
+      consume_account_recovery_send: {
+        Args: { p_person_id: string }
+        Returns: undefined
       }
       consume_staff_invitation_rate_limit: {
         Args: {
@@ -2118,15 +2550,50 @@ export type Database = {
           value_text: string
         }[]
       }
+      delete_body_progress: {
+        Args: {
+          p_command_id: string
+          p_idempotency_key: string
+          p_issuer: string
+          p_provider: string
+          p_record_id: string
+          p_request_hash: string
+          p_subject: string
+        }
+        Returns: {
+          replayed: boolean
+          result: Json
+        }[]
+      }
+      delete_health_context: {
+        Args: {
+          p_claim_id: string
+          p_command_id: string
+          p_idempotency_key: string
+          p_issuer: string
+          p_provider: string
+          p_request_hash: string
+          p_subject: string
+        }
+        Returns: {
+          replayed: boolean
+          result: Json
+        }[]
+      }
       expire_backoffice_authentication_attempts: {
         Args: { p_limit: number }
         Returns: number
       }
       expire_staff_invitations: { Args: { p_limit?: number }; Returns: number }
+      fail_account_recovery_delivery: {
+        Args: { p_event_id: string }
+        Returns: undefined
+      }
       get_my_professional_context: {
         Args: { p_person_id: string; p_request_id: string }
         Returns: Json
       }
+      health_context_projection: { Args: { p_claim_id: string }; Returns: Json }
       issue_client_invitation: {
         Args: {
           p_channel: string
@@ -2177,6 +2644,33 @@ export type Database = {
           status: string
         }[]
       }
+      list_backoffice_client_invitations: {
+        Args: {
+          p_actor_person_id: string
+          p_actor_session_id: string
+          p_organization_id: string
+        }
+        Returns: Json
+      }
+      list_backoffice_team_invitations: {
+        Args: {
+          p_actor_person_id: string
+          p_actor_session_id: string
+          p_organization_id: string
+        }
+        Returns: Json
+      }
+      list_body_progress: {
+        Args: {
+          p_before_id?: string
+          p_before_measured_on?: string
+          p_issuer: string
+          p_limit: number
+          p_provider: string
+          p_subject: string
+        }
+        Returns: Json
+      }
       list_credential_verification_requests: {
         Args: {
           p_actor_person_id: string
@@ -2222,6 +2716,17 @@ export type Database = {
           issuer: string
           last_valid_to: string
         }[]
+      }
+      list_health_context: {
+        Args: {
+          p_before_id?: string
+          p_before_valid_from?: string
+          p_issuer: string
+          p_limit: number
+          p_provider: string
+          p_subject: string
+        }
+        Returns: Json
       }
       list_staff_invitations: {
         Args: {
@@ -2313,7 +2818,6 @@ export type Database = {
           provider_session_id: string
         }[]
       }
-      metric_dimension: { Args: { p_metric_code: string }; Returns: string }
       open_credential_verification_renewal: {
         Args: {
           p_actor_person_id: string
@@ -2328,12 +2832,31 @@ export type Database = {
           result: Json
         }[]
       }
+      prepare_account_recovery_delivery: {
+        Args: { p_event_id: string }
+        Returns: {
+          contact: string
+          delivery_state: string
+          request_id: string
+        }[]
+      }
       prepare_backoffice_auth_cleanup: {
         Args: { p_event_id: string }
         Returns: {
           cleanup_state: string
           provider_factor_id: string
           provider_session_id: string
+        }[]
+      }
+      prepare_client_invitation_delivery: {
+        Args: { p_event_id: string }
+        Returns: {
+          contact: string
+          delivery_state: string
+          expires_at: string
+          invitation_id: string
+          organization_name: string
+          token_key_version: number
         }[]
       }
       prepare_ownership_invitation_delivery: {
@@ -2397,6 +2920,15 @@ export type Database = {
           replayed: boolean
         }[]
       }
+      read_account_recovery: {
+        Args: {
+          p_actor_person_id: string
+          p_actor_session_id: string
+          p_case_reference: string
+          p_person_id: string
+        }
+        Returns: Json
+      }
       read_current_onboarding: {
         Args: { p_account_id: string }
         Returns: {
@@ -2416,6 +2948,14 @@ export type Database = {
           primary_training_goal: string
           training_experience: string
         }[]
+      }
+      record_account_recovery_access: {
+        Args: { p_actor_person_id: string; p_person_id: string }
+        Returns: undefined
+      }
+      record_account_recovery_delivery: {
+        Args: { p_event_id: string; p_expires_at: string }
+        Returns: undefined
       }
       record_adult_eligibility: {
         Args: {
@@ -2459,6 +2999,25 @@ export type Database = {
           value_numeric: number
         }[]
       }
+      record_health_context: {
+        Args: {
+          p_body_area: string
+          p_claim_id: string
+          p_context_type: string
+          p_description: string
+          p_idempotency_key: string
+          p_issuer: string
+          p_provider: string
+          p_request_hash: string
+          p_subject: string
+          p_valid_from: string
+          p_valid_to: string
+        }
+        Returns: {
+          replayed: boolean
+          result: Json
+        }[]
+      }
       recover_backoffice_totp_factor: {
         Args: {
           p_approved_by_person_id: string
@@ -2468,13 +3027,75 @@ export type Database = {
         }
         Returns: string
       }
+      require_account_recovery_assistant: {
+        Args: { p_actor_person_id: string; p_actor_session_id: string }
+        Returns: string
+      }
       require_credential_verifier: {
         Args: { p_actor_person_id: string; p_actor_session_id: string }
         Returns: undefined
       }
+      require_invitation_resender: {
+        Args: { p_actor_person_id: string; p_actor_session_id: string }
+        Returns: string
+      }
       require_professional_actor: {
         Args: { p_person_id: string }
         Returns: undefined
+      }
+      require_space_person: {
+        Args: { p_issuer: string; p_provider: string; p_subject: string }
+        Returns: string
+      }
+      resend_account_recovery: {
+        Args: {
+          p_actor_person_id: string
+          p_actor_session_id: string
+          p_case_reference: string
+          p_command_id: string
+          p_idempotency_key: string
+          p_person_id: string
+          p_request_hash: string
+          p_request_id: string
+        }
+        Returns: {
+          replayed: boolean
+          result: Json
+        }[]
+      }
+      resend_client_invitation: {
+        Args: {
+          p_actor_person_id: string
+          p_actor_session_id: string
+          p_command_id: string
+          p_idempotency_key: string
+          p_invitation_id: string
+          p_organization_id: string
+          p_request_hash: string
+          p_token_hash: string
+          p_token_key_version: number
+        }
+        Returns: {
+          replayed: boolean
+          result: Json
+        }[]
+      }
+      resend_team_invitation: {
+        Args: {
+          p_actor_person_id: string
+          p_actor_session_id: string
+          p_command_id: string
+          p_idempotency_key: string
+          p_invitation_id: string
+          p_organization_id: string
+          p_request_hash: string
+          p_token_hash: string
+          p_token_key_version: number
+        }
+        Returns: {
+          replayed: boolean
+          result: Json
+        }[]
       }
       resolve_actor_registration: {
         Args: { p_account_id: string }
@@ -2610,6 +3231,21 @@ export type Database = {
         }
         Returns: undefined
       }
+      start_account_recovery: {
+        Args: {
+          p_actor_person_id: string
+          p_actor_session_id: string
+          p_case_reference: string
+          p_command_id: string
+          p_idempotency_key: string
+          p_person_id: string
+          p_request_hash: string
+        }
+        Returns: {
+          replayed: boolean
+          result: Json
+        }[]
+      }
       start_backoffice_authentication_attempt: {
         Args: {
           p_access_account_id: string
@@ -2676,6 +3312,9 @@ export type Database = {
         'pending_enrollment' | 'pending_challenge' | 'completed' | 'failed' | 'expired'
       biological_sex: 'male' | 'female'
       eligibility_result: 'pass' | 'fail' | 'review_required' | 'unknown'
+      identity_action_kind: 'account_recovery'
+      identity_action_status:
+        'initiated' | 'awaiting_verification' | 'confirmed' | 'expired' | 'cancelled' | 'failed'
       invitation_intent_kind:
         'membership' | 'service_relationship' | 'program_assignment' | 'ownership'
       invitation_intent_status: 'pending' | 'accepted' | 'rejected' | 'revoked' | 'expired'
@@ -4871,6 +5510,15 @@ export const Constants = {
       ],
       biological_sex: ['male', 'female'],
       eligibility_result: ['pass', 'fail', 'review_required', 'unknown'],
+      identity_action_kind: ['account_recovery'],
+      identity_action_status: [
+        'initiated',
+        'awaiting_verification',
+        'confirmed',
+        'expired',
+        'cancelled',
+        'failed',
+      ],
       invitation_intent_kind: [
         'membership',
         'service_relationship',

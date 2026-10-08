@@ -5,8 +5,10 @@ import {
   circuitSummary,
   circuitTone,
   needsAttention,
+  operationStateFilterLabel,
   operationStateLabel,
   operationStateTone,
+  sourceFilterLabel,
   sourceLabel,
   supportDiagnosisMessage,
   type SupportDeliveryCircuit,
@@ -42,6 +44,15 @@ function circuit(overrides: Partial<SupportDeliveryCircuit> = {}): SupportDelive
 }
 
 describe('technical diagnosis vocabulary', () => {
+  test('each closed filter says what it filters, including when it filters nothing', () => {
+    expect(sourceFilterLabel('any')).toBe('Todo')
+    expect(operationStateFilterLabel('any')).toBe('Todo')
+    expect(sourceFilterLabel('command')).toBe(sourceLabel('command'))
+    for (const state of SUPPORT_OPERATION_STATES) {
+      expect(operationStateFilterLabel(state)).toBe(operationStateLabel(state))
+    }
+  })
+
   test('names every state the feed can answer', () => {
     const labels = SUPPORT_OPERATION_STATES.map((state) => operationStateLabel(state))
     expect(new Set(labels).size).toBe(SUPPORT_OPERATION_STATES.length)

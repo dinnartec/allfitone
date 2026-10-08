@@ -1,50 +1,46 @@
--- What a person eats is theirs: the nutrition schema (ADR-027, ADR-039, ADR-040).
+-- What a person eats is theirs: the rest of the nutrition domain (ADR-027, ADR-039, ADR-040).
 --
--- The eight tables of the Data Dictionary §10A, and the person's half of the domain:
+-- `20260927080000_person_meals` laid the schema: the meal, its items and nutrients, the
+-- six-nutrient catalogue, deleting through the owner disposition and support's restricted
+-- read. This builds the person's half on top of it, in place, without recreating anything:
 -- recording, reading, correcting and deleting meals (OP-NUT-001..004), the day summed up
 -- as it is read with its streak (OP-NUT-005), and the goal line, published by the person
 -- or proposed by a professional and decided by the person (OP-NUT-006..008).
 --
--- - **Manual and closed.** Six nutrients in their canonical unit, and nothing else: no
---   food catalogue, no estimate. A nutrient left out of an item is not zero, and no
---   total ever turns a missing value into one.
+-- - **The catalogue grows from six nutrients to the label's thirty-one**, each with its
+--   group and the Resolución 810 de 2021 daily value. A nutrient left out of an item is
+--   not zero, and no total ever turns a missing value into one.
 -- - **A meal's hour and day are frozen** when it is recorded, in its own zone; a
 --   correction replaces items, note and photo in place under the revision it read, and a
---   stale one is refused rather than merged (OP-NUT-003). Deleting is deleting.
+--   stale one is refused rather than merged (OP-NUT-003). The first schema refused every
+--   rewrite until revising existed; it exists now, so its guard keeps only the frozen day.
+-- - **Deleting still goes through the owner disposition** and announces
+--   `nutrition.meal_deleted.v1`, as the first schema did, and now also queues the photo.
 -- - **The photo is a storage key**, never bytes and never an address (ADR-039). A photo
 --   that stops being used is queued in `media_disposals` in the same transaction; the
 --   API removes it from storage after the commit and seals the row.
 -- - **One goal is active**, versioned; publishing supersedes it and accepting a proposal
 --   does too. A decision is written once and never rewritten.
 --
--- Additive, plus the three units nutrition is counted in.
+-- The first schema's three commands (`record_meal`, `list_meals`, `delete_meal` over the
+-- provider's subject) are replaced by this file's, which the API reaches with the person
+-- already resolved; `meal_projection`, read by support, stays.
 
 set lock_timeout = '5s';
 set statement_timeout = '120s';
 
 begin;
 
-create schema nutrition;
-alter schema nutrition owner to allfit_owner;
-revoke all on schema nutrition from public;
--- Usage only: the runtime role reaches nutrition through closed functions, as execution.
-grant usage on schema nutrition to allfit_api;
-
--- Kilocalories, grams and millilitres, and what a meal is weighed or a nutrient measured
--- in. Mass is in kilograms' terms, so the volume a session lifted and the protein a meal
--- carried read off the same catalogue.
+-- What a food label is weighed and measured in, beyond the gram, kilocalorie and millilitre
+-- the first schema brought. Mass is in kilograms' terms, as the volume a session lifts.
 insert into catalog.units (code, dimension, is_canonical, to_canonical_factor)
 values
-  ('kcal',  'energy', true,  1),
-  ('g',     'mass',   false, 0.001),
   ('mg',    'mass',   false, 0.000001),
   ('mcg',   'mass',   false, 0.000000001),
   ('oz',    'mass',   false, 0.028349523125),
-  ('ml',    'volume', true,  1),
   ('l',     'volume', false, 1000),
   ('fl_oz', 'volume', false, 29.5735);
 
-create type nutrition.meal_type as enum ('breakfast', 'lunch', 'dinner', 'snack', 'other');
 create type nutrition.goal_origin as enum ('self', 'professional');
 create type nutrition.goal_status as enum ('proposed', 'active', 'rejected', 'superseded', 'cancelled');
 create type nutrition.goal_target_mode as enum ('minimum', 'maximum', 'range', 'exact');
@@ -52,131 +48,93 @@ create type nutrition.goal_decision as enum ('accepted', 'rejected');
 
 -- ———————————————————————————————————————— the nutrient catalogue (§10A.1)
 
-create table nutrition.nutrient_definitions (
-  id uuid not null default extensions.uuid_generate_v7(),
-  code text not null,
-  name text not null,
-  canonical_unit_code text not null,
-  nutrient_group text not null,
-  -- The Resolución 810 de 2021 daily value for adults, in the canonical unit; null where
-  -- it gives none. A person's own goal, when they have one, comes first.
-  daily_reference numeric,
-  status catalog.publication_status not null default 'published',
-  published_at timestamp with time zone,
-  constraint pk_nutrient_definitions primary key (id),
-  constraint uq_nutrient_definitions_code unique (code),
-  constraint fk_nutrient_definitions_unit foreign key (canonical_unit_code) references catalog.units (code) on delete restrict,
-  constraint ck_nutrient_definitions_unit check (canonical_unit_code in ('kcal', 'g', 'mg', 'mcg', 'ml')),
-  constraint ck_nutrient_definitions_group check (nutrient_group in ('macro', 'detail', 'vitamin', 'mineral')),
-  constraint ck_nutrient_definitions_reference check (daily_reference is null or daily_reference > 0)
-);
+-- The closed list of six becomes the label's: any code, in one of the label's units.
+alter table nutrition.nutrient_definitions drop constraint ck_nutrient_definitions_code_unit;
+alter table nutrition.nutrient_definitions
+  add constraint ck_nutrient_definitions_unit check (canonical_unit_code in ('kcal', 'g', 'mg', 'mcg', 'ml'));
 
-create index idx_nutrient_definitions_status on nutrition.nutrient_definitions (status, code);
+alter table nutrition.nutrient_definitions add column nutrient_group text;
+-- The Resolución 810 de 2021 daily value for adults, in the canonical unit; null where
+-- it gives none. A person's own goal, when they have one, comes first.
+alter table nutrition.nutrient_definitions add column daily_reference numeric;
+
+-- A published definition is never rewritten by the runtime; the migration that grows the
+-- catalogue fills in the two columns it adds, under the owner, and closes the door again.
+alter table nutrition.nutrient_definitions disable trigger trg_nutrient_definitions_immutable;
+update nutrition.nutrient_definitions as definition
+set nutrient_group = 'macro', daily_reference = reference.daily_reference
+from (values
+  ('energy', 2000::numeric), ('protein', 50), ('carbohydrates', 300), ('fat', 66),
+  ('fiber', 28), ('water', null)
+) as reference (code, daily_reference)
+where definition.code = reference.code;
+alter table nutrition.nutrient_definitions enable trigger trg_nutrient_definitions_immutable;
+
+alter table nutrition.nutrient_definitions alter column nutrient_group set not null;
+alter table nutrition.nutrient_definitions
+  add constraint ck_nutrient_definitions_group check (nutrient_group in ('macro', 'detail', 'vitamin', 'mineral'));
+alter table nutrition.nutrient_definitions
+  add constraint ck_nutrient_definitions_reference check (daily_reference is null or daily_reference > 0);
 
 -- References: Resolución 810 de 2021, art. 15, tables 9 (needs) and 10 (maximums, for
--- saturated and trans fat, cholesterol and sodium). Total sugars and water have none.
-insert into nutrition.nutrient_definitions (code, name, canonical_unit_code, nutrient_group, daily_reference, published_at)
+-- saturated and trans fat, cholesterol and sodium). Total sugars has none. The maximum is
+-- per item, as for the first six: it rejects typos, not large meals.
+insert into nutrition.nutrient_definitions (code, name, canonical_unit_code, nutrient_group, daily_reference, maximum_value)
 values
-  ('energy',           'Energía',              'kcal', 'macro',   2000, clock_timestamp()),
-  ('protein',          'Proteína',             'g',    'macro',   50,   clock_timestamp()),
-  ('carbohydrates',    'Carbohidratos',        'g',    'macro',   300,  clock_timestamp()),
-  ('fat',              'Grasa',                'g',    'macro',   66,   clock_timestamp()),
-  ('fiber',            'Fibra',                'g',    'macro',   28,   clock_timestamp()),
-  ('water',            'Agua',                 'ml',   'macro',   null, clock_timestamp()),
-  ('saturated_fat',    'Grasa saturada',       'g',    'detail',  20,   clock_timestamp()),
-  ('trans_fat',        'Grasa trans',          'g',    'detail',  2.2,  clock_timestamp()),
-  ('cholesterol',      'Colesterol',           'mg',   'detail',  300,  clock_timestamp()),
-  ('sodium',           'Sodio',                'mg',   'detail',  2000, clock_timestamp()),
-  ('sugars',           'Azúcares',             'g',    'detail',  null, clock_timestamp()),
-  ('vitamin_a',        'Vitamina A',           'mcg',  'vitamin', 800,  clock_timestamp()),
-  ('vitamin_c',        'Vitamina C',           'mg',   'vitamin', 83,   clock_timestamp()),
-  ('vitamin_d',        'Vitamina D',           'mcg',  'vitamin', 15,   clock_timestamp()),
-  ('vitamin_e',        'Vitamina E',           'mg',   'vitamin', 9,    clock_timestamp()),
-  ('vitamin_k',        'Vitamina K',           'mcg',  'vitamin', 65,   clock_timestamp()),
-  ('thiamin',          'Vitamina B1',          'mg',   'vitamin', 1.15, clock_timestamp()),
-  ('riboflavin',       'Vitamina B2',          'mg',   'vitamin', 1.2,  clock_timestamp()),
-  ('niacin',           'Vitamina B3',          'mg',   'vitamin', 15,   clock_timestamp()),
-  ('pantothenic_acid', 'Vitamina B5',          'mg',   'vitamin', 5,    clock_timestamp()),
-  ('vitamin_b6',       'Vitamina B6',          'mg',   'vitamin', 1.3,  clock_timestamp()),
-  ('vitamin_b12',      'Vitamina B12',         'mcg',  'vitamin', 2.4,  clock_timestamp()),
-  ('folate',           'Folato',               'mcg',  'vitamin', 400,  clock_timestamp()),
-  ('calcium',          'Calcio',               'mg',   'mineral', 1000, clock_timestamp()),
-  ('iron',             'Hierro',               'mg',   'mineral', 20,   clock_timestamp()),
-  ('magnesium',        'Magnesio',             'mg',   'mineral', 310,  clock_timestamp()),
-  ('phosphorus',       'Fósforo',              'mg',   'mineral', 700,  clock_timestamp()),
-  ('potassium',        'Potasio',              'mg',   'mineral', 4700, clock_timestamp()),
-  ('zinc',             'Zinc',                 'mg',   'mineral', 11,   clock_timestamp()),
-  ('selenium',         'Selenio',              'mcg',  'mineral', 70,   clock_timestamp()),
-  ('copper',           'Cobre',                'mg',   'mineral', 0.9,  clock_timestamp());
+  ('saturated_fat',    'Grasa saturada',       'g',    'detail',  20,   1000),
+  ('trans_fat',        'Grasa trans',          'g',    'detail',  2.2,  1000),
+  ('cholesterol',      'Colesterol',           'mg',   'detail',  300,  100000),
+  ('sodium',           'Sodio',                'mg',   'detail',  2000, 100000),
+  ('sugars',           'Azúcares',             'g',    'detail',  null, 2000),
+  ('vitamin_a',        'Vitamina A',           'mcg',  'vitamin', 800,  1000000),
+  ('vitamin_c',        'Vitamina C',           'mg',   'vitamin', 83,   100000),
+  ('vitamin_d',        'Vitamina D',           'mcg',  'vitamin', 15,   1000000),
+  ('vitamin_e',        'Vitamina E',           'mg',   'vitamin', 9,    100000),
+  ('vitamin_k',        'Vitamina K',           'mcg',  'vitamin', 65,   1000000),
+  ('thiamin',          'Vitamina B1',          'mg',   'vitamin', 1.15, 100000),
+  ('riboflavin',       'Vitamina B2',          'mg',   'vitamin', 1.2,  100000),
+  ('niacin',           'Vitamina B3',          'mg',   'vitamin', 15,   100000),
+  ('pantothenic_acid', 'Vitamina B5',          'mg',   'vitamin', 5,    100000),
+  ('vitamin_b6',       'Vitamina B6',          'mg',   'vitamin', 1.3,  100000),
+  ('vitamin_b12',      'Vitamina B12',         'mcg',  'vitamin', 2.4,  1000000),
+  ('folate',           'Folato',               'mcg',  'vitamin', 400,  1000000),
+  ('calcium',          'Calcio',               'mg',   'mineral', 1000, 100000),
+  ('iron',             'Hierro',               'mg',   'mineral', 20,   100000),
+  ('magnesium',        'Magnesio',             'mg',   'mineral', 310,  100000),
+  ('phosphorus',       'Fósforo',              'mg',   'mineral', 700,  100000),
+  ('potassium',        'Potasio',              'mg',   'mineral', 4700, 100000),
+  ('zinc',             'Zinc',                 'mg',   'mineral', 11,   100000),
+  ('selenium',         'Selenio',              'mcg',  'mineral', 70,   1000000),
+  ('copper',           'Cobre',                'mg',   'mineral', 0.9,  100000);
 
 -- ———————————————————————————————————————— meals (§10A.2–10A.4)
 
-create table nutrition.meals (
-  id uuid not null,
-  person_id uuid not null,
-  occurred_at timestamp with time zone not null,
-  timezone text not null,
-  local_date date not null,
-  meal_type nutrition.meal_type not null,
-  note text,
-  revision_number integer not null default 0,
-  media_ref text,
-  has_media boolean not null default false,
-  created_at timestamp with time zone not null default clock_timestamp(),
-  updated_at timestamp with time zone not null default clock_timestamp(),
-  constraint pk_meals primary key (id),
-  constraint uq_meals_carrier unique (id, person_id),
-  constraint fk_meals_person foreign key (person_id) references identity.people (id) on delete restrict,
-  constraint ck_meals_revision check (revision_number >= 0),
-  constraint ck_meals_media check (has_media = (media_ref is not null)),
-  constraint ck_meals_note check (note is null or char_length(note) <= 1000)
-);
+-- Revising exists now: the guard keeps the real zone and the frozen day, and lets the
+-- correction through. The hour and day themselves are never part of a revision.
+create or replace function nutrition.meal_guard_tg()
+returns trigger
+language plpgsql
+set search_path = pg_catalog
+as $function$
+begin
+  if tg_op = 'UPDATE' and (
+    new.occurred_at is distinct from old.occurred_at
+    or new.timezone is distinct from old.timezone
+    or new.local_date is distinct from old.local_date
+    or new.person_id is distinct from old.person_id
+  ) then
+    raise exception 'a meal keeps the moment and the day it was recorded with' using errcode = '55000';
+  end if;
 
-create index idx_meals_person_time on nutrition.meals (person_id, occurred_at desc, id desc);
-create index idx_meals_person_day on nutrition.meals (person_id, local_date);
-
-create table nutrition.meal_items (
-  id uuid not null default extensions.uuid_generate_v7(),
-  meal_id uuid not null,
-  person_id uuid not null,
-  position integer not null,
-  name text not null,
-  quantity_numeric numeric,
-  quantity_unit_code text,
-  created_at timestamp with time zone not null default clock_timestamp(),
-  constraint pk_meal_items primary key (id),
-  constraint uq_meal_items_carrier unique (id, meal_id, person_id),
-  constraint uq_meal_items_person_carrier unique (id, person_id),
-  constraint uq_meal_items_position unique (meal_id, position),
-  constraint fk_meal_items_meal foreign key (meal_id, person_id) references nutrition.meals (id, person_id) on delete cascade,
-  constraint fk_meal_items_unit foreign key (quantity_unit_code) references catalog.units (code) on delete restrict,
-  constraint ck_meal_items_position check (position between 1 and 100),
-  constraint ck_meal_items_name check (char_length(btrim(name)) between 1 and 160),
-  constraint ck_meal_items_quantity check (
-    (quantity_numeric is null and quantity_unit_code is null)
-    or (quantity_numeric > 0 and quantity_unit_code is not null))
-);
-
-create table nutrition.meal_nutrient_values (
-  id uuid not null default extensions.uuid_generate_v7(),
-  meal_item_id uuid not null,
-  meal_id uuid not null,
-  person_id uuid not null,
-  nutrient_definition_id uuid not null,
-  value_numeric numeric not null,
-  unit_code text not null,
-  created_at timestamp with time zone not null default clock_timestamp(),
-  constraint pk_meal_nutrient_values primary key (id),
-  constraint uq_meal_nutrient_values_item unique (meal_item_id, nutrient_definition_id),
-  constraint fk_meal_nutrient_values_item foreign key (meal_item_id, meal_id, person_id) references nutrition.meal_items (id, meal_id, person_id) on delete cascade,
-  constraint fk_meal_nutrient_values_meal foreign key (meal_id, person_id) references nutrition.meals (id, person_id) on delete cascade,
-  constraint fk_meal_nutrient_values_definition foreign key (nutrient_definition_id) references nutrition.nutrient_definitions (id) on delete restrict,
-  constraint fk_meal_nutrient_values_unit foreign key (unit_code) references catalog.units (code) on delete restrict,
-  constraint ck_meal_nutrient_values_value check (value_numeric >= 0)
-);
-
-create index idx_meal_nutrient_values_definition on nutrition.meal_nutrient_values (nutrient_definition_id);
-create index idx_meal_nutrient_values_meal on nutrition.meal_nutrient_values (meal_id);
+  if not exists (select 1 from pg_timezone_names as zone where zone.name = new.timezone) then
+    raise exception 'a meal happens in a real time zone' using errcode = '23514';
+  end if;
+  if new.local_date <> (new.occurred_at at time zone new.timezone)::date then
+    raise exception 'the day of a meal is the day of its moment in its zone' using errcode = '23514';
+  end if;
+  return new;
+end
+$function$;
 
 -- ———————————————————————————————————————— photos no longer used (ADR-039)
 
@@ -292,27 +250,50 @@ create index idx_goal_decisions_person on nutrition.goal_decisions (person_id, d
 
 -- ———————————————————————————————————————— ownership and row-level security
 
-alter table nutrition.nutrient_definitions owner to allfit_owner;
-alter table nutrition.meals owner to allfit_owner;
-alter table nutrition.meal_items owner to allfit_owner;
-alter table nutrition.meal_nutrient_values owner to allfit_owner;
+-- A meal is the person's and nobody else's, as training is: the first schema's owner
+-- policies over everything give way to the person's own, and support reads only under
+-- an approved, live window for `nutrition_intake`, the pattern `20260927140000` set for
+-- sessions. `support.exercise_break_glass` still checks everything else and audits.
+drop policy meals_all_owner on nutrition.meals;
+drop policy meal_items_all_owner on nutrition.meal_items;
+drop policy meal_nutrient_values_all_owner on nutrition.meal_nutrient_values;
+
+create policy meals_all_self on nutrition.meals
+  for all to allfit_owner
+  using (access_control.is_self(person_id))
+  with check (access_control.is_self(person_id));
+create policy meals_select_break_glass on nutrition.meals
+  for select to allfit_owner
+  using (access_control.reads_under_break_glass(person_id, 'nutrition_intake'));
+
+create policy meal_items_all_self on nutrition.meal_items
+  for all to allfit_owner
+  using (access_control.is_self(person_id))
+  with check (access_control.is_self(person_id));
+create policy meal_items_select_break_glass on nutrition.meal_items
+  for select to allfit_owner
+  using (access_control.reads_under_break_glass(person_id, 'nutrition_intake'));
+
+create policy meal_nutrient_values_all_self on nutrition.meal_nutrient_values
+  for all to allfit_owner
+  using (access_control.is_self(person_id))
+  with check (access_control.is_self(person_id));
+create policy meal_nutrient_values_select_break_glass on nutrition.meal_nutrient_values
+  for select to allfit_owner
+  using (access_control.reads_under_break_glass(person_id, 'nutrition_intake'));
+
+alter type nutrition.goal_origin owner to allfit_owner;
+alter type nutrition.goal_status owner to allfit_owner;
+alter type nutrition.goal_target_mode owner to allfit_owner;
+alter type nutrition.goal_decision owner to allfit_owner;
 alter table nutrition.media_disposals owner to allfit_owner;
 alter table nutrition.goal_sets owner to allfit_owner;
 alter table nutrition.goal_versions owner to allfit_owner;
 alter table nutrition.goal_targets owner to allfit_owner;
 alter table nutrition.goal_decisions owner to allfit_owner;
-revoke all on nutrition.nutrient_definitions, nutrition.meals, nutrition.meal_items,
-  nutrition.meal_nutrient_values, nutrition.media_disposals, nutrition.goal_sets,
-  nutrition.goal_versions, nutrition.goal_targets, nutrition.goal_decisions from public;
+revoke all on nutrition.media_disposals, nutrition.goal_sets, nutrition.goal_versions,
+  nutrition.goal_targets, nutrition.goal_decisions from public;
 
-alter table nutrition.nutrient_definitions enable row level security;
-alter table nutrition.nutrient_definitions force row level security;
-alter table nutrition.meals enable row level security;
-alter table nutrition.meals force row level security;
-alter table nutrition.meal_items enable row level security;
-alter table nutrition.meal_items force row level security;
-alter table nutrition.meal_nutrient_values enable row level security;
-alter table nutrition.meal_nutrient_values force row level security;
 alter table nutrition.media_disposals enable row level security;
 alter table nutrition.media_disposals force row level security;
 alter table nutrition.goal_sets enable row level security;
@@ -323,24 +304,6 @@ alter table nutrition.goal_targets enable row level security;
 alter table nutrition.goal_targets force row level security;
 alter table nutrition.goal_decisions enable row level security;
 alter table nutrition.goal_decisions force row level security;
-
-create policy nutrient_definitions_select_published on nutrition.nutrient_definitions
-  for select to allfit_owner using (status = 'published');
-
-create policy meals_all_self on nutrition.meals
-  for all to allfit_owner
-  using (access_control.is_self(person_id))
-  with check (access_control.is_self(person_id));
-
-create policy meal_items_all_self on nutrition.meal_items
-  for all to allfit_owner
-  using (access_control.is_self(person_id))
-  with check (access_control.is_self(person_id));
-
-create policy meal_nutrient_values_all_self on nutrition.meal_nutrient_values
-  for all to allfit_owner
-  using (access_control.is_self(person_id))
-  with check (access_control.is_self(person_id));
 
 create policy media_disposals_all_self on nutrition.media_disposals
   for all to allfit_owner
@@ -374,7 +337,8 @@ create policy goal_decisions_all_self on nutrition.goal_decisions
 
 -- ———————————————————————————————————————— what the base enforces by itself
 
--- IX-29 and IX-34: a value is written in its nutrient's unit, never converted on the way.
+-- IX-29 and IX-34 for goals: a target is written in its nutrient's unit, as a meal's values
+-- already are by the first schema's constraint trigger.
 create function nutrition.enforce_canonical_unit()
 returns trigger
 language plpgsql
@@ -393,10 +357,6 @@ $function$;
 
 alter function nutrition.enforce_canonical_unit() owner to allfit_owner;
 revoke all on function nutrition.enforce_canonical_unit() from public;
-
-create trigger trg_meal_nutrient_values_unit
-  before insert or update on nutrition.meal_nutrient_values
-  for each row execute function nutrition.enforce_canonical_unit();
 
 create trigger trg_goal_targets_unit
   before insert or update on nutrition.goal_targets
@@ -496,6 +456,10 @@ begin
       if definition.id is null then
         raise exception 'a nutrient the catalogue does not publish' using errcode = '23514';
       end if;
+      -- Per item, as the first schema had it: it rejects typos, not large meals.
+      if (nutrient->>'value')::numeric > definition.maximum_value then
+        raise exception 'a nutrient value above what one item can carry' using errcode = '23514';
+      end if;
       insert into nutrition.meal_nutrient_values (
         meal_item_id, meal_id, person_id, nutrient_definition_id, value_numeric, unit_code
       ) values (item_id, p_meal_id, p_person_id, definition.id, (nutrient->>'value')::numeric, nutrient->>'unit');
@@ -506,6 +470,12 @@ $function$;
 
 alter function nutrition.write_items(uuid, uuid, jsonb) owner to allfit_owner;
 revoke all on function nutrition.write_items(uuid, uuid, jsonb) from public;
+
+-- The first schema's commands over the provider's subject give way to these, which the API
+-- reaches with the person already resolved and the actor set (DT-020, the read ritual).
+drop function nutrition.record_meal(text, text, text, uuid, timestamptz, text, text, text, jsonb, uuid, bytea);
+drop function nutrition.list_meals(text, text, text, date, date, integer, timestamptz, uuid);
+drop function nutrition.delete_meal(text, text, text, uuid, uuid, uuid, bytea);
 
 -- ———————————————————————————————————————— record (OP-NUT-001)
 
@@ -615,6 +585,10 @@ declare
 begin
   if access_control.actor_kind() <> 'person' or access_control.person() <> p_person_id then
     return jsonb_build_object('data', '[]'::jsonb, 'page', jsonb_build_object('next_cursor', null, 'has_more', false));
+  end if;
+  -- A page reads at most a month of local days, as the first schema had it.
+  if p_from is null or p_to is null or p_to < p_from or p_to - p_from > 30 then
+    raise exception 'a page covers from one to thirty-one days' using errcode = '22023';
   end if;
 
   if p_cursor is not null then
@@ -763,6 +737,13 @@ begin
   if meal.id is null then
     raise exception 'meal is not this person''s' using errcode = '42501';
   end if;
+
+  -- The owner's disposition records the deletion under the nutrition policy, and the
+  -- outbox tells whoever keeps a copy; both as the first schema did.
+  perform privacy.dispose_on_owner_request(p_person_id, 'nutrition', 'nutrition_meal', meal.id);
+  perform system.enqueue_outbox_event(
+    'meal', meal.id, 'nutrition.meal_deleted.v1', jsonb_build_object('meal_id', meal.id)
+  );
 
   if meal.media_ref is not null then
     insert into nutrition.media_disposals (person_id, media_ref) values (p_person_id, meal.media_ref);

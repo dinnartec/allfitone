@@ -33,8 +33,8 @@ select is(
   'T-NUT-DEF-03 each nutrient has its unit, its group and the Resolución 810 reference, none where it gives none');
 
 select throws_ok(
-  $$ insert into nutrition.nutrient_definitions (code, name, canonical_unit_code, nutrient_group)
-     values ('length_thing', 'Cosa', 'cm', 'detail') $$,
+  $$ insert into nutrition.nutrient_definitions (code, name, canonical_unit_code, nutrient_group, maximum_value)
+     values ('length_thing', 'Cosa', 'cm', 'detail', 100) $$,
   '23514', null, 'T-NUT-DEF-04 a nutrient is measured in energy, mass or volume, never a length');
 
 select set_config('app.actor_kind', 'person', true);

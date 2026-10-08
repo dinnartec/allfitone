@@ -43,6 +43,13 @@ export type ClientDirectoryItem = AllfitV1Schemas['ClientDirectoryItem']
 export type ClientDirectoryRelationship = AllfitV1Schemas['ClientDirectoryRelationship']
 export type ClientDirectoryInvitation = AllfitV1Schemas['ClientDirectoryInvitation']
 export type ClientDirectoryGroup = AllfitV1Schemas['ClientDirectoryGroup']
+export type RelationshipState = AllfitV1Schemas['RelationshipState']
+export type RelationshipProfessional = AllfitV1Schemas['RelationshipProfessional']
+export type RelationshipSubstitution = AllfitV1Schemas['RelationshipSubstitution']
+export type RelationshipGrant = AllfitV1Schemas['RelationshipGrant']
+export type RelationshipHolder = AllfitV1Schemas['RelationshipHolder']
+export type RelationshipHolderAssignment = AllfitV1Schemas['RelationshipHolderAssignment']
+export type RelationshipReassignment = AllfitV1Schemas['RelationshipReassignment']
 export type Organization = AllfitV1Schemas['Organization']
 export type OrganizationSite = AllfitV1Schemas['OrganizationSite']
 export type OrganizationSiteStatus = AllfitV1Schemas['OrganizationSiteStatus']
@@ -51,6 +58,8 @@ export type OrganizationSiteUpdate = AllfitV1Schemas['OrganizationSiteUpdate']
 export type OrganizationRole = AllfitV1Schemas['OrganizationRole']
 export type OrganizationRoleCatalog = AllfitV1Schemas['OrganizationRoleCatalog']
 export type OrganizationRoleCode = AllfitV1Schemas['OrganizationRoleCode']
+export type OrganizationRoleGrant = AllfitV1Schemas['OrganizationRoleGrant']
+export type OrganizationRoleGrantCreate = AllfitV1Schemas['OrganizationRoleGrantCreate']
 
 const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080').replace(/\/$/, '')
 
@@ -297,6 +306,15 @@ export const studioApi = {
     )
   },
 
+  relationshipState: (organizationId: string, relationshipId: string, signal?: AbortSignal) =>
+    request<RelationshipState>(
+      `/studio/v1/organizations/${organizationId}/relationships/${relationshipId}`,
+      {
+        cache: 'no-store',
+        ...(signal ? { signal } : {}),
+      },
+    ),
+
   offerableScopes: (signal?: AbortSignal) =>
     request<OfferableScopeCatalog>('/studio/v1/offerable-scopes', {
       cache: 'no-store',
@@ -313,6 +331,51 @@ export const studioApi = {
       headers: commandHeaders(command),
       body: JSON.stringify(body),
     }),
+
+  assignRelationshipHolder: (
+    organizationId: string,
+    relationshipId: string,
+    body: RelationshipHolderAssignment,
+    command: CommandHeaders,
+  ) =>
+    request<RelationshipHolder>(
+      `/studio/v1/organizations/${organizationId}/relationships/${relationshipId}/professional-assignments`,
+      {
+        method: 'POST',
+        headers: commandHeaders(command),
+        body: JSON.stringify(body),
+      },
+    ),
+
+  reassignRelationshipHolder: (
+    organizationId: string,
+    relationshipId: string,
+    body: RelationshipHolderAssignment,
+    command: CommandHeaders,
+  ) =>
+    request<RelationshipReassignment>(
+      `/studio/v1/organizations/${organizationId}/relationships/${relationshipId}/professional-assignments/reassignment`,
+      {
+        method: 'POST',
+        headers: commandHeaders(command),
+        body: JSON.stringify(body),
+      },
+    ),
+
+  grantMembershipRole: (
+    organizationId: string,
+    membershipId: string,
+    body: OrganizationRoleGrantCreate,
+    command: CommandHeaders,
+  ) =>
+    request<OrganizationRoleGrant>(
+      `/studio/v1/organizations/${organizationId}/memberships/${membershipId}/roles`,
+      {
+        method: 'POST',
+        headers: commandHeaders(command),
+        body: JSON.stringify(body),
+      },
+    ),
 
   organization: (organizationId: string, signal?: AbortSignal) =>
     request<Organization>(`/studio/v1/organizations/${organizationId}`, signal ? { signal } : {}),
@@ -334,16 +397,27 @@ export const studioApi = {
     organizationId: string,
     siteId: string,
     body: OrganizationSiteUpdate,
-    expectedRevision: string,
+    expectedRevision: number,
     command: CommandHeaders,
     signal?: AbortSignal,
   ) =>
     request<OrganizationSite>(`/studio/v1/organizations/${organizationId}/sites/${siteId}`, {
       method: 'PATCH',
-      // The revision this edit was based on. Without it the server answers 428
-      // rather than guessing that the screen was current.
-      headers: { ...commandHeaders(command), 'If-Match': expectedRevision },
-      body: JSON.stringify(body),
+      headers: commandHeaders(command),
+      /*
+       * The revision this edit was based on, in the body and not in `If-Match`.
+       * Without it the server answers 428 rather than guessing the screen was
+       * current.
+       *
+       * It used to be a header, and that broke the screen in production: this
+       * API is one function mounted at `/`, and Vercel's Edge evaluates
+       * conditional requests against that single cache key before the function
+       * runs. A write carrying `If-Match` was answered `412` by the Edge after
+       * the row had already been written, and with no CORS headers, so this
+       * client could not read the refusal and reported a failure for a change
+       * that was saved.
+       */
+      body: JSON.stringify({ ...body, expected_revision: expectedRevision }),
       ...(signal ? { signal } : {}),
     }),
 

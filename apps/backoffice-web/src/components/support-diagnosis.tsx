@@ -55,8 +55,10 @@ import {
   SUPPORT_OPERATION_STATES,
   circuitSummary,
   circuitTone,
+  operationStateFilterLabel,
   operationStateLabel,
   operationStateTone,
+  sourceFilterLabel,
   sourceLabel,
   supportDiagnosisMessage,
   type SupportOperationSourceKind,
@@ -222,7 +224,7 @@ export function SupportDiagnosis() {
                 }
               >
                 <SelectTrigger id="diagnosis-source">
-                  <SelectValue />
+                  <SelectValue>{sourceFilterLabel(source)}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value={ANY}>Todo</SelectItem>
@@ -243,7 +245,7 @@ export function SupportDiagnosis() {
                 }
               >
                 <SelectTrigger id="diagnosis-state">
-                  <SelectValue />
+                  <SelectValue>{operationStateFilterLabel(operationState)}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value={ANY}>Todo</SelectItem>

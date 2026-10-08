@@ -1,14 +1,13 @@
 {
   "format": "allfitone-brand-assets",
   "schemaVersion": 1,
-  "brandVersion": "0.3.0",
+  "brandVersion": "0.4.0",
   "managedFiles": [
     "README.md",
     "manifest.json",
     "logo/allfit-one-logo-cyan.svg",
     "logo/allfit-one-logo-ink.svg",
     "logo/allfit-one-logo-chalk.svg",
-    "logo/allfit-one-logo-carrier.svg",
     "wordmark/allfit-one-wordmark-on-light.svg",
     "wordmark/allfit-one-wordmark-on-dark.svg",
     "lockup/allfit-one-lockup-on-light.svg",

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1678 480" role="img" aria-labelledby="lockup-light-title lockup-light-description">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1438 480" role="img" aria-labelledby="lockup-light-title lockup-light-description">
   <title id="lockup-light-title">Allfit One</title>
   <desc id="lockup-light-description">Allfit One logo and wordmark for light surfaces</desc>
   <defs>
@@ -12,13 +12,8 @@
     <path id="lockup-light-n" d="M335 700H475Q480 700 483.5 696.5Q487 693 487 688V12Q487 7 483.5 3.5Q480 0 475 0H316Q305 0 302 10L203 358Q202 361 199.5 361.5Q197 362 197 358L199 12Q199 7 195.5 3.5Q192 0 187 0H47Q42 0 38.5 3.5Q35 7 35 12V688Q35 693 38.5 696.5Q42 700 47 700H204Q215 700 218 690L318 340Q319 337 321.5 337Q324 337 324 341L323 688Q323 693 326.5 696.5Q330 700 335 700Z"/>
     <path id="lockup-light-e" d="M407 558H206Q201 558 201 553V427Q201 422 206 422H316Q321 422 324.5 418.5Q328 415 328 410V291Q328 286 324.5 282.5Q321 279 316 279H206Q201 279 201 274V147Q201 142 206 142H407Q412 142 415.5 138.5Q419 135 419 130V12Q419 7 415.5 3.5Q412 0 407 0H47Q42 0 38.5 3.5Q35 7 35 12V688Q35 693 38.5 696.5Q42 700 47 700H407Q412 700 415.5 696.5Q419 693 419 688V570Q419 565 415.5 561.5Q412 558 407 558Z"/>
   </defs>
-  <g transform="translate(44 36)">
-    <path fill="#55EFFB" d="M65 0h330l-65 408H0L65 0Z"/>
-    <g transform="translate(142 22) scale(.318)">
-      <path fill="#030713" d="M405 0 0 211l120 1L11 1149l324-490L405 0Z"/>
-    </g>
-  </g>
-  <g transform="translate(512 337) scale(.28 -.28)" fill="#030713">
+  <path fill="#55EFFB" d="M405 0 0 211l120 1L11 1149l324-490L405 0Z" transform="translate(44 58) scale(.318)"/>
+  <g transform="translate(272 337) scale(.28 -.28)" fill="#030713">
     <use href="#lockup-light-a" x="0"/>
     <use href="#lockup-light-l" x="490.143"/>
     <use href="#lockup-light-l" x="909.286"/>
@@ -26,7 +21,7 @@
     <use href="#lockup-light-i" x="1737.571"/>
     <use href="#lockup-light-t" x="1954.714"/>
   </g>
-  <g transform="translate(1240 337) scale(.28 -.28)" fill="#55EFFB">
+  <g transform="translate(1000 337) scale(.28 -.28)" fill="#55EFFB">
     <use href="#lockup-light-o" x="0"/>
     <use href="#lockup-light-n" x="461.143"/>
     <use href="#lockup-light-e" x="965.286"/>

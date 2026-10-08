@@ -1113,8 +1113,8 @@ paths:
 
         The legal name is neither searched nor returned, because for an independent
         professional it is a person's name; the responsible party never leaves the
-        database. `people_served` is null until service relationships exist —
-        never zero, which would say the organization serves nobody.
+        database. `people_served` counts the people the gym serves now; the file of a
+        single gym also says what state those relationships are in.
       security:
         - backofficeCookieAuth: []
       parameters:
@@ -2843,6 +2843,59 @@ paths:
           $ref: '#/components/responses/Conflict'
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
+    get:
+      tags: [Space Identity]
+      operationId: listSpaceBodyProgress
+      x-allfit-operation: OP-IDN-015
+      x-allfit-cache: no-store
+      summary: Read my body measurements
+      description: >-
+        The person's own measurements, newest measurement first, each in the
+        canonical unit of its dimension and with what the person typed when that
+        was something else. Nobody else's measurement ever appears, and a photo
+        reference is never returned.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: before_measured_on
+          in: query
+          required: false
+          description: The `measured_on` of the last record already read.
+          schema:
+            type: string
+            format: date
+        - name: before_id
+          in: query
+          required: false
+          description: The `id` of the last record already read; sent with `before_measured_on`.
+          schema:
+            $ref: '#/components/schemas/UuidV7'
+      responses:
+        '200':
+          description: One page of my measurements
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BodyProgressPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
 
   /space/v1/onboarding-attempts/{attemptId}/skips:
     post:
@@ -3580,12 +3633,15 @@ paths:
               $ref: '#/components/schemas/OrganizationUpdate'
       responses:
         '200':
-          description: Updated organization projection, or the unchanged projection for a no-op
+          description: >-
+            Updated organization projection, or the unchanged projection for a
+            no-op. The new revision is `revision_number` in the body, and there
+            is deliberately no `ETag`: the platform compares the request's
+            `If-Match` against it and answers `412` of its own after the write
+            has already landed.
           headers:
             Cache-Control:
               $ref: '#/components/headers/NoStore'
-            ETag:
-              $ref: '#/components/headers/ETag'
             Idempotent-Replay:
               $ref: '#/components/headers/IdempotentReplay'
           content:
@@ -3682,14 +3738,15 @@ paths:
               $ref: '#/components/schemas/OrganizationSiteUpdate'
       responses:
         '200':
-          description: Updated site, or the unchanged site for a no-op
+          description: >-
+            Updated site, or the unchanged site for a no-op. The new revision is
+            `revision_number` in the body, and there is deliberately no `ETag` —
+            see the organization patch above for why.
           headers:
             Cache-Control:
               $ref: '#/components/headers/NoStore'
             Idempotent-Replay:
               $ref: '#/components/headers/IdempotentReplay'
-            ETag:
-              $ref: '#/components/headers/ETag'
           content:
             application/json:
               schema:
@@ -4978,6 +5035,139 @@ paths:
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
 
+  /studio/v1/organizations/{organizationId}/relationships/{relationshipId}:
+    get:
+      tags: [Studio Relationships]
+      operationId: readStudioRelationship
+      x-allfit-operation: OP-REL-011
+      x-allfit-cache: private-no-store
+      summary: Read how one relationship stands
+      description: >-
+        Says where the link stands, who attends this person, which substitutions
+        exist, and **which permissions were granted and in what version**.
+
+
+        It never returns the content a permission covers. Knowing that
+        `health_context` is granted is not reading anybody's injuries, and this
+        endpoint only ever answers the first of those.
+
+
+        What comes back depends on who asks. A caller with `view_directory`
+        (owner, admin, staff) sees every assignment on the relationship. A coach
+        holds `view_assigned_directory` instead: they can read only a
+        relationship they are effectively assigned to, and they see their own
+        assignment rather than the full list. A relationship the caller may not
+        see answers `404`, not `403` — telling a coach that a relationship exists
+        but is not theirs would reveal that the organization has that client.
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/RelationshipId'
+      responses:
+        '200':
+          description: How the relationship stands
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/PrivateNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RelationshipState'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /studio/v1/organizations/{organizationId}/relationships/{relationshipId}/events:
+    get:
+      tags: [Studio Relationships]
+      operationId: listStudioRelationshipEvents
+      x-allfit-operation: OP-REL-014
+      x-allfit-cache: private-no-store
+      summary: Read what a relationship has been through
+      description: >-
+        The relationship's history as a timeline, newest first: when it opened,
+        every change of the professional in charge, substitutions proposed,
+        accepted and ended, each consent decision, and the close.
+
+
+        It never returns the content a permission covers. A `consent_decided`
+        event names the scope that was decided and the version presented, which
+        is metadata about the permission and not the data behind it.
+
+
+        **The page is shorter for a coach than for an owner**, and that is
+        deliberate rather than a gap. A caller with `view_directory` (owner,
+        admin, staff) sees every assignment on the relationship. A coach holds
+        `view_assigned_directory` instead and sees only their own, so a coach
+        never learns who attended this person before them. No total is reported
+        for the same reason: a count the reader cannot reconcile with what they
+        see is worse than no count.
+
+
+        A relationship the caller may not see answers `404`, not `403`, like
+        reading its state — telling a coach a relationship exists but is not
+        theirs would reveal that the organization has that client.
+
+
+        **The termination reason belongs to whoever declared it.** When the
+        organization ended the relationship, `detail.reason` carries what it
+        declared and `detail.declared_by_us` is `true`. When the person ended it,
+        the reason is theirs: `declared_by_us` is `false` and `reason` is `null`,
+        so the screen can say who closed it without implying nothing was said.
+
+
+        A `cursor` that cannot be read answers `400` rather than quietly
+        returning the first page.
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/RelationshipId'
+        - name: limit
+          in: query
+          required: false
+          description: Events per page. Clamped to 1–100; defaults to 50.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+        - name: cursor
+          in: query
+          required: false
+          description: The `next_cursor` from a previous page. Opaque.
+          schema:
+            type: string
+            minLength: 16
+            maxLength: 1024
+      responses:
+        '200':
+          description: A page of the relationship's history, newest first
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/PrivateNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RelationshipHistoryPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
   /studio/v1/organizations/{organizationId}/relationships/{relationshipId}/professional-assignments:
     post:
       tags: [Studio Relationships]
@@ -5034,6 +5224,81 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RelationshipHolder'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /studio/v1/organizations/{organizationId}/relationships/{relationshipId}/professional-assignments/reassignment:
+    post:
+      tags: [Studio Relationships]
+      operationId: reassignRelationshipHolder
+      x-allfit-operation: OP-REL-003
+      x-allfit-cache: no-store
+      summary: Change which coach is in charge of a client
+      description: >-
+        Takes the client away from the coach who has them and gives them to
+        another. It exists apart from assigning for one reason: **the person is
+        notified, and if the notice cannot be enqueued the change does not
+        happen.** A reassignment is never silent.
+
+
+        The person's permissions survive untouched. Nothing a permission records
+        has changed — not the organization, not the responsible party, not the
+        purpose, not the category — so asking again for consent would be asking
+        for something already given. What changes is who may exercise it.
+
+
+        The previous professional loses access immediately, with no cache
+        window, and keeps authorship of whatever they recorded.
+
+
+        A relationship with nobody in charge is rejected with `409`: putting the
+        first coach in charge is `OP-REL-002`, which notifies nobody because
+        nobody is losing anything. Naming the coach who is already in charge
+        writes nothing, notifies nobody, and answers `200`.
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/RelationshipId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RelationshipHolderAssignment'
+      responses:
+        '200':
+          description: That coach was already in charge; nothing changed and nobody was notified
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RelationshipReassignment'
+        '201':
+          description: The client moved to the new coach, and the person has been notified
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RelationshipReassignment'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -7091,6 +7356,8 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '409':
           $ref: '#/components/responses/Conflict'
+        '410':
+          $ref: '#/components/responses/CommandEffectDisposed'
         '422':
           $ref: '#/components/responses/ValidationFailed'
     get:
@@ -7711,6 +7978,1377 @@ paths:
         '422':
           $ref: '#/components/responses/ValidationFailed'
 
+  /backoffice/v1/catalogue:
+    get:
+      tags: [Backoffice Catalogue]
+      operationId: readBackofficeGlobalCatalogue
+      x-allfit-operation: NEW-CAT-GLOBAL-PUBLISH
+      x-allfit-cache: no-store
+      summary: Read the global catalogue as its curator sees it
+      description: >-
+        `HU-BO-022`. Every global discipline, activity type and movement, published and
+        archived alike — unlike `/catalog/v1`, which answers only what is published. Each
+        entry says how much already depends on it, so archiving is a decision taken with
+        the consequence in view. A gym's private content never appears here. Equipment has
+        no table in V1 and is declared absent rather than answered as an empty list.
+        Requires `curate_global_catalog`.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+      responses:
+        '200':
+          description: The global catalogue with its drafts and archived entries
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackofficeGlobalCatalogue'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/catalogue/disciplines:
+    post:
+      tags: [Backoffice Catalogue]
+      operationId: publishCatalogueDiscipline
+      x-allfit-operation: OP-CAT-004
+      x-allfit-cache: no-store
+      summary: Publish a discipline in the global catalogue
+      description: >-
+        Only Allfit publishes global content. A code that is already published answers
+        409, and an archived code is published again only under the name it had: the code
+        is stable and never becomes another thing.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CataloguePublication'
+      responses:
+        '200':
+          description: The published discipline
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GlobalCatalogueEntry'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/catalogue/disciplines/{code}/archival:
+    post:
+      tags: [Backoffice Catalogue]
+      operationId: archiveCatalogueDiscipline
+      x-allfit-operation: OP-CAT-005
+      x-allfit-cache: no-store
+      summary: Withdraw a discipline from the catalogue without deleting it
+      description: >-
+        Archiving removes the discipline from every search while the sessions and
+        templates that already use it keep resolving. A discipline whose global activity
+        types or movements are still published answers 409: they are archived first, so
+        nothing is retired that nobody asked to retire. The command carries no body.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/CatalogueCode'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      responses:
+        '200':
+          description: The archived discipline
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GlobalCatalogueEntry'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/catalogue/activity-types:
+    post:
+      tags: [Backoffice Catalogue]
+      operationId: publishCatalogueActivityType
+      x-allfit-operation: OP-CAT-004
+      x-allfit-cache: no-store
+      summary: Publish a global activity type
+      description: >-
+        The activity type belongs to a published discipline and carries no owner: there is
+        no field for one, so a gym's private content cannot be pushed into the global
+        catalogue. A published code answers 409.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CatalogueActivityTypePublication'
+      responses:
+        '200':
+          description: The published activity type
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GlobalCatalogueEntry'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/catalogue/activity-types/{code}/archival:
+    post:
+      tags: [Backoffice Catalogue]
+      operationId: archiveCatalogueActivityType
+      x-allfit-operation: OP-CAT-005
+      x-allfit-cache: no-store
+      summary: Withdraw a global activity type from the catalogue
+      description: >-
+        The activity type leaves every search; the result contracts bound to it and the
+        sessions recorded under it keep resolving. A private activity type of a gym is not
+        found here. The command carries no body.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/CatalogueCode'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      responses:
+        '200':
+          description: The archived activity type
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GlobalCatalogueEntry'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/catalogue/movements:
+    post:
+      tags: [Backoffice Catalogue]
+      operationId: publishCatalogueMovement
+      x-allfit-operation: OP-CAT-004
+      x-allfit-cache: no-store
+      summary: Publish a global movement
+      description: >-
+        A movement is identified by its name, normalised: the same name written with other
+        spacing or capitalisation is the same movement and answers 409. It belongs to a
+        published discipline and has no owner.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CatalogueMovementPublication'
+      responses:
+        '200':
+          description: The published movement
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GlobalCatalogueEntry'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/catalogue/movements/{movementId}/archival:
+    post:
+      tags: [Backoffice Catalogue]
+      operationId: archiveCatalogueMovement
+      x-allfit-operation: OP-CAT-005
+      x-allfit-cache: no-store
+      summary: Withdraw a global movement from the catalogue
+      description: >-
+        The movement leaves every search; the planned steps that reference it keep
+        resolving. A movement owned by a gym or by a person is not found here. The command
+        carries no body.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - name: movementId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/Uuid'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      responses:
+        '200':
+          description: The archived movement
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GlobalCatalogueEntry'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/people/{personId}/account-recovery:
+    get:
+      tags: [Backoffice Support]
+      operationId: readBackofficeAccountRecovery
+      x-allfit-operation: NEW-IDN-ACTION
+      x-allfit-cache: no-store
+      summary: Read whether a person's access can be recovered, and how each recovery went
+      description: >-
+        `HU-BO-010`. Whether Allfit can send this person the official recovery flow,
+        why not when it cannot, the hint of the verified email it would go to, and the
+        ten newest recoveries. Recovery fails closed without an account and a verified
+        email. No address, link or code travels. The read is recorded against the
+        person before its content is returned. Requires `diagnose_support_metadata`.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/SupportPersonId'
+        - $ref: '#/components/parameters/SupportCaseReference'
+      responses:
+        '200':
+          description: The person's recovery state
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackofficeAccountRecovery'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/people/{personId}/account-recoveries:
+    post:
+      tags: [Backoffice Support]
+      operationId: startBackofficeAccountRecovery
+      x-allfit-operation: OP-IDN-053
+      x-allfit-cache: no-store
+      summary: Send a person the official recovery flow
+      description: >-
+        The identity provider emails the person a single-use recovery link at the email
+        they already verified; only the person confirms it, by resetting their password.
+        Without an account or a verified email, with a recovery already under way, or
+        for the operator's own account the command answers 409 or 403 and writes
+        nothing. Three recovery emails a day reach one person at most: 429. The body
+        carries only the case the recovery answers.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/SupportPersonId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountRecoveryCommand'
+      responses:
+        '200':
+          description: The recovery that was started
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackofficeAccountRecoveryRequest'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/people/{personId}/account-recoveries/{requestId}/resends:
+    post:
+      tags: [Backoffice Support]
+      operationId: resendBackofficeAccountRecovery
+      x-allfit-operation: OP-IDN-054
+      x-allfit-cache: no-store
+      summary: Send a live recovery again
+      description: >-
+        `HU-BO-011`. Only a recovery that went out and is still live is resent, to the
+        email it started with. An expired, cancelled, confirmed or failed recovery, one
+        that has not gone out yet, or one whose verified email changed answers 409: an
+        expired recovery is never revived, a new one replaces it. The daily limit of the
+        start applies: 429. The body carries only the case.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/SupportPersonId'
+        - $ref: '#/components/parameters/AccountRecoveryRequestId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountRecoveryCommand'
+      responses:
+        '200':
+          description: The recovery, sent again
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackofficeAccountRecoveryRequest'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/people/{personId}/account-recoveries/{requestId}/cancellation:
+    post:
+      tags: [Backoffice Support]
+      operationId: cancelBackofficeAccountRecovery
+      x-allfit-operation: OP-IDN-055
+      x-allfit-cache: no-store
+      summary: Cancel a suspicious recovery
+      description: >-
+        A live recovery stops: nothing more is sent for it and a later password reset
+        does not confirm it. An email that already left cannot be recalled. A recovery
+        that is no longer live answers 409. The body carries only the case.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/SupportPersonId'
+        - $ref: '#/components/parameters/AccountRecoveryRequestId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountRecoveryCommand'
+      responses:
+        '200':
+          description: The cancelled recovery
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackofficeAccountRecoveryRequest'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/support/business:
+    get:
+      tags: [Backoffice Support]
+      operationId: readBackofficeSupportBusiness
+      x-allfit-operation: NEW-SUP-DASHBOARD
+      x-allfit-cache: no-store
+      summary: Read how the business is going
+      description: >-
+        Counts of people, gyms and money, each one carrying the period it was
+        measured over. A figure the platform cannot compute is `not_modelled` with
+        no value and a reason, never zero: payments have no tables yet, and Space
+        keeps no session, so "people active this week" has no signal at all.
+
+        A count of people below `minimum_aggregate` is `below_threshold` with no
+        value, so no figure narrows the platform down to somebody. A true zero is
+        published, because it singles nobody out. Nothing here names a person, so
+        reading it records no access, and no figure leads to one.
+
+        Requires `view_platform_metrics`.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+      responses:
+        '200':
+          description: How the business is going, as of now
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportBusinessPanel'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/platform-plans:
+    get:
+      tags: [Backoffice Commercial]
+      operationId: listBackofficePlatformPlans
+      x-allfit-operation: NEW-PAY-PLATFORM-PLAN
+      x-allfit-cache: no-store
+      summary: Read the plans Allfit sells
+      description: >-
+        Every plan with the version in force, the proposal waiting for review with what
+        it changes, and the full history. Also the catalogue of functions a plan can
+        limit, which changes only with a deployment because each function needs code
+        that enforces it; it may be empty.
+
+        A price list is nobody's data, so reading it records no access. Requires
+        `manage_platform_commercial`.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+      responses:
+        '200':
+          description: The plans and the functions they can limit
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformPlanCatalogue'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+    post:
+      tags: [Backoffice Commercial]
+      operationId: createBackofficePlatformPlan
+      x-allfit-operation: OP-PAY-024
+      x-allfit-cache: no-store
+      summary: Create a plan
+      description: >-
+        A plan is a stable code, a name and a kind, and it is a draft until its first
+        version is published. There is one free plan, ever: its limits change by
+        publishing versions of it, so a second free plan answers 409, and so does a
+        code that is already taken.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlatformPlanCreate'
+      responses:
+        '201':
+          description: The new plan
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformPlan'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/platform-plans/{planId}/versions:
+    post:
+      tags: [Backoffice Commercial]
+      operationId: proposeBackofficePlatformPlanVersion
+      x-allfit-operation: OP-PAY-025
+      x-allfit-cache: no-store
+      summary: Propose a new version of a plan
+      description: >-
+        The price, currency, billing period and what the version does with every
+        function in the catalogue, none left out and none added. The free plan costs
+        zero and has no currency or period; a paid plan costs something every month or
+        year. A proposal waits for somebody else to publish it and carries what it
+        changes against the version in force.
+
+        A plan has one proposal open at a time, and a proposal that changes nothing
+        answers 409. Privacy functions are not in the catalogue, so no version can
+        limit them.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/PlatformPlanId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlatformPlanVersionProposal'
+      responses:
+        '201':
+          description: The plan, with the proposal open
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformPlan'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/platform-plans/{planId}/versions/{versionId}/publication:
+    post:
+      tags: [Backoffice Commercial]
+      operationId: publishBackofficePlatformPlanVersion
+      x-allfit-operation: OP-PAY-017
+      x-allfit-cache: no-store
+      summary: Publish a proposal somebody else made
+      description: >-
+        The version comes into force and the one it replaces is retired, never
+        rewritten: whoever subscribed to it keeps what they accepted. The person who
+        proposed a version cannot publish it (403). A proposal that was already
+        published or withdrawn answers 409. The command carries no body.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/PlatformPlanId'
+        - $ref: '#/components/parameters/PlatformPlanVersionId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      responses:
+        '200':
+          description: The plan, with the new version in force
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformPlan'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/platform-plans/{planId}/versions/{versionId}/withdrawal:
+    post:
+      tags: [Backoffice Commercial]
+      operationId: withdrawBackofficePlatformPlanVersion
+      x-allfit-operation: OP-PAY-026
+      x-allfit-cache: no-store
+      summary: Withdraw a proposal
+      description: >-
+        The proposer changing their mind and a reviewer who disagrees end the same way:
+        the proposal is kept as withdrawn, with who withdrew it, and its number is never
+        reused. Only an open proposal is withdrawn (409 otherwise). The command carries
+        no body.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/PlatformPlanId'
+        - $ref: '#/components/parameters/PlatformPlanVersionId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      responses:
+        '200':
+          description: The plan, with no proposal open
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformPlan'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/organizations/{organizationId}/team-invitations:
+    get:
+      tags: [Backoffice Organizations]
+      operationId: listBackofficeTeamInvitations
+      x-allfit-operation: NEW-IDN-RESEND
+      x-allfit-cache: no-store
+      summary: Read a gym's team invitations to resend one
+      description: >-
+        `HU-BO-011`. The 50 newest team invitations of an organization, each with its
+        state and whether it can be resent. Contacts are hints and no person is named,
+        so the read records no access. Requires `diagnose_support_metadata`.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/OrganizationId'
+      responses:
+        '200':
+          description: The organization's team invitations, newest first
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackofficeTeamInvitationList'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/organizations/{organizationId}/team-invitations/{invitationId}/resends:
+    post:
+      tags: [Backoffice Organizations]
+      operationId: resendBackofficeTeamInvitation
+      x-allfit-operation: OP-IDN-052
+      x-allfit-cache: no-store
+      summary: Send a team invitation again
+      description: >-
+        A live invitation is sent again as it is. An expired one is replaced by a new
+        identical invitation that Allfit signs, and the expired one never works again.
+        An accepted, declined or revoked invitation, one already reissued, or one with
+        an equal invitation pending answers 409. Resending never changes the gym, the
+        contact or the role, and the destination limit Studio enforces applies: 429.
+        The command carries no body.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/OrganizationId'
+        - name: invitationId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/UuidV7'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      responses:
+        '200':
+          description: The invitation that went out, and whether it was redelivered or reissued
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackofficeTeamInvitationResend'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/organizations/{organizationId}/client-invitations:
+    get:
+      tags: [Backoffice Organizations]
+      operationId: listBackofficeClientInvitations
+      x-allfit-operation: NEW-IDN-CLIENT-RESEND
+      x-allfit-cache: no-store
+      summary: Read a gym's client invitations to resend one
+      description: >-
+        `HU-BO-011`. The 50 newest client invitations of an organization, each with its
+        state, the scopes it offered and whether it can be resent. Contacts are hints
+        and no person is named — an invitation identifies nobody until someone accepts
+        it — so the read records no access. Requires `diagnose_support_metadata`.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/OrganizationId'
+      responses:
+        '200':
+          description: The organization's client invitations, newest first
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackofficeClientInvitationList'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/organizations/{organizationId}/client-invitations/{invitationId}/resends:
+    post:
+      tags: [Backoffice Organizations]
+      operationId: resendBackofficeClientInvitation
+      x-allfit-operation: OP-IDN-051
+      x-allfit-cache: no-store
+      summary: Send a client invitation again
+      description: >-
+        A live invitation is sent again as it is. An expired one is replaced by a new
+        identical invitation that Allfit signs, asking for exactly the same scopes at
+        exactly the same levels, and the expired one never works again. An accepted,
+        declined or revoked invitation, one already reissued, or one with an equal
+        invitation pending answers 409. Resending never changes the gym, the contact
+        or what was asked for, and the destination limit Studio enforces applies: 429.
+        The command carries no body.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/OrganizationId'
+        - name: invitationId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/UuidV7'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      responses:
+        '200':
+          description: The invitation that went out, and whether it was redelivered or reissued
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackofficeClientInvitationResend'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/erasure-requests:
+    get:
+      tags: [Backoffice Privacy]
+      operationId: listBackofficeErasureRequests
+      x-allfit-operation: OP-PRV-021
+      x-allfit-cache: no-store
+      summary: Follow the erasure requests people have made
+      description: >-
+        What each person asked the platform to erase, what is still owed to them
+        and what the resolution was, category by category.
+
+        It lists **requests**: a disposition a retention policy opened runs under
+        the same rules, but nobody asked for it and nobody is waiting on an
+        answer. `due_at` is thirty days after the request arrived and is an
+        instant, not a countdown, so the screen decides in the reader's own zone
+        whether it is late.
+
+        The projection is minimised to what the disposition needs: the person is
+        named by identifier, and nothing that was erased travels here.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/ErasureRequestState'
+        - $ref: '#/components/parameters/ErasureRequestCursorAt'
+        - $ref: '#/components/parameters/ErasureRequestCursorId'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: >-
+            Open requests oldest first, resolved ones newest first
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErasureRequestPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/legal-holds:
+    post:
+      tags: [Backoffice Privacy]
+      operationId: applyBackofficeLegalHold
+      x-allfit-operation: OP-PRV-009
+      x-allfit-cache: no-store
+      summary: Suspend the disposition of specific data
+      description: >-
+        Stops named dispositions from running, because an obligation says the data
+        has to be kept for now.
+
+        A hold suspends; it does not reveal. The answer carries the hold and no
+        field of the data it protects, and holding changes nothing about who may
+        read that person's file.
+
+        There are no indefinite holds: `valid_to` is required and has to be in the
+        future. And whoever requested or approved an exceptional read of that person
+        is refused here — deciding to look and deciding to keep do not belong in the
+        same pair of hands.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LegalHoldApplication'
+      responses:
+        '201':
+          description: The hold, and how many dispositions it stopped
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LegalHold'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/legal-holds/{holdId}/release:
+    post:
+      tags: [Backoffice Privacy]
+      operationId: releaseBackofficeLegalHold
+      x-allfit-operation: OP-PRV-010
+      x-allfit-cache: no-store
+      summary: Release a legal hold
+      description: >-
+        Puts the suspended dispositions back where they were — waiting their turn —
+        and nowhere else. Releasing never executes what the hold was holding.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+        - name: holdId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/Uuid'
+      responses:
+        '200':
+          description: The released hold
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LegalHold'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /space/v1/body-progress/{recordId}:
+    delete:
+      tags: [Space Identity]
+      operationId: deleteSpaceBodyProgress
+      x-allfit-operation: OP-IDN-007
+      x-allfit-cache: no-store
+      summary: Delete one of my body measurements
+      description: >-
+        The measurement is deleted physically, now, and a disposition case records
+        that body data was deleted at the person's request and under which policy,
+        without keeping the value. Deleting data is not revoking a permission:
+        grants are untouched. Someone else's measurement and one that does not
+        exist both answer 404.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: recordId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/UuidV7'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      responses:
+        '200':
+          description: The measurement is gone and the case that recorded it
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BodyProgressDeletion'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /space/v1/health-context:
+    get:
+      tags: [Space Identity]
+      operationId: listSpaceHealthContext
+      x-allfit-operation: OP-IDN-049
+      x-allfit-cache: no-store
+      summary: Read my health context
+      description: >-
+        The pains, limitations and recoveries the person declared, the most
+        recent start first. Nobody else's claim ever appears.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: before_valid_from
+          in: query
+          required: false
+          description: The `valid_from` of the last claim already read.
+          schema:
+            type: string
+            format: date-time
+        - name: before_id
+          in: query
+          required: false
+          description: The `id` of the last claim already read; sent with `before_valid_from`.
+          schema:
+            $ref: '#/components/schemas/UuidV7'
+      responses:
+        '200':
+          description: One page of my health context
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthContextPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+    post:
+      tags: [Space Identity]
+      operationId: declareSpaceHealthContext
+      x-allfit-operation: OP-IDN-008
+      x-allfit-cache: no-store
+      summary: Declare a pain, limitation or recovery
+      description: >-
+        Health context is the most protected category V1 keeps, and it is not a
+        clinical record: three types, a short description in the person's own
+        words and, optionally, one body area. There is no field for a diagnosis,
+        a test result or a document. The `Command-Id` is the claim's identifier,
+        so a device can declare offline and send it later without duplicating it.
+        A declared claim is never rewritten.
+
+        Replaying the declaration of a claim that was deleted since answers 410.
+        Only a token that resolves to an active person declares anything (403).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HealthContextClaimCreate'
+      responses:
+        '201':
+          description: The declared claim
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthContextClaim'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '410':
+          $ref: '#/components/responses/CommandEffectDisposed'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /space/v1/health-context/{claimId}:
+    delete:
+      tags: [Space Identity]
+      operationId: deleteSpaceHealthContext
+      x-allfit-operation: OP-IDN-050
+      x-allfit-cache: no-store
+      summary: Delete one of my health context claims
+      description: >-
+        The claim is deleted physically, now, and a disposition case records that
+        health data was deleted at the person's request and under which policy,
+        without keeping what it said. Grants are untouched. Someone else's claim
+        and one that does not exist both answer 404.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: claimId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/UuidV7'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      responses:
+        '200':
+          description: The claim is gone and the case that recorded it
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthContextDeletion'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
 components:
   securitySchemes:
     cookieAuth:
@@ -8032,16 +9670,26 @@ components:
     OrganizationIfMatch:
       name: If-Match
       in: header
-      required: true
-      description: Strong ETag for the organization revision used as the command base.
+      required: false
+      deprecated: true
+      description: >-
+        Strong ETag for the organization revision used as the command base.
+        **Deprecated — send `expected_revision` in the body instead.** Vercel's
+        Edge answers a conditional write `412` before the function runs; see
+        `ExpectedRevision`. Still read when the body omits the field, so callers
+        that have not moved keep working.
       schema:
         type: string
         pattern: '^"organization:[0-9a-f-]{36}:r[0-9]+"$'
     OrganizationSiteIfMatch:
       name: If-Match
       in: header
-      required: true
-      description: Strong ETag for the organization site revision used as the command base.
+      required: false
+      deprecated: true
+      description: >-
+        Strong ETag for the organization site revision used as the command base.
+        **Deprecated — send `expected_revision` in the body instead.** See
+        `OrganizationIfMatch` for why.
       schema:
         type: string
         pattern: '^"organization-site:[0-9a-f-]{36}:r[0-9]+"$'
@@ -8101,6 +9749,59 @@ components:
         minLength: 16
         maxLength: 1024
 
+    CatalogueCode:
+      name: code
+      in: path
+      required: true
+      description: The stable code of a global catalogue entry.
+      schema:
+        type: string
+        pattern: '^[a-z][a-z0-9_]{1,63}$'
+    PlatformPlanId:
+      name: planId
+      in: path
+      required: true
+      description: One of the plans Allfit sells.
+      schema:
+        $ref: '#/components/schemas/UuidV7'
+    PlatformPlanVersionId:
+      name: versionId
+      in: path
+      required: true
+      description: One version of that plan.
+      schema:
+        $ref: '#/components/schemas/UuidV7'
+    AccountRecoveryRequestId:
+      name: requestId
+      in: path
+      required: true
+      description: The recovery, identified by the command that started it.
+      schema:
+        $ref: '#/components/schemas/UuidV7'
+    ErasureRequestState:
+      name: status
+      in: query
+      required: false
+      description: Which half of the panel to read. Defaults to what is still owed.
+      schema:
+        $ref: '#/components/schemas/ErasureRequestState'
+    ErasureRequestCursorAt:
+      name: cursor_at
+      in: query
+      required: false
+      description: >-
+        Continue after this instant, in the order the chosen half is read:
+        `opened_at` for open requests, `closed_at` for resolved ones.
+      schema:
+        type: string
+        format: date-time
+    ErasureRequestCursorId:
+      name: cursor_id
+      in: query
+      required: false
+      description: The request the page continues after. Travels with cursor_at.
+      schema:
+        $ref: '#/components/schemas/Uuid'
   headers:
     NoStore:
       required: true
@@ -8200,11 +9901,21 @@ components:
         application/problem+json:
           schema:
             $ref: '#/components/schemas/Problem'
-          example:
-            type: https://errors.allfit.invalid/forbidden
-            title: The actor cannot execute this operation
-            status: 403
-            request_id: 01JEXAMPLE0000000000000000
+          examples:
+            forbidden:
+              summary: The duty this operation needs is not in force
+              value:
+                type: https://errors.allfit.invalid/forbidden
+                title: The actor cannot execute this operation
+                status: 403
+                request_id: 01JEXAMPLE0000000000000000
+            separationOfDuties:
+              summary: Allowed in general, refused here
+              value:
+                type: https://errors.allfit.invalid/separation-of-duties
+                title: This actor already asked to read this person
+                status: 403
+                request_id: 01JEXAMPLE0000000000000000
     AccountClosed:
       description: The person linked to the authenticated account is closed
       headers:
@@ -8576,11 +10287,9 @@ components:
           type: integer
           minimum: 0
         people_served:
-          type: [integer, 'null']
+          type: integer
           minimum: 0
-          description: >-
-            Null until service relationships exist. Not zero, because zero would say
-            the organization serves nobody.
+          description: How many people the gym serves now. The file carries the states.
     BackofficeOrganizationPage:
       type: object
       additionalProperties: false
@@ -8609,6 +10318,7 @@ components:
         - team_truncated
         - sites
         - people_served
+        - relationship_counts
         - plans_availability
         - payment_method_availability
         - premium_availability
@@ -8718,9 +10428,25 @@ components:
                 type: string
                 enum: [active, inactive]
         people_served:
-          type: [integer, 'null']
+          type: integer
           minimum: 0
-          description: Null until service relationships exist. Never zero in their place.
+          description: >-
+            How many people the gym serves now. A relationship that ended is not one of
+            them; it is counted in `relationship_counts` instead.
+        relationship_counts:
+          type: object
+          additionalProperties: false
+          required: [active, terminated]
+          description: >-
+            The state those relationships are in. A count and nothing else: reaching a
+            person still means a break-glass window with a case reference.
+          properties:
+            active:
+              type: integer
+              minimum: 0
+            terminated:
+              type: integer
+              minimum: 0
         plans_availability:
           $ref: '#/components/schemas/ModelAvailability'
         payment_method_availability:
@@ -9312,13 +11038,18 @@ components:
       additionalProperties: false
       description: >-
         Every attempt is recorded before this answers, so `break_glass_event_id`
-        is the evidence of this exact attempt. No outcome carries content in this
-        version.
+        is the evidence of this exact attempt. Only `allowed` carries content, and
+        only for a category whose data the platform stores; the others answer
+        `content_unavailable`. A category that returns content reads only its own
+        kind of data, so pointing it at another is `denied` with
+        `resource_out_of_scope`.
       required: [outcome, reason_code, break_glass_event_id, occurred_at]
       properties:
         outcome:
           type: string
-          enum: [denied, content_unavailable]
+          enum: [allowed, denied, content_unavailable]
+        content:
+          $ref: '#/components/schemas/BreakGlassContent'
         reason_code:
           type: string
           pattern: '^[a-z][a-z0-9_]{1,63}$'
@@ -12473,6 +14204,28 @@ components:
           minLength: 1
         type_code:
           $ref: '#/components/schemas/OrganizationTypeCode'
+        expected_revision:
+          $ref: '#/components/schemas/ExpectedRevision'
+
+    ExpectedRevision:
+      description: >-
+        The `revision_number` the caller read before editing. The write is
+        refused with `409` when the stored revision has moved on, which is what
+        keeps two people from overwriting each other in silence.
+
+
+        It travels in the body rather than in `If-Match`, and that is a
+        deployment constraint rather than a preference: this API is one function
+        mounted at `/`, and Vercel's Edge evaluates conditional requests against
+        that single cache key before the function runs. A write carrying
+        `If-Match` was answered `412 Precondition Failed` by the Edge — after the
+        row had already been written, and without CORS headers, so the browser
+        could not read the refusal. `If-Match` is still accepted on these two
+        routes for callers that have not moved yet, and will be dropped once
+        none remain.
+      type: integer
+      minimum: 0
+
     OrganizationSiteStatus:
       type: string
       enum: [active, inactive]
@@ -12519,6 +14272,8 @@ components:
           minLength: 1
         status:
           $ref: '#/components/schemas/OrganizationSiteStatus'
+        expected_revision:
+          $ref: '#/components/schemas/ExpectedRevision'
     Organization:
       type: object
       additionalProperties: false
@@ -13264,6 +15019,236 @@ components:
     RelationshipStatus:
       type: string
       enum: [active, terminated]
+    AssignmentStatus:
+      type: string
+      enum: [proposed, active, ended]
+    GrantStatus:
+      description: >-
+        `frozen` is not `revoked`. Ending the relationship freezes a grant, so
+        the organization keeps what it already had and nothing after the cut; the
+        person revoking it ends all access. Neither is the other's synonym.
+      type: string
+      enum: [active, frozen, revoked]
+    RelationshipProfessional:
+      description: Who attends this person, under an open-ended assignment.
+      type: object
+      additionalProperties: false
+      required:
+        [assignment_id, membership_id, professional_person_id, display_name, valid_from]
+      properties:
+        assignment_id:
+          $ref: '#/components/schemas/UuidV7'
+        membership_id:
+          $ref: '#/components/schemas/UuidV7'
+        professional_person_id:
+          $ref: '#/components/schemas/UuidV7'
+          description: >-
+            The professional, never the client. The two are distinct people and
+            the names have to say which is which.
+        display_name:
+          type: string
+          minLength: 1
+        valid_from:
+          type: string
+          format: date-time
+          description: Since when this professional has attended the person.
+    RelationshipSubstitution:
+      description: >-
+        Somebody covering for the professional in charge, for a bounded period.
+        A substitution only becomes effective once the person accepts it, so a
+        `proposed` entry grants nothing yet.
+      type: object
+      additionalProperties: false
+      required:
+        [assignment_id, membership_id, professional_person_id, display_name, status,
+         valid_from, ends_on, accepted_by_person_at]
+      properties:
+        assignment_id:
+          $ref: '#/components/schemas/UuidV7'
+        membership_id:
+          $ref: '#/components/schemas/UuidV7'
+        professional_person_id:
+          $ref: '#/components/schemas/UuidV7'
+        display_name:
+          type: string
+          minLength: 1
+        status:
+          $ref: '#/components/schemas/AssignmentStatus'
+        valid_from:
+          type: string
+          format: date-time
+        ends_on:
+          type: [string, 'null']
+          format: date
+        accepted_by_person_at:
+          type: [string, 'null']
+          format: date-time
+          description: Null until the person has accepted this substitution.
+    RelationshipGrant:
+      description: >-
+        A permission the person granted, and nothing it covers. Every field here
+        describes the permission — which scope, which version, whether it still
+        stands — so a reader learns that measurements were shared without
+        learning a single measurement.
+      type: object
+      additionalProperties: false
+      required:
+        [grant_id, scope_code, display_name, version_number, access_level,
+         status, purpose, granted_at, revoked_at]
+      properties:
+        grant_id:
+          $ref: '#/components/schemas/UuidV7'
+        scope_code:
+          type: string
+          minLength: 1
+        display_name:
+          type: [string, 'null']
+          description: >-
+            The words the person was shown when they decided. Null when no
+            presentation has been published for this scope yet.
+        version_number:
+          type: integer
+          minimum: 1
+          description: >-
+            The scope version that was agreed, not the latest published one. A
+            grant never drifts onto a later version.
+        access_level:
+          $ref: '#/components/schemas/AccessLevel'
+        status:
+          $ref: '#/components/schemas/GrantStatus'
+        purpose:
+          type: string
+          minLength: 1
+        granted_at:
+          type: string
+          format: date-time
+        revoked_at:
+          type: [string, 'null']
+          format: date-time
+    RelationshipReassignment:
+      description: >-
+        The assignment now in force, and the one it replaced. `replaced_assignment_id`
+        is null when nothing changed because that coach was already in charge.
+      type: object
+      additionalProperties: false
+      required:
+        [assignment_id, relationship_id, membership_id, professional_person_id,
+         valid_from, replaced_assignment_id]
+      properties:
+        assignment_id:
+          $ref: '#/components/schemas/UuidV7'
+        relationship_id:
+          $ref: '#/components/schemas/UuidV7'
+        membership_id:
+          $ref: '#/components/schemas/UuidV7'
+        professional_person_id:
+          $ref: '#/components/schemas/UuidV7'
+        valid_from:
+          type: string
+          format: date-time
+        replaced_assignment_id:
+          description: The assignment this one ended, or null when nothing changed.
+          oneOf:
+            - $ref: '#/components/schemas/UuidV7'
+            - type: 'null'
+    RelationshipHistoryEvent:
+      description: >-
+        One moment in a relationship's past. `detail` carries different keys per
+        `type`, and every one of them is metadata about the moment — never the
+        content a permission covers.
+      type: object
+      additionalProperties: false
+      required: [type, occurred_at, source_id, detail]
+      properties:
+        type:
+          type: string
+          enum:
+            - relationship_started
+            - holder_assigned
+            - holder_ended
+            - substitution_proposed
+            - substitution_accepted
+            - substitution_ended
+            - consent_decided
+            - relationship_ended
+        occurred_at:
+          type: string
+          format: date-time
+        source_id:
+          description: >-
+            The row this moment was read from, not an identifier of the moment.
+            One assignment row produces more than one event, so the same
+            `source_id` appears against different types.
+          allOf:
+            - $ref: '#/components/schemas/UuidV7'
+        detail:
+          type: object
+          description: >-
+            Keys vary by `type`. `holder_assigned`, `holder_ended` and the
+            substitution kinds carry `assignment_id`, `membership_id`,
+            `professional_person_id` and `display_name`; `consent_decided`
+            carries `scope_code`, `decision` and `scope_definition_id`;
+            `relationship_ended` carries `ended_by_kind`, `declared_by_us` and
+            `reason`; `relationship_started` carries
+            `continues_relationship_id`.
+          additionalProperties: true
+
+    RelationshipHistoryPage:
+      description: >-
+        A page of a relationship's history, newest first. Shorter for a coach
+        than for an owner, because a coach sees only their own assignment.
+      type: object
+      additionalProperties: false
+      required: [data, page]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/RelationshipHistoryEvent'
+        page:
+          $ref: '#/components/schemas/Page'
+
+    RelationshipState:
+      description: >-
+        How one relationship stands: the link, who attends the person, the
+        substitutions, and which permissions are in force. Cacheable for
+        presentation, never for deciding authorization.
+      type: object
+      additionalProperties: false
+      required:
+        [relationship_id, person_id, display_name, status, started_at, ended_at,
+         holder, substitutions, grants]
+      properties:
+        relationship_id:
+          $ref: '#/components/schemas/UuidV7'
+        person_id:
+          $ref: '#/components/schemas/UuidV7'
+        display_name:
+          type: string
+          minLength: 1
+        status:
+          $ref: '#/components/schemas/RelationshipStatus'
+        started_at:
+          type: string
+          format: date-time
+        ended_at:
+          type: [string, 'null']
+          format: date-time
+        holder:
+          description: >-
+            Null when nobody attends this person yet — which is the state
+            assigning a professional starts from.
+          oneOf:
+            - $ref: '#/components/schemas/RelationshipProfessional'
+            - type: 'null'
+        substitutions:
+          type: array
+          items:
+            $ref: '#/components/schemas/RelationshipSubstitution'
+        grants:
+          type: array
+          items:
+            $ref: '#/components/schemas/RelationshipGrant'
     ClientDirectoryItem:
       description: >-
         A directory entry is one of two things and says which. A `relationship`
@@ -16323,3 +18308,1356 @@ components:
         message:
           type: string
           maxLength: 500
+
+    BackofficeTeamInvitation:
+      type: object
+      additionalProperties: false
+      description: >-
+        A gym's team invitation as Allfit's support sees it. The contact is a hint, never
+        the address, and no person is named. `resendable` is the database's answer: a
+        live invitation, or an expired one that was not already reissued and has no equal
+        invitation pending.
+      required:
+        - invitation_id
+        - state
+        - proposed_role_code
+        - contact_hint
+        - created_at
+        - expires_at
+        - issued_by
+        - reissues_invitation_id
+        - resendable
+        - last_resent_at
+      properties:
+        invitation_id:
+          $ref: '#/components/schemas/UuidV7'
+        state:
+          type: string
+          enum: [pending, expired, accepted, rejected, revoked]
+        proposed_role_code:
+          type: string
+          description: A team invitation proposes one of the roles a gym can invite to.
+          enum: [admin, coach, staff]
+        contact_hint:
+          type: string
+          maxLength: 260
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        issued_by:
+          type: string
+          description: >-
+            `member` when the gym sent it; `allfit` when Allfit reissued an expired one.
+          enum: [member, allfit]
+        reissues_invitation_id:
+          oneOf:
+            - $ref: '#/components/schemas/UuidV7'
+            - type: 'null'
+        resendable:
+          type: boolean
+        last_resent_at:
+          type: [string, 'null']
+          format: date-time
+    BackofficeTeamInvitationList:
+      type: object
+      additionalProperties: false
+      required: [organization_id, items, truncated]
+      properties:
+        organization_id:
+          $ref: '#/components/schemas/Uuid'
+        items:
+          type: array
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/BackofficeTeamInvitation'
+        truncated:
+          type: boolean
+    BackofficeTeamInvitationResend:
+      description: >-
+        The invitation that went out. `redelivered` is the same invitation sent again;
+        `reissued` is a new identical one that replaces an expired invitation.
+      allOf:
+        - $ref: '#/components/schemas/BackofficeTeamInvitation'
+        - type: object
+          required: [outcome]
+          properties:
+            outcome:
+              type: string
+              enum: [redelivered, reissued]
+    BackofficeClientInvitation:
+      type: object
+      additionalProperties: false
+      description: >-
+        A gym's client invitation as Allfit's support sees it. The contact is a hint,
+        never the address, and no person is named — before anyone accepts, an invitation
+        identifies nobody. `scope_codes` is what the gym asked for: the operator has to
+        see what is being resent, and a resend never changes it. The purpose the gym
+        wrote and the wording the person will read stay out; they are for the person
+        deciding, not for support.
+      required:
+        - invitation_id
+        - state
+        - scope_codes
+        - contact_hint
+        - created_at
+        - expires_at
+        - issued_by
+        - reissues_invitation_id
+        - resendable
+        - last_resent_at
+      properties:
+        invitation_id:
+          $ref: '#/components/schemas/UuidV7'
+        state:
+          type: string
+          enum: [pending, expired, accepted, rejected, revoked]
+        scope_codes:
+          type: array
+          description: The scopes the invitation offered, in code order.
+          items:
+            $ref: '#/components/schemas/ScopeCode'
+        contact_hint:
+          type: string
+          maxLength: 260
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        issued_by:
+          type: string
+          description: >-
+            `member` when the gym sent it; `allfit` when Allfit reissued an expired one.
+          enum: [member, allfit]
+        reissues_invitation_id:
+          oneOf:
+            - $ref: '#/components/schemas/UuidV7'
+            - type: 'null'
+        resendable:
+          type: boolean
+        last_resent_at:
+          type: [string, 'null']
+          format: date-time
+    BackofficeClientInvitationList:
+      type: object
+      additionalProperties: false
+      required: [organization_id, items, truncated]
+      properties:
+        organization_id:
+          $ref: '#/components/schemas/Uuid'
+        items:
+          type: array
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/BackofficeClientInvitation'
+        truncated:
+          type: boolean
+    BackofficeClientInvitationResend:
+      description: >-
+        The invitation that went out. `redelivered` is the same invitation sent again;
+        `reissued` is a new identical one that replaces an expired invitation and asks
+        for exactly the same scopes.
+      allOf:
+        - $ref: '#/components/schemas/BackofficeClientInvitation'
+        - type: object
+          required: [outcome]
+          properties:
+            outcome:
+              type: string
+              enum: [redelivered, reissued]
+    ErasureRequestState:
+      type: string
+      enum: [open, closed]
+    LegalHoldReason:
+      type: string
+      description: >-
+        The ground the hold answers to. Closed on purpose: a reason typed by hand
+        cannot be queried, and a hold nobody can query is a hold nobody can review.
+      enum: [judicial_order, regulatory_request, service_dispute, tax_or_accounting_obligation]
+    LegalHoldStatus:
+      type: string
+      enum: [active, released]
+    LegalHoldApplication:
+      type: object
+      additionalProperties: false
+      description: >-
+        Scope, reason, vigency and what it covers. Who applies it comes from the
+        session and is never accepted here.
+      required: [scope_description, reason_code, case_reference, valid_to, disposition_item_ids]
+      properties:
+        scope_description:
+          type: string
+          minLength: 3
+          maxLength: 500
+          description: What this hold covers, in the words of whoever answers for it.
+        reason_code:
+          $ref: '#/components/schemas/LegalHoldReason'
+        case_reference:
+          type: string
+          minLength: 3
+          maxLength: 120
+          description: The order or requirement this hold answers to.
+        valid_to:
+          type: string
+          format: date-time
+          description: When the hold ends. There are no indefinite holds.
+        disposition_item_ids:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items:
+            $ref: '#/components/schemas/Uuid'
+    LegalHold:
+      type: object
+      additionalProperties: false
+      required: [id, scope_description, reason_code, case_reference, valid_from, valid_to,
+        status, applied_by_person_id, released_at, released_by_person_id, suspended_items,
+        items]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        scope_description:
+          type: string
+        reason_code:
+          $ref: '#/components/schemas/LegalHoldReason'
+        case_reference:
+          type: string
+        valid_from:
+          type: string
+          format: date-time
+        valid_to:
+          type: string
+          format: date-time
+        status:
+          $ref: '#/components/schemas/LegalHoldStatus'
+        applied_by_person_id:
+          $ref: '#/components/schemas/Uuid'
+        released_at:
+          type: [string, 'null']
+          format: date-time
+        released_by_person_id:
+          oneOf:
+            - $ref: '#/components/schemas/Uuid'
+            - type: 'null'
+        suspended_items:
+          type: integer
+          minimum: 0
+          description: How many dispositions this hold is stopping right now.
+        items:
+          type: integer
+          minimum: 1
+          description: How many it named when it was applied.
+    DataClassificationCode:
+      type: string
+      enum: [operational, audit, identity_pii, training, body, nutrition, health]
+    DispositionOrigin:
+      type: string
+      enum: [request, retention, closure, disconnection, expiry]
+    DispositionAction:
+      type: string
+      enum: [delete, anonymize, retain_restricted]
+    DispositionItemStatus:
+      type: string
+      enum: [pending, executed, suspended]
+    DispositionResult:
+      type: string
+      enum: [deleted, anonymized, retained, failed]
+    ErasureRequestCategory:
+      type: object
+      additionalProperties: false
+      description: >-
+        One line per category, action and state. Deleting forty meals is one line
+        that says so: the identifiers of forty erased rows are the data the
+        erasure removed.
+      required: [data_classification_code, action, status, items, item_ids, result,
+        executed_at, retained_until, hold]
+      properties:
+        data_classification_code:
+          $ref: '#/components/schemas/DataClassificationCode'
+        action:
+          $ref: '#/components/schemas/DispositionAction'
+        status:
+          $ref: '#/components/schemas/DispositionItemStatus'
+        items:
+          type: integer
+          minimum: 1
+        item_ids:
+          type: array
+          minItems: 1
+          maxItems: 500
+          description: >-
+            The dispositions this line is made of, so a legal hold can name exactly
+            these and nothing else.
+          items:
+            $ref: '#/components/schemas/Uuid'
+        result:
+          oneOf:
+            - $ref: '#/components/schemas/DispositionResult'
+            - type: 'null'
+          description: What the disposition recorded. Absent until it runs.
+        executed_at:
+          type: [string, 'null']
+          format: date-time
+        retained_until:
+          type: [string, 'null']
+          format: date-time
+          description: >-
+            Only where something was kept, and taken from the policy that decided
+            to keep it.
+        hold:
+          oneOf:
+            - $ref: '#/components/schemas/ErasureRequestHold'
+            - type: 'null'
+          description: The legal hold stopping this line, when one is.
+    ErasureRequestHold:
+      type: object
+      additionalProperties: false
+      description: Why this line is stopped and until when, without leaving the panel.
+      required: [id, reason_code, valid_to]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        reason_code:
+          $ref: '#/components/schemas/LegalHoldReason'
+        valid_to:
+          type: string
+          format: date-time
+    ErasureRequest:
+      type: object
+      additionalProperties: false
+      description: >-
+        A person's erasure request and how far it got. The person is named by
+        identifier: this screen tracks the request, it does not open the file.
+      required: [id, subject_person_id, origin, status, opened_at, closed_at, due_at,
+        pending_items, suspended_items, resolved_items, categories]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        subject_person_id:
+          $ref: '#/components/schemas/Uuid'
+        origin:
+          $ref: '#/components/schemas/DispositionOrigin'
+        status:
+          $ref: '#/components/schemas/ErasureRequestState'
+        opened_at:
+          type: string
+          format: date-time
+        closed_at:
+          type: [string, 'null']
+          format: date-time
+        due_at:
+          type: string
+          format: date-time
+          description: Thirty days after the request arrived.
+        pending_items:
+          type: integer
+          minimum: 0
+        suspended_items:
+          type: integer
+          minimum: 0
+          description: Held by a legal obligation rather than waiting its turn.
+        resolved_items:
+          type: integer
+          minimum: 0
+        categories:
+          type: array
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/ErasureRequestCategory'
+    ErasureRequestPage:
+      type: object
+      additionalProperties: false
+      required: [items, has_more]
+      properties:
+        items:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/ErasureRequest'
+        has_more:
+          type: boolean
+    BodyProgressMetricCode:
+      type: string
+      description: >-
+        The rows of `identity.body_progress_metrics`. Recording is an onboarding step and
+        accepts weight and height only; the rest exist in the catalogue, and a read returns
+        whichever were written.
+      enum:
+        [
+          body_weight,
+          body_height,
+          muscle_mass,
+          body_fat,
+          waist,
+          hip,
+          chest,
+          arm,
+          thigh,
+        ]
+    BodyProgressUnitCode:
+      type: string
+      description: Masses in `kg` or `lb`, lengths in `m`, `cm` or `in`, body fat in `percent`.
+      enum: [kg, lb, m, cm, in, percent]
+    BodyProgressRecord:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - metric_code
+        - value
+        - unit_code
+        - original_value
+        - original_unit_code
+        - measured_on
+        - has_media
+        - recorded_at
+      properties:
+        id:
+          $ref: '#/components/schemas/UuidV7'
+        metric_code:
+          $ref: '#/components/schemas/BodyProgressMetricCode'
+        value:
+          type: number
+          description: In the canonical unit of the measurement's dimension.
+        unit_code:
+          $ref: '#/components/schemas/BodyProgressUnitCode'
+        original_value:
+          type: [number, 'null']
+          description: What the person typed, when it was not the canonical unit.
+        original_unit_code:
+          oneOf:
+            - $ref: '#/components/schemas/BodyProgressUnitCode'
+            - type: 'null'
+        measured_on:
+          type: string
+          format: date
+        has_media:
+          type: boolean
+          description: Whether a photo exists. Where it is never travels.
+        recorded_at:
+          type: string
+          format: date-time
+    BodyProgressPage:
+      type: object
+      additionalProperties: false
+      required: [items, has_more]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/BodyProgressRecord'
+        has_more:
+          type: boolean
+    BodyProgressDeletion:
+      type: object
+      additionalProperties: false
+      required: [body_progress_record_id, disposition_case_id, status]
+      properties:
+        body_progress_record_id:
+          $ref: '#/components/schemas/UuidV7'
+        disposition_case_id:
+          $ref: '#/components/schemas/UuidV7'
+        status:
+          type: string
+          enum: [deleted]
+    HealthContextType:
+      type: string
+      enum: [pain, limitation, recovery]
+    HealthContextBodyArea:
+      type: string
+      enum:
+        - neck
+        - shoulder
+        - upper_back
+        - lower_back
+        - chest
+        - abdomen
+        - arm
+        - elbow
+        - wrist_hand
+        - hip
+        - thigh
+        - knee
+        - lower_leg
+        - ankle_foot
+    Provenance:
+      type: string
+      description: >-
+        Where a claim comes from. Space only writes `person_declared`; whether a
+        value was verified is a separate matter.
+      enum:
+        - person_declared
+        - professional_observation
+        - device_observed
+        - system_inferred
+        - authority_verified
+    HealthContextClaimCreate:
+      type: object
+      additionalProperties: false
+      required: [context_type, description, valid_from]
+      properties:
+        context_type:
+          $ref: '#/components/schemas/HealthContextType'
+        description:
+          type: string
+          minLength: 1
+          maxLength: 500
+          description: In the person's own words. Surrounding spaces are removed.
+        body_area:
+          oneOf:
+            - $ref: '#/components/schemas/HealthContextBodyArea'
+            - type: 'null'
+        valid_from:
+          type: string
+          format: date-time
+          description: When it started; never later than tomorrow.
+        valid_to:
+          type: [string, 'null']
+          format: date-time
+          description: When it ends, if the person knows; after `valid_from`.
+    HealthContextClaim:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - context_type
+        - description
+        - body_area
+        - provenance
+        - valid_from
+        - valid_to
+        - recorded_at
+      properties:
+        id:
+          $ref: '#/components/schemas/UuidV7'
+        context_type:
+          $ref: '#/components/schemas/HealthContextType'
+        description:
+          type: string
+        body_area:
+          oneOf:
+            - $ref: '#/components/schemas/HealthContextBodyArea'
+            - type: 'null'
+        provenance:
+          $ref: '#/components/schemas/Provenance'
+        valid_from:
+          type: string
+          format: date-time
+        valid_to:
+          type: [string, 'null']
+          format: date-time
+        recorded_at:
+          type: string
+          format: date-time
+    HealthContextPage:
+      type: object
+      additionalProperties: false
+      required: [items, has_more]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/HealthContextClaim'
+        has_more:
+          type: boolean
+    HealthContextDeletion:
+      type: object
+      additionalProperties: false
+      required: [health_context_claim_id, disposition_case_id, status]
+      properties:
+        health_context_claim_id:
+          $ref: '#/components/schemas/UuidV7'
+        disposition_case_id:
+          $ref: '#/components/schemas/UuidV7'
+        status:
+          type: string
+          enum: [deleted]
+    BreakGlassMeal:
+      type: object
+      additionalProperties: false
+      required:
+        [id, occurred_at, local_date, timezone, meal_type, note, revision_number,
+         has_media, items]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        occurred_at:
+          type: string
+          format: date-time
+        local_date:
+          type: string
+          format: date
+        timezone:
+          $ref: '#/components/schemas/IanaTimeZone'
+        meal_type:
+          $ref: '#/components/schemas/MealType'
+        note:
+          type: [string, 'null']
+          maxLength: 1000
+        revision_number:
+          type: integer
+          minimum: 0
+        has_media:
+          type: boolean
+          description: Whether a photo exists. The photo itself never travels here.
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/NutritionMealItem'
+    BreakGlassContent:
+      type: object
+      additionalProperties: false
+      description: >-
+        What an allowed read returns, under the category that was read. Only
+        categories whose data the platform stores appear; the rest answer
+        `content_unavailable` instead.
+      properties:
+        body_progress:
+          type: array
+          maxItems: 500
+          items:
+            $ref: '#/components/schemas/BodyProgressRecord'
+        health_context:
+          type: array
+          maxItems: 500
+          items:
+            $ref: '#/components/schemas/HealthContextClaim'
+        nutrition_intake:
+          type: array
+          maxItems: 500
+          items:
+            $ref: '#/components/schemas/BreakGlassMeal'
+        prior_training_history:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/ExecutionDetail'
+    PlatformPlanCatalogue:
+      type: object
+      additionalProperties: false
+      required: [generated_at, feature_catalog, plans]
+      properties:
+        generated_at:
+          type: string
+          format: date-time
+        feature_catalog:
+          type: array
+          description: >-
+            The functions a plan can limit. Each one arrives with the code that enforces
+            it, so the list changes only with a deployment, and it may be empty.
+          items:
+            $ref: '#/components/schemas/PlatformFeature'
+        plans:
+          type: array
+          description: The free plan first, then the paid ones by code.
+          items:
+            $ref: '#/components/schemas/PlatformPlan'
+    PlatformFeature:
+      type: object
+      additionalProperties: false
+      required: [code, name, unit]
+      properties:
+        code:
+          $ref: '#/components/schemas/PlatformFeatureCode'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        unit:
+          type: [string, 'null']
+          maxLength: 32
+          description: What the limit counts, such as `items` or `weeks`.
+    PlatformFeatureCode:
+      type: string
+      pattern: '^[a-z][a-z0-9_]{1,63}$'
+    PlatformPlanCode:
+      type: string
+      pattern: '^[a-z][a-z0-9_]{1,39}$'
+    PlatformPlanKind:
+      type: string
+      enum: [free, paid]
+    PlatformPlanBillingPeriod:
+      type: string
+      enum: [month, year]
+    PlatformPlanCreate:
+      type: object
+      additionalProperties: false
+      required: [code, name, plan_kind]
+      properties:
+        code:
+          $ref: '#/components/schemas/PlatformPlanCode'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        plan_kind:
+          $ref: '#/components/schemas/PlatformPlanKind'
+    PlatformPlanFeatureLimit:
+      type: object
+      additionalProperties: false
+      required: [feature_code, enabled, limit_value]
+      description: >-
+        `enabled: false` leaves the function out of the plan and carries no limit. A
+        null limit on an enabled function means unlimited.
+      properties:
+        feature_code:
+          $ref: '#/components/schemas/PlatformFeatureCode'
+        enabled:
+          type: boolean
+        limit_value:
+          type: [integer, 'null']
+          minimum: 0
+          maximum: 2147483647
+    PlatformPlanVersionProposal:
+      type: object
+      additionalProperties: false
+      required: [amount_minor, currency_code, billing_period, features]
+      description: >-
+        The free plan sends `amount_minor: 0` with no currency and no period. A paid
+        plan sends a positive amount in minor units of an ISO 4217 currency and a
+        monthly or yearly period. `features` lists every function in the catalogue
+        exactly once.
+      properties:
+        amount_minor:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 100000000000
+        currency_code:
+          type: [string, 'null']
+          pattern: '^[A-Z]{3}$'
+        billing_period:
+          oneOf:
+            - $ref: '#/components/schemas/PlatformPlanBillingPeriod'
+            - type: 'null'
+        features:
+          type: array
+          maxItems: 200
+          items:
+            $ref: '#/components/schemas/PlatformPlanFeatureLimit'
+    PlatformPlanFeatureState:
+      type: object
+      additionalProperties: false
+      required: [enabled, limit_value]
+      properties:
+        enabled:
+          type: boolean
+        limit_value:
+          type: [integer, 'null']
+          minimum: 0
+    PlatformPlanVersionChange:
+      type: object
+      additionalProperties: false
+      required: [field, feature_code, before, after]
+      description: >-
+        One difference against the version this one would replace. `before` and
+        `after` are an amount, a currency, a period or a function's state, and are null
+        where the value was or becomes absent.
+      properties:
+        field:
+          type: string
+          enum: [amount_minor, currency_code, billing_period, feature]
+        feature_code:
+          oneOf:
+            - $ref: '#/components/schemas/PlatformFeatureCode'
+            - type: 'null'
+        before:
+          $ref: '#/components/schemas/PlatformPlanChangeValue'
+        after:
+          $ref: '#/components/schemas/PlatformPlanChangeValue'
+    PlatformPlanChangeValue:
+      oneOf:
+        - type: integer
+          format: int64
+        - type: string
+        - $ref: '#/components/schemas/PlatformPlanFeatureState'
+        - type: 'null'
+    PlatformPlanVersion:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - version_number
+        - status
+        - amount_minor
+        - currency_code
+        - billing_period
+        - features
+        - supersedes_version_id
+        - changes
+        - proposed_by_person_id
+        - proposed_by_self
+        - proposed_at
+        - published_by_person_id
+        - published_at
+        - deprecated_at
+        - withdrawn_by_person_id
+        - withdrawn_at
+      description: >-
+        A version never changes once published: `draft` is a proposal waiting for
+        review, `published` is in force, `deprecated` was replaced and still says what
+        its subscribers accepted, and `archived` is a proposal that was withdrawn.
+      properties:
+        id:
+          $ref: '#/components/schemas/UuidV7'
+        version_number:
+          type: integer
+          minimum: 1
+        status:
+          type: string
+          enum: [draft, published, deprecated, archived]
+        amount_minor:
+          type: integer
+          format: int64
+          minimum: 0
+        currency_code:
+          type: [string, 'null']
+          pattern: '^[A-Z]{3}$'
+        billing_period:
+          oneOf:
+            - $ref: '#/components/schemas/PlatformPlanBillingPeriod'
+            - type: 'null'
+        features:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlatformPlanFeatureLimit'
+        supersedes_version_id:
+          oneOf:
+            - $ref: '#/components/schemas/UuidV7'
+            - type: 'null'
+        changes:
+          type: [array, 'null']
+          description: >-
+            What this version changes against the one it would replace; null for the
+            first version of a plan, which replaces nothing.
+          items:
+            $ref: '#/components/schemas/PlatformPlanVersionChange'
+        proposed_by_person_id:
+          $ref: '#/components/schemas/Uuid'
+        proposed_by_self:
+          type: boolean
+          description: >-
+            Whether the operator reading proposed it. Whoever proposed a version cannot
+            publish it.
+        proposed_at:
+          type: string
+          format: date-time
+        published_by_person_id:
+          oneOf:
+            - $ref: '#/components/schemas/Uuid'
+            - type: 'null'
+        published_at:
+          type: [string, 'null']
+          format: date-time
+        deprecated_at:
+          type: [string, 'null']
+          format: date-time
+        withdrawn_by_person_id:
+          oneOf:
+            - $ref: '#/components/schemas/Uuid'
+            - type: 'null'
+        withdrawn_at:
+          type: [string, 'null']
+          format: date-time
+    PlatformPlan:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - code
+        - name
+        - plan_kind
+        - status
+        - created_by_person_id
+        - created_at
+        - current_version
+        - proposal
+        - history
+      properties:
+        id:
+          $ref: '#/components/schemas/UuidV7'
+        code:
+          $ref: '#/components/schemas/PlatformPlanCode'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        plan_kind:
+          $ref: '#/components/schemas/PlatformPlanKind'
+        status:
+          type: string
+          description: A plan is a draft until its first version is published.
+          enum: [draft, published]
+        created_by_person_id:
+          $ref: '#/components/schemas/Uuid'
+        created_at:
+          type: string
+          format: date-time
+        current_version:
+          oneOf:
+            - $ref: '#/components/schemas/PlatformPlanVersion'
+            - type: 'null'
+        proposal:
+          oneOf:
+            - $ref: '#/components/schemas/PlatformPlanVersion'
+            - type: 'null'
+        history:
+          type: array
+          description: Every version, newest first, withdrawn proposals included.
+          items:
+            $ref: '#/components/schemas/PlatformPlanVersion'
+    SupportBusinessPanel:
+      type: object
+      additionalProperties: false
+      description: >-
+        Counts only, each carrying the period it was measured over. No identifier,
+        name or contact travels here, so no figure can be used to reach a person.
+      required:
+        - generated_at
+        - minimum_aggregate
+        - metrics
+      properties:
+        generated_at:
+          type: string
+          format: date-time
+        minimum_aggregate:
+          type: integer
+          minimum: 1
+          description: >-
+            The smallest group of people the panel will report. A count of people
+            below it is withheld; a true zero is still published.
+        metrics:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/SupportBusinessMetric'
+    SupportBusinessMetric:
+      type: object
+      additionalProperties: false
+      description: >-
+        One figure. `value` is null unless `availability` is `available`, and the
+        period is never absent: a number without a period is not published.
+      required:
+        - key
+        - availability
+        - value
+        - reason
+        - period
+      properties:
+        key:
+          $ref: '#/components/schemas/SupportBusinessMetricKey'
+        availability:
+          $ref: '#/components/schemas/SupportBusinessMetricAvailability'
+        value:
+          type: [integer, 'null']
+          minimum: 0
+        reason:
+          type: [string, 'null']
+          maxLength: 64
+          description: Why the figure cannot be given, when it cannot.
+        period:
+          $ref: '#/components/schemas/SupportBusinessMetricPeriod'
+    SupportBusinessMetricKey:
+      type: string
+      description: >-
+        `active_people_this_week` counts people training in Space and has no signal
+        at all; `studio_active_professionals_this_week` counts professionals working
+        in Studio, which is the only activity the platform records. They are not
+        the same question and must not be read as one.
+      enum:
+        - registered_people
+        - new_people_this_week
+        - active_people_this_week
+        - studio_active_professionals_this_week
+        - organizations
+        - operating_organizations
+        - unclaimed_organizations
+        - active_subscriptions
+        - billed_this_month
+        - premium_people
+    SupportBusinessMetricAvailability:
+      type: string
+      description: >-
+        `below_threshold` is a statement about the group being too small to report;
+        `not_modelled` is a statement about the platform. Neither is zero.
+      enum: [available, below_threshold, not_modelled]
+    SupportBusinessMetricPeriod:
+      type: object
+      additionalProperties: false
+      description: >-
+        The window the figure was measured over. `from` is null for a running
+        total, which has no beginning other than the platform's own.
+      required:
+        - kind
+        - from
+        - to
+      properties:
+        kind:
+          type: string
+          enum: [total, week, month]
+        from:
+          type: [string, 'null']
+          format: date-time
+        to:
+          type: string
+          format: date-time
+    AccountRecoveryCommand:
+      type: object
+      additionalProperties: false
+      description: >-
+        Only the case the command answers. The destination, the person and the flow come
+        from the person's verified email and the recovery itself, so there is nothing a
+        client could send to redirect one.
+      required: [case_reference]
+      properties:
+        case_reference:
+          type: string
+          pattern: '^[A-Z][A-Z0-9_-]{2,63}$'
+    BackofficeAccountRecoveryRequest:
+      type: object
+      additionalProperties: false
+      description: >-
+        One recovery as support sees it: a hint of where it went and what happened, never
+        the address, a link or a code. `state` reads `expired` as soon as the link lapses.
+        `resendable` and `cancellable` are the database's answer.
+      required:
+        - request_id
+        - person_id
+        - state
+        - contact_hint
+        - case_reference
+        - created_at
+        - delivered_at
+        - expires_at
+        - confirmed_at
+        - cancelled_at
+        - failed_at
+        - failure_code
+        - send_count
+        - resendable
+        - cancellable
+      properties:
+        request_id:
+          $ref: '#/components/schemas/UuidV7'
+        person_id:
+          $ref: '#/components/schemas/Uuid'
+        state:
+          type: string
+          description: >-
+            `initiated` has not gone out yet; `awaiting_verification` went out and waits
+            for the person; `confirmed` means the person reset their password.
+          enum: [initiated, awaiting_verification, confirmed, expired, cancelled, failed]
+        contact_hint:
+          type: string
+          maxLength: 260
+        case_reference:
+          type: string
+          pattern: '^[A-Z][A-Z0-9_-]{2,63}$'
+        created_at:
+          type: string
+          format: date-time
+        delivered_at:
+          type: [string, 'null']
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        confirmed_at:
+          type: [string, 'null']
+          format: date-time
+        cancelled_at:
+          type: [string, 'null']
+          format: date-time
+        failed_at:
+          type: [string, 'null']
+          format: date-time
+        failure_code:
+          type: [string, 'null']
+          description: >-
+            `contact_changed` when the verified email changed before it went out;
+            `delivery_failed` when the identity provider never accepted it.
+          enum: [contact_changed, delivery_failed, null]
+        send_count:
+          type: integer
+          description: How many times support asked for this recovery to be sent.
+          minimum: 1
+        resendable:
+          type: boolean
+        cancellable:
+          type: boolean
+    BackofficeAccountRecovery:
+      type: object
+      additionalProperties: false
+      description: >-
+        Whether the official recovery flow can reach this person. `unavailable_reason`
+        says why it fails closed; no alternative is offered, because V1 has none.
+      required:
+        - person_id
+        - availability
+        - unavailable_reason
+        - contact_hint
+        - can_start
+        - requests
+      properties:
+        person_id:
+          $ref: '#/components/schemas/Uuid'
+        availability:
+          type: string
+          enum: [available, unavailable]
+        unavailable_reason:
+          type: [string, 'null']
+          enum: [person_not_active, no_access_account, no_verified_email, null]
+        contact_hint:
+          type: [string, 'null']
+          description: The verified email a recovery would go to, as a hint.
+          maxLength: 260
+        can_start:
+          type: boolean
+          description: >-
+            Recovery is available, nothing is under way, and the operator is not the
+            person.
+        requests:
+          type: array
+          maxItems: 10
+          items:
+            $ref: '#/components/schemas/BackofficeAccountRecoveryRequest'
+    GlobalCatalogueEntry:
+      type: object
+      additionalProperties: false
+      description: >-
+        One entry of the global catalogue as its curator sees it. `in_use_count` is what
+        already references it — templates, sessions and result contracts included — so
+        archiving is never a blind decision. A movement has no code: it is identified by
+        its normalised name.
+      required: [kind, id, code, discipline_code, name, status, created_at, in_use_count]
+      properties:
+        kind:
+          type: string
+          enum: [discipline, activity_type, movement]
+        id:
+          $ref: '#/components/schemas/Uuid'
+        code:
+          type: [string, 'null']
+          pattern: '^[a-z][a-z0-9_]{1,63}$'
+        discipline_code:
+          type: string
+          pattern: '^[a-z][a-z0-9_]{1,63}$'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        status:
+          type: string
+          enum: [draft, published, deprecated, archived]
+        created_at:
+          type: string
+          format: date-time
+        in_use_count:
+          type: integer
+          minimum: 0
+    BackofficeGlobalCatalogue:
+      type: object
+      additionalProperties: false
+      required: [disciplines, activity_types, movements, equipment_availability]
+      properties:
+        disciplines:
+          type: array
+          items:
+            $ref: '#/components/schemas/GlobalCatalogueEntry'
+        activity_types:
+          type: array
+          items:
+            $ref: '#/components/schemas/GlobalCatalogueEntry'
+        movements:
+          type: array
+          items:
+            $ref: '#/components/schemas/GlobalCatalogueEntry'
+        equipment_availability:
+          $ref: '#/components/schemas/SupportBlockAvailability'
+    CataloguePublication:
+      type: object
+      additionalProperties: false
+      description: A discipline. The code is chosen once and never means anything else.
+      required: [code, name]
+      properties:
+        code:
+          type: string
+          pattern: '^[a-z][a-z0-9_]{1,63}$'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+    CatalogueActivityTypePublication:
+      type: object
+      additionalProperties: false
+      description: >-
+        A global activity type under a published discipline. There is no owner field: what
+        Allfit publishes is global by construction.
+      required: [discipline_code, code, name]
+      properties:
+        discipline_code:
+          type: string
+          pattern: '^[a-z][a-z0-9_]{1,63}$'
+        code:
+          type: string
+          pattern: '^[a-z][a-z0-9_]{1,63}$'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+    CatalogueMovementPublication:
+      type: object
+      additionalProperties: false
+      description: A global movement, identified by its normalised name.
+      required: [discipline_code, name]
+      properties:
+        discipline_code:
+          type: string
+          pattern: '^[a-z][a-z0-9_]{1,63}$'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+    EnduranceLap:
+      type: object
+      additionalProperties: false
+      required: [segment_position, lap_number, distance, duration_seconds]
+      properties:
+        segment_position:
+          type: integer
+          minimum: 1
+          maximum: 100
+        lap_number:
+          type: integer
+          minimum: 1
+          maximum: 1000
+        distance:
+          $ref: '#/components/schemas/Distance'
+        duration_seconds:
+          type: number
+          exclusiveMinimum: 0
+          maximum: 604800
+    Distance:
+      type: object
+      additionalProperties: false
+      required: [value, unit]
+      properties:
+        value:
+          type: number
+          exclusiveMinimum: 0
+        unit:
+          type: string
+          enum: [m, km, mi]
+    ExecutionValidationStatus:
+      type: string
+      enum: [pending, valid, invalid, annulled]
+    ExecutionDetail:
+      type: object
+      additionalProperties: false
+      description: >-
+        A session with what was recorded in it. A load and a distance come back as
+        the person typed them.
+      required:
+        [id, activity_type_code, activity_type_name, discipline_code, started_at, ended_at,
+         timezone, status, validation_status, requested_level, achieved_level, revision_number,
+         capture_source, contract, segments, strength_sets, endurance_laps]
+      properties:
+        id:
+          $ref: '#/components/schemas/UuidV7'
+        activity_type_code:
+          type: string
+        activity_type_name:
+          type: string
+        discipline_code:
+          type: string
+        started_at:
+          type: string
+          format: date-time
+        ended_at:
+          type: [string, 'null']
+          format: date-time
+        timezone:
+          $ref: '#/components/schemas/IanaTimeZone'
+        status:
+          $ref: '#/components/schemas/ExecutionStatus'
+        validation_status:
+          $ref: '#/components/schemas/ExecutionValidationStatus'
+        requested_level:
+          $ref: '#/components/schemas/CompletenessLevel'
+        achieved_level:
+          oneOf:
+            - $ref: '#/components/schemas/CompletenessLevel'
+            - type: 'null'
+        revision_number:
+          type: integer
+          minimum: 0
+        capture_source:
+          type: string
+          enum: [manual, device]
+        contract:
+          type: object
+          additionalProperties: false
+          required: [id, version]
+          properties:
+            id:
+              $ref: '#/components/schemas/Uuid'
+            version:
+              type: integer
+              minimum: 1
+        segments:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [position, activity_type_code]
+            properties:
+              position:
+                type: integer
+                minimum: 1
+              activity_type_code:
+                type: [string, 'null']
+        strength_sets:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [segment_position, order, movement_id, movement_name, achieved_reps, load, rpe]
+            properties:
+              segment_position:
+                type: [integer, 'null']
+              order:
+                type: integer
+                minimum: 1
+              movement_id:
+                type: [string, 'null']
+                format: uuid
+              movement_name:
+                type: [string, 'null']
+              achieved_reps:
+                type: [integer, 'null']
+              load:
+                oneOf:
+                  - $ref: '#/components/schemas/Load'
+                  - type: 'null'
+              rpe:
+                type: [number, 'null']
+        endurance_laps:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [segment_position, lap_number, distance, duration_seconds]
+            properties:
+              segment_position:
+                type: [integer, 'null']
+              lap_number:
+                type: integer
+                minimum: 1
+              distance:
+                $ref: '#/components/schemas/Distance'
+              duration_seconds:
+                type: number

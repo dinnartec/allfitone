@@ -238,6 +238,19 @@ export interface SupportAttentionDatabase {
 }
 
 /**
+ * How the business is going: `HU-BO-004`.
+ *
+ * Counts with the period they were measured over. A figure the platform cannot
+ * compute is absent with a reason, and a count of people below the declared
+ * minimum is withheld — neither is zero. Which is which is decided in PostgreSQL.
+ */
+export type SupportBusinessPanel = AllfitV1Schemas['SupportBusinessPanel']
+
+export interface SupportBusinessDatabase {
+  read(input: SupportReader & { requestId: string }): Promise<SupportBusinessPanel>
+}
+
+/**
  * Break-glass windows: `OP-SUP-001` through `OP-SUP-004`.
  *
  * The vocabularies are repeated here only so a malformed request is answered 422

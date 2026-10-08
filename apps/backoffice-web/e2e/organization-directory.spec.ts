@@ -67,22 +67,32 @@ test('an unclaimed organization is told apart from one that operates', async ({
   await expect(page.getByText(/cuyo dueño todavía no aceptó: existe, pero no opera/)).toBeVisible()
 })
 
-test('an unknown number of people served is never shown as zero', async ({ context, page }) => {
+test('a row says how many people the gym serves, and one is not plural', async ({
+  context,
+  page,
+}) => {
   await mockBackofficeApi(
     context,
     createBackofficeFixture({
       session: activeSession(),
-      organizationDirectory: { organizations: [directoryOrganization({ people_served: null })] },
+      organizationDirectory: {
+        organizations: [
+          directoryOrganization({ people_served: 1 }),
+          directoryOrganization({
+            organization_id: '019a6000-0000-7000-8000-0000000003f2',
+            display_name: 'Gimnasio Vacío',
+            people_served: 0,
+          }),
+        ],
+      },
     }),
   )
 
   await page.goto(PATH)
 
-  await expect(page.getByRole('cell', { name: 'Sin dato aún' })).toBeVisible()
-  await expect(page.getByText(/0 personas/)).toHaveCount(0)
-  await expect(page.locator('[data-organization-people-served-note]')).toContainText(
-    'un cero diría que no atiende a nadie',
-  )
+  await expect(page.getByRole('cell', { name: '1 persona', exact: true })).toBeVisible()
+  await expect(page.getByRole('cell', { name: '0 personas', exact: true })).toBeVisible()
+  await expect(page.locator('[data-organization-people-served-note]')).toHaveCount(0)
 })
 
 test('searches by name and sends the trimmed search', async ({ context, page }) => {

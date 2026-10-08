@@ -39,6 +39,7 @@ import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
 
+import { AccountRecoveryPanel } from '@/components/account-recovery'
 import {
   BackofficeApiError,
   BackofficeNetworkError,
@@ -234,6 +235,8 @@ export function SupportPersonCard({ personId }: { personId: string }) {
           </FieldGroup>
         </CardContent>
       </Card>
+
+      <AccountRecoveryPanel personId={personId} caseReference={caseReference} />
 
       <Card>
         <CardHeader>

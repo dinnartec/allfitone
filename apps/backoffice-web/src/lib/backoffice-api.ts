@@ -12,15 +12,29 @@ export type PlatformDutyCode = AllfitV1Schemas['PlatformDutyCode']
 export type PlatformRoleAssignmentPage = AllfitV1Schemas['PlatformRoleAssignmentPage']
 export type PlatformDutyAssignmentPage = AllfitV1Schemas['PlatformDutyAssignmentPage']
 
+export type BackofficeGlobalCatalogue = AllfitV1Schemas['BackofficeGlobalCatalogue']
+export type GlobalCatalogueEntry = AllfitV1Schemas['GlobalCatalogueEntry']
+export type CataloguePublication = AllfitV1Schemas['CataloguePublication']
+export type CatalogueActivityTypePublication = AllfitV1Schemas['CatalogueActivityTypePublication']
+export type CatalogueMovementPublication = AllfitV1Schemas['CatalogueMovementPublication']
 export type CatalogDiscipline = AllfitV1Schemas['CatalogDiscipline']
 export type CatalogActivityType = AllfitV1Schemas['CatalogActivityType']
 export type ActivityTypeResultContract = AllfitV1Schemas['ActivityTypeResultContract']
 export type AccessEventPage = AllfitV1Schemas['AccessEventPage']
+export type ErasureRequestPage = AllfitV1Schemas['ErasureRequestPage']
+export type LegalHold = AllfitV1Schemas['LegalHold']
+export type LegalHoldApplication = AllfitV1Schemas['LegalHoldApplication']
 export type BackofficeOrganizationSummary = AllfitV1Schemas['BackofficeOrganizationSummary']
 export type BackofficeOrganizationPage = AllfitV1Schemas['BackofficeOrganizationPage']
 export type OrganizationHandover = AllfitV1Schemas['OrganizationHandover']
 export type BackofficeOrganizationFile = AllfitV1Schemas['BackofficeOrganizationFile']
 export type OrganizationHandoverCreate = AllfitV1Schemas['OrganizationHandoverCreate']
+export type BackofficeClientInvitation = AllfitV1Schemas['BackofficeClientInvitation']
+export type BackofficeClientInvitationList = AllfitV1Schemas['BackofficeClientInvitationList']
+export type BackofficeClientInvitationResend = AllfitV1Schemas['BackofficeClientInvitationResend']
+export type BackofficeTeamInvitation = AllfitV1Schemas['BackofficeTeamInvitation']
+export type BackofficeTeamInvitationList = AllfitV1Schemas['BackofficeTeamInvitationList']
+export type BackofficeTeamInvitationResend = AllfitV1Schemas['BackofficeTeamInvitationResend']
 export type CredentialVerificationRequest = AllfitV1Schemas['CredentialVerificationRequest']
 export type CredentialVerificationOutcome = AllfitV1Schemas['CredentialVerificationOutcome']
 export type CredentialVerificationDecisionCreate =
@@ -35,7 +49,15 @@ export type SupportOperation = AllfitV1Schemas['SupportOperation']
 export type SupportOperationPage = AllfitV1Schemas['SupportOperationPage']
 export type SupportDeliveryCircuit = AllfitV1Schemas['SupportDeliveryCircuit']
 export type SupportAttentionPanel = AllfitV1Schemas['SupportAttentionPanel']
+export type SupportBusinessPanel = AllfitV1Schemas['SupportBusinessPanel']
+export type SupportBusinessMetric = AllfitV1Schemas['SupportBusinessMetric']
+export type PlatformPlanCatalogue = AllfitV1Schemas['PlatformPlanCatalogue']
+export type PlatformPlan = AllfitV1Schemas['PlatformPlan']
+export type PlatformPlanCreate = AllfitV1Schemas['PlatformPlanCreate']
+export type PlatformPlanVersionProposal = AllfitV1Schemas['PlatformPlanVersionProposal']
 export type SupportPersonMetadata = AllfitV1Schemas['SupportPersonMetadata']
+export type BackofficeAccountRecovery = AllfitV1Schemas['BackofficeAccountRecovery']
+export type BackofficeAccountRecoveryRequest = AllfitV1Schemas['BackofficeAccountRecoveryRequest']
 export type SupportPeopleSearch = AllfitV1Schemas['SupportPeopleSearch']
 export type ResultContract = AllfitV1Schemas['ResultContract']
 export type ResultContractPublication = AllfitV1Schemas['ResultContractPublication']
@@ -168,6 +190,47 @@ export const backofficeApi = {
       { method: 'POST', headers: commandHeaders(command), body: '{}' },
     ),
 
+  // The curator's view: published and archived alike, unlike /catalog/v1.
+  globalCatalogue: (signal?: AbortSignal) =>
+    requestJson<BackofficeGlobalCatalogue>('/backoffice/v1/catalogue', signal ? { signal } : {}),
+
+  publishCatalogueDiscipline: (publication: CataloguePublication, command: BackofficeCommand) =>
+    requestJson<GlobalCatalogueEntry>('/backoffice/v1/catalogue/disciplines', {
+      method: 'POST',
+      headers: commandHeaders(command),
+      body: JSON.stringify(publication),
+    }),
+
+  publishCatalogueActivityType: (
+    publication: CatalogueActivityTypePublication,
+    command: BackofficeCommand,
+  ) =>
+    requestJson<GlobalCatalogueEntry>('/backoffice/v1/catalogue/activity-types', {
+      method: 'POST',
+      headers: commandHeaders(command),
+      body: JSON.stringify(publication),
+    }),
+
+  publishCatalogueMovement: (
+    publication: CatalogueMovementPublication,
+    command: BackofficeCommand,
+  ) =>
+    requestJson<GlobalCatalogueEntry>('/backoffice/v1/catalogue/movements', {
+      method: 'POST',
+      headers: commandHeaders(command),
+      body: JSON.stringify(publication),
+    }),
+
+  // No body: archiving takes only which entry, so nothing else can travel with it.
+  archiveCatalogueEntry: (
+    entry: { kind: 'discipline' | 'activity_type' | 'movement'; id: string; code: string | null },
+    command: BackofficeCommand,
+  ) =>
+    requestJson<GlobalCatalogueEntry>(
+      `/backoffice/v1/catalogue/${catalogueSegment(entry.kind)}/${entry.code ?? entry.id}/archival`,
+      { method: 'POST', headers: commandHeaders(command), body: '{}' },
+    ),
+
   publishResultContract: (publication: ResultContractPublication, command: BackofficeCommand) =>
     requestJson<ResultContract>('/backoffice/v1/result-contracts', {
       method: 'POST',
@@ -222,6 +285,53 @@ export const backofficeApi = {
       signal ? { signal } : {},
     ),
 
+  accountRecovery: (personId: string, caseReference: string, signal?: AbortSignal) =>
+    requestJson<BackofficeAccountRecovery>(
+      `/backoffice/v1/people/${personId}/account-recovery${query({ case_reference: caseReference })}`,
+      signal ? { signal } : {},
+    ),
+
+  // Only the case travels: the person, the address and the flow come from the server.
+  startAccountRecovery: (personId: string, caseReference: string, command: BackofficeCommand) =>
+    requestJson<BackofficeAccountRecoveryRequest>(
+      `/backoffice/v1/people/${personId}/account-recoveries`,
+      {
+        method: 'POST',
+        headers: commandHeaders(command),
+        body: JSON.stringify({ case_reference: caseReference }),
+      },
+    ),
+
+  resendAccountRecovery: (
+    personId: string,
+    recoveryId: string,
+    caseReference: string,
+    command: BackofficeCommand,
+  ) =>
+    requestJson<BackofficeAccountRecoveryRequest>(
+      `/backoffice/v1/people/${personId}/account-recoveries/${recoveryId}/resends`,
+      {
+        method: 'POST',
+        headers: commandHeaders(command),
+        body: JSON.stringify({ case_reference: caseReference }),
+      },
+    ),
+
+  cancelAccountRecovery: (
+    personId: string,
+    recoveryId: string,
+    caseReference: string,
+    command: BackofficeCommand,
+  ) =>
+    requestJson<BackofficeAccountRecoveryRequest>(
+      `/backoffice/v1/people/${personId}/account-recoveries/${recoveryId}/cancellation`,
+      {
+        method: 'POST',
+        headers: commandHeaders(command),
+        body: JSON.stringify({ case_reference: caseReference }),
+      },
+    ),
+
   // No case reference here, unlike the other support reads: this feed has no
   // subject, so there is nothing to trace back to a case.
   supportOperations: (
@@ -249,6 +359,42 @@ export const backofficeApi = {
       '/backoffice/v1/support/attention',
       signal ? { signal } : {},
     ),
+
+  platformPlans: (signal?: AbortSignal) =>
+    requestJson<PlatformPlanCatalogue>('/backoffice/v1/platform-plans', signal ? { signal } : {}),
+
+  createPlatformPlan: (plan: PlatformPlanCreate, command: BackofficeCommand) =>
+    requestJson<PlatformPlan>('/backoffice/v1/platform-plans', {
+      method: 'POST',
+      headers: commandHeaders(command),
+      body: JSON.stringify(plan),
+    }),
+
+  proposePlatformPlanVersion: (
+    planId: string,
+    proposal: PlatformPlanVersionProposal,
+    command: BackofficeCommand,
+  ) =>
+    requestJson<PlatformPlan>(`/backoffice/v1/platform-plans/${planId}/versions`, {
+      method: 'POST',
+      headers: commandHeaders(command),
+      body: JSON.stringify(proposal),
+    }),
+
+  publishPlatformPlanVersion: (planId: string, versionId: string, command: BackofficeCommand) =>
+    requestJson<PlatformPlan>(
+      `/backoffice/v1/platform-plans/${planId}/versions/${versionId}/publication`,
+      { method: 'POST', headers: commandHeaders(command), body: '{}' },
+    ),
+
+  withdrawPlatformPlanVersion: (planId: string, versionId: string, command: BackofficeCommand) =>
+    requestJson<PlatformPlan>(
+      `/backoffice/v1/platform-plans/${planId}/versions/${versionId}/withdrawal`,
+      { method: 'POST', headers: commandHeaders(command), body: '{}' },
+    ),
+
+  supportBusiness: (signal?: AbortSignal) =>
+    requestJson<SupportBusinessPanel>('/backoffice/v1/support/business', signal ? { signal } : {}),
 
   verificationRequests: (signal?: AbortSignal) =>
     requestJson<{ items: CredentialVerificationRequest[] }>(
@@ -278,6 +424,32 @@ export const backofficeApi = {
       headers: commandHeaders(command),
       body: JSON.stringify({ credential_id: credentialId }),
     }),
+
+  applyLegalHold: (application: LegalHoldApplication, command: BackofficeCommand) =>
+    requestJson<LegalHold>('/backoffice/v1/legal-holds', {
+      method: 'POST',
+      headers: commandHeaders(command),
+      body: JSON.stringify(application),
+    }),
+
+  releaseLegalHold: (holdId: string, command: BackofficeCommand) =>
+    requestJson<LegalHold>(`/backoffice/v1/legal-holds/${holdId}/release`, {
+      method: 'POST',
+      headers: commandHeaders(command),
+    }),
+
+  erasureRequests: (
+    filters: {
+      status?: string | undefined
+      cursor_at?: string | undefined
+      cursor_id?: string | undefined
+    } = {},
+    signal?: AbortSignal,
+  ) =>
+    requestJson<ErasureRequestPage>(
+      `/backoffice/v1/erasure-requests${query(filters)}`,
+      signal ? { signal } : {},
+    ),
 
   accessEvents: (
     filters: {
@@ -323,6 +495,40 @@ export const backofficeApi = {
     requestJson<OrganizationHandover>(
       `/backoffice/v1/organizations/${organizationId}/handover`,
       signal ? { signal } : {},
+    ),
+
+  organizationTeamInvitations: (organizationId: string, signal?: AbortSignal) =>
+    requestJson<BackofficeTeamInvitationList>(
+      `/backoffice/v1/organizations/${organizationId}/team-invitations`,
+      signal ? { signal } : {},
+    ),
+
+  organizationClientInvitations: (organizationId: string, signal?: AbortSignal) =>
+    requestJson<BackofficeClientInvitationList>(
+      `/backoffice/v1/organizations/${organizationId}/client-invitations`,
+      signal ? { signal } : {},
+    ),
+
+  // No body: the contact, the gym and the scopes asked for come from the invitation.
+  resendClientInvitation: (
+    organizationId: string,
+    invitationId: string,
+    command: BackofficeCommand,
+  ) =>
+    requestJson<BackofficeClientInvitationResend>(
+      `/backoffice/v1/organizations/${organizationId}/client-invitations/${invitationId}/resends`,
+      { method: 'POST', headers: commandHeaders(command), body: '{}' },
+    ),
+
+  // No body: the contact, the role and the gym all come from the invitation itself.
+  resendTeamInvitation: (
+    organizationId: string,
+    invitationId: string,
+    command: BackofficeCommand,
+  ) =>
+    requestJson<BackofficeTeamInvitationResend>(
+      `/backoffice/v1/organizations/${organizationId}/team-invitations/${invitationId}/resends`,
+      { method: 'POST', headers: commandHeaders(command), body: '{}' },
     ),
 
   // No body: the resend always goes to the address the handover was created with.
@@ -514,6 +720,9 @@ function backofficeOperation(path: string, method: string): ClientOperation {
       : 'backoffice.privacy.scope_definition_list'
   }
   return (
+    catalogueOperation(resolved) ??
+    platformPlanOperation(resolved, method) ??
+    peopleOperation(resolved) ??
     supportOperation(resolved) ??
     catalogOperation(resolved) ??
     platformOperation(resolved) ??
@@ -534,6 +743,16 @@ function organizationOperation(route: string, method: string): ClientOperation |
       : 'backoffice.organization.directory'
   }
   if (segments.length === 4) return 'backoffice.organization.file'
+  if (segments[4] === 'client-invitations') {
+    return segments[6] === 'resends'
+      ? 'backoffice.organization.client_invitation_resend'
+      : 'backoffice.organization.client_invitations'
+  }
+  if (segments[4] === 'team-invitations') {
+    return segments[6] === 'resends'
+      ? 'backoffice.organization.team_invitation_resend'
+      : 'backoffice.organization.team_invitations'
+  }
   if (segments[4] === 'cancellation') return 'backoffice.organization.handover_cancel'
   if (segments[4] !== 'handover') return undefined
   return segments[5] === 'resends'
@@ -561,12 +780,59 @@ function supportOperation(route: string): ClientOperation | undefined {
     return undefined
   }
   if (segments[3] === 'attention') return 'backoffice.support.attention'
+  if (segments[3] === 'business') return 'backoffice.support.business'
   if (segments[3] === 'operations') return 'backoffice.support.operations'
   if (segments[3] === 'delivery-circuits') return 'backoffice.support.delivery_circuits'
   if (segments[3] !== 'people') return undefined
   return segments.length === 4
     ? 'backoffice.support.people_search'
     : 'backoffice.support.person_metadata'
+}
+
+function catalogueSegment(kind: 'discipline' | 'activity_type' | 'movement'): string {
+  if (kind === 'discipline') return 'disciplines'
+  return kind === 'activity_type' ? 'activity-types' : 'movements'
+}
+
+/** The entry identifier varies per row, so the curation routes are matched by shape. */
+function catalogueOperation(route: string): ClientOperation | undefined {
+  const segments = route.split('/').filter(Boolean)
+  if (segments[0] !== 'backoffice' || segments[1] !== 'v1' || segments[2] !== 'catalogue') {
+    return undefined
+  }
+  if (segments.length === 3) return 'backoffice.catalog.global_read'
+  return segments[5] === 'archival'
+    ? 'backoffice.catalog.global_archive'
+    : 'backoffice.catalog.global_publish'
+}
+
+/** The plan and the version vary per row, so these routes are matched by shape. */
+function platformPlanOperation(route: string, method: string): ClientOperation | undefined {
+  const segments = route.split('/').filter(Boolean)
+  if (segments[0] !== 'backoffice' || segments[1] !== 'v1' || segments[2] !== 'platform-plans') {
+    return undefined
+  }
+  if (segments.length === 3) {
+    return method === 'POST'
+      ? 'backoffice.commercial.plan_create'
+      : 'backoffice.commercial.plans_read'
+  }
+  if (segments[6] === 'publication') return 'backoffice.commercial.plan_version_publish'
+  if (segments[6] === 'withdrawal') return 'backoffice.commercial.plan_version_withdraw'
+  return segments.length === 5 ? 'backoffice.commercial.plan_version_propose' : undefined
+}
+
+/** The person and the recovery vary per row, so these routes are matched by shape. */
+function peopleOperation(route: string): ClientOperation | undefined {
+  const segments = route.split('/').filter(Boolean)
+  if (segments[0] !== 'backoffice' || segments[1] !== 'v1' || segments[2] !== 'people') {
+    return undefined
+  }
+  if (segments[4] === 'account-recovery') return 'backoffice.support.account_recovery'
+  if (segments[4] !== 'account-recoveries') return undefined
+  if (segments[6] === 'resends') return 'backoffice.support.account_recovery_resend'
+  if (segments[6] === 'cancellation') return 'backoffice.support.account_recovery_cancel'
+  return 'backoffice.support.account_recovery_start'
 }
 
 /** The catalogue surface is shared, so its operations carry no product prefix. */

@@ -163,6 +163,19 @@ describe('meals', () => {
     expect((await send(refused, 'POST', '/meals', commanded, create)).status).toBe(422)
   })
 
+  test('T-NUT-API-22 replaying the recording of a meal deleted since is gone, not recreated', async () => {
+    const disposed = harness({
+      recordMeal: async () => {
+        throw Object.assign(new Error('the meal this command recorded was deleted'), {
+          code: 'AF410',
+        })
+      },
+    })
+    const response = await send(disposed, 'POST', '/meals', commanded, create)
+    expect(response.status).toBe(410)
+    expect(await response.json()).toEqual({ error: { code: 'command-effect-disposed' } })
+  })
+
   test("T-NUT-API-05 reads one meal with its validator, and another person's is not found", async () => {
     const response = await send(harness(), 'GET', `/meals/${MEAL}`, authorized)
     expect(response.status).toBe(200)

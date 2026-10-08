@@ -50,6 +50,28 @@ jobs:
       - name: Test local database concurrency
         run: bun run db:test:concurrency
 
+      # Same preload as the Database job in ci.yml, and here it matters more:
+      # this step is the last local gate before production credentials are used,
+      # so an image pull that fails stops the whole deploy. That is what happened
+      # on 2026-10-05 (run 37266771279) — the database stayed 19 migrations
+      # behind for a day over a registry limit, not a defect.
+      #
+      # postgres-meta is pulled from public.ecr.aws, which limits anonymous
+      # pulls. The same image — identical layer digests — is on Docker Hub, so
+      # take it there and tag it with the name the Supabase CLI looks for; the
+      # CLI then finds it already on the machine and never calls ECR.
+      #
+      # The tag belongs to the CLI pinned in package.json ("supabase":
+      # "2.110.0"). If a CLI bump asks for a different one, this turns into a
+      # no-op and the CLI pulls from ECR as before, which is what
+      # continue-on-error protects: this step must never be what fails a deploy.
+      - name: Preload the type generator image
+        continue-on-error: true
+        run: |
+          image=supabase/postgres-meta:v0.96.6
+          docker pull "$image"
+          docker tag "$image" "public.ecr.aws/$image"
+
       - name: Validate generated database types
         run: bun run check:db-types
 

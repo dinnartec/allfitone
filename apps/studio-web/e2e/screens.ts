@@ -14,14 +14,19 @@ import { expect, type Page } from '@playwright/test'
 
 import {
   TEST_ANALYTICS_ID,
+  activeCoach,
   activeMembership,
+  activeTeamMember,
+  coachedTeam,
   createStudioApiFixture,
   organizationWithLongSite,
   organizationWithoutSites,
   error,
   installStudioApiMock,
   professionalCredential,
+  endedRelationshipState,
   professionalProfile,
+  relationshipState,
   secondActiveMembership,
   terminatedMembership,
   type StudioApiFixture,
@@ -114,6 +119,7 @@ async function settleAnimations(page: Page): Promise<void> {
 }
 
 const workspace = `/organizations/${activeMembership.organization_id}`
+const relationshipId = relationshipState.relationship_id
 
 const memberOfTwo = () =>
   createStudioApiFixture({
@@ -844,6 +850,176 @@ export const SCREENS: Screen[] = [
       await expect(page.getByText('No pudimos cargar los clientes')).toBeVisible()
     },
   },
+  // --- `/organizations/[id]/clients/[relationshipId]` · HU-025 ---
+  {
+    // The fullest the screen gets: a holder, a substitution nobody has answered
+    // yet, and three permissions in three different states. If any of these
+    // crowd each other, this is where it shows.
+    stories: 'HU-025 · how a relationship stands, with permissions in three states',
+    path: `${workspace}/clients/${relationshipId}`,
+    fixture: () => createStudioApiFixture({ memberships: [activeMembership] }),
+    settled: async (page) => {
+      await settledByHeading(page)
+      await expect(page.getByText('Camilo Restrepo')).toBeVisible()
+      await expect(page.getByText('Retirado')).toBeVisible()
+    },
+  },
+  {
+    // The relationship after it ended: that is the only state where a permission
+    // is frozen, which is what "Sin nuevos datos" names. It is also the only
+    // place the end date appears.
+    stories: 'HU-025 · a relationship that ended, and the permissions it froze',
+    path: `${workspace}/clients/${relationshipId}`,
+    fixture: () =>
+      createStudioApiFixture({
+        memberships: [activeMembership],
+        relationshipState: endedRelationshipState,
+      }),
+    settled: async (page) => {
+      await settledByHeading(page)
+      await expect(page.getByText('Sin nuevos datos').first()).toBeVisible()
+      await expect(page.getByText('Finalización')).toBeVisible()
+    },
+  },
+  {
+    // Nobody in charge and nothing granted. Both are legitimate states, and the
+    // screen has to read as a state rather than as a failure.
+    stories: 'HU-025 · a relationship with no professional and no permissions',
+    path: `${workspace}/clients/${relationshipId}`,
+    fixture: () =>
+      createStudioApiFixture({
+        memberships: [activeMembership],
+        relationshipState: {
+          ...relationshipState,
+          holder: null,
+          substitutions: [],
+          grants: [],
+        },
+      }),
+    settled: async (page) => {
+      await settledByHeading(page)
+      await expect(page.getByText('Nadie la atiende todavía')).toBeVisible()
+      await expect(page.getByText('No concedió ningún permiso')).toBeVisible()
+    },
+  },
+  {
+    // HU-027. The form only exists where the command would succeed: a live
+    // relationship with nobody in charge, read by somebody who may assign.
+    stories: 'HU-027 · choosing the professional for a client nobody attends',
+    path: `${workspace}/clients/${relationshipId}`,
+    fixture: () =>
+      createStudioApiFixture({
+        memberships: [activeMembership],
+        organizationMemberships: coachedTeam(),
+        relationshipState: { ...relationshipState, holder: null, substitutions: [] },
+      }),
+    settled: async (page) => {
+      await settledByHeading(page)
+      await expect(page.getByText('Asignar no concede datos')).toBeVisible()
+    },
+  },
+  {
+    // The list open, which is the widest the panel ever gets and the state that
+    // paints over whatever sits under it when it does not fit.
+    stories: 'HU-027 · the coaches a client can be assigned to',
+    path: `${workspace}/clients/${relationshipId}`,
+    fixture: () =>
+      createStudioApiFixture({
+        memberships: [activeMembership],
+        organizationMemberships: coachedTeam(),
+        relationshipState: { ...relationshipState, holder: null, substitutions: [] },
+      }),
+    reveal: async (page) => {
+      await page.getByRole('combobox', { name: 'Profesional responsable' }).click()
+      await expect(page.getByRole('option', { name: 'Camilo Restrepo' })).toBeVisible()
+    },
+  },
+  {
+    // Somebody else got there first. A conflict, not an outage: the reader can
+    // see what happened and what to do, so it is said in the field.
+    stories: 'HU-027 · somebody else was assigned while the page was open',
+    path: `${workspace}/clients/${relationshipId}`,
+    fixture: () =>
+      createStudioApiFixture({
+        memberships: [activeMembership],
+        organizationMemberships: coachedTeam(),
+        relationshipState: { ...relationshipState, holder: null, substitutions: [] },
+        assignmentOutcome: 'taken',
+      }),
+    reveal: async (page) => {
+      await page.getByRole('combobox', { name: 'Profesional responsable' }).click()
+      await page.getByRole('option', { name: 'Camilo Restrepo' }).click()
+      await page.getByRole('button', { name: 'Asignar' }).click()
+      await expect(page.getByText(/Alguien lo asignó mientras tenías/)).toBeVisible()
+    },
+  },
+  {
+    // HU-028. The dialog open, which is the state worth looking at: its three
+    // sentences are the only warning an administrator gets that the client is
+    // about to be emailed.
+    stories: 'HU-028 · the warning before a client changes professional',
+    path: `${workspace}/clients/${relationshipId}`,
+    fixture: () =>
+      createStudioApiFixture({
+        memberships: [activeMembership],
+        organizationMemberships: coachedTeam(),
+        relationshipState: { ...relationshipState, substitutions: [] },
+      }),
+    reveal: async (page) => {
+      await page.getByRole('button', { name: 'Cambiar' }).click()
+      await expect(page.getByText(/A la persona le llegará un correo/)).toBeVisible()
+    },
+  },
+  {
+    // Nobody to move the client to. The gym has one coach, who already has
+    // them, so the dialog says that instead of offering an empty list.
+    stories: 'HU-028 · there is no other coach to move the client to',
+    path: `${workspace}/clients/${relationshipId}`,
+    fixture: () =>
+      createStudioApiFixture({
+        memberships: [activeMembership],
+        organizationMemberships: [activeTeamMember, activeCoach],
+        relationshipState: { ...relationshipState, substitutions: [] },
+      }),
+    reveal: async (page) => {
+      await page.getByRole('button', { name: 'Cambiar' }).click()
+      await expect(page.getByText(/No hay otro entrenador activo/)).toBeVisible()
+    },
+  },
+  {
+    // A coach reads a narrower answer: the policy shows them their own
+    // assignment and not the others, so the panel must not claim there are none.
+    stories: 'HU-025 · the relationship a coach reads',
+    path: `/organizations/${secondActiveMembership.organization_id}/clients/${relationshipId}`,
+    fixture: () =>
+      createStudioApiFixture({
+        memberships: [secondActiveMembership],
+        relationshipState: { ...relationshipState, substitutions: [] },
+      }),
+    settled: async (page) => {
+      await settledByHeading(page)
+      await expect(page.getByText(/muestra solo tu propia asignación/)).toBeVisible()
+    },
+  },
+  {
+    stories: 'HU-025 · a relationship that is not there, or not ours to read',
+    path: `${workspace}/clients/${relationshipId}`,
+    fixture: () =>
+      createStudioApiFixture({ memberships: [activeMembership], relationshipState: null }),
+    settled: async (page) => {
+      await settledByHeading(page)
+      await expect(page.getByText('No encontramos este vínculo')).toBeVisible()
+    },
+  },
+  {
+    stories: 'HU-025 · the relationship could not be read',
+    path: `${workspace}/clients/${relationshipId}`,
+    fixture: failingFor([activeMembership], /\/organizations\/[^/]+\/relationships\/[^/]+$/),
+    settled: async (page) => {
+      await settledByHeading(page)
+      await expect(page.getByText('No pudimos cargar el estado del vínculo')).toBeVisible()
+    },
+  },
   // --- `/organizations/[id]/clients/invitations/new` · HU-023 ---
   {
     stories: 'HU-023 · inviting somebody, with the permissions to choose from',
@@ -1265,6 +1441,21 @@ export const SCREENS: Screen[] = [
 
   // --- the team section -------------------------------------------------------
   { stories: 'HU-017 · team directory', path: `${workspace}/team`, fixture: memberOfTwo },
+  {
+    // HU-019. The dialog open, which is the state worth looking at: the
+    // sentence under the picker is the only place that says a role gives
+    // access to nobody's data.
+    stories: 'HU-019 · the warning before giving somebody a role',
+    path: `${workspace}/team`,
+    fixture: memberOfTwo,
+    reveal: async (page) => {
+      await page
+        .getByRole('button', { name: /Añadir un rol/ })
+        .first()
+        .click()
+      await expect(page.getByText(/Un rol no da acceso a los datos de nadie/)).toBeVisible()
+    },
+  },
   {
     // Below 720px the directory renders a card list instead of the table, and
     // the two are separate markup rather than one behind a CSS toggle.

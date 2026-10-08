@@ -388,6 +388,7 @@ function failure(c: Context, cause: unknown): Response {
     console.warn('[nutrition] space command refused', { code, detail: String(cause).slice(0, 160) })
     if (code === '42501') return fail(c, 'not-found')
     if (code === '40001') return fail(c, 'stale-draft')
+    if (code === 'AF410') return fail(c, 'command-effect-disposed')
     if (code === '23505') return fail(c, 'conflict')
     if (
       code === '23514' ||

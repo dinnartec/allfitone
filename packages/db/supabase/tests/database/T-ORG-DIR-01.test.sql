@@ -21,7 +21,7 @@
 
 begin;
 
-select plan(21);
+select plan(22);
 
 insert into identity.people (id, given_name, family_name, status)
 values
@@ -219,6 +219,24 @@ select throws_ok(
   'an unrelated duty does not stand in for reading organizations'
 );
 
+insert into relationships.service_relationships (
+  id, person_id, organization_id, status, started_at, ended_at, ended_reason, ended_by_kind
+) values
+  ('019ab000-0000-7000-8000-000000000901', '019ab000-0000-7000-8000-000000000001',
+    '019ab000-0000-7000-8000-000000000301', 'active', clock_timestamp() - interval '40 days',
+    null, null, null),
+  ('019ab000-0000-7000-8000-000000000902', '019ab000-0000-7000-8000-000000000002',
+    '019ab000-0000-7000-8000-000000000301', 'active', clock_timestamp() - interval '20 days',
+    null, null, null),
+  ('019ab000-0000-7000-8000-000000000903', '019ab000-0000-7000-8000-000000000004',
+    '019ab000-0000-7000-8000-000000000301', 'terminated', clock_timestamp() - interval '80 days',
+    clock_timestamp() - interval '5 days', 'moved_away', 'person');
+
+-- The actor context the API sets on every Backoffice request; the relationship count
+-- is behind a policy that asks who is reading.
+select set_config('app.actor_kind', 'support', true),
+       set_config('app.actor_person_id', '019ab000-0000-7000-8000-000000000003', true);
+
 create temporary table directory on commit drop as
 select * from organizations.list_backoffice_organizations(
   '019ab000-0000-7000-8000-000000000003', '019ab000-0000-7000-8000-000000000023',
@@ -259,9 +277,18 @@ select ok(
   'each row says its type, its members, its sites and whether it was claimed'
 );
 
+select results_eq(
+  $$ select row.people_served
+     from directory as row
+     where row.organization_id = '019ab000-0000-7000-8000-000000000301' $$,
+  $$ values (2) $$,
+  'and how many people it serves, counting neither the one it stopped serving nor another gym''s'
+);
+
 select ok(
-  (select bool_and(row.people_served is null) from directory as row),
-  'how many people it serves is empty rather than guessed, because relationships do not exist'
+  (select bool_and(row.people_served = 0) from directory as row
+   where row.organization_id <> '019ab000-0000-7000-8000-000000000301'),
+  'a gym with no relationship serves nobody, and here that zero is a fact about it'
 );
 
 -- ---------------------------------------------------------------------------

@@ -58,14 +58,13 @@ import {
 } from '@/lib/backoffice-api'
 import {
   ORGANIZATION_STATUSES,
-  PEOPLE_SERVED_NOTE,
   directoryAnswer,
   directoryFilterIssue,
   directoryFilterIssueMessage,
   directoryFiltersFromStatus,
   directoryMessage,
-  hasUnknownPeopleServed,
   peopleServedLabel,
+  statusFilterLabel,
   statusLabel,
   statusMeaning,
   statusTone,
@@ -195,7 +194,7 @@ export function OrganizationDirectory() {
                   }
                 >
                   <SelectTrigger id="org-status">
-                    <SelectValue />
+                    <SelectValue>{statusFilterLabel(draft.status)}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value={ANY}>Todos</SelectItem>
@@ -299,13 +298,6 @@ export function OrganizationDirectory() {
                   ))}
                 </TableBody>
               </Table>
-            ) : null}
-
-            {hasUnknownPeopleServed(organizations) ? (
-              <Alert live="off" variant="info" data-organization-people-served-note>
-                <AlertTitle>Por qué no hay cifra de personas atendidas</AlertTitle>
-                <AlertDescription>{PEOPLE_SERVED_NOTE}</AlertDescription>
-              </Alert>
             ) : null}
 
             {appendFailure ? (

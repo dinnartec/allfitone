@@ -44,6 +44,11 @@ export function statusLabel(status: OrganizationStatus): string {
   return STATUS_LABELS[status]
 }
 
+/** What the closed filter says, including when it filters nothing. */
+export function statusFilterLabel(status: OrganizationStatus | 'any'): string {
+  return status === 'any' ? 'Todos' : STATUS_LABELS[status]
+}
+
 const STATUS_MEANINGS: Record<OrganizationStatus, string> = {
   active: 'Su dueño lo reclamó y está operando.',
   unclaimed: 'Allfit lo creó y su dueño todavía no aceptó. Existe, pero no opera.',
@@ -64,17 +69,9 @@ export function statusTone(status: OrganizationStatus): StatusTone {
   return 'secondary'
 }
 
-export function peopleServedLabel(value: number | null): string {
-  if (value === null) return 'Sin dato aún'
+export function peopleServedLabel(value: number): string {
   return value === 1 ? '1 persona' : `${value} personas`
 }
-
-export function hasUnknownPeopleServed(organizations: readonly OrganizationSummary[]): boolean {
-  return organizations.some((organization) => organization.people_served === null)
-}
-
-export const PEOPLE_SERVED_NOTE =
-  'Cuántas personas atiende cada gimnasio se cuenta desde sus relaciones de servicio, que todavía no existen. Mientras tanto se muestra «Sin dato aún» y nunca un cero, porque un cero diría que no atiende a nadie.'
 
 export interface DirectoryFilters {
   query: string

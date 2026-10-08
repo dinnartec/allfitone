@@ -106,6 +106,147 @@ export interface HolderAssignmentResult extends CommandResult<RelationshipHolder
   readonly created: boolean
 }
 
+/**
+ * How one relationship stands. Three things a member of the organization needs
+ * before deciding anything: where the link is, who attends the person, and what
+ * the person agreed to share. Never what they shared.
+ */
+export interface RelationshipState {
+  readonly relationshipId: string
+  readonly personId: string
+  readonly displayName: string
+  readonly status: 'active' | 'terminated'
+  readonly startedAt: Date
+  readonly endedAt: Date | null
+  /** Null when nobody attends this person yet. */
+  readonly holder: RelationshipProfessional | null
+  readonly substitutions: readonly RelationshipSubstitution[]
+  readonly grants: readonly RelationshipGrant[]
+}
+
+export interface RelationshipProfessional {
+  readonly assignmentId: string
+  readonly membershipId: string
+  /**
+   * The professional, never the client. On the assignment row in PostgreSQL
+   * `person_id` is the client being attended, so the two names have to differ
+   * here or one reads as the other.
+   */
+  readonly professionalPersonId: string
+  readonly displayName: string
+  readonly validFrom: Date
+}
+
+export interface RelationshipSubstitution extends RelationshipProfessional {
+  readonly status: 'proposed' | 'active' | 'ended'
+  readonly endsOn: string | null
+  readonly acceptedByPersonAt: Date | null
+}
+
+/**
+ * Metadata about a permission, and nothing the permission covers. `version` is
+ * the scope version that was agreed, not the latest published: a grant never
+ * drifts onto a later one.
+ */
+export interface RelationshipGrant {
+  readonly grantId: string
+  readonly scopeCode: string
+  readonly displayName: string | null
+  readonly versionNumber: number
+  readonly accessLevel: 'read' | 'contribute'
+  readonly status: 'active' | 'frozen' | 'revoked'
+  readonly purpose: string
+  readonly grantedAt: Date
+  readonly revokedAt: Date | null
+}
+
+export interface RelationshipStateDatabase {
+  readState(
+    actorPersonId: string,
+    query: { organizationId: string; relationshipId: string },
+  ): Promise<RelationshipState>
+}
+
+/**
+ * One moment in a relationship's past. `detail` stays loose on purpose: each
+ * kind carries different fields, and narrowing them here would mean a union the
+ * screen has to re-narrow anyway. What is fixed is that `type` names the kind
+ * and `occurredAt` places it.
+ */
+export interface RelationshipHistoryEvent {
+  readonly type:
+    | 'relationship_started'
+    | 'holder_assigned'
+    | 'holder_ended'
+    | 'substitution_proposed'
+    | 'substitution_accepted'
+    | 'substitution_ended'
+    | 'consent_decided'
+    | 'relationship_ended'
+  readonly occurredAt: Date
+  /** The row the moment was read from — not an id of the moment itself. */
+  readonly sourceId: string
+  readonly detail: Readonly<Record<string, unknown>>
+}
+
+/**
+ * A page of a relationship's history, newest first.
+ *
+ * **Shorter for a coach than for an owner, by design.** The row policy shows a
+ * coach only their own assignment, so a coach never learns who attended this
+ * person before them. A short list is not a failed read.
+ */
+export interface RelationshipHistory {
+  readonly relationshipId: string
+  readonly personId: string
+  readonly events: readonly RelationshipHistoryEvent[]
+  readonly nextCursor: string | null
+  readonly hasMore: boolean
+}
+
+export interface RelationshipHistoryDatabase {
+  readHistory(
+    actorPersonId: string,
+    query: {
+      organizationId: string
+      relationshipId: string
+      limit: number | null
+      cursor: string | null
+    },
+  ): Promise<RelationshipHistory>
+}
+
+/**
+ * The outcome of changing who attends a client. `reassigned` is false when the
+ * named coach was already in charge: nothing was written and, more to the
+ * point, **nobody was notified** — a notice saying somebody's coach changed to
+ * the same coach teaches people to ignore the real one.
+ */
+export interface RelationshipReassignment {
+  readonly assignmentId: string
+  readonly relationshipId: string
+  readonly membershipId: string
+  readonly professionalPersonId: string
+  readonly validFrom: Date
+  /** The assignment this one ended, or null when nothing changed. */
+  readonly replacedAssignmentId: string | null
+}
+
+export interface HolderReassignmentResult extends CommandResult<RelationshipReassignment> {
+  readonly reassigned: boolean
+}
+
+export interface HolderReassignmentDatabase {
+  reassignHolder(
+    input: CommandContext & {
+      actorPersonId: string
+      organizationId: string
+      relationshipId: string
+      membershipId: string
+    },
+  ): Promise<HolderReassignmentResult>
+}
+
 export interface HolderAssignmentDatabase {
   assignHolder(
     input: CommandContext & {

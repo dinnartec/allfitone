@@ -84,9 +84,9 @@ export function createResultContractDatabase(): ResultContractDatabase {
           select * from catalog.publish_result_contract(
             ${input.actorPersonId}::uuid, ${input.actorSessionId}::uuid,
             ${publication.contract_code}, ${publication.activity_family}::catalog.activity_family,
-            ${jsonDocument(publication.envelope)}::jsonb,
-            ${jsonDocument(publication.minimums)}::jsonb,
-            ${jsonDocument(publication.fixtures)}::jsonb,
+            ${jsonDocument(publication.envelope)}::text::jsonb,
+            ${jsonDocument(publication.minimums)}::text::jsonb,
+            ${jsonDocument(publication.fixtures)}::text::jsonb,
             ${publication.activity_type_id}::uuid, ${publication.is_default ?? true},
             ${input.idempotencyKey}::uuid, ${input.commandId}::uuid, ${input.requestHash}
           )
@@ -130,8 +130,9 @@ function command<T>(
 /**
  * A contract's envelope, minimums and fixtures are arbitrary JSON documents, so
  * they have no shape `postgres` can type. Binding the serialized text and
- * casting it in SQL preserves the object; `transaction.json` would need the DTO
- * widened to satisfy its own type.
+ * casting it through `text` preserves the object: cast straight to `jsonb`, the
+ * driver serializes it again and PostgreSQL receives a JSON string.
+ * `transaction.json` would need the DTO widened to satisfy its own type.
  */
 function jsonDocument(value: unknown): string {
   return JSON.stringify(value)

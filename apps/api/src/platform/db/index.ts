@@ -30,3 +30,27 @@ export async function setDatabase(client: ReturnType<typeof postgres> | undefine
   if (cached && cached !== client) await cached.end({ timeout: 1 })
   cached = client
 }
+
+/**
+ * Whether PostgreSQL answers right now.
+ *
+ * The API cannot serve a single route without it, so a health endpoint that skips this
+ * reports the process, not the service. The timeout is the point: a database that hangs
+ * is unreachable for the caller deciding whether to send traffic here, and waiting on the
+ * connection timeout would turn the probe itself into the outage.
+ */
+export async function databaseReachable(timeoutMs = 2000): Promise<boolean> {
+  let expire: ReturnType<typeof setTimeout> | undefined
+  try {
+    const answered = database()`select 1 as reachable`
+    const expired = new Promise<'expired'>((resolve) => {
+      expire = setTimeout(() => resolve('expired'), timeoutMs)
+    })
+    return (await Promise.race([answered.then(() => 'answered' as const), expired])) === 'answered'
+  } catch {
+    // Unreachable covers every reason equally: no URL configured, refused, or broken.
+    return false
+  } finally {
+    if (expire) clearTimeout(expire)
+  }
+}

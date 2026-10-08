@@ -14,9 +14,10 @@
 
 import { WorkOS } from '@workos-inc/node'
 
+import { AuthError } from './errors.js'
 import type { AuthProvider, Surface } from './port.js'
 import { createWorkOSAuthProvider, type SurfaceCredentials } from './adapters/workos.js'
-import type { WorkOSClient } from './adapters/workos-client.js'
+import type { WorkOSClient, WorkOSUserManagement } from './adapters/workos-client.js'
 
 /** Only what this package reads. Passing `process.env` satisfies it. */
 export type ProviderEnv = Record<string, string | undefined>
@@ -24,6 +25,16 @@ export type ProviderEnv = Record<string, string | undefined>
 export interface BackofficeAuthMaintenance {
   deleteAuthenticationFactor(factorId: string): Promise<void>
   revokeSession(sessionId: string): Promise<void>
+}
+
+/**
+ * Worker-only delivery of the recovery support starts (`HU-BO-010`).
+ *
+ * The provider emails its single-use link itself. Only the link's expiry comes back: the
+ * token and the URL the provider also returns never leave this package.
+ */
+export interface AccountRecoveryDelivery {
+  sendRecovery(email: string): Promise<{ expiresAt: string }>
 }
 
 const SURFACES = ['space', 'studio', 'backoffice'] as const
@@ -69,23 +80,71 @@ export function createBackofficeAuthMaintenanceFromEnv(
       try {
         await client.multiFactorAuth.deleteFactor(factorId)
       } catch (error) {
-        if (!isNotFound(error)) throw error
+        if (statusOf(error) !== 404) throw error
       }
     },
     async revokeSession(sessionId) {
       try {
         await client.userManagement.revokeSession({ sessionId })
       } catch (error) {
-        if (!isNotFound(error)) throw error
+        if (statusOf(error) !== 404) throw error
       }
     },
   }
 }
 
-function isNotFound(error: unknown): boolean {
-  if (!error || typeof error !== 'object') return false
+/**
+ * Recovery goes out under Space's Application: the person recovers their Fitness ID, not
+ * a professional or staff session. Every Application reaches the same directory, so the
+ * new password works wherever the person signs in.
+ */
+export function createAccountRecoveryDeliveryFromEnv(
+  env: ProviderEnv = process.env,
+): AccountRecoveryDelivery {
+  const client = new WorkOS({ apiKey: required(env, 'WORKOS_API_KEY_SPACE') })
+  return createAccountRecoveryDelivery(client.userManagement)
+}
+
+export function createAccountRecoveryDelivery(
+  userManagement: Pick<WorkOSUserManagement, 'createPasswordReset'>,
+): AccountRecoveryDelivery {
+  return {
+    async sendRecovery(email) {
+      let reset: unknown
+      try {
+        reset = await userManagement.createPasswordReset({ email })
+      } catch (error) {
+        throw recoveryFailure(error)
+      }
+      const expiresAt =
+        typeof reset === 'object' && reset !== null && 'expiresAt' in reset
+          ? reset.expiresAt
+          : undefined
+      if (typeof expiresAt !== 'string' || Number.isNaN(Date.parse(expiresAt))) {
+        throw new AuthError('provider_unavailable', 'password reset without an expiry')
+      }
+      return { expiresAt }
+    },
+  }
+}
+
+/** An address the provider refuses stays refused on retry; anything else might pass. */
+function recoveryFailure(error: unknown): AuthError {
+  const status = statusOf(error)
+  if (status === 400 || status === 404 || status === 422) {
+    return new AuthError('invalid_email', `password reset refused with status ${status}`)
+  }
+  return new AuthError(
+    'provider_unavailable',
+    `password reset failed with status ${status ?? 'none'}`,
+  )
+}
+
+function statusOf(error: unknown): number | undefined {
+  if (!error || typeof error !== 'object') return undefined
   const candidate = error as { status?: unknown; statusCode?: unknown }
-  return (candidate.status ?? candidate.statusCode) === 404
+  const value = candidate.status ?? candidate.statusCode
+  return typeof value === 'number' ? value : undefined
 }
 
 function required(env: ProviderEnv, name: string): string {

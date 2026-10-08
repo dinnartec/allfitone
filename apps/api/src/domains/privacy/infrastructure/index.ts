@@ -16,6 +16,10 @@ import type {
   AccessEvent,
   AccessEventPage,
   AccessLogDatabase,
+  ErasureRequest,
+  ErasureRequestDatabase,
+  LegalHold,
+  LegalHoldDatabase,
   ScopeCommandResult,
   ScopeDefinition,
   ScopeDefinitionDatabase,
@@ -61,6 +65,65 @@ export function createAccessLogDatabase(): AccessLogDatabase {
   }
 }
 
+/**
+ * One row more than the page is asked for, so "is there another page" is answered
+ * by the same query rather than by a second count over a moving table.
+ */
+type HoldRow = { result: LegalHold; replayed: boolean }
+
+export function createLegalHoldDatabase(): LegalHoldDatabase {
+  const sql = database()
+
+  return {
+    apply: (input) =>
+      inTransaction(sql, input.actorPersonId, input.requestId, async (transaction) => {
+        const [row] = await transaction<HoldRow[]>`
+          select * from privacy.apply_legal_hold(
+            ${input.actorPersonId}::uuid, ${input.actorSessionId}::uuid,
+            ${input.application.scope_description}, ${input.application.reason_code},
+            ${input.application.case_reference}, ${input.application.valid_to}::timestamptz,
+            ${input.application.disposition_item_ids}::uuid[],
+            ${input.idempotencyKey}::uuid, ${input.commandId}::uuid, ${input.requestHash}
+          )
+        `
+        if (!row) throw new Error('PostgreSQL did not answer the legal hold')
+        return { resource: row.result, replayed: row.replayed }
+      }),
+
+    release: (input) =>
+      inTransaction(sql, input.actorPersonId, input.requestId, async (transaction) => {
+        const [row] = await transaction<HoldRow[]>`
+          select * from privacy.release_legal_hold(
+            ${input.actorPersonId}::uuid, ${input.actorSessionId}::uuid,
+            ${input.holdId}::uuid,
+            ${input.idempotencyKey}::uuid, ${input.commandId}::uuid, ${input.requestHash}
+          )
+        `
+        if (!row) throw new Error('PostgreSQL did not answer the legal hold release')
+        return { resource: row.result, replayed: row.replayed }
+      }),
+  }
+}
+
+export function createErasureRequestDatabase(): ErasureRequestDatabase {
+  const sql = database()
+
+  return {
+    list: (input) =>
+      inTransaction(sql, input.actorPersonId, input.requestId, async (transaction) => {
+        const rows = await transaction<ErasureRequest[]>`
+          select * from privacy.list_erasure_requests(
+            ${input.actorPersonId}::uuid, ${input.actorSessionId}::uuid,
+            ${input.status}, ${input.limit + 1}::integer,
+            ${input.cursor?.at ?? null}::timestamptz, ${input.cursor?.id ?? null}::uuid
+          )
+        `
+        const hasMore = rows.length > input.limit
+        return { items: hasMore ? rows.slice(0, input.limit) : rows, has_more: hasMore }
+      }),
+  }
+}
+
 export function createScopeDefinitionDatabase(): ScopeDefinitionDatabase {
   const sql = database()
 
@@ -71,7 +134,7 @@ export function createScopeDefinitionDatabase(): ScopeDefinitionDatabase {
           select * from privacy.publish_scope_definition(
             ${input.actorPersonId}::uuid, ${input.actorSessionId}::uuid,
             ${input.publication.scope_code},
-            ${JSON.stringify(input.publication.rules)}::jsonb,
+            ${JSON.stringify(input.publication.rules)}::text::jsonb,
             ${input.idempotencyKey}::uuid, ${input.commandId}::uuid, ${input.requestHash}
           )
         `

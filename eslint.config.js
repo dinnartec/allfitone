@@ -253,6 +253,7 @@ const DOMAINS = [
   'identity',
   'nutrition',
   'organizations',
+  'payments',
   'planning',
   'privacy',
   'relationships',

@@ -4,12 +4,25 @@ import { allfitV1ContractManifest } from '@allfitone/contracts'
 import { createApp } from './application.js'
 
 type Route = { method: string; path: string }
+type Handled = Route & { handler: { length: number } }
 
 const HTTP_METHODS = new Set(['DELETE', 'GET', 'HEAD', 'OPTIONS', 'PATCH', 'POST', 'PUT'])
 
 function routeKey(route: Route) {
   const canonicalPath = route.path.replace(/:([A-Za-z0-9_]+)/g, '{$1}')
   return `${route.method.toUpperCase()} ${canonicalPath}`
+}
+
+// A terminal handler takes the context alone; route-level middleware takes a next as
+// well. Only the first kind answers, so only the first kind may appear twice.
+function collidingRoutes(routes: readonly Handled[]) {
+  const answered = new Map<string, number>()
+  for (const { method, path, handler } of routes) {
+    if (!HTTP_METHODS.has(method.toUpperCase()) || handler.length !== 1) continue
+    const key = routeKey({ method, path })
+    answered.set(key, (answered.get(key) ?? 0) + 1)
+  }
+  return [...answered].filter(([, count]) => count > 1).map(([key]) => key)
 }
 
 function contractDrift(implementedRoutes: readonly Route[], excludedRoutes: readonly Route[]) {
@@ -38,6 +51,46 @@ describe('OpenAPI route gate', () => {
       undocumented: [],
       staleExclusions: [],
     })
+  })
+
+  // HU-BO-017 is deferred by decision: no platform closure distinct from the one the
+  // owner governs, to be reconsidered with legal policy. Its V1 obligation is to prove
+  // the absence of the route, so this is that proof. T-ORG-CLOSE-01 proves the rest.
+  //
+  // `NEW-ORG-PLATFORM-CLOSE` needs no assertion of its own: the generated operation
+  // codes are a literal union, so naming it here does not compile. That is a stronger
+  // guarantee than a comparison, and it is why one is absent.
+  test('offers Backoffice no way to end a gym relationship', () => {
+    expect(
+      allfitV1ContractManifest.operations.filter(
+        (operation) =>
+          operation.path.startsWith('/backoffice/v1/') && /relationship/i.test(operation.path),
+      ),
+    ).toEqual([])
+  })
+
+  // Two routers mounted on the same prefix can both claim a path. Hono answers with
+  // whichever registered first, so the other becomes unreachable without failing anything.
+  test('leaves no path answered by two handlers', () => {
+    process.env.API_PUBLIC_URL = 'https://api.example.test'
+    process.env.STUDIO_WEB_URL = 'https://studio.example.test'
+    process.env.BACKOFFICE_WEB_URL = 'https://backoffice.example.test'
+
+    expect(collidingRoutes(createApp().routes)).toEqual([])
+  })
+
+  test('rejects a path two handlers answer and ignores route-level middleware', () => {
+    const answer = (c: unknown) => c
+    const middleware = (c: unknown, next: unknown) => [c, next]
+
+    expect(
+      collidingRoutes([
+        { method: 'POST', path: '/twice', handler: answer },
+        { method: 'POST', path: '/twice', handler: answer },
+        { method: 'POST', path: '/guarded', handler: middleware },
+        { method: 'POST', path: '/guarded', handler: answer },
+      ]),
+    ).toEqual(['POST /twice'])
   })
 
   test('rejects an implemented route absent from both OpenAPI and exclusions', () => {

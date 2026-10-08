@@ -58,9 +58,13 @@ import {
   responsibleLabel,
   rolesLabel,
   siteAddress,
+  peopleServedSentence,
   teamSentence,
 } from '@/lib/organization-file'
 import { formatInstant } from '@/lib/platform-access'
+
+import { OrganizationClientInvitations } from './organization-client-invitations'
+import { OrganizationTeamInvitations } from './organization-team-invitations'
 
 type LoadState = 'loading' | 'ready' | 'failed'
 
@@ -194,6 +198,11 @@ export function OrganizationFile({ organizationId }: { organizationId: string })
             <AlertDescription>{teamSentence(file)}</AlertDescription>
           </Alert>
 
+          <Alert live="off" variant="info" data-file-people-served>
+            <AlertTitle>Personas que atiende</AlertTitle>
+            <AlertDescription>{peopleServedSentence(file)}</AlertDescription>
+          </Alert>
+
           {file.team.length > 0 ? (
             <Table scrollAreaLabel="Equipo">
               <TableHeader>
@@ -221,6 +230,16 @@ export function OrganizationFile({ organizationId }: { organizationId: string })
           ) : null}
         </CardContent>
       </Card>
+
+      {/* A gym nobody claimed has no team and no clients yet, so neither kind of
+          invitation exists for it. */}
+      {handsOverHere(file) ? null : (
+        <OrganizationTeamInvitations organizationId={organization.organization_id} />
+      )}
+
+      {handsOverHere(file) ? null : (
+        <OrganizationClientInvitations organizationId={organization.organization_id} />
+      )}
 
       <Card>
         <CardHeader>

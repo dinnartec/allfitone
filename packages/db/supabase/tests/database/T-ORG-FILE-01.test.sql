@@ -20,7 +20,7 @@
 
 begin;
 
-select plan(20);
+select plan(26);
 
 insert into identity.people (id, given_name, family_name, status, contact_email)
 values
@@ -299,16 +299,15 @@ select ok(
 );
 
 -- ---------------------------------------------------------------------------
--- Criteria 3 to 6 — what has no table yet
+-- Criteria 4 to 6 — what has no table yet
 -- ---------------------------------------------------------------------------
 
 select ok(
-  (select file->'people_served' = 'null'::jsonb
-     and file->>'plans_availability' = 'not_modelled'
+  (select file->>'plans_availability' = 'not_modelled'
      and file->>'payment_method_availability' = 'not_modelled'
      and file->>'premium_availability' = 'not_modelled'
    from norte_file),
-  'people served, plans, payment method and Premium are unknown, not zero'
+  'plans, payment method and Premium are unknown, not zero'
 );
 
 -- ---------------------------------------------------------------------------
@@ -368,6 +367,91 @@ select ok(
   ),
   'a refused read records no access, because nothing was reached'
 );
+
+-- ---------------------------------------------------------------------------
+-- Criterion 3 — how many people it serves, and in what state
+-- ---------------------------------------------------------------------------
+
+-- Two people it serves now, one it no longer does, and one at another gym that must
+-- not be counted here.
+insert into relationships.service_relationships (
+  id, person_id, organization_id, status, started_at, ended_at, ended_reason, ended_by_kind
+) values
+  ('019ad000-0000-7000-8000-000000000801', '019ad000-0000-7000-8000-000000000006',
+    '019ad000-0000-7000-8000-000000000301', 'active', clock_timestamp() - interval '60 days',
+    null, null, null),
+  ('019ad000-0000-7000-8000-000000000802', '019ad000-0000-7000-8000-000000000007',
+    '019ad000-0000-7000-8000-000000000301', 'active', clock_timestamp() - interval '30 days',
+    null, null, null),
+  ('019ad000-0000-7000-8000-000000000803', '019ad000-0000-7000-8000-000000000005',
+    '019ad000-0000-7000-8000-000000000301', 'terminated', clock_timestamp() - interval '90 days',
+    clock_timestamp() - interval '10 days', 'moved_away', 'person'),
+  ('019ad000-0000-7000-8000-000000000804', '019ad000-0000-7000-8000-000000000006',
+    '019ad000-0000-7000-8000-000000000302', 'active', clock_timestamp() - interval '20 days',
+    null, null, null);
+
+-- The actor context the API sets on every Backoffice request. The reads above never
+-- needed it; counting relationships does, because their policy asks who is reading.
+select set_config('app.actor_kind', 'support', true),
+       set_config('app.actor_person_id', '019ad000-0000-7000-8000-000000000003', true);
+
+create temporary table served_file on commit drop as
+select organizations.read_backoffice_organization(
+  '019ad000-0000-7000-8000-000000000003', '019ad000-0000-7000-8000-000000000033',
+  '019ad000-0000-7000-8000-000000000301'
+) as file;
+
+select is(
+  (select (file->>'people_served')::integer from served_file),
+  2,
+  'the file says how many people the gym serves, and only the ones it still serves'
+);
+
+select results_eq(
+  $$ select (file->'relationship_counts'->>'active')::integer,
+            (file->'relationship_counts'->>'terminated')::integer
+     from served_file $$,
+  $$ values (2, 1) $$,
+  'and in what state those relationships are, the way it already does for the team'
+);
+
+-- A count is a count. Reaching a person still means going through the door that asks
+-- for a case reference.
+select ok(
+  (select not (file::text like '%019ad000-0000-7000-8000-000000000801%')
+     and not (file::text like '%019ad000-0000-7000-8000-000000000005%')
+   from served_file),
+  'and never which relationship it is, nor whose'
+);
+
+-- The floor under the count, asserted on its own: the file refuses a reader without
+-- the duty before the policy is ever consulted, so the only way to know the policy
+-- would refuse too is to ask it directly.
+
+select ok(
+  access_control.holds_backoffice_duty('diagnose_support_metadata'),
+  'the duty is what lets the count see a relationship at all'
+);
+
+select ok(
+  not access_control.holds_backoffice_duty('manage_privacy_requests'),
+  'and it is that duty, not any duty the reader happens to hold'
+);
+
+select ok(
+  not (
+    select access_control.holds_backoffice_duty('diagnose_support_metadata')
+    from (select set_config('app.actor_person_id',
+      '019ad000-0000-7000-8000-000000000005', true)) as other_actor
+  ),
+  'and somebody who only verifies credentials sees no row to count'
+);
+
+select set_config('app.actor_person_id', '019ad000-0000-7000-8000-000000000003', true);
+
+-- The predicate also demands a live AAL2 Backoffice session, and that branch is not
+-- asserted here: every session in this file already is one, so relaxing it changes
+-- nothing. Isolating it needs a reader whose only session is another surface's.
 
 -- ---------------------------------------------------------------------------
 -- Grants

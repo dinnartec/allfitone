@@ -13,9 +13,10 @@
  * because a read nobody can trace back to a case is the thing `PR-22` exists to
  * prevent.
  *
- * The attention panel (`HU-BO-005`) lives here because it is a support read with
- * no subject, like the diagnosis feed. Which of its notices an operator sees is
- * decided by their duties in PostgreSQL, never by this handler.
+ * The attention panel (`HU-BO-005`) and the business panel (`HU-BO-004`) live here
+ * because they are support reads with no subject, like the diagnosis feed. Which of
+ * their figures an operator sees is decided by their duties in PostgreSQL, never by
+ * this handler.
  */
 
 import { randomUUID } from 'node:crypto'
@@ -33,11 +34,13 @@ import {
 import { problem, type ApiErrorCode } from '../../../platform/http/index.js'
 import type {
   SupportAttentionService,
+  SupportBusinessService,
   SupportDiagnosisService,
   SupportMetadataService,
 } from '../application/index.js'
 import {
   supportAttentionService,
+  supportBusinessService,
   supportDiagnosisService,
   supportMetadataService,
 } from '../dependencies.js'
@@ -61,11 +64,13 @@ export function backofficeSupportMetadataRoutes(
   injectedSessions?: BackofficeAuthenticationService,
   injectedDiagnosis?: SupportDiagnosisService,
   injectedAttention?: SupportAttentionService,
+  injectedBusiness?: SupportBusinessService,
 ): Hono {
   const origin = new URL(trustedBackofficeWebUrl()).origin
   const metadata = () => injectedMetadata ?? supportMetadataService()
   const diagnosis = () => injectedDiagnosis ?? supportDiagnosisService()
   const attention = () => injectedAttention ?? supportAttentionService()
+  const business = () => injectedBusiness ?? supportBusinessService()
   const sessions = () => injectedSessions ?? backofficeAuthenticationService()
   const routes = new Hono()
 
@@ -176,6 +181,22 @@ export function backofficeSupportMetadataRoutes(
       if (actor instanceof Response) return actor
       return c.json(
         await attention().read(
+          { actorPersonId: actor.personId, actorSessionId: actor.sessionId },
+          { requestId: randomUUID() },
+        ),
+      )
+    } catch (error) {
+      return operationFailure(c, error)
+    }
+  })
+
+  // Counts of everybody, so nobody in particular: no case reference either.
+  routes.get('/support/business', async (c) => {
+    try {
+      const actor = await backofficeActor(c, sessions())
+      if (actor instanceof Response) return actor
+      return c.json(
+        await business().read(
           { actorPersonId: actor.personId, actorSessionId: actor.sessionId },
           { requestId: randomUUID() },
         ),

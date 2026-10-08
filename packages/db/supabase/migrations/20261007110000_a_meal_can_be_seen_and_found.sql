@@ -666,7 +666,19 @@ begin
     raise exception 'a meal has between one and a hundred items' using errcode = '23514';
   end if;
 
+  -- Refused as content, before any row: the table's uniques would answer as a conflict.
+  if (select count(distinct value->>'position') from jsonb_array_elements(p_items)) <> jsonb_array_length(p_items) then
+    raise exception 'two items cannot share a position' using errcode = '23514';
+  end if;
+
   for entry in select value from jsonb_array_elements(p_items) loop
+    if coalesce(jsonb_typeof(entry->'quantity'), 'null') not in ('number', 'null') then
+      raise exception 'a quantity is a number, not text that looks like one' using errcode = '23514';
+    end if;
+    if (select count(distinct value->>'nutrient_code') from jsonb_array_elements(coalesce(entry->'nutrients', '[]'::jsonb)))
+       <> jsonb_array_length(coalesce(entry->'nutrients', '[]'::jsonb)) then
+      raise exception 'an item says each nutrient once' using errcode = '23514';
+    end if;
     if nullif(entry->>'quantity_unit', '') is not null
        and not exists (select 1 from catalog.units where code = entry->>'quantity_unit') then
       raise exception 'an item''s quantity is in a unit the catalogue has' using errcode = '23514';
@@ -700,6 +712,10 @@ begin
       if definition.id is null then
         raise exception 'a nutrient the catalogue does not publish' using errcode = '23514';
       end if;
+      -- Per item, as the first schema had it: it rejects typos, not large meals.
+      if (nutrient->>'value')::numeric > definition.maximum_value then
+        raise exception 'a nutrient value above what one item can carry' using errcode = '23514';
+      end if;
       insert into nutrition.meal_nutrient_values (
         meal_item_id, meal_id, person_id, nutrient_definition_id, value_numeric, unit_code
       ) values (item_id, p_meal_id, p_person_id, definition.id, (nutrient->>'value')::numeric, nutrient->>'unit');
@@ -728,12 +744,22 @@ begin
   if access_control.actor_kind() <> 'person' or access_control.person() <> p_person_id then
     raise exception 'nutrition person does not match the authenticated actor' using errcode = '42501';
   end if;
+  -- A closed account records nothing, as the first schema had it.
+  if not exists (select 1 from identity.people where id = p_person_id and status = 'active') then
+    raise exception 'a closed person records nothing' using errcode = '42501';
+  end if;
 
   select * into receipt from system.begin_idempotency(
     p_person_id, 'OP-NUT-001', p_idempotency_key, p_command_id, p_request_hash
   );
-  -- A replay answers the meal it recorded; null when that meal was deleted since.
+  -- A replay answers the meal it recorded; one deleted since is gone, never recreated.
   if not receipt.claimed then
+    if receipt.aggregate_id is null then
+      raise exception 'idempotent meal not found' using errcode = '40001';
+    end if;
+    if not exists (select 1 from nutrition.meals where id = receipt.aggregate_id) then
+      raise exception 'the meal this command recorded was deleted' using errcode = 'AF410';
+    end if;
     return nutrition.meal_json(receipt.aggregate_id);
   end if;
 
@@ -741,6 +767,10 @@ begin
     raise exception 'unknown time zone' using errcode = '22023';
   end if;
   occurred := (p_meal->>'occurred_at')::timestamp with time zone;
+  -- A day of slack for the zones ahead of the server; anything later has not been eaten.
+  if occurred > clock_timestamp() + interval '1 day' then
+    raise exception 'a meal happened on a real day, not a future one' using errcode = '22023';
+  end if;
 
   insert into nutrition.meals (id, person_id, occurred_at, timezone, local_date, meal_type, note, recognized_by)
   values (p_command_id, p_person_id, occurred, zone, (occurred at time zone zone)::date,
@@ -748,6 +778,11 @@ begin
           nullif(btrim(p_meal->>'recognized_by'), ''));
 
   perform nutrition.write_items(p_command_id, p_person_id, coalesce(p_meal->'items', '[]'::jsonb));
+
+  -- The event says a meal exists, never what was eaten; a replay never reaches here.
+  perform system.enqueue_outbox_event(
+    'meal', p_command_id, 'nutrition.meal_recorded.v1', jsonb_build_object('meal_id', p_command_id)
+  );
 
   perform system.finish_idempotency(receipt.receipt_id, 201::smallint, 'meal-recorded', 'nutrition_meal', p_command_id);
 

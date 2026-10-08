@@ -88,6 +88,19 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       'How the access was authorised. `break_glass` is the exceptional path and is the only one subject to the per-case auditor disqualification.',
     enum: ['live', 'frozen', 'break_glass', 'organization_operational', 'support_metadata'],
   },
+  AccountRecoveryCommand: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      "Only the case the command answers. The destination, the person and the flow come from the person's verified email and the recovery itself, so there is nothing a client could send to redirect one.",
+    required: ['case_reference'],
+    properties: {
+      case_reference: {
+        type: 'string',
+        pattern: '^[A-Z][A-Z0-9_-]{2,63}$',
+      },
+    },
+  },
   ActivityFamily: {
     type: 'string',
     enum: ['strength', 'endurance', 'interval', 'mobility'],
@@ -395,6 +408,10 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         format: 'date-time',
       },
     },
+  },
+  AssignmentStatus: {
+    type: 'string',
+    enum: ['proposed', 'active', 'ended'],
   },
   Attempt: {
     type: 'object',
@@ -882,6 +899,136 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  BackofficeAccountRecovery: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      'Whether the official recovery flow can reach this person. `unavailable_reason` says why it fails closed; no alternative is offered, because V1 has none.',
+    required: [
+      'person_id',
+      'availability',
+      'unavailable_reason',
+      'contact_hint',
+      'can_start',
+      'requests',
+    ],
+    properties: {
+      person_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      availability: {
+        type: 'string',
+        enum: ['available', 'unavailable'],
+      },
+      unavailable_reason: {
+        type: ['string', 'null'],
+        enum: ['person_not_active', 'no_access_account', 'no_verified_email', null],
+      },
+      contact_hint: {
+        type: ['string', 'null'],
+        description: 'The verified email a recovery would go to, as a hint.',
+        maxLength: 260,
+      },
+      can_start: {
+        type: 'boolean',
+        description:
+          'Recovery is available, nothing is under way, and the operator is not the person.',
+      },
+      requests: {
+        type: 'array',
+        maxItems: 10,
+        items: {
+          $ref: '#/components/schemas/BackofficeAccountRecoveryRequest',
+        },
+      },
+    },
+  },
+  BackofficeAccountRecoveryRequest: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      "One recovery as support sees it: a hint of where it went and what happened, never the address, a link or a code. `state` reads `expired` as soon as the link lapses. `resendable` and `cancellable` are the database's answer.",
+    required: [
+      'request_id',
+      'person_id',
+      'state',
+      'contact_hint',
+      'case_reference',
+      'created_at',
+      'delivered_at',
+      'expires_at',
+      'confirmed_at',
+      'cancelled_at',
+      'failed_at',
+      'failure_code',
+      'send_count',
+      'resendable',
+      'cancellable',
+    ],
+    properties: {
+      request_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      person_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      state: {
+        type: 'string',
+        description:
+          '`initiated` has not gone out yet; `awaiting_verification` went out and waits for the person; `confirmed` means the person reset their password.',
+        enum: ['initiated', 'awaiting_verification', 'confirmed', 'expired', 'cancelled', 'failed'],
+      },
+      contact_hint: {
+        type: 'string',
+        maxLength: 260,
+      },
+      case_reference: {
+        type: 'string',
+        pattern: '^[A-Z][A-Z0-9_-]{2,63}$',
+      },
+      created_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      delivered_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      expires_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      confirmed_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      cancelled_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      failed_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      failure_code: {
+        type: ['string', 'null'],
+        description:
+          '`contact_changed` when the verified email changed before it went out; `delivery_failed` when the identity provider never accepted it.',
+        enum: ['contact_changed', 'delivery_failed', null],
+      },
+      send_count: {
+        type: 'integer',
+        description: 'How many times support asked for this recovery to be sent.',
+        minimum: 1,
+      },
+      resendable: {
+        type: 'boolean',
+      },
+      cancellable: {
+        type: 'boolean',
+      },
+    },
+  },
   BackofficeAuthenticationAttempt: {
     type: 'object',
     additionalProperties: false,
@@ -915,6 +1062,141 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
     },
     description: 'Enrollment secrets are present only for a first-factor attempt.',
   },
+  BackofficeClientInvitation: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      "A gym's client invitation as Allfit's support sees it. The contact is a hint, never the address, and no person is named — before anyone accepts, an invitation identifies nobody. `scope_codes` is what the gym asked for: the operator has to see what is being resent, and a resend never changes it. The purpose the gym wrote and the wording the person will read stay out; they are for the person deciding, not for support.",
+    required: [
+      'invitation_id',
+      'state',
+      'scope_codes',
+      'contact_hint',
+      'created_at',
+      'expires_at',
+      'issued_by',
+      'reissues_invitation_id',
+      'resendable',
+      'last_resent_at',
+    ],
+    properties: {
+      invitation_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      state: {
+        type: 'string',
+        enum: ['pending', 'expired', 'accepted', 'rejected', 'revoked'],
+      },
+      scope_codes: {
+        type: 'array',
+        description: 'The scopes the invitation offered, in code order.',
+        items: {
+          $ref: '#/components/schemas/ScopeCode',
+        },
+      },
+      contact_hint: {
+        type: 'string',
+        maxLength: 260,
+      },
+      created_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      expires_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      issued_by: {
+        type: 'string',
+        description: '`member` when the gym sent it; `allfit` when Allfit reissued an expired one.',
+        enum: ['member', 'allfit'],
+      },
+      reissues_invitation_id: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/UuidV7',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      resendable: {
+        type: 'boolean',
+      },
+      last_resent_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+    },
+  },
+  BackofficeClientInvitationList: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['organization_id', 'items', 'truncated'],
+    properties: {
+      organization_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      items: {
+        type: 'array',
+        maxItems: 50,
+        items: {
+          $ref: '#/components/schemas/BackofficeClientInvitation',
+        },
+      },
+      truncated: {
+        type: 'boolean',
+      },
+    },
+  },
+  BackofficeClientInvitationResend: {
+    description:
+      'The invitation that went out. `redelivered` is the same invitation sent again; `reissued` is a new identical one that replaces an expired invitation and asks for exactly the same scopes.',
+    allOf: [
+      {
+        $ref: '#/components/schemas/BackofficeClientInvitation',
+      },
+      {
+        type: 'object',
+        required: ['outcome'],
+        properties: {
+          outcome: {
+            type: 'string',
+            enum: ['redelivered', 'reissued'],
+          },
+        },
+      },
+    ],
+  },
+  BackofficeGlobalCatalogue: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['disciplines', 'activity_types', 'movements', 'equipment_availability'],
+    properties: {
+      disciplines: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/GlobalCatalogueEntry',
+        },
+      },
+      activity_types: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/GlobalCatalogueEntry',
+        },
+      },
+      movements: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/GlobalCatalogueEntry',
+        },
+      },
+      equipment_availability: {
+        $ref: '#/components/schemas/SupportBlockAvailability',
+      },
+    },
+  },
   BackofficeOrganizationFile: {
     type: 'object',
     additionalProperties: false,
@@ -926,6 +1208,7 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       'team_truncated',
       'sites',
       'people_served',
+      'relationship_counts',
       'plans_availability',
       'payment_method_availability',
       'premium_availability',
@@ -1075,9 +1358,27 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         },
       },
       people_served: {
-        type: ['integer', 'null'],
+        type: 'integer',
         minimum: 0,
-        description: 'Null until service relationships exist. Never zero in their place.',
+        description:
+          'How many people the gym serves now. A relationship that ended is not one of them; it is counted in `relationship_counts` instead.',
+      },
+      relationship_counts: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['active', 'terminated'],
+        description:
+          'The state those relationships are in. A count and nothing else: reaching a person still means a break-glass window with a case reference.',
+        properties: {
+          active: {
+            type: 'integer',
+            minimum: 0,
+          },
+          terminated: {
+            type: 'integer',
+            minimum: 0,
+          },
+        },
       },
       plans_availability: {
         $ref: '#/components/schemas/ModelAvailability',
@@ -1161,10 +1462,9 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         minimum: 0,
       },
       people_served: {
-        type: ['integer', 'null'],
+        type: 'integer',
         minimum: 0,
-        description:
-          'Null until service relationships exist. Not zero, because zero would say the organization serves nobody.',
+        description: 'How many people the gym serves now. The file carries the states.',
       },
     },
   },
@@ -1246,6 +1546,111 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  BackofficeTeamInvitation: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      "A gym's team invitation as Allfit's support sees it. The contact is a hint, never the address, and no person is named. `resendable` is the database's answer: a live invitation, or an expired one that was not already reissued and has no equal invitation pending.",
+    required: [
+      'invitation_id',
+      'state',
+      'proposed_role_code',
+      'contact_hint',
+      'created_at',
+      'expires_at',
+      'issued_by',
+      'reissues_invitation_id',
+      'resendable',
+      'last_resent_at',
+    ],
+    properties: {
+      invitation_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      state: {
+        type: 'string',
+        enum: ['pending', 'expired', 'accepted', 'rejected', 'revoked'],
+      },
+      proposed_role_code: {
+        type: 'string',
+        description: 'A team invitation proposes one of the roles a gym can invite to.',
+        enum: ['admin', 'coach', 'staff'],
+      },
+      contact_hint: {
+        type: 'string',
+        maxLength: 260,
+      },
+      created_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      expires_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      issued_by: {
+        type: 'string',
+        description: '`member` when the gym sent it; `allfit` when Allfit reissued an expired one.',
+        enum: ['member', 'allfit'],
+      },
+      reissues_invitation_id: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/UuidV7',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      resendable: {
+        type: 'boolean',
+      },
+      last_resent_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+    },
+  },
+  BackofficeTeamInvitationList: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['organization_id', 'items', 'truncated'],
+    properties: {
+      organization_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      items: {
+        type: 'array',
+        maxItems: 50,
+        items: {
+          $ref: '#/components/schemas/BackofficeTeamInvitation',
+        },
+      },
+      truncated: {
+        type: 'boolean',
+      },
+    },
+  },
+  BackofficeTeamInvitationResend: {
+    description:
+      'The invitation that went out. `redelivered` is the same invitation sent again; `reissued` is a new identical one that replaces an expired invitation.',
+    allOf: [
+      {
+        $ref: '#/components/schemas/BackofficeTeamInvitation',
+      },
+      {
+        type: 'object',
+        required: ['outcome'],
+        properties: {
+          outcome: {
+            type: 'string',
+            enum: ['redelivered', 'reissued'],
+          },
+        },
+      },
+    ],
+  },
   BiologicalSex: {
     type: 'string',
     enum: ['male', 'female'],
@@ -1257,6 +1662,116 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
     enum: ['body_weight', 'body_height'],
     description:
       'The two metrics V1 records. The `body_` prefix is not decoration: `metric_code` also names execution results, where `weight` is the load on the bar rather than the weight of the person.',
+  },
+  BodyProgressDeletion: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['body_progress_record_id', 'disposition_case_id', 'status'],
+    properties: {
+      body_progress_record_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      disposition_case_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      status: {
+        type: 'string',
+        enum: ['deleted'],
+      },
+    },
+  },
+  BodyProgressMetricCode: {
+    type: 'string',
+    description:
+      'The rows of `identity.body_progress_metrics`. Recording is an onboarding step and accepts weight and height only; the rest exist in the catalogue, and a read returns whichever were written.',
+    enum: [
+      'body_weight',
+      'body_height',
+      'muscle_mass',
+      'body_fat',
+      'waist',
+      'hip',
+      'chest',
+      'arm',
+      'thigh',
+    ],
+  },
+  BodyProgressPage: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['items', 'has_more'],
+    properties: {
+      items: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/BodyProgressRecord',
+        },
+      },
+      has_more: {
+        type: 'boolean',
+      },
+    },
+  },
+  BodyProgressRecord: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'id',
+      'metric_code',
+      'value',
+      'unit_code',
+      'original_value',
+      'original_unit_code',
+      'measured_on',
+      'has_media',
+      'recorded_at',
+    ],
+    properties: {
+      id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      metric_code: {
+        $ref: '#/components/schemas/BodyProgressMetricCode',
+      },
+      value: {
+        type: 'number',
+        description: "In the canonical unit of the measurement's dimension.",
+      },
+      unit_code: {
+        $ref: '#/components/schemas/BodyProgressUnitCode',
+      },
+      original_value: {
+        type: ['number', 'null'],
+        description: 'What the person typed, when it was not the canonical unit.',
+      },
+      original_unit_code: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/BodyProgressUnitCode',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      measured_on: {
+        type: 'string',
+        format: 'date',
+      },
+      has_media: {
+        type: 'boolean',
+        description: 'Whether a photo exists. Where it is never travels.',
+      },
+      recorded_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+    },
+  },
+  BodyProgressUnitCode: {
+    type: 'string',
+    description: 'Masses in `kg` or `lb`, lengths in `m`, `cm` or `in`, body fat in `percent`.',
+    enum: ['kg', 'lb', 'm', 'cm', 'in', 'percent'],
   },
   BreakGlassApproval: {
     type: 'object',
@@ -1292,6 +1807,42 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       'health_context',
       'nutrition_intake',
     ],
+  },
+  BreakGlassContent: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      'What an allowed read returns, under the category that was read. Only categories whose data the platform stores appear; the rest answer `content_unavailable` instead.',
+    properties: {
+      body_progress: {
+        type: 'array',
+        maxItems: 500,
+        items: {
+          $ref: '#/components/schemas/BodyProgressRecord',
+        },
+      },
+      health_context: {
+        type: 'array',
+        maxItems: 500,
+        items: {
+          $ref: '#/components/schemas/HealthContextClaim',
+        },
+      },
+      nutrition_intake: {
+        type: 'array',
+        maxItems: 500,
+        items: {
+          $ref: '#/components/schemas/BreakGlassMeal',
+        },
+      },
+      prior_training_history: {
+        type: 'array',
+        maxItems: 100,
+        items: {
+          $ref: '#/components/schemas/ExecutionDetail',
+        },
+      },
+    },
   },
   BreakGlassDecision: {
     type: 'object',
@@ -1330,12 +1881,15 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
     type: 'object',
     additionalProperties: false,
     description:
-      'Every attempt is recorded before this answers, so `break_glass_event_id` is the evidence of this exact attempt. No outcome carries content in this version.',
+      'Every attempt is recorded before this answers, so `break_glass_event_id` is the evidence of this exact attempt. Only `allowed` carries content, and only for a category whose data the platform stores; the others answer `content_unavailable`. A category that returns content reads only its own kind of data, so pointing it at another is `denied` with `resource_out_of_scope`.',
     required: ['outcome', 'reason_code', 'break_glass_event_id', 'occurred_at'],
     properties: {
       outcome: {
         type: 'string',
-        enum: ['denied', 'content_unavailable'],
+        enum: ['allowed', 'denied', 'content_unavailable'],
+      },
+      content: {
+        $ref: '#/components/schemas/BreakGlassContent',
       },
       reason_code: {
         type: 'string',
@@ -1350,6 +1904,58 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
       category: {
         $ref: '#/components/schemas/BreakGlassCategory',
+      },
+    },
+  },
+  BreakGlassMeal: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'id',
+      'occurred_at',
+      'local_date',
+      'timezone',
+      'meal_type',
+      'note',
+      'revision_number',
+      'has_media',
+      'items',
+    ],
+    properties: {
+      id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      occurred_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      local_date: {
+        type: 'string',
+        format: 'date',
+      },
+      timezone: {
+        $ref: '#/components/schemas/IanaTimeZone',
+      },
+      meal_type: {
+        $ref: '#/components/schemas/MealType',
+      },
+      note: {
+        type: ['string', 'null'],
+        maxLength: 1000,
+      },
+      revision_number: {
+        type: 'integer',
+        minimum: 0,
+      },
+      has_media: {
+        type: 'boolean',
+        description: 'Whether a photo exists. The photo itself never travels here.',
+      },
+      items: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/NutritionMealItem',
+        },
       },
     },
   },
@@ -1599,6 +2205,62 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         items: {
           $ref: '#/components/schemas/CatalogDiscipline',
         },
+      },
+    },
+  },
+  CatalogueActivityTypePublication: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      'A global activity type under a published discipline. There is no owner field: what Allfit publishes is global by construction.',
+    required: ['discipline_code', 'code', 'name'],
+    properties: {
+      discipline_code: {
+        type: 'string',
+        pattern: '^[a-z][a-z0-9_]{1,63}$',
+      },
+      code: {
+        type: 'string',
+        pattern: '^[a-z][a-z0-9_]{1,63}$',
+      },
+      name: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 120,
+      },
+    },
+  },
+  CatalogueMovementPublication: {
+    type: 'object',
+    additionalProperties: false,
+    description: 'A global movement, identified by its normalised name.',
+    required: ['discipline_code', 'name'],
+    properties: {
+      discipline_code: {
+        type: 'string',
+        pattern: '^[a-z][a-z0-9_]{1,63}$',
+      },
+      name: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 120,
+      },
+    },
+  },
+  CataloguePublication: {
+    type: 'object',
+    additionalProperties: false,
+    description: 'A discipline. The code is chosen once and never means anything else.',
+    required: ['code', 'name'],
+    properties: {
+      code: {
+        type: 'string',
+        pattern: '^[a-z][a-z0-9_]{1,63}$',
+      },
+      name: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 120,
       },
     },
   },
@@ -2376,6 +3038,66 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       'What a verifier may record. There is no default, and `unverifiable` is the answer whenever the evidence does not reach.',
     enum: ['verified', 'rejected', 'unverifiable'],
   },
+  DataClassificationCode: {
+    type: 'string',
+    enum: ['operational', 'audit', 'identity_pii', 'training', 'body', 'nutrition', 'health'],
+  },
+  DispositionAction: {
+    type: 'string',
+    enum: ['delete', 'anonymize', 'retain_restricted'],
+  },
+  DispositionItemStatus: {
+    type: 'string',
+    enum: ['pending', 'executed', 'suspended'],
+  },
+  DispositionOrigin: {
+    type: 'string',
+    enum: ['request', 'retention', 'closure', 'disconnection', 'expiry'],
+  },
+  DispositionResult: {
+    type: 'string',
+    enum: ['deleted', 'anonymized', 'retained', 'failed'],
+  },
+  Distance: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['value', 'unit'],
+    properties: {
+      value: {
+        type: 'number',
+        exclusiveMinimum: 0,
+      },
+      unit: {
+        type: 'string',
+        enum: ['m', 'km', 'mi'],
+      },
+    },
+  },
+  EnduranceLap: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['segment_position', 'lap_number', 'distance', 'duration_seconds'],
+    properties: {
+      segment_position: {
+        type: 'integer',
+        minimum: 1,
+        maximum: 100,
+      },
+      lap_number: {
+        type: 'integer',
+        minimum: 1,
+        maximum: 1000,
+      },
+      distance: {
+        $ref: '#/components/schemas/Distance',
+      },
+      duration_seconds: {
+        type: 'number',
+        exclusiveMinimum: 0,
+        maximum: 604800,
+      },
+    },
+  },
   EnduranceLapReplace: {
     type: 'object',
     additionalProperties: false,
@@ -2454,6 +3176,185 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  ErasureRequest: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      "A person's erasure request and how far it got. The person is named by identifier: this screen tracks the request, it does not open the file.",
+    required: [
+      'id',
+      'subject_person_id',
+      'origin',
+      'status',
+      'opened_at',
+      'closed_at',
+      'due_at',
+      'pending_items',
+      'suspended_items',
+      'resolved_items',
+      'categories',
+    ],
+    properties: {
+      id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      subject_person_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      origin: {
+        $ref: '#/components/schemas/DispositionOrigin',
+      },
+      status: {
+        $ref: '#/components/schemas/ErasureRequestState',
+      },
+      opened_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      closed_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      due_at: {
+        type: 'string',
+        format: 'date-time',
+        description: 'Thirty days after the request arrived.',
+      },
+      pending_items: {
+        type: 'integer',
+        minimum: 0,
+      },
+      suspended_items: {
+        type: 'integer',
+        minimum: 0,
+        description: 'Held by a legal obligation rather than waiting its turn.',
+      },
+      resolved_items: {
+        type: 'integer',
+        minimum: 0,
+      },
+      categories: {
+        type: 'array',
+        maxItems: 50,
+        items: {
+          $ref: '#/components/schemas/ErasureRequestCategory',
+        },
+      },
+    },
+  },
+  ErasureRequestCategory: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      'One line per category, action and state. Deleting forty meals is one line that says so: the identifiers of forty erased rows are the data the erasure removed.',
+    required: [
+      'data_classification_code',
+      'action',
+      'status',
+      'items',
+      'item_ids',
+      'result',
+      'executed_at',
+      'retained_until',
+      'hold',
+    ],
+    properties: {
+      data_classification_code: {
+        $ref: '#/components/schemas/DataClassificationCode',
+      },
+      action: {
+        $ref: '#/components/schemas/DispositionAction',
+      },
+      status: {
+        $ref: '#/components/schemas/DispositionItemStatus',
+      },
+      items: {
+        type: 'integer',
+        minimum: 1,
+      },
+      item_ids: {
+        type: 'array',
+        minItems: 1,
+        maxItems: 500,
+        description:
+          'The dispositions this line is made of, so a legal hold can name exactly these and nothing else.',
+        items: {
+          $ref: '#/components/schemas/Uuid',
+        },
+      },
+      result: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/DispositionResult',
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description: 'What the disposition recorded. Absent until it runs.',
+      },
+      executed_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      retained_until: {
+        type: ['string', 'null'],
+        format: 'date-time',
+        description:
+          'Only where something was kept, and taken from the policy that decided to keep it.',
+      },
+      hold: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/ErasureRequestHold',
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description: 'The legal hold stopping this line, when one is.',
+      },
+    },
+  },
+  ErasureRequestHold: {
+    type: 'object',
+    additionalProperties: false,
+    description: 'Why this line is stopped and until when, without leaving the panel.',
+    required: ['id', 'reason_code', 'valid_to'],
+    properties: {
+      id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      reason_code: {
+        $ref: '#/components/schemas/LegalHoldReason',
+      },
+      valid_to: {
+        type: 'string',
+        format: 'date-time',
+      },
+    },
+  },
+  ErasureRequestPage: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['items', 'has_more'],
+    properties: {
+      items: {
+        type: 'array',
+        maxItems: 100,
+        items: {
+          $ref: '#/components/schemas/ErasureRequest',
+        },
+      },
+      has_more: {
+        type: 'boolean',
+      },
+    },
+  },
+  ErasureRequestState: {
+    type: 'string',
+    enum: ['open', 'closed'],
+  },
   ExecutionAbandoned: {
     type: 'object',
     additionalProperties: false,
@@ -2475,6 +3376,185 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         minimum: 0,
         description:
           'What the attempt keeps. Abandoning does not delete training that happened; it says the session was not finished.',
+      },
+    },
+  },
+  ExecutionDetail: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      'A session with what was recorded in it. A load and a distance come back as the person typed them.',
+    required: [
+      'id',
+      'activity_type_code',
+      'activity_type_name',
+      'discipline_code',
+      'started_at',
+      'ended_at',
+      'timezone',
+      'status',
+      'validation_status',
+      'requested_level',
+      'achieved_level',
+      'revision_number',
+      'capture_source',
+      'contract',
+      'segments',
+      'strength_sets',
+      'endurance_laps',
+    ],
+    properties: {
+      id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      activity_type_code: {
+        type: 'string',
+      },
+      activity_type_name: {
+        type: 'string',
+      },
+      discipline_code: {
+        type: 'string',
+      },
+      started_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      ended_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      timezone: {
+        $ref: '#/components/schemas/IanaTimeZone',
+      },
+      status: {
+        $ref: '#/components/schemas/ExecutionStatus',
+      },
+      validation_status: {
+        $ref: '#/components/schemas/ExecutionValidationStatus',
+      },
+      requested_level: {
+        $ref: '#/components/schemas/CompletenessLevel',
+      },
+      achieved_level: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/CompletenessLevel',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      revision_number: {
+        type: 'integer',
+        minimum: 0,
+      },
+      capture_source: {
+        type: 'string',
+        enum: ['manual', 'device'],
+      },
+      contract: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['id', 'version'],
+        properties: {
+          id: {
+            $ref: '#/components/schemas/Uuid',
+          },
+          version: {
+            type: 'integer',
+            minimum: 1,
+          },
+        },
+      },
+      segments: {
+        type: 'array',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['position', 'activity_type_code'],
+          properties: {
+            position: {
+              type: 'integer',
+              minimum: 1,
+            },
+            activity_type_code: {
+              type: ['string', 'null'],
+            },
+          },
+        },
+      },
+      strength_sets: {
+        type: 'array',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: [
+            'segment_position',
+            'order',
+            'movement_id',
+            'movement_name',
+            'achieved_reps',
+            'load',
+            'rpe',
+          ],
+          properties: {
+            segment_position: {
+              type: ['integer', 'null'],
+            },
+            order: {
+              type: 'integer',
+              minimum: 1,
+            },
+            movement_id: {
+              type: ['string', 'null'],
+              format: 'uuid',
+            },
+            movement_name: {
+              type: ['string', 'null'],
+            },
+            achieved_reps: {
+              type: ['integer', 'null'],
+            },
+            load: {
+              oneOf: [
+                {
+                  $ref: '#/components/schemas/Load',
+                },
+                {
+                  type: 'null',
+                },
+              ],
+            },
+            rpe: {
+              type: ['number', 'null'],
+            },
+          },
+        },
+      },
+      endurance_laps: {
+        type: 'array',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['segment_position', 'lap_number', 'distance', 'duration_seconds'],
+          properties: {
+            segment_position: {
+              type: ['integer', 'null'],
+            },
+            lap_number: {
+              type: 'integer',
+              minimum: 1,
+            },
+            distance: {
+              $ref: '#/components/schemas/Distance',
+            },
+            duration_seconds: {
+              type: 'number',
+            },
+          },
+        },
       },
     },
   },
@@ -2782,6 +3862,16 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
     type: 'string',
     enum: ['in_progress', 'paused', 'completed', 'abandoned'],
   },
+  ExecutionValidationStatus: {
+    type: 'string',
+    enum: ['pending', 'valid', 'invalid', 'annulled'],
+  },
+  ExpectedRevision: {
+    description:
+      "The `revision_number` the caller read before editing. The write is refused with `409` when the stored revision has moved on, which is what keeps two people from overwriting each other in silence.\n\nIt travels in the body rather than in `If-Match`, and that is a deployment constraint rather than a preference: this API is one function mounted at `/`, and Vercel's Edge evaluates conditional requests against that single cache key before the function runs. A write carrying `If-Match` was answered `412 Precondition Failed` by the Edge — after the row had already been written, and without CORS headers, so the browser could not read the refusal. `If-Match` is still accepted on these two routes for callers that have not moved yet, and will be dropped once none remain.",
+    type: 'integer',
+    minimum: 0,
+  },
   FitnessDataAccessPolicy: {
     type: 'string',
     description:
@@ -2817,6 +3907,204 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         minimum: 1,
       },
     },
+  },
+  GlobalCatalogueEntry: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      'One entry of the global catalogue as its curator sees it. `in_use_count` is what already references it — templates, sessions and result contracts included — so archiving is never a blind decision. A movement has no code: it is identified by its normalised name.',
+    required: [
+      'kind',
+      'id',
+      'code',
+      'discipline_code',
+      'name',
+      'status',
+      'created_at',
+      'in_use_count',
+    ],
+    properties: {
+      kind: {
+        type: 'string',
+        enum: ['discipline', 'activity_type', 'movement'],
+      },
+      id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      code: {
+        type: ['string', 'null'],
+        pattern: '^[a-z][a-z0-9_]{1,63}$',
+      },
+      discipline_code: {
+        type: 'string',
+        pattern: '^[a-z][a-z0-9_]{1,63}$',
+      },
+      name: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 120,
+      },
+      status: {
+        type: 'string',
+        enum: ['draft', 'published', 'deprecated', 'archived'],
+      },
+      created_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      in_use_count: {
+        type: 'integer',
+        minimum: 0,
+      },
+    },
+  },
+  GrantStatus: {
+    description:
+      "`frozen` is not `revoked`. Ending the relationship freezes a grant, so the organization keeps what it already had and nothing after the cut; the person revoking it ends all access. Neither is the other's synonym.",
+    type: 'string',
+    enum: ['active', 'frozen', 'revoked'],
+  },
+  HealthContextBodyArea: {
+    type: 'string',
+    enum: [
+      'neck',
+      'shoulder',
+      'upper_back',
+      'lower_back',
+      'chest',
+      'abdomen',
+      'arm',
+      'elbow',
+      'wrist_hand',
+      'hip',
+      'thigh',
+      'knee',
+      'lower_leg',
+      'ankle_foot',
+    ],
+  },
+  HealthContextClaim: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'id',
+      'context_type',
+      'description',
+      'body_area',
+      'provenance',
+      'valid_from',
+      'valid_to',
+      'recorded_at',
+    ],
+    properties: {
+      id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      context_type: {
+        $ref: '#/components/schemas/HealthContextType',
+      },
+      description: {
+        type: 'string',
+      },
+      body_area: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/HealthContextBodyArea',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      provenance: {
+        $ref: '#/components/schemas/Provenance',
+      },
+      valid_from: {
+        type: 'string',
+        format: 'date-time',
+      },
+      valid_to: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      recorded_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+    },
+  },
+  HealthContextClaimCreate: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['context_type', 'description', 'valid_from'],
+    properties: {
+      context_type: {
+        $ref: '#/components/schemas/HealthContextType',
+      },
+      description: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 500,
+        description: "In the person's own words. Surrounding spaces are removed.",
+      },
+      body_area: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/HealthContextBodyArea',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      valid_from: {
+        type: 'string',
+        format: 'date-time',
+        description: 'When it started; never later than tomorrow.',
+      },
+      valid_to: {
+        type: ['string', 'null'],
+        format: 'date-time',
+        description: 'When it ends, if the person knows; after `valid_from`.',
+      },
+    },
+  },
+  HealthContextDeletion: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['health_context_claim_id', 'disposition_case_id', 'status'],
+    properties: {
+      health_context_claim_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      disposition_case_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      status: {
+        type: 'string',
+        enum: ['deleted'],
+      },
+    },
+  },
+  HealthContextPage: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['items', 'has_more'],
+    properties: {
+      items: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/HealthContextClaim',
+        },
+      },
+      has_more: {
+        type: 'boolean',
+      },
+    },
+  },
+  HealthContextType: {
+    type: 'string',
+    enum: ['pain', 'limitation', 'recovery'],
   },
   IanaTimeZone: {
     type: 'string',
@@ -2885,6 +4173,134 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         maximum: 10,
       },
     },
+  },
+  LegalHold: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'id',
+      'scope_description',
+      'reason_code',
+      'case_reference',
+      'valid_from',
+      'valid_to',
+      'status',
+      'applied_by_person_id',
+      'released_at',
+      'released_by_person_id',
+      'suspended_items',
+      'items',
+    ],
+    properties: {
+      id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      scope_description: {
+        type: 'string',
+      },
+      reason_code: {
+        $ref: '#/components/schemas/LegalHoldReason',
+      },
+      case_reference: {
+        type: 'string',
+      },
+      valid_from: {
+        type: 'string',
+        format: 'date-time',
+      },
+      valid_to: {
+        type: 'string',
+        format: 'date-time',
+      },
+      status: {
+        $ref: '#/components/schemas/LegalHoldStatus',
+      },
+      applied_by_person_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      released_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      released_by_person_id: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/Uuid',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      suspended_items: {
+        type: 'integer',
+        minimum: 0,
+        description: 'How many dispositions this hold is stopping right now.',
+      },
+      items: {
+        type: 'integer',
+        minimum: 1,
+        description: 'How many it named when it was applied.',
+      },
+    },
+  },
+  LegalHoldApplication: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      'Scope, reason, vigency and what it covers. Who applies it comes from the session and is never accepted here.',
+    required: [
+      'scope_description',
+      'reason_code',
+      'case_reference',
+      'valid_to',
+      'disposition_item_ids',
+    ],
+    properties: {
+      scope_description: {
+        type: 'string',
+        minLength: 3,
+        maxLength: 500,
+        description: 'What this hold covers, in the words of whoever answers for it.',
+      },
+      reason_code: {
+        $ref: '#/components/schemas/LegalHoldReason',
+      },
+      case_reference: {
+        type: 'string',
+        minLength: 3,
+        maxLength: 120,
+        description: 'The order or requirement this hold answers to.',
+      },
+      valid_to: {
+        type: 'string',
+        format: 'date-time',
+        description: 'When the hold ends. There are no indefinite holds.',
+      },
+      disposition_item_ids: {
+        type: 'array',
+        minItems: 1,
+        maxItems: 500,
+        items: {
+          $ref: '#/components/schemas/Uuid',
+        },
+      },
+    },
+  },
+  LegalHoldReason: {
+    type: 'string',
+    description:
+      'The ground the hold answers to. Closed on purpose: a reason typed by hand cannot be queried, and a hold nobody can query is a hold nobody can review.',
+    enum: [
+      'judicial_order',
+      'regulatory_request',
+      'service_dispute',
+      'tax_or_accounting_obligation',
+    ],
+  },
+  LegalHoldStatus: {
+    type: 'string',
+    enum: ['active', 'released'],
   },
   LengthUnit: {
     type: 'string',
@@ -5077,6 +6493,9 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       status: {
         $ref: '#/components/schemas/OrganizationSiteStatus',
       },
+      expected_revision: {
+        $ref: '#/components/schemas/ExpectedRevision',
+      },
     },
   },
   OrganizationType: {
@@ -5128,6 +6547,9 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
       type_code: {
         $ref: '#/components/schemas/OrganizationTypeCode',
+      },
+      expected_revision: {
+        $ref: '#/components/schemas/ExpectedRevision',
       },
     },
   },
@@ -5530,6 +6952,398 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
       reason_code: {
         $ref: '#/components/schemas/PlatformAccessReasonCode',
+      },
+    },
+  },
+  PlatformFeature: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['code', 'name', 'unit'],
+    properties: {
+      code: {
+        $ref: '#/components/schemas/PlatformFeatureCode',
+      },
+      name: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 120,
+      },
+      unit: {
+        type: ['string', 'null'],
+        maxLength: 32,
+        description: 'What the limit counts, such as `items` or `weeks`.',
+      },
+    },
+  },
+  PlatformFeatureCode: {
+    type: 'string',
+    pattern: '^[a-z][a-z0-9_]{1,63}$',
+  },
+  PlatformPlan: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'id',
+      'code',
+      'name',
+      'plan_kind',
+      'status',
+      'created_by_person_id',
+      'created_at',
+      'current_version',
+      'proposal',
+      'history',
+    ],
+    properties: {
+      id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      code: {
+        $ref: '#/components/schemas/PlatformPlanCode',
+      },
+      name: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 80,
+      },
+      plan_kind: {
+        $ref: '#/components/schemas/PlatformPlanKind',
+      },
+      status: {
+        type: 'string',
+        description: 'A plan is a draft until its first version is published.',
+        enum: ['draft', 'published'],
+      },
+      created_by_person_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      created_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      current_version: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/PlatformPlanVersion',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      proposal: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/PlatformPlanVersion',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      history: {
+        type: 'array',
+        description: 'Every version, newest first, withdrawn proposals included.',
+        items: {
+          $ref: '#/components/schemas/PlatformPlanVersion',
+        },
+      },
+    },
+  },
+  PlatformPlanBillingPeriod: {
+    type: 'string',
+    enum: ['month', 'year'],
+  },
+  PlatformPlanCatalogue: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['generated_at', 'feature_catalog', 'plans'],
+    properties: {
+      generated_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      feature_catalog: {
+        type: 'array',
+        description:
+          'The functions a plan can limit. Each one arrives with the code that enforces it, so the list changes only with a deployment, and it may be empty.',
+        items: {
+          $ref: '#/components/schemas/PlatformFeature',
+        },
+      },
+      plans: {
+        type: 'array',
+        description: 'The free plan first, then the paid ones by code.',
+        items: {
+          $ref: '#/components/schemas/PlatformPlan',
+        },
+      },
+    },
+  },
+  PlatformPlanChangeValue: {
+    oneOf: [
+      {
+        type: 'integer',
+        format: 'int64',
+      },
+      {
+        type: 'string',
+      },
+      {
+        $ref: '#/components/schemas/PlatformPlanFeatureState',
+      },
+      {
+        type: 'null',
+      },
+    ],
+  },
+  PlatformPlanCode: {
+    type: 'string',
+    pattern: '^[a-z][a-z0-9_]{1,39}$',
+  },
+  PlatformPlanCreate: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['code', 'name', 'plan_kind'],
+    properties: {
+      code: {
+        $ref: '#/components/schemas/PlatformPlanCode',
+      },
+      name: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 80,
+      },
+      plan_kind: {
+        $ref: '#/components/schemas/PlatformPlanKind',
+      },
+    },
+  },
+  PlatformPlanFeatureLimit: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['feature_code', 'enabled', 'limit_value'],
+    description:
+      '`enabled: false` leaves the function out of the plan and carries no limit. A null limit on an enabled function means unlimited.',
+    properties: {
+      feature_code: {
+        $ref: '#/components/schemas/PlatformFeatureCode',
+      },
+      enabled: {
+        type: 'boolean',
+      },
+      limit_value: {
+        type: ['integer', 'null'],
+        minimum: 0,
+        maximum: 2147483647,
+      },
+    },
+  },
+  PlatformPlanFeatureState: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['enabled', 'limit_value'],
+    properties: {
+      enabled: {
+        type: 'boolean',
+      },
+      limit_value: {
+        type: ['integer', 'null'],
+        minimum: 0,
+      },
+    },
+  },
+  PlatformPlanKind: {
+    type: 'string',
+    enum: ['free', 'paid'],
+  },
+  PlatformPlanVersion: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'id',
+      'version_number',
+      'status',
+      'amount_minor',
+      'currency_code',
+      'billing_period',
+      'features',
+      'supersedes_version_id',
+      'changes',
+      'proposed_by_person_id',
+      'proposed_by_self',
+      'proposed_at',
+      'published_by_person_id',
+      'published_at',
+      'deprecated_at',
+      'withdrawn_by_person_id',
+      'withdrawn_at',
+    ],
+    description:
+      'A version never changes once published: `draft` is a proposal waiting for review, `published` is in force, `deprecated` was replaced and still says what its subscribers accepted, and `archived` is a proposal that was withdrawn.',
+    properties: {
+      id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      version_number: {
+        type: 'integer',
+        minimum: 1,
+      },
+      status: {
+        type: 'string',
+        enum: ['draft', 'published', 'deprecated', 'archived'],
+      },
+      amount_minor: {
+        type: 'integer',
+        format: 'int64',
+        minimum: 0,
+      },
+      currency_code: {
+        type: ['string', 'null'],
+        pattern: '^[A-Z]{3}$',
+      },
+      billing_period: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/PlatformPlanBillingPeriod',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      features: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/PlatformPlanFeatureLimit',
+        },
+      },
+      supersedes_version_id: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/UuidV7',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      changes: {
+        type: ['array', 'null'],
+        description:
+          'What this version changes against the one it would replace; null for the first version of a plan, which replaces nothing.',
+        items: {
+          $ref: '#/components/schemas/PlatformPlanVersionChange',
+        },
+      },
+      proposed_by_person_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      proposed_by_self: {
+        type: 'boolean',
+        description:
+          'Whether the operator reading proposed it. Whoever proposed a version cannot publish it.',
+      },
+      proposed_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      published_by_person_id: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/Uuid',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      published_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      deprecated_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      withdrawn_by_person_id: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/Uuid',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      withdrawn_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+    },
+  },
+  PlatformPlanVersionChange: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['field', 'feature_code', 'before', 'after'],
+    description:
+      "One difference against the version this one would replace. `before` and `after` are an amount, a currency, a period or a function's state, and are null where the value was or becomes absent.",
+    properties: {
+      field: {
+        type: 'string',
+        enum: ['amount_minor', 'currency_code', 'billing_period', 'feature'],
+      },
+      feature_code: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/PlatformFeatureCode',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      before: {
+        $ref: '#/components/schemas/PlatformPlanChangeValue',
+      },
+      after: {
+        $ref: '#/components/schemas/PlatformPlanChangeValue',
+      },
+    },
+  },
+  PlatformPlanVersionProposal: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['amount_minor', 'currency_code', 'billing_period', 'features'],
+    description:
+      'The free plan sends `amount_minor: 0` with no currency and no period. A paid plan sends a positive amount in minor units of an ISO 4217 currency and a monthly or yearly period. `features` lists every function in the catalogue exactly once.',
+    properties: {
+      amount_minor: {
+        type: 'integer',
+        format: 'int64',
+        minimum: 0,
+        maximum: 100000000000,
+      },
+      currency_code: {
+        type: ['string', 'null'],
+        pattern: '^[A-Z]{3}$',
+      },
+      billing_period: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/PlatformPlanBillingPeriod',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      features: {
+        type: 'array',
+        maxItems: 200,
+        items: {
+          $ref: '#/components/schemas/PlatformPlanFeatureLimit',
+        },
       },
     },
   },
@@ -6293,6 +8107,18 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  Provenance: {
+    type: 'string',
+    description:
+      'Where a claim comes from. Space only writes `person_declared`; whether a value was verified is a separate matter.',
+    enum: [
+      'person_declared',
+      'professional_observation',
+      'device_observed',
+      'system_inferred',
+      'authority_verified',
+    ],
+  },
   PublicationStatus: {
     type: 'string',
     enum: ['draft', 'published', 'deprecated', 'archived'],
@@ -6321,6 +8147,120 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         type: 'string',
         minLength: 1,
         maxLength: 200,
+      },
+    },
+  },
+  RelationshipGrant: {
+    description:
+      'A permission the person granted, and nothing it covers. Every field here describes the permission — which scope, which version, whether it still stands — so a reader learns that measurements were shared without learning a single measurement.',
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'grant_id',
+      'scope_code',
+      'display_name',
+      'version_number',
+      'access_level',
+      'status',
+      'purpose',
+      'granted_at',
+      'revoked_at',
+    ],
+    properties: {
+      grant_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      scope_code: {
+        type: 'string',
+        minLength: 1,
+      },
+      display_name: {
+        type: ['string', 'null'],
+        description:
+          'The words the person was shown when they decided. Null when no presentation has been published for this scope yet.',
+      },
+      version_number: {
+        type: 'integer',
+        minimum: 1,
+        description:
+          'The scope version that was agreed, not the latest published one. A grant never drifts onto a later version.',
+      },
+      access_level: {
+        $ref: '#/components/schemas/AccessLevel',
+      },
+      status: {
+        $ref: '#/components/schemas/GrantStatus',
+      },
+      purpose: {
+        type: 'string',
+        minLength: 1,
+      },
+      granted_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      revoked_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+    },
+  },
+  RelationshipHistoryEvent: {
+    description:
+      "One moment in a relationship's past. `detail` carries different keys per `type`, and every one of them is metadata about the moment — never the content a permission covers.",
+    type: 'object',
+    additionalProperties: false,
+    required: ['type', 'occurred_at', 'source_id', 'detail'],
+    properties: {
+      type: {
+        type: 'string',
+        enum: [
+          'relationship_started',
+          'holder_assigned',
+          'holder_ended',
+          'substitution_proposed',
+          'substitution_accepted',
+          'substitution_ended',
+          'consent_decided',
+          'relationship_ended',
+        ],
+      },
+      occurred_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      source_id: {
+        description:
+          'The row this moment was read from, not an identifier of the moment. One assignment row produces more than one event, so the same `source_id` appears against different types.',
+        allOf: [
+          {
+            $ref: '#/components/schemas/UuidV7',
+          },
+        ],
+      },
+      detail: {
+        type: 'object',
+        description:
+          'Keys vary by `type`. `holder_assigned`, `holder_ended` and the substitution kinds carry `assignment_id`, `membership_id`, `professional_person_id` and `display_name`; `consent_decided` carries `scope_code`, `decision` and `scope_definition_id`; `relationship_ended` carries `ended_by_kind`, `declared_by_us` and `reason`; `relationship_started` carries `continues_relationship_id`.',
+        additionalProperties: true,
+      },
+    },
+  },
+  RelationshipHistoryPage: {
+    description:
+      "A page of a relationship's history, newest first. Shorter for a coach than for an owner, because a coach sees only their own assignment.",
+    type: 'object',
+    additionalProperties: false,
+    required: ['data', 'page'],
+    properties: {
+      data: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/RelationshipHistoryEvent',
+        },
+      },
+      page: {
+        $ref: '#/components/schemas/Page',
       },
     },
   },
@@ -6360,9 +8300,197 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  RelationshipProfessional: {
+    description: 'Who attends this person, under an open-ended assignment.',
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'assignment_id',
+      'membership_id',
+      'professional_person_id',
+      'display_name',
+      'valid_from',
+    ],
+    properties: {
+      assignment_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      membership_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      professional_person_id: {
+        $ref: '#/components/schemas/UuidV7',
+        description:
+          'The professional, never the client. The two are distinct people and the names have to say which is which.',
+      },
+      display_name: {
+        type: 'string',
+        minLength: 1,
+      },
+      valid_from: {
+        type: 'string',
+        format: 'date-time',
+        description: 'Since when this professional has attended the person.',
+      },
+    },
+  },
+  RelationshipReassignment: {
+    description:
+      'The assignment now in force, and the one it replaced. `replaced_assignment_id` is null when nothing changed because that coach was already in charge.',
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'assignment_id',
+      'relationship_id',
+      'membership_id',
+      'professional_person_id',
+      'valid_from',
+      'replaced_assignment_id',
+    ],
+    properties: {
+      assignment_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      relationship_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      membership_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      professional_person_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      valid_from: {
+        type: 'string',
+        format: 'date-time',
+      },
+      replaced_assignment_id: {
+        description: 'The assignment this one ended, or null when nothing changed.',
+        oneOf: [
+          {
+            $ref: '#/components/schemas/UuidV7',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+    },
+  },
+  RelationshipState: {
+    description:
+      'How one relationship stands: the link, who attends the person, the substitutions, and which permissions are in force. Cacheable for presentation, never for deciding authorization.',
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'relationship_id',
+      'person_id',
+      'display_name',
+      'status',
+      'started_at',
+      'ended_at',
+      'holder',
+      'substitutions',
+      'grants',
+    ],
+    properties: {
+      relationship_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      person_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      display_name: {
+        type: 'string',
+        minLength: 1,
+      },
+      status: {
+        $ref: '#/components/schemas/RelationshipStatus',
+      },
+      started_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      ended_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      holder: {
+        description:
+          'Null when nobody attends this person yet — which is the state assigning a professional starts from.',
+        oneOf: [
+          {
+            $ref: '#/components/schemas/RelationshipProfessional',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      substitutions: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/RelationshipSubstitution',
+        },
+      },
+      grants: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/RelationshipGrant',
+        },
+      },
+    },
+  },
   RelationshipStatus: {
     type: 'string',
     enum: ['active', 'terminated'],
+  },
+  RelationshipSubstitution: {
+    description:
+      'Somebody covering for the professional in charge, for a bounded period. A substitution only becomes effective once the person accepts it, so a `proposed` entry grants nothing yet.',
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'assignment_id',
+      'membership_id',
+      'professional_person_id',
+      'display_name',
+      'status',
+      'valid_from',
+      'ends_on',
+      'accepted_by_person_at',
+    ],
+    properties: {
+      assignment_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      membership_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      professional_person_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      display_name: {
+        type: 'string',
+        minLength: 1,
+      },
+      status: {
+        $ref: '#/components/schemas/AssignmentStatus',
+      },
+      valid_from: {
+        type: 'string',
+        format: 'date-time',
+      },
+      ends_on: {
+        type: ['string', 'null'],
+        format: 'date',
+      },
+      accepted_by_person_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+        description: 'Null until the person has accepted this substitution.',
+      },
+    },
   },
   RequiredScope: {
     type: 'object',
@@ -10199,6 +12327,103 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
     description:
       'Whether a block of the projection can say anything. `unknown` is a statement about the person; `not_modelled` is a statement about the platform, and confusing the two makes the card lie by omission.',
     enum: ['available', 'unknown', 'not_modelled'],
+  },
+  SupportBusinessMetric: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      'One figure. `value` is null unless `availability` is `available`, and the period is never absent: a number without a period is not published.',
+    required: ['key', 'availability', 'value', 'reason', 'period'],
+    properties: {
+      key: {
+        $ref: '#/components/schemas/SupportBusinessMetricKey',
+      },
+      availability: {
+        $ref: '#/components/schemas/SupportBusinessMetricAvailability',
+      },
+      value: {
+        type: ['integer', 'null'],
+        minimum: 0,
+      },
+      reason: {
+        type: ['string', 'null'],
+        maxLength: 64,
+        description: 'Why the figure cannot be given, when it cannot.',
+      },
+      period: {
+        $ref: '#/components/schemas/SupportBusinessMetricPeriod',
+      },
+    },
+  },
+  SupportBusinessMetricAvailability: {
+    type: 'string',
+    description:
+      '`below_threshold` is a statement about the group being too small to report; `not_modelled` is a statement about the platform. Neither is zero.',
+    enum: ['available', 'below_threshold', 'not_modelled'],
+  },
+  SupportBusinessMetricKey: {
+    type: 'string',
+    description:
+      '`active_people_this_week` counts people training in Space and has no signal at all; `studio_active_professionals_this_week` counts professionals working in Studio, which is the only activity the platform records. They are not the same question and must not be read as one.',
+    enum: [
+      'registered_people',
+      'new_people_this_week',
+      'active_people_this_week',
+      'studio_active_professionals_this_week',
+      'organizations',
+      'operating_organizations',
+      'unclaimed_organizations',
+      'active_subscriptions',
+      'billed_this_month',
+      'premium_people',
+    ],
+  },
+  SupportBusinessMetricPeriod: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      "The window the figure was measured over. `from` is null for a running total, which has no beginning other than the platform's own.",
+    required: ['kind', 'from', 'to'],
+    properties: {
+      kind: {
+        type: 'string',
+        enum: ['total', 'week', 'month'],
+      },
+      from: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      to: {
+        type: 'string',
+        format: 'date-time',
+      },
+    },
+  },
+  SupportBusinessPanel: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      'Counts only, each carrying the period it was measured over. No identifier, name or contact travels here, so no figure can be used to reach a person.',
+    required: ['generated_at', 'minimum_aggregate', 'metrics'],
+    properties: {
+      generated_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      minimum_aggregate: {
+        type: 'integer',
+        minimum: 1,
+        description:
+          'The smallest group of people the panel will report. A count of people below it is withheld; a true zero is still published.',
+      },
+      metrics: {
+        type: 'array',
+        minItems: 1,
+        items: {
+          $ref: '#/components/schemas/SupportBusinessMetric',
+        },
+      },
+    },
   },
   SupportDeliveryCircuit: {
     type: 'object',

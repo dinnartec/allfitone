@@ -626,7 +626,19 @@ describe('Studio organization routes', () => {
     })
 
     expect(response.status).toBe(200)
-    expect(response.headers.get('etag')).toBe(`"organization:${ORGANIZATION_ID}:r3"`)
+    /*
+     * No `ETag`, and this assertion used to say the opposite.
+     *
+     * It was inverted while chasing a `412` the Edge returned for these writes,
+     * on a theory about Vercel comparing `If-Match` against our response `ETag`
+     * that turned out to be wrong. The real cause was the Edge cache; see
+     * `application.ts`. The header stays off regardless, because nothing reads
+     * it — the client takes the new revision from the body, which is asserted
+     * below, so the guarantee moved to the field that carries it rather than
+     * disappearing.
+     */
+    expect(response.headers.get('etag')).toBeNull()
+    expect(await response.json()).toMatchObject({ revision_number: 3 })
     expect(received).toMatchObject({
       organizationId: ORGANIZATION_ID,
       expectedRevision: 2,
@@ -749,9 +761,14 @@ describe('Studio organization routes', () => {
     )
 
     expect(created.status).toBe(201)
+    // Creating still carries it: a POST sends no `If-Match`, so there is nothing
+    // for the platform to compare it against.
     expect(created.headers.get('etag')).toBe(`"organization-site:${SITE_ID}:r0"`)
     expect(updated.status).toBe(200)
-    expect(updated.headers.get('etag')).toBe(`"organization-site:${SITE_ID}:r1"`)
+    // The patch does not, and this is the route the defect was found on. See the
+    // organization patch test above for why the header has to go, and note the
+    // revision is still asserted — on the body, where the client reads it.
+    expect(updated.headers.get('etag')).toBeNull()
     expect(missingPrecondition.status).toBe(428)
     await expect(updated.json()).resolves.toMatchObject({ status: 'inactive', revision_number: 1 })
   })
