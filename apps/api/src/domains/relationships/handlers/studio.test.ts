@@ -86,7 +86,7 @@ function directory(page: Partial<DirectoryPage> = {}, capture?: (query: Director
 
 function app(service: ClientDirectoryService, session = sessions()): Hono {
   const routes = new Hono()
-  routes.route('/studio/v1', studioRelationshipRoutes(service, session))
+  routes.route('/studio/v1', studioRelationshipRoutes({ directory: service, sessions: session }))
   return routes
 }
 
@@ -315,7 +315,7 @@ function holders(overrides: Partial<HolderAssignmentService> = {}): HolderAssign
 
 function assignApp(service: HolderAssignmentService = holders(), session = sessions()): Hono {
   const routes = new Hono()
-  routes.route('/studio/v1', studioRelationshipRoutes(directory(), session, service))
+  routes.route('/studio/v1', studioRelationshipRoutes({ sessions: session, holders: service }))
   return routes
 }
 
@@ -496,7 +496,7 @@ function states(overrides: Partial<RelationshipState> = {}): RelationshipStateSe
 
 function stateApp(service: RelationshipStateService = states(), session = sessions()): Hono {
   const routes = new Hono()
-  routes.route('/studio/v1', studioRelationshipRoutes(directory(), session, holders(), service))
+  routes.route('/studio/v1', studioRelationshipRoutes({ sessions: session, states: service }))
   return routes
 }
 
@@ -621,7 +621,7 @@ function reassignApp(service: HolderReassignmentService = reassignments()): Hono
   const routes = new Hono()
   routes.route(
     '/studio/v1',
-    studioRelationshipRoutes(directory(), sessions(), holders(), states(), service),
+    studioRelationshipRoutes({ sessions: sessions(), reassignments: service }),
   )
   return routes
 }
@@ -759,17 +759,7 @@ function histories(
 
 function historyApp(service: RelationshipHistoryService = histories()): Hono {
   const routes = new Hono()
-  routes.route(
-    '/studio/v1',
-    studioRelationshipRoutes(
-      directory(),
-      sessions(),
-      holders(),
-      states(),
-      reassignments(),
-      service,
-    ),
-  )
+  routes.route('/studio/v1', studioRelationshipRoutes({ sessions: sessions(), histories: service }))
   return routes
 }
 
