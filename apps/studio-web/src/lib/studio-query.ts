@@ -56,6 +56,16 @@ export const studioQueryKeys = {
     [...ROOT_KEY, 'organization', organizationId, 'clients', { status, limit }] as const,
   relationship: (organizationId: string, relationshipId: string) =>
     [...ROOT_KEY, 'organization', organizationId, 'relationship', relationshipId] as const,
+  relationshipHistory: (organizationId: string, relationshipId: string, limit: number) =>
+    [
+      ...ROOT_KEY,
+      'organization',
+      organizationId,
+      'relationship',
+      relationshipId,
+      'history',
+      { limit },
+    ] as const,
   organizationInvitationsRoot: (organizationId: string) =>
     [...ROOT_KEY, 'organization', organizationId, 'invitations'] as const,
   organizationInvitations: (organizationId: string, status: InvitationFilter, limit: number) =>
@@ -200,6 +210,34 @@ export function relationshipQueryOptions(organizationId: string, relationshipId:
   return queryOptions({
     queryKey: studioQueryKeys.relationship(organizationId, relationshipId),
     queryFn: ({ signal }) => studioApi.relationshipState(organizationId, relationshipId, signal),
+    staleTime: STUDIO_TEAM_STALE_TIME_MS,
+  })
+}
+
+/**
+ * A relationship's past, newest first.
+ *
+ * Unlike the state beside it, this does not go stale: what already happened does
+ * not change. What can change is that something new is added to the end of it,
+ * which a reader notices by coming back rather than by this screen refetching
+ * under them mid-scroll.
+ */
+export function relationshipHistoryQueryOptions(
+  organizationId: string,
+  relationshipId: string,
+  limit: number,
+) {
+  return infiniteQueryOptions({
+    queryKey: studioQueryKeys.relationshipHistory(organizationId, relationshipId, limit),
+    queryFn: ({ pageParam, signal }) =>
+      studioApi.relationshipHistory(
+        organizationId,
+        relationshipId,
+        { limit, ...(pageParam ? { cursor: pageParam } : {}) },
+        signal,
+      ),
+    initialPageParam: null as string | null,
+    getNextPageParam: nextPageCursor,
     staleTime: STUDIO_TEAM_STALE_TIME_MS,
   })
 }

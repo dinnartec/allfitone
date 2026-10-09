@@ -24,6 +24,7 @@ export interface StudioApiFixture {
   organizationMemberships: unknown[]
   organizationClients: unknown[]
   relationshipState: unknown
+  relationshipHistory: unknown[]
   assignmentOutcome: 'created' | 'taken' | 'forbidden'
   reassignmentOutcome: 'reassigned' | 'no-holder' | 'forbidden'
   roleGrantOutcome: 'granted' | 'rejected' | 'forbidden'
@@ -223,6 +224,64 @@ export const endedRelationshipState = {
     entry.status === 'active' ? { ...entry, status: 'frozen' } : entry,
   ),
 }
+
+/**
+ * What that relationship has been through, newest first, as the server orders
+ * it.
+ *
+ * Deliberately longer than one page of 25 would be awkward to write, so the
+ * spec asks for a smaller page instead — what matters is that it holds a
+ * handover whose two halves **share an instant**, which is what a reassignment
+ * really produces, and a closure declared by the person, where the reason is
+ * withheld and the screen has to say why rather than look empty.
+ */
+export const relationshipHistory = [
+  {
+    type: 'relationship_ended',
+    occurred_at: '2026-09-28T16:00:00.000Z',
+    source_id: '01991600-7000-7000-8000-000000000101',
+    detail: { ended_by_kind: 'person', declared_by_us: false, reason: null },
+  },
+  {
+    type: 'holder_assigned',
+    occurred_at: '2026-09-20T09:00:00.000Z',
+    source_id: '01991600-7000-7000-8000-000000000302',
+    detail: { display_name: 'Diana Entrante' },
+  },
+  {
+    type: 'holder_ended',
+    occurred_at: '2026-09-20T09:00:00.000Z',
+    source_id: '01991600-7000-7000-8000-000000000301',
+    detail: { display_name: 'Camilo Saliente' },
+  },
+  {
+    type: 'consent_decided',
+    occurred_at: '2026-09-02T10:30:00.000Z',
+    source_id: '01991600-7000-7000-8000-000000000401',
+    detail: { scope_code: 'health_context', decision: 'accepted' },
+  },
+  {
+    type: 'relationship_started',
+    occurred_at: '2026-09-01T08:00:00.000Z',
+    source_id: '01991600-7000-7000-8000-000000000101',
+    detail: { continues_relationship_id: null },
+  },
+]
+
+/** The same history, closed by the organization, which does share its reason. */
+export const relationshipHistoryClosedByUs = [
+  {
+    type: 'relationship_ended',
+    occurred_at: '2026-09-28T16:00:00.000Z',
+    source_id: '01991600-7000-7000-8000-000000000101',
+    detail: {
+      ended_by_kind: 'professional',
+      declared_by_us: true,
+      reason: 'Dejó de asistir sin avisar',
+    },
+  },
+  ...relationshipHistory.slice(1),
+]
 
 export const terminatedClient = {
   kind: 'relationship',
@@ -531,6 +590,7 @@ export function createStudioApiFixture(
     organizationMemberships: [activeTeamMember, terminatedTeamMember],
     organizationClients: [activeClient, pendingClientInvitation, terminatedClient],
     relationshipState: structuredClone(relationshipState),
+    relationshipHistory: structuredClone(relationshipHistory),
     assignmentOutcome: 'created',
     reassignmentOutcome: 'reassigned',
     roleGrantOutcome: 'granted',
@@ -790,6 +850,29 @@ function defaultResponse(
     // production never reports.
     if (fixture.relationshipState === null) return { status: 404, body: { error: 'not-found' } }
     return { status: 200, body: fixture.relationshipState }
+  }
+  if (
+    request.method === 'GET' &&
+    /^\/studio\/v1\/organizations\/[^/]+\/relationships\/[^/]+\/events$/.test(request.path)
+  ) {
+    if (fixture.relationshipState === null) return { status: 404, body: { error: 'not-found' } }
+
+    /*
+     * Paged for real rather than returned whole. The screen's «cargar más» is
+     * the only way to reach a second page, and a fixture that handed everything
+     * over at once would let it ship without ever being pressed.
+     */
+    const search = new URLSearchParams(request.search ?? '')
+    const limit = Number(search.get('limit') ?? '25')
+    const cursor = search.get('cursor')
+    const all = fixture.relationshipHistory
+    const from = cursor ? Number(cursor) : 0
+    const slice = all.slice(from, from + limit)
+    const next = from + limit < all.length ? String(from + limit) : null
+    return {
+      status: 200,
+      body: { data: slice, page: { next_cursor: next, has_more: next !== null } },
+    }
   }
   if (
     request.method === 'POST' &&

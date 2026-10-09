@@ -44,6 +44,8 @@ export type ClientDirectoryRelationship = AllfitV1Schemas['ClientDirectoryRelati
 export type ClientDirectoryInvitation = AllfitV1Schemas['ClientDirectoryInvitation']
 export type ClientDirectoryGroup = AllfitV1Schemas['ClientDirectoryGroup']
 export type RelationshipState = AllfitV1Schemas['RelationshipState']
+export type RelationshipHistoryPage = AllfitV1Schemas['RelationshipHistoryPage']
+export type RelationshipHistoryEvent = AllfitV1Schemas['RelationshipHistoryEvent']
 export type RelationshipProfessional = AllfitV1Schemas['RelationshipProfessional']
 export type RelationshipSubstitution = AllfitV1Schemas['RelationshipSubstitution']
 export type RelationshipGrant = AllfitV1Schemas['RelationshipGrant']
@@ -314,6 +316,23 @@ export const studioApi = {
         ...(signal ? { signal } : {}),
       },
     ),
+
+  relationshipHistory: (
+    organizationId: string,
+    relationshipId: string,
+    query: { limit: number; cursor?: string },
+    signal?: AbortSignal,
+  ) => {
+    const search = new URLSearchParams({ limit: String(query.limit) })
+    if (query.cursor) search.set('cursor', query.cursor)
+    return request<RelationshipHistoryPage>(
+      `/studio/v1/organizations/${organizationId}/relationships/${relationshipId}/events?${search}`,
+      {
+        cache: 'no-store',
+        ...(signal ? { signal } : {}),
+      },
+    )
+  },
 
   offerableScopes: (signal?: AbortSignal) =>
     request<OfferableScopeCatalog>('/studio/v1/offerable-scopes', {

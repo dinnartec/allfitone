@@ -233,7 +233,8 @@
 [data-organization-details],
 [data-profile-presentation],
 [data-account-map],
-[data-relationship-state] {
+[data-relationship-state],
+[data-relationship-history] {
   display: grid;
   min-width: 0;
   gap: var(--afo-space-5);
@@ -611,6 +612,7 @@
 [data-client-directory-card-list],
 [data-relationship-substitution-list],
 [data-relationship-grant-cards],
+[data-relationship-history-list],
 [data-role-capability-list] {
   display: grid;
   gap: var(--afo-space-3);
@@ -631,9 +633,51 @@
 [data-organization-site-identity],
 [data-relationship-substitution-identity],
 [data-relationship-grant-identity],
+[data-relationship-history-what],
 [data-overview-team-identity] {
   min-width: 0;
   flex: 1;
+}
+
+/* One moment: when it happened on the left, what happened beside it. The only
+   rule here that is not shared with the lists above, because no other list puts
+   a timestamp in its own column. */
+[data-relationship-history-entry] {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: var(--afo-space-3);
+}
+
+[data-relationship-history-when] {
+  display: grid;
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+[data-relationship-history-when] [data-history-time] {
+  color: var(--afo-color-text-muted);
+  font-size: var(--afo-font-size-sm);
+}
+
+[data-relationship-history-what] [data-history-reason],
+[data-relationship-history-what] [data-history-note] {
+  color: var(--afo-color-text-muted);
+  font-size: var(--afo-font-size-sm);
+}
+
+/* On a phone the two stack: a date column that fits «6 oct 2026» leaves a
+   sentence about four words wide beside it. */
+@media (max-width: 40rem) {
+  [data-relationship-history-entry] {
+    display: grid;
+    gap: var(--afo-space-1);
+  }
+
+  [data-relationship-history-when] {
+    display: flex;
+    gap: var(--afo-space-2);
+  }
 }
 
 [data-overview-attention-expiry] {

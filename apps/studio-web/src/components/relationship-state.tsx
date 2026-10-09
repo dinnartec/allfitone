@@ -126,14 +126,28 @@ export function RelationshipStateScreen() {
             : `Cómo quedó el vínculo con ${relationship.display_name}, quién la atendía y qué permisos concedió.`
         }
         actions={
-          <Link
-            href={directoryPath}
-            data-slot="button"
-            data-variant="outline"
-            className={buttonVariants({ variant: 'outline', size: 'sm' })}
-          >
-            Volver a clientes
-          </Link>
+          <>
+            {/* Since a professional in charge can be replaced, this screen names
+                somebody without saying when that changed. The history is where
+                that lives, so the way in belongs next to the state it explains. */}
+            <Link
+              href={`${directoryPath}/${params.relationshipId}/history`}
+              data-slot="button"
+              data-variant="outline"
+              data-relationship-history-link
+              className={buttonVariants({ variant: 'outline', size: 'sm' })}
+            >
+              Ver la historia
+            </Link>
+            <Link
+              href={directoryPath}
+              data-slot="button"
+              data-variant="outline"
+              className={buttonVariants({ variant: 'outline', size: 'sm' })}
+            >
+              Volver a clientes
+            </Link>
+          </>
         }
       />
 
