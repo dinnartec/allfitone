@@ -68,8 +68,8 @@
       "dependencies": {
         "@allfitone/brand": "0.4.0",
         "@allfitone/contracts": "workspace:*",
-        "@allfitone/icons": "0.4.0",
-        "@allfitone/react-native": "0.9.0",
+        "@allfitone/icons": "0.5.0",
+        "@allfitone/react-native": "0.10.0",
         "@allfitone/telemetry": "workspace:*",
         "@allfitone/tokens": "0.4.0",
         "expo": "57.0.11",
@@ -228,7 +228,7 @@
 
     "@allfitone/food-recognition": ["@allfitone/food-recognition@workspace:packages/food-recognition"],
 
-    "@allfitone/icons": ["@allfitone/icons@0.4.0", "", { "dependencies": { "lucide-react": "^1.25.0" }, "peerDependencies": { "react": ">=19" } }, "sha512-NNSPLG4MRUFQI+Kf+G7v3JI7chiHrIEMdh9vyNRrW5VZpgrLNymfL6QDYI8xkhFUBZ+tmryo16bQxtSfe+xxEQ=="],
+    "@allfitone/icons": ["@allfitone/icons@0.5.0", "", { "dependencies": { "lucide-react": "^1.25.0" }, "peerDependencies": { "react": ">=19" } }, "sha512-r7UN5vwFemlGXZDytBAmDncH7tN7mXqucJn1fkDVqOWgQoYvEwNxjTfpshr9koqMBUFu2dTlcc4Pe8PYt7yIxA=="],
 
     "@allfitone/notifications": ["@allfitone/notifications@workspace:packages/notifications"],
 
@@ -238,7 +238,7 @@
 
     "@allfitone/react": ["@allfitone/react@0.10.0", "", { "dependencies": { "@allfitone/brand": "^0.3.0", "@allfitone/icons": "^0.2.0", "@allfitone/tokens": "^0.2.0", "@base-ui/react": "^1.6.0", "@tanstack/react-table": "^8.21.3", "class-variance-authority": "^0.7.1", "clsx": "^2.1.1", "cmdk": "^1.1.1", "date-fns": "^4.4.0", "motion": "^12.42.2", "react-day-picker": "^9.14.0", "sonner": "^2.0.7", "tailwind-merge": "^3.4.0" }, "peerDependencies": { "react": ">=19", "react-dom": ">=19" } }, "sha512-GWn70XYwQlYYFPAsNSjvLTTDAKi418cC1Hi84KEc+/RWMce4fD8eUyALhW3mrM4bFYB0c32sFHDQOPOAgOgtPg=="],
 
-    "@allfitone/react-native": ["@allfitone/react-native@0.9.0", "", { "dependencies": { "@allfitone/brand": "^0.4.0", "@allfitone/icons": "^0.4.0", "@allfitone/tokens": "^0.4.0", "@expo-google-fonts/barlow-condensed": "^0.4.0", "@expo-google-fonts/manrope": "^0.4.0", "lucide-react-native": "^1.25.0" }, "peerDependencies": { "expo-blur": ">=57", "expo-font": ">=57", "expo-linear-gradient": ">=57", "react": ">=19", "react-native": ">=0.86", "react-native-reanimated": ">=4", "react-native-safe-area-context": ">=5", "react-native-svg": ">=15.15.5" } }, "sha512-6/0NzmMYzO06LdyWAVpy+LTqUVc5BflQ/sXSFBC2XkzQf9cMe5SL4g9+WhBlulF8NcxmuG8+qVWix/w8UJ0h4Q=="],
+    "@allfitone/react-native": ["@allfitone/react-native@0.10.0", "", { "dependencies": { "@allfitone/brand": "^0.4.0", "@allfitone/icons": "^0.5.0", "@allfitone/tokens": "^0.4.0", "@expo-google-fonts/barlow-condensed": "^0.4.0", "@expo-google-fonts/manrope": "^0.4.0", "lucide-react-native": "^1.25.0" }, "peerDependencies": { "expo-blur": ">=57", "expo-font": ">=57", "expo-linear-gradient": ">=57", "react": ">=19", "react-native": ">=0.86", "react-native-reanimated": ">=4", "react-native-safe-area-context": ">=5", "react-native-svg": ">=15.15.5" } }, "sha512-JN08QlsG5Lubr8OvdVxFLNgsDqACVcQYLV6H1BnY0dIyZcZemZvbhChLOxyGFnYtzkXrSoo+BzlIn6dCFAoGcQ=="],
 
     "@allfitone/space": ["@allfitone/space@workspace:apps/space"],
 
@@ -2225,6 +2225,8 @@
     "xml2js/xmlbuilder": ["xmlbuilder@11.0.1", "", {}, "sha512-fDlsI/kFEx7gLvbecc0/ohLG50fugQp8ryHzMTuW9vSa1GJ0XYWKnhsUx7oie3G98+r56aTQIUB4kht42R3JvA=="],
 
     "zxing-wasm/type-fest": ["type-fest@5.10.0", "", { "dependencies": { "tagged-tag": "^1.0.0" } }, "sha512-NoSdpq/WEiAg5sjmBkmV/hfxv6HJH4NqPNrqjtSO5CwRmpsDfaf4begxW34KdJykH/l1yHtwBWQkCRdoXO8mPA=="],
+
+    "@allfitone/studio-web/@allfitone/react/@allfitone/icons": ["@allfitone/icons@0.4.0", "", { "dependencies": { "lucide-react": "^1.25.0" }, "peerDependencies": { "react": ">=19" } }, "sha512-NNSPLG4MRUFQI+Kf+G7v3JI7chiHrIEMdh9vyNRrW5VZpgrLNymfL6QDYI8xkhFUBZ+tmryo16bQxtSfe+xxEQ=="],
 
     "@commitlint/top-level/find-up/locate-path": ["locate-path@7.2.0", "", { "dependencies": { "p-locate": "^6.0.0" } }, "sha512-gvVijfZvn7R+2qyPX8mAuKcFGDf6Nc61GdvGafQsHL0sBIxfKzA+usWn4GFC/bk+QdwPUD4kWFJLhElipq+0VA=="],
 
