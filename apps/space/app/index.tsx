@@ -32,19 +32,18 @@ import { AccessibilityInfo, Animated, Easing, StyleSheet, View } from 'react-nat
 
 import { ApiError } from '../src/client'
 import { createSpaceOnboardingFlow } from '../src/client/onboarding-transport'
-import { resolveEntryRoute } from '../src/client/session-gate'
+import { introLeftMs, resolveEntryRoute } from '../src/client/session-gate'
 import { clearSession, readSession } from '../src/client/session'
 
 const FILL_MS = 1500
 const POWERED_DELAY_MS = 2050
-const EXIT_MS = 2800
-const REDUCED_EXIT_MS = 800
 
 export default function Opening() {
   const theme = useTheme()
   const router = useRouter()
   const [reduceMotion, setReduceMotion] = useState<boolean | null>(null)
   const [route, setRoute] = useState<string | null>(null)
+  const launchedAt = useRef(Date.now()).current
 
   useEffect(() => {
     let active = true
@@ -90,8 +89,7 @@ export default function Opening() {
   }, [])
 
   useEffect(() => {
-    if (reduceMotion === null || route === null) return
-
+    if (reduceMotion === null) return
     if (reduceMotion) {
       name.setValue(1)
       powered.setValue(1)
@@ -113,13 +111,16 @@ export default function Opening() {
         }),
       ]).start()
     }
+  }, [reduceMotion, name, powered])
 
+  useEffect(() => {
+    if (reduceMotion === null || route === null) return
     const timer = setTimeout(
       () => router.replace(route as '/welcome'),
-      reduceMotion ? REDUCED_EXIT_MS : EXIT_MS,
+      introLeftMs(Date.now() - launchedAt, reduceMotion),
     )
     return () => clearTimeout(timer)
-  }, [reduceMotion, route, name, powered, router])
+  }, [reduceMotion, route, launchedAt, router])
 
   return (
     <View style={[styles.root, { backgroundColor: theme.color.background.canvas }]}>

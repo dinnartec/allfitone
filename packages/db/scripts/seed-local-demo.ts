@@ -220,9 +220,13 @@ async function demoMeals(athlete: { person: string; subject: string }): Promise<
       await actor(transaction, 'person', athlete.person)
       await transaction`
         select nutrition.record_meal(
-          'workos', ${ISSUER}, ${athlete.subject}, ${uuidV7()}::uuid,
-          clock_timestamp() - ${ago}::interval, 'America/Bogota', ${type}, ${note},
-          ${JSON.stringify(items)}::text::jsonb, ${randomUUID()}::uuid, ${digest()}
+          ${athlete.person}::uuid,
+          jsonb_build_object(
+            'occurred_at', clock_timestamp() - ${ago}::interval, 'timezone', 'America/Bogota',
+            'meal_type', ${type}::text, 'note', ${note}::text,
+            'items', ${JSON.stringify(items)}::text::jsonb
+          ),
+          ${randomUUID()}::uuid, ${uuidV7()}::uuid, ${digest()}
         )
       `
     })

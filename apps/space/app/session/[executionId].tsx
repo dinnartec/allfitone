@@ -52,7 +52,7 @@ import { FoundationIcon } from '@allfitone/react-native/icons'
 import * as Haptics from 'expo-haptics'
 import { Image } from 'expo-image'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Keyboard, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import Animated, {
@@ -89,6 +89,7 @@ import {
   clockOf,
   editStateFrom,
   menuTitle,
+  rangeLabel,
   withClock,
 } from '../../src/client/finished'
 import { SPRING } from '../../src/client/motion'
@@ -248,7 +249,6 @@ export default function Session() {
   const [openKey, setOpenKey] = useState<string | undefined>(undefined)
   const [title, setTitle] = useState('')
   const [startedAt, setStartedAt] = useState<number | undefined>(undefined)
-  const [seconds, setSeconds] = useState(0)
   const [failure, setFailure] = useState<string | undefined>(undefined)
   const [closing, setClosing] = useState(false)
   const [deciding, setDeciding] = useState(false)
@@ -365,16 +365,6 @@ export default function Session() {
     declareReplacing(undefined)
     router.push('/routines/exercises')
   }
-
-  // Driven from the session's own start, not from a counter: a screen that slept for
-  // ten minutes has to come back showing ten minutes, not the ticks it missed.
-  useEffect(() => {
-    if (startedAt === undefined) return
-    const tick = () => setSeconds((Date.now() - startedAt) / 1000)
-    tick()
-    const timer = setInterval(tick, 1_000)
-    return () => clearInterval(timer)
-  }, [startedAt])
 
   const edit = (
     position: number,
@@ -502,15 +492,21 @@ export default function Session() {
     }
   }
 
-  // The screen already renders once a second for its clock; the rest ends on that beat.
+  // The rest ends on a timer of its own: the screen no longer redraws every second.
   useEffect(() => {
-    if (!rest || rest.endsAt > Date.now()) return
-    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
-    rememberRest(executionId, undefined)
-    void cancelRestEnd()
-    setRest(undefined)
-    setAside({ kind: 'done', next: upNext.current.movement })
-  }, [rest, seconds, executionId])
+    if (!rest) return
+    const end = setTimeout(
+      () => {
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+        rememberRest(executionId, undefined)
+        void cancelRestEnd()
+        setRest(undefined)
+        setAside({ kind: 'done', next: upNext.current.movement })
+      },
+      Math.max(0, rest.endsAt - Date.now()),
+    )
+    return () => clearTimeout(end)
+  }, [rest, executionId])
 
   // Its own effect: on the clock's, the next second's render cancelled the goodbye.
   useEffect(() => {
@@ -723,7 +719,7 @@ export default function Session() {
                 </Text>
                 <View style={styles.inline}>
                   <Text role="poster" size="xl">
-                    {`${clockOf(times.start, timeZone)}–${clockOf(times.end, timeZone)}`}
+                    {rangeLabel(clockOf(times.start, timeZone), clockOf(times.end, timeZone))}
                   </Text>
                   <FoundationIcon
                     name="edit"
@@ -763,7 +759,7 @@ export default function Session() {
         </View>
       ) : (
         <SessionScoreboard
-          seconds={seconds}
+          startedAt={startedAt}
           volumeKg={volume}
           done={progress.done}
           planned={progress.planned}
@@ -883,7 +879,6 @@ export default function Session() {
           moment={
             rest ? { kind: 'rest', rest, ...upNext.current } : (aside ?? { kind: 'done', next: '' })
           }
-          now={startedAt === undefined ? Date.now() : startedAt + seconds * 1000}
           onAdjust={(by) => {
             if (rest) restWith(adjusted(rest, by, Date.now()))
           }}
@@ -1399,6 +1394,11 @@ function SetRow({
   const theme = useTheme()
   const offset = useSharedValue(0)
   const [open, setOpen] = useState(false)
+  // The tick shows the moment it is pressed; the session's own redraw follows as a
+  // transition, and once it holds the same answer the row lets go of its own.
+  const [pending, setPending] = useState<boolean | undefined>(undefined)
+  if (pending !== undefined && pending === set.done) setPending(undefined)
+  const done = pending ?? set.done
 
   const settle = (to: number, velocity = 0) => {
     'worklet'
@@ -1492,7 +1492,7 @@ function SetRow({
             style={[
               StyleSheet.absoluteFill,
               styles.doneTint,
-              { backgroundColor: set.done ? tint : transparent(tint) },
+              { backgroundColor: done ? tint : transparent(tint) },
             ]}
           />
           {/* A chip with a caret, so it reads as something to press: the bare number
@@ -1506,7 +1506,7 @@ function SetRow({
               styles.colSet,
               styles.kindChip,
               { backgroundColor: theme.color.background.canvas },
-              set.done ? styles.dimmed : null,
+              done ? styles.dimmed : null,
             ]}
           >
             <Text
@@ -1543,13 +1543,13 @@ function SetRow({
           <Field
             value={set.loadKg}
             label={`Kilos de la serie ${index + 1}`}
-            dimmed={set.done}
+            dimmed={done}
             onChange={(loadKg) => onEdit({ loadKg })}
           />
           <Field
             value={set.reps}
             label={`Repeticiones de la serie ${index + 1}`}
-            dimmed={set.done}
+            dimmed={done}
             onChange={(reps) => onEdit({ reps })}
           />
           {/* Optional, and a button rather than a field: the scale opens explained. */}
@@ -1563,11 +1563,11 @@ function SetRow({
               styles.colRpe,
               styles.effort,
               {
-                backgroundColor: set.done
+                backgroundColor: done
                   ? transparent(theme.color.background.canvas)
                   : theme.color.background.canvas,
               },
-              set.done ? styles.dimmed : null,
+              done ? styles.dimmed : null,
             ]}
           >
             {/* A value like any other: accent is for action and focus, not for a number. */}
@@ -1578,25 +1578,26 @@ function SetRow({
 
           <Pressable
             accessibilityRole="checkbox"
-            accessibilityState={{ checked: set.done }}
+            accessibilityState={{ checked: done }}
             accessibilityLabel={`Marcar la serie ${index + 1}`}
             onPress={() => {
               if (open) return close()
               // The set is over; the keyboard would sit over the ones still to come.
               Keyboard.dismiss()
-              onTick()
+              setPending(!done)
+              startTransition(onTick)
             }}
             style={[
               styles.colTick,
               styles.tick,
               {
-                backgroundColor: set.done ? tint : theme.color.background.canvas,
-                borderColor: set.done ? theme.color.border.accent : theme.color.border.default,
-                borderWidth: set.done ? 1.5 : 1,
+                backgroundColor: done ? tint : theme.color.background.canvas,
+                borderColor: done ? theme.color.border.accent : theme.color.border.default,
+                borderWidth: done ? 1.5 : 1,
               },
             ]}
           >
-            {set.done ? (
+            {done ? (
               <FoundationIcon name="check" size="xs" color={theme.color.icon.accent} decorative />
             ) : null}
           </Pressable>

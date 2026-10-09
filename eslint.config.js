@@ -30,6 +30,18 @@ const NO_QUEUE_SDK = {
   message: 'The queue SDK belongs in packages/queue. Use its port.',
 }
 
+// Only packages/object-store knows the storage vendor (ADR-039).
+const NO_OBJECT_STORE_SDK = {
+  group: ['@aws-sdk/client-s3', '@aws-sdk/s3-request-presigner', '@aws-sdk/lib-storage'],
+  message: 'The storage SDK belongs in packages/object-store. Use its port.',
+}
+
+// Only packages/food-recognition talks to a model (ADR-041).
+const NO_AI_SDK = {
+  group: ['ai', 'ai/*', '@ai-sdk/*'],
+  message: 'The AI SDK belongs in packages/food-recognition. Use its port.',
+}
+
 // Product web apps consume visual decisions only through the React platform
 // package. Foundations and implementation libraries remain private to the DS.
 const UI_APPS = ['studio-web', 'backoffice-web']
@@ -322,19 +334,60 @@ export default tseslint.config(
   // exactly the failure these rules exist to prevent.
   {
     files: ['**/*.{ts,tsx}'],
-    rules: { 'no-restricted-imports': restrict(NO_PROVIDER_SDK, NO_QUEUE_SDK) },
+    rules: {
+      'no-restricted-imports': restrict(
+        NO_PROVIDER_SDK,
+        NO_QUEUE_SDK,
+        NO_OBJECT_STORE_SDK,
+        NO_AI_SDK,
+      ),
+    },
   },
   {
     files: ['packages/**/*.{ts,tsx}'],
-    rules: { 'no-restricted-imports': restrict(NO_PROVIDER_SDK, NO_QUEUE_SDK, NO_HOSTING) },
+    rules: {
+      'no-restricted-imports': restrict(
+        NO_PROVIDER_SDK,
+        NO_QUEUE_SDK,
+        NO_OBJECT_STORE_SDK,
+        NO_AI_SDK,
+        NO_HOSTING,
+      ),
+    },
   },
   {
     files: ['packages/auth-provider/**/*.ts'],
-    rules: { 'no-restricted-imports': restrict(NO_QUEUE_SDK, NO_HOSTING) },
+    rules: {
+      'no-restricted-imports': restrict(NO_QUEUE_SDK, NO_OBJECT_STORE_SDK, NO_AI_SDK, NO_HOSTING),
+    },
   },
   {
     files: ['packages/queue/**/*.ts'],
-    rules: { 'no-restricted-imports': restrict(NO_PROVIDER_SDK, NO_HOSTING) },
+    rules: {
+      'no-restricted-imports': restrict(
+        NO_PROVIDER_SDK,
+        NO_OBJECT_STORE_SDK,
+        NO_AI_SDK,
+        NO_HOSTING,
+      ),
+    },
+  },
+  {
+    files: ['packages/object-store/**/*.ts'],
+    rules: {
+      'no-restricted-imports': restrict(NO_PROVIDER_SDK, NO_QUEUE_SDK, NO_AI_SDK, NO_HOSTING),
+    },
+  },
+  {
+    files: ['packages/food-recognition/**/*.ts'],
+    rules: {
+      'no-restricted-imports': restrict(
+        NO_PROVIDER_SDK,
+        NO_QUEUE_SDK,
+        NO_OBJECT_STORE_SDK,
+        NO_HOSTING,
+      ),
+    },
   },
   ...APPS.map((app) => ({
     files: [`apps/${app}/**/*.{ts,tsx}`],
@@ -342,6 +395,8 @@ export default tseslint.config(
       'no-restricted-imports': restrict(
         NO_PROVIDER_SDK,
         NO_QUEUE_SDK,
+        NO_OBJECT_STORE_SDK,
+        NO_AI_SDK,
         noOtherApps(app),
         NO_DOMAIN_INTERNALS,
         ...(UI_APPS.includes(app) ? [NO_REACT_ROOT, NO_DIRECT_UI, NO_LOCAL_UI] : []),
@@ -389,6 +444,8 @@ export default tseslint.config(
       'no-restricted-imports': restrict(
         NO_PROVIDER_SDK,
         NO_QUEUE_SDK,
+        NO_OBJECT_STORE_SDK,
+        NO_AI_SDK,
         noOtherApps('api'),
         noOtherDomainInternals(domain),
       ),
@@ -400,6 +457,8 @@ export default tseslint.config(
       'no-restricted-imports': restrict(
         NO_PROVIDER_SDK,
         NO_QUEUE_SDK,
+        NO_OBJECT_STORE_SDK,
+        NO_AI_SDK,
         noOtherApps('api'),
         noOtherDomainInternals(domain),
         NO_DB_IN_HANDLERS,

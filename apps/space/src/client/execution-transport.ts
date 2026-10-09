@@ -9,7 +9,7 @@
 import { newCommand } from '@allfitone/contracts/commands'
 import * as Crypto from 'expo-crypto'
 
-import { ApiError, authorizedGet, authorizedPost, authorizedPut, refreshSession } from './index'
+import { authorizedGet, authorizedPost, authorizedPut } from './index'
 import {
   createExecutionFlow,
   type Abandoned,
@@ -27,8 +27,7 @@ import {
   type Today,
 } from './execution'
 import { historyPath, type HistoryMonth, type HistoryPage } from './history'
-import { readSession, storeSession } from './session'
-import { withRefresh } from './with-refresh'
+import { authenticated } from './session'
 
 export function createSpaceExecutionFlow(): ExecutionFlow {
   return createExecutionFlow({
@@ -141,23 +140,4 @@ export function createSpaceExecutionFlow(): ExecutionFlow {
         ),
     },
   })
-}
-
-function authenticated<T>(send: (token: string | undefined) => Promise<T>): Promise<T> {
-  return withRefresh(
-    {
-      session: async () => {
-        const stored = await readSession()
-        if (!stored) return null
-        return { accessToken: stored.accessToken, refreshToken: stored.refreshToken }
-      },
-      persist: (tokens) => storeSession({ ...tokens, analytics: { distinct_id: null } }),
-      refresh: async (refreshToken) => {
-        const rotated = await refreshSession(refreshToken)
-        return { accessToken: rotated.accessToken, refreshToken: rotated.refreshToken }
-      },
-      unauthorized: (error) => error instanceof ApiError && error.failure === 'unauthenticated',
-    },
-    send,
-  )
 }

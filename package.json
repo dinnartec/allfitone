@@ -43,7 +43,8 @@
     "measure:studio-latency": "node scripts/measure-studio-latency.mjs",
     "db:migration:new": "supabase migration new --workdir packages/db",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "media:start": "bun --env-file=.env.local packages/object-store/scripts/local.ts"
   },
   "lint-staged": {
     "*.{ts,tsx,js,mjs}": [

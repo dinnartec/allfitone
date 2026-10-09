@@ -4,8 +4,8 @@
  * Split from `sign-out.ts` for the reason every flow here is split — that file has to
  * stay loadable by the test runner, and none of this does.
  *
- * **No refresh wrapper.** Every other authenticated call retries through
- * `withRefresh` when the token is stale; this one must not. Refreshing in order to
+ * **No renewal.** Every other authenticated call goes through the session keeper,
+ * which renews a stale token; this one must not. Refreshing in order to
  * revoke would mint a new session on the way out, and a stale token is already a
  * session `OP-IDN-048` concedes closing.
  */

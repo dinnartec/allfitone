@@ -31,22 +31,26 @@ import Animated, {
 
 import { clockParts } from '../client/session-form'
 
+import { useNow } from './use-now'
+
 const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1)
 
 export function SessionScoreboard({
-  seconds,
+  startedAt,
   volumeKg,
   done,
   planned,
 }: {
-  readonly seconds: number
+  /** When the session began; its clock ticks here, so the screen around it does not. */
+  readonly startedAt: number | undefined
   readonly volumeKg: number
   readonly done: number
   readonly planned: number
 }) {
   const theme = useTheme()
   const reduced = useReducedMotion()
-  const clock = clockParts(seconds)
+  const now = useNow()
+  const clock = clockParts(startedAt === undefined ? 0 : (now - startedAt) / 1000)
   const share = planned > 0 ? Math.min(1, done / planned) : 0
 
   const fill = useSharedValue(share)

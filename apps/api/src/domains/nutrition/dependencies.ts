@@ -1,20 +1,25 @@
-/** Nutrition module composition. */
+/** Nutrition module composition: its database, the private store, the sanitiser and the recogniser. */
 
-import { randomUUID } from 'node:crypto'
+import { createFoodRecognizerFromEnv } from '@allfitone/food-recognition'
+import { createObjectStoreFromEnv } from '@allfitone/object-store'
 
-import { createMealService, type MealService } from './application/meals.js'
-import { createMealDatabase } from './infrastructure/meals.js'
+import { createSpaceNutritionService, type SpaceNutritionService } from './application/index.js'
+import { createNutritionDatabase } from './infrastructure/index.js'
+import { createSharpSanitizer } from './infrastructure/photo.js'
 
-let cachedMeals: MealService | undefined
+let cached: SpaceNutritionService | undefined
 
-export function spaceMealService(): MealService {
-  if (cachedMeals) return cachedMeals
-  const issuer = process.env.WORKOS_ISSUER
-  if (!issuer) throw new Error('WORKOS_ISSUER is not set')
-  cachedMeals = createMealService({
-    database: createMealDatabase(),
-    issuer,
-    requestId: () => randomUUID(),
-  })
-  return cachedMeals
+export function spaceNutritionService(): SpaceNutritionService {
+  cached ??= createSpaceNutritionService(
+    createNutritionDatabase(),
+    createObjectStoreFromEnv(process.env),
+    createSharpSanitizer(),
+    createFoodRecognizerFromEnv(process.env),
+  )
+  return cached
+}
+
+/** Test seam. Undefined restores environment-backed construction. */
+export function setSpaceNutritionService(service: SpaceNutritionService | undefined): void {
+  cached = service
 }

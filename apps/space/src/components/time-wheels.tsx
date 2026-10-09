@@ -1,6 +1,7 @@
 /**
- * A time picked on wheels, as the phone's own clock picks one: hours and minutes, each
- * its own wheel (FIN-18d).
+ * A time picked on wheels, as the phone's own clock picks one: hours from 1 to 12,
+ * minutes, and the half of the day, each its own wheel (FIN-18d). The clock it holds
+ * stays on 24 hours; only what turns reads as people read it.
  *
  * The session's start and end are one choice made twice, so a segmented control says
  * which of the two the wheels are turning, each with its time on it, and the wheels
@@ -13,7 +14,10 @@ import { WheelPicker } from '@allfitone/react-native/wheel-picker'
 import { useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 
-const HOURS = Array.from({ length: 24 }, (_, hour) => hour)
+import { fromTwelve, rangeLabel, toTwelve, twelveHour } from '../client/finished'
+
+const HOURS = Array.from({ length: 12 }, (_, index) => index + 1)
+const PERIODS = [0, 1]
 const MINUTES = Array.from({ length: 60 }, (_, minute) => minute)
 const two = (value: number) => String(value).padStart(2, '0')
 
@@ -23,6 +27,57 @@ export interface Clock {
 }
 
 export const clockText = (clock: Clock) => `${two(clock.hour)}:${two(clock.minute)}`
+
+/** «6:02 p. m.», for a label; `clockText` stays the value the clock is compared by. */
+export function clockShown(clock: Clock): string {
+  const { time, period } = twelveHour(clockText(clock))
+  return `${time} ${period}`
+}
+
+export const clockRange = (start: Clock, end: Clock) => rangeLabel(clockText(start), clockText(end))
+
+/** Hour, minutes and half of the day, turning one clock. */
+export function ClockWheels({
+  clock,
+  onChange,
+  label,
+}: {
+  readonly clock: Clock
+  readonly onChange: (clock: Clock) => void
+  readonly label: { readonly hour: string; readonly minute: string; readonly period: string }
+}) {
+  const twelve = toTwelve(clock.hour)
+  return (
+    <View style={styles.wheels}>
+      <WheelPicker
+        values={HOURS}
+        value={twelve.hour}
+        onChange={(hour) => onChange({ ...clock, hour: fromTwelve(hour, twelve.pm) })}
+        accessibilityLabel={label.hour}
+        style={styles.wheel}
+      />
+      <Text role="poster" size="3xl" color="muted">
+        :
+      </Text>
+      <WheelPicker
+        values={MINUTES}
+        value={clock.minute}
+        onChange={(minute) => onChange({ ...clock, minute })}
+        formatValue={two}
+        accessibilityLabel={label.minute}
+        style={styles.wheel}
+      />
+      <WheelPicker
+        values={PERIODS}
+        value={twelve.pm ? 1 : 0}
+        onChange={(period) => onChange({ ...clock, hour: fromTwelve(twelve.hour, period === 1) })}
+        formatValue={(period) => (period === 1 ? 'p. m.' : 'a. m.')}
+        accessibilityLabel={label.period}
+        style={styles.wheel}
+      />
+    </View>
+  )
+}
 
 /** «18:02» as the wheels hold it; anything else is midnight, which the wheels then show. */
 export function clockFrom(text: string): Clock {
@@ -49,35 +104,26 @@ export function TimeWheels({
       <SegmentedControl
         accessibilityLabel="Qué hora cambias"
         items={[
-          { value: 'start', label: `Empezó · ${clockText(start)}` },
-          { value: 'end', label: `Terminó · ${clockText(end)}` },
+          { value: 'start', label: `Empezó · ${clockShown(start)}` },
+          { value: 'end', label: `Terminó · ${clockShown(end)}` },
         ]}
         value={turning}
         onChange={setTurning}
       />
-      <View style={styles.wheels}>
-        <WheelPicker
-          key={`${turning}-hour`}
-          values={HOURS}
-          value={shown.hour}
-          onChange={(hour) => set({ ...shown, hour })}
-          formatValue={two}
-          accessibilityLabel={turning === 'start' ? 'Hora de inicio' : 'Hora de fin'}
-          style={styles.wheel}
-        />
-        <Text role="poster" size="3xl" color="muted">
-          :
-        </Text>
-        <WheelPicker
-          key={`${turning}-minute`}
-          values={MINUTES}
-          value={shown.minute}
-          onChange={(minute) => set({ ...shown, minute })}
-          formatValue={two}
-          accessibilityLabel={turning === 'start' ? 'Minutos de inicio' : 'Minutos de fin'}
-          style={styles.wheel}
-        />
-      </View>
+      <ClockWheels
+        key={turning}
+        clock={shown}
+        onChange={set}
+        label={
+          turning === 'start'
+            ? {
+                hour: 'Hora de inicio',
+                minute: 'Minutos de inicio',
+                period: 'Mañana o tarde, inicio',
+              }
+            : { hour: 'Hora de fin', minute: 'Minutos de fin', period: 'Mañana o tarde, fin' }
+        }
+      />
     </View>
   )
 }

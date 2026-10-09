@@ -4976,6 +4976,13 @@ export type Database = {
       program_draft_projection: { Args: { p_draft_id: string }; Returns: Json }
       program_projection: { Args: { p_program_id: string }; Returns: Json }
       program_region: { Args: { p_program_id: string }; Returns: string }
+      program_regions: {
+        Args: { p_program_ids: string[] }
+        Returns: {
+          program_id: string
+          region: string
+        }[]
+      }
       program_version_projection: {
         Args: { p_version_id: string }
         Returns: Json

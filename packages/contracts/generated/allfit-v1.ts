@@ -2971,7 +2971,11 @@ export interface paths {
       path?: never
       cookie?: never
     }
-    get?: never
+    /**
+     * Read one of my meals, with the revision a correction carries
+     * @description The meal a detail opens on. The ETag is the strong validator `OP-NUT-003` requires in `If-Match`. Another person's meal answers 404, as a missing one.
+     */
+    get: operations['getMyNutritionMeal']
     put?: never
     post?: never
     /** Delete one personal meal through governed disposition */
@@ -2980,6 +2984,78 @@ export interface paths {
     head?: never
     /** Revise meal structure or attach a sanitized photo */
     patch: operations['updateNutritionMeal']
+    trace?: never
+  }
+  '/space/v1/nutrition/foods': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** Search the food catalogue by name or synonym, accents and case aside */
+    get: operations['searchNutritionFoods']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/nutrition/foods/frequent': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** The catalogue foods the person logs most, with the last amount they used */
+    get: operations['listMyFrequentNutritionFoods']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/nutrition/recognitions': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Recognise the foods in a meal photo; nothing is stored
+     * @description Requires the person's recognition consent. The photo is sanitised (no EXIF, 1024 px) before it leaves Allfit, sent to one pinned model with zero data retention, and the answer is crossed with the catalogue for its nutrients (ADR-041).
+     */
+    post: operations['recognizeNutritionPhoto']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/nutrition/recognition-consent': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** Read the person's consent to photo recognition */
+    get: operations['getNutritionRecognitionConsent']
+    /** Accept a version of the photo recognition consent */
+    put: operations['acceptNutritionRecognitionConsent']
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
     trace?: never
   }
   '/space/v1/nutrition/daily-summaries': {
@@ -6831,8 +6907,42 @@ export interface components {
       /** Format: date-time */
       revoked_at: string
     }
-    /** @enum {string} */
-    NutrientCode: 'energy' | 'protein' | 'carbohydrates' | 'fat' | 'fiber' | 'water'
+    /**
+     * @description The published nutrients. Energy, macros, fibre and water; the detail of a label (saturated and trans fat, cholesterol, sodium, sugars); and vitamins and minerals. Each is written in its own unit only.
+     * @enum {string}
+     */
+    NutrientCode:
+      | 'energy'
+      | 'protein'
+      | 'carbohydrates'
+      | 'fat'
+      | 'fiber'
+      | 'water'
+      | 'saturated_fat'
+      | 'trans_fat'
+      | 'cholesterol'
+      | 'sodium'
+      | 'sugars'
+      | 'vitamin_a'
+      | 'vitamin_c'
+      | 'vitamin_d'
+      | 'vitamin_e'
+      | 'vitamin_k'
+      | 'thiamin'
+      | 'riboflavin'
+      | 'niacin'
+      | 'pantothenic_acid'
+      | 'vitamin_b6'
+      | 'vitamin_b12'
+      | 'folate'
+      | 'calcium'
+      | 'iron'
+      | 'magnesium'
+      | 'phosphorus'
+      | 'potassium'
+      | 'zinc'
+      | 'selenium'
+      | 'copper'
     /** @enum {string} */
     MealType: 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'other'
     /** @enum {string} */
@@ -6848,7 +6958,7 @@ export interface components {
       nutrient_code: components['schemas']['NutrientCode']
       value: number
       /** @enum {string} */
-      unit: 'kcal' | 'g' | 'ml'
+      unit: 'kcal' | 'g' | 'mg' | 'mcg' | 'ml'
     } & (
       | {
           /** @constant */
@@ -6864,9 +6974,39 @@ export interface components {
         }
       | {
           /** @enum {unknown} */
-          nutrient_code?: 'protein' | 'carbohydrates' | 'fat' | 'fiber'
+          nutrient_code?:
+            'protein' | 'carbohydrates' | 'fat' | 'fiber' | 'saturated_fat' | 'trans_fat' | 'sugars'
           /** @constant */
           unit?: 'g'
+        }
+      | {
+          /** @enum {unknown} */
+          nutrient_code?:
+            | 'cholesterol'
+            | 'sodium'
+            | 'vitamin_c'
+            | 'vitamin_e'
+            | 'thiamin'
+            | 'riboflavin'
+            | 'niacin'
+            | 'pantothenic_acid'
+            | 'vitamin_b6'
+            | 'calcium'
+            | 'iron'
+            | 'magnesium'
+            | 'phosphorus'
+            | 'potassium'
+            | 'zinc'
+            | 'copper'
+          /** @constant */
+          unit?: 'mg'
+        }
+      | {
+          /** @enum {unknown} */
+          nutrient_code?:
+            'vitamin_a' | 'vitamin_d' | 'vitamin_k' | 'vitamin_b12' | 'folate' | 'selenium'
+          /** @constant */
+          unit?: 'mcg'
         }
     )
     /**
@@ -6895,6 +7035,17 @@ export interface components {
       quantity: number | null
       quantity_unit: string | null
       nutrients: components['schemas']['NutrientValue'][]
+      /** @description The catalogue food this item is, when it is one (ADR-041). A published food only. */
+      food_id?: components['schemas']['Uuid'] | null
+      /** @description How the person said the amount («1½ taza», «210 ml»), to show it back; the nutrients follow `quantity` in grams. */
+      serving?: string | null
+      /** @description The packaged product this item is, when it is one; never together with `food_id`, and never on an item recognised in a photo. A published product only. */
+      product_id?: components['schemas']['Uuid'] | null
+      /**
+       * @description Where the item came from: typed by hand, picked from the catalogue (needs `food_id` or `product_id`), or recognised in a photo. Omitted on write, it is `typed`.
+       * @enum {string}
+       */
+      origin?: 'typed' | 'catalog' | 'photo'
     } & (
       | {
           quantity?: number
@@ -6940,6 +7091,7 @@ export interface components {
       meal_type: components['schemas']['MealType']
       note?: string | null
       items: components['schemas']['NutritionMealItem'][]
+      recognized_by?: components['schemas']['NutritionRecognitionModel']
     }
     NutritionPhotoUpload: {
       /** @enum {string} */
@@ -6957,6 +7109,7 @@ export interface components {
       photo?: components['schemas']['NutritionPhotoUpload'] | null
       /** @default false */
       remove_photo: boolean
+      recognized_by?: components['schemas']['NutritionRecognitionModel']
     }
     /**
      * @example {
@@ -6998,7 +7151,114 @@ export interface components {
       revision_number: number
       items: components['schemas']['NutritionMealItem'][]
       photo: components['schemas']['SignedMediaUrl'] | null
+      recognized_by?: components['schemas']['NutritionRecognitionModel']
       applied_scopes: components['schemas']['AppliedScope'][]
+    }
+    /** @description The exact model that recognised the meal's photo, when one did (ADR-041 §6). */
+    NutritionRecognitionModel: string | null
+    NutritionFoodNutrient: {
+      nutrient_code: components['schemas']['NutrientCode']
+      value_per_100g: number
+      /** @enum {string} */
+      unit: 'kcal' | 'g' | 'mg' | 'mcg' | 'ml'
+    }
+    NutritionFoodPortion: {
+      label: string
+      grams: number
+      is_default: boolean
+    }
+    /**
+     * @description A catalogue food with its nutrients per 100 g and its portions. A nutrient the source does not report is absent, never zero. Of kind `product`, it is a packaged product from Open Food Facts (ODbL), with its brand; the app credits the source wherever one shows.
+     * @example {
+     *       "id": "0190f2d6-68d0-7b4a-8d7f-d152223eed28",
+     *       "name": "Arroz blanco",
+     *       "kind": "ingredient",
+     *       "brand": null,
+     *       "icon": "grain",
+     *       "grams_per_ml": null,
+     *       "nutrients": [
+     *         {
+     *           "nutrient_code": "energy",
+     *           "value_per_100g": 130,
+     *           "unit": "kcal"
+     *         }
+     *       ],
+     *       "portions": [
+     *         {
+     *           "label": "1 taza",
+     *           "grams": 160,
+     *           "is_default": true
+     *         }
+     *       ]
+     *     }
+     */
+    NutritionFood: {
+      id: components['schemas']['Uuid']
+      name: string
+      /** @enum {string} */
+      kind: 'ingredient' | 'dish' | 'product'
+      /** @description The brand of a product; null for Allfit's own foods. */
+      brand: string | null
+      /** @description A DS food icon name, to tell foods apart in a list. */
+      icon: string
+      /** @description What a millilitre weighs, for what is poured; null otherwise, and then it offers no millilitres. */
+      grams_per_ml: number | null
+      nutrients: components['schemas']['NutritionFoodNutrient'][]
+      portions: components['schemas']['NutritionFoodPortion'][]
+    }
+    NutritionFoodPage: {
+      data: components['schemas']['NutritionFood'][]
+    }
+    NutritionFrequentFood: {
+      food: components['schemas']['NutritionFood']
+      times: number
+      last_portion: {
+        quantity: number | null
+        quantity_unit: string | null
+        grams: number | null
+      }
+    }
+    NutritionFrequentFoodPage: {
+      data: components['schemas']['NutritionFrequentFood'][]
+    }
+    NutritionRecognitionCreate: {
+      photo: components['schemas']['NutritionPhotoUpload']
+    }
+    NutritionRecognizedItem: {
+      /** @description Roughly where it sits in the photo, 0 to 1 from the top left; null when not said. */
+      at: {
+        x: number
+        y: number
+      } | null
+      name: string
+      units: number
+      grams: number
+      confidence: number
+      /** @description The food group the model saw, as a DS food icon name; null when it did not say. */
+      icon: string | null
+      /** @description The nutrients are the model's estimate because no catalogue food matched (ADR-041 as amended). The app says «Estimado con IA · revísalo». */
+      estimated: boolean
+      /** @description Low confidence, no catalogue food, or a whole dish beside its own parts: the app asks the person «¿Es esto?» before saving. */
+      needs_review: boolean
+      food: components['schemas']['NutritionFood'] | null
+      /** @description For the grams recognised: from the catalogue food, or the model's estimate when there is none (`estimated`); empty when there is neither. */
+      nutrients: components['schemas']['NutrientValue'][]
+    }
+    /** @description What a photo shows, with nutrients from the catalogue, never from the model. Nothing is stored: the person reviews it and saves a meal (ADR-041). */
+    NutritionRecognition: {
+      dish: string | null
+      items: components['schemas']['NutritionRecognizedItem'][]
+      model: string
+    }
+    NutritionRecognitionConsent: {
+      /** @description The text version a person must accept before a photo is recognised. */
+      current_version: string
+      accepted_version: string | null
+      /** Format: date-time */
+      accepted_at: string | null
+    }
+    NutritionRecognitionConsentAccept: {
+      version: string
     }
     NutritionMealPage: {
       data: components['schemas']['NutritionMeal'][]
@@ -7089,6 +7349,8 @@ export interface components {
       applied_scope: components['schemas']['AppliedScope'] | null
     }
     NutritionDailySummaryPage: {
+      /** @description Days in a row with at least one meal, ending today or, while today has none yet, yesterday (ADR-040). Counted over every day, not only the range asked. */
+      streak_days: number
       data: components['schemas']['NutritionDailySummary'][]
     }
     /**
@@ -7236,6 +7498,10 @@ export interface components {
       /** @enum {string} */
       kind: 'self' | 'professional'
       person_id: components['schemas']['Uuid']
+      /** @description The professional's name, so the person knows who proposes. Absent for a self goal. */
+      display_name?: string
+      /** @description The organization the proposal comes through. Absent for a self goal. */
+      organization_name?: string | null
     }
     /**
      * @example {
@@ -13895,7 +14161,34 @@ export interface operations {
       400: components['responses']['BadRequest']
       401: components['responses']['Unauthenticated']
       409: components['responses']['Conflict']
+      410: components['responses']['CommandEffectDisposed']
       422: components['responses']['ValidationFailed']
+    }
+  }
+  getMyNutritionMeal: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        mealId: components['parameters']['MealId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The meal as its owner sees it */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['PrivateNoStore']
+          ETag: components['headers']['ETag']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['NutritionMeal']
+        }
+      }
+      401: components['responses']['Unauthenticated']
+      404: components['responses']['NotFound']
     }
   }
   deleteNutritionMeal: {
@@ -13971,12 +14264,149 @@ export interface operations {
       428: components['responses']['PreconditionRequired']
     }
   }
+  searchNutritionFoods: {
+    parameters: {
+      query: {
+        q: string
+        limit?: number
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Matching published foods, exact names first */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['PrivateNoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['NutritionFoodPage']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+    }
+  }
+  listMyFrequentNutritionFoods: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Up to ten foods, most logged first */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['PrivateNoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['NutritionFrequentFoodPage']
+        }
+      }
+      401: components['responses']['Unauthenticated']
+    }
+  }
+  recognizeNutritionPhoto: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['NutritionRecognitionCreate']
+      }
+    }
+    responses: {
+      /** @description What the photo shows, for the person to review */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['NutritionRecognition']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  getNutritionRecognitionConsent: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The current text version and what the person accepted */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['PrivateNoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['NutritionRecognitionConsent']
+        }
+      }
+      401: components['responses']['Unauthenticated']
+    }
+  }
+  acceptNutritionRecognitionConsent: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['NutritionRecognitionConsentAccept']
+      }
+    }
+    responses: {
+      /** @description Consent recorded */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['NutritionRecognitionConsent']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      409: components['responses']['Conflict']
+      422: components['responses']['ValidationFailed']
+    }
+  }
   listMyNutritionDailySummaries: {
     parameters: {
       query: {
         from: components['parameters']['FromDate']
         /** @description Inclusive date; range from..to must not exceed 31 days. */
         to: components['parameters']['ToDate']
+        /** @description The device's zone, which decides what today is for `streak_days`. Omitted, the zone of the person's latest meal, or UTC. */
+        timezone?: components['schemas']['IanaTimeZone']
       }
       header?: never
       path?: never

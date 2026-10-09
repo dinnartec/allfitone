@@ -8,7 +8,8 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./commands": "./src/commands.ts"
+    "./commands": "./src/commands.ts",
+    "./nutrients": "./src/nutrients.ts"
   },
   "scripts": {
     "check:openapi": "redocly lint openapi/allfit-v1.openapi.yaml --config ../../redocly.yaml",

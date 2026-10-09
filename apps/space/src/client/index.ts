@@ -294,6 +294,46 @@ export async function authorizedPut<T>(
 }
 
 /**
+ * Authenticated PATCH or DELETE, the two verbs nutrition's meals answer to.
+ *
+ * `If-Match` is the strong validator the meal's last read named (OP-NUT-003); a DELETE
+ * carries no body and answers none, so it resolves to `undefined`.
+ */
+export async function authorizedSend<T>(
+  method: 'PATCH' | 'PUT' | 'DELETE',
+  path: string,
+  command: { idempotencyKey: string; commandId: string },
+  body: unknown,
+  token: string | undefined,
+  ifMatch?: string,
+): Promise<T> {
+  const { signal, done } = timeoutSignal(TIMEOUT_MS)
+  let response: Response | undefined
+  try {
+    response = await fetch(`${BASE_URL}${path}`, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        'Idempotency-Key': command.idempotencyKey,
+        'Command-Id': command.commandId,
+        ...(ifMatch === undefined ? {} : { 'If-Match': ifMatch }),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      signal,
+    })
+  } catch {
+    throw new ApiError('unavailable')
+  } finally {
+    done()
+  }
+
+  if (!response.ok) throw new ApiError(failureFor(response.status))
+
+  return (await readJsonBody<T>(response)) as T
+}
+
+/**
  * Authenticated GET. No command headers: a read is not a command, and sending
  * them would claim an idempotency key for something that changes nothing.
  */
@@ -323,6 +363,37 @@ export async function authorizedGet<T>(path: string, token?: string): Promise<T>
     response = await fetch(`${BASE_URL}${path}`, {
       method: 'GET',
       headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      signal,
+    })
+  } catch {
+    throw new ApiError('unavailable')
+  } finally {
+    done()
+  }
+
+  if (!response.ok) throw new ApiError(failureFor(response.status))
+
+  return (await readJsonBody<T>(response)) as T
+}
+
+/** A photo upload plus a model's look at it (OP-NUT-016) outlasts an ordinary request. */
+const RECOGNITION_TIMEOUT_MS = 30_000
+
+/**
+ * Authenticated POST that changes nothing on the server, so it claims no command: a
+ * recognition reads a photo and answers, and storing nothing has nothing to replay.
+ */
+export async function authorizedRead<T>(path: string, body: unknown, token?: string): Promise<T> {
+  const { signal, done } = timeoutSignal(RECOGNITION_TIMEOUT_MS)
+  let response: Response | undefined
+  try {
+    response = await fetch(`${BASE_URL}${path}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(body),
       signal,
     })
   } catch {

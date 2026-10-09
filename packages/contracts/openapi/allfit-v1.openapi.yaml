@@ -7356,6 +7356,8 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '409':
           $ref: '#/components/responses/Conflict'
+        '410':
+          $ref: '#/components/responses/CommandEffectDisposed'
         '422':
           $ref: '#/components/responses/ValidationFailed'
     get:
@@ -7387,6 +7389,35 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
 
   /space/v1/nutrition/meals/{mealId}:
+    get:
+      tags: [Space Nutrition]
+      operationId: getMyNutritionMeal
+      x-allfit-operation: OP-NUT-002
+      x-allfit-cache: private, no-store
+      summary: Read one of my meals, with the revision a correction carries
+      description: >-
+        The meal a detail opens on. The ETag is the strong validator `OP-NUT-003`
+        requires in `If-Match`. Another person's meal answers 404, as a missing one.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/MealId'
+      responses:
+        '200':
+          description: The meal as its owner sees it
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/PrivateNoStore'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NutritionMeal'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
     patch:
       tags: [Space Nutrition]
       operationId: updateNutritionMeal
@@ -7461,6 +7492,167 @@ paths:
         '410':
           $ref: '#/components/responses/CommandEffectDisposed'
 
+  /space/v1/nutrition/foods:
+    get:
+      tags: [Space Nutrition]
+      operationId: searchNutritionFoods
+      x-allfit-operation: OP-NUT-014
+      x-allfit-cache: private, no-store
+      summary: Search the food catalogue by name or synonym, accents and case aside
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 80
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 30
+            default: 20
+      responses:
+        '200':
+          description: Matching published foods, exact names first
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/PrivateNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NutritionFoodPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+
+  /space/v1/nutrition/foods/frequent:
+    get:
+      tags: [Space Nutrition]
+      operationId: listMyFrequentNutritionFoods
+      x-allfit-operation: OP-NUT-015
+      x-allfit-cache: private, no-store
+      summary: The catalogue foods the person logs most, with the last amount they used
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Up to ten foods, most logged first
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/PrivateNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NutritionFrequentFoodPage'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+
+  /space/v1/nutrition/recognitions:
+    post:
+      tags: [Space Nutrition]
+      operationId: recognizeNutritionPhoto
+      x-allfit-operation: OP-NUT-016
+      x-allfit-cache: no-store
+      summary: Recognise the foods in a meal photo; nothing is stored
+      description: >-
+        Requires the person's recognition consent. The photo is sanitised (no EXIF, 1024 px)
+        before it leaves Allfit, sent to one pinned model with zero data retention, and the
+        answer is crossed with the catalogue for its nutrients (ADR-041).
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NutritionRecognitionCreate'
+      responses:
+        '200':
+          description: What the photo shows, for the person to review
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NutritionRecognition'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /space/v1/nutrition/recognition-consent:
+    get:
+      tags: [Space Nutrition]
+      operationId: getNutritionRecognitionConsent
+      x-allfit-operation: OP-NUT-017
+      x-allfit-cache: private, no-store
+      summary: Read the person's consent to photo recognition
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: The current text version and what the person accepted
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/PrivateNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NutritionRecognitionConsent'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+    put:
+      tags: [Space Nutrition]
+      operationId: acceptNutritionRecognitionConsent
+      x-allfit-operation: OP-NUT-017
+      x-allfit-cache: no-store
+      summary: Accept a version of the photo recognition consent
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NutritionRecognitionConsentAccept'
+      responses:
+        '200':
+          description: Consent recorded
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NutritionRecognitionConsent'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
   /space/v1/nutrition/daily-summaries:
     get:
       tags: [Space Nutrition]
@@ -7473,6 +7665,14 @@ paths:
       parameters:
         - $ref: '#/components/parameters/FromDate'
         - $ref: '#/components/parameters/ToDate'
+        - name: timezone
+          in: query
+          required: false
+          description: >-
+            The device's zone, which decides what today is for `streak_days`. Omitted, the
+            zone of the person's latest meal, or UTC.
+          schema:
+            $ref: '#/components/schemas/IanaTimeZone'
       responses:
         '200':
           description: Daily summaries ordered by local date
@@ -16991,8 +17191,43 @@ components:
           format: date-time
 
     NutrientCode:
+      description: >-
+        The published nutrients. Energy, macros, fibre and water; the detail of a label
+        (saturated and trans fat, cholesterol, sodium, sugars); and vitamins and minerals.
+        Each is written in its own unit only.
       type: string
-      enum: [energy, protein, carbohydrates, fat, fiber, water]
+      enum:
+        - energy
+        - protein
+        - carbohydrates
+        - fat
+        - fiber
+        - water
+        - saturated_fat
+        - trans_fat
+        - cholesterol
+        - sodium
+        - sugars
+        - vitamin_a
+        - vitamin_c
+        - vitamin_d
+        - vitamin_e
+        - vitamin_k
+        - thiamin
+        - riboflavin
+        - niacin
+        - pantothenic_acid
+        - vitamin_b6
+        - vitamin_b12
+        - folate
+        - calcium
+        - iron
+        - magnesium
+        - phosphorus
+        - potassium
+        - zinc
+        - selenium
+        - copper
     MealType:
       type: string
       enum: [breakfast, lunch, dinner, snack, other]
@@ -17022,9 +17257,19 @@ components:
               const: ml
         - properties:
             nutrient_code:
-              enum: [protein, carbohydrates, fat, fiber]
+              enum: [protein, carbohydrates, fat, fiber, saturated_fat, trans_fat, sugars]
             unit:
               const: g
+        - properties:
+            nutrient_code:
+              enum: [cholesterol, sodium, vitamin_c, vitamin_e, thiamin, riboflavin, niacin, pantothenic_acid, vitamin_b6, calcium, iron, magnesium, phosphorus, potassium, zinc, copper]
+            unit:
+              const: mg
+        - properties:
+            nutrient_code:
+              enum: [vitamin_a, vitamin_d, vitamin_k, vitamin_b12, folate, selenium]
+            unit:
+              const: mcg
       properties:
         nutrient_code:
           $ref: '#/components/schemas/NutrientCode'
@@ -17033,12 +17278,12 @@ components:
           minimum: 0
         unit:
           type: string
-          enum: [kcal, g, ml]
+          enum: [kcal, g, mg, mcg, ml]
 
     NutritionMealItem:
       type: object
       propertyNames:
-        enum: [position, name, quantity, quantity_unit, nutrients]
+        enum: [position, name, quantity, quantity_unit, serving, nutrients, food_id, product_id, origin]
       required: [position, name, quantity, quantity_unit, nutrients]
       example:
         position: 1
@@ -17081,9 +17326,34 @@ components:
           maxLength: 16
         nutrients:
           type: array
-          maxItems: 6
+          maxItems: 32
           items:
             $ref: '#/components/schemas/NutrientValue'
+        food_id:
+          description: The catalogue food this item is, when it is one (ADR-041). A published food only.
+          oneOf:
+            - $ref: '#/components/schemas/Uuid'
+            - type: 'null'
+        serving:
+          description: >-
+            How the person said the amount («1½ taza», «210 ml»), to show it back; the
+            nutrients follow `quantity` in grams.
+          type: [string, 'null']
+          minLength: 1
+          maxLength: 40
+        product_id:
+          description: >-
+            The packaged product this item is, when it is one; never together with `food_id`, and
+            never on an item recognised in a photo. A published product only.
+          oneOf:
+            - $ref: '#/components/schemas/Uuid'
+            - type: 'null'
+        origin:
+          description: >-
+            Where the item came from: typed by hand, picked from the catalogue (needs `food_id` or `product_id`), or
+            recognised in a photo. Omitted on write, it is `typed`.
+          type: string
+          enum: [typed, catalog, photo]
 
     NutritionMealCreate:
       type: object
@@ -17123,6 +17393,8 @@ components:
           maxItems: 100
           items:
             $ref: '#/components/schemas/NutritionMealItem'
+        recognized_by:
+          $ref: '#/components/schemas/NutritionRecognitionModel'
 
     NutritionPhotoUpload:
       type: object
@@ -17166,6 +17438,8 @@ components:
         remove_photo:
           type: boolean
           default: false
+        recognized_by:
+          $ref: '#/components/schemas/NutritionRecognitionModel'
 
     NutritionMeal:
       type: object
@@ -17219,11 +17493,267 @@ components:
           oneOf:
             - $ref: '#/components/schemas/SignedMediaUrl'
             - type: 'null'
+        recognized_by:
+          $ref: '#/components/schemas/NutritionRecognitionModel'
         applied_scopes:
           type: array
           maxItems: 2
           items:
             $ref: '#/components/schemas/AppliedScope'
+
+    NutritionRecognitionModel:
+      description: The exact model that recognised the meal's photo, when one did (ADR-041 §6).
+      type: [string, 'null']
+      pattern: '^[a-z0-9-]+/[a-z0-9.-]+$'
+      maxLength: 120
+
+    NutritionFoodNutrient:
+      type: object
+      additionalProperties: false
+      required: [nutrient_code, value_per_100g, unit]
+      properties:
+        nutrient_code:
+          $ref: '#/components/schemas/NutrientCode'
+        value_per_100g:
+          type: number
+          minimum: 0
+        unit:
+          type: string
+          enum: [kcal, g, mg, mcg, ml]
+
+    NutritionFoodPortion:
+      type: object
+      additionalProperties: false
+      required: [label, grams, is_default]
+      properties:
+        label:
+          type: string
+          minLength: 1
+          maxLength: 60
+        grams:
+          type: number
+          exclusiveMinimum: 0
+        is_default:
+          type: boolean
+
+    NutritionFood:
+      type: object
+      additionalProperties: false
+      required: [id, name, kind, brand, icon, grams_per_ml, nutrients, portions]
+      description: >-
+        A catalogue food with its nutrients per 100 g and its portions. A nutrient the source
+        does not report is absent, never zero. Of kind `product`, it is a packaged product from
+        Open Food Facts (ODbL), with its brand; the app credits the source wherever one shows.
+      example:
+        id: 0190f2d6-68d0-7b4a-8d7f-d152223eed28
+        name: Arroz blanco
+        kind: ingredient
+        brand: null
+        icon: grain
+        grams_per_ml: null
+        nutrients:
+          - nutrient_code: energy
+            value_per_100g: 130
+            unit: kcal
+        portions:
+          - label: 1 taza
+            grams: 160
+            is_default: true
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        kind:
+          type: string
+          enum: [ingredient, dish, product]
+        brand:
+          description: The brand of a product; null for Allfit's own foods.
+          type: [string, 'null']
+          maxLength: 80
+        icon:
+          description: A DS food icon name, to tell foods apart in a list.
+          type: string
+          pattern: '^[a-z][a-zA-Z]*$'
+        grams_per_ml:
+          description: >-
+            What a millilitre weighs, for what is poured; null otherwise, and then it offers no
+            millilitres.
+          type: [number, 'null']
+          minimum: 0.1
+          maximum: 3
+        nutrients:
+          type: array
+          maxItems: 32
+          items:
+            $ref: '#/components/schemas/NutritionFoodNutrient'
+        portions:
+          type: array
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/NutritionFoodPortion'
+
+    NutritionFoodPage:
+      type: object
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          type: array
+          maxItems: 30
+          items:
+            $ref: '#/components/schemas/NutritionFood'
+
+    NutritionFrequentFood:
+      type: object
+      additionalProperties: false
+      required: [food, times, last_portion]
+      properties:
+        food:
+          $ref: '#/components/schemas/NutritionFood'
+        times:
+          type: integer
+          minimum: 1
+        last_portion:
+          type: object
+          additionalProperties: false
+          required: [quantity, quantity_unit, grams]
+          properties:
+            quantity:
+              type: [number, 'null']
+            quantity_unit:
+              type: [string, 'null']
+            grams:
+              type: [number, 'null']
+
+    NutritionFrequentFoodPage:
+      type: object
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          type: array
+          maxItems: 10
+          items:
+            $ref: '#/components/schemas/NutritionFrequentFood'
+
+    NutritionRecognitionCreate:
+      type: object
+      additionalProperties: false
+      required: [photo]
+      properties:
+        photo:
+          $ref: '#/components/schemas/NutritionPhotoUpload'
+
+    NutritionRecognizedItem:
+      type: object
+      additionalProperties: false
+      required: [name, units, grams, confidence, at, icon, estimated, needs_review, food, nutrients]
+      properties:
+        at:
+          description: Roughly where it sits in the photo, 0 to 1 from the top left; null when not said.
+          oneOf:
+            - type: object
+              additionalProperties: false
+              required: [x, y]
+              properties:
+                x:
+                  type: number
+                  minimum: 0
+                  maximum: 1
+                y:
+                  type: number
+                  minimum: 0
+                  maximum: 1
+            - type: 'null'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 60
+        units:
+          type: integer
+          minimum: 1
+          maximum: 50
+        grams:
+          type: integer
+          minimum: 1
+          maximum: 1500
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+        icon:
+          description: The food group the model saw, as a DS food icon name; null when it did not say.
+          type: [string, 'null']
+          pattern: '^[a-z][a-zA-Z]*$'
+        estimated:
+          type: boolean
+          description: >-
+            The nutrients are the model's estimate because no catalogue food matched (ADR-041 as
+            amended). The app says «Estimado con IA · revísalo».
+        needs_review:
+          type: boolean
+          description: >-
+            Low confidence, no catalogue food, or a whole dish beside its own parts: the app
+            asks the person «¿Es esto?» before saving.
+        food:
+          oneOf:
+            - $ref: '#/components/schemas/NutritionFood'
+            - type: 'null'
+        nutrients:
+          description: >-
+            For the grams recognised: from the catalogue food, or the model's estimate when there is
+            none (`estimated`); empty when there is neither.
+          type: array
+          maxItems: 32
+          items:
+            $ref: '#/components/schemas/NutrientValue'
+
+    NutritionRecognition:
+      type: object
+      additionalProperties: false
+      required: [dish, items, model]
+      description: >-
+        What a photo shows, with nutrients from the catalogue, never from the model. Nothing is
+        stored: the person reviews it and saves a meal (ADR-041).
+      properties:
+        dish:
+          type: [string, 'null']
+          maxLength: 60
+        items:
+          type: array
+          minItems: 1
+          maxItems: 15
+          items:
+            $ref: '#/components/schemas/NutritionRecognizedItem'
+        model:
+          type: string
+          pattern: '^[a-z0-9-]+/[a-z0-9.-]+$'
+
+    NutritionRecognitionConsent:
+      type: object
+      additionalProperties: false
+      required: [current_version, accepted_version, accepted_at]
+      properties:
+        current_version:
+          type: string
+          description: The text version a person must accept before a photo is recognised.
+        accepted_version:
+          type: [string, 'null']
+        accepted_at:
+          type: [string, 'null']
+          format: date-time
+
+    NutritionRecognitionConsentAccept:
+      type: object
+      additionalProperties: false
+      required: [version]
+      properties:
+        version:
+          type: string
+          pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
 
     NutritionMealPage:
       type: object
@@ -17337,7 +17867,7 @@ components:
           minimum: 0
         nutrient_totals:
           type: array
-          maxItems: 6
+          maxItems: 32
           items:
             $ref: '#/components/schemas/NutrientValue'
         applied_scope:
@@ -17348,8 +17878,14 @@ components:
     NutritionDailySummaryPage:
       type: object
       additionalProperties: false
-      required: [data]
+      required: [data, streak_days]
       properties:
+        streak_days:
+          type: integer
+          minimum: 0
+          description: >-
+            Days in a row with at least one meal, ending today or, while today has none
+            yet, yesterday (ADR-040). Counted over every day, not only the range asked.
         data:
           type: array
           maxItems: 31
@@ -17540,6 +18076,12 @@ components:
           enum: [self, professional]
         person_id:
           $ref: '#/components/schemas/Uuid'
+        display_name:
+          type: string
+          description: The professional's name, so the person knows who proposes. Absent for a self goal.
+        organization_name:
+          type: [string, 'null']
+          description: The organization the proposal comes through. Absent for a self goal.
 
     NutritionGoalVersion:
       type: object

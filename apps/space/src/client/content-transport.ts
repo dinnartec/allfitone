@@ -15,7 +15,7 @@
 import { newCommand } from '@allfitone/contracts/commands'
 import * as Crypto from 'expo-crypto'
 
-import { ApiError, authorizedGet, authorizedPost, authorizedPut, refreshSession } from './index'
+import { authorizedGet, authorizedPost, authorizedPut } from './index'
 import {
   createContentFlow,
   type ContentFlow,
@@ -32,8 +32,7 @@ import {
   type SessionTemplateDraft,
   type SessionTemplateVersion,
 } from './content'
-import { readSession, storeSession } from './session'
-import { withRefresh } from './with-refresh'
+import { authenticated } from './session'
 
 /** The contract's ceiling. Fewer round trips for the same bytes. */
 const PAGE_SIZE = 100
@@ -199,23 +198,4 @@ export function createSpaceContentFlow(): ContentFlow {
         ),
     },
   })
-}
-
-function authenticated<T>(send: (token: string | undefined) => Promise<T>): Promise<T> {
-  return withRefresh(
-    {
-      session: async () => {
-        const stored = await readSession()
-        if (!stored) return null
-        return { accessToken: stored.accessToken, refreshToken: stored.refreshToken }
-      },
-      persist: (tokens) => storeSession({ ...tokens, analytics: { distinct_id: null } }),
-      refresh: async (refreshToken) => {
-        const rotated = await refreshSession(refreshToken)
-        return { accessToken: rotated.accessToken, refreshToken: rotated.refreshToken }
-      },
-      unauthorized: (error) => error instanceof ApiError && error.failure === 'unauthenticated',
-    },
-    send,
-  )
 }

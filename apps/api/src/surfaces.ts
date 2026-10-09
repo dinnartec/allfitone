@@ -21,6 +21,7 @@ import {
   studioCatalogRoutes,
 } from './domains/catalog/index.js'
 import { spaceExecutionRoutes } from './domains/execution/index.js'
+import { spaceNutritionRoutes } from './domains/nutrition/index.js'
 import {
   backofficeAccountRecoveryRoutes,
   backofficeCredentialVerificationRoutes,
@@ -45,7 +46,6 @@ import {
   backofficeOrganizationRoutes,
   studioOrganizationRoutes,
 } from './domains/organizations/index.js'
-import { spaceMealRoutes } from './domains/nutrition/index.js'
 import { backofficePlatformPlanRoutes } from './domains/payments/index.js'
 import { spacePlanningRoutes, studioPlanningRoutes } from './domains/planning/index.js'
 import { backofficePrivacyRoutes, studioPrivacyRoutes } from './domains/privacy/index.js'
@@ -114,10 +114,10 @@ export function mountSurfaces(app: Hono): void {
   app.route('/space/v1', spaceOnboardingRoutes())
   app.route('/space/v1', spaceBodyProgressRoutes())
   app.route('/space/v1', spaceHealthContextRoutes())
-  app.route('/space/v1', spaceMealRoutes())
   app.route('/space/v1', spaceClientInvitationRoutes())
   app.route('/space/v1', spacePlanningRoutes())
   app.route('/space/v1', spaceExecutionRoutes())
+  app.route('/space/v1', spaceNutritionRoutes())
   app.route('/backoffice/v1', backofficeIdentityRoutes())
   app.route('/backoffice/v1', backofficeCredentialVerificationRoutes())
   app.route('/backoffice/v1', backofficeTeamInvitationRoutes())

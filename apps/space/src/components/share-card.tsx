@@ -23,7 +23,7 @@
  * render. The logo is the Design System's — never redrawn.
  */
 
-import { BrandLogoCarrier, ProductLockup } from '@allfitone/react-native/brand'
+import { BrandLogo, ProductLockup } from '@allfitone/react-native/brand'
 import { nativeFontFamily } from '@allfitone/react-native/fonts'
 import { FoundationIcon, type IconName } from '@allfitone/react-native/icons'
 import { color } from '@allfitone/react-native/tokens'
@@ -370,7 +370,8 @@ function Foot({
   return (
     <>
       <View style={[styles.symbol, { top: symbolAt }]}>
-        <BrandLogoCarrier width={24} height={25} decorative />
+        {/* The plain logo since DS 0.9.0, which retired the carrier tile; 405 × 1149. */}
+        <BrandLogo width={Math.round((25 * 405) / 1149)} height={25} decorative />
       </View>
       {motto ? (
         <Text

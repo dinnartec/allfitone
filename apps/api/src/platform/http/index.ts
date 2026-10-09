@@ -29,6 +29,8 @@ export type ApiErrorCode =
   | 'account-closed'
   /** Authenticated request is not allowed to perform this action. */
   | 'forbidden'
+  /** The person has not accepted the consent this operation needs (ADR-041). */
+  | 'consent-required'
   /** The chosen password was refused: too short, or known to be breached. */
   | 'weak-password'
   /** The command conflicts with durable state or a prior idempotent request. */
@@ -59,6 +61,7 @@ const STATUS: Record<ApiErrorCode, ContentfulStatusCode> = {
   'registration-incomplete': 403,
   'account-closed': 403,
   forbidden: 403,
+  'consent-required': 403,
   'weak-password': 422,
   conflict: 409,
   'stale-draft': 409,
@@ -81,6 +84,7 @@ const TITLE: Record<ApiErrorCode, string> = {
   'registration-incomplete': 'Registration must be completed first',
   'account-closed': 'The account is closed',
   forbidden: 'The actor cannot execute this operation',
+  'consent-required': 'Consent is required first',
   'weak-password': 'The password does not satisfy the security policy',
   conflict: 'The request conflicts with current state',
   'stale-draft': 'The local draft is stale',

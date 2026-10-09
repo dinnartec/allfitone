@@ -45,6 +45,8 @@ import Svg, { Circle } from 'react-native-svg'
 import { restLine, type RestLine } from '../client/rest-lines'
 import { countdownLabel, remaining, type Rest } from '../client/rest-timer'
 
+import { useNow } from './use-now'
+
 const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1)
 const ENTER = FadeInDown.duration(260).easing(EASE_OUT).reduceMotion(ReduceMotion.System)
 const EXIT = FadeOutDown.duration(180).reduceMotion(ReduceMotion.System)
@@ -81,17 +83,17 @@ export type RestMoment =
 
 export function RestBar({
   moment,
-  now,
   onAdjust,
   onSkip,
 }: {
   readonly moment: RestMoment
-  readonly now: number
   readonly onAdjust: (seconds: number) => void
   readonly onSkip: () => void
 }) {
   const theme = useTheme()
   const reduced = useReducedMotion()
+  // Its own clock, so counting down redraws the bar and not the session behind it.
+  const now = useNow()
   const fill = useSharedValue(1)
   const pulse = useSharedValue(1)
 

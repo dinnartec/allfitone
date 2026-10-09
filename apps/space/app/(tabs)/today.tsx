@@ -36,7 +36,7 @@ import { Sheet } from '@allfitone/react-native/sheet'
 import { Text } from '@allfitone/react-native/text'
 import { useTheme } from '@allfitone/react-native/theme'
 import { useFocusEffect, useRouter } from 'expo-router'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native'
 import Animated, {
   useAnimatedReaction,
@@ -50,6 +50,8 @@ import { semanticSpacing } from '@allfitone/react-native/tokens'
 
 import { ApiError } from '../../src/client'
 import { createSpaceExecutionFlow } from '../../src/client/execution-transport'
+import { keepIfSame } from '../../src/client/same-answer'
+import { ENTRANCE_MS } from '../../src/components/tab-entrance'
 import type { Today as TodayPayload } from '../../src/client/execution'
 import { createSpaceProgramFlow } from '../../src/client/programs-transport'
 import type { ProgramCatalogue } from '../../src/client/programs'
@@ -154,6 +156,7 @@ export default function Today() {
    * de nuevo a quien sólo quería ver dos más.
    */
   const [expanded, setExpanded] = useState(false)
+  const readOnce = useRef(false)
 
   /**
    * Re-read every time this tab is looked at, and **never clear what is on screen
@@ -170,50 +173,62 @@ export default function Today() {
     useCallback(() => {
       let active = true
 
-      training
-        .readToday(timezone)
-        .then((current) => {
-          if (!active) return
-          setToday(current)
-          // The catalogue is only read when there is a choice to make: somebody with a
-          // program does not need twenty-four of them fetched behind their session.
-          if (current.current_assignment === null) return programs.readCatalogue()
-          // Con programa, lo que hace falta es la semana y la biblioteca. Van detrás y
-          // no delante: la pantalla ya tiene qué dibujar arriba mientras llegan.
-          void Promise.all([
-            programs.readWeekPlan(timezone),
-            content.readMyRoutines(),
-            readExerciseLibrary(content),
-          ])
-            .then(([week, mine, read]) => {
-              if (!active) return
-              setPlan(week)
-              setRoutines(mine)
-              setLibrary(read)
-            })
-            .catch(() => undefined)
-          // Apart from the rest: a history that fails to load must not take the week with it.
-          void training
-            .listHistory({ timezone, limit: HOME_HISTORY })
-            .then((page) => active && setRecent(page.data))
-            .catch(() => active && setRecent([]))
-          return undefined
-        })
-        .then((available) => {
-          if (active && available) setCatalogue(available)
-        })
-        .catch((cause: unknown) => {
-          if (!active) return
-          if (cause instanceof ApiError && cause.failure === 'unauthenticated') {
-            setSessionExpired(true)
-            setFailure(EXPIRED)
-            return
-          }
-          setFailure(READ_FAILED)
-        })
+      // Coming back, the screen already shows the last answer: ask once it has finished
+      // arriving, so the redraw does not land on top of the transition.
+      const timer = setTimeout(read, readOnce.current ? ENTRANCE_MS : 0)
+      readOnce.current = true
+
+      function read() {
+        // Asked alongside today and not after it: most people have a programme, and
+        // waiting for today to say so cost a round trip. Without one, they go unused.
+        const withProgramme = Promise.all([
+          programs.readWeekPlan(timezone),
+          content.readMyRoutines(),
+          readExerciseLibrary(content),
+        ])
+        const history = training.listHistory({ timezone, limit: HOME_HISTORY })
+        withProgramme.catch(() => undefined)
+        history.catch(() => undefined)
+
+        training
+          .readToday(timezone)
+          .then((current) => {
+            if (!active) return
+            setToday((held) => keepIfSame(held, current))
+            // The catalogue is only read when there is a choice to make: somebody with a
+            // program does not need twenty-four of them fetched behind their session.
+            if (current.current_assignment === null) return programs.readCatalogue()
+            void withProgramme
+              .then(([week, mine, read]) => {
+                if (!active) return
+                setPlan((held) => keepIfSame(held, week))
+                setRoutines((held) => keepIfSame(held, mine))
+                setLibrary(read)
+              })
+              .catch(() => undefined)
+            // Apart from the rest: a history that fails to load must not take the week with it.
+            void history
+              .then((page) => active && setRecent((held) => keepIfSame(held, page.data)))
+              .catch(() => active && setRecent([]))
+            return undefined
+          })
+          .then((available) => {
+            if (active && available) setCatalogue((held) => keepIfSame(held, available))
+          })
+          .catch((cause: unknown) => {
+            if (!active) return
+            if (cause instanceof ApiError && cause.failure === 'unauthenticated') {
+              setSessionExpired(true)
+              setFailure(EXPIRED)
+              return
+            }
+            setFailure(READ_FAILED)
+          })
+      }
 
       return () => {
         active = false
+        clearTimeout(timer)
       }
     }, [content, programs, training, timezone]),
   )
@@ -270,19 +285,26 @@ export default function Today() {
   }
 
   /** Empezar la rutina de una tarjeta, o volver a la que quedó abierta. */
-  const start = (card: RoutineCard) => {
-    const open = card.routine.open_execution_id
-    if (open) {
-      router.push(`/session/${open}`)
-      return
-    }
-    setStarting(card.routine.planned_session_id)
-    training
-      .start(card.routine.planned_session_id, timezone)
-      .then((id) => router.push(`/session/${id}`))
-      .catch(() => setFailure(START_FAILED))
-      .finally(() => setStarting(undefined))
-  }
+  const start = useCallback(
+    (card: RoutineCard) => {
+      const open = card.routine.open_execution_id
+      if (open) {
+        router.push(`/session/${open}`)
+        return
+      }
+      setStarting(card.routine.planned_session_id)
+      training
+        .start(card.routine.planned_session_id, timezone)
+        .then((id) => router.push(`/session/${id}`))
+        .catch(() => setFailure(START_FAILED))
+        .finally(() => setStarting(undefined))
+    },
+    [router, training, timezone],
+  )
+  const openRoutine = useCallback(
+    (templateId: string) => router.push(`/routines/${templateId}`),
+    [router],
+  )
 
   return (
     <Screen edges={assigned ? [] : ['top', 'bottom']} style={assigned ? styles.bare : undefined}>
@@ -343,7 +365,7 @@ export default function Today() {
             library={library}
             today={todayIs}
             starting={starting}
-            onOpen={(templateId) => router.push(`/routines/${templateId}`)}
+            onOpen={openRoutine}
             onStart={start}
           />
         ) : null}
@@ -657,7 +679,8 @@ function open(router: ReturnType<typeof useRouter>, program: ProgramSummary) {
  * **Y sangra hasta el borde.** La pantalla tiene su margen, pero un carrusel que se
  * detuviera en él escondería la tarjeta siguiente justo cuando hace falta verla.
  */
-function Carousel({
+// Memoised: the costliest part of Hoy, and its props only change when the week does.
+const Carousel = memo(function Carousel({
   week,
   routines,
   library,
@@ -771,7 +794,7 @@ function Carousel({
       ) : null}
     </View>
   )
-}
+})
 
 function Week({
   week,

@@ -1,9 +1,3 @@
-/**
- * Public interface of the nutrition domain.
- *
- * Everything outside this module reaches nutrition through here and nowhere else — the
- * boundary rules enforce it.
- */
-
-export { spaceMealRoutes } from './handlers/space-meals.js'
-export type { MealService } from './application/meals.js'
+export { spaceNutritionRoutes } from './handlers/space.js'
+export { spaceNutritionService, setSpaceNutritionService } from './dependencies.js'
+export type { SpaceNutritionService } from './application/index.js'

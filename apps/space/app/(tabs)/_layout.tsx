@@ -22,38 +22,62 @@
  * `TabTrigger` created inside `TabBar` would never be seen. The bar is a shell now;
  * this file says where each destination leads.
  *
- * Comida has no route to lead to, so it is a plain `Tab` among the triggers — the
- * parser skips anything that is not a trigger, and it answers with what it is waiting
- * on instead of navigating into an empty screen. Progreso left the bar (1 Oct 2026).
+ * Every destination leads somewhere now: Comida got its screen with nutrition
+ * (ADR-040), and Progreso left the bar (1 Oct 2026).
  */
 
-import { Text } from '@allfitone/react-native/text'
-import { usePathname } from 'expo-router'
+import { useTheme } from '@allfitone/react-native/theme'
+import { usePathname, useRouter } from 'expo-router'
+import { useEffect, useState } from 'react'
 import { TabList, TabSlot, TabTrigger, Tabs } from 'expo-router/ui'
-import { useState } from 'react'
-import { StyleSheet } from 'react-native'
 
-import { DOCK_HEIGHT, PENDING, Tab, TabBar } from '../../src/components/tab-bar'
+import { Tab, TabBar } from '../../src/components/tab-bar'
+import { TabScene } from '../../src/components/tab-entrance'
+
+// The destinations in the bar's order, for the drop that is dragged between them.
+const PATHS = ['/today', '/train', '/food', '/profile'] as const
+const WARM_AFTER_MS = 1200
 
 export default function TabsLayout() {
-  const [pending, setPending] = useState<string | undefined>(undefined)
   // `TabTrigger` hands its child the press handling but never says whether it is the
   // focused one, and `usePathname` drops the group segment — so this compares against
   // the same paths the rest of the app navigates to.
   const path = usePathname()
+  const router = useRouter()
+  const active = PATHS.findIndex((one) => one === path)
+  const theme = useTheme()
+  // The tabs not yet visited are built a moment after launch, while nothing moves, so a
+  // first visit does not build a whole screen under the drop on its way there.
+  const [warm, setWarm] = useState(false)
+  useEffect(() => {
+    const timer = setTimeout(() => setWarm(true), WARM_AFTER_MS)
+    return () => clearTimeout(timer)
+  }, [])
 
   return (
-    <Tabs>
-      <TabSlot />
-
-      {pending ? (
-        <Text role="body" size="sm" color="muted" style={styles.pending}>
-          {pending}
-        </Text>
-      ) : null}
+    // The canvas behind the screens, so one arriving fades over it and not over white.
+    <Tabs style={{ flex: 1, backgroundColor: theme.color.background.canvas }}>
+      {/* Every screen stays mounted and dissolves in; see `TabScene`. */}
+      <TabSlot
+        detachInactiveScreens={false}
+        renderFn={(descriptor, { isFocused, loaded }) =>
+          loaded || isFocused || warm ? (
+            <TabScene key={descriptor.route.key} focused={isFocused}>
+              {descriptor.render()}
+            </TabScene>
+          ) : null
+        }
+      />
 
       <TabList asChild>
-        <TabBar>
+        <TabBar
+          active={active}
+          count={PATHS.length}
+          onSelect={(index) => {
+            const next = PATHS[index]
+            if (next) router.navigate(next)
+          }}
+        >
           <TabTrigger name="today" href="/today" asChild>
             <Tab icon="home" label="Hoy" active={path === '/today'} />
           </TabTrigger>
@@ -62,12 +86,9 @@ export default function TabsLayout() {
           </TabTrigger>
           {/* Cubiertos y no una cámara: Comida es dónde vive lo que registraste, y un
               obturador prometía una foto que no es lo que abre. */}
-          <Tab
-            icon="nutrition"
-            label="Comida"
-            active={false}
-            onPress={() => setPending(PENDING.food)}
-          />
+          <TabTrigger name="food" href="/food" asChild>
+            <Tab icon="nutrition" label="Comida" active={path === '/food'} />
+          </TabTrigger>
           <TabTrigger name="profile" href="/profile" asChild>
             <Tab icon="person" label="Perfil" active={path === '/profile'} />
           </TabTrigger>
@@ -76,15 +97,3 @@ export default function TabsLayout() {
     </Tabs>
   )
 }
-
-const styles = StyleSheet.create({
-  // Above the bar, out of the way of the content, and in one place rather than
-  // repeated in every screen that used to own this state.
-  pending: {
-    position: 'absolute',
-    left: 24,
-    right: 24,
-    bottom: DOCK_HEIGHT + 34,
-    textAlign: 'center',
-  },
-})

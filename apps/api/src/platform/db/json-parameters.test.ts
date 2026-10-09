@@ -38,7 +38,7 @@ describe('JSON documents sent to PostgreSQL', () => {
   test('T-PLAT-UNIT-02 the check reads the adapters it guards', () => {
     const paths = adapterSources().map(({ path }) => path)
 
-    expect(paths).toContain('nutrition/infrastructure/meals.ts')
+    expect(paths).toContain('nutrition/infrastructure/index.ts')
     expect(paths).toContain('organizations/infrastructure/index.ts')
     expect(paths).toContain('catalog/infrastructure/index.ts')
     expect(paths).toContain('payments/infrastructure/index.ts')
