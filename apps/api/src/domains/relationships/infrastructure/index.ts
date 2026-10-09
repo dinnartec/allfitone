@@ -17,6 +17,7 @@ import type {
   RelationshipState,
   RelationshipStateDatabase,
   RelationshipSubstitution,
+  SubstitutionProposalDatabase,
 } from '../domain/index.js'
 
 type DirectoryRow = {
@@ -406,5 +407,77 @@ type HolderRow = {
   person_id: string
   valid_from: string
   created: boolean
+  replayed: boolean
+}
+
+/**
+ * PostgreSQL access for asking somebody to accept a cover.
+ *
+ * The organization context is set by the function itself, for the same reason
+ * as assigning and reassigning.
+ *
+ * The dates stay strings on the way in and on the way out. `date` has no time
+ * and no zone, and routing it through a `Date` would attach both — a cover
+ * starting on the 12th becoming the 11th at 22:00 for a caller an hour west is
+ * the whole of that bug.
+ */
+export function createSubstitutionProposalDatabase(
+  sql: postgres.Sql = database(),
+): SubstitutionProposalDatabase {
+  return {
+    proposeSubstitution: (input) =>
+      measureStudioRequestPhase('business-db', async () => {
+        const row = await sql.begin(async (transaction) => {
+          await setPersonActor(transaction, input.actorPersonId)
+          const [proposal] = await transaction<SubstitutionProposalRow[]>`
+            select
+              assignment_id,
+              relationship_id,
+              membership_id,
+              professional_person_id,
+              starts_on::text as starts_on,
+              ends_on::text as ends_on,
+              proposed,
+              replayed
+            from relationships.propose_substitution(
+              ${input.actorPersonId}::uuid,
+              ${input.organizationId}::uuid,
+              ${input.relationshipId}::uuid,
+              ${input.membershipId}::uuid,
+              ${input.startsOn}::date,
+              ${input.endsOn}::date,
+              ${input.idempotencyKey}::uuid,
+              ${input.commandId}::uuid,
+              ${input.requestHash}
+            )
+          `
+          return proposal
+        })
+
+        if (!row) throw new Error('propose_substitution returned no row')
+        return {
+          resource: {
+            assignmentId: row.assignment_id,
+            relationshipId: row.relationship_id,
+            membershipId: row.membership_id,
+            professionalPersonId: row.professional_person_id,
+            startsOn: row.starts_on,
+            endsOn: row.ends_on,
+          },
+          proposed: row.proposed,
+          replayed: row.replayed,
+        }
+      }),
+  }
+}
+
+type SubstitutionProposalRow = {
+  assignment_id: string
+  relationship_id: string
+  membership_id: string
+  professional_person_id: string
+  starts_on: string
+  ends_on: string
+  proposed: boolean
   replayed: boolean
 }

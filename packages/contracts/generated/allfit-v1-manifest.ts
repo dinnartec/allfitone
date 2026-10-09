@@ -1329,6 +1329,13 @@ export const allfitV1ContractManifest = {
       responses: ['200', '201', '400', '401', '403', '404', '409', '422', '503'],
     },
     {
+      method: 'POST',
+      path: '/studio/v1/organizations/{organizationId}/relationships/{relationshipId}/substitutions',
+      operationId: 'proposeRelationshipSubstitution',
+      allfitOperation: 'OP-REL-004',
+      responses: ['200', '201', '400', '401', '403', '404', '409', '422', '503'],
+    },
+    {
       method: 'GET',
       path: '/studio/v1/organizations/{organizationId}/roles',
       operationId: 'listStudioOrganizationRoles',

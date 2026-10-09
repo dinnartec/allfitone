@@ -2113,6 +2113,34 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/studio/v1/organizations/{organizationId}/relationships/{relationshipId}/substitutions': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Ask a client to accept somebody covering for their coach
+     * @description Proposes that another professional cover the client's coach for a stretch of days — a holiday, a leave, a course. **It is a question put to the person, not a decision taken for them.** The cover is created pending and the proposed professional reads nothing of the person's data until the person accepts. Silence is never acceptance.
+     *
+     *     The coach in charge may call this, which no other operation here allows: they are the one who knows they will be away, and making them ask an administrator to file their own absence is how a client ends up with nobody.
+     *
+     *     The person is notified inside the command's own transaction. If there is no way to reach them the proposal is refused with `409` rather than left pending — a professional waiting on an answer nobody was ever asked for is worse than a refusal.
+     *
+     *     Access ends on `ends_on` by itself. No nightly process has to run for the cover to stop counting, which is why an end date is required: `422` without one.
+     *
+     *     Asking twice for the same professional over the same days answers `409`.
+     */
+    post: operations['proposeRelationshipSubstitution']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/studio/v1/organizations/{organizationId}/relationships/{relationshipId}/assignments': {
     parameters: {
       query?: never
@@ -5903,6 +5931,32 @@ export interface components {
       valid_from: string
       /** @description The assignment this one ended, or null when nothing changed. */
       replaced_assignment_id: components['schemas']['UuidV7'] | null
+    }
+    /** @description Who covers, and for which days. Both dates are required: a cover with no end would have to be switched off by hand, and until somebody did, it would keep granting access to a person's data. */
+    RelationshipSubstitutionProposalCreate: {
+      /** @description The membership of the professional asked to cover. */
+      membership_id: components['schemas']['UuidV7']
+      /**
+       * Format: date
+       * @description First day of the cover.
+       */
+      starts_on: string
+      /**
+       * Format: date
+       * @description Last day of the cover, inclusive. Access stops after it on its own.
+       */
+      ends_on: string
+    }
+    /** @description The cover as it now stands: pending the person's answer. It grants nothing — `professional_person_id` reads none of this person's data until they accept, and then only until `ends_on`. */
+    RelationshipSubstitutionProposal: {
+      assignment_id: components['schemas']['UuidV7']
+      relationship_id: components['schemas']['UuidV7']
+      membership_id: components['schemas']['UuidV7']
+      professional_person_id: components['schemas']['UuidV7']
+      /** Format: date */
+      starts_on: string
+      /** Format: date */
+      ends_on: string
     }
     /** @description One moment in a relationship's past. `detail` carries different keys per `type`, and every one of them is metadata about the moment — never the content a permission covers. */
     RelationshipHistoryEvent: {
@@ -12634,6 +12688,57 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['RelationshipReassignment']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  proposeRelationshipSubstitution: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+        relationshipId: components['parameters']['RelationshipId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['RelationshipSubstitutionProposalCreate']
+      }
+    }
+    responses: {
+      /** @description A replay of a proposal this same command already made */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['RelationshipSubstitutionProposal']
+        }
+      }
+      /** @description The cover is pending the person's answer, and they have been asked */
+      201: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['RelationshipSubstitutionProposal']
         }
       }
       400: components['responses']['BadRequest']

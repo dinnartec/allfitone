@@ -257,3 +257,39 @@ export interface HolderAssignmentDatabase {
     },
   ): Promise<HolderAssignmentResult>
 }
+
+/**
+ * A cover somebody has been asked to accept. It is a question put to the
+ * person, not a decision taken for them: until they answer, the professional
+ * named here reads nothing of theirs, and the window below is only when the
+ * cover *would* run.
+ *
+ * Dates, not timestamps. A cover runs from one day to another, and the person
+ * answering reads days — turning that into an instant would invent a time
+ * nobody chose.
+ */
+export interface SubstitutionProposal {
+  readonly assignmentId: string
+  readonly relationshipId: string
+  readonly membershipId: string
+  readonly professionalPersonId: string
+  readonly startsOn: string
+  readonly endsOn: string
+}
+
+export interface SubstitutionProposalResult extends CommandResult<SubstitutionProposal> {
+  readonly proposed: boolean
+}
+
+export interface SubstitutionProposalDatabase {
+  proposeSubstitution(
+    input: CommandContext & {
+      actorPersonId: string
+      organizationId: string
+      relationshipId: string
+      membershipId: string
+      startsOn: string
+      endsOn: string
+    },
+  ): Promise<SubstitutionProposalResult>
+}

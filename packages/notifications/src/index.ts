@@ -312,6 +312,58 @@ export function renderProfessionalReassignedEmail(input: {
   }
 }
 
+/**
+ * Asking somebody whether another professional may cover for theirs.
+ *
+ * This one is a question, which no other email here is. So the subject is a
+ * question, and the first thing the body says is that nothing happens until
+ * they answer — because an email announcing that somebody new will see their
+ * health data reads as a decision already taken unless it says otherwise in
+ * the first line.
+ *
+ * No link, for the same reason as the reassignment notice: a button in an email
+ * about who reaches their data is an invitation to phish them. They answer in
+ * the app, where they are already who they say they are.
+ */
+export function renderSubstitutionProposedEmail(input: {
+  organizationName: string
+  substituteName: string
+  holderName: string
+  startsOn: string
+  endsOn: string
+  brandAssetUrl: string
+}): { subject: string; text: string; html: string } {
+  const organization = escapeHtml(input.organizationName)
+  const substitute = escapeHtml(input.substituteName)
+  const holder = escapeHtml(input.holderName)
+  const window = `${formatCalendarDay(input.startsOn)} – ${formatCalendarDay(input.endsOn)}`
+  const lastDay = formatCalendarDay(input.endsOn)
+  return {
+    subject: `¿Aceptas que ${input.substituteName} te atienda mientras ${input.holderName} no está?`,
+    text: [
+      `${input.organizationName} propone que ${input.substituteName} te atienda del ${formatCalendarDay(input.startsOn)} al ${lastDay}, mientras ${input.holderName} no está.`,
+      `No pasa nada hasta que respondas. Mientras no aceptes, ${input.substituteName} no ve nada de tu información.`,
+      `Si aceptas, verá lo mismo que ve ${input.holderName} — lo que tú permitiste, y nada más — y solo hasta el ${lastDay}. Después deja de verlo sin que nadie tenga que hacer nada.`,
+      'Puedes aceptar o rechazar desde la app. Si no respondes, no se hace.',
+      'Si no esperabas esto, habla con tu gimnasio.',
+    ].join('\n\n'),
+    html: invitationEmailHtml({
+      title: `¿Aceptas que ${substitute} te atienda mientras ${holder} no está?`,
+      preheader: `${organization} propone una suplencia. No pasa nada hasta que respondas.`,
+      eyebrow: 'SUPLENCIA PROPUESTA',
+      heading: `${organization} propone que ${substitute} te atienda mientras ${holder} no está`,
+      lead: `No pasa nada hasta que respondas. Mientras no aceptes, ${substitute} no ve nada de tu información. Si aceptas, verá lo mismo que ve ${holder} — lo que tú permitiste, y nada más — y solo hasta el ${escapeHtml(lastDay)}.`,
+      detailLabel: 'TE ATENDERÍA',
+      detailValue: substitute,
+      expiryLabel: 'SOLO ESTOS DÍAS',
+      expires: escapeHtml(window),
+      brandAssetUrl: escapeHtml(input.brandAssetUrl),
+      note: 'Puedes aceptar o rechazar desde la app. Si no respondes, no se hace. Si no esperabas esto, habla con tu gimnasio.',
+      footer: 'Allfit One',
+    }),
+  }
+}
+
 function invitationEmailHtml(parts: InvitationEmailParts): string {
   return `<!doctype html>
 <html lang="es">
@@ -434,6 +486,25 @@ ${
     </table>
   </body>
 </html>`
+}
+
+/**
+ * A `date` from PostgreSQL as a person reads it.
+ *
+ * Parsed by its parts rather than handed to `new Date('2026-10-12')`, which
+ * reads the string as midnight UTC and then renders it in the running machine's
+ * zone — turning the 12th into the 11th for anybody west of Greenwich. A cover
+ * that starts a day early in an email is a cover the person did not agree to.
+ */
+function formatCalendarDay(day: string): string {
+  const parts = day.split('-')
+  const instant = Date.UTC(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]))
+  return new Intl.DateTimeFormat('es-CO', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(instant))
 }
 
 function formatInvitationExpiry(expiresAt: Date): string {

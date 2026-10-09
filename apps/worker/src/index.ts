@@ -21,6 +21,7 @@ import {
   createOwnershipInvitationDeliveryDatabase,
 } from './ownership-invitations.js'
 import { createReassignmentBatchProcessor } from './professional-reassignments.js'
+import { createSubstitutionBatchProcessor } from './substitution-proposals.js'
 import {
   createClientInvitationBatchProcessor,
   createClientInvitationDeliveryDatabase,
@@ -230,10 +231,17 @@ function processorsFromEnvironment(): WorkerJobProcessors {
    * trusted base, not a new setting: a second place to configure the same image
    * is a second place for it to be wrong.
    */
+  const brandAssetUrl = new URL('email/allfit-one-lockup-on-light.png', publicBaseUrl).toString()
   const reassignments = createReassignmentBatchProcessor({
     queue,
     email,
-    brandAssetUrl: new URL('email/allfit-one-lockup-on-light.png', publicBaseUrl).toString(),
+    brandAssetUrl,
+    deliveryEnabled,
+  })
+  const substitutions = createSubstitutionBatchProcessor({
+    queue,
+    email,
+    brandAssetUrl,
     deliveryEnabled,
   })
   const backofficeAuthentication = createBackofficeAuthBatchProcessor({
@@ -262,19 +270,37 @@ function processorsFromEnvironment(): WorkerJobProcessors {
       const team = await teamInvitations()
       const ownership = await ownershipInvitations()
       const client = await clientInvitations()
-      // Reassignment notices ride the same job rather than a cron of their own:
-      // they are the same claim against the same outbox, and a separate
-      // schedule would be a second thing to notice when it stops running.
+      // Reassignment notices and substitution questions ride the same job
+      // rather than a cron each: they are the same claim against the same
+      // outbox, and a separate schedule would be another thing to notice when
+      // it stops running.
       const reassigned = await reassignments()
+      const substituted = await substitutions()
       return {
-        claimed: team.claimed + ownership.claimed + client.claimed + reassigned.claimed,
-        delivered: team.delivered + ownership.delivered + client.delivered + reassigned.delivered,
+        claimed:
+          team.claimed +
+          ownership.claimed +
+          client.claimed +
+          reassigned.claimed +
+          substituted.claimed,
+        delivered:
+          team.delivered +
+          ownership.delivered +
+          client.delivered +
+          reassigned.delivered +
+          substituted.delivered,
         deadOrDelayed:
           team.deadOrDelayed +
           ownership.deadOrDelayed +
           client.deadOrDelayed +
-          reassigned.deadOrDelayed,
-        skipped: team.skipped + ownership.skipped + client.skipped + reassigned.skipped,
+          reassigned.deadOrDelayed +
+          substituted.deadOrDelayed,
+        skipped:
+          team.skipped +
+          ownership.skipped +
+          client.skipped +
+          reassigned.skipped +
+          substituted.skipped,
         expired: team.expired,
       }
     },

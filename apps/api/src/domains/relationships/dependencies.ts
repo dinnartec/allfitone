@@ -4,11 +4,13 @@ import {
   createHolderReassignmentService,
   createRelationshipHistoryService,
   createRelationshipStateService,
+  createSubstitutionProposalService,
   type ClientDirectoryService,
   type HolderAssignmentService,
   type HolderReassignmentService,
   type RelationshipHistoryService,
   type RelationshipStateService,
+  type SubstitutionProposalService,
 } from './application/index.js'
 import {
   createClientDirectoryDatabase,
@@ -16,6 +18,7 @@ import {
   createHolderReassignmentDatabase,
   createRelationshipHistoryDatabase,
   createRelationshipStateDatabase,
+  createSubstitutionProposalDatabase,
 } from './infrastructure/index.js'
 
 let cached: ClientDirectoryService | undefined
@@ -23,6 +26,7 @@ let cachedHolders: HolderAssignmentService | undefined
 let cachedStates: RelationshipStateService | undefined
 let cachedReassignments: HolderReassignmentService | undefined
 let cachedHistories: RelationshipHistoryService | undefined
+let cachedSubstitutions: SubstitutionProposalService | undefined
 
 export function clientDirectoryService(): ClientDirectoryService {
   cached ??= createClientDirectoryService(createClientDirectoryDatabase())
@@ -47,4 +51,9 @@ export function relationshipStateService(): RelationshipStateService {
 export function relationshipHistoryService(): RelationshipHistoryService {
   cachedHistories ??= createRelationshipHistoryService(createRelationshipHistoryDatabase())
   return cachedHistories
+}
+
+export function substitutionProposalService(): SubstitutionProposalService {
+  cachedSubstitutions ??= createSubstitutionProposalService(createSubstitutionProposalDatabase())
+  return cachedSubstitutions
 }

@@ -19,6 +19,7 @@ import {
   holderReassignmentService,
   relationshipHistoryService,
   relationshipStateService,
+  substitutionProposalService,
 } from '../dependencies.js'
 import {
   RelationshipsError,
@@ -27,6 +28,7 @@ import {
   type HolderReassignmentService,
   type RelationshipHistoryService,
   type RelationshipStateService,
+  type SubstitutionProposalService,
 } from '../application/index.js'
 import type {
   DirectoryEntry,
@@ -39,6 +41,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[89ab][0-9a-f]{3}-[0-9a-f]{12
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const UUID_V7 = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const DIRECTORY_GROUPS = new Set<DirectoryGroup>(['active', 'invited', 'terminated'])
+const CALENDAR_DAY = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/
 
 /**
  * The services these routes stand on. Every one is optional and every one
@@ -55,6 +58,7 @@ export interface StudioRelationshipDependencies {
   readonly states?: RelationshipStateService
   readonly reassignments?: HolderReassignmentService
   readonly histories?: RelationshipHistoryService
+  readonly substitutions?: SubstitutionProposalService
 }
 
 export function studioRelationshipRoutes(injected: StudioRelationshipDependencies = {}): Hono {
@@ -64,6 +68,7 @@ export function studioRelationshipRoutes(injected: StudioRelationshipDependencie
   const states = () => injected.states ?? relationshipStateService()
   const reassignments = () => injected.reassignments ?? holderReassignmentService()
   const histories = () => injected.histories ?? relationshipHistoryService()
+  const substitutions = () => injected.substitutions ?? substitutionProposalService()
   const sessions = () => injected.sessions ?? studioSessionService()
   const routes = new Hono()
 
@@ -313,6 +318,63 @@ export function studioRelationshipRoutes(injected: StudioRelationshipDependencie
     },
   )
 
+  /*
+   * OP-REL-004. Asks the person to accept somebody covering for their coach.
+   *
+   * Unlike its two siblings this one grants nothing when it succeeds: the cover
+   * is created pending, and the professional named in it reads nothing of the
+   * person's until the person answers. That is why the route returns 201 for
+   * something nobody can use yet.
+   *
+   * The holder may call it, which no other operation in this domain allows —
+   * they are the one who knows they will be away.
+   */
+  routes.post(
+    '/organizations/:organizationId/relationships/:relationshipId/substitutions',
+    async (c) => {
+      c.header('Cache-Control', 'no-store')
+      if (c.req.header('origin') !== studioOrigin) {
+        return fail(c, 'forbidden', 'origin is not allowed')
+      }
+      const organizationId = c.req.param('organizationId')
+      const relationshipId = c.req.param('relationshipId')
+      if (!UUID.test(organizationId) || !UUID.test(relationshipId)) {
+        return fail(c, 'invalid-request')
+      }
+      const body = await readJson(c)
+      if (!isSubstitutionProposal(body)) return fail(c, 'validation-failed')
+      const command = commandContext(c, body)
+      if (!command) return fail(c, 'invalid-request', 'valid command headers are required')
+
+      try {
+        const actor = await studioActor(c, sessions())
+        if (actor instanceof Response) return actor
+        const result = await substitutions().propose(actor, {
+          organizationId,
+          relationshipId,
+          membershipId: body.membership_id,
+          startsOn: body.starts_on,
+          endsOn: body.ends_on,
+          ...command,
+        })
+        if (result.replayed) c.header('Idempotent-Replay', 'true')
+        return c.json(
+          {
+            assignment_id: result.resource.assignmentId,
+            relationship_id: result.resource.relationshipId,
+            membership_id: result.resource.membershipId,
+            professional_person_id: result.resource.professionalPersonId,
+            starts_on: result.resource.startsOn,
+            ends_on: result.resource.endsOn,
+          },
+          result.proposed ? 201 : 200,
+        )
+      } catch (error) {
+        return failure(c, error)
+      }
+    },
+  )
+
   return routes
 }
 
@@ -352,6 +414,46 @@ function isHolderAssignment(value: unknown): value is { membership_id: string } 
     Object.keys(value).join(',') === 'membership_id' &&
     typeof value.membership_id === 'string' &&
     UUID.test(value.membership_id)
+  )
+}
+
+/*
+ * The keys are sorted before comparing, unlike the assignment above: with one
+ * field there is one order, with three there are six, and rejecting a body for
+ * naming its fields in a different order would be a contract nobody could read
+ * off the request.
+ */
+function isSubstitutionProposal(
+  value: unknown,
+): value is { membership_id: string; starts_on: string; ends_on: string } {
+  return (
+    isObject(value) &&
+    Object.keys(value).sort().join(',') === 'ends_on,membership_id,starts_on' &&
+    typeof value.membership_id === 'string' &&
+    UUID.test(value.membership_id) &&
+    isCalendarDay(value.starts_on) &&
+    isCalendarDay(value.ends_on)
+  )
+}
+
+/**
+ * A day as a person writes it, with no time and no zone. Which order the two
+ * dates come in, and whether the window is in the past, is decided by the
+ * command — this only says the string names a day that exists.
+ */
+function isCalendarDay(value: unknown): value is string {
+  if (typeof value !== 'string' || !CALENDAR_DAY.test(value)) return false
+  // `2026-02-31` has the shape of a day and is not one. `Date.UTC` rolls it
+  // forward to 3 March, so reading the parts back is what catches it.
+  const parts = value.split('-')
+  const year = Number(parts[0])
+  const month = Number(parts[1])
+  const day = Number(parts[2])
+  const parsed = new Date(Date.UTC(year, month - 1, day))
+  return (
+    parsed.getUTCFullYear() === year &&
+    parsed.getUTCMonth() === month - 1 &&
+    parsed.getUTCDate() === day
   )
 }
 
