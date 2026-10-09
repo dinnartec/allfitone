@@ -986,6 +986,42 @@ export const SCREENS: Screen[] = [
       await expect(page.getByText(/No hay otro entrenador activo/)).toBeVisible()
     },
   },
+  // --- `/organizations/[id]/clients/[relationshipId]/history` · HU-026 ---
+  {
+    // The timeline with every kind in it, including the handover whose two
+    // halves share an instant. If a date column and a sentence crowd each
+    // other, this is where it shows.
+    stories: 'HU-026 · what a relationship has been through',
+    path: `${workspace}/clients/${relationshipId}/history`,
+    fixture: () => createStudioApiFixture({ memberships: [activeMembership] }),
+    settled: async (page) => {
+      await settledByHeading(page)
+      await expect(page.getByText('Diana Entrante pasó a atenderla')).toBeVisible()
+    },
+  },
+  {
+    // Nothing has happened yet. The empty state has to say what will appear
+    // here, because «no hay nada» alone reads as a screen that failed.
+    stories: 'HU-026 · a relationship with nothing to tell yet',
+    path: `${workspace}/clients/${relationshipId}/history`,
+    fixture: () =>
+      createStudioApiFixture({ memberships: [activeMembership], relationshipHistory: [] }),
+    settled: async (page) => {
+      await settledByHeading(page)
+      await expect(page.getByText('Todavía no hay nada que contar')).toBeVisible()
+    },
+  },
+  {
+    // A coach sees a shorter history and is told so above it, so the notice and
+    // the list have to sit together without the warning swamping the content.
+    stories: 'HU-026 · the history a coach reads, with the notice that it is partial',
+    path: `/organizations/${secondActiveMembership.organization_id}/clients/${relationshipId}/history`,
+    fixture: () => createStudioApiFixture({ memberships: [secondActiveMembership] }),
+    settled: async (page) => {
+      await settledByHeading(page)
+      await expect(page.getByText('Ves tu parte de esta historia')).toBeVisible()
+    },
+  },
   {
     // A coach reads a narrower answer: the policy shows them their own
     // assignment and not the others, so the panel must not claim there are none.
