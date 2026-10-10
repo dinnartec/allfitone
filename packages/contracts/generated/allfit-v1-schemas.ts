@@ -8492,6 +8492,65 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  RelationshipSubstitutionProposal: {
+    description:
+      "The cover as it now stands: pending the person's answer. It grants nothing — `professional_person_id` reads none of this person's data until they accept, and then only until `ends_on`.",
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'assignment_id',
+      'relationship_id',
+      'membership_id',
+      'professional_person_id',
+      'starts_on',
+      'ends_on',
+    ],
+    properties: {
+      assignment_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      relationship_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      membership_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      professional_person_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      starts_on: {
+        type: 'string',
+        format: 'date',
+      },
+      ends_on: {
+        type: 'string',
+        format: 'date',
+      },
+    },
+  },
+  RelationshipSubstitutionProposalCreate: {
+    description:
+      "Who covers, and for which days. Both dates are required: a cover with no end would have to be switched off by hand, and until somebody did, it would keep granting access to a person's data.",
+    type: 'object',
+    additionalProperties: false,
+    required: ['membership_id', 'starts_on', 'ends_on'],
+    properties: {
+      membership_id: {
+        $ref: '#/components/schemas/UuidV7',
+        description: 'The membership of the professional asked to cover.',
+      },
+      starts_on: {
+        type: 'string',
+        format: 'date',
+        description: 'First day of the cover.',
+      },
+      ends_on: {
+        type: 'string',
+        format: 'date',
+        description: 'Last day of the cover, inclusive. Access stops after it on its own.',
+      },
+    },
+  },
   RequiredScope: {
     type: 'object',
     additionalProperties: false,

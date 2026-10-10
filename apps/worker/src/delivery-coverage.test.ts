@@ -37,7 +37,7 @@ const WORKER_SOURCE = import.meta.dir
  * `relationship.professional_reassigned.v1` went unexamined the first time.
  */
 const DELIVERY_EVENT =
-  /^(organization\.\w*invited|relationship\.(client_invited|professional_reassigned)|identity\.account_recovery_requested)\.v1$/
+  /^(organization\.\w*invited|relationship\.(client_invited|professional_reassigned|substitution_proposed)|identity\.account_recovery_requested)\.v1$/
 
 function enqueuedDeliveryEvents(): string[] {
   const found = new Set<string>()
@@ -67,6 +67,7 @@ describe('outbox delivery coverage', () => {
     expect(events).toContain('identity.account_recovery_requested.v1')
     expect(events).toContain('relationship.client_invited.v1')
     expect(events).toContain('relationship.professional_reassigned.v1')
+    expect(events).toContain('relationship.substitution_proposed.v1')
   })
 
   test('and would notice an event the worker never mentions', () => {

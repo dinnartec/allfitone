@@ -8,6 +8,7 @@ import type {
   HolderReassignmentService,
   RelationshipHistoryService,
   RelationshipStateService,
+  SubstitutionProposalService,
 } from '../application/index.js'
 import type {
   DirectoryEntry,
@@ -861,5 +862,184 @@ describe('reading what a relationship has been through', () => {
   test('is never stored by a cache', async () => {
     const response = await historyApp().fetch(askHistory())
     expect(response.headers.get('cache-control')).toBe('private, no-store')
+  })
+})
+
+const COVER_PATH = `/studio/v1/organizations/${ORGANIZATION}/relationships/${RELATIONSHIP}/substitutions`
+const COVER_BODY = {
+  membership_id: MEMBERSHIP,
+  starts_on: '2026-11-02',
+  ends_on: '2026-11-09',
+}
+
+function proposals(
+  overrides: Partial<SubstitutionProposalService> = {},
+  capture?: (input: Record<string, unknown>) => void,
+): SubstitutionProposalService {
+  return {
+    propose: async (_actor, input) => {
+      capture?.(input as unknown as Record<string, unknown>)
+      return {
+        resource: {
+          assignmentId: '019ad000-0000-7000-8000-000000000403',
+          relationshipId: RELATIONSHIP,
+          membershipId: MEMBERSHIP,
+          professionalPersonId: '019ad000-0000-7000-8000-000000000014',
+          startsOn: '2026-11-02',
+          endsOn: '2026-11-09',
+        },
+        proposed: true,
+        replayed: false,
+      }
+    },
+    ...overrides,
+  }
+}
+
+function coverApp(service: SubstitutionProposalService = proposals()): Hono {
+  const routes = new Hono()
+  routes.route(
+    '/studio/v1',
+    studioRelationshipRoutes({ sessions: sessions(), substitutions: service }),
+  )
+  return routes
+}
+
+function propose(body: unknown, headers: Record<string, string> = ASSIGN_HEADERS): Request {
+  return new Request(`https://api.example.test${COVER_PATH}`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body),
+  })
+}
+
+describe('asking a client to accept a cover', () => {
+  test('answers with the cover and the days it would run', async () => {
+    const response = await coverApp().fetch(propose(COVER_BODY))
+    expect(response.status).toBe(201)
+    const payload = (await response.json()) as Record<string, unknown>
+    expect(payload.professional_person_id).toBe('019ad000-0000-7000-8000-000000000014')
+    expect(payload.starts_on).toBe('2026-11-02')
+    expect(payload.ends_on).toBe('2026-11-09')
+  })
+
+  /*
+   * The dates go down as the strings they arrived as. A `date` has no time and
+   * no zone, and routing one through `Date` would attach both — a cover
+   * starting on the 2nd becoming the 1st at 22:00 for a caller an hour west.
+   */
+  test('passes the days down without turning them into instants', async () => {
+    const seen: Record<string, unknown>[] = []
+    const app = coverApp(proposals({}, (input) => seen.push(input)))
+    await app.fetch(propose(COVER_BODY))
+    expect(seen[0]?.startsOn).toBe('2026-11-02')
+    expect(seen[0]?.endsOn).toBe('2026-11-09')
+  })
+
+  test('marks a replayed command', async () => {
+    const replayed = proposals({
+      propose: async () => ({
+        resource: {
+          assignmentId: '019ad000-0000-7000-8000-000000000403',
+          relationshipId: RELATIONSHIP,
+          membershipId: MEMBERSHIP,
+          professionalPersonId: '019ad000-0000-7000-8000-000000000014',
+          startsOn: '2026-11-02',
+          endsOn: '2026-11-09',
+        },
+        proposed: false,
+        replayed: true,
+      }),
+    })
+    const response = await coverApp(replayed).fetch(propose(COVER_BODY))
+    expect(response.status).toBe(200)
+    expect(response.headers.get('Idempotent-Replay')).toBe('true')
+  })
+
+  /*
+   * Without an end date the cover would have to be switched off by hand, and
+   * until somebody did, it would keep granting access to a person's data. `422`
+   * and not `409`: the request is malformed, there is nothing to conflict with.
+   */
+  test('a cover with no end date is rejected', async () => {
+    const { ends_on: _end, ...open } = COVER_BODY
+    const response = await coverApp().fetch(propose(open))
+    expect(response.status).toBe(422)
+  })
+
+  test('a date that is not a day anybody has', async () => {
+    const response = await coverApp().fetch(propose({ ...COVER_BODY, ends_on: '2026-02-31' }))
+    expect(response.status).toBe(422)
+  })
+
+  test('a date written as an instant', async () => {
+    const response = await coverApp().fetch(
+      propose({ ...COVER_BODY, starts_on: '2026-11-02T00:00:00Z' }),
+    )
+    expect(response.status).toBe(422)
+  })
+
+  // Naming the fields in another order is not a different request.
+  test('accepts the fields in any order', async () => {
+    const response = await coverApp().fetch(
+      propose({ ends_on: '2026-11-09', starts_on: '2026-11-02', membership_id: MEMBERSHIP }),
+    )
+    expect(response.status).toBe(201)
+  })
+
+  test('a body carrying a field the contract does not declare', async () => {
+    const response = await coverApp().fetch(propose({ ...COVER_BODY, notify: false }))
+    expect(response.status).toBe(422)
+  })
+
+  // The same cover asked for twice. The database refuses it with a duplicate
+  // key, which has to reach the caller as a conflict rather than an outage.
+  test('the same cover asked for twice is a conflict', async () => {
+    const duplicate = proposals({
+      propose: async () => {
+        throw Object.assign(new Error('duplicate'), { code: '23505' })
+      },
+    })
+    const response = await coverApp(duplicate).fetch(propose(COVER_BODY))
+    expect(response.status).toBe(409)
+  })
+
+  // A coach who does not attend this person must not learn that it exists.
+  test('a relationship the caller may not see is a 404, not a 403', async () => {
+    const hidden = proposals({
+      propose: async () => {
+        throw Object.assign(new Error('not found'), { code: 'P0002' })
+      },
+    })
+    const response = await coverApp(hidden).fetch(propose(COVER_BODY))
+    expect(response.status).toBe(404)
+  })
+
+  test('somebody who may not decide who attends', async () => {
+    const refused = proposals({
+      propose: async () => {
+        throw Object.assign(new Error('forbidden'), { code: '42501' })
+      },
+    })
+    const response = await coverApp(refused).fetch(propose(COVER_BODY))
+    expect(response.status).toBe(403)
+  })
+
+  test('command headers that are missing', async () => {
+    const { 'command-id': _id, ...headers } = ASSIGN_HEADERS
+    const response = await coverApp().fetch(propose(COVER_BODY, headers))
+    expect(response.status).toBe(400)
+  })
+
+  test('another origin', async () => {
+    const response = await coverApp().fetch(
+      propose(COVER_BODY, { ...ASSIGN_HEADERS, origin: 'https://evil.test' }),
+    )
+    expect(response.status).toBe(403)
+  })
+
+  test('the response is never stored', async () => {
+    const response = await coverApp().fetch(propose(COVER_BODY))
+    expect(response.headers.get('Cache-Control')).toBe('no-store')
   })
 })

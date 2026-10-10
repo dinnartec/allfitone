@@ -10,6 +10,7 @@ import type {
   RelationshipHistoryDatabase,
   RelationshipState,
   RelationshipStateDatabase,
+  SubstitutionProposalDatabase,
 } from '../domain/index.js'
 
 /**
@@ -150,6 +151,36 @@ export function createHolderAssignmentService(
     assign(actor, input) {
       if (!actor.personId) throw new RelationshipsError('registration-incomplete')
       return database.assignHolder({ actorPersonId: actor.personId, ...input })
+    },
+  }
+}
+
+export interface SubstitutionProposalService {
+  propose(
+    actor: AccountActor,
+    input: CommandContext & {
+      organizationId: string
+      relationshipId: string
+      membershipId: string
+      startsOn: string
+      endsOn: string
+    },
+  ): ReturnType<SubstitutionProposalDatabase['proposeSubstitution']>
+}
+
+/*
+ * Thin, like its three siblings. The dates are checked by the route's schema
+ * before they arrive and again by the command, which is the one that also knows
+ * whether the relationship is live, who the holder is and whether the person
+ * can be asked at all — none of which this layer can see.
+ */
+export function createSubstitutionProposalService(
+  database: SubstitutionProposalDatabase,
+): SubstitutionProposalService {
+  return {
+    propose(actor, input) {
+      if (!actor.personId) throw new RelationshipsError('registration-incomplete')
+      return database.proposeSubstitution({ actorPersonId: actor.personId, ...input })
     },
   }
 }

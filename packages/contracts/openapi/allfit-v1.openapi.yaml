@@ -5314,6 +5314,88 @@ paths:
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
 
+  /studio/v1/organizations/{organizationId}/relationships/{relationshipId}/substitutions:
+    post:
+      tags: [Studio Relationships]
+      operationId: proposeRelationshipSubstitution
+      x-allfit-operation: OP-REL-004
+      x-allfit-cache: no-store
+      summary: Ask a client to accept somebody covering for their coach
+      description: >-
+        Proposes that another professional cover the client's coach for a stretch
+        of days — a holiday, a leave, a course. **It is a question put to the
+        person, not a decision taken for them.** The cover is created pending and
+        the proposed professional reads nothing of the person's data until the
+        person accepts. Silence is never acceptance.
+
+
+        The coach in charge may call this, which no other operation here allows:
+        they are the one who knows they will be away, and making them ask an
+        administrator to file their own absence is how a client ends up with
+        nobody.
+
+
+        The person is notified inside the command's own transaction. If there is
+        no way to reach them the proposal is refused with `409` rather than left
+        pending — a professional waiting on an answer nobody was ever asked for
+        is worse than a refusal.
+
+
+        Access ends on `ends_on` by itself. No nightly process has to run for the
+        cover to stop counting, which is why an end date is required: `422`
+        without one.
+
+
+        Asking twice for the same professional over the same days answers `409`.
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/RelationshipId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RelationshipSubstitutionProposalCreate'
+      responses:
+        '200':
+          description: A replay of a proposal this same command already made
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RelationshipSubstitutionProposal'
+        '201':
+          description: The cover is pending the person's answer, and they have been asked
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RelationshipSubstitutionProposal'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
   /studio/v1/organizations/{organizationId}/relationships/{relationshipId}/assignments:
     post:
       tags: [Studio Planning]
@@ -15151,6 +15233,52 @@ components:
           oneOf:
             - $ref: '#/components/schemas/UuidV7'
             - type: 'null'
+    RelationshipSubstitutionProposalCreate:
+      description: >-
+        Who covers, and for which days. Both dates are required: a cover with no
+        end would have to be switched off by hand, and until somebody did, it
+        would keep granting access to a person's data.
+      type: object
+      additionalProperties: false
+      required: [membership_id, starts_on, ends_on]
+      properties:
+        membership_id:
+          $ref: '#/components/schemas/UuidV7'
+          description: The membership of the professional asked to cover.
+        starts_on:
+          type: string
+          format: date
+          description: First day of the cover.
+        ends_on:
+          type: string
+          format: date
+          description: >-
+            Last day of the cover, inclusive. Access stops after it on its own.
+    RelationshipSubstitutionProposal:
+      description: >-
+        The cover as it now stands: pending the person's answer. It grants
+        nothing — `professional_person_id` reads none of this person's data until
+        they accept, and then only until `ends_on`.
+      type: object
+      additionalProperties: false
+      required:
+        [assignment_id, relationship_id, membership_id, professional_person_id,
+         starts_on, ends_on]
+      properties:
+        assignment_id:
+          $ref: '#/components/schemas/UuidV7'
+        relationship_id:
+          $ref: '#/components/schemas/UuidV7'
+        membership_id:
+          $ref: '#/components/schemas/UuidV7'
+        professional_person_id:
+          $ref: '#/components/schemas/UuidV7'
+        starts_on:
+          type: string
+          format: date
+        ends_on:
+          type: string
+          format: date
     RelationshipHistoryEvent:
       description: >-
         One moment in a relationship's past. `detail` carries different keys per
