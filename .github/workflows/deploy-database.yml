@@ -2,6 +2,26 @@ name: Deploy database
 
 on:
   workflow_dispatch:
+    inputs:
+      include_all:
+        # `db push` refuses to apply a migration older than the newest one already
+        # on the remote, because applying out of order can leave a schema that a
+        # clean `db reset` would never produce. That is the right default and it
+        # stays off.
+        #
+        # It happens anyway when two branches run in parallel: the timestamp is
+        # written when the work starts, the order is decided when it merges. On
+        # 2026-10-12 seventeen Backoffice migrations dated 2026-09-27 sat behind
+        # Space work dated later that had already shipped.
+        #
+        # Turning this on is a decision, not a retry. Read the dry-run first: it
+        # prints the exact order, and what makes out-of-order safe is that no
+        # pending migration redefines something a newer applied one also defines.
+        description: >-
+          Apply migrations older than the newest one already on the remote.
+          Only after reading the dry-run.
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -111,17 +131,26 @@ jobs:
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: bunx supabase migration list --linked --password "$SUPABASE_DB_PASSWORD" --workdir packages/db
 
+      # Both halves take the same flag, so the dry-run shows the order the apply
+      # will use. A dry-run that refused and an apply that did not would be worse
+      # than no dry-run at all.
       - name: Dry-run migration deployment
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
-        run: bunx supabase db push --linked --password "$SUPABASE_DB_PASSWORD" --workdir packages/db --dry-run
+          INCLUDE_ALL: ${{ inputs.include_all && '--include-all' || '' }}
+        run: >-
+          bunx supabase db push --linked --password "$SUPABASE_DB_PASSWORD"
+          --workdir packages/db --dry-run $INCLUDE_ALL
 
       - name: Apply migrations
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
-        run: bunx supabase db push --linked --password "$SUPABASE_DB_PASSWORD" --workdir packages/db --yes
+          INCLUDE_ALL: ${{ inputs.include_all && '--include-all' || '' }}
+        run: >-
+          bunx supabase db push --linked --password "$SUPABASE_DB_PASSWORD"
+          --workdir packages/db --yes $INCLUDE_ALL
 
       - name: Configure runtime database role
         env:
