@@ -1,8 +1,6 @@
 import { execFileSync } from 'node:child_process'
-import console from 'node:console'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { basename, join, relative, resolve } from 'node:path'
-import process from 'node:process'
 
 const repositoryRoot = resolve(import.meta.dirname, '..')
 const migrationsDirectory = join(repositoryRoot, 'packages', 'db', 'supabase', 'migrations')
@@ -126,6 +124,38 @@ if (base) {
     for (const filePath of untracked.split(/\r?\n/).filter(Boolean)) {
       const absolutePath = resolve(repositoryRoot, filePath)
       if (!newMigrations.includes(absolutePath)) newMigrations.push(absolutePath)
+    }
+    // A migration dated before the newest one the base already has will deploy out
+    // of order, and `supabase db push` refuses it: "found local migration files to
+    // be inserted before the last migration on remote". Nothing is wrong with the
+    // SQL — the timestamp is written when a branch starts and the order is decided
+    // when it merges, so two branches in parallel cross over. It surfaced on
+    // 2026-10-12 with seventeen migrations stuck behind work that shipped first,
+    // and it surfaces at deploy time, where the only options left are a flag that
+    // skips the check or renumbering after the fact. Here it is a rename away.
+    const baseMigrations = runGit([
+      'ls-tree',
+      '-r',
+      '--name-only',
+      base,
+      '--',
+      'packages/db/supabase/migrations',
+    ])
+      .split(/\r?\n/)
+      .filter((filePath) => filePath.endsWith('.sql'))
+      .map((filePath) => basename(filePath).split('_')[0])
+      .sort()
+    const newestAtBase = baseMigrations.at(-1)
+    if (newestAtBase) {
+      for (const filePath of newMigrations) {
+        const version = basename(filePath).split('_')[0]
+        if (version < newestAtBase) {
+          fail(
+            `${basename(filePath)} is dated before ${newestAtBase}, which the base branch ` +
+              'already has. Rename it to a later timestamp: deploying it would land out of order.',
+          )
+        }
+      }
     }
   } catch (error) {
     fail(`Cannot compare migration history with base ${base}: ${error.message}`)
