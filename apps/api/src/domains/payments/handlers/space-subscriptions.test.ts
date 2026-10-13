@@ -17,7 +17,7 @@ import type { VerifiedToken } from '@allfitone/auth-provider'
 import type { SpaceActorResolver } from '../../identity/index.js'
 import type { SubscriptionService } from '../application/subscriptions.js'
 import type { OrganizationPlanOffer, Subscription } from '../domain/subscriptions.js'
-import { spacePaymentRoutes } from './space.js'
+import { spacePaymentRoutes } from './space-subscriptions.js'
 
 const ORGANIZATION = '019c4000-0000-7000-8000-000000000101'
 const PERSON = '019c4000-0000-7000-8000-000000000002'

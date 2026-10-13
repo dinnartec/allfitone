@@ -12,6 +12,10 @@
  * Reads are `private, no-store`. The plan list is cacheable for presentation, but the
  * subscription command confirms the price itself, so a stale screen cannot make somebody
  * agree to a number that moved.
+ *
+ * Separate from `space.ts`, which serves Allfit Pro. A person pays for two unrelated
+ * things on this surface: Pro is bought in a store and belongs to the platform, and a
+ * plan is a price the gym sets and charges through its own gateway.
  */
 
 import { createHash } from 'node:crypto'

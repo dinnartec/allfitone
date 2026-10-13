@@ -6,7 +6,7 @@
  */
 
 export { backofficePlatformPlanRoutes } from './handlers/backoffice.js'
-export { spacePaymentRoutes } from './handlers/space.js'
+export { spacePaymentRoutes } from './handlers/space-subscriptions.js'
 export { studioPaymentRoutes } from './handlers/studio.js'
 export { platformPlanService, subscriptionService } from './dependencies.js'
 export type { PlatformPlanService } from './application/index.js'
