@@ -17,6 +17,7 @@ const COMMAND = '019f1000-0000-7000-8000-000000000201'
 
 const status: ProStatus = {
   generated_at: '2026-10-12T12:00:00Z',
+  account_token: PERSON,
   effective_source: 'organization',
   is_pro: true,
   plan: {
@@ -41,6 +42,7 @@ function service(overrides: Partial<ProService> = {}): ProService {
   return {
     read: async () => status,
     plans: async () => ({ generated_at: '2026-10-12T12:00:00Z', plans: [] }),
+    payments: async () => ({ generated_at: '2026-10-12T12:00:00Z', payments: [] }),
     purchase: async () => ({ resource: status, replayed: false }),
     appStoreNotification: async () => 'processed',
     googlePlayNotification: async () => 'processed',
@@ -100,7 +102,12 @@ describe('Allfit Pro on Space', () => {
           operation.path === '/space/v1/pro' || operation.path.startsWith('/space/v1/pro/'),
       )
       .map((operation) => operation.allfitOperation)
-    expect([...new Set(declared)].sort()).toEqual(['OP-PAY-018', 'OP-PAY-019', 'OP-PAY-020'])
+    expect([...new Set(declared)].sort()).toEqual([
+      'NEW-PAY-PRO-PAYMENTS',
+      'OP-PAY-018',
+      'OP-PAY-019',
+      'OP-PAY-020',
+    ])
   })
 
   test('T-PAY-PRO-API-02 mounts below the real Space prefix, and the store webhooks beside WorkOS', () => {
@@ -109,6 +116,7 @@ describe('Allfit Pro on Space', () => {
     const mounted = surfaces.routes.map((route) => `${route.method} ${route.path}`)
     expect(mounted).toContain('GET /space/v1/pro')
     expect(mounted).toContain('GET /space/v1/pro/plans')
+    expect(mounted).toContain('GET /space/v1/pro/payments')
     expect(mounted).toContain('POST /space/v1/pro/purchases')
 
     const application = createApp().routes.map((route) => `${route.method} ${route.path}`)
@@ -128,7 +136,7 @@ describe('Allfit Pro on Space', () => {
     expect(unregistered.status).toBe(403)
   })
 
-  test('T-PAY-PRO-API-04 reads Pro and the plans for the person behind the token, out of any cache', async () => {
+  test('T-PAY-PRO-API-04 reads Pro, the plans and the payments for the person behind the token, out of any cache', async () => {
     let asked: string | undefined
     const app = harness({
       read: async (reader) => {
@@ -138,11 +146,13 @@ describe('Allfit Pro on Space', () => {
     })
     const response = await send(app, 'GET', '/space/v1/pro', authorized)
     const plans = await send(app, 'GET', '/space/v1/pro/plans', authorized)
+    const payments = await send(app, 'GET', '/space/v1/pro/payments', authorized)
     expect(response.status).toBe(200)
     expect(response.headers.get('cache-control')).toBe('no-store')
     expect(await response.json()).toEqual(status)
     expect(asked).toBe(PERSON)
     expect(plans.status).toBe(200)
+    expect(payments.status).toBe(200)
   })
 
   test('T-PAY-PRO-API-05 a purchase names its store and only what that store needs', async () => {

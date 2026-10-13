@@ -868,6 +868,13 @@ export const allfitV1ContractManifest = {
     },
     {
       method: 'GET',
+      path: '/space/v1/pro/payments',
+      operationId: 'listSpaceProPayments',
+      allfitOperation: 'NEW-PAY-PRO-PAYMENTS',
+      responses: ['200', '401', '403', '503'],
+    },
+    {
+      method: 'GET',
       path: '/space/v1/pro/plans',
       operationId: 'listSpaceProPlans',
       allfitOperation: 'OP-PAY-018',

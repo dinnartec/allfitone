@@ -11228,6 +11228,53 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  SpaceProPayment: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['id', 'store', 'amount_minor', 'currency_code', 'result', 'occurred_at'],
+    properties: {
+      id: {
+        type: 'string',
+        format: 'uuid',
+      },
+      store: {
+        $ref: '#/components/schemas/SpaceProStore',
+      },
+      amount_minor: {
+        type: ['integer', 'null'],
+        minimum: 0,
+      },
+      currency_code: {
+        type: ['string', 'null'],
+      },
+      result: {
+        type: 'string',
+        enum: ['succeeded', 'failed'],
+      },
+      occurred_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+    },
+  },
+  SpaceProPayments: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['generated_at', 'payments'],
+    properties: {
+      generated_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      payments: {
+        type: 'array',
+        maxItems: 60,
+        items: {
+          $ref: '#/components/schemas/SpaceProPayment',
+        },
+      },
+    },
+  },
   SpaceProPlan: {
     type: 'object',
     additionalProperties: false,
@@ -11447,11 +11494,25 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
   SpaceProStatus: {
     type: 'object',
     additionalProperties: false,
-    required: ['generated_at', 'effective_source', 'is_pro', 'plan', 'features', 'sources'],
+    required: [
+      'generated_at',
+      'account_token',
+      'effective_source',
+      'is_pro',
+      'plan',
+      'features',
+      'sources',
+    ],
     properties: {
       generated_at: {
         type: 'string',
         format: 'date-time',
+      },
+      account_token: {
+        type: 'string',
+        format: 'uuid',
+        description:
+          "The id the app buys with (Apple's appAccountToken, Google's obfuscated account id), so the API can tell a purchase made for this person from one that was not.",
       },
       effective_source: {
         type: 'string',

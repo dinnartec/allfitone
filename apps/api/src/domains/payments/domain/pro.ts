@@ -15,6 +15,7 @@ import type { PaymentsCommandContext, PaymentsCommandResult } from './index.js'
 export type ProStatus = AllfitV1Schemas['SpaceProStatus']
 export type ProPlanCatalogue = AllfitV1Schemas['SpaceProPlanCatalogue']
 export type ProPurchaseRequest = AllfitV1Schemas['SpaceProPurchase']
+export type ProPayments = AllfitV1Schemas['SpaceProPayments']
 
 export const STORE_PRODUCT_ID = /^[A-Za-z0-9][A-Za-z0-9._]{0,99}$/
 export const MAX_SIGNED_TRANSACTION = 20_000
@@ -30,6 +31,7 @@ export interface ProReader {
 export interface ProDatabase {
   read(input: ProReader): Promise<ProStatus>
   plans(input: ProReader): Promise<ProPlanCatalogue>
+  payments(input: ProReader): Promise<ProPayments>
   recordPurchase(
     input: ProReader & PaymentsCommandContext & { state: StoreSubscriptionState },
   ): Promise<PaymentsCommandResult<ProStatus>>

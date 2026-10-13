@@ -19,6 +19,7 @@ import type { PaymentsCommandContext, PaymentsCommandResult } from '../domain/in
 import type {
   NotificationOutcome,
   ProDatabase,
+  ProPayments,
   ProPlanCatalogue,
   ProPurchaseRequest,
   ProReader,
@@ -28,6 +29,7 @@ import type {
 export interface ProService {
   read(reader: ProReader): Promise<ProStatus>
   plans(reader: ProReader): Promise<ProPlanCatalogue>
+  payments(reader: ProReader): Promise<ProPayments>
   purchase(
     reader: ProReader,
     request: ProPurchaseRequest,
@@ -67,6 +69,7 @@ export function createProService(database: ProDatabase, billing: () => StoreBill
   return {
     read: (reader) => database.read(reader),
     plans: (reader) => database.plans(reader),
+    payments: (reader) => database.payments(reader),
 
     async purchase(reader, request, command) {
       const state = await billing().verifyPurchase(storePurchase(request))

@@ -1,5 +1,5 @@
 /**
- * Allfit Pro routes on /space/v1: `OP-PAY-018`, `OP-PAY-019` and `OP-PAY-020`.
+ * Allfit Pro routes on /space/v1: `OP-PAY-018..020` and `NEW-PAY-PRO-PAYMENTS`.
  *
  * `HU-SP-084..088`. The token is verified here and resolved to a person in the database;
  * nothing in a request names whose Pro this is. A purchase carries only what the store
@@ -79,6 +79,16 @@ export function spaceProRoutes(
     if (person instanceof Response) return person
     try {
       return c.json(await pro().plans(person))
+    } catch (error) {
+      return spaceFailure(c, error, OPERATION)
+    }
+  })
+
+  routes.get('/pro/payments', async (c) => {
+    const person = await reader(c)
+    if (person instanceof Response) return person
+    try {
+      return c.json(await pro().payments(person))
     } catch (error) {
       return spaceFailure(c, error, OPERATION)
     }

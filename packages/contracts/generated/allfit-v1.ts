@@ -1165,6 +1165,26 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/space/v1/pro/payments': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * What the person has paid for Pro, the latest first
+     * @description Each charge a store reported, with its result. Allfit never sees a card, so no payment method appears here.
+     */
+    get: operations['listSpaceProPayments']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/space/v1/pro/purchases': {
     parameters: {
       query?: never
@@ -8136,6 +8156,11 @@ export interface components {
       /** Format: date-time */
       generated_at: string
       /**
+       * Format: uuid
+       * @description The id the app buys with (Apple's appAccountToken, Google's obfuscated account id), so the API can tell a purchase made for this person from one that was not.
+       */
+      account_token: string
+      /**
        * @description The source whose version decides the limits.
        * @enum {string}
        */
@@ -8170,6 +8195,22 @@ export interface components {
       /** Format: date-time */
       generated_at: string
       plans: components['schemas']['SpaceProPlan'][]
+    }
+    SpaceProPayment: {
+      /** Format: uuid */
+      id: string
+      store: components['schemas']['SpaceProStore']
+      amount_minor: number | null
+      currency_code: string | null
+      /** @enum {string} */
+      result: 'succeeded' | 'failed'
+      /** Format: date-time */
+      occurred_at: string
+    }
+    SpaceProPayments: {
+      /** Format: date-time */
+      generated_at: string
+      payments: components['schemas']['SpaceProPayment'][]
     }
     SpaceProPurchase:
       | {
@@ -10894,6 +10935,30 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['SpaceProPlanCatalogue']
+        }
+      }
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listSpaceProPayments: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The person's charges */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SpaceProPayments']
         }
       }
       401: components['responses']['Unauthenticated']

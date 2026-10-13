@@ -17,16 +17,19 @@
  */
 
 import { Button } from '@allfitone/react-native/button'
+import { ContentRow } from '@allfitone/react-native/content-row'
 import { FoundationIcon } from '@allfitone/react-native/icons'
 import { InlineAlert } from '@allfitone/react-native/inline-alert'
 import { Screen } from '@allfitone/react-native/screen'
 import { Sheet } from '@allfitone/react-native/sheet'
 import { Text } from '@allfitone/react-native/text'
 import { useTheme } from '@allfitone/react-native/theme'
-import { useRouter } from 'expo-router'
-import { useMemo, useState } from 'react'
+import { useFocusEffect, useRouter } from 'expo-router'
+import { useCallback, useMemo, useState } from 'react'
 import { ScrollView, StyleSheet, View } from 'react-native'
 
+import { sourceLine, type ProStatus } from '../../src/client/pro'
+import { createSpaceProFlow } from '../../src/client/pro-transport'
 import { createSpaceSignOutFlow } from '../../src/client/sign-out-transport'
 import { forgetExerciseLibrary } from '../../src/client/exercise-library'
 import { DOCK_HEIGHT } from '../../src/components/tab-bar'
@@ -44,6 +47,22 @@ export default function Profile() {
   const router = useRouter()
   const theme = useTheme()
   const flow = useMemo(() => createSpaceSignOutFlow(), [])
+  const pro = useMemo(() => createSpaceProFlow(), [])
+  const [plan, setPlan] = useState<ProStatus | undefined>(undefined)
+
+  useFocusEffect(
+    useCallback(() => {
+      let active = true
+      // A row that cannot load stays hidden: the plan is not worth an error on this screen.
+      pro
+        .read()
+        .then((read) => active && setPlan(read))
+        .catch(() => undefined)
+      return () => {
+        active = false
+      }
+    }, [pro]),
+  )
 
   const [busy, setBusy] = useState(false)
   const [warning, setWarning] = useState(false)
@@ -82,6 +101,16 @@ export default function Profile() {
         </View>
 
         {notice ? <InlineAlert message={notice} /> : null}
+
+        {plan ? (
+          <ContentRow
+            name={plan.is_pro ? 'Allfit Pro' : 'Plan gratis'}
+            caption={sourceLine(plan)}
+            noteTone="accent"
+            trailing={{ kind: 'chevron', tone: plan.is_pro ? 'accent' : 'muted' }}
+            onPress={() => router.push('/pro')}
+          />
+        ) : null}
 
         <View style={styles.section}>
           <Text role="eyebrow" size="2xs" color="muted">

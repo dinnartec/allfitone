@@ -11,7 +11,7 @@
 
 begin;
 
-select plan(49);
+select plan(53);
 
 -- ---------------------------------------------------------------------------
 -- Fixture: two commercial managers publish the free plan and Pro
@@ -237,6 +237,12 @@ select is(
   payments.read_my_pro('019b5000-0000-7000-8000-000000000033')->>'effective_source',
   'free',
   'and it says so'
+);
+
+select is(
+  payments.read_my_pro('019b5000-0000-7000-8000-000000000033')->>'account_token',
+  '019b5000-0000-7000-8000-000000000033',
+  'and gives the account token the app buys with: the person''s own id'
 );
 
 select pg_temp.as_person('019b5000-0000-7000-8000-000000000032');
@@ -547,6 +553,33 @@ select is(
 select pg_temp.as_person('019b5000-0000-7000-8000-000000000031');
 
 select is(
+  (select jsonb_agg(entry->>'amount_minor') from jsonb_array_elements(
+    payments.list_my_pro_payments('019b5000-0000-7000-8000-000000000031')->'payments') as entry),
+  '["19900", "19900"]'::jsonb,
+  'the person reads what they paid, the latest first'
+);
+
+select ok(
+  not exists (
+    select 1 from jsonb_array_elements(
+      payments.list_my_pro_payments('019b5000-0000-7000-8000-000000000031')->'payments') as entry,
+      jsonb_object_keys(entry) as key
+    where key not in ('id', 'store', 'amount_minor', 'currency_code', 'result', 'occurred_at')
+  ),
+  'and nothing else about the charge'
+);
+
+select pg_temp.as_person('019b5000-0000-7000-8000-000000000033');
+
+select throws_ok(
+  $$ select payments.list_my_pro_payments('019b5000-0000-7000-8000-000000000031') $$,
+  '42501', null,
+  'nobody reads another person''s payments'
+);
+
+select pg_temp.as_person('019b5000-0000-7000-8000-000000000031');
+
+select is(
   (select entry->'auto_renews' from jsonb_array_elements(
     payments.read_my_pro('019b5000-0000-7000-8000-000000000031')->'sources') as entry
    where entry->>'kind' = 'subscription'),
@@ -631,11 +664,12 @@ select ok(
 select ok(
   has_function_privilege('allfit_api', 'payments.list_pro_plans(uuid)', 'EXECUTE')
   and has_function_privilege('allfit_api', 'payments.read_my_pro(uuid)', 'EXECUTE')
+  and has_function_privilege('allfit_api', 'payments.list_my_pro_payments(uuid)', 'EXECUTE')
   and has_function_privilege('allfit_api',
     'payments.record_store_subscription(uuid,jsonb,uuid,uuid,bytea)', 'EXECUTE')
   and has_function_privilege('allfit_api',
     'payments.apply_store_notification(text,text,bytea,jsonb)', 'EXECUTE'),
-  'it runs the two reads and the two commands'
+  'it runs the three reads and the two commands'
 );
 
 select ok(
@@ -645,7 +679,11 @@ select ok(
 
 select is(
   (select count(*)::integer from system.outbox_events
-   where event_type = 'payments.platform_subscription_started.v1'),
+   where event_type = 'payments.platform_subscription_started.v1'
+     and aggregate_id in (
+       select id from payments.platform_subscriptions
+       where person_id = '019b5000-0000-7000-8000-000000000031'
+     )),
   1,
   'starting a subscription is announced once'
 );

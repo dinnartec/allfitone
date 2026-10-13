@@ -15,6 +15,7 @@ import { measureRequestPhase } from '../../../platform/observability/index.js'
 import type {
   NotificationOutcome,
   ProDatabase,
+  ProPayments,
   ProPlanCatalogue,
   ProStatus,
 } from '../domain/pro.js'
@@ -58,6 +59,15 @@ export function createProDatabase(): ProDatabase {
         `
         if (!row) throw new Error('PostgreSQL did not list the plans')
         return row.list_pro_plans
+      }),
+
+    payments: (input) =>
+      as(sql, 'person', input.personId, input.requestId, async (transaction) => {
+        const [row] = await transaction<{ list_my_pro_payments: ProPayments }[]>`
+          select payments.list_my_pro_payments(${input.personId}::uuid)
+        `
+        if (!row) throw new Error('PostgreSQL did not list the payments')
+        return row.list_my_pro_payments
       }),
 
     recordPurchase: (input) =>

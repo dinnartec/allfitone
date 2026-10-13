@@ -396,6 +396,8 @@ begin
 
   return jsonb_build_object(
     'generated_at', clock_timestamp(),
+    -- What the app buys with, so the store's answer can be matched to this person.
+    'account_token', p_person_id,
     'effective_source', resolution->>'effective_source',
     'is_pro', resolution->>'effective_source' <> 'free',
     'plan', (
@@ -479,6 +481,47 @@ begin
         from payments.platform_plans as plan
         join payments.platform_plan_versions as version
           on version.platform_plan_id = plan.id and version.status = 'published'
+      ),
+      '[]'::jsonb
+    )
+  );
+end
+$function$;
+
+-- ---------------------------------------------------------------------------
+-- NEW-PAY-PRO-PAYMENTS — what a person has paid for Pro
+-- ---------------------------------------------------------------------------
+
+-- The latest charges first, a year of monthly renewals and then some; no card, ever.
+create or replace function payments.list_my_pro_payments(p_person_id uuid)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = pg_catalog
+as $function$
+begin
+  if access_control.actor_kind() <> 'person' or access_control.person() is distinct from p_person_id then
+    raise exception 'payments are read only by their own person' using errcode = '42501';
+  end if;
+
+  return jsonb_build_object(
+    'generated_at', clock_timestamp(),
+    'payments', coalesce(
+      (
+        select jsonb_agg(entry.payment order by entry.occurred_at desc, entry.id desc)
+        from (
+          select record.id, record.occurred_at,
+                 jsonb_build_object(
+                   'id', record.id, 'store', record.store,
+                   'amount_minor', record.amount_minor, 'currency_code', record.currency_code,
+                   'result', record.result, 'occurred_at', record.occurred_at
+                 ) as payment
+          from payments.platform_payment_records as record
+          where record.person_id = p_person_id
+          order by record.occurred_at desc, record.id desc
+          limit 60
+        ) as entry
       ),
       '[]'::jsonb
     )
@@ -837,6 +880,7 @@ alter function payments.platform_version_features(uuid) owner to allfit_owner;
 alter function payments.resolve_pro(uuid) owner to allfit_owner;
 alter function payments.read_my_pro(uuid) owner to allfit_owner;
 alter function payments.list_pro_plans(uuid) owner to allfit_owner;
+alter function payments.list_my_pro_payments(uuid) owner to allfit_owner;
 alter function payments.platform_subscription_record_charge(payments.platform_subscriptions, jsonb) owner to allfit_owner;
 alter function payments.platform_subscription_event(uuid, text) owner to allfit_owner;
 alter function payments.platform_subscription_open(uuid, payments.platform_store, jsonb, text, text) owner to allfit_owner;
@@ -851,6 +895,7 @@ revoke all on function payments.platform_version_features(uuid) from public;
 revoke all on function payments.resolve_pro(uuid) from public;
 revoke all on function payments.read_my_pro(uuid) from public;
 revoke all on function payments.list_pro_plans(uuid) from public;
+revoke all on function payments.list_my_pro_payments(uuid) from public;
 revoke all on function payments.platform_subscription_record_charge(payments.platform_subscriptions, jsonb) from public;
 revoke all on function payments.platform_subscription_event(uuid, text) from public;
 revoke all on function payments.platform_subscription_open(uuid, payments.platform_store, jsonb, text, text) from public;
@@ -860,5 +905,6 @@ revoke all on function payments.apply_store_notification(text, text, bytea, json
 
 grant execute on function payments.read_my_pro(uuid) to allfit_api;
 grant execute on function payments.list_pro_plans(uuid) to allfit_api;
+grant execute on function payments.list_my_pro_payments(uuid) to allfit_api;
 grant execute on function payments.record_store_subscription(uuid, jsonb, uuid, uuid, bytea) to allfit_api;
 grant execute on function payments.apply_store_notification(text, text, bytea, jsonb) to allfit_api;

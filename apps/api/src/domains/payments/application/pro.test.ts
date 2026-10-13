@@ -38,6 +38,7 @@ function fakes(billing: Partial<StoreBilling>) {
   const database: ProDatabase = {
     read: async () => ({}) as ProStatus,
     plans: async () => ({ generated_at: '', plans: [] }),
+    payments: async () => ({ generated_at: '', payments: [] }),
     recordPurchase: async (input) => {
       recorded.push(input)
       return { resource: {} as ProStatus, replayed: false }
