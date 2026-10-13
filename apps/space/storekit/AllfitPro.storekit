@@ -1,0 +1,45 @@
+{
+  "identifier" : "6F1D7B6E-0C1A-4D7B-9C2E-41A9B0E5A7C3",
+  "nonRenewingSubscriptions" : [],
+  "products" : [],
+  "settings" : {
+    "_failTransactionsEnabled" : false,
+    "_locale" : "es_CO",
+    "_storefront" : "COL",
+    "_storeKitErrors" : []
+  },
+  "subscriptionGroups" : [
+    {
+      "id" : "21500001",
+      "localizations" : [],
+      "name" : "Allfit Pro",
+      "subscriptions" : [
+        {
+          "adHocOffers" : [],
+          "codeOffers" : [],
+          "displayPrice" : "24900",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "6739000001",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Todo Allfit, sin depender de un gimnasio.",
+              "displayName" : "Allfit Pro",
+              "locale" : "es_CO"
+            }
+          ],
+          "productID" : "com.dinnartec.allfitspace.pro.monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "Allfit Pro mensual",
+          "subscriptionGroupID" : "21500001",
+          "type" : "RecurringSubscription"
+        }
+      ]
+    }
+  ],
+  "version" : {
+    "major" : 3,
+    "minor" : 0
+  }
+}

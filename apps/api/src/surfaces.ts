@@ -49,6 +49,7 @@ import {
 import {
   backofficePlatformPlanRoutes,
   spacePaymentRoutes,
+  spaceProRoutes,
   studioPaymentRoutes,
 } from './domains/payments/index.js'
 import { spacePlanningRoutes, studioPlanningRoutes } from './domains/planning/index.js'
@@ -123,6 +124,7 @@ export function mountSurfaces(app: Hono): void {
   app.route('/space/v1', spacePlanningRoutes())
   app.route('/space/v1', spaceExecutionRoutes())
   app.route('/space/v1', spaceNutritionRoutes())
+  app.route('/space/v1', spaceProRoutes())
   app.route('/space/v1', spacePaymentRoutes())
   app.route('/space/v1', spaceRelationshipRoutes())
   app.route('/backoffice/v1', backofficeIdentityRoutes())

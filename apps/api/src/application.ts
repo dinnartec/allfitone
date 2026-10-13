@@ -9,6 +9,7 @@
 import { Hono } from 'hono'
 import { mountSurfaces } from './surfaces.js'
 import { workosWebhookRoutes } from './domains/identity/index.js'
+import { storeWebhookRoutes } from './domains/payments/index.js'
 import { databaseReachable } from './platform/db/index.js'
 import { requestTiming } from './platform/observability/index.js'
 
@@ -51,6 +52,7 @@ export function createApp(app: Hono = new Hono()): Hono {
     )
   })
   app.route('/webhooks', workosWebhookRoutes())
+  app.route('/webhooks', storeWebhookRoutes())
   app.use('/studio/v1/*', requestTiming('studio'))
   app.use('/space/v1/*', requestTiming('space'))
   app.use('/backoffice/v1/*', requestTiming('backoffice'))

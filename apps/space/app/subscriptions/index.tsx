@@ -1,5 +1,5 @@
 /**
- * `Mis planes` — `OP-PAY-013` and `OP-PAY-015`.
+ * `Planes de gimnasio` — `OP-PAY-013` and `OP-PAY-015`.
  *
  * What she pays each gym, and the two things she can do about it: look at what a gym she
  * trains at offers, and cancel one she has.
@@ -18,6 +18,10 @@
  * **No card ever reaches this screen.** Allfit does not hold one. Paying happens at the
  * gym's own gateway, which is why subscribing hands back a price and a provider and not a
  * form.
+ *
+ * **This is not Allfit Pro.** Pro is the platform plan, bought in a store, and it lives
+ * under `/pro`. Both are money she spends, so the profile lists them side by side — but
+ * cancelling here ends what the gym charges and touches Pro not at all.
  */
 
 import { Button } from '@allfitone/react-native/button'
@@ -106,7 +110,7 @@ export default function SubscriptionsScreen() {
       <View style={styles.header}>
         <IconButton icon="back" accessibilityLabel="Volver" onPress={() => router.back()} />
         <Text role="control" size="xl" accessibilityRole="header" style={styles.grow}>
-          Mis planes
+          Planes de gimnasio
         </Text>
       </View>
 

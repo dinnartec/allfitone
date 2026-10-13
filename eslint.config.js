@@ -42,6 +42,12 @@ const NO_AI_SDK = {
   message: 'The AI SDK belongs in packages/food-recognition. Use its port.',
 }
 
+// Only packages/store-billing talks to the App Store and Google Play (ADR-043).
+const NO_STORE_BILLING_SDK = {
+  group: ['@apple/app-store-server-library', 'google-auth-library', 'googleapis', '@googleapis/*'],
+  message: 'The store billing SDKs belong in packages/store-billing. Use its port.',
+}
+
 // Product web apps consume visual decisions only through the React platform
 // package. Foundations and implementation libraries remain private to the DS.
 const UI_APPS = ['studio-web', 'backoffice-web']
@@ -339,6 +345,7 @@ export default tseslint.config(
         NO_PROVIDER_SDK,
         NO_QUEUE_SDK,
         NO_OBJECT_STORE_SDK,
+        NO_STORE_BILLING_SDK,
         NO_AI_SDK,
       ),
     },
@@ -350,6 +357,7 @@ export default tseslint.config(
         NO_PROVIDER_SDK,
         NO_QUEUE_SDK,
         NO_OBJECT_STORE_SDK,
+        NO_STORE_BILLING_SDK,
         NO_AI_SDK,
         NO_HOSTING,
       ),
@@ -358,7 +366,13 @@ export default tseslint.config(
   {
     files: ['packages/auth-provider/**/*.ts'],
     rules: {
-      'no-restricted-imports': restrict(NO_QUEUE_SDK, NO_OBJECT_STORE_SDK, NO_AI_SDK, NO_HOSTING),
+      'no-restricted-imports': restrict(
+        NO_QUEUE_SDK,
+        NO_OBJECT_STORE_SDK,
+        NO_STORE_BILLING_SDK,
+        NO_AI_SDK,
+        NO_HOSTING,
+      ),
     },
   },
   {
@@ -367,6 +381,7 @@ export default tseslint.config(
       'no-restricted-imports': restrict(
         NO_PROVIDER_SDK,
         NO_OBJECT_STORE_SDK,
+        NO_STORE_BILLING_SDK,
         NO_AI_SDK,
         NO_HOSTING,
       ),
@@ -375,7 +390,25 @@ export default tseslint.config(
   {
     files: ['packages/object-store/**/*.ts'],
     rules: {
-      'no-restricted-imports': restrict(NO_PROVIDER_SDK, NO_QUEUE_SDK, NO_AI_SDK, NO_HOSTING),
+      'no-restricted-imports': restrict(
+        NO_PROVIDER_SDK,
+        NO_QUEUE_SDK,
+        NO_AI_SDK,
+        NO_STORE_BILLING_SDK,
+        NO_HOSTING,
+      ),
+    },
+  },
+  {
+    files: ['packages/store-billing/**/*.ts'],
+    rules: {
+      'no-restricted-imports': restrict(
+        NO_PROVIDER_SDK,
+        NO_QUEUE_SDK,
+        NO_OBJECT_STORE_SDK,
+        NO_AI_SDK,
+        NO_HOSTING,
+      ),
     },
   },
   {
@@ -385,6 +418,7 @@ export default tseslint.config(
         NO_PROVIDER_SDK,
         NO_QUEUE_SDK,
         NO_OBJECT_STORE_SDK,
+        NO_STORE_BILLING_SDK,
         NO_HOSTING,
       ),
     },
@@ -396,6 +430,7 @@ export default tseslint.config(
         NO_PROVIDER_SDK,
         NO_QUEUE_SDK,
         NO_OBJECT_STORE_SDK,
+        NO_STORE_BILLING_SDK,
         NO_AI_SDK,
         noOtherApps(app),
         NO_DOMAIN_INTERNALS,
@@ -445,6 +480,7 @@ export default tseslint.config(
         NO_PROVIDER_SDK,
         NO_QUEUE_SDK,
         NO_OBJECT_STORE_SDK,
+        NO_STORE_BILLING_SDK,
         NO_AI_SDK,
         noOtherApps('api'),
         noOtherDomainInternals(domain),
@@ -458,6 +494,7 @@ export default tseslint.config(
         NO_PROVIDER_SDK,
         NO_QUEUE_SDK,
         NO_OBJECT_STORE_SDK,
+        NO_STORE_BILLING_SDK,
         NO_AI_SDK,
         noOtherApps('api'),
         noOtherDomainInternals(domain),
