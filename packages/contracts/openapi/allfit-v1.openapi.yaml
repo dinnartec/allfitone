@@ -71,6 +71,8 @@ tags:
     description: Personal nutrition capture and goal operations.
   - name: Studio Nutrition
     description: Authorized professional nutrition operations.
+  - name: Space Pro
+    description: Allfit Pro, its plans and the store purchases that pay for it (ADR-043).
 x-allfit-contract-gate:
   source: V1_OPERATIONS_MATRIX.md
   rule: >-
@@ -90,6 +92,22 @@ x-allfit-contract-gate:
       owner: identity
       lifecycle: permanent
       reason: Signed provider delivery shared by every application; it is not a client API.
+    - method: POST
+      path: /webhooks/app-store
+      classification: operational
+      owner: payments
+      lifecycle: permanent
+      reason: >-
+        App Store Server Notifications V2, signed by Apple (OP-PAY-023); it is not a
+        client API.
+    - method: POST
+      path: /webhooks/google-play
+      classification: operational
+      owner: payments
+      lifecycle: permanent
+      reason: >-
+        Google Play notifications pushed by Pub/Sub with an OIDC token (OP-PAY-023); it
+        is not a client API.
 x-allfit-error-catalog:
   - code: registration-incomplete
     status: 403
@@ -2784,6 +2802,110 @@ paths:
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
 
+  /space/v1/pro:
+    get:
+      tags: [Space Pro]
+      operationId: readSpacePro
+      x-allfit-operation: OP-PAY-020
+      x-allfit-cache: no-store
+      summary: Whether the person has Pro, through which source, and its limits
+      description: >-
+        HU-SP-086 and HU-SP-088. Resolved on read, never from a stored flag (ADR-043):
+        a live subscription of one's own gives its frozen version; otherwise an active
+        relationship with an active gym gives the version of Pro in force; otherwise the
+        free plan. Every source in force is listed, and any doubt resolves to free.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: The person's plan, its sources and its limits
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpaceProStatus'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+  /space/v1/pro/plans:
+    get:
+      tags: [Space Pro]
+      operationId: listSpaceProPlans
+      x-allfit-operation: OP-PAY-018
+      x-allfit-cache: no-store
+      summary: What each of Allfit's plans includes, and the store products that sell it
+      description: >-
+        HU-SP-084. The free plan first. The price shown to the person is the one the
+        store localizes for the product; the catalogue says what each version includes.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: The plans in force
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpaceProPlanCatalogue'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+  /space/v1/pro/purchases:
+    post:
+      tags: [Space Pro]
+      operationId: recordSpaceProPurchase
+      x-allfit-operation: OP-PAY-019
+      x-allfit-cache: no-store
+      summary: Present a store purchase so Allfit verifies it and records the subscription
+      description: >-
+        HU-SP-085. The app buys with the person's id as account token and presents the
+        purchase here: Apple's signed transaction, or Google's product and purchase token.
+        The API verifies it with the store before recording anything, and a purchase made
+        for another account or of a product Allfit does not sell gives nothing. Presenting
+        the same purchase again, as a restore does, records nothing new.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SpaceProPurchase'
+      responses:
+        '201':
+          description: The person's Pro after the purchase
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpaceProStatus'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
   /space/v1/body-progress:
     post:
       tags: [Space Identity]
@@ -19167,6 +19289,205 @@ components:
           maxItems: 200
           items:
             $ref: '#/components/schemas/PlatformPlanFeatureLimit'
+    SpaceProFeature:
+      type: object
+      additionalProperties: false
+      required: [code, name, unit, enabled, limit_value]
+      properties:
+        code:
+          type: string
+          pattern: '^[a-z][a-z0-9_]{1,63}$'
+        name:
+          type: string
+        unit:
+          type: [string, 'null']
+        enabled:
+          type: boolean
+        limit_value:
+          type: [integer, 'null']
+          minimum: 0
+          description: Null means unlimited.
+    SpaceProPlanRef:
+      type: object
+      additionalProperties: false
+      required: [id, code, name, kind, version_id, version_number]
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        name:
+          type: string
+        kind:
+          $ref: '#/components/schemas/PlatformPlanKind'
+        version_id:
+          type: string
+          format: uuid
+        version_number:
+          type: integer
+          minimum: 1
+    SpaceProStore:
+      type: string
+      enum: [app_store, google_play]
+    SpaceProSource:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required: [kind, store, status, auto_renews, current_period_end, grace_until, version_id]
+          properties:
+            kind:
+              const: subscription
+            store:
+              $ref: '#/components/schemas/SpaceProStore'
+            status:
+              type: string
+              enum: [active, grace, suspended]
+            auto_renews:
+              type: boolean
+            current_period_end:
+              type: string
+              format: date-time
+            grace_until:
+              type: [string, 'null']
+              format: date-time
+            version_id:
+              type: string
+              format: uuid
+        - type: object
+          additionalProperties: false
+          required: [kind, organization_id, organization_name]
+          properties:
+            kind:
+              const: organization
+            organization_id:
+              type: string
+              format: uuid
+            organization_name:
+              type: string
+    SpaceProStatus:
+      type: object
+      additionalProperties: false
+      required: [generated_at, effective_source, is_pro, plan, features, sources]
+      properties:
+        generated_at:
+          type: string
+          format: date-time
+        effective_source:
+          type: string
+          enum: [subscription, organization, free]
+          description: The source whose version decides the limits.
+        is_pro:
+          type: boolean
+        plan:
+          oneOf:
+            - $ref: '#/components/schemas/SpaceProPlanRef'
+            - type: 'null'
+        features:
+          type: array
+          items:
+            $ref: '#/components/schemas/SpaceProFeature'
+        sources:
+          type: array
+          description: Every source in force, including the ones that do not decide the limits.
+          items:
+            $ref: '#/components/schemas/SpaceProSource'
+    SpaceProStoreProduct:
+      type: object
+      additionalProperties: false
+      required: [store, product_id]
+      properties:
+        store:
+          $ref: '#/components/schemas/SpaceProStore'
+        product_id:
+          type: string
+    SpaceProPlan:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - code
+        - name
+        - kind
+        - version_id
+        - version_number
+        - amount_minor
+        - currency_code
+        - billing_period
+        - features
+        - store_products
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        name:
+          type: string
+        kind:
+          $ref: '#/components/schemas/PlatformPlanKind'
+        version_id:
+          type: string
+          format: uuid
+        version_number:
+          type: integer
+          minimum: 1
+        amount_minor:
+          type: integer
+          minimum: 0
+          description: The catalogue's reference price; the store's localized price is what is charged.
+        currency_code:
+          type: [string, 'null']
+        billing_period:
+          oneOf:
+            - $ref: '#/components/schemas/PlatformPlanBillingPeriod'
+            - type: 'null'
+        features:
+          type: array
+          items:
+            $ref: '#/components/schemas/SpaceProFeature'
+        store_products:
+          type: array
+          items:
+            $ref: '#/components/schemas/SpaceProStoreProduct'
+    SpaceProPlanCatalogue:
+      type: object
+      additionalProperties: false
+      required: [generated_at, plans]
+      properties:
+        generated_at:
+          type: string
+          format: date-time
+        plans:
+          type: array
+          items:
+            $ref: '#/components/schemas/SpaceProPlan'
+    SpaceProPurchase:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required: [store, signed_transaction]
+          properties:
+            store:
+              const: app_store
+            signed_transaction:
+              type: string
+              minLength: 1
+              maxLength: 20000
+              description: The JWS transaction StoreKit returned for the purchase.
+        - type: object
+          additionalProperties: false
+          required: [store, product_id, purchase_token]
+          properties:
+            store:
+              const: google_play
+            product_id:
+              type: string
+              pattern: '^[A-Za-z0-9][A-Za-z0-9._]{0,99}$'
+            purchase_token:
+              type: string
+              minLength: 1
+              maxLength: 4096
     PlatformPlanFeatureState:
       type: object
       additionalProperties: false

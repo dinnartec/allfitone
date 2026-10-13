@@ -860,6 +860,27 @@ export const allfitV1ContractManifest = {
       responses: ['201', '400', '401', '403', '404', '409', '422'],
     },
     {
+      method: 'GET',
+      path: '/space/v1/pro',
+      operationId: 'readSpacePro',
+      allfitOperation: 'OP-PAY-020',
+      responses: ['200', '401', '403', '503'],
+    },
+    {
+      method: 'GET',
+      path: '/space/v1/pro/plans',
+      operationId: 'listSpaceProPlans',
+      allfitOperation: 'OP-PAY-018',
+      responses: ['200', '401', '403', '503'],
+    },
+    {
+      method: 'POST',
+      path: '/space/v1/pro/purchases',
+      operationId: 'recordSpaceProPurchase',
+      allfitOperation: 'OP-PAY-019',
+      responses: ['201', '400', '401', '403', '409', '422', '503'],
+    },
+    {
       method: 'POST',
       path: '/space/v1/profile/claims',
       operationId: 'declareSpaceProfileClaim',
@@ -1463,6 +1484,24 @@ export const allfitV1ContractManifest = {
       owner: 'platform',
       lifecycle: 'permanent',
       reason: 'Liveness belongs to deployment operations, not the product API.',
+    },
+    {
+      method: 'POST',
+      path: '/webhooks/app-store',
+      classification: 'operational',
+      owner: 'payments',
+      lifecycle: 'permanent',
+      reason:
+        'App Store Server Notifications V2, signed by Apple (OP-PAY-023); it is not a client API.',
+    },
+    {
+      method: 'POST',
+      path: '/webhooks/google-play',
+      classification: 'operational',
+      owner: 'payments',
+      lifecycle: 'permanent',
+      reason:
+        'Google Play notifications pushed by Pub/Sub with an OIDC token (OP-PAY-023); it is not a client API.',
     },
     {
       method: 'POST',
