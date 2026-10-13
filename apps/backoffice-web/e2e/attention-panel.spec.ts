@@ -18,6 +18,17 @@ test('a verifier sees the credentials waiting, and no notice its duties do not r
       session: activeSession(),
       attention: {
         panel: attentionPanelRecord({
+          // This operator verifies credentials and nothing else, so the money is not
+          // counted for them. Withheld, never zero.
+          billing: {
+            availability: 'withheld',
+            window_hours: 24,
+            failed_platform_charges: null,
+            platform_subscriptions_in_grace: null,
+            platform_subscriptions_suspended: null,
+            organization_subscriptions_suspended: null,
+            failed_organization_charges_availability: null,
+          },
           credential_verifications: {
             availability: 'available',
             pending_count: 2,
@@ -64,9 +75,10 @@ test('a verifier sees the credentials waiting, and no notice its duties do not r
     await expect(notice.locator('[data-attention-link]')).toHaveCount(0)
   }
 
-  await expect(
-    page.locator('[data-attention-notice="billing"]').getByText(/Allfit todavía no guarda cobros/),
-  ).toBeVisible()
+  // The billing notice is withheld for this operator, which is not a zero either.
+  const billing = page.locator('[data-attention-notice="billing"]')
+  await expect(billing).toHaveAttribute('data-availability', 'withheld')
+  await expect(billing.getByText(/No significa que no haya nada pendiente/)).toBeVisible()
 })
 
 test('support follows a notice to the gyms nobody claimed, already filtered', async ({
@@ -132,6 +144,15 @@ test('nothing pending is said plainly rather than left as an empty board', async
       session: activeSession(),
       attention: {
         panel: attentionPanelRecord({
+          billing: {
+            availability: 'available',
+            window_hours: 24,
+            failed_platform_charges: 0,
+            platform_subscriptions_in_grace: 0,
+            platform_subscriptions_suspended: 0,
+            organization_subscriptions_suspended: 0,
+            failed_organization_charges_availability: 'not_modelled',
+          },
           credential_verifications: {
             availability: 'available',
             pending_count: 0,
@@ -165,6 +186,11 @@ test('nothing pending is said plainly rather than left as an empty board', async
   ).toBeVisible()
   await expect(page.getByText('Todos los gimnasios que Allfit creó ya tienen dueño.')).toBeVisible()
   await expect(page.getByText('Nada se está repitiendo en las últimas 24 horas.')).toBeVisible()
+  await expect(
+    page.getByText(
+      'ningún cobro de Pro falló en las últimas 24 horas, ninguna renovación está en periodo de gracia y ninguna suscripción está suspendida.',
+    ),
+  ).toBeVisible()
   await expect(page.getByText('Pendiente', { exact: true })).toHaveCount(0)
 })
 

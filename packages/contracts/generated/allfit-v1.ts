@@ -4150,11 +4150,6 @@ export interface components {
       data: components['schemas']['BackofficeOrganizationSummary'][]
       page: components['schemas']['Page']
     }
-    /**
-     * @description `not_modelled` means the platform has no table for this yet. It is a fact about Allfit, never about the organization or the person.
-     * @enum {string}
-     */
-    ModelAvailability: 'not_modelled'
     BackofficeOrganizationFile: {
       organization: {
         organization_id: components['schemas']['Uuid']
@@ -4207,9 +4202,36 @@ export interface components {
         active: number
         terminated: number
       }
-      plans_availability: components['schemas']['ModelAvailability']
-      payment_method_availability: components['schemas']['ModelAvailability']
-      premium_availability: components['schemas']['ModelAvailability']
+      /** @description What the gym publishes and how many of its clients pay each one. A draft is not an offer and does not appear; an empty list is a gym that sells nothing, which is a fact about the gym and not about the platform. */
+      plans: components['schemas']['OrganizationFilePlan'][]
+      payment_method: components['schemas']['OrganizationFilePaymentMethod']
+      premium: components['schemas']['OrganizationFilePremium']
+    }
+    OrganizationFilePlan: {
+      plan_id: components['schemas']['Uuid']
+      name: string
+      version_id: components['schemas']['Uuid']
+      version_number: number
+      /** @description In the minor unit of its currency, by the ISO 4217 exponent. */
+      amount_minor: number
+      currency_code: string
+      /** @enum {string} */
+      billing_period: 'month' | 'year'
+      /** @description How many of the gym's clients are paying this version right now. */
+      subscribers: number
+    }
+    /** @description Whether the gym can be paid, and nothing more. The account reference and the vault key live in another table that this reader has no policy for at all, so no credential can travel here even by mistake. */
+    OrganizationFilePaymentMethod: {
+      connected: boolean
+      provider: string | null
+      /** Format: date-time */
+      connected_at: string | null
+    }
+    /** @description Whether the gym gives Pro to the people it serves. By ADR-043 there is no per-gym switch: every gym that operates gives it, as long as a paid Pro version is published at all. The answer is derived, never stored. */
+    OrganizationFilePremium: {
+      gives_pro: boolean
+      /** @enum {string|null} */
+      reason: 'no_published_pro_version' | 'organization_not_active' | null
     }
     /**
      * @description Whether the organization answers as a company or as a natural person. A natural person's name is never written by Allfit.
@@ -4510,10 +4532,23 @@ export interface components {
     SupportDeliveryCircuitList: {
       items: components['schemas']['SupportDeliveryCircuit'][]
     }
-    /** @description Failed charges and suspended subscriptions. Payments have no tables yet, so this says so instead of printing a zero. */
+    /**
+     * @description What needs attention about the money: the charges a store could not collect inside the window, the Pro renewals in grace, and the subscriptions already suspended. `withheld` is what somebody without `view_billing_metadata` is told, and it is never a zero.
+     *     A gym collects through its own gateway and the worker that records what a provider reports is not built, so a failed charge of a gym is `not_modelled` rather than counted as none.
+     */
     AttentionBillingNotice: {
       /** @enum {string} */
-      availability: 'not_modelled'
+      availability: 'available' | 'withheld'
+      window_hours: number
+      /** @description Charges Allfit's own stores reported as failed inside the window. */
+      failed_platform_charges: number | null
+      /** @description Pro the store could not renew. The person keeps it until the grace period ends, which is why it is worth looking before then. */
+      platform_subscriptions_in_grace: number | null
+      platform_subscriptions_suspended: number | null
+      /** @description Plans a gym paused, usually for not being paid. */
+      organization_subscriptions_suspended: number | null
+      /** @enum {string|null} */
+      failed_organization_charges_availability: 'not_modelled' | null
     }
     /** @description `withheld` when the operator does not hold `verify_professional_credentials`; every count is then null, never zero. */
     AttentionVerificationNotice: {
@@ -8508,6 +8543,8 @@ export interface components {
       /** @description The smallest group of people the panel will report. A count of people below it is withheld; a true zero is still published. */
       minimum_aggregate: number
       metrics: components['schemas']['SupportBusinessMetric'][]
+      /** @description Amounts, apart from the counts. An amount carries its currency and its minor unit, and amounts in different currencies are never added together. */
+      money: components['schemas']['SupportBusinessMoneyMetric'][]
     }
     /** @description One figure. `value` is null unless `availability` is `available`, and the period is never absent: a number without a period is not published. */
     SupportBusinessMetric: {
@@ -8531,8 +8568,28 @@ export interface components {
       | 'operating_organizations'
       | 'unclaimed_organizations'
       | 'active_subscriptions'
-      | 'billed_this_month'
+      | 'active_organization_subscriptions'
+      | 'pro_people_paying_allfit'
+      | 'pro_people_through_organization'
       | 'premium_people'
+    /** @description One amount, over one period. `amounts` is null unless `availability` is `available`, and it is withheld when fewer people than `minimum_aggregate` paid: with two payers a total is one subtraction away from what each of them pays. */
+    SupportBusinessMoneyMetric: {
+      /**
+       * @description What Allfit itself billed. A gym charges its own clients through its own gateway and that money never passes through this platform, so it is not here and is not income of Allfit.
+       * @enum {string}
+       */
+      key: 'billed_this_month'
+      availability: components['schemas']['SupportBusinessMetricAvailability']
+      /** @description One entry per currency. An empty list is a month with nothing collected. */
+      amounts: components['schemas']['SupportBusinessMoneyAmount'][] | null
+      reason: string | null
+      period: components['schemas']['SupportBusinessMetricPeriod']
+    }
+    SupportBusinessMoneyAmount: {
+      currency_code: string
+      /** @description In the minor unit of its own currency, by the ISO 4217 exponent. For COP that is hundredths, whatever a display locale would choose to show. */
+      amount_minor: number
+    }
     /**
      * @description `below_threshold` is a statement about the group being too small to report; `not_modelled` is a statement about the platform. Neither is zero.
      * @enum {string}

@@ -12,13 +12,19 @@
  * it can be their home. The screen says it was withheld, so nobody reads it as a gym
  * that never gave one.
  *
- * **What Allfit does not store yet is not something the gym lacks.** People served,
- * plans, the payment method and Premium have no tables, and the file lists them as
- * such rather than as empty.
+ * **A gym with nothing published sells nothing, and that is a fact.** Plans, the
+ * payment method and Pro all have tables now, so an empty list means the gym publishes
+ * no plan rather than Allfit not knowing. The one thing still missing says so on its
+ * own line, never as a zero.
+ *
+ * **No credential reaches this screen.** The file carries whether the gym can be paid
+ * and which provider it uses. The account reference and the vault key are in a table
+ * this reader has no policy for, so there is nothing here to hide by hand.
  */
 
 import type { AllfitV1Schemas } from '@allfitone/contracts'
 
+import { formatAmount } from './platform-plans'
 import { isValidCaseReference } from './support-metadata'
 
 export type OrganizationFile = AllfitV1Schemas['BackofficeOrganizationFile']
@@ -90,15 +96,61 @@ export function responsibleLabel(file: OrganizationFile): string {
     : 'Una persona natural. Su nombre no se muestra aquí.'
 }
 
-export const NOT_MODELLED_ITEMS: readonly string[] = [
-  'Cuántas personas atiende y en qué estado están esas relaciones',
-  'Sus planes publicados y sus suscriptores',
-  'Si tiene su medio de cobro conectado',
-  'Si está habilitado para dar Premium a sus clientes',
-]
+export type FilePlan = OrganizationFile['plans'][number]
 
-export const NOT_MODELLED_NOTE =
-  'Todavía no existen en la plataforma. No es que el gimnasio no los tenga: es que Allfit aún no los guarda.'
+export const NO_PLANS_NOTE =
+  'Este gimnasio no tiene ningún plan publicado. No cobra por la plataforma: entrenar y pagar son cosas separadas.'
+
+/** The plan, the price in force, and how many of its clients are paying it. */
+export function planLine(plan: FilePlan): string {
+  const price = formatAmount(plan.amount_minor, plan.currency_code)
+  const period = plan.billing_period === 'year' ? 'al año' : 'al mes'
+  const subscribers =
+    plan.subscribers === 0
+      ? 'nadie lo paga todavía'
+      : plan.subscribers === 1
+        ? '1 persona lo paga'
+        : `${plan.subscribers} personas lo pagan`
+  return `${price} ${period} · ${subscribers}`
+}
+
+/**
+ * Whether the gym can be paid. Never a credential: the provider is as far as this goes,
+ * and that is a property of the connection, not of the account behind it.
+ */
+export function paymentMethodLine(file: OrganizationFile): string {
+  const method = file.payment_method
+  if (!method.connected) {
+    return 'Sin medio de cobro conectado. Hasta que lo conecte no puede cobrarle a nadie.'
+  }
+  return `Conectado con ${providerLabel(method.provider)}. Ninguna credencial se muestra aquí ni puede leerse desde el Backoffice.`
+}
+
+const PROVIDERS: Record<string, string> = {
+  mercado_pago: 'Mercado Pago',
+  wompi: 'Wompi',
+}
+
+export function providerLabel(provider: string | null): string {
+  if (provider === null) return 'una pasarela'
+  return PROVIDERS[provider] ?? provider
+}
+
+/**
+ * Criterion 6. There is no per-gym switch: by `ADR-043` every gym that operates gives
+ * Pro to the people it serves, so what the screen explains is the condition and not a
+ * setting somebody could change here.
+ */
+export function premiumLine(file: OrganizationFile): string {
+  const premium = file.premium
+  if (premium.gives_pro) {
+    return 'Sus clientes tienen Allfit Pro por entrenar aquí. No se activa por gimnasio: lo da cualquiera que opere.'
+  }
+  if (premium.reason === 'organization_not_active') {
+    return 'Mientras no opere, sus clientes no tienen Pro por él. Reclamarlo o reactivarlo se lo devuelve, sin perder ningún dato.'
+  }
+  return 'Ningún plan Pro está publicado todavía, así que ningún gimnasio lo da.'
+}
 
 export const IDENTIFIERS_NOTE =
   'El equipo aparece por identificador, nunca por nombre. Cada persona que muestra esta ficha queda en el registro de accesos, y abrir la ficha de una de ellas pide la referencia del caso que lo justifica.'

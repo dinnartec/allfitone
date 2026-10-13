@@ -90,9 +90,9 @@ const fileResource: AllfitV1Schemas['BackofficeOrganizationFile'] = {
   sites: [],
   people_served: 0,
   relationship_counts: { active: 0, terminated: 0 },
-  plans_availability: 'not_modelled',
-  payment_method_availability: 'not_modelled',
-  premium_availability: 'not_modelled',
+  plans: [],
+  payment_method: { connected: false, provider: null, connected_at: null },
+  premium: { gives_pro: true, reason: null },
 }
 
 function fileService(overrides: Partial<OrganizationFileService> = {}): OrganizationFileService {

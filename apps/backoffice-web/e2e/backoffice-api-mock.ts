@@ -475,9 +475,21 @@ export interface OrganizationFileRecordFixture {
   }>
   people_served: number
   relationship_counts: { active: number; terminated: number }
-  plans_availability: 'not_modelled'
-  payment_method_availability: 'not_modelled'
-  premium_availability: 'not_modelled'
+  plans: Array<{
+    plan_id: string
+    name: string
+    version_id: string
+    version_number: number
+    amount_minor: number
+    currency_code: string
+    billing_period: 'month' | 'year'
+    subscribers: number
+  }>
+  payment_method: { connected: boolean; provider: string | null; connected_at: string | null }
+  premium: {
+    gives_pro: boolean
+    reason: 'no_published_pro_version' | 'organization_not_active' | null
+  }
 }
 
 let fileSequence = 0
@@ -507,9 +519,24 @@ export function organizationFileRecord(
     sites: [],
     people_served: 3,
     relationship_counts: { active: 3, terminated: 1 },
-    plans_availability: 'not_modelled',
-    payment_method_availability: 'not_modelled',
-    premium_availability: 'not_modelled',
+    plans: [
+      {
+        plan_id: `019a9300-0000-7000-8000-${suffix}`,
+        name: 'Mensual',
+        version_id: `019a9400-0000-7000-8000-${suffix}`,
+        version_number: 1,
+        amount_minor: 12000000,
+        currency_code: 'COP',
+        billing_period: 'month',
+        subscribers: 2,
+      },
+    ],
+    payment_method: {
+      connected: true,
+      provider: 'mercado_pago',
+      connected_at: '2026-06-02T12:00:00.000Z',
+    },
+    premium: { gives_pro: true, reason: null },
     ...overrides,
   }
 }
@@ -785,13 +812,25 @@ export interface BusinessMetricFixture {
   period: { kind: 'total' | 'week' | 'month'; from: string | null; to: string }
 }
 
+export interface BusinessMoneyFixture {
+  key: 'billed_this_month'
+  availability: 'available' | 'below_threshold' | 'not_modelled'
+  amounts: Array<{ currency_code: string; amount_minor: number }> | null
+  reason: string | null
+  period: { kind: 'month'; from: string | null; to: string }
+}
+
 export interface BusinessPanelFixture {
   generated_at: string
   minimum_aggregate: number
   metrics: BusinessMetricFixture[]
+  money: BusinessMoneyFixture[]
 }
 
-/** One of each answer: a figure, a true zero, a group too small, and four gaps. */
+/**
+ * One of each answer: a figure, a true zero, a group too small, one gap that is still a
+ * gap, and the money apart from the counts in two currencies.
+ */
 export function businessPanelRecord(
   overrides: Partial<BusinessPanelFixture> = {},
 ): BusinessPanelFixture {
@@ -851,24 +890,50 @@ export function businessPanelRecord(
       },
       {
         key: 'active_subscriptions',
-        availability: 'not_modelled',
-        value: null,
-        reason: 'payments_not_modelled',
+        availability: 'available',
+        value: 6,
+        reason: null,
         period: total,
       },
       {
-        key: 'billed_this_month',
-        availability: 'not_modelled',
+        key: 'active_organization_subscriptions',
+        availability: 'available',
+        value: 5,
+        reason: null,
+        period: total,
+      },
+      {
+        key: 'pro_people_paying_allfit',
+        availability: 'available',
+        value: 6,
+        reason: null,
+        period: total,
+      },
+      {
+        key: 'pro_people_through_organization',
+        availability: 'below_threshold',
         value: null,
-        reason: 'payments_not_modelled',
-        period: { kind: 'month', from: month, to },
+        reason: null,
+        period: total,
       },
       {
         key: 'premium_people',
-        availability: 'not_modelled',
-        value: null,
-        reason: 'payments_not_modelled',
+        availability: 'available',
+        value: 9,
+        reason: null,
         period: total,
+      },
+    ],
+    money: [
+      {
+        key: 'billed_this_month',
+        availability: 'available',
+        amounts: [
+          { currency_code: 'COP', amount_minor: 7960000 },
+          { currency_code: 'USD', amount_minor: 1198 },
+        ],
+        reason: null,
+        period: { kind: 'month', from: month, to },
       },
     ],
     ...overrides,
@@ -888,7 +953,15 @@ type NoticeAvailability = 'available' | 'withheld'
 
 export interface AttentionPanelFixture {
   generated_at: string
-  billing: { availability: 'not_modelled' }
+  billing: {
+    availability: NoticeAvailability
+    window_hours: 24
+    failed_platform_charges: number | null
+    platform_subscriptions_in_grace: number | null
+    platform_subscriptions_suspended: number | null
+    organization_subscriptions_suspended: number | null
+    failed_organization_charges_availability: 'not_modelled' | null
+  }
   credential_verifications: {
     availability: NoticeAvailability
     pending_count: number | null
@@ -928,7 +1001,15 @@ export function attentionPanelRecord(
 ): AttentionPanelFixture {
   return {
     generated_at: new Date().toISOString(),
-    billing: { availability: 'not_modelled' },
+    billing: {
+      availability: 'available',
+      window_hours: 24,
+      failed_platform_charges: 2,
+      platform_subscriptions_in_grace: 1,
+      platform_subscriptions_suspended: 0,
+      organization_subscriptions_suspended: 3,
+      failed_organization_charges_availability: 'not_modelled',
+    },
     credential_verifications: {
       availability: 'withheld',
       pending_count: null,
