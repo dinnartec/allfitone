@@ -15,6 +15,9 @@ import {
   type OrganizationMembership,
   type OrganizationMembershipPage,
   type OrganizationMembershipStatus,
+  type OrganizationSubscription,
+  type OrganizationSubscriptionPage,
+  type SubscriptionStatus,
   type ProfessionalCredential,
   type ProfessionalProfile,
   type StudioMe,
@@ -25,6 +28,7 @@ import {
 export type MembershipFilter = OrganizationMembershipStatus | 'all'
 export type InvitationFilter = TeamInvitationStatus | 'all'
 export type ClientFilter = ClientDirectoryGroup | 'all'
+export type SubscriptionFilter = SubscriptionStatus | 'all'
 
 export const STUDIO_QUERY_GC_TIME_MS = 5 * 60 * 1000
 export const STUDIO_TEAM_STALE_TIME_MS = 30 * 1000
@@ -54,6 +58,10 @@ export const studioQueryKeys = {
     [...ROOT_KEY, 'organization', organizationId, 'clients'] as const,
   organizationClients: (organizationId: string, status: ClientFilter, limit: number) =>
     [...ROOT_KEY, 'organization', organizationId, 'clients', { status, limit }] as const,
+  organizationSubscriptionsRoot: (organizationId: string) =>
+    [...ROOT_KEY, 'organization', organizationId, 'subscriptions'] as const,
+  organizationSubscriptions: (organizationId: string, status: SubscriptionFilter, limit: number) =>
+    [...ROOT_KEY, 'organization', organizationId, 'subscriptions', { status, limit }] as const,
   relationship: (organizationId: string, relationshipId: string) =>
     [...ROOT_KEY, 'organization', organizationId, 'relationship', relationshipId] as const,
   relationshipHistory: (organizationId: string, relationshipId: string, limit: number) =>
@@ -469,4 +477,50 @@ export function removeInvitationFromPages(
       data: page.data.filter((invitation) => invitation.id !== invitationId),
     })),
   }
+}
+
+/**
+ * Who pays the organization.
+ *
+ * Held for the same short while as a directory page and never longer: the catalogue says
+ * this is "nunca cacheable para decidir suspensión", and suspending somebody on a stale
+ * state is how a person loses access for a charge that already cleared.
+ */
+export function organizationSubscriptionsQueryOptions(
+  organizationId: string,
+  status: SubscriptionFilter,
+  limit: number,
+) {
+  return infiniteQueryOptions({
+    queryKey: studioQueryKeys.organizationSubscriptions(organizationId, status, limit),
+    queryFn: ({ pageParam, signal }) =>
+      studioApi.organizationSubscriptions(
+        organizationId,
+        {
+          ...(status === 'all' ? {} : { status }),
+          limit,
+          ...(pageParam ? { cursor: pageParam } : {}),
+        },
+        signal,
+      ),
+    initialPageParam: null as string | null,
+    getNextPageParam: nextPageCursor,
+    staleTime: STUDIO_TEAM_STALE_TIME_MS,
+  })
+}
+
+export function flattenSubscriptionPages(
+  data: InfiniteData<OrganizationSubscriptionPage, unknown> | undefined,
+): OrganizationSubscription[] {
+  if (!data) return []
+  const subscriptions: OrganizationSubscription[] = []
+  const seen = new Set<string>()
+  for (const page of data.pages) {
+    for (const subscription of page.data) {
+      if (seen.has(subscription.subscription_id)) continue
+      seen.add(subscription.subscription_id)
+      subscriptions.push(subscription)
+    }
+  }
+  return subscriptions
 }

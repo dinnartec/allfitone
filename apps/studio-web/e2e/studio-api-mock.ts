@@ -27,6 +27,14 @@ export interface StudioApiFixture {
   relationshipHistory: unknown[]
   assignmentOutcome: 'created' | 'taken' | 'forbidden'
   reassignmentOutcome: 'reassigned' | 'no-holder' | 'forbidden'
+  organizationSubscriptions: unknown[]
+  /**
+   * `applied` moves the row in the fixture, the way the real command does; the other two
+   * are the refusals the screen has wording for. `no-cause` is `409` on a reactivation
+   * whose block the database cannot find — a state these operations cannot produce, which
+   * is why the screen says it is not a retry.
+   */
+  subscriptionOutcome: 'applied' | 'no-cause' | 'forbidden'
   roleGrantOutcome: 'granted' | 'rejected' | 'forbidden'
   offerableScopes: unknown[]
   organization: unknown
@@ -128,6 +136,30 @@ export const offerableScopeCatalog = [
  * and a fixture that invented a name here would let the screen render something
  * the API can never send.
  */
+/**
+ * Somebody paying the organization.
+ *
+ * `amount_minor` is the minor unit, so this is $120.000 and not $12.000.000 — which is
+ * exactly the confusion the screen's formatter is tested against. `current_period_end` is
+ * null because nothing has reported a charge yet, which is the state a subscription sits
+ * in between being created and the gateway's first webhook.
+ */
+export const activeSubscription = {
+  subscription_id: '01991600-7000-7000-8000-000000000601',
+  person_id: '01991600-7000-7000-8000-000000000201',
+  person_name: 'Ana Álvarez',
+  plan_name: 'Mensual',
+  plan_version_id: '01991600-7000-7000-8000-000000000501',
+  amount_minor: 12000000,
+  currency_code: 'COP',
+  billing_period: 'month',
+  status: 'active',
+  current_period_end: null,
+  started_at: '2026-10-01T15:12:44.118Z',
+  suspended_at: null,
+  ended_at: null,
+}
+
 export const activeClient = {
   kind: 'relationship',
   relationship_id: '01991600-7000-7000-8000-000000000101',
@@ -593,6 +625,8 @@ export function createStudioApiFixture(
     relationshipHistory: structuredClone(relationshipHistory),
     assignmentOutcome: 'created',
     reassignmentOutcome: 'reassigned',
+    organizationSubscriptions: [structuredClone(activeSubscription)],
+    subscriptionOutcome: 'applied',
     roleGrantOutcome: 'granted',
     offerableScopes: [...offerableScopeCatalog],
     /*
@@ -763,6 +797,66 @@ function defaultResponse(
         })
       : fixture.organizationClients
     return { status: 200, body: { data, page: { has_more: false, next_cursor: null } } }
+  }
+  if (
+    request.method === 'GET' &&
+    /^\/studio\/v1\/organizations\/[^/]+\/subscriptions$/.test(request.path)
+  ) {
+    const status = new URLSearchParams(request.search).get('status')
+    const data = status
+      ? fixture.organizationSubscriptions.filter(
+          (entry) =>
+            typeof entry === 'object' &&
+            entry !== null &&
+            'status' in entry &&
+            entry.status === status,
+        )
+      : fixture.organizationSubscriptions
+    return { status: 200, body: { data, page: { has_more: false, next_cursor: null } } }
+  }
+  /*
+   * The three transitions answer the same shape and differ only in the state they leave
+   * behind, so one handler reads the verb from the path. Writing the new state into the
+   * fixture is what lets a test assert that the list the screen returns to has moved.
+   */
+  {
+    const transition =
+      request.method === 'POST'
+        ? /^\/studio\/v1\/organizations\/[^/]+\/subscriptions\/([^/]+)\/(suspension|reactivation|termination)$/.exec(
+            request.path,
+          )
+        : null
+    if (transition) {
+      const subscriptionId = transition[1] ?? ''
+      const verb = transition[2]
+      if (fixture.subscriptionOutcome !== 'applied') {
+        return {
+          status: fixture.subscriptionOutcome === 'no-cause' ? 409 : 403,
+          body: {
+            error: fixture.subscriptionOutcome === 'no-cause' ? 'conflict' : 'forbidden',
+          },
+        }
+      }
+      const status =
+        verb === 'suspension' ? 'suspended' : verb === 'reactivation' ? 'active' : 'ended'
+      fixture.organizationSubscriptions = fixture.organizationSubscriptions.map((entry) => {
+        if (
+          typeof entry !== 'object' ||
+          entry === null ||
+          !('subscription_id' in entry) ||
+          entry.subscription_id !== subscriptionId
+        ) {
+          return entry
+        }
+        return {
+          ...entry,
+          status,
+          suspended_at: status === 'suspended' ? '2026-10-20T09:00:00.000Z' : null,
+          ended_at: status === 'ended' ? '2026-10-20T09:00:00.000Z' : null,
+        }
+      })
+      return { status: 200, body: { subscription_id: subscriptionId, status } }
+    }
   }
   if (
     request.method === 'POST' &&
