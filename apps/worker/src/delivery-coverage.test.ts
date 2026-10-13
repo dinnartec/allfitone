@@ -37,7 +37,7 @@ const WORKER_SOURCE = import.meta.dir
  * `relationship.professional_reassigned.v1` went unexamined the first time.
  */
 const DELIVERY_EVENT =
-  /^(organization\.\w*invited|relationship\.(client_invited|professional_reassigned|substitution_proposed)|identity\.account_recovery_requested)\.v1$/
+  /^(organization\.\w*invited|relationship\.(client_invited|professional_reassigned|substitution_proposed)|identity\.account_recovery_requested|payments\.subscription_(suspended|reactivated|ended))\.v1$/
 
 function enqueuedDeliveryEvents(): string[] {
   const found = new Set<string>()

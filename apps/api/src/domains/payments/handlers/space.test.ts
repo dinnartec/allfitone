@@ -34,7 +34,10 @@ const COMMAND = {
 const verifier = async (): Promise<VerifiedToken> =>
   ({ subject: 'auth0|carla', sessionId: 'session' }) as VerifiedToken
 
-const actors: SpaceActorResolver = { personFor: async () => PERSON } as SpaceActorResolver
+const actors: SpaceActorResolver = {
+  actorFor: async () => ({ accountId: 'account', personId: PERSON }),
+  personFor: async () => PERSON,
+}
 
 function offer(overrides: Partial<OrganizationPlanOffer> = {}): OrganizationPlanOffer {
   return {

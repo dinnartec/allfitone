@@ -76,16 +76,17 @@ function service(
   overrides: Partial<SubscriptionService> = {},
   capture?: Capture,
 ): SubscriptionService {
-  const record = (input: Record<string, unknown>) => {
-    capture?.inputs.push(input)
-    if (input.requestHash instanceof Uint8Array) {
-      capture?.hashes.push(Buffer.from(input.requestHash).toString('hex'))
+  const record = (input: object) => {
+    const seen = input as Record<string, unknown>
+    capture?.inputs.push(seen)
+    if (seen.requestHash instanceof Uint8Array) {
+      capture?.hashes.push(Buffer.from(seen.requestHash).toString('hex'))
     }
   }
-  const transition = async (_personId: string, input: Record<string, unknown>) => {
+  const transition: SubscriptionService['suspend'] = async (_personId, input) => {
     record(input)
     return {
-      resource: { subscription_id: String(input.subscriptionId), status: 'suspended' as const },
+      resource: { subscription_id: input.subscriptionId, status: 'suspended' },
       replayed: false,
     }
   }
