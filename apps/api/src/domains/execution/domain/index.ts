@@ -9,6 +9,7 @@ import type { AllfitV1Schemas } from '@allfitone/contracts'
 
 export type Execution = AllfitV1Schemas['SpaceExecution']
 export type Attempt = AllfitV1Schemas['Attempt']
+export type FreeSession = AllfitV1Schemas['FreeSession']
 export type ResultsState = AllfitV1Schemas['ExecutionResultsState']
 export type Finalized = AllfitV1Schemas['ExecutionFinalized']
 export type Abandoned = AllfitV1Schemas['ExecutionAbandoned']
@@ -68,6 +69,18 @@ export interface ExecutionDatabase {
       captureSource: string
     },
   ): Promise<Attempt>
+  /** A session with no planned session behind it; one is open at a time (55006 otherwise). */
+  startFreeSession(
+    input: ExecutionCommand & {
+      personId: string
+      disciplineCode: string
+      startedAt: string
+      timezone: string
+      requestedLevel: string
+      captureSource: string
+    },
+  ): Promise<FreeSession>
+  readOpenFreeSession(input: { personId: string; requestId: string }): Promise<string | null>
   replaceResults(
     input: ExecutionCommand & {
       personId: string

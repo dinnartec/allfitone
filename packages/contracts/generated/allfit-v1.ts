@@ -2780,7 +2780,11 @@ export interface paths {
      */
     get: operations['listMyExecutions']
     put?: never
-    post?: never
+    /**
+     * Start a free session, with no planned session behind it
+     * @description Training that was not on the agenda (HU-SP-052). The session starts empty and the person adds exercises as they train. It freezes the contract of the one published activity type of the discipline. Only one free session is open at a time: while one is, a new start is a 409, and Today names the open one.
+     */
+    post: operations['startFreeSession']
     delete?: never
     options?: never
     head?: never
@@ -5152,6 +5156,8 @@ export interface components {
     }
     SpaceToday: {
       profile: components['schemas']['SpaceTrainingProfile']
+      /** @description The free session still open, if there is one: what «Entrenamiento libre» resumes instead of starting another (OP-EXE-004). */
+      open_free_session_id: components['schemas']['UuidV7'] | null
       current_assignment: components['schemas']['SpaceProgramAssignment'] | null
       /** @description Null on a day the program does not ask for anything. A rest day is an answer, not an absence. */
       session: components['schemas']['SpaceTodaySession'] | null
@@ -6873,6 +6879,43 @@ export interface components {
       requested_level: components['schemas']['CompletenessLevel']
       /** @enum {string} */
       capture_source: 'manual' | 'device'
+    }
+    /**
+     * @example {
+     *       "discipline_code": "strength",
+     *       "started_at": "2026-10-13T18:04:00-05:00",
+     *       "timezone": "America/Bogota",
+     *       "requested_level": "detailed",
+     *       "capture_source": "manual"
+     *     }
+     */
+    FreeSessionCreate: {
+      discipline_code: string
+      /** Format: date-time */
+      started_at: string
+      timezone: components['schemas']['IanaTimeZone']
+      requested_level: components['schemas']['CompletenessLevel']
+      /** @enum {string} */
+      capture_source: 'manual' | 'device'
+    }
+    /**
+     * @example {
+     *       "id": "0190a0b1-2c3d-7e4f-8a9b-0c1d2e3f4a5b",
+     *       "status": "in_progress",
+     *       "revision_number": 0,
+     *       "result_contract": {
+     *         "id": "018f6f8d-2b00-7a00-8000-000000000801",
+     *         "version": 1,
+     *         "requested_level": "detailed"
+     *       }
+     *     }
+     */
+    FreeSession: {
+      id: components['schemas']['UuidV7']
+      /** @constant */
+      status: 'in_progress'
+      revision_number: number
+      result_contract: components['schemas']['ResultContractRef']
     }
     /**
      * @example {
@@ -14340,6 +14383,42 @@ export interface operations {
       400: components['responses']['BadRequest']
       401: components['responses']['Unauthenticated']
       403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  startFreeSession: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['FreeSessionCreate']
+      }
+    }
+    responses: {
+      /** @description Free session started */
+      201: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          Location: components['headers']['Location']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['FreeSession']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      409: components['responses']['Conflict']
       503: components['responses']['UpstreamUnavailable']
     }
   }

@@ -601,6 +601,13 @@ export const allfitV1ContractManifest = {
       responses: ['200', '400', '401', '403', '503'],
     },
     {
+      method: 'POST',
+      path: '/space/v1/executions',
+      operationId: 'startFreeSession',
+      allfitOperation: 'OP-EXE-004',
+      responses: ['201', '400', '401', '403', '409', '503'],
+    },
+    {
       method: 'GET',
       path: '/space/v1/executions/{executionId}',
       operationId: 'getMyExecution',

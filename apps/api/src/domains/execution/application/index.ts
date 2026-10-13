@@ -18,6 +18,8 @@ import type {
 
 export interface SpaceExecutionService {
   startAttempt: ExecutionDatabase['startAttempt']
+  startFreeSession: ExecutionDatabase['startFreeSession']
+  readOpenFreeSession: ExecutionDatabase['readOpenFreeSession']
   replaceResults: ExecutionDatabase['replaceResults']
   finalize: ExecutionDatabase['finalize']
   abandon: ExecutionDatabase['abandon']
@@ -46,6 +48,8 @@ export function createSpaceExecutionService(
   const address = (key: string | null) => (key === null ? null : `${base}/${key}`)
   return {
     startAttempt: (input) => database.startAttempt(input),
+    startFreeSession: (input) => database.startFreeSession(input),
+    readOpenFreeSession: (input) => database.readOpenFreeSession(input),
     replaceResults: (input) => database.replaceResults(input),
     finalize: (input) => database.finalize(input),
     abandon: (input) => database.abandon(input),

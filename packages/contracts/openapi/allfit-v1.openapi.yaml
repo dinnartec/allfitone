@@ -6936,6 +6936,51 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
+    post:
+      tags: [Space Execution]
+      operationId: startFreeSession
+      x-allfit-operation: OP-EXE-004
+      x-allfit-cache: no-store
+      x-allfit-command-resource-id: true
+      summary: Start a free session, with no planned session behind it
+      description: >-
+        Training that was not on the agenda (HU-SP-052). The session starts empty and
+        the person adds exercises as they train. It freezes the contract of the one
+        published activity type of the discipline. Only one free session is open at a
+        time: while one is, a new start is a 409, and Today names the open one.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FreeSessionCreate'
+      responses:
+        '201':
+          description: Free session started
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Location:
+              $ref: '#/components/headers/Location'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FreeSession'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
 
   /space/v1/history/months/{month}:
     get:
@@ -13444,10 +13489,17 @@ components:
     SpaceToday:
       type: object
       additionalProperties: false
-      required: [profile, current_assignment, session, week]
+      required: [profile, current_assignment, session, week, open_free_session_id]
       properties:
         profile:
           $ref: '#/components/schemas/SpaceTrainingProfile'
+        open_free_session_id:
+          oneOf:
+            - $ref: '#/components/schemas/UuidV7'
+            - type: 'null'
+          description: >-
+            The free session still open, if there is one: what «Entrenamiento libre»
+            resumes instead of starting another (OP-EXE-004).
         current_assignment:
           oneOf:
             - $ref: '#/components/schemas/SpaceProgramAssignment'
@@ -17259,6 +17311,53 @@ components:
         capture_source:
           type: string
           enum: [manual, device]
+    FreeSessionCreate:
+      type: object
+      additionalProperties: false
+      required: [discipline_code, started_at, timezone, requested_level, capture_source]
+      example:
+        discipline_code: strength
+        started_at: '2026-10-13T18:04:00-05:00'
+        timezone: America/Bogota
+        requested_level: detailed
+        capture_source: manual
+      properties:
+        discipline_code:
+          type: string
+          pattern: '^[a-z][a-z0-9_]{1,63}$'
+        started_at:
+          type: string
+          format: date-time
+        timezone:
+          $ref: '#/components/schemas/IanaTimeZone'
+        requested_level:
+          $ref: '#/components/schemas/CompletenessLevel'
+        capture_source:
+          type: string
+          enum: [manual, device]
+    FreeSession:
+      type: object
+      additionalProperties: false
+      required: [id, status, revision_number, result_contract]
+      example:
+        id: 0190a0b1-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+        status: in_progress
+        revision_number: 0
+        result_contract:
+          id: 018f6f8d-2b00-7a00-8000-000000000801
+          version: 1
+          requested_level: detailed
+      properties:
+        id:
+          $ref: '#/components/schemas/UuidV7'
+        status:
+          type: string
+          const: in_progress
+        revision_number:
+          type: integer
+          minimum: 0
+        result_contract:
+          $ref: '#/components/schemas/ResultContractRef'
     Attempt:
       type: object
       additionalProperties: false
