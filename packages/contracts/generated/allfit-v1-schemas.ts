@@ -11427,6 +11427,78 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  SpaceRelationship: {
+    description:
+      'One bond between the caller and an organization. `previous_relationship_id` is set when she had another with the same organization before this one.',
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'relationship_id',
+      'organization_id',
+      'organization_name',
+      'organization_type_code',
+      'status',
+      'started_at',
+      'ended_at',
+      'previous_relationship_id',
+    ],
+    properties: {
+      relationship_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      organization_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      organization_name: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 160,
+      },
+      organization_type_code: {
+        type: 'string',
+        pattern: '^[a-z][a-z0-9_]{1,63}$',
+      },
+      status: {
+        type: 'string',
+        enum: ['active', 'terminated'],
+      },
+      started_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      ended_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      previous_relationship_id: {
+        anyOf: [
+          {
+            $ref: '#/components/schemas/UuidV7',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+    },
+  },
+  SpaceRelationshipPage: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['data', 'page'],
+    properties: {
+      data: {
+        type: 'array',
+        maxItems: 100,
+        items: {
+          $ref: '#/components/schemas/SpaceRelationship',
+        },
+      },
+      page: {
+        $ref: '#/components/schemas/Page',
+      },
+    },
+  },
   SpaceRoutineLastTime: {
     type: 'object',
     additionalProperties: false,

@@ -5,6 +5,8 @@
  * them.
  */
 
+import type { AllfitV1Schemas } from '@allfitone/contracts'
+
 export type RelationshipStatus = 'active' | 'terminated'
 export type InvitationStatus = 'pending' | 'accepted' | 'rejected' | 'revoked' | 'expired'
 
@@ -292,4 +294,27 @@ export interface SubstitutionProposalDatabase {
       endsOn: string
     },
   ): Promise<SubstitutionProposalResult>
+}
+
+/**
+ * `OP-REL-012`. A page of the caller's own relationships, shaped as the contract sends
+ * it: this answer is handed straight to the client, so the row and the DTO are the same
+ * thing and a mapping layer between them would only be a place to drop a field.
+ */
+export type MyRelationship = AllfitV1Schemas['SpaceRelationship']
+
+export interface MyRelationshipPage {
+  items: MyRelationship[]
+  hasMore: boolean
+}
+
+export interface MyRelationshipQuery {
+  limit: number
+  requestId: string
+  cursorStartedAt?: string
+  cursorRelationshipId?: string
+}
+
+export interface MyRelationshipDatabase {
+  listMine(personId: string, query: MyRelationshipQuery): Promise<MyRelationshipPage>
 }

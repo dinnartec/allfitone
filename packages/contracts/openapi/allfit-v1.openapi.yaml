@@ -9905,6 +9905,62 @@ paths:
           $ref: '#/components/responses/ValidationFailed'
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
+
+  /space/v1/relationships:
+    get:
+      tags: [Space Privacy]
+      operationId: listSpaceRelationships
+      x-allfit-operation: OP-REL-012
+      x-allfit-cache: private-no-store
+      summary: The gyms I train at, and the ones I used to
+      description: >-
+        Every service relationship of the caller, newest first, closed ones
+        included.
+
+
+        **Leaving is part of somebody's history.** A relationship that ended
+        stays in the list, and when the person came back the new one carries
+        `previous_relationship_id`. Showing that link grants nothing: the old
+        relationship's permissions were frozen the moment it ended, so the link
+        is a fact about her past and not a key to it.
+
+
+        Carries no fitness data of any kind — not a measurement, not a session,
+        not a note. What it carries is which organizations she has a bond with,
+        which is what every other operation about one of them needs in order to
+        be reachable at all.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: The caller's relationships
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/PrivateNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpaceRelationshipPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
 components:
   securitySchemes:
     cookieAuth:
@@ -20507,5 +20563,52 @@ components:
           maxItems: 100
           items:
             $ref: '#/components/schemas/OrganizationSubscription'
+        page:
+          $ref: '#/components/schemas/Page'
+
+    SpaceRelationship:
+      description: >-
+        One bond between the caller and an organization. `previous_relationship_id`
+        is set when she had another with the same organization before this one.
+      type: object
+      additionalProperties: false
+      required:
+        [relationship_id, organization_id, organization_name, organization_type_code,
+         status, started_at, ended_at, previous_relationship_id]
+      properties:
+        relationship_id:
+          $ref: '#/components/schemas/UuidV7'
+        organization_id:
+          $ref: '#/components/schemas/UuidV7'
+        organization_name:
+          type: string
+          minLength: 1
+          maxLength: 160
+        organization_type_code:
+          type: string
+          pattern: '^[a-z][a-z0-9_]{1,63}$'
+        status:
+          type: string
+          enum: [active, terminated]
+        started_at:
+          type: string
+          format: date-time
+        ended_at:
+          type: [string, 'null']
+          format: date-time
+        previous_relationship_id:
+          anyOf:
+            - $ref: '#/components/schemas/UuidV7'
+            - type: 'null'
+    SpaceRelationshipPage:
+      type: object
+      additionalProperties: false
+      required: [data, page]
+      properties:
+        data:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/SpaceRelationship'
         page:
           $ref: '#/components/schemas/Page'

@@ -3955,6 +3955,30 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/space/v1/relationships': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * The gyms I train at, and the ones I used to
+     * @description Every service relationship of the caller, newest first, closed ones included.
+     *
+     *     **Leaving is part of somebody's history.** A relationship that ended stays in the list, and when the person came back the new one carries `previous_relationship_id`. Showing that link grants nothing: the old relationship's permissions were frozen the moment it ended, so the link is a fact about her past and not a key to it.
+     *
+     *     Carries no fitness data of any kind — not a measurement, not a session, not a note. What it carries is which organizations she has a bond with, which is what every other operation about one of them needs in order to be reachable at all.
+     */
+    get: operations['listSpaceRelationships']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
 }
 export type webhooks = Record<string, never>
 export interface components {
@@ -8569,6 +8593,24 @@ export interface components {
     }
     OrganizationSubscriptionPage: {
       data: components['schemas']['OrganizationSubscription'][]
+      page: components['schemas']['Page']
+    }
+    /** @description One bond between the caller and an organization. `previous_relationship_id` is set when she had another with the same organization before this one. */
+    SpaceRelationship: {
+      relationship_id: components['schemas']['UuidV7']
+      organization_id: components['schemas']['UuidV7']
+      organization_name: string
+      organization_type_code: string
+      /** @enum {string} */
+      status: 'active' | 'terminated'
+      /** Format: date-time */
+      started_at: string
+      /** Format: date-time */
+      ended_at: string | null
+      previous_relationship_id: components['schemas']['UuidV7'] | null
+    }
+    SpaceRelationshipPage: {
+      data: components['schemas']['SpaceRelationship'][]
       page: components['schemas']['Page']
     }
   }
@@ -16397,6 +16439,35 @@ export interface operations {
       401: components['responses']['Unauthenticated']
       403: components['responses']['Forbidden']
       404: components['responses']['NotFound']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listSpaceRelationships: {
+    parameters: {
+      query?: {
+        limit?: number
+        cursor?: components['parameters']['Cursor']
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The caller's relationships */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['PrivateNoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SpaceRelationshipPage']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
       422: components['responses']['ValidationFailed']
       503: components['responses']['UpstreamUnavailable']
     }

@@ -972,6 +972,13 @@ export const allfitV1ContractManifest = {
       responses: ['200', '401', '403'],
     },
     {
+      method: 'GET',
+      path: '/space/v1/relationships',
+      operationId: 'listSpaceRelationships',
+      allfitOperation: 'OP-REL-012',
+      responses: ['200', '400', '401', '403', '422', '503'],
+    },
+    {
       method: 'POST',
       path: '/space/v1/session-templates',
       operationId: 'createMySessionTemplate',

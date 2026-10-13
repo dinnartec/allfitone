@@ -25,10 +25,15 @@ select plan(5);
 -- Naming all of them, rather than asserting that no name matches `terminate%`, is the
 -- point: a closure called anything at all breaks this, and whoever adds a function to
 -- `relationships` has to say out loud that theirs is not one. It has already worked
--- twice — `read_relationship_state` and `reassign_relationship_holder` arrived with
--- `AFO-54`/`AFO-57`, `read_relationship_history` with `AFO-55` and
--- `propose_substitution` with `AFO-58`; each landed here before it landed anywhere
--- else.
+-- four times — `read_relationship_state` and `reassign_relationship_holder` arrived with
+-- `AFO-54`/`AFO-57`, `read_relationship_history` with `AFO-55`,
+-- `propose_substitution` with `AFO-58` and `list_my_relationships` with `OP-REL-012`;
+-- each landed here before it landed anywhere else.
+--
+-- `list_my_relationships` is a read the **person** performs over her own rows, and it is
+-- what makes everything about one of her gyms reachable from Space at all. It ends
+-- nothing, it writes nothing, and the closure that stays deferred is Allfit ending a
+-- relationship over the gym's head.
 --
 -- Only the function the API calls appears. `history_cursor` and
 -- `history_cursor_parts` came with the same migration and are deliberately absent:
@@ -46,10 +51,10 @@ select is(
        and routine.prokind = 'f'
        and has_function_privilege('allfit_api', routine.oid, 'EXECUTE')
    ) as runnable),
-  'actor_is_assigned, assign_relationship_holder, list_organization_clients, '
-    || 'propose_substitution, read_relationship_history, read_relationship_state, '
-    || 'reassign_relationship_holder',
-  'the runtime reaches seven relationship functions, and ending one is not among them'
+  'actor_is_assigned, assign_relationship_holder, list_my_relationships, '
+    || 'list_organization_clients, propose_substitution, read_relationship_history, '
+    || 'read_relationship_state, reassign_relationship_holder',
+  'the runtime reaches eight relationship functions, and ending one is not among them'
 );
 
 -- ---------------------------------------------------------------------------

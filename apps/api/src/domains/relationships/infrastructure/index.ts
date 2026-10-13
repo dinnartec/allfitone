@@ -18,6 +18,8 @@ import type {
   RelationshipStateDatabase,
   RelationshipSubstitution,
   SubstitutionProposalDatabase,
+  MyRelationship,
+  MyRelationshipDatabase,
 } from '../domain/index.js'
 
 type DirectoryRow = {
@@ -480,4 +482,63 @@ type SubstitutionProposalRow = {
   ends_on: string
   proposed: boolean
   replayed: boolean
+}
+
+/**
+ * `OP-REL-012`. The function answers with the contract's own field names, so the rows go
+ * out as they came in apart from the timestamps, which PostgreSQL hands over as `Date`.
+ *
+ * Reads `limit + 1` and trims, so `has_more` is a fact rather than a guess.
+ */
+export function createMyRelationshipDatabase(
+  sql: postgres.Sql = database(),
+): MyRelationshipDatabase {
+  return {
+    listMine: (personId, query) =>
+      measureStudioRequestPhase('business-db', async () => {
+        const outcome = await sql.begin(async (transaction) => {
+          await setPersonActor(transaction, personId)
+          const rows = await transaction<MyRelationshipRow[]>`
+            select * from relationships.list_my_relationships(
+              ${personId}::uuid,
+              ${query.limit + 1}::integer,
+              ${query.cursorStartedAt ?? null}::timestamptz,
+              ${query.cursorRelationshipId ?? null}::uuid
+            )
+          `
+          const hasMore = rows.length > query.limit
+          return {
+            value: {
+              items: rows.slice(0, query.limit).map(presentMyRelationship),
+              hasMore,
+            },
+          }
+        })
+        return outcome.value
+      }),
+  }
+}
+
+type MyRelationshipRow = {
+  relationship_id: string
+  organization_id: string
+  organization_name: string
+  organization_type_code: string
+  status: MyRelationship['status']
+  started_at: string
+  ended_at: string | null
+  previous_relationship_id: string | null
+}
+
+function presentMyRelationship(row: MyRelationshipRow): MyRelationship {
+  return {
+    relationship_id: row.relationship_id,
+    organization_id: row.organization_id,
+    organization_name: row.organization_name,
+    organization_type_code: row.organization_type_code,
+    status: row.status,
+    started_at: new Date(row.started_at).toISOString(),
+    ended_at: row.ended_at ? new Date(row.ended_at).toISOString() : null,
+    previous_relationship_id: row.previous_relationship_id,
+  }
 }
