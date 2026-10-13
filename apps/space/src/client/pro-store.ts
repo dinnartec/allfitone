@@ -101,10 +101,17 @@ export interface PurchaseListeners {
 }
 
 export function listenForPurchases(listeners: PurchaseListeners): () => void {
-  const updated = purchaseUpdatedListener(listeners.onPurchase)
-  const failed = purchaseErrorListener((error) => {
-    if (error.code !== ErrorCode.UserCancelled) listeners.onFailure(error.message)
-  })
+  let updated: { remove(): void }
+  let failed: { remove(): void }
+  try {
+    updated = purchaseUpdatedListener(listeners.onPurchase)
+    failed = purchaseErrorListener((error) => {
+      if (error.code !== ErrorCode.UserCancelled) listeners.onFailure(error.message)
+    })
+  } catch {
+    // A binary built without the store module cannot buy; the offer fails too and says so.
+    return () => undefined
+  }
   return () => {
     updated.remove()
     failed.remove()

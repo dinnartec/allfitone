@@ -1,34 +1,37 @@
 /**
- * `PRO-1`, `PRO-3`, `PRO-5` · Tu plan — `HU-SP-086`, `HU-SP-087`, `HU-SP-088`.
+ * `PRO-A1`, `PRO-A2`, `PRO-A3` · Tu plan — `HU-SP-086`, `HU-SP-087`, `HU-SP-088`.
  *
  * One screen for the three ways a person stands: Pro through a gym, Pro they pay for, or
- * the free plan. What decides is the API's `effective_source`; this screen says it in
- * words and never infers a plan from what it does not see.
+ * the free plan. What decides is the API's `effective_source`; the membership card says
+ * it, and the rest of the screen only answers what that means: what is included, where
+ * the payments are, how to leave.
  *
- * **Cancelling happens in the store.** Apple and Google allow nothing else, so the sheet
- * explains what changes and what does not, and opens the store's own subscriptions.
+ * **Cancelling happens in the store** (`PRO-C`). Apple and Google allow nothing else, so
+ * the sheet says what stays the same, keeps «Mantener Pro» as the main act, and opens the
+ * store's own subscriptions.
  */
 
-import { Badge } from '@allfitone/react-native/badge'
 import { Button } from '@allfitone/react-native/button'
-import { ContentRow } from '@allfitone/react-native/content-row'
-import { IconButton } from '@allfitone/react-native/icon-button'
 import { FoundationIcon } from '@allfitone/react-native/icons'
+import { IconButton } from '@allfitone/react-native/icon-button'
 import { InlineAlert } from '@allfitone/react-native/inline-alert'
 import { Screen } from '@allfitone/react-native/screen'
 import { Sheet } from '@allfitone/react-native/sheet'
 import { Text } from '@allfitone/react-native/text'
 import { useTheme } from '@allfitone/react-native/theme'
+import { LinearGradient } from 'expo-linear-gradient'
 import { useFocusEffect, useRouter } from 'expo-router'
 import { useCallback, useMemo, useState } from 'react'
-import { ScrollView, StyleSheet, View } from 'react-native'
+import { Image, Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
+import invitePhoto from '../../assets/images/pro-invite.webp'
 import {
   gymsOf,
   lastPaid,
-  limitLabel,
   money,
   renewalLine,
+  shortDate,
   sourceLine,
   storeName,
   subscriptionOf,
@@ -36,16 +39,24 @@ import {
   type ProFlow,
   type ProPayments,
   type ProStatus,
+  type SubscriptionSource,
 } from '../../src/client/pro'
 import { manageSubscription } from '../../src/client/pro-store'
 import { createSpaceProFlow } from '../../src/client/pro-transport'
+import {
+  FeatureList,
+  LinkPanel,
+  MembershipCard,
+  Note,
+  SectionLabel,
+  type CardFact,
+  type PanelLink,
+} from '../../src/components/pro-ui'
 
 const UNAVAILABLE = 'No pudimos cargar tu plan. Revisa tu conexión e inténtalo de nuevo.'
-const KEEPS = [
-  'No se borra ningún dato. Pasas al plan gratis y sigues viendo todo tu historial.',
-  'Tus permisos y tus gimnasios no cambian.',
-  'Si te afilia un gimnasio activo, recuperas Pro sin pagar.',
-]
+// Dark under the words, clear by three quarters, where the athlete stands.
+const INVITE_VEIL = ['#05090FF7', '#05090FB8', '#05090F00'] as const
+const INVITE_VEIL_STOPS = [0, 0.42, 0.78] as const
 
 export default function ProPlanRoute() {
   const flow = useMemo(() => createSpaceProFlow(), [])
@@ -55,7 +66,7 @@ export default function ProPlanRoute() {
 /** The screen itself, given its flow: the route passes the real one. */
 export function ProPlan({ flow }: { readonly flow: ProFlow }) {
   const router = useRouter()
-  const theme = useTheme()
+  const insets = useSafeAreaInsets()
   const [status, setStatus] = useState<ProStatus | undefined>(undefined)
   const [payments, setPayments] = useState<ProPayments | undefined>(undefined)
   const [failure, setFailure] = useState<string | undefined>(undefined)
@@ -79,15 +90,47 @@ export function ProPlan({ flow }: { readonly flow: ProFlow }) {
   )
 
   const subscription = status ? subscriptionOf(status) : undefined
-  const gyms = status ? gymsOf(status) : []
-  const paid = payments ? lastPaid(payments.payments) : undefined
-  const card = {
-    backgroundColor: theme.color.background.surface,
-    borderColor: theme.color.border.subtle,
+  const [gym] = status ? gymsOf(status) : []
+  const charges = payments?.payments ?? []
+  const paid = lastPaid(charges)
+
+  const facts: CardFact[] = []
+  if (status?.effective_source === 'subscription' && subscription) {
+    facts.push({
+      label: subscription.auto_renews ? 'Renueva' : 'Termina',
+      value: shortDate(subscription.current_period_end),
+    })
+    const amount = paid ? money(paid.amount_minor, paid.currency_code) : undefined
+    if (amount) facts.push({ label: 'Pagas', value: `${amount}/mes` })
+  } else if (status?.effective_source === 'organization' && gym) {
+    facts.push(
+      { label: 'Gimnasio', value: gym.organization_name },
+      { label: 'En la app', value: 'No pagas nada' },
+    )
+  }
+
+  const links: PanelLink[] = []
+  if (subscription || charges.length > 0) {
+    links.push({
+      icon: 'history',
+      title: 'Tus pagos',
+      caption: paid
+        ? `${charges.length} cobros · el último el ${shortDate(paid.occurred_at)}`
+        : `${charges.length} cobros`,
+      onPress: () => router.push('/pro/payments'),
+    })
+  }
+  if (subscription) {
+    links.push({
+      icon: 'external',
+      title: `Gestionar en ${subscription.store === 'google_play' ? 'Google Play' : 'App Store'}`,
+      caption: 'Cambiar o cancelar la suscripción',
+      onPress: () => void manageSubscription(undefined),
+    })
   }
 
   return (
-    <Screen edges={['top', 'bottom']}>
+    <Screen edges={['top']} padded={false}>
       <View style={styles.header}>
         <IconButton icon="back" accessibilityLabel="Volver" onPress={() => router.back()} />
         <Text role="control" size="xl" accessibilityRole="header">
@@ -95,197 +138,169 @@ export function ProPlan({ flow }: { readonly flow: ProFlow }) {
         </Text>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}
+        showsVerticalScrollIndicator={false}
+      >
         {failure ? <InlineAlert message={failure} /> : null}
 
         {status ? (
           <>
-            <View style={[styles.card, card]}>
-              <View style={styles.planRow}>
-                <View style={styles.grow}>
-                  <Text role="display" size="xl">
-                    {status.is_pro ? 'Allfit Pro' : 'Plan gratis'}
-                  </Text>
-                  <Text role="body" size="sm" color={status.is_pro ? 'accent' : 'muted'}>
-                    {sourceLine(status)}
-                  </Text>
-                </View>
-                {status.is_pro ? <Badge label="Activo" tone="success" variant="quiet" /> : null}
-              </View>
-              {status.effective_source === 'organization' && gyms[0] ? (
-                <Text role="body" size="sm" color="secondary">
-                  Lo tienes mientras sigas en {gyms[0].organization_name} y el gimnasio esté activo.
-                  No pagas nada en la app.
-                </Text>
-              ) : null}
-              {subscription ? (
-                <View style={styles.facts}>
-                  {paid ? (
-                    <Fact
-                      label="Pagas"
-                      value={money(paid.amount_minor, paid.currency_code) ?? '—'}
-                    />
-                  ) : null}
-                  <Fact label="Con" value={storeName(subscription.store)} />
-                  <Fact label="Estado" value={renewalLine(subscription)} wide />
-                </View>
-              ) : null}
+            <MembershipCard pro={status.is_pro} source={sourceLine(status)} facts={facts} />
+
+            {status.effective_source === 'organization' && gym ? (
+              <Note icon="info">
+                Lo tienes mientras sigas en {gym.organization_name} y el gimnasio esté activo. Si
+                eso cambia, pasas al plan gratis sin perder nada.
+              </Note>
+            ) : null}
+
+            {subscription && subscription.status !== 'active' ? (
+              <InlineAlert message={renewalLine(subscription)} tone="warning" />
+            ) : null}
+
+            {!status.is_pro ? <ProInvitation onPress={() => router.push('/pro/plans')} /> : null}
+
+            <View style={styles.section}>
+              <SectionLabel>Lo que incluye</SectionLabel>
+              <FeatureList
+                features={status.features}
+                pro={status.is_pro}
+                waiting={WAITING_FOR_FEATURES}
+              />
             </View>
 
-            {gyms.length > 0 ? (
-              <Section title="Tu afiliación">
-                {gyms.map((gym) => (
-                  <View key={gym.organization_id} style={[styles.gym, card]}>
-                    <Text role="control" size="md">
-                      {gym.organization_name}
-                    </Text>
-                    <Text role="body" size="sm" color="muted">
-                      Incluye Pro
-                    </Text>
-                  </View>
-                ))}
-              </Section>
-            ) : null}
-
-            <Section title={status.is_pro ? 'Tus límites hoy' : 'Lo que incluye tu plan'}>
-              {status.features.length === 0 ? (
-                <Text role="body" size="sm" color="muted">
-                  {WAITING_FOR_FEATURES}
-                </Text>
-              ) : (
-                status.features.map((feature) => (
-                  <View key={feature.code} style={styles.limit}>
-                    <Text role="body" size="sm" style={styles.grow}>
-                      {feature.name}
-                    </Text>
-                    <Text role="control" size="sm" color="accent">
-                      {limitLabel(feature)}
-                    </Text>
-                  </View>
-                ))
-              )}
-            </Section>
+            {links.length > 0 ? <LinkPanel links={links} /> : null}
 
             {!status.is_pro ? (
-              <View style={[styles.card, card]}>
-                <Text role="control" size="lg">
-                  Allfit Pro
-                </Text>
-                <Text role="body" size="sm" color="secondary">
-                  Todo Allfit, sin depender de un gimnasio.
-                </Text>
-                <Button label="Ver Pro" onPress={() => router.push('/pro/plans')} />
-              </View>
-            ) : null}
-
-            <Section title="Más">
-              {subscription || (payments?.payments.length ?? 0) > 0 ? (
-                <ContentRow
-                  name="Tus pagos a Allfit"
-                  caption={`${payments?.payments.length ?? 0} cobros`}
-                  trailing={{ kind: 'chevron' }}
-                  onPress={() => router.push('/pro/payments')}
-                />
-              ) : null}
-              <ContentRow
-                name="Qué incluye cada plan"
-                caption="Gratis y Pro, lado a lado"
-                trailing={{ kind: 'chevron' }}
-                onPress={() => router.push('/pro/plans')}
-              />
-            </Section>
-
-            {!status.is_pro ? (
-              <View style={styles.note}>
-                <FoundationIcon
-                  name="info"
-                  size="sm"
-                  color={theme.color.icon.secondary}
-                  decorative
-                />
-                <Text role="body" size="xs" color="muted" style={styles.grow}>
-                  Si un gimnasio te invita, entras con Pro sin pagar.
-                </Text>
-              </View>
+              <Note icon="organization">Si un gimnasio te invita, entras con Pro sin pagar.</Note>
             ) : null}
 
             {subscription ? (
-              <Button label="Cancelar Pro" variant="ghost" onPress={() => setCancelling(true)} />
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setCancelling(true)}
+                style={styles.cancel}
+              >
+                <Text role="control" size="sm" color="muted" align="center">
+                  Cancelar Pro
+                </Text>
+              </Pressable>
             ) : null}
           </>
         ) : null}
       </ScrollView>
 
-      <Sheet
-        visible={cancelling}
-        onDismiss={() => setCancelling(false)}
-        title="¿Cancelar Allfit Pro?"
-      >
-        <View style={styles.sheet}>
-          {subscription ? (
-            <Text role="body" size="sm" color="secondary">
-              Lo pagas con {storeName(subscription.store)}, así que se cancela en tu cuenta de{' '}
-              {storeName(subscription.store)}. Sigues con Pro hasta el final del periodo que ya
-              pagaste.
-            </Text>
-          ) : null}
-          {KEEPS.map((line) => (
-            <View key={line} style={styles.keep}>
-              <FoundationIcon name="check" size="sm" color={theme.color.icon.accent} decorative />
-              <Text role="body" size="sm" style={styles.grow}>
-                {line}
-              </Text>
-            </View>
-          ))}
-          <Button
-            label={`Gestionar en ${subscription?.store === 'google_play' ? 'Google Play' : 'App Store'}`}
-            onPress={() => {
-              setCancelling(false)
-              void manageSubscription(undefined)
-            }}
-          />
-          <Button label="Mantener Pro" variant="ghost" onPress={() => setCancelling(false)} />
-        </View>
-      </Sheet>
+      {subscription ? (
+        <CancelSheet
+          visible={cancelling}
+          subscription={subscription}
+          onDismiss={() => setCancelling(false)}
+        />
+      ) : null}
     </Screen>
   )
 }
 
-function Section({
-  title,
-  children,
-}: {
-  readonly title: string
-  readonly children: React.ReactNode
-}) {
+/** `PRO-A3`'s invitation: the paywall's athlete, cropped wide and mirrored to the light side. */
+function ProInvitation({ onPress }: { readonly onPress: () => void }) {
+  const theme = useTheme()
+  // Measured, because an absolutely filled image is drawn at its own size on iOS.
+  const [size, setSize] = useState({ width: 0, height: 0 })
   return (
-    <View style={styles.section}>
-      <Text role="eyebrow" size="2xs" color="muted">
-        {title.toUpperCase()}
-      </Text>
-      {children}
-    </View>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Conoce Allfit Pro"
+      onPress={onPress}
+      onLayout={(event) =>
+        setSize({ width: event.nativeEvent.layout.width, height: event.nativeEvent.layout.height })
+      }
+      style={[styles.invite, { borderColor: theme.color.accent.tonalBorder }]}
+    >
+      <Image
+        source={invitePhoto}
+        style={[styles.invitePhoto, size]}
+        resizeMode="cover"
+        accessible={false}
+      />
+      <LinearGradient
+        colors={INVITE_VEIL}
+        locations={INVITE_VEIL_STOPS}
+        start={{ x: 0, y: 0.5 }}
+        end={{ x: 1, y: 0.5 }}
+        style={StyleSheet.absoluteFill}
+      />
+      <View style={styles.inviteCopy}>
+        <View style={styles.seal}>
+          <FoundationIcon name="favourite" size="sm" color={theme.color.icon.accent} decorative />
+          <Text role="control" size="xs" color="accent">
+            Allfit Pro
+          </Text>
+        </View>
+        <Text role="display" size="2xl" uppercase>
+          {'Todo Allfit, sin depender\nde un gimnasio'}
+        </Text>
+      </View>
+      <View style={styles.inviteButton}>
+        <Button label="Conoce Pro" size="sm" onPress={onPress} />
+      </View>
+    </Pressable>
   )
 }
 
-function Fact({
-  label,
-  value,
-  wide,
+const KEEPS = [
+  ['history', 'No se borra ningún dato. Pasas al plan gratis y sigues viendo todo tu historial.'],
+  ['people', 'Tus permisos y tus gimnasios no cambian.'],
+  ['organization', 'Si un gimnasio activo te afilia, recuperas Pro sin pagar.'],
+] as const
+
+function CancelSheet({
+  visible,
+  subscription,
+  onDismiss,
 }: {
-  readonly label: string
-  readonly value: string
-  readonly wide?: boolean
+  readonly visible: boolean
+  readonly subscription: SubscriptionSource
+  readonly onDismiss: () => void
 }) {
+  const theme = useTheme()
+  const store = storeName(subscription.store)
   return (
-    <View style={wide ? styles.wide : styles.fact}>
-      <Text role="body" size="xs" color="muted">
-        {label}
-      </Text>
-      <Text role="control" size="sm">
-        {value}
-      </Text>
-    </View>
+    <Sheet visible={visible} onDismiss={onDismiss} title="¿Cancelar Allfit Pro?">
+      <View style={styles.sheet}>
+        <View
+          style={[
+            styles.until,
+            {
+              backgroundColor: theme.color.accent.tonal,
+              borderColor: theme.color.accent.tonalBorder,
+            },
+          ]}
+        >
+          <FoundationIcon name="calendar" size="sm" color={theme.color.icon.accent} decorative />
+          <Text role="control" size="xs" color="accent">
+            Sigues con Pro hasta el {shortDate(subscription.current_period_end)}
+          </Text>
+        </View>
+        {KEEPS.map(([icon, line]) => (
+          <Note key={line} icon={icon}>
+            {line}
+          </Note>
+        ))}
+        <Text role="body" size="xs" color="muted">
+          Lo pagas con {store}, así que se cancela en tu cuenta de {store}.
+        </Text>
+        <Button label="Mantener Pro" onPress={onDismiss} />
+        <Button
+          label={`Cancelar en ${subscription.store === 'google_play' ? 'Google Play' : 'App Store'}`}
+          variant="secondary"
+          onPress={() => {
+            onDismiss()
+            void manageSubscription(undefined)
+          }}
+        />
+      </View>
+    </Sheet>
   )
 }
 
@@ -293,22 +308,36 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 20,
+    gap: 14,
+    paddingHorizontal: 24,
     paddingTop: 8,
-    paddingBottom: 10,
+    paddingBottom: 18,
   },
-  content: { paddingHorizontal: 20, paddingBottom: 40, gap: 18 },
-  card: { borderRadius: 24, borderWidth: 1, padding: 18, gap: 12 },
-  planRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  grow: { flex: 1 },
-  facts: { flexDirection: 'row', flexWrap: 'wrap', gap: 14 },
-  fact: { gap: 2 },
-  wide: { gap: 2, flexBasis: '100%' },
-  section: { gap: 10 },
-  gym: { borderRadius: 20, borderWidth: 1, paddingHorizontal: 18, paddingVertical: 14, gap: 2 },
-  limit: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  note: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  sheet: { gap: 14 },
-  keep: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  content: { paddingHorizontal: 24, gap: 26 },
+  section: { gap: 4 },
+  cancel: { paddingVertical: 8 },
+  seal: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  invite: {
+    minHeight: 196,
+    borderRadius: 24,
+    borderWidth: 1,
+    overflow: 'hidden',
+    padding: 20,
+    gap: 12,
+    justifyContent: 'flex-end',
+  },
+  invitePhoto: { position: 'absolute', top: 0, left: 0 },
+  inviteCopy: { gap: 4, maxWidth: 270 },
+  inviteButton: { alignSelf: 'flex-start' },
+  sheet: { gap: 16 },
+  until: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
 })

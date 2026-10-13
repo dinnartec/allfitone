@@ -13,6 +13,7 @@
 
 import type { AllfitV1Schemas } from '@allfitone/contracts'
 import type { CommandHeaders } from '@allfitone/contracts/commands'
+import type { IconName } from '@allfitone/icons'
 
 export type ProStatus = AllfitV1Schemas['SpaceProStatus']
 export type ProPlanCatalogue = AllfitV1Schemas['SpaceProPlanCatalogue']
@@ -116,14 +117,51 @@ export function gymWarning(status: ProStatus): string | undefined {
   return `Ya tienes Pro por ${gym.organization_name}. Pagarlo solo te sirve para no depender de esa afiliación.`
 }
 
-export const WAITING_FOR_FEATURES = 'Pronto verás aquí qué incluye cada plan y sus límites.'
+export const WAITING_FOR_FEATURES = 'Muy pronto verás aquí cada función de Pro y su límite.'
 
-/** A limit as a person reads it: «Sin límite», «Incluido», «No incluido» or «3 al día». */
-export function limitLabel(feature: ProFeature): string {
-  if (!feature.enabled) return 'No incluido'
-  if (feature.limit_value === null) return 'Sin límite'
-  return feature.unit ? `${feature.limit_value} ${feature.unit}` : String(feature.limit_value)
+// What each known function says at a given limit; `null` is unlimited.
+const SENTENCES: Readonly<Record<string, (limit: number | null) => string>> = {
+  active_programs: (limit) =>
+    limit === null
+      ? 'Programas activos sin límite'
+      : `Máximo ${limit} ${limit === 1 ? 'programa activo' : 'programas activos'}`,
+  own_routines: (limit) =>
+    limit === null
+      ? 'Rutinas propias sin límite'
+      : `Máximo ${limit} ${limit === 1 ? 'rutina' : 'rutinas'}`,
+  history_months: (limit) =>
+    limit === null
+      ? 'Todo tu historial'
+      : limit === 1
+        ? 'Historial del último mes'
+        : `Historial de los últimos ${limit} meses`,
+  meal_photos: () => 'Comidas por foto y por búsqueda',
 }
+
+// When a function is left out of a plan, what the person still has instead.
+const WITHOUT: Readonly<Record<string, string>> = {
+  meal_photos: 'Comidas solo por búsqueda de alimentos',
+}
+
+/** One function as a sentence: «Máximo 1 programa activo», «Todo tu historial». */
+export function featureSentence(feature: ProFeature): string {
+  if (!feature.enabled) return WITHOUT[feature.code] ?? `${feature.name}: no incluido`
+  const sentence = SENTENCES[feature.code]
+  if (sentence) return sentence(feature.limit_value)
+  return feature.limit_value === null
+    ? `${feature.name} sin límite`
+    : `${feature.name}: máximo ${feature.limit_value}`
+}
+
+const FEATURE_ICONS: Readonly<Record<string, IconName>> = {
+  active_programs: 'training',
+  own_routines: 'checklist',
+  meal_photos: 'camera',
+  history_months: 'progress',
+}
+
+/** The icon of a function; one the app does not know yet gets a neutral mark. */
+export const featureIcon = (code: string): IconName => FEATURE_ICONS[code] ?? 'check'
 
 const MINOR_DIGITS: Readonly<Record<string, number>> = { CLP: 0, JPY: 0, KRW: 0, PYG: 0 }
 

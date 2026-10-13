@@ -13,6 +13,11 @@
  *   bun packages/db/scripts/publish-local-pro.ts
  *
  * The product ids match the StoreKit configuration file of the Space app.
+ *
+ * It also adds a handful of **invented** functions, so the screens have limits to show
+ * while product decides the real catalogue. They exist only on this machine: in every
+ * real environment a function enters the catalogue by migration, with the code that
+ * enforces it.
  */
 
 import { randomUUID } from 'node:crypto'
@@ -31,7 +36,49 @@ const GUARDED = [
   'support.platform_duty_assignments',
   'payments.platform_plans',
   'payments.platform_plan_versions',
+  'payments.platform_plan_features',
 ] as const
+
+// Code and name; then each plan's limit (null is unlimited), or false when it is left out.
+const DEMO_FEATURES: readonly [string, string, number | null | false, number | null | false][] = [
+  ['active_programs', 'Programas activos', 1, null],
+  ['own_routines', 'Rutinas propias', 4, null],
+  ['history_months', 'Historial', 3, null],
+  ['meal_photos', 'Comidas por foto', false, null],
+]
+// Demo functions this script used to add, removed so a local catalogue matches the list above.
+const RETIRED = ['meal_photos_per_day', 'compared_history_weeks']
+
+async function demoFeatures(): Promise<string> {
+  return sql.begin(async (transaction) => {
+    await transaction`set local role allfit_owner`
+    await transaction`alter table payments.platform_plan_features disable trigger user`
+    await transaction`delete from payments.platform_plan_features where feature_code in ${sql(RETIRED)}`
+    await transaction`delete from payments.platform_features where code in ${sql(RETIRED)}`
+    for (const [code, name, free, pro] of DEMO_FEATURES) {
+      await transaction`
+        insert into payments.platform_features (code, name, unit) values (${code}, ${name}, null)
+        on conflict (code) do nothing
+      `
+      for (const [kind, limit] of [
+        ['free', free],
+        ['paid', pro],
+      ] as const) {
+        await transaction`
+          insert into payments.platform_plan_features (platform_plan_version_id, feature_code, limit_value, enabled)
+          select version.id, ${code}, ${limit === false ? null : limit}::integer, ${limit !== false}
+          from payments.platform_plan_versions as version
+          join payments.platform_plans as plan on plan.id = version.platform_plan_id
+          where version.status = 'published' and plan.plan_kind = ${kind}
+          on conflict (platform_plan_version_id, feature_code)
+          do update set limit_value = excluded.limit_value, enabled = excluded.enabled
+        `
+      }
+    }
+    await transaction`alter table payments.platform_plan_features enable trigger user`
+    return `Demo functions in place: ${DEMO_FEATURES.map(([code]) => code).join(', ')}.`
+  })
+}
 
 const sql = postgres(url, { prepare: false, max: 1 })
 
@@ -128,6 +175,7 @@ async function publish(): Promise<string> {
 
 try {
   console.log(await publish())
+  console.log(await demoFeatures())
 } finally {
   await sql.end({ timeout: 1 })
 }

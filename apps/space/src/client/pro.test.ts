@@ -3,8 +3,9 @@ import type { CommandHeaders } from '@allfitone/contracts/commands'
 
 import {
   createProFlow,
+  featureIcon,
+  featureSentence,
   gymWarning,
-  limitLabel,
   money,
   productFor,
   renewalLine,
@@ -74,11 +75,27 @@ describe('what the screens say', () => {
     expect(gymWarning(status({}))).toBe(undefined)
   })
 
-  test('T-SPC-UNIT-291 a limit reads as a person would say it', () => {
-    const base = { code: 'meal_logs_per_day', name: 'Comidas', unit: 'al día', enabled: true }
-    expect(limitLabel({ ...base, limit_value: null })).toBe('Sin límite')
-    expect(limitLabel({ ...base, limit_value: 3 })).toBe('3 al día')
-    expect(limitLabel({ ...base, enabled: false, limit_value: null })).toBe('No incluido')
+  test('T-SPC-UNIT-291 each function reads as one sentence, at its limit or without one', () => {
+    const f = (code: string, limit: number | null, enabled = true) => ({
+      code,
+      name: 'Función',
+      unit: null,
+      enabled,
+      limit_value: limit,
+    })
+    expect(featureSentence(f('active_programs', 1))).toBe('Máximo 1 programa activo')
+    expect(featureSentence(f('active_programs', null))).toBe('Programas activos sin límite')
+    expect(featureSentence(f('own_routines', 4))).toBe('Máximo 4 rutinas')
+    expect(featureSentence(f('history_months', 3))).toBe('Historial de los últimos 3 meses')
+    expect(featureSentence(f('history_months', 1))).toBe('Historial del último mes')
+    expect(featureSentence(f('history_months', null))).toBe('Todo tu historial')
+    expect(featureSentence(f('meal_photos', null, false))).toBe(
+      'Comidas solo por búsqueda de alimentos',
+    )
+    expect(featureSentence(f('meal_photos', null))).toBe('Comidas por foto y por búsqueda')
+    expect(featureSentence(f('something_new', 2))).toBe('Función: máximo 2')
+    expect(featureIcon('own_routines')).toBe('checklist')
+    expect(featureIcon('something_new')).toBe('check')
   })
 
   test('T-SPC-UNIT-292 money is shown as on a receipt', () => {
