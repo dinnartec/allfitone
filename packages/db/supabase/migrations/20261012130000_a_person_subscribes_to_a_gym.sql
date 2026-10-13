@@ -69,6 +69,12 @@ alter type payments.subscription_status owner to allfit_owner;
  * Narrow on purpose. It answers only about the acting person, so the policy on
  * `service_relationships` admits the row it reads and this does not become a way to
  * ask about somebody else's relationships.
+ *
+ * The organization has to be operating, not merely related. Closing a gym ends no
+ * relationship — the platform closure of `HU-BO-017` is deferred — so a gym that shut
+ * its doors keeps its clients, its connected gateway account and its published prices,
+ * and without this the person is offered a plan there and the money moves.
+ * `payments.resolve_pro` stops counting a closed gym for the same reason.
  */
 create or replace function access_control.has_active_relationship(p_organization_id uuid)
 returns boolean
@@ -80,9 +86,12 @@ as $function$
   select exists (
     select 1
     from relationships.service_relationships as relationship
+    join organizations.organizations as organization
+      on organization.id = relationship.organization_id
     where relationship.organization_id = p_organization_id
       and relationship.person_id = access_control.person()
       and relationship.status = 'active'
+      and organization.status = 'active'
   )
 $function$;
 

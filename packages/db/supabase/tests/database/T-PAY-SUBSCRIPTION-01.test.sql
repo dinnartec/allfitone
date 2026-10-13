@@ -23,7 +23,7 @@
 
 begin;
 
-select plan(44);
+select plan(46);
 
 -- ---------------------------------------------------------------------------
 -- Two gyms, two people, and a coach who may not look
@@ -38,12 +38,20 @@ values
   ('019c1000-0000-7000-8000-000000000005', 'Otra', 'Cliente', 'active'),
   ('019c1000-0000-7000-8000-000000000006', 'Adela', 'Admin', 'active');
 
-insert into organizations.organizations (id, type_code, display_name, responsible_party)
+insert into organizations.organizations (id, type_code, display_name, responsible_party, status)
 values
   ('019c1000-0000-7000-8000-000000000101', 'gym', 'Gimnasio Uno',
-   '{"party_kind":"legal_entity","party_name":"Uno SAS","purpose":"studio_operations"}'),
+   '{"party_kind":"legal_entity","party_name":"Uno SAS","purpose":"studio_operations"}',
+   'active'),
   ('019c1000-0000-7000-8000-000000000102', 'gym', 'Gimnasio Dos',
-   '{"party_kind":"legal_entity","party_name":"Dos SAS","purpose":"studio_operations"}');
+   '{"party_kind":"legal_entity","party_name":"Dos SAS","purpose":"studio_operations"}',
+   'active'),
+  -- A gym that shut its doors with its clients still on its books. Closing an
+  -- organization ends nothing by itself — the platform closure of `HU-BO-017` is
+  -- deferred — so this row is the state the schema has to answer for.
+  ('019c1000-0000-7000-8000-000000000103', 'gym', 'Gimnasio Cerrado',
+   '{"party_kind":"legal_entity","party_name":"Tres SAS","purpose":"studio_operations"}',
+   'closed');
 
 insert into organizations.organization_memberships (id, organization_id, person_id, status)
 values
@@ -69,7 +77,10 @@ values
 insert into relationships.service_relationships (id, person_id, organization_id, status)
 values
   ('019c1000-0000-7000-8000-000000000701', '019c1000-0000-7000-8000-000000000002',
-   '019c1000-0000-7000-8000-000000000101', 'active');
+   '019c1000-0000-7000-8000-000000000101', 'active'),
+  -- Still a client of the gym that closed, because nothing ended the bond.
+  ('019c1000-0000-7000-8000-000000000702', '019c1000-0000-7000-8000-000000000002',
+   '019c1000-0000-7000-8000-000000000103', 'active');
 
 -- ---------------------------------------------------------------------------
 -- The gym connects its gateway: the money goes to the gym, not to Allfit
@@ -79,6 +90,10 @@ insert into payments.gateway_connections
   (id, organization_id, provider, status)
 values
   ('019c1000-0000-7000-8000-000000000301', '019c1000-0000-7000-8000-000000000101',
+   'mercado_pago', 'active'),
+  -- The closed gym kept its account and its price. Nothing cleaned them up, which is
+  -- exactly why reading them has to be refused rather than assumed impossible.
+  ('019c1000-0000-7000-8000-000000000303', '019c1000-0000-7000-8000-000000000103',
    'mercado_pago', 'active');
 
 insert into payments.gateway_credentials
@@ -162,7 +177,9 @@ values
    'Mensual', 'published'),
   -- A price the gym is still thinking about. It is not an offer, so no client sees it.
   ('019c1000-0000-7000-8000-000000000403', '019c1000-0000-7000-8000-000000000101',
-   'Anual', 'draft');
+   'Anual', 'draft'),
+  ('019c1000-0000-7000-8000-000000000404', '019c1000-0000-7000-8000-000000000103',
+   'Mensual', 'published');
 
 select throws_ok(
   $$ insert into payments.organization_plans (organization_id, name, status)
@@ -187,6 +204,9 @@ values
    clock_timestamp()),
   ('019c1000-0000-7000-8000-000000000502', '019c1000-0000-7000-8000-000000000402',
    '019c1000-0000-7000-8000-000000000102', 1, 9000000, 'COP', 'month', 'published',
+   clock_timestamp()),
+  ('019c1000-0000-7000-8000-000000000504', '019c1000-0000-7000-8000-000000000404',
+   '019c1000-0000-7000-8000-000000000103', 1, 8000000, 'COP', 'month', 'published',
    clock_timestamp());
 
 select throws_ok(
@@ -448,6 +468,23 @@ select isnt_empty(
   $$ select 1 from payments.plan_versions
       where id = '019c1000-0000-7000-8000-000000000501' $$,
   'and the published version she would be subscribing to'
+);
+
+-- The gym that closed. She is still its client, its gateway account is still connected
+-- and its price is still published — so without the organization's own state in the
+-- rule, she is offered a plan at a gym that no longer operates and the money moves.
+-- `payments.resolve_pro` already stops counting a closed gym, and ten functions of this
+-- schema say `organization.status = 'active'` before letting anybody act.
+select is_empty(
+  $$ select 1 from payments.gateway_connections
+      where organization_id = '019c1000-0000-7000-8000-000000000103' $$,
+  'a gym that closed is not payable, even by the client it still has'
+);
+
+select is_empty(
+  $$ select 1 from payments.plan_versions
+      where organization_id = '019c1000-0000-7000-8000-000000000103' $$,
+  'and its published price is not an offer any more'
 );
 
 select is_empty(
