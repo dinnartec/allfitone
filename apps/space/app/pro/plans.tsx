@@ -8,8 +8,8 @@
  * has not decided yet.
  *
  * **`PRO-B2`.** Whoever already has Pro through a gym is told so where the price is, and
- * the button does not offer to charge them: paying would only stop them depending on that
- * gym (`HU-SP-085` criterion 6), and that is a decision for «Tu plan», not an impulse here.
+ * the button does not offer to charge them (`HU-SP-085` criterion 6): they already have
+ * Pro, and a second charge would buy nothing. If that relationship ends, they can buy it.
  */
 
 import { Button } from '@allfitone/react-native/button'
