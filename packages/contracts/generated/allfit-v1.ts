@@ -3763,6 +3763,198 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/space/v1/organizations/{organizationId}/plans': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * What the gym charges, for somebody who already trains there
+     * @description The published plans of one organization, cheapest first.
+     *
+     *     **This is not a marketplace.** Only somebody with an active relationship with that organization sees anything; for anybody else the answer is the same as for a gym that does not exist. Discovering gyms is a separate, deferred decision.
+     *
+     *     Only published versions that have not been retired. A retired version is still readable by whoever is paying it — their own subscription names it — but it is never offered again.
+     *
+     *     Cacheable for presentation. **Never** for subscribing: the price is confirmed by the command, not by what the screen was showing.
+     */
+    get: operations['listSpaceOrganizationPlans']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/subscriptions': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * What I pay, to whom, and whether it is paused
+     * @description Every live subscription of the caller: the organization, the exact plan version frozen when they subscribed, the amount, the next cut-off, and `blocked_since` when access is paused for non-payment.
+     *
+     *     **No card data, ever** — not masked, not last four digits. Allfit does not hold any, so there is nothing to return.
+     *
+     *     Ended subscriptions are not listed. The history of one is read through the organization that charged it.
+     */
+    get: operations['listSpaceSubscriptions']
+    put?: never
+    /**
+     * Subscribe to one of a gym's plans
+     * @description Creates the paying bond between the caller and the organization, **freezing the exact plan version**. A later price rise publishes another version and never moves this one.
+     *
+     *     Four refusals, each one actionable: the version must be on offer (`404`), the caller must already be a client of that gym (`404`, the same answer — learning that a price exists at a gym you have no relationship with is already learning something), the gym must have an active gateway (`409`, because otherwise there would be nowhere to charge), and the caller must not already owe that gym (`409`).
+     *
+     *     **Subscribing grants no access to data.** Permissions are decided only when accepting a relationship, and it does not create the relationship either. The two are separate bonds on purpose.
+     *
+     *     The card is handed **directly to the organization's gateway**. Allfit never sees it and never stores it. The response carries the price and the provider so the app can open the right checkout; `current_period_end` stays null until the provider reports a charge.
+     *
+     *     Never confirmed from cache.
+     */
+    post: operations['createSpaceSubscription']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/subscriptions/{subscriptionId}/cancellation': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Cancel my own subscription
+     * @description Ends the paying bond. The caller must be its holder.
+     *
+     *     **Cancelling the money revokes nothing.** The Fitness ID, the training history and every permission already granted stay exactly as they were. Cutting access to personal data is `OP-PRV-005` and ending the relationship is `OP-REL-007`; both are separate decisions on purpose, because somebody who stops paying has not withdrawn their consent.
+     *
+     *     Converges: cancelling an already ended subscription answers `200` with no further effect. Subscribing again later creates a new subscription rather than reviving this one, so the record of what was charged stays intact.
+     */
+    post: operations['cancelSpaceSubscription']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/studio/v1/organizations/{organizationId}/subscriptions': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Who pays this organization, and how each one stands
+     * @description The organization's subscriptions with the person's identity, the plan version each one froze, the amount and the state.
+     *
+     *     **`manage_billing` or nothing.** A coach does not reach this operation even for a client assigned to them, and neither does `staff`: what somebody pays is not a training fact. Without the capability the answer is the same as for an organization that does not exist.
+     *
+     *     Carries no fitness data of any kind.
+     *
+     *     Never cacheable for deciding a suspension: suspending on a stale state is how somebody loses access for a charge that already cleared.
+     */
+    get: operations['listStudioOrganizationSubscriptions']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/studio/v1/organizations/{organizationId}/subscriptions/{subscriptionId}/suspension': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Suspend a subscription without revoking anything
+     * @description Pauses the subscription and opens **one reversible cause** that makes the professional's contribution ineffective and projects future managed sessions as paused.
+     *
+     *     It **does not touch the permissions, does not detach the assignment and does not end the relationship** — `IX-40`. That is not a simplification: a revoked permission needs the person's consent again, a terminated relationship is a new relationship with a new history, and a cancelled session is gone. Nothing here can be put back, so nothing here is taken away.
+     *
+     *     Converges. Suspending an already suspended subscription answers `200` and never opens a second cause, which is what keeps closing it later unambiguous.
+     *
+     *     An ended subscription is not suspended: `409`.
+     */
+    post: operations['suspendStudioSubscription']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/studio/v1/organizations/{organizationId}/subscriptions/{subscriptionId}/reactivation': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Lift the suspension, subtractively
+     * @description Returns the subscription to active and closes **only the cause this suspension opened**.
+     *
+     *     It is subtractive, never restorative. It revives no revoked permission, no terminated relationship, no changed assignment and no cancelled session; it recalculates from whatever is true now. Any other open cause — the organization being suspended, say — keeps denying.
+     *
+     *     No new acceptance is required as long as the person's permission is still in force, because it was never revoked.
+     *
+     *     Converges on an already active subscription. An ended one is not reactivated: `409`. A suspension with no open cause is also `409` — that state cannot be produced by these operations, and guessing which cause to close would be the wrong way to discover it.
+     */
+    post: operations['reactivateStudioSubscription']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/studio/v1/organizations/{organizationId}/subscriptions/{subscriptionId}/termination': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * End a subscription from the organization
+     * @description Closes the paying bond, recording which member of the organization decided it.
+     *
+     *     **Ending the subscription does not end the service relationship.** They are different bonds: ending the relationship is `OP-REL-008`, with its own effects. Somebody who stops paying and keeps training is a decision the organization makes on purpose.
+     *
+     *     No automatic process can reach this operation: the table requires a declared human actor, and the gateway worker has none. A failed charge can therefore never arrive looking like a cancellation.
+     *
+     *     If the subscription was suspended, its open cause is closed here — left open it could never be closed by anything, because reactivation requires a subscription that has not ended.
+     *
+     *     Converges without effect on an already ended subscription.
+     */
+    post: operations['endStudioSubscription']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
 }
 export type webhooks = Record<string, never>
 export interface components {
@@ -8279,6 +8471,106 @@ export interface components {
         duration_seconds: number
       }[]
     }
+    /**
+     * @description `active` is paying, `suspended` is paused for a reason that can be lifted, `ended` is over and does not come back.
+     * @enum {string}
+     */
+    SubscriptionStatus: 'active' | 'suspended' | 'ended'
+    /** @enum {string} */
+    BillingPeriod: 'month' | 'year'
+    /**
+     * @description The provider the organization collects through. The money goes to the organization's own account; Allfit never holds it.
+     * @enum {string}
+     */
+    GatewayProvider: 'mercado_pago' | 'wompi'
+    /** @description One published plan version, which is what a subscription freezes. The price lives on the version and never on the plan, so a plan can be repriced without moving anybody already paying. */
+    OrganizationPlanOffer: {
+      plan_id: components['schemas']['UuidV7']
+      plan_version_id: components['schemas']['UuidV7']
+      plan_name: string
+      version_number: number
+      /** @description In the currency's minor unit, so 120000 COP is 12000000. */
+      amount_minor: number
+      currency_code: string
+      billing_period: components['schemas']['BillingPeriod']
+      /** Format: date-time */
+      published_at: string
+    }
+    OrganizationPlanOfferPage: {
+      data: components['schemas']['OrganizationPlanOffer'][]
+      page: components['schemas']['Page']
+    }
+    SubscriptionCreate: {
+      /** @description The exact version being accepted. Not the plan: the plan has no price, and sending one would leave which price was agreed to chance. */
+      plan_version_id: components['schemas']['UuidV7']
+    }
+    /** @description The subscription as created, with what has to be paid and through which provider. It carries no account reference and no credential — the checkout is opened server-side with the organization's own credential, which no client ever receives. */
+    SubscriptionCheckout: {
+      subscription_id: components['schemas']['UuidV7']
+      organization_id: components['schemas']['UuidV7']
+      plan_version_id: components['schemas']['UuidV7']
+      plan_name: string
+      amount_minor: number
+      currency_code: string
+      billing_period: components['schemas']['BillingPeriod']
+      provider: components['schemas']['GatewayProvider']
+    }
+    /** @description Where the subscription stands after the command. Every one of these operations converges, so the same answer comes back whether the transition happened now or had already happened. */
+    SubscriptionTransition: {
+      subscription_id: components['schemas']['UuidV7']
+      status: components['schemas']['SubscriptionStatus']
+    }
+    /** @description What the caller pays one organization. `blocked_since` is set while a suspension is in force and is the only thing here that says access is paused — the permissions themselves are untouched. */
+    Subscription: {
+      subscription_id: components['schemas']['UuidV7']
+      organization_id: components['schemas']['UuidV7']
+      organization_name: string
+      plan_name: string
+      plan_version_id: components['schemas']['UuidV7']
+      amount_minor: number
+      currency_code: string
+      billing_period: components['schemas']['BillingPeriod']
+      status: components['schemas']['SubscriptionStatus']
+      /**
+       * Format: date
+       * @description Null until the provider reports a charge. Allfit does not decide when a period ends; it records what it is told.
+       */
+      current_period_end: string | null
+      /** Format: date-time */
+      started_at: string
+      /** Format: date-time */
+      suspended_at: string | null
+      /** Format: date-time */
+      blocked_since: string | null
+    }
+    SubscriptionList: {
+      /** @description Not paginated. A person pays a handful of gyms at most, and a cursor over three rows is a contract nobody can remove later. */
+      data: components['schemas']['Subscription'][]
+    }
+    /** @description One person's paying bond with the organization. Identity and payment state, and no fitness data of any kind. */
+    OrganizationSubscription: {
+      subscription_id: components['schemas']['UuidV7']
+      person_id: components['schemas']['UuidV7']
+      person_name: string
+      plan_name: string
+      plan_version_id: components['schemas']['UuidV7']
+      amount_minor: number
+      currency_code: string
+      billing_period: components['schemas']['BillingPeriod']
+      status: components['schemas']['SubscriptionStatus']
+      /** Format: date */
+      current_period_end: string | null
+      /** Format: date-time */
+      started_at: string
+      /** Format: date-time */
+      suspended_at: string | null
+      /** Format: date-time */
+      ended_at: string | null
+    }
+    OrganizationSubscriptionPage: {
+      data: components['schemas']['OrganizationSubscription'][]
+      page: components['schemas']['Page']
+    }
   }
   responses: {
     /** @description Missing/invalid headers or malformed request */
@@ -8656,6 +8948,7 @@ export interface components {
     /** @description Filters on the effective state, so `expired` reflects the clock, not a job. */
     PlatformDutyStatusFilter: 'scheduled' | 'active' | 'suspended' | 'expired' | 'revoked'
     PlatformAssignmentId: components['schemas']['UuidV7']
+    SubscriptionId: components['schemas']['UuidV7']
     /** @description UUIDv4 reused only for HTTP retries of this operation. */
     IdempotencyKey: components['schemas']['UuidV4']
     /** @description UUIDv7 durable identity generated when the user intention is created. */
@@ -15827,6 +16120,284 @@ export interface operations {
       403: components['responses']['Forbidden']
       404: components['responses']['NotFound']
       409: components['responses']['Conflict']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listSpaceOrganizationPlans: {
+    parameters: {
+      query?: {
+        limit?: number
+        cursor?: components['parameters']['Cursor']
+      }
+      header?: never
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The plans on offer at this organization */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['PrivateNoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['OrganizationPlanOfferPage']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listSpaceSubscriptions: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The caller's live subscriptions */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['PrivateNoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SubscriptionList']
+        }
+      }
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  createSpaceSubscription: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SubscriptionCreate']
+      }
+    }
+    responses: {
+      /** @description A replay of a subscription this same command already created */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SubscriptionCheckout']
+        }
+      }
+      /** @description The subscription exists and the payment can be completed */
+      201: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SubscriptionCheckout']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  cancelSpaceSubscription: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        subscriptionId: components['parameters']['SubscriptionId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The subscription is ended */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SubscriptionTransition']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listStudioOrganizationSubscriptions: {
+    parameters: {
+      query?: {
+        /** @description Narrows to one state. Omitted, every subscription is listed. */
+        status?: components['schemas']['SubscriptionStatus']
+        limit?: number
+        cursor?: components['parameters']['Cursor']
+      }
+      header?: never
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Authorized subscription page */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['PrivateNoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['OrganizationSubscriptionPage']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  suspendStudioSubscription: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+        subscriptionId: components['parameters']['SubscriptionId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The subscription is suspended and its cause is open */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SubscriptionTransition']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  reactivateStudioSubscription: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+        subscriptionId: components['parameters']['SubscriptionId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The subscription is active and that one cause is closed */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SubscriptionTransition']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  endStudioSubscription: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+        subscriptionId: components['parameters']['SubscriptionId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The subscription is ended */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SubscriptionTransition']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      422: components['responses']['ValidationFailed']
       503: components['responses']['UpstreamUnavailable']
     }
   }
