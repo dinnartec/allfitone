@@ -19,6 +19,10 @@ export type Database = {
         Returns: boolean
       }
       counts_platform_metrics: { Args: never; Returns: boolean }
+      has_active_relationship: {
+        Args: { p_organization_id: string }
+        Returns: boolean
+      }
       has_capability: {
         Args: { p_capability_code: string; p_organization_id: string }
         Returns: boolean
@@ -4574,6 +4578,54 @@ export type Database = {
             referencedColumns: ['id']
           },
         ]
+      }
+      service_access_blocks: {
+        Row: {
+          blocks_future_sessions: boolean
+          blocks_professional_contribution: boolean
+          created_by_kind: Database['identity']['Enums']['actor_kind']
+          created_by_membership_id: string | null
+          ended_at: string | null
+          id: string
+          organization_event_id: string | null
+          organization_id: string
+          person_id: string
+          relationship_id: string | null
+          source_kind: string
+          started_at: string
+          subscription_id: string | null
+        }
+        Insert: {
+          blocks_future_sessions: boolean
+          blocks_professional_contribution: boolean
+          created_by_kind: Database['identity']['Enums']['actor_kind']
+          created_by_membership_id?: string | null
+          ended_at?: string | null
+          id?: string
+          organization_event_id?: string | null
+          organization_id: string
+          person_id: string
+          relationship_id?: string | null
+          source_kind: string
+          started_at?: string
+          subscription_id?: string | null
+        }
+        Update: {
+          blocks_future_sessions?: boolean
+          blocks_professional_contribution?: boolean
+          created_by_kind?: Database['identity']['Enums']['actor_kind']
+          created_by_membership_id?: string | null
+          ended_at?: string | null
+          id?: string
+          organization_event_id?: string | null
+          organization_id?: string
+          person_id?: string
+          relationship_id?: string | null
+          source_kind?: string
+          started_at?: string
+          subscription_id?: string | null
+        }
+        Relationships: []
       }
       session_template_drafts: {
         Row: {

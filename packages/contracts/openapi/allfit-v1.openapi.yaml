@@ -73,6 +73,15 @@ tags:
     description: Authorized professional nutrition operations.
   - name: Space Pro
     description: Allfit Pro, its plans and the store purchases that pay for it (ADR-043).
+  - name: Space Payments
+    description: >-
+      What a person pays an organization, and the plans it offers them. No card
+      data passes through Allfit: the money goes to the organization's own
+      gateway account.
+  - name: Studio Payments
+    description: >-
+      Who pays the organization and how each bond stands. Reserved to roles with
+      `manage_billing`: what somebody pays is not a training fact.
 x-allfit-contract-gate:
   source: V1_OPERATIONS_MATRIX.md
   rule: >-
@@ -9581,6 +9590,527 @@ paths:
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
 
+
+  /space/v1/organizations/{organizationId}/plans:
+    get:
+      tags: [Space Payments]
+      operationId: listSpaceOrganizationPlans
+      x-allfit-operation: OP-PAY-011
+      x-allfit-cache: private-no-store
+      summary: What the gym charges, for somebody who already trains there
+      description: >-
+        The published plans of one organization, cheapest first.
+
+
+        **This is not a marketplace.** Only somebody with an active relationship
+        with that organization sees anything; for anybody else the answer is the
+        same as for a gym that does not exist. Discovering gyms is a separate,
+        deferred decision.
+
+
+        Only published versions that have not been retired. A retired version is
+        still readable by whoever is paying it — their own subscription names it
+        — but it is never offered again.
+
+
+        Cacheable for presentation. **Never** for subscribing: the price is
+        confirmed by the command, not by what the screen was showing.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: The plans on offer at this organization
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/PrivateNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationPlanOfferPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /space/v1/subscriptions:
+    get:
+      tags: [Space Payments]
+      operationId: listSpaceSubscriptions
+      x-allfit-operation: OP-PAY-013
+      x-allfit-cache: private-no-store
+      summary: What I pay, to whom, and whether it is paused
+      description: >-
+        Every live subscription of the caller: the organization, the exact plan
+        version frozen when they subscribed, the amount, the next cut-off, and
+        `blocked_since` when access is paused for non-payment.
+
+
+        **No card data, ever** — not masked, not last four digits. Allfit does
+        not hold any, so there is nothing to return.
+
+
+        Ended subscriptions are not listed. The history of one is read through
+        the organization that charged it.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: The caller's live subscriptions
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/PrivateNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriptionList'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+    post:
+      tags: [Space Payments]
+      operationId: createSpaceSubscription
+      x-allfit-operation: OP-PAY-012
+      x-allfit-cache: no-store
+      summary: Subscribe to one of a gym's plans
+      description: >-
+        Creates the paying bond between the caller and the organization,
+        **freezing the exact plan version**. A later price rise publishes another
+        version and never moves this one.
+
+
+        Four refusals, each one actionable: the version must be on offer (`404`),
+        the caller must already be a client of that gym (`404`, the same answer —
+        learning that a price exists at a gym you have no relationship with is
+        already learning something), the gym must have an active gateway (`409`,
+        because otherwise there would be nowhere to charge), and the caller must
+        not already owe that gym (`409`).
+
+
+        **Subscribing grants no access to data.** Permissions are decided only
+        when accepting a relationship, and it does not create the relationship
+        either. The two are separate bonds on purpose.
+
+
+        The card is handed **directly to the organization's gateway**. Allfit
+        never sees it and never stores it. The response carries the price and the
+        provider so the app can open the right checkout; `current_period_end`
+        stays null until the provider reports a charge.
+
+
+        Never confirmed from cache.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubscriptionCreate'
+      responses:
+        '200':
+          description: A replay of a subscription this same command already created
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriptionCheckout'
+        '201':
+          description: The subscription exists and the payment can be completed
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriptionCheckout'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /space/v1/subscriptions/{subscriptionId}/cancellation:
+    post:
+      tags: [Space Payments]
+      operationId: cancelSpaceSubscription
+      x-allfit-operation: OP-PAY-015
+      x-allfit-cache: no-store
+      summary: Cancel my own subscription
+      description: >-
+        Ends the paying bond. The caller must be its holder.
+
+
+        **Cancelling the money revokes nothing.** The Fitness ID, the training
+        history and every permission already granted stay exactly as they were.
+        Cutting access to personal data is `OP-PRV-005` and ending the
+        relationship is `OP-REL-007`; both are separate decisions on purpose,
+        because somebody who stops paying has not withdrawn their consent.
+
+
+        Converges: cancelling an already ended subscription answers `200` with no
+        further effect. Subscribing again later creates a new subscription rather
+        than reviving this one, so the record of what was charged stays intact.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SubscriptionId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      responses:
+        '200':
+          description: The subscription is ended
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriptionTransition'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /studio/v1/organizations/{organizationId}/subscriptions:
+    get:
+      tags: [Studio Payments]
+      operationId: listStudioOrganizationSubscriptions
+      x-allfit-operation: OP-PAY-007
+      x-allfit-cache: private-no-store
+      summary: Who pays this organization, and how each one stands
+      description: >-
+        The organization's subscriptions with the person's identity, the plan
+        version each one froze, the amount and the state.
+
+
+        **`manage_billing` or nothing.** A coach does not reach this operation
+        even for a client assigned to them, and neither does `staff`: what
+        somebody pays is not a training fact. Without the capability the answer
+        is the same as for an organization that does not exist.
+
+
+        Carries no fitness data of any kind.
+
+
+        Never cacheable for deciding a suspension: suspending on a stale state is
+        how somebody loses access for a charge that already cleared.
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+        - name: status
+          in: query
+          required: false
+          description: Narrows to one state. Omitted, every subscription is listed.
+          schema:
+            $ref: '#/components/schemas/SubscriptionStatus'
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Authorized subscription page
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/PrivateNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationSubscriptionPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /studio/v1/organizations/{organizationId}/subscriptions/{subscriptionId}/suspension:
+    post:
+      tags: [Studio Payments]
+      operationId: suspendStudioSubscription
+      x-allfit-operation: OP-PAY-008
+      x-allfit-cache: no-store
+      summary: Suspend a subscription without revoking anything
+      description: >-
+        Pauses the subscription and opens **one reversible cause** that makes the
+        professional's contribution ineffective and projects future managed
+        sessions as paused.
+
+
+        It **does not touch the permissions, does not detach the assignment and
+        does not end the relationship** — `IX-40`. That is not a simplification:
+        a revoked permission needs the person's consent again, a terminated
+        relationship is a new relationship with a new history, and a cancelled
+        session is gone. Nothing here can be put back, so nothing here is taken
+        away.
+
+
+        Converges. Suspending an already suspended subscription answers `200` and
+        never opens a second cause, which is what keeps closing it later
+        unambiguous.
+
+
+        An ended subscription is not suspended: `409`.
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/SubscriptionId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      responses:
+        '200':
+          description: The subscription is suspended and its cause is open
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriptionTransition'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /studio/v1/organizations/{organizationId}/subscriptions/{subscriptionId}/reactivation:
+    post:
+      tags: [Studio Payments]
+      operationId: reactivateStudioSubscription
+      x-allfit-operation: OP-PAY-009
+      x-allfit-cache: no-store
+      summary: Lift the suspension, subtractively
+      description: >-
+        Returns the subscription to active and closes **only the cause this
+        suspension opened**.
+
+
+        It is subtractive, never restorative. It revives no revoked permission,
+        no terminated relationship, no changed assignment and no cancelled
+        session; it recalculates from whatever is true now. Any other open cause
+        — the organization being suspended, say — keeps denying.
+
+
+        No new acceptance is required as long as the person's permission is still
+        in force, because it was never revoked.
+
+
+        Converges on an already active subscription. An ended one is not
+        reactivated: `409`. A suspension with no open cause is also `409` — that
+        state cannot be produced by these operations, and guessing which cause to
+        close would be the wrong way to discover it.
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/SubscriptionId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      responses:
+        '200':
+          description: The subscription is active and that one cause is closed
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriptionTransition'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /studio/v1/organizations/{organizationId}/subscriptions/{subscriptionId}/termination:
+    post:
+      tags: [Studio Payments]
+      operationId: endStudioSubscription
+      x-allfit-operation: OP-PAY-010
+      x-allfit-cache: no-store
+      summary: End a subscription from the organization
+      description: >-
+        Closes the paying bond, recording which member of the organization
+        decided it.
+
+
+        **Ending the subscription does not end the service relationship.** They
+        are different bonds: ending the relationship is `OP-REL-008`, with its
+        own effects. Somebody who stops paying and keeps training is a decision
+        the organization makes on purpose.
+
+
+        No automatic process can reach this operation: the table requires a
+        declared human actor, and the gateway worker has none. A failed charge
+        can therefore never arrive looking like a cancellation.
+
+
+        If the subscription was suspended, its open cause is closed here — left
+        open it could never be closed by anything, because reactivation requires
+        a subscription that has not ended.
+
+
+        Converges without effect on an already ended subscription.
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/SubscriptionId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      responses:
+        '200':
+          description: The subscription is ended
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriptionTransition'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /space/v1/relationships:
+    get:
+      tags: [Space Privacy]
+      operationId: listSpaceRelationships
+      x-allfit-operation: OP-REL-012
+      x-allfit-cache: private-no-store
+      summary: The gyms I train at, and the ones I used to
+      description: >-
+        Every service relationship of the caller, newest first, closed ones
+        included.
+
+
+        **Leaving is part of somebody's history.** A relationship that ended
+        stays in the list, and when the person came back the new one carries
+        `previous_relationship_id`. Showing that link grants nothing: the old
+        relationship's permissions were frozen the moment it ended, so the link
+        is a fact about her past and not a key to it.
+
+
+        Carries no fitness data of any kind — not a measurement, not a session,
+        not a note. What it carries is which organizations she has a bond with,
+        which is what every other operation about one of them needs in order to
+        be reachable at all.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: The caller's relationships
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/PrivateNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpaceRelationshipPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
 components:
   securitySchemes:
     cookieAuth:
@@ -9865,6 +10395,12 @@ components:
         enum: [scheduled, active, suspended, expired, revoked]
     PlatformAssignmentId:
       name: assignmentId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/UuidV7'
+    SubscriptionId:
+      name: subscriptionId
       in: path
       required: true
       schema:
@@ -20178,3 +20714,290 @@ components:
                 $ref: '#/components/schemas/Distance'
               duration_seconds:
                 type: number
+
+    SubscriptionStatus:
+      description: >-
+        `active` is paying, `suspended` is paused for a reason that can be
+        lifted, `ended` is over and does not come back.
+      type: string
+      enum: [active, suspended, ended]
+    BillingPeriod:
+      type: string
+      enum: [month, year]
+    GatewayProvider:
+      description: >-
+        The provider the organization collects through. The money goes to the
+        organization's own account; Allfit never holds it.
+      type: string
+      enum: [mercado_pago, wompi]
+    OrganizationPlanOffer:
+      description: >-
+        One published plan version, which is what a subscription freezes. The
+        price lives on the version and never on the plan, so a plan can be
+        repriced without moving anybody already paying.
+      type: object
+      additionalProperties: false
+      required:
+        [plan_id, plan_version_id, plan_name, version_number, amount_minor,
+         currency_code, billing_period, published_at]
+      properties:
+        plan_id:
+          $ref: '#/components/schemas/UuidV7'
+        plan_version_id:
+          $ref: '#/components/schemas/UuidV7'
+        plan_name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        version_number:
+          type: integer
+          minimum: 1
+        amount_minor:
+          description: In the currency's minor unit, so 120000 COP is 12000000.
+          type: integer
+          minimum: 1
+        currency_code:
+          type: string
+          pattern: '^[A-Z]{3}$'
+        billing_period:
+          $ref: '#/components/schemas/BillingPeriod'
+        published_at:
+          type: string
+          format: date-time
+    OrganizationPlanOfferPage:
+      type: object
+      additionalProperties: false
+      required: [data, page]
+      properties:
+        data:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/OrganizationPlanOffer'
+        page:
+          $ref: '#/components/schemas/Page'
+    SubscriptionCreate:
+      type: object
+      additionalProperties: false
+      required: [plan_version_id]
+      properties:
+        plan_version_id:
+          description: >-
+            The exact version being accepted. Not the plan: the plan has no
+            price, and sending one would leave which price was agreed to chance.
+          $ref: '#/components/schemas/UuidV7'
+    SubscriptionCheckout:
+      description: >-
+        The subscription as created, with what has to be paid and through which
+        provider. It carries no account reference and no credential — the
+        checkout is opened server-side with the organization's own credential,
+        which no client ever receives.
+      type: object
+      additionalProperties: false
+      required:
+        [subscription_id, organization_id, plan_version_id, plan_name,
+         amount_minor, currency_code, billing_period, provider]
+      properties:
+        subscription_id:
+          $ref: '#/components/schemas/UuidV7'
+        organization_id:
+          $ref: '#/components/schemas/UuidV7'
+        plan_version_id:
+          $ref: '#/components/schemas/UuidV7'
+        plan_name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        amount_minor:
+          type: integer
+          minimum: 1
+        currency_code:
+          type: string
+          pattern: '^[A-Z]{3}$'
+        billing_period:
+          $ref: '#/components/schemas/BillingPeriod'
+        provider:
+          $ref: '#/components/schemas/GatewayProvider'
+    SubscriptionTransition:
+      description: >-
+        Where the subscription stands after the command. Every one of these
+        operations converges, so the same answer comes back whether the
+        transition happened now or had already happened.
+      type: object
+      additionalProperties: false
+      required: [subscription_id, status]
+      properties:
+        subscription_id:
+          $ref: '#/components/schemas/UuidV7'
+        status:
+          $ref: '#/components/schemas/SubscriptionStatus'
+    Subscription:
+      description: >-
+        What the caller pays one organization. `blocked_since` is set while a
+        suspension is in force and is the only thing here that says access is
+        paused — the permissions themselves are untouched.
+      type: object
+      additionalProperties: false
+      required:
+        [subscription_id, organization_id, organization_name, plan_name,
+         plan_version_id, amount_minor, currency_code, billing_period, status,
+         current_period_end, started_at, suspended_at, blocked_since]
+      properties:
+        subscription_id:
+          $ref: '#/components/schemas/UuidV7'
+        organization_id:
+          $ref: '#/components/schemas/UuidV7'
+        organization_name:
+          type: string
+          minLength: 1
+          maxLength: 160
+        plan_name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        plan_version_id:
+          $ref: '#/components/schemas/UuidV7'
+        amount_minor:
+          type: integer
+          minimum: 1
+        currency_code:
+          type: string
+          pattern: '^[A-Z]{3}$'
+        billing_period:
+          $ref: '#/components/schemas/BillingPeriod'
+        status:
+          $ref: '#/components/schemas/SubscriptionStatus'
+        current_period_end:
+          description: >-
+            Null until the provider reports a charge. Allfit does not decide when
+            a period ends; it records what it is told.
+          type: [string, 'null']
+          format: date
+        started_at:
+          type: string
+          format: date-time
+        suspended_at:
+          type: [string, 'null']
+          format: date-time
+        blocked_since:
+          type: [string, 'null']
+          format: date-time
+    SubscriptionList:
+      type: object
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          description: >-
+            Not paginated. A person pays a handful of gyms at most, and a cursor
+            over three rows is a contract nobody can remove later.
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/Subscription'
+    OrganizationSubscription:
+      description: >-
+        One person's paying bond with the organization. Identity and payment
+        state, and no fitness data of any kind.
+      type: object
+      additionalProperties: false
+      required:
+        [subscription_id, person_id, person_name, plan_name, plan_version_id,
+         amount_minor, currency_code, billing_period, status,
+         current_period_end, started_at, suspended_at, ended_at]
+      properties:
+        subscription_id:
+          $ref: '#/components/schemas/UuidV7'
+        person_id:
+          $ref: '#/components/schemas/UuidV7'
+        person_name:
+          type: string
+          minLength: 1
+          maxLength: 160
+        plan_name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        plan_version_id:
+          $ref: '#/components/schemas/UuidV7'
+        amount_minor:
+          type: integer
+          minimum: 1
+        currency_code:
+          type: string
+          pattern: '^[A-Z]{3}$'
+        billing_period:
+          $ref: '#/components/schemas/BillingPeriod'
+        status:
+          $ref: '#/components/schemas/SubscriptionStatus'
+        current_period_end:
+          type: [string, 'null']
+          format: date
+        started_at:
+          type: string
+          format: date-time
+        suspended_at:
+          type: [string, 'null']
+          format: date-time
+        ended_at:
+          type: [string, 'null']
+          format: date-time
+    OrganizationSubscriptionPage:
+      type: object
+      additionalProperties: false
+      required: [data, page]
+      properties:
+        data:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/OrganizationSubscription'
+        page:
+          $ref: '#/components/schemas/Page'
+
+    SpaceRelationship:
+      description: >-
+        One bond between the caller and an organization. `previous_relationship_id`
+        is set when she had another with the same organization before this one.
+      type: object
+      additionalProperties: false
+      required:
+        [relationship_id, organization_id, organization_name, organization_type_code,
+         status, started_at, ended_at, previous_relationship_id]
+      properties:
+        relationship_id:
+          $ref: '#/components/schemas/UuidV7'
+        organization_id:
+          $ref: '#/components/schemas/UuidV7'
+        organization_name:
+          type: string
+          minLength: 1
+          maxLength: 160
+        organization_type_code:
+          type: string
+          pattern: '^[a-z][a-z0-9_]{1,63}$'
+        status:
+          type: string
+          enum: [active, terminated]
+        started_at:
+          type: string
+          format: date-time
+        ended_at:
+          type: [string, 'null']
+          format: date-time
+        previous_relationship_id:
+          anyOf:
+            - $ref: '#/components/schemas/UuidV7'
+            - type: 'null'
+    SpaceRelationshipPage:
+      type: object
+      additionalProperties: false
+      required: [data, page]
+      properties:
+        data:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/SpaceRelationship'
+        page:
+          $ref: '#/components/schemas/Page'

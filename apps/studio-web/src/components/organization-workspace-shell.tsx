@@ -79,6 +79,8 @@ function OrganizationSidebar({ basePath, pathname }: { basePath: string; pathnam
   const teamActive = pathname.startsWith(teamHref)
   const clientsHref = `${basePath}/clients`
   const clientsActive = pathname.startsWith(clientsHref)
+  const billingHref = `${basePath}/billing`
+  const billingActive = pathname.startsWith(billingHref)
 
   function closeMobileNavigation() {
     setOpenMobile(false)
@@ -210,6 +212,20 @@ function OrganizationSidebar({ basePath, pathname }: { basePath: string; pathnam
                 >
                   <FoundationIcon name="person" decorative />
                   <span>Clientes</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              {/* Shown to everybody; the screen itself says no when the role has no
+                  `manage_billing`, and PostgreSQL says it again underneath. Hiding the
+                  entry would need a second copy of that grant here, which is the drift
+                  the capability catalogue exists to avoid. */}
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  render={<Link href={billingHref} onClick={closeMobileNavigation} />}
+                  isActive={billingActive}
+                  aria-current={billingActive ? 'page' : undefined}
+                >
+                  <FoundationIcon name="business" decorative />
+                  <span>Cobros</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>

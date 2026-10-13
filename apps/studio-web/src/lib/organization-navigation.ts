@@ -48,5 +48,10 @@ export function resolveWorkspaceRoute(
   if (/^\/organizations\/[^/]+\/clients\/(?!invitations$)[^/]+$/.test(pathname)) {
     return { title: 'Vínculo' }
   }
+  // "Cobros" and not "Pagos": Allfit reflects the state of a payment and never processes
+  // one, so the word for the screen is the gym's activity, not the transaction.
+  if (pathname === `${basePath}/billing`) {
+    return { title: 'Cobros' }
+  }
   return { title: 'Studio' }
 }

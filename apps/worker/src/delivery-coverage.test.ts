@@ -35,9 +35,15 @@ const WORKER_SOURCE = import.meta.dir
  * report an orphan that is not one. **Add a kind here when the platform starts sending
  * a new one**, or this check will pass by ignoring it: that is how
  * `relationship.professional_reassigned.v1` went unexamined the first time.
+ *
+ * Open, and named here so it is not rediscovered: Pro enqueues
+ * `payments.platform_subscription_started|suspended|reactivated|ended.v1` and no worker
+ * claims any of them. The store is the one that charges and already writes to the person
+ * about its own money, so they may well be domain records — but nobody has decided that
+ * out loud. The day Allfit sends one of them itself, its name belongs above.
  */
 const DELIVERY_EVENT =
-  /^(organization\.\w*invited|relationship\.(client_invited|professional_reassigned|substitution_proposed)|identity\.account_recovery_requested)\.v1$/
+  /^(organization\.\w*invited|relationship\.(client_invited|professional_reassigned|substitution_proposed)|identity\.account_recovery_requested|payments\.subscription_(suspended|reactivated|ended))\.v1$/
 
 function enqueuedDeliveryEvents(): string[] {
   const found = new Set<string>()

@@ -11,6 +11,9 @@ import type {
   RelationshipState,
   RelationshipStateDatabase,
   SubstitutionProposalDatabase,
+  MyRelationshipDatabase,
+  MyRelationshipPage,
+  MyRelationshipQuery,
 } from '../domain/index.js'
 
 /**
@@ -182,5 +185,22 @@ export function createSubstitutionProposalService(
       if (!actor.personId) throw new RelationshipsError('registration-incomplete')
       return database.proposeSubstitution({ actorPersonId: actor.personId, ...input })
     },
+  }
+}
+
+/**
+ * `OP-REL-012`. Takes a person id rather than an actor: Space resolves the person from the
+ * token before anything else, and there is no incomplete-registration case to report —
+ * somebody without a person has no relationships to list.
+ */
+export interface MyRelationshipService {
+  listMine(personId: string, query: MyRelationshipQuery): Promise<MyRelationshipPage>
+}
+
+export function createMyRelationshipService(
+  database: MyRelationshipDatabase,
+): MyRelationshipService {
+  return {
+    listMine: (personId, query) => database.listMine(personId, query),
   }
 }

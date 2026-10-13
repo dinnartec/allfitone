@@ -528,3 +528,138 @@ function escapeHtml(value: string): string {
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#039;')
 }
+
+/**
+ * Telling somebody their gym paused their access for a payment.
+ *
+ * It carries **no link and no button.** There is nothing to approve and nothing to pay
+ * here: the gym collects through its own gateway, so a payment link in an Allfit email
+ * would be exactly the shape a phishing message takes. What the person can do is talk to
+ * the gym, and the email says so.
+ *
+ * It says plainly what has *not* happened, because that is the part nobody would guess:
+ * the data they shared is untouched, their history is intact, and their permissions still
+ * stand. A suspension is reversible by design, and somebody who reads "suspendida" with
+ * no further detail will assume they lost everything.
+ */
+export function renderSubscriptionSuspendedEmail(input: {
+  organizationName: string
+  planName: string
+  amountMinor: number
+  currencyCode: string
+  brandAssetUrl: string
+}): { subject: string; text: string; html: string } {
+  const organization = escapeHtml(input.organizationName)
+  const price = formatMoney(input.amountMinor, input.currencyCode)
+  return {
+    subject: `${input.organizationName} pausó tu plan por un pago pendiente`,
+    text: [
+      `${input.organizationName} pausó tu plan ${input.planName} (${price}) por un pago pendiente.`,
+      'Mientras esté pausado, tus sesiones futuras con ese gimnasio quedan en pausa y tu profesional no puede registrar cambios.',
+      'Lo que compartiste con el gimnasio sigue igual: no se borró nada, tu historial está completo y los permisos que diste siguen en pie. Cuando el pago se resuelva, todo vuelve a funcionar sin que tengas que aceptar nada de nuevo.',
+      'El cobro lo administra el gimnasio, no Allfit. Para resolverlo, habla directamente con ellos.',
+      'Nunca te vamos a pedir los datos de tu tarjeta por correo.',
+    ].join('\n\n'),
+    html: invitationEmailHtml({
+      title: `${organization} pausó tu plan por un pago pendiente`,
+      preheader:
+        'Tus datos y tus permisos siguen igual. El plan se reactiva cuando el pago se resuelva.',
+      eyebrow: 'PLAN EN PAUSA',
+      heading: `${organization} pausó tu plan por un pago pendiente`,
+      lead: 'Mientras esté pausado, tus sesiones futuras con ese gimnasio quedan en pausa y tu profesional no puede registrar cambios. Lo que compartiste sigue igual: no se borró nada, tu historial está completo y los permisos que diste siguen en pie.',
+      detailLabel: 'PLAN',
+      detailValue: `${escapeHtml(input.planName)} · ${escapeHtml(price)}`,
+      brandAssetUrl: escapeHtml(input.brandAssetUrl),
+      note: 'El cobro lo administra el gimnasio, no Allfit; para resolverlo habla directamente con ellos. Nunca te vamos a pedir los datos de tu tarjeta por correo.',
+      footer: 'Allfit One',
+    }),
+  }
+}
+
+/** The pause is over. Nothing had to be re-granted, and the email says why. */
+export function renderSubscriptionReactivatedEmail(input: {
+  organizationName: string
+  planName: string
+  brandAssetUrl: string
+}): { subject: string; text: string; html: string } {
+  const organization = escapeHtml(input.organizationName)
+  return {
+    subject: `${input.organizationName} reactivó tu plan`,
+    text: [
+      `${input.organizationName} reactivó tu plan ${input.planName}.`,
+      'Tus sesiones vuelven a verse como siempre y tu profesional puede registrar cambios otra vez.',
+      'No tuviste que volver a aceptar nada porque nunca se te quitó nada: el plan estaba en pausa, no cancelado.',
+    ].join('\n\n'),
+    html: invitationEmailHtml({
+      title: `${organization} reactivó tu plan`,
+      preheader: 'Tus sesiones vuelven a verse como siempre.',
+      eyebrow: 'PLAN ACTIVO',
+      heading: `${organization} reactivó tu plan`,
+      lead: 'Tus sesiones vuelven a verse como siempre y tu profesional puede registrar cambios otra vez. No tuviste que volver a aceptar nada porque nunca se te quitó nada: el plan estaba en pausa, no cancelado.',
+      detailLabel: 'PLAN',
+      detailValue: escapeHtml(input.planName),
+      brandAssetUrl: escapeHtml(input.brandAssetUrl),
+      note: 'El cobro lo administra el gimnasio, no Allfit. Nunca te vamos a pedir los datos de tu tarjeta por correo.',
+      footer: 'Allfit One',
+    }),
+  }
+}
+
+/**
+ * The paying bond is over, and the email's whole job is to say what that does **not**
+ * mean. Ending a subscription revokes no permission and ends no relationship, so somebody
+ * who reads this and assumes their data was deleted would be wrong in the direction that
+ * matters: they might stop asking for it.
+ */
+export function renderSubscriptionEndedEmail(input: {
+  organizationName: string
+  planName: string
+  brandAssetUrl: string
+}): { subject: string; text: string; html: string } {
+  const organization = escapeHtml(input.organizationName)
+  return {
+    subject: `Tu plan con ${input.organizationName} terminó`,
+    text: [
+      `Tu plan ${input.planName} con ${input.organizationName} terminó. No se va a volver a cobrar.`,
+      'Tu Fitness ID, tu historial de entrenamiento y lo que registraste siguen siendo tuyos y siguen ahí.',
+      'Terminar el plan no retira los permisos que diste ni cierra tu relación con el gimnasio. Si además quieres que dejen de ver tu información, eso se decide aparte desde la app.',
+    ].join('\n\n'),
+    html: invitationEmailHtml({
+      title: `Tu plan con ${organization} terminó`,
+      preheader: 'No se va a volver a cobrar. Tu historial y tus permisos siguen como estaban.',
+      eyebrow: 'PLAN TERMINADO',
+      heading: `Tu plan con ${organization} terminó`,
+      lead: 'No se va a volver a cobrar. Tu Fitness ID, tu historial de entrenamiento y lo que registraste siguen siendo tuyos y siguen ahí.',
+      detailLabel: 'PLAN',
+      detailValue: escapeHtml(input.planName),
+      brandAssetUrl: escapeHtml(input.brandAssetUrl),
+      note: 'Terminar el plan no retira los permisos que diste ni cierra tu relación con el gimnasio. Si además quieres que dejen de ver tu información, eso se decide aparte desde la app.',
+      footer: 'Allfit One',
+    }),
+  }
+}
+
+/**
+ * Money as a person reads it, from the minor unit the database stores.
+ *
+ * The divisor is the **ISO 4217 exponent**, deliberately not what `Intl` would choose.
+ * For COP, `Intl` resolves `maximumFractionDigits` to 0 because Colombians do not write
+ * centavos, while the standard minor unit is still 1/100. Using that display preference
+ * as the divisor turns a $120.000 plan into $12.000.000 — a number somebody reads twice
+ * and then calls their bank about.
+ *
+ * Two decimals covers every currency a gym can charge in today. A zero-decimal currency —
+ * CLP, PYG, JPY — has to be added here before one is accepted, because the column checks
+ * only the shape of the code.
+ *
+ * How many decimals are *shown* is left to `Intl`, which is a different question and one
+ * it answers correctly per currency.
+ */
+const MINOR_UNIT_EXPONENT = 2
+
+function formatMoney(amountMinor: number, currencyCode: string): string {
+  return new Intl.NumberFormat('es-CO', {
+    style: 'currency',
+    currency: currencyCode,
+  }).format(amountMinor / 10 ** MINOR_UNIT_EXPONENT)
+}

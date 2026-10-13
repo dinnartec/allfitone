@@ -256,6 +256,15 @@ export function ProfileScreen({ sources }: { readonly sources: ProfileSources })
             end="open"
             onPress={() => router.push('/pro/payments')}
           />
+          {/* A gym plan is not Pro: the gym sets the price and charges it through its own
+              gateway. Both are money, so they belong in the same group. */}
+          <ProfileRow
+            icon="organization"
+            title="Planes de gimnasio"
+            caption="Los que ofrece tu gimnasio y los que pagas"
+            end="open"
+            onPress={() => router.push('/subscriptions')}
+          />
         </ProfileGroup>
 
         <ProfileGroup label="Cuenta">

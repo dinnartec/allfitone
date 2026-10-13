@@ -1651,6 +1651,10 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     ],
   },
+  BillingPeriod: {
+    type: 'string',
+    enum: ['month', 'year'],
+  },
   BiologicalSex: {
     type: 'string',
     enum: ['male', 'female'],
@@ -3907,6 +3911,12 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         minimum: 1,
       },
     },
+  },
+  GatewayProvider: {
+    description:
+      "The provider the organization collects through. The money goes to the organization's own account; Allfit never holds it.",
+    type: 'string',
+    enum: ['mercado_pago', 'wompi'],
   },
   GlobalCatalogueEntry: {
     type: 'object',
@@ -6360,6 +6370,72 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       "Whether the organization answers as a company or as a natural person. A natural person's name is never written by Allfit.",
     enum: ['natural_person', 'legal_entity'],
   },
+  OrganizationPlanOffer: {
+    description:
+      'One published plan version, which is what a subscription freezes. The price lives on the version and never on the plan, so a plan can be repriced without moving anybody already paying.',
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'plan_id',
+      'plan_version_id',
+      'plan_name',
+      'version_number',
+      'amount_minor',
+      'currency_code',
+      'billing_period',
+      'published_at',
+    ],
+    properties: {
+      plan_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      plan_version_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      plan_name: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 80,
+      },
+      version_number: {
+        type: 'integer',
+        minimum: 1,
+      },
+      amount_minor: {
+        description: "In the currency's minor unit, so 120000 COP is 12000000.",
+        type: 'integer',
+        minimum: 1,
+      },
+      currency_code: {
+        type: 'string',
+        pattern: '^[A-Z]{3}$',
+      },
+      billing_period: {
+        $ref: '#/components/schemas/BillingPeriod',
+      },
+      published_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+    },
+  },
+  OrganizationPlanOfferPage: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['data', 'page'],
+    properties: {
+      data: {
+        type: 'array',
+        maxItems: 100,
+        items: {
+          $ref: '#/components/schemas/OrganizationPlanOffer',
+        },
+      },
+      page: {
+        $ref: '#/components/schemas/Page',
+      },
+    },
+  },
   OrganizationRole: {
     type: 'object',
     additionalProperties: false,
@@ -6495,6 +6571,95 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
       expected_revision: {
         $ref: '#/components/schemas/ExpectedRevision',
+      },
+    },
+  },
+  OrganizationSubscription: {
+    description:
+      "One person's paying bond with the organization. Identity and payment state, and no fitness data of any kind.",
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'subscription_id',
+      'person_id',
+      'person_name',
+      'plan_name',
+      'plan_version_id',
+      'amount_minor',
+      'currency_code',
+      'billing_period',
+      'status',
+      'current_period_end',
+      'started_at',
+      'suspended_at',
+      'ended_at',
+    ],
+    properties: {
+      subscription_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      person_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      person_name: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 160,
+      },
+      plan_name: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 80,
+      },
+      plan_version_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      amount_minor: {
+        type: 'integer',
+        minimum: 1,
+      },
+      currency_code: {
+        type: 'string',
+        pattern: '^[A-Z]{3}$',
+      },
+      billing_period: {
+        $ref: '#/components/schemas/BillingPeriod',
+      },
+      status: {
+        $ref: '#/components/schemas/SubscriptionStatus',
+      },
+      current_period_end: {
+        type: ['string', 'null'],
+        format: 'date',
+      },
+      started_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      suspended_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      ended_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+    },
+  },
+  OrganizationSubscriptionPage: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['data', 'page'],
+    properties: {
+      data: {
+        type: 'array',
+        maxItems: 100,
+        items: {
+          $ref: '#/components/schemas/OrganizationSubscription',
+        },
+      },
+      page: {
+        $ref: '#/components/schemas/Page',
       },
     },
   },
@@ -11623,6 +11788,78 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  SpaceRelationship: {
+    description:
+      'One bond between the caller and an organization. `previous_relationship_id` is set when she had another with the same organization before this one.',
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'relationship_id',
+      'organization_id',
+      'organization_name',
+      'organization_type_code',
+      'status',
+      'started_at',
+      'ended_at',
+      'previous_relationship_id',
+    ],
+    properties: {
+      relationship_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      organization_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      organization_name: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 160,
+      },
+      organization_type_code: {
+        type: 'string',
+        pattern: '^[a-z][a-z0-9_]{1,63}$',
+      },
+      status: {
+        type: 'string',
+        enum: ['active', 'terminated'],
+      },
+      started_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      ended_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      previous_relationship_id: {
+        anyOf: [
+          {
+            $ref: '#/components/schemas/UuidV7',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+    },
+  },
+  SpaceRelationshipPage: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['data', 'page'],
+    properties: {
+      data: {
+        type: 'array',
+        maxItems: 100,
+        items: {
+          $ref: '#/components/schemas/SpaceRelationship',
+        },
+      },
+      page: {
+        $ref: '#/components/schemas/Page',
+      },
+    },
+  },
   SpaceRoutineLastTime: {
     type: 'object',
     additionalProperties: false,
@@ -12696,6 +12933,175 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
       analytics: {
         $ref: '#/components/schemas/AnalyticsIdentity',
+      },
+    },
+  },
+  Subscription: {
+    description:
+      'What the caller pays one organization. `blocked_since` is set while a suspension is in force and is the only thing here that says access is paused — the permissions themselves are untouched.',
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'subscription_id',
+      'organization_id',
+      'organization_name',
+      'plan_name',
+      'plan_version_id',
+      'amount_minor',
+      'currency_code',
+      'billing_period',
+      'status',
+      'current_period_end',
+      'started_at',
+      'suspended_at',
+      'blocked_since',
+    ],
+    properties: {
+      subscription_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      organization_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      organization_name: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 160,
+      },
+      plan_name: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 80,
+      },
+      plan_version_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      amount_minor: {
+        type: 'integer',
+        minimum: 1,
+      },
+      currency_code: {
+        type: 'string',
+        pattern: '^[A-Z]{3}$',
+      },
+      billing_period: {
+        $ref: '#/components/schemas/BillingPeriod',
+      },
+      status: {
+        $ref: '#/components/schemas/SubscriptionStatus',
+      },
+      current_period_end: {
+        description:
+          'Null until the provider reports a charge. Allfit does not decide when a period ends; it records what it is told.',
+        type: ['string', 'null'],
+        format: 'date',
+      },
+      started_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      suspended_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      blocked_since: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+    },
+  },
+  SubscriptionCheckout: {
+    description:
+      "The subscription as created, with what has to be paid and through which provider. It carries no account reference and no credential — the checkout is opened server-side with the organization's own credential, which no client ever receives.",
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'subscription_id',
+      'organization_id',
+      'plan_version_id',
+      'plan_name',
+      'amount_minor',
+      'currency_code',
+      'billing_period',
+      'provider',
+    ],
+    properties: {
+      subscription_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      organization_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      plan_version_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      plan_name: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 80,
+      },
+      amount_minor: {
+        type: 'integer',
+        minimum: 1,
+      },
+      currency_code: {
+        type: 'string',
+        pattern: '^[A-Z]{3}$',
+      },
+      billing_period: {
+        $ref: '#/components/schemas/BillingPeriod',
+      },
+      provider: {
+        $ref: '#/components/schemas/GatewayProvider',
+      },
+    },
+  },
+  SubscriptionCreate: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['plan_version_id'],
+    properties: {
+      plan_version_id: {
+        description:
+          'The exact version being accepted. Not the plan: the plan has no price, and sending one would leave which price was agreed to chance.',
+        $ref: '#/components/schemas/UuidV7',
+      },
+    },
+  },
+  SubscriptionList: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['data'],
+    properties: {
+      data: {
+        description:
+          'Not paginated. A person pays a handful of gyms at most, and a cursor over three rows is a contract nobody can remove later.',
+        type: 'array',
+        maxItems: 100,
+        items: {
+          $ref: '#/components/schemas/Subscription',
+        },
+      },
+    },
+  },
+  SubscriptionStatus: {
+    description:
+      '`active` is paying, `suspended` is paused for a reason that can be lifted, `ended` is over and does not come back.',
+    type: 'string',
+    enum: ['active', 'suspended', 'ended'],
+  },
+  SubscriptionTransition: {
+    description:
+      'Where the subscription stands after the command. Every one of these operations converges, so the same answer comes back whether the transition happened now or had already happened.',
+    type: 'object',
+    additionalProperties: false,
+    required: ['subscription_id', 'status'],
+    properties: {
+      subscription_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      status: {
+        $ref: '#/components/schemas/SubscriptionStatus',
       },
     },
   },

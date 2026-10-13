@@ -62,6 +62,10 @@ export type OrganizationRoleCatalog = AllfitV1Schemas['OrganizationRoleCatalog']
 export type OrganizationRoleCode = AllfitV1Schemas['OrganizationRoleCode']
 export type OrganizationRoleGrant = AllfitV1Schemas['OrganizationRoleGrant']
 export type OrganizationRoleGrantCreate = AllfitV1Schemas['OrganizationRoleGrantCreate']
+export type OrganizationSubscriptionPage = AllfitV1Schemas['OrganizationSubscriptionPage']
+export type OrganizationSubscription = AllfitV1Schemas['OrganizationSubscription']
+export type SubscriptionStatus = AllfitV1Schemas['SubscriptionStatus']
+export type SubscriptionTransition = AllfitV1Schemas['SubscriptionTransition']
 
 const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080').replace(/\/$/, '')
 
@@ -307,6 +311,53 @@ export const studioApi = {
       },
     )
   },
+
+  organizationSubscriptions: (
+    organizationId: string,
+    options: { status?: SubscriptionStatus; limit?: number; cursor?: string } = {},
+    signal?: AbortSignal,
+  ) => {
+    const query = new URLSearchParams()
+    if (options.status) query.set('status', options.status)
+    if (options.limit) query.set('limit', String(options.limit))
+    if (options.cursor) query.set('cursor', options.cursor)
+    const suffix = query.size ? `?${query.toString()}` : ''
+    return request<OrganizationSubscriptionPage>(
+      `/studio/v1/organizations/${organizationId}/subscriptions${suffix}`,
+      {
+        cache: 'no-store',
+        ...(signal ? { signal } : {}),
+      },
+    )
+  },
+
+  /*
+   * The three transitions carry no body: the subscription is in the path and there is
+   * nothing to choose. They are separate methods rather than one with a verb argument so
+   * that a typo cannot send `terminate` where `suspend` was meant and get a 404 instead
+   * of a type error.
+   */
+  suspendSubscription: (organizationId: string, subscriptionId: string, command: CommandHeaders) =>
+    request<SubscriptionTransition>(
+      `/studio/v1/organizations/${organizationId}/subscriptions/${subscriptionId}/suspension`,
+      { method: 'POST', headers: commandHeaders(command) },
+    ),
+
+  reactivateSubscription: (
+    organizationId: string,
+    subscriptionId: string,
+    command: CommandHeaders,
+  ) =>
+    request<SubscriptionTransition>(
+      `/studio/v1/organizations/${organizationId}/subscriptions/${subscriptionId}/reactivation`,
+      { method: 'POST', headers: commandHeaders(command) },
+    ),
+
+  endSubscription: (organizationId: string, subscriptionId: string, command: CommandHeaders) =>
+    request<SubscriptionTransition>(
+      `/studio/v1/organizations/${organizationId}/subscriptions/${subscriptionId}/termination`,
+      { method: 'POST', headers: commandHeaders(command) },
+    ),
 
   relationshipState: (organizationId: string, relationshipId: string, signal?: AbortSignal) =>
     request<RelationshipState>(

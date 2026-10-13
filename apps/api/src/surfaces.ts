@@ -46,10 +46,15 @@ import {
   backofficeOrganizationRoutes,
   studioOrganizationRoutes,
 } from './domains/organizations/index.js'
-import { backofficePlatformPlanRoutes, spaceProRoutes } from './domains/payments/index.js'
+import {
+  backofficePlatformPlanRoutes,
+  spacePaymentRoutes,
+  spaceProRoutes,
+  studioPaymentRoutes,
+} from './domains/payments/index.js'
 import { spacePlanningRoutes, studioPlanningRoutes } from './domains/planning/index.js'
 import { backofficePrivacyRoutes, studioPrivacyRoutes } from './domains/privacy/index.js'
-import { studioRelationshipRoutes } from './domains/relationships/index.js'
+import { spaceRelationshipRoutes, studioRelationshipRoutes } from './domains/relationships/index.js'
 import {
   backofficeBreakGlassRoutes,
   backofficePlatformAccessRoutes,
@@ -110,6 +115,7 @@ export function mountSurfaces(app: Hono): void {
   app.route('/studio/v1', studioRelationshipRoutes())
   app.route('/studio/v1', studioCatalogRoutes())
   app.route('/studio/v1', studioPlanningRoutes())
+  app.route('/studio/v1', studioPaymentRoutes())
   app.route('/space/v1', spaceIdentityRoutes())
   app.route('/space/v1', spaceOnboardingRoutes())
   app.route('/space/v1', spaceBodyProgressRoutes())
@@ -119,6 +125,8 @@ export function mountSurfaces(app: Hono): void {
   app.route('/space/v1', spaceExecutionRoutes())
   app.route('/space/v1', spaceNutritionRoutes())
   app.route('/space/v1', spaceProRoutes())
+  app.route('/space/v1', spacePaymentRoutes())
+  app.route('/space/v1', spaceRelationshipRoutes())
   app.route('/backoffice/v1', backofficeIdentityRoutes())
   app.route('/backoffice/v1', backofficeCredentialVerificationRoutes())
   app.route('/backoffice/v1', backofficeTeamInvitationRoutes())

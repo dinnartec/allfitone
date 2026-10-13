@@ -21,6 +21,7 @@ import {
   createOwnershipInvitationDeliveryDatabase,
 } from './ownership-invitations.js'
 import { createReassignmentBatchProcessor } from './professional-reassignments.js'
+import { createSubscriptionNoticeBatchProcessor } from './subscription-notices.js'
 import { createSubstitutionBatchProcessor } from './substitution-proposals.js'
 import {
   createClientInvitationBatchProcessor,
@@ -263,6 +264,12 @@ function processorsFromEnvironment(): WorkerJobProcessors {
         },
     deliveryEnabled: recoveryEnabled,
   })
+  const subscriptionNotices = createSubscriptionNoticeBatchProcessor({
+    queue,
+    email,
+    brandAssetUrl,
+    deliveryEnabled,
+  })
   cachedProcessors = {
     // One delivery job for every kind: the same switch and the same expiry, which the
     // team batch already runs for every pending invitation whatever it proposes.
@@ -270,37 +277,34 @@ function processorsFromEnvironment(): WorkerJobProcessors {
       const team = await teamInvitations()
       const ownership = await ownershipInvitations()
       const client = await clientInvitations()
-      // Reassignment notices and substitution questions ride the same job
-      // rather than a cron each: they are the same claim against the same
-      // outbox, and a separate schedule would be another thing to notice when
-      // it stops running.
-      const reassigned = await reassignments()
-      const substituted = await substitutions()
+      /*
+       * Reassignment notices, substitution questions and subscription notices ride the
+       * same job rather than a cron each: they are the same claim against the same
+       * outbox, and a separate schedule would be another thing to notice when it stops
+       * running.
+       *
+       * Summed by a fold and not by hand. With six processors and four counters the
+       * written-out version was twenty-four terms, and a sixth kind added to three of
+       * them would have under-reported for as long as nobody checked the number.
+       */
+      const batches = [
+        team,
+        ownership,
+        client,
+        await reassignments(),
+        await substitutions(),
+        await subscriptionNotices(),
+      ]
       return {
-        claimed:
-          team.claimed +
-          ownership.claimed +
-          client.claimed +
-          reassigned.claimed +
-          substituted.claimed,
-        delivered:
-          team.delivered +
-          ownership.delivered +
-          client.delivered +
-          reassigned.delivered +
-          substituted.delivered,
-        deadOrDelayed:
-          team.deadOrDelayed +
-          ownership.deadOrDelayed +
-          client.deadOrDelayed +
-          reassigned.deadOrDelayed +
-          substituted.deadOrDelayed,
-        skipped:
-          team.skipped +
-          ownership.skipped +
-          client.skipped +
-          reassigned.skipped +
-          substituted.skipped,
+        ...batches.reduce(
+          (total, batch) => ({
+            claimed: total.claimed + batch.claimed,
+            delivered: total.delivered + batch.delivered,
+            deadOrDelayed: total.deadOrDelayed + batch.deadOrDelayed,
+            skipped: total.skipped + batch.skipped,
+          }),
+          { claimed: 0, delivered: 0, deadOrDelayed: 0, skipped: 0 },
+        ),
         expired: team.expired,
       }
     },
