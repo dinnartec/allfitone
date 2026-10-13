@@ -27,6 +27,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import invitePhoto from '../../assets/images/pro-invite.webp'
 import {
+  billingOf,
   gymsOf,
   lastPaid,
   money,
@@ -38,6 +39,7 @@ import {
   WAITING_FOR_FEATURES,
   type ProFlow,
   type ProPayments,
+  type ProPlanCatalogue,
   type ProStatus,
   type SubscriptionSource,
 } from '../../src/client/pro'
@@ -69,17 +71,19 @@ export function ProPlan({ flow }: { readonly flow: ProFlow }) {
   const insets = useSafeAreaInsets()
   const [status, setStatus] = useState<ProStatus | undefined>(undefined)
   const [payments, setPayments] = useState<ProPayments | undefined>(undefined)
+  const [catalogue, setCatalogue] = useState<ProPlanCatalogue | undefined>(undefined)
   const [failure, setFailure] = useState<string | undefined>(undefined)
   const [cancelling, setCancelling] = useState(false)
 
   useFocusEffect(
     useCallback(() => {
       let active = true
-      Promise.all([flow.read(), flow.payments()])
-        .then(([read, paid]) => {
+      Promise.all([flow.read(), flow.payments(), flow.plans()])
+        .then(([read, paid, plans]) => {
           if (!active) return
           setStatus(read)
           setPayments(paid)
+          setCatalogue(plans)
           setFailure(undefined)
         })
         .catch(() => active && setFailure(UNAVAILABLE))
@@ -97,11 +101,14 @@ export function ProPlan({ flow }: { readonly flow: ProFlow }) {
   const facts: CardFact[] = []
   if (status?.effective_source === 'subscription' && subscription) {
     facts.push({
-      label: subscription.auto_renews ? 'Renueva' : 'Termina',
+      label: subscription.auto_renews ? 'Renovación' : 'Vencimiento',
       value: shortDate(subscription.current_period_end),
     })
     const amount = paid ? money(paid.amount_minor, paid.currency_code) : undefined
-    if (amount) facts.push({ label: 'Pagas', value: `${amount}/mes` })
+    if (amount) {
+      const billing = billingOf(catalogue, subscription.version_id)
+      facts.push({ label: billing.fee, value: `${amount}${billing.per}` })
+    }
   } else if (status?.effective_source === 'organization' && gym) {
     facts.push(
       { label: 'Gimnasio', value: gym.organization_name },

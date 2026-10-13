@@ -19,6 +19,7 @@ import { ScrollView, StyleSheet, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import {
+  billingOf,
   money,
   renewalLine,
   shortDate,
@@ -26,6 +27,7 @@ import {
   subscriptionOf,
   type ProFlow,
   type ProPayments,
+  type ProPlanCatalogue,
   type ProStatus,
 } from '../../src/client/pro'
 import { createSpaceProFlow } from '../../src/client/pro-transport'
@@ -45,16 +47,18 @@ export function ProPaymentsScreen({ flow }: { readonly flow: ProFlow }) {
   const theme = useTheme()
   const [payments, setPayments] = useState<ProPayments | undefined>(undefined)
   const [status, setStatus] = useState<ProStatus | undefined>(undefined)
+  const [catalogue, setCatalogue] = useState<ProPlanCatalogue | undefined>(undefined)
   const [failure, setFailure] = useState<string | undefined>(undefined)
 
   useFocusEffect(
     useCallback(() => {
       let active = true
-      Promise.all([flow.payments(), flow.read()])
-        .then(([paid, read]) => {
+      Promise.all([flow.payments(), flow.read(), flow.plans()])
+        .then(([paid, read, plans]) => {
           if (!active) return
           setPayments(paid)
           setStatus(read)
+          setCatalogue(plans)
         })
         .catch(() => active && setFailure(UNAVAILABLE))
       return () => {
@@ -67,11 +71,10 @@ export function ProPaymentsScreen({ flow }: { readonly flow: ProFlow }) {
   const succeeded = list.filter((payment) => payment.result === 'succeeded')
   const [latest] = succeeded
   const first = succeeded[succeeded.length - 1]
-  const sameCurrency = succeeded.every((payment) => payment.currency_code === latest?.currency_code)
-  const total = sameCurrency
-    ? succeeded.reduce((sum, payment) => sum + (payment.amount_minor ?? 0), 0)
-    : null
   const subscription = status ? subscriptionOf(status) : undefined
+  // The fee of the latest charge that went through: what the person pays each period.
+  const fee = latest ? money(latest.amount_minor, latest.currency_code) : undefined
+  const billing = subscription ? billingOf(catalogue, subscription.version_id) : undefined
   const store = subscription?.store ?? latest?.store
 
   const chips: (readonly [IconName, string])[] = []
@@ -97,19 +100,24 @@ export function ProPaymentsScreen({ flow }: { readonly flow: ProFlow }) {
           <Note icon="history">Todavía no hay cobros de Allfit Pro.</Note>
         ) : null}
 
-        {latest && total !== null ? (
+        {fee ? (
           <View style={styles.summary}>
-            <SectionLabel>Pagado a Allfit</SectionLabel>
+            <SectionLabel>{billing?.fee ?? 'Tu último cobro'}</SectionLabel>
             <View style={styles.totalRow}>
               <Text role="data" size="6xl">
-                {money(total, latest.currency_code) ?? '—'}
+                {fee}
               </Text>
-              {first ? (
-                <Text role="body" size="sm" color="secondary">
-                  desde el {shortDate(first.occurred_at)}
+              {billing?.per ? (
+                <Text role="body" size="md" color="secondary">
+                  {billing.per}
                 </Text>
               ) : null}
             </View>
+            {first ? (
+              <Text role="body" size="sm" color="secondary">
+                Pagas Pro desde el {shortDate(first.occurred_at)}
+              </Text>
+            ) : null}
             <View style={styles.chips}>
               {chips.map(([icon, text]) => (
                 <View

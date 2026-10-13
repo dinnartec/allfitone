@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import type { CommandHeaders } from '@allfitone/contracts/commands'
 
 import {
+  billingOf,
   createProFlow,
   featureIcon,
   featureSentence,
@@ -11,6 +12,7 @@ import {
   renewalLine,
   sourceLine,
   type ProPlan,
+  type ProPlanCatalogue,
   type ProStatus,
   type SubscriptionSource,
 } from './pro'
@@ -45,7 +47,7 @@ describe('what the screens say', () => {
   test('T-SPC-UNIT-288 the source line names who pays, or that nobody does', () => {
     expect(
       sourceLine(status({ effective_source: 'subscription', sources: [subscription, gym] })),
-    ).toBe('Lo pagas tú, con Apple')
+    ).toBe('Pagado con Apple')
     expect(sourceLine(status({ effective_source: 'organization', sources: [gym] }))).toBe(
       'Incluido por Bodytech Chicó',
     )
@@ -96,6 +98,19 @@ describe('what the screens say', () => {
     expect(featureSentence(f('something_new', 2))).toBe('Función: máximo 2')
     expect(featureIcon('own_routines')).toBe('checklist')
     expect(featureIcon('something_new')).toBe('check')
+  })
+
+  test('T-SPC-UNIT-295 the fee follows the period of the version paid, never assumed', () => {
+    const catalogue = {
+      generated_at: '',
+      plans: [
+        { version_id: 'monthly', billing_period: 'month' },
+        { version_id: 'yearly', billing_period: 'year' },
+      ],
+    } as ProPlanCatalogue
+    expect(billingOf(catalogue, 'monthly')).toEqual({ fee: 'Cuota mensual', per: '/mes' })
+    expect(billingOf(catalogue, 'yearly')).toEqual({ fee: 'Cuota anual', per: '/año' })
+    expect(billingOf(catalogue, 'unknown')).toEqual({ fee: 'Cuota', per: '' })
   })
 
   test('T-SPC-UNIT-292 money is shown as on a receipt', () => {

@@ -92,7 +92,7 @@ export function sourceLine(status: ProStatus): string {
   const subscription = subscriptionOf(status)
   const [gym] = gymsOf(status)
   if (status.effective_source === 'subscription' && subscription) {
-    return `Lo pagas tú, con ${storeName(subscription.store)}`
+    return `Pagado con ${storeName(subscription.store)}`
   }
   if (status.effective_source === 'organization' && gym)
     return `Incluido por ${gym.organization_name}`
@@ -179,6 +179,20 @@ export function money(amountMinor: number | null, currency: string | null): stri
 /** The latest charge that went through, to show what the person pays. */
 export const lastPaid = (payments: readonly ProPayment[]): ProPayment | undefined =>
   payments.find((payment) => payment.result === 'succeeded')
+
+const PERIODS: Readonly<Record<string, { readonly fee: string; readonly per: string }>> = {
+  month: { fee: 'Cuota mensual', per: '/mes' },
+  year: { fee: 'Cuota anual', per: '/año' },
+}
+
+/** How a version is billed, read from the catalogue rather than assumed to be monthly. */
+export function billingOf(
+  catalogue: ProPlanCatalogue | undefined,
+  versionId: string,
+): { readonly fee: string; readonly per: string } {
+  const period = catalogue?.plans.find((plan) => plan.version_id === versionId)?.billing_period
+  return (period ? PERIODS[period] : undefined) ?? { fee: 'Cuota', per: '' }
+}
 
 export const proPlanOf = (catalogue: ProPlanCatalogue): ProPlan | undefined =>
   catalogue.plans.find((plan) => plan.code === 'pro')
