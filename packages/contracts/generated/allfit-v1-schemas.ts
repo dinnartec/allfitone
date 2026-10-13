@@ -10689,6 +10689,31 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
     description:
       "The email is absent on purpose. It is the credential's address, it already travels with the session, and changing it is another operation with its own verification.",
   },
+  SpaceProFeature: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['code', 'name', 'unit', 'enabled', 'limit_value'],
+    properties: {
+      code: {
+        type: 'string',
+        pattern: '^[a-z][a-z0-9_]{1,63}$',
+      },
+      name: {
+        type: 'string',
+      },
+      unit: {
+        type: ['string', 'null'],
+      },
+      enabled: {
+        type: 'boolean',
+      },
+      limit_value: {
+        type: ['integer', 'null'],
+        minimum: 0,
+        description: 'Null means unlimited.',
+      },
+    },
+  },
   SpaceProfileClaim: {
     oneOf: [
       {
@@ -11200,6 +11225,342 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         ],
         description:
           "The programme's photograph, composed by the API out of the stored object key and the media origin. It is the same address the programme answers once it has been taken (`SpaceMyProgram.cover_url`), so choosing it and living with it show the same picture — the catalogue is where somebody decides, and deciding on a placeholder is deciding on nothing.\n**It is the set of whoever is asking**, resolved by `planning.cover_for` from the sex they declared; somebody who preferred not to say gets a stable mix, deterministic per programme, and never a default set. Null for a programme with no artwork. The key never leaves the server (`ADR-031`).",
+      },
+    },
+  },
+  SpaceProPayment: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['id', 'store', 'amount_minor', 'currency_code', 'result', 'occurred_at'],
+    properties: {
+      id: {
+        type: 'string',
+        format: 'uuid',
+      },
+      store: {
+        $ref: '#/components/schemas/SpaceProStore',
+      },
+      amount_minor: {
+        type: ['integer', 'null'],
+        minimum: 0,
+      },
+      currency_code: {
+        type: ['string', 'null'],
+      },
+      result: {
+        type: 'string',
+        enum: ['succeeded', 'failed'],
+      },
+      occurred_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+    },
+  },
+  SpaceProPayments: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['generated_at', 'payments'],
+    properties: {
+      generated_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      payments: {
+        type: 'array',
+        maxItems: 60,
+        items: {
+          $ref: '#/components/schemas/SpaceProPayment',
+        },
+      },
+    },
+  },
+  SpaceProPlan: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'id',
+      'code',
+      'name',
+      'kind',
+      'version_id',
+      'version_number',
+      'amount_minor',
+      'currency_code',
+      'billing_period',
+      'features',
+      'store_products',
+    ],
+    properties: {
+      id: {
+        type: 'string',
+        format: 'uuid',
+      },
+      code: {
+        type: 'string',
+      },
+      name: {
+        type: 'string',
+      },
+      kind: {
+        $ref: '#/components/schemas/PlatformPlanKind',
+      },
+      version_id: {
+        type: 'string',
+        format: 'uuid',
+      },
+      version_number: {
+        type: 'integer',
+        minimum: 1,
+      },
+      amount_minor: {
+        type: 'integer',
+        minimum: 0,
+        description:
+          "The catalogue's reference price; the store's localized price is what is charged.",
+      },
+      currency_code: {
+        type: ['string', 'null'],
+      },
+      billing_period: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/PlatformPlanBillingPeriod',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      features: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/SpaceProFeature',
+        },
+      },
+      store_products: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/SpaceProStoreProduct',
+        },
+      },
+    },
+  },
+  SpaceProPlanCatalogue: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['generated_at', 'plans'],
+    properties: {
+      generated_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      plans: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/SpaceProPlan',
+        },
+      },
+    },
+  },
+  SpaceProPlanRef: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['id', 'code', 'name', 'kind', 'version_id', 'version_number'],
+    properties: {
+      id: {
+        type: 'string',
+        format: 'uuid',
+      },
+      code: {
+        type: 'string',
+      },
+      name: {
+        type: 'string',
+      },
+      kind: {
+        $ref: '#/components/schemas/PlatformPlanKind',
+      },
+      version_id: {
+        type: 'string',
+        format: 'uuid',
+      },
+      version_number: {
+        type: 'integer',
+        minimum: 1,
+      },
+    },
+  },
+  SpaceProPurchase: {
+    oneOf: [
+      {
+        type: 'object',
+        additionalProperties: false,
+        required: ['store', 'signed_transaction'],
+        properties: {
+          store: {
+            const: 'app_store',
+          },
+          signed_transaction: {
+            type: 'string',
+            minLength: 1,
+            maxLength: 20000,
+            description: 'The JWS transaction StoreKit returned for the purchase.',
+          },
+        },
+      },
+      {
+        type: 'object',
+        additionalProperties: false,
+        required: ['store', 'product_id', 'purchase_token'],
+        properties: {
+          store: {
+            const: 'google_play',
+          },
+          product_id: {
+            type: 'string',
+            pattern: '^[A-Za-z0-9][A-Za-z0-9._]{0,99}$',
+          },
+          purchase_token: {
+            type: 'string',
+            minLength: 1,
+            maxLength: 4096,
+          },
+        },
+      },
+    ],
+  },
+  SpaceProSource: {
+    oneOf: [
+      {
+        type: 'object',
+        additionalProperties: false,
+        required: [
+          'kind',
+          'store',
+          'status',
+          'auto_renews',
+          'current_period_end',
+          'grace_until',
+          'version_id',
+        ],
+        properties: {
+          kind: {
+            const: 'subscription',
+          },
+          store: {
+            $ref: '#/components/schemas/SpaceProStore',
+          },
+          status: {
+            type: 'string',
+            enum: ['active', 'grace', 'suspended'],
+          },
+          auto_renews: {
+            type: 'boolean',
+          },
+          current_period_end: {
+            type: 'string',
+            format: 'date-time',
+          },
+          grace_until: {
+            type: ['string', 'null'],
+            format: 'date-time',
+          },
+          version_id: {
+            type: 'string',
+            format: 'uuid',
+          },
+        },
+      },
+      {
+        type: 'object',
+        additionalProperties: false,
+        required: ['kind', 'organization_id', 'organization_name'],
+        properties: {
+          kind: {
+            const: 'organization',
+          },
+          organization_id: {
+            type: 'string',
+            format: 'uuid',
+          },
+          organization_name: {
+            type: 'string',
+          },
+        },
+      },
+    ],
+  },
+  SpaceProStatus: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'generated_at',
+      'account_token',
+      'effective_source',
+      'is_pro',
+      'plan',
+      'features',
+      'sources',
+    ],
+    properties: {
+      generated_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      account_token: {
+        type: 'string',
+        format: 'uuid',
+        description:
+          "The id the app buys with (Apple's appAccountToken, Google's obfuscated account id), so the API can tell a purchase made for this person from one that was not.",
+      },
+      effective_source: {
+        type: 'string',
+        enum: ['subscription', 'organization', 'free'],
+        description: 'The source whose version decides the limits.',
+      },
+      is_pro: {
+        type: 'boolean',
+      },
+      plan: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/SpaceProPlanRef',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      features: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/SpaceProFeature',
+        },
+      },
+      sources: {
+        type: 'array',
+        description: 'Every source in force, including the ones that do not decide the limits.',
+        items: {
+          $ref: '#/components/schemas/SpaceProSource',
+        },
+      },
+    },
+  },
+  SpaceProStore: {
+    type: 'string',
+    enum: ['app_store', 'google_play'],
+  },
+  SpaceProStoreProduct: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['store', 'product_id'],
+    properties: {
+      store: {
+        $ref: '#/components/schemas/SpaceProStore',
+      },
+      product_id: {
+        type: 'string',
       },
     },
   },

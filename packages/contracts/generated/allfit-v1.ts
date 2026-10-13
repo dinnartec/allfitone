@@ -1125,6 +1125,86 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/space/v1/pro': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Whether the person has Pro, through which source, and its limits
+     * @description HU-SP-086 and HU-SP-088. Resolved on read, never from a stored flag (ADR-043): a live subscription of one's own gives its frozen version; otherwise an active relationship with an active gym gives the version of Pro in force; otherwise the free plan. Every source in force is listed, and any doubt resolves to free.
+     */
+    get: operations['readSpacePro']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/pro/plans': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * What each of Allfit's plans includes, and the store products that sell it
+     * @description HU-SP-084. The free plan first. The price shown to the person is the one the store localizes for the product; the catalogue says what each version includes.
+     */
+    get: operations['listSpaceProPlans']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/pro/payments': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * What the person has paid for Pro, the latest first
+     * @description Each charge a store reported, with its result. Allfit never sees a card, so no payment method appears here.
+     */
+    get: operations['listSpaceProPayments']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/pro/purchases': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Present a store purchase so Allfit verifies it and records the subscription
+     * @description HU-SP-085. The app buys with the person's id as account token and presents the purchase here: Apple's signed transaction, or Google's product and purchase token. The API verifies it with the store before recording anything, and a purchase made for another account or of a product Allfit does not sell gives nothing. Presenting the same purchase again, as a restore does, records nothing new.
+     */
+    post: operations['recordSpaceProPurchase']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/space/v1/body-progress': {
     parameters: {
       query?: never
@@ -8030,6 +8110,121 @@ export interface components {
       billing_period: components['schemas']['PlatformPlanBillingPeriod'] | null
       features: components['schemas']['PlatformPlanFeatureLimit'][]
     }
+    SpaceProFeature: {
+      code: string
+      name: string
+      unit: string | null
+      enabled: boolean
+      /** @description Null means unlimited. */
+      limit_value: number | null
+    }
+    SpaceProPlanRef: {
+      /** Format: uuid */
+      id: string
+      code: string
+      name: string
+      kind: components['schemas']['PlatformPlanKind']
+      /** Format: uuid */
+      version_id: string
+      version_number: number
+    }
+    /** @enum {string} */
+    SpaceProStore: 'app_store' | 'google_play'
+    SpaceProSource:
+      | {
+          /** @constant */
+          kind: 'subscription'
+          store: components['schemas']['SpaceProStore']
+          /** @enum {string} */
+          status: 'active' | 'grace' | 'suspended'
+          auto_renews: boolean
+          /** Format: date-time */
+          current_period_end: string
+          /** Format: date-time */
+          grace_until: string | null
+          /** Format: uuid */
+          version_id: string
+        }
+      | {
+          /** @constant */
+          kind: 'organization'
+          /** Format: uuid */
+          organization_id: string
+          organization_name: string
+        }
+    SpaceProStatus: {
+      /** Format: date-time */
+      generated_at: string
+      /**
+       * Format: uuid
+       * @description The id the app buys with (Apple's appAccountToken, Google's obfuscated account id), so the API can tell a purchase made for this person from one that was not.
+       */
+      account_token: string
+      /**
+       * @description The source whose version decides the limits.
+       * @enum {string}
+       */
+      effective_source: 'subscription' | 'organization' | 'free'
+      is_pro: boolean
+      plan: components['schemas']['SpaceProPlanRef'] | null
+      features: components['schemas']['SpaceProFeature'][]
+      /** @description Every source in force, including the ones that do not decide the limits. */
+      sources: components['schemas']['SpaceProSource'][]
+    }
+    SpaceProStoreProduct: {
+      store: components['schemas']['SpaceProStore']
+      product_id: string
+    }
+    SpaceProPlan: {
+      /** Format: uuid */
+      id: string
+      code: string
+      name: string
+      kind: components['schemas']['PlatformPlanKind']
+      /** Format: uuid */
+      version_id: string
+      version_number: number
+      /** @description The catalogue's reference price; the store's localized price is what is charged. */
+      amount_minor: number
+      currency_code: string | null
+      billing_period: components['schemas']['PlatformPlanBillingPeriod'] | null
+      features: components['schemas']['SpaceProFeature'][]
+      store_products: components['schemas']['SpaceProStoreProduct'][]
+    }
+    SpaceProPlanCatalogue: {
+      /** Format: date-time */
+      generated_at: string
+      plans: components['schemas']['SpaceProPlan'][]
+    }
+    SpaceProPayment: {
+      /** Format: uuid */
+      id: string
+      store: components['schemas']['SpaceProStore']
+      amount_minor: number | null
+      currency_code: string | null
+      /** @enum {string} */
+      result: 'succeeded' | 'failed'
+      /** Format: date-time */
+      occurred_at: string
+    }
+    SpaceProPayments: {
+      /** Format: date-time */
+      generated_at: string
+      payments: components['schemas']['SpaceProPayment'][]
+    }
+    SpaceProPurchase:
+      | {
+          /** @constant */
+          store: 'app_store'
+          /** @description The JWS transaction StoreKit returned for the purchase. */
+          signed_transaction: string
+        }
+      | {
+          /** @constant */
+          store: 'google_play'
+          product_id: string
+          purchase_token: string
+        }
     PlatformPlanFeatureState: {
       enabled: boolean
       limit_value: number | null
@@ -10694,6 +10889,114 @@ export interface operations {
       401: components['responses']['Unauthenticated']
       403: components['responses']['Forbidden']
       404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  readSpacePro: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The person's plan, its sources and its limits */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SpaceProStatus']
+        }
+      }
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listSpaceProPlans: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The plans in force */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SpaceProPlanCatalogue']
+        }
+      }
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listSpaceProPayments: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The person's charges */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SpaceProPayments']
+        }
+      }
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  recordSpaceProPurchase: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SpaceProPurchase']
+      }
+    }
+    responses: {
+      /** @description The person's Pro after the purchase */
+      201: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SpaceProStatus']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
       409: components['responses']['Conflict']
       422: components['responses']['ValidationFailed']
       503: components['responses']['UpstreamUnavailable']

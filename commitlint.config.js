@@ -24,6 +24,7 @@ export default {
         'notifications',
         'telemetry',
         'object-store',
+        'store-billing',
         'food-recognition',
         // domains inside apps/api
         'identity',

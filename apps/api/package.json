@@ -19,6 +19,7 @@
     "@allfitone/food-recognition": "workspace:*",
     "@allfitone/notifications": "workspace:*",
     "@allfitone/object-store": "workspace:*",
+    "@allfitone/store-billing": "workspace:*",
     "@allfitone/queue": "workspace:*",
     "@allfitone/telemetry": "workspace:*",
     "@vercel/functions": "3.9.3",
