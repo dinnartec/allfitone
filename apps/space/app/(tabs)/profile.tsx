@@ -25,7 +25,7 @@ import { Text } from '@allfitone/react-native/text'
 import { useTheme } from '@allfitone/react-native/theme'
 import { useRouter } from 'expo-router'
 import { useMemo, useState } from 'react'
-import { ScrollView, StyleSheet, View } from 'react-native'
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
 
 import { createSpaceSignOutFlow } from '../../src/client/sign-out-transport'
 import { forgetExerciseLibrary } from '../../src/client/exercise-library'
@@ -82,6 +82,22 @@ export default function Profile() {
         </View>
 
         {notice ? <InlineAlert message={notice} /> : null}
+
+        {/* The one thing on this screen that is not an account action. It lives here
+            because paying a gym is between her and the gym, and nothing else in the app
+            is about that. */}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Ver mis planes"
+          onPress={() => router.push('/subscriptions')}
+          style={[styles.row, { borderColor: theme.color.border.subtle }]}
+        >
+          <FoundationIcon name="business" size="sm" color={theme.color.icon.secondary} decorative />
+          <Text role="body" size="sm" style={styles.grow}>
+            Mis planes
+          </Text>
+          <FoundationIcon name="forward" color={theme.color.icon.secondary} decorative />
+        </Pressable>
 
         <View style={styles.section}>
           <Text role="eyebrow" size="2xs" color="muted">
@@ -148,6 +164,16 @@ const styles = StyleSheet.create({
   heading: { gap: 4 },
   section: { gap: 10 },
   coming: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  grow: { flex: 1 },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+  },
   divider: { height: 1 },
   centered: { textAlign: 'center' },
   sheetBody: { gap: 12 },
