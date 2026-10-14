@@ -21,7 +21,7 @@
 
 begin;
 
-select plan(25);
+select plan(32);
 
 insert into identity.people (id, given_name, family_name, status, contact_email)
 values
@@ -31,7 +31,8 @@ values
   ('019c9000-0000-7000-8000-000000000012', 'Camilo', 'Coach', 'active', null),
   ('019c9000-0000-7000-8000-000000000013', 'Elena', 'Coach', 'active', null),
   ('019c9000-0000-7000-8000-000000000014', 'Sara', 'Staff', 'active', null),
-  ('019c9000-0000-7000-8000-000000000015', 'Rita', 'Coach', 'active', null);
+  ('019c9000-0000-7000-8000-000000000015', 'Rita', 'Coach', 'active', null),
+  ('019c9000-0000-7000-8000-000000000016', 'Tomás', 'Ajeno', 'active', null);
 
 -- Sin forma de preguntarle. La suplencia es una pregunta que se le hace a la
 -- persona, así que una persona sin contacto no puede tener una pendiente.
@@ -53,7 +54,9 @@ values
   ('019c9000-0000-7000-8000-000000000204', '019c9000-0000-7000-8000-000000000101',
     '019c9000-0000-7000-8000-000000000014', 'active'),
   ('019c9000-0000-7000-8000-000000000205', '019c9000-0000-7000-8000-000000000101',
-    '019c9000-0000-7000-8000-000000000015', 'active');
+    '019c9000-0000-7000-8000-000000000015', 'active'),
+  ('019c9000-0000-7000-8000-000000000206', '019c9000-0000-7000-8000-000000000101',
+    '019c9000-0000-7000-8000-000000000016', 'active');
 
 insert into organizations.membership_roles (membership_id, role_code)
 values
@@ -61,7 +64,8 @@ values
   ('019c9000-0000-7000-8000-000000000202', 'coach'),
   ('019c9000-0000-7000-8000-000000000203', 'coach'),
   ('019c9000-0000-7000-8000-000000000204', 'staff'),
-  ('019c9000-0000-7000-8000-000000000205', 'coach');
+  ('019c9000-0000-7000-8000-000000000205', 'coach'),
+  ('019c9000-0000-7000-8000-000000000206', 'coach');
 
 insert into relationships.service_relationships (id, person_id, organization_id, status)
 values
@@ -428,6 +432,105 @@ select is(
   (select relationships.actor_is_assigned('019c9000-0000-7000-8000-000000000701')),
   true,
   'el titular no tiene fecha de fin y sigue atendiendo'
+);
+
+/*
+ * ———————————————————————————————————— Quién puede leer una suplencia
+ *
+ * La mitad que faltaba. El titular puede pedir una suplencia desde el día que
+ * `OP-REL-004` existe, y hasta hoy no podía leerla: la política identifica a un
+ * coach por `membership_id`, y una suplencia lleva la ficha del suplente. Quien
+ * pide que le cubran y nunca sabe si aceptaron se va sin saber si su clienta
+ * queda atendida.
+ *
+ * La fila dice ahora a quién cubre, y el predicado sigue siendo local a la
+ * fila: preguntar `actor_is_assigned` aquí recurre, porque esa función lee esta
+ * misma tabla — la migración original ya lo dejó anotado como intentado y
+ * fallido.
+ */
+select set_config('app.actor_person_id', '019c9000-0000-7000-8000-000000000011', true);
+
+select is(
+  (select covers_membership_id from relationships.relationship_professional_assignments
+   where relationship_id = '019c9000-0000-7000-8000-000000000701'
+     and membership_id = '019c9000-0000-7000-8000-000000000205'),
+  '019c9000-0000-7000-8000-000000000202'::uuid,
+  'la suplencia registra a qué titular cubre'
+);
+
+-- La aserción por la que existe todo esto: Camilo pidió que le cubrieran y
+-- puede ver el resultado.
+select set_config('app.actor_person_id', '019c9000-0000-7000-8000-000000000012', true);
+
+select is(
+  (select count(*)::int from relationships.relationship_professional_assignments
+   where relationship_id = '019c9000-0000-7000-8000-000000000701'
+     and membership_id = '019c9000-0000-7000-8000-000000000205'),
+  1,
+  'el titular lee la suplencia que él mismo propuso'
+);
+
+-- Y la lee donde la pantalla la busca, no solo en la tabla.
+select is(
+  (select jsonb_array_length(
+     relationships.read_relationship_state(
+       '019c9000-0000-7000-8000-000000000012', '019c9000-0000-7000-8000-000000000101',
+       '019c9000-0000-7000-8000-000000000701') -> 'substitutions')),
+  3,
+  'y la ficha del vínculo se la devuelve, que antes le llegaba vacía'
+);
+
+-- Rita es la suplente: su propia ficha ya la veía, y lo sigue haciendo.
+select set_config('app.actor_person_id', '019c9000-0000-7000-8000-000000000015', true);
+
+select is(
+  (select count(*)::int from relationships.relationship_professional_assignments
+   where relationship_id = '019c9000-0000-7000-8000-000000000701'
+     and membership_id = '019c9000-0000-7000-8000-000000000205'),
+  1,
+  'la suplente sigue viendo la suya'
+);
+
+/*
+ * Y lo que NO se amplió. Tomás es coach de la organización, no atiende a Ana y
+ * no cubre a nadie: no ve ninguna fila de esta relación. Si esta aserción se
+ * cae, la política se abrió de más.
+ *
+ * Tiene que ser él y no Elena: Elena es la suplente propuesta en dos
+ * coberturas, así que ve sus propias filas por `owns_membership(membership_id)`,
+ * que es la regla de siempre y no lo que aquí se está midiendo.
+ */
+select set_config('app.actor_person_id', '019c9000-0000-7000-8000-000000000016', true);
+
+select is(
+  (select count(*)::int from relationships.relationship_professional_assignments
+   where relationship_id = '019c9000-0000-7000-8000-000000000701'),
+  0,
+  'un coach ajeno a la relación no ve ninguna de sus asignaciones'
+);
+
+-- Las dos restricciones que sostienen la política: si una suplencia pudiera no
+-- decir a quién cubre, habría filas que el titular nunca vería.
+select set_config('app.actor_person_id', '019c9000-0000-7000-8000-000000000011', true);
+
+select throws_ok(
+  $$insert into relationships.relationship_professional_assignments
+    (relationship_id, person_id, organization_id, membership_id, kind, status, ends_on)
+    values ('019c9000-0000-7000-8000-000000000701', '019c9000-0000-7000-8000-000000000001',
+            '019c9000-0000-7000-8000-000000000101', '019c9000-0000-7000-8000-000000000203',
+            'substitute', 'proposed', current_date + 5)$$,
+  '23514',
+  null,
+  'una suplencia que no dice a quién cubre no se escribe'
+);
+
+select throws_ok(
+  $$update relationships.relationship_professional_assignments
+    set covers_membership_id = '019c9000-0000-7000-8000-000000000203'
+    where id = '019c9000-0000-7000-8000-000000000801'$$,
+  '23514',
+  null,
+  'y un titular no cubre a nadie'
 );
 
 select * from finish();

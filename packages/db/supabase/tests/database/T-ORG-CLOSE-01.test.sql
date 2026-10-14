@@ -25,10 +25,15 @@ select plan(5);
 -- Naming all of them, rather than asserting that no name matches `terminate%`, is the
 -- point: a closure called anything at all breaks this, and whoever adds a function to
 -- `relationships` has to say out loud that theirs is not one. It has already worked
--- four times — `read_relationship_state` and `reassign_relationship_holder` arrived with
+-- five times — `read_relationship_state` and `reassign_relationship_holder` arrived with
 -- `AFO-54`/`AFO-57`, `read_relationship_history` with `AFO-55`,
--- `propose_substitution` with `AFO-58` and `list_my_relationships` with `OP-REL-012`;
--- each landed here before it landed anywhere else.
+-- `propose_substitution` with `AFO-58`, `list_my_relationships` with `OP-REL-012` and
+-- `relationship_assignment_is_visible` with `STUDIO-94`; each landed here before it
+-- landed anywhere else.
+--
+-- The last one is not an operation. It is the assignment read policy's predicate,
+-- lifted into a function so the policy reads as one line, and the runtime holds
+-- EXECUTE because a policy is evaluated as whoever is reading.
 --
 -- `list_my_relationships` is a read the **person** performs over her own rows, and it is
 -- what makes everything about one of her gyms reachable from Space at all. It ends
@@ -53,8 +58,9 @@ select is(
    ) as runnable),
   'actor_is_assigned, assign_relationship_holder, list_my_relationships, '
     || 'list_organization_clients, propose_substitution, read_relationship_history, '
-    || 'read_relationship_state, reassign_relationship_holder',
-  'the runtime reaches eight relationship functions, and ending one is not among them'
+    || 'read_relationship_state, reassign_relationship_holder, '
+    || 'relationship_assignment_is_visible',
+  'the runtime reaches nine relationship functions, and ending one is not among them'
 );
 
 -- ---------------------------------------------------------------------------
