@@ -10,6 +10,10 @@ export type Database = {
     }
     Functions: {
       account: { Args: never; Returns: string }
+      acting_person_is: {
+        Args: { p_actor_person_id: string }
+        Returns: boolean
+      }
       actor_kind: {
         Args: never
         Returns: Database['identity']['Enums']['actor_kind']

@@ -76,8 +76,12 @@ test('opens a gym’s file with its data, owner, team and sites, and no names', 
     'Atiende a 3 personas, y 1 relación ya terminó.',
   )
   await expect(page.getByRole('cell', { name: 'Calle 80 # 1-10' })).toBeVisible()
-  await expect(page.getByText(/Sus planes publicados y sus suscriptores/)).toBeVisible()
-  await expect(page.getByText(/es que Allfit aún no los guarda/)).toBeVisible()
+  // What it charges, who pays it, and that no credential of its gateway is here.
+  await expect(page.locator('[data-file-plans] li')).toContainText('Mensual')
+  await expect(page.locator('[data-file-plans] li')).toContainText('2 personas lo pagan')
+  await expect(page.locator('[data-file-payment-method]')).toContainText('Mercado Pago')
+  await expect(page.locator('[data-file-payment-method]')).toContainText('Ninguna credencial')
+  await expect(page.locator('[data-file-premium]')).toContainText('No se activa por gimnasio')
 
   const reads = fixture.requests.filter(
     (request) =>

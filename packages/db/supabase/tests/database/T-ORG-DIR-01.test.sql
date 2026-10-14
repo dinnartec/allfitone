@@ -245,6 +245,10 @@ select * from organizations.list_backoffice_organizations(
 
 select is((select count(*)::integer from directory), 3, 'a support operator reads the directory');
 
+-- Another operator, so another actor: the directory counts the people each gym serves
+-- under the policies of whoever is reading, and the two have to be the same person.
+select set_config('app.actor_person_id', '019ab000-0000-7000-8000-000000000004', true);
+
 select is(
   (select count(*)::integer from organizations.list_backoffice_organizations(
     '019ab000-0000-7000-8000-000000000004', '019ab000-0000-7000-8000-000000000024',
@@ -253,6 +257,8 @@ select is(
   3,
   'so does whoever manages the organization lifecycle'
 );
+
+select set_config('app.actor_person_id', '019ab000-0000-7000-8000-000000000003', true);
 
 -- ---------------------------------------------------------------------------
 -- Criterion 1 and 3 — what each row says

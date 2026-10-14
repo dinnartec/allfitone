@@ -20,7 +20,7 @@
 
 begin;
 
-select plan(26);
+select plan(34);
 
 insert into identity.people (id, given_name, family_name, status, contact_email)
 values
@@ -169,6 +169,13 @@ values (
 -- Who reads a file
 -- ---------------------------------------------------------------------------
 
+-- The actor context the API sets on every Backoffice request, and the file now
+-- requires it: the figures it counts come from tables whose policies ask who is
+-- reading, so the person asked about and the person acting have to be the same one.
+-- Set per reader below, because each of these is a different operator.
+select set_config('app.actor_kind', 'support', true),
+       set_config('app.actor_person_id', '019ad000-0000-7000-8000-000000000007', true);
+
 select throws_ok(
   $$ select organizations.read_backoffice_organization(
     '019ad000-0000-7000-8000-000000000007', '019ad000-0000-7000-8000-000000000037',
@@ -179,6 +186,8 @@ select throws_ok(
   'the base role alone does not open a gym''s file'
 );
 
+select set_config('app.actor_person_id', '019ad000-0000-7000-8000-000000000005', true);
+
 select throws_ok(
   $$ select organizations.read_backoffice_organization(
     '019ad000-0000-7000-8000-000000000005', '019ad000-0000-7000-8000-000000000035',
@@ -188,6 +197,8 @@ select throws_ok(
   null,
   'an unrelated duty does not stand in for reading a gym'
 );
+
+select set_config('app.actor_person_id', '019ad000-0000-7000-8000-000000000003', true);
 
 select throws_ok(
   $$ select organizations.read_backoffice_organization(
@@ -205,6 +216,8 @@ select organizations.read_backoffice_organization(
   '019ad000-0000-7000-8000-000000000301'
 ) as file;
 
+select set_config('app.actor_person_id', '019ad000-0000-7000-8000-000000000004', true);
+
 select ok(
   (select organizations.read_backoffice_organization(
      '019ad000-0000-7000-8000-000000000004', '019ad000-0000-7000-8000-000000000034',
@@ -212,6 +225,8 @@ select ok(
    ) is not null),
   'whoever manages the lifecycle opens the file as well as support'
 );
+
+select set_config('app.actor_person_id', '019ad000-0000-7000-8000-000000000003', true);
 
 -- ---------------------------------------------------------------------------
 -- Criterion 1 — its data, its owner and its sites
@@ -298,17 +313,9 @@ select ok(
   'no member is named and no contact travels in the file'
 );
 
--- ---------------------------------------------------------------------------
--- Criteria 4 to 6 — what has no table yet
--- ---------------------------------------------------------------------------
-
-select ok(
-  (select file->>'plans_availability' = 'not_modelled'
-     and file->>'payment_method_availability' = 'not_modelled'
-     and file->>'premium_availability' = 'not_modelled'
-   from norte_file),
-  'plans, payment method and Premium are unknown, not zero'
-);
+-- Criteria 4 to 6 are answered at the end of this file, where the plans, the gateway
+-- and the Pro of a gym are set up. They used to be asserted here as `not_modelled`,
+-- which was true of a schema without `payments` and stopped being true on 2026-10-12.
 
 -- ---------------------------------------------------------------------------
 -- Every person revealed is an access
@@ -390,8 +397,8 @@ insert into relationships.service_relationships (
     '019ad000-0000-7000-8000-000000000302', 'active', clock_timestamp() - interval '20 days',
     null, null, null);
 
--- The actor context the API sets on every Backoffice request. The reads above never
--- needed it; counting relationships does, because their policy asks who is reading.
+-- Still support, still the same person. Left here because what follows asserts the
+-- counts, and reading it next to them is worth the repetition.
 select set_config('app.actor_kind', 'support', true),
        set_config('app.actor_person_id', '019ad000-0000-7000-8000-000000000003', true);
 
@@ -473,6 +480,154 @@ select ok(
    where n.nspname = 'organizations' and p.proname = 'read_backoffice_organization'),
   'the file is one closed projection built by the database'
 );
+
+-- ---------------------------------------------------------------------------
+-- Criteria 4 to 6 — its plans, its gateway, and whether it gives Pro
+-- ---------------------------------------------------------------------------
+
+-- A plan the gym publishes, a price in force, and two of its clients paying it. The
+-- draft beside it is not an offer and must not appear.
+insert into payments.organization_plans (id, organization_id, name, status)
+values
+  ('019ad000-0000-7000-8000-000000000501', '019ad000-0000-7000-8000-000000000301',
+    'Mensual', 'published'),
+  ('019ad000-0000-7000-8000-000000000502', '019ad000-0000-7000-8000-000000000301',
+    'Anual', 'draft');
+
+insert into payments.plan_versions (
+  id, plan_id, organization_id, version_number, amount_minor, currency_code,
+  billing_period, status, published_at
+)
+values ('019ad000-0000-7000-8000-000000000511', '019ad000-0000-7000-8000-000000000501',
+  '019ad000-0000-7000-8000-000000000301', 1, 12000000, 'COP', 'month', 'published',
+  clock_timestamp());
+
+insert into payments.plan_subscriptions (
+  id, person_id, organization_id, plan_version_id, status, current_period_end
+)
+values
+  ('019ad000-0000-7000-8000-000000000521', '019ad000-0000-7000-8000-000000000008',
+    '019ad000-0000-7000-8000-000000000301', '019ad000-0000-7000-8000-000000000511',
+    'active', (clock_timestamp() + interval '30 days')::date),
+  ('019ad000-0000-7000-8000-000000000522', '019ad000-0000-7000-8000-000000000010',
+    '019ad000-0000-7000-8000-000000000301', '019ad000-0000-7000-8000-000000000511',
+    'active', (clock_timestamp() + interval '30 days')::date);
+
+-- The gateway account, and the credential hanging off it that nobody here may read.
+insert into payments.gateway_connections (id, organization_id, provider, status)
+values ('019ad000-0000-7000-8000-000000000531', '019ad000-0000-7000-8000-000000000301',
+  'mercado_pago', 'active');
+
+insert into payments.gateway_credentials
+  (connection_id, organization_id, external_account_ref, credential_secret_ref)
+values ('019ad000-0000-7000-8000-000000000531', '019ad000-0000-7000-8000-000000000301',
+  'mp_acct_norte', 'vault://gateway/norte');
+
+-- Pro exists as a published plan of Allfit, which is one of the two conditions
+-- criterion 6 depends on. The other is the gym being active.
+insert into payments.platform_plans (
+  id, code, name, plan_kind, status, created_by_person_id, created_by_duty_assignment_id
+)
+select '019ad000-0000-7000-8000-000000000541', 'pro', 'Pro', 'paid', 'published',
+  '019ad000-0000-7000-8000-000000000001', duty.id
+from support.platform_duty_assignments as duty
+where duty.person_id = '019ad000-0000-7000-8000-000000000003'
+  and duty.duty_code = 'diagnose_support_metadata';
+
+insert into payments.platform_plan_versions (
+  id, platform_plan_id, plan_kind, version_number, amount_minor, currency_code,
+  billing_period, status, proposed_by_person_id, proposed_by_duty_assignment_id,
+  published_by_person_id, published_by_duty_assignment_id, published_at
+)
+select '019ad000-0000-7000-8000-000000000542', '019ad000-0000-7000-8000-000000000541',
+  'paid', 1, 1990000, 'COP', 'month', 'published',
+  '019ad000-0000-7000-8000-000000000001', duty.id,
+  '019ad000-0000-7000-8000-000000000002', duty.id, clock_timestamp()
+from support.platform_duty_assignments as duty
+where duty.person_id = '019ad000-0000-7000-8000-000000000003'
+  and duty.duty_code = 'diagnose_support_metadata';
+
+create temporary table billing_file on commit drop as
+select organizations.read_backoffice_organization(
+  '019ad000-0000-7000-8000-000000000003', '019ad000-0000-7000-8000-000000000033',
+  '019ad000-0000-7000-8000-000000000301'
+) as file;
+
+create temporary table unclaimed_pro_file on commit drop as
+select organizations.read_backoffice_organization(
+  '019ad000-0000-7000-8000-000000000003', '019ad000-0000-7000-8000-000000000033',
+  '019ad000-0000-7000-8000-000000000303'
+) as file;
+
+select is(
+  (select jsonb_array_length(file->'plans') from billing_file),
+  1,
+  'the file lists the plan the gym publishes and not the draft beside it'
+);
+
+select results_eq(
+  $$ select item->>'name', (item->>'amount_minor')::bigint, item->>'currency_code',
+            (item->>'subscribers')::integer
+     from billing_file, jsonb_array_elements(file->'plans') as item $$,
+  $$ values ('Mensual'::text, 12000000::bigint, 'COP'::text, 2) $$,
+  'with the price in force and how many of its clients pay it'
+);
+
+select ok(
+  (select (file->'payment_method'->>'connected')::boolean
+     and file->'payment_method'->>'provider' = 'mercado_pago'
+   from billing_file),
+  'and that the gym can be paid, naming the provider and nothing else'
+);
+
+-- Criterion 5, the half that matters: the account reference and the vault key are not
+-- in the file, and not for lack of selecting them.
+select ok(
+  (select position('mp_acct_norte' in file::text) = 0
+     and position('vault://' in file::text) = 0
+     and position('credential' in file::text) = 0
+   from billing_file),
+  'no credential and no account reference travels in the file'
+);
+
+select ok(
+  (select (file->'premium'->>'gives_pro')::boolean
+     and file->'premium'->>'reason' is null
+   from billing_file),
+  'an active gym gives Pro to the people it serves, which by ADR-043 needs no switch'
+);
+
+select ok(
+  (select not (file->'premium'->>'gives_pro')::boolean
+     and file->'premium'->>'reason' = 'organization_not_active'
+   from unclaimed_pro_file),
+  'and one nobody has claimed gives nothing, with the reason said out loud'
+);
+
+-- The gym it belongs to does not appear in another gym's file.
+select is(
+  (select jsonb_array_length(file->'plans') from unclaimed_pro_file),
+  0,
+  'a gym with no plans published has an empty list, which is a fact and not a gap'
+);
+
+-- And the table itself refuses the credential, which is what the file depends on. With
+-- a policy on `gateway_credentials` this assertion fails, and that is its whole point.
+set local role allfit_owner;
+
+select is_empty(
+  $$ select 1 from payments.gateway_credentials
+      where organization_id = '019ad000-0000-7000-8000-000000000301' $$,
+  'Allfit''s own team cannot read the gym''s credential at all: there is no policy for it'
+);
+
+select isnt_empty(
+  $$ select 1 from payments.gateway_connections
+      where organization_id = '019ad000-0000-7000-8000-000000000301' $$,
+  'while the fact that it can be paid is readable, which is the split the schema is for'
+);
+
+reset role;
 
 select * from finish();
 rollback;

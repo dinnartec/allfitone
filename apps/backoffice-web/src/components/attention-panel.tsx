@@ -36,8 +36,9 @@ import {
 } from '@/lib/backoffice-api'
 import {
   ATTENTION_DESTINATIONS,
-  BILLING_NOTE,
+  GYM_CHARGES_NOTE,
   attentionMessage,
+  billingSummary,
   failureSummary,
   groupLine,
   needsAction,
@@ -108,8 +109,13 @@ export function AttentionPanel() {
           kind="billing"
           availability={panel.billing.availability}
           title="Cobros fallidos y suscripciones suspendidas"
-          summary={BILLING_NOTE}
-        />
+          summary={billingSummary(panel.billing)}
+          urgent={action.billing}
+        >
+          {panel.billing.availability === 'available' ? (
+            <p data-attention-detail>{GYM_CHARGES_NOTE}</p>
+          ) : null}
+        </Notice>
 
         <Notice
           kind="verifications"

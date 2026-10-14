@@ -2,8 +2,10 @@ import { describe, expect, test } from 'bun:test'
 
 import {
   ATTENTION_DESTINATIONS,
+  GYM_CHARGES_NOTE,
   WITHHELD_NOTE,
   attentionMessage,
+  billingSummary,
   failureSummary,
   groupLine,
   needsAction,
@@ -15,7 +17,15 @@ import {
 function panel(overrides: Partial<SupportAttentionPanel> = {}): SupportAttentionPanel {
   return {
     generated_at: '2026-09-14T12:00:00.000Z',
-    billing: { availability: 'not_modelled' },
+    billing: {
+      availability: 'available',
+      window_hours: 24,
+      failed_platform_charges: 0,
+      platform_subscriptions_in_grace: 0,
+      platform_subscriptions_suspended: 0,
+      organization_subscriptions_suspended: 0,
+      failed_organization_charges_availability: 'not_modelled',
+    },
     credential_verifications: {
       availability: 'available',
       pending_count: 0,
@@ -153,6 +163,89 @@ describe('attention panel presentation', () => {
       unclaimedOrganizations: '/organizations?status=unclaimed',
       failures: '/diagnosis',
     })
+  })
+
+  test('the billing notice counts the charges that failed, the grace and the suspensions', () => {
+    expect(
+      billingSummary({
+        availability: 'available',
+        window_hours: 24,
+        failed_platform_charges: 2,
+        platform_subscriptions_in_grace: 1,
+        platform_subscriptions_suspended: 3,
+        organization_subscriptions_suspended: 4,
+        failed_organization_charges_availability: 'not_modelled',
+      }),
+    ).toBe(
+      '2 cobros de Pro fallaron en las últimas 24 horas, 1 renovación está en gracia y 7 suscripciones están suspendidas.',
+    )
+  })
+
+  test('nothing pending says so, because zero is an answer', () => {
+    expect(
+      billingSummary({
+        availability: 'available',
+        window_hours: 24,
+        failed_platform_charges: 0,
+        platform_subscriptions_in_grace: 0,
+        platform_subscriptions_suspended: 0,
+        organization_subscriptions_suspended: 0,
+        failed_organization_charges_availability: 'not_modelled',
+      }),
+    ).toBe(
+      'ningún cobro de Pro falló en las últimas 24 horas, ninguna renovación está en periodo de gracia y ninguna suscripción está suspendida.',
+    )
+  })
+
+  test('and whoever cannot read it is told why, never zero', () => {
+    expect(
+      billingSummary({
+        availability: 'withheld',
+        window_hours: 24,
+        failed_platform_charges: null,
+        platform_subscriptions_in_grace: null,
+        platform_subscriptions_suspended: null,
+        organization_subscriptions_suspended: null,
+        failed_organization_charges_availability: null,
+      }),
+    ).toBe(WITHHELD_NOTE)
+  })
+
+  test('a charge with a clock on it earns the warning tone; a suspension does not', () => {
+    expect(
+      needsAction(
+        panel({
+          billing: {
+            availability: 'available',
+            window_hours: 24,
+            failed_platform_charges: 1,
+            platform_subscriptions_in_grace: 0,
+            platform_subscriptions_suspended: 0,
+            organization_subscriptions_suspended: 0,
+            failed_organization_charges_availability: 'not_modelled',
+          },
+        }),
+      ).billing,
+    ).toBe(true)
+    expect(
+      needsAction(
+        panel({
+          billing: {
+            availability: 'available',
+            window_hours: 24,
+            failed_platform_charges: 0,
+            platform_subscriptions_in_grace: 0,
+            platform_subscriptions_suspended: 9,
+            organization_subscriptions_suspended: 9,
+            failed_organization_charges_availability: 'not_modelled',
+          },
+        }),
+      ).billing,
+    ).toBe(false)
+  })
+
+  test("a gym's failed charge is said to be unknown, so nobody reads it as none", () => {
+    expect(GYM_CHARGES_NOTE).toContain('no sabemos todavía si fallan')
   })
 
   test('a refusal explains that the base role grants nothing', () => {

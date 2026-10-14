@@ -125,7 +125,13 @@ export function formatPrice(
   return `${amount} ${period}`
 }
 
-function formatAmount(amountMinor: number, currency: string): string {
+/**
+ * An amount in its own currency, divided by the ISO 4217 exponent and never by what a
+ * display locale would choose: `Intl` resolves zero decimals for COP, and dividing by
+ * that turns a plan of $120.000 into $12.000.000. Shared with the business panel, which
+ * publishes what Allfit billed.
+ */
+export function formatAmount(amountMinor: number, currency: string): string {
   const exponent = exponentOf(currency)
   const whole = amountMinor % 10 ** exponent === 0
   return new Intl.NumberFormat('es-CO', {

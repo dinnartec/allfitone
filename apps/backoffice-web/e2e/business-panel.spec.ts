@@ -31,9 +31,20 @@ test('every figure arrives with its period, and what cannot be computed is blank
   await expect(training.locator('[data-business-note]')).toHaveCount(0)
   await expect(training).toHaveAttribute('data-availability', 'available')
 
-  const money = page.locator('[data-business-metric="billed_this_month"]')
-  await expect(money.locator('[data-business-value]')).toHaveText('—')
-  await expect(money.locator('[data-business-note]')).toContainText('todavía no guarda pagos')
+  // Money, apart from the counts and one line per currency: a total mixing pesos and
+  // dollars would be a number that means nothing.
+  const money = page.locator('[data-business-money="billed_this_month"]')
+  await expect(money.locator('[data-business-value]')).toHaveCount(2)
+  await expect(money.locator('[data-business-value]').first()).toContainText('79.600')
+  await expect(money.locator('[data-business-value]').last()).toContainText('11,98')
+  await expect(money.locator('[data-business-note]')).toHaveCount(0)
+
+  // The two routes to Pro are two figures. One is withheld, which is not a zero.
+  const paying = page.locator('[data-business-metric="pro_people_paying_allfit"]')
+  await expect(paying.locator('[data-business-value]')).toHaveText('6')
+  const throughGym = page.locator('[data-business-metric="pro_people_through_organization"]')
+  await expect(throughGym).toHaveAttribute('data-availability', 'below_threshold')
+  await expect(throughGym.locator('[data-business-value]')).toHaveText('—')
 
   // A true zero is a fact about the business and is published as one.
   const unclaimed = page.locator('[data-business-metric="unclaimed_organizations"]')

@@ -11069,12 +11069,6 @@ components:
             $ref: '#/components/schemas/BackofficeOrganizationSummary'
         page:
           $ref: '#/components/schemas/Page'
-    ModelAvailability:
-      type: string
-      description: >-
-        `not_modelled` means the platform has no table for this yet. It is a fact about
-        Allfit, never about the organization or the person.
-      enum: [not_modelled]
     BackofficeOrganizationFile:
       type: object
       additionalProperties: false
@@ -11087,9 +11081,9 @@ components:
         - sites
         - people_served
         - relationship_counts
-        - plans_availability
-        - payment_method_availability
-        - premium_availability
+        - plans
+        - payment_method
+        - premium
       properties:
         organization:
           type: object
@@ -11215,12 +11209,85 @@ components:
             terminated:
               type: integer
               minimum: 0
-        plans_availability:
-          $ref: '#/components/schemas/ModelAvailability'
-        payment_method_availability:
-          $ref: '#/components/schemas/ModelAvailability'
-        premium_availability:
-          $ref: '#/components/schemas/ModelAvailability'
+        plans:
+          type: array
+          description: >-
+            What the gym publishes and how many of its clients pay each one. A draft
+            is not an offer and does not appear; an empty list is a gym that sells
+            nothing, which is a fact about the gym and not about the platform.
+          items:
+            $ref: '#/components/schemas/OrganizationFilePlan'
+        payment_method:
+          $ref: '#/components/schemas/OrganizationFilePaymentMethod'
+        premium:
+          $ref: '#/components/schemas/OrganizationFilePremium'
+    OrganizationFilePlan:
+      type: object
+      additionalProperties: false
+      required:
+        - plan_id
+        - name
+        - version_id
+        - version_number
+        - amount_minor
+        - currency_code
+        - billing_period
+        - subscribers
+      properties:
+        plan_id:
+          $ref: '#/components/schemas/Uuid'
+        name:
+          type: string
+        version_id:
+          $ref: '#/components/schemas/Uuid'
+        version_number:
+          type: integer
+          minimum: 1
+        amount_minor:
+          type: integer
+          minimum: 0
+          description: In the minor unit of its currency, by the ISO 4217 exponent.
+        currency_code:
+          type: string
+          pattern: '^[A-Z]{3}$'
+        billing_period:
+          type: string
+          enum: [month, year]
+        subscribers:
+          type: integer
+          minimum: 0
+          description: How many of the gym's clients are paying this version right now.
+    OrganizationFilePaymentMethod:
+      type: object
+      additionalProperties: false
+      description: >-
+        Whether the gym can be paid, and nothing more. The account reference and the
+        vault key live in another table that this reader has no policy for at all, so
+        no credential can travel here even by mistake.
+      required: [connected, provider, connected_at]
+      properties:
+        connected:
+          type: boolean
+        provider:
+          type: [string, 'null']
+          maxLength: 32
+        connected_at:
+          type: [string, 'null']
+          format: date-time
+    OrganizationFilePremium:
+      type: object
+      additionalProperties: false
+      description: >-
+        Whether the gym gives Pro to the people it serves. By ADR-043 there is no
+        per-gym switch: every gym that operates gives it, as long as a paid Pro
+        version is published at all. The answer is derived, never stored.
+      required: [gives_pro, reason]
+      properties:
+        gives_pro:
+          type: boolean
+        reason:
+          type: [string, 'null']
+          enum: [no_published_pro_version, organization_not_active, null]
     OrganizationPartyKind:
       type: string
       description: >-
@@ -11945,13 +12012,49 @@ components:
       type: object
       additionalProperties: false
       description: >-
-        Failed charges and suspended subscriptions. Payments have no tables yet, so
-        this says so instead of printing a zero.
-      required: [availability]
+        What needs attention about the money: the charges a store could not collect
+        inside the window, the Pro renewals in grace, and the subscriptions already
+        suspended. `withheld` is what somebody without `view_billing_metadata` is
+        told, and it is never a zero.
+
+        A gym collects through its own gateway and the worker that records what a
+        provider reports is not built, so a failed charge of a gym is
+        `not_modelled` rather than counted as none.
+      required:
+        - availability
+        - window_hours
+        - failed_platform_charges
+        - platform_subscriptions_in_grace
+        - platform_subscriptions_suspended
+        - organization_subscriptions_suspended
+        - failed_organization_charges_availability
       properties:
         availability:
           type: string
-          enum: [not_modelled]
+          enum: [available, withheld]
+        window_hours:
+          type: integer
+          minimum: 1
+        failed_platform_charges:
+          type: [integer, 'null']
+          minimum: 0
+          description: Charges Allfit's own stores reported as failed inside the window.
+        platform_subscriptions_in_grace:
+          type: [integer, 'null']
+          minimum: 0
+          description: >-
+            Pro the store could not renew. The person keeps it until the grace period
+            ends, which is why it is worth looking before then.
+        platform_subscriptions_suspended:
+          type: [integer, 'null']
+          minimum: 0
+        organization_subscriptions_suspended:
+          type: [integer, 'null']
+          minimum: 0
+          description: Plans a gym paused, usually for not being paid.
+        failed_organization_charges_availability:
+          type: [string, 'null']
+          enum: [not_modelled, null]
     AttentionVerificationNotice:
       type: object
       additionalProperties: false
@@ -20273,6 +20376,7 @@ components:
         - generated_at
         - minimum_aggregate
         - metrics
+        - money
       properties:
         generated_at:
           type: string
@@ -20288,6 +20392,13 @@ components:
           minItems: 1
           items:
             $ref: '#/components/schemas/SupportBusinessMetric'
+        money:
+          type: array
+          description: >-
+            Amounts, apart from the counts. An amount carries its currency and its
+            minor unit, and amounts in different currencies are never added together.
+          items:
+            $ref: '#/components/schemas/SupportBusinessMoneyMetric'
     SupportBusinessMetric:
       type: object
       additionalProperties: false
@@ -20330,8 +20441,58 @@ components:
         - operating_organizations
         - unclaimed_organizations
         - active_subscriptions
-        - billed_this_month
+        - active_organization_subscriptions
+        - pro_people_paying_allfit
+        - pro_people_through_organization
         - premium_people
+    SupportBusinessMoneyMetric:
+      type: object
+      additionalProperties: false
+      description: >-
+        One amount, over one period. `amounts` is null unless `availability` is
+        `available`, and it is withheld when fewer people than
+        `minimum_aggregate` paid: with two payers a total is one subtraction away
+        from what each of them pays.
+      required:
+        - key
+        - availability
+        - amounts
+        - reason
+        - period
+      properties:
+        key:
+          type: string
+          description: >-
+            What Allfit itself billed. A gym charges its own clients through its own
+            gateway and that money never passes through this platform, so it is not
+            here and is not income of Allfit.
+          enum: [billed_this_month]
+        availability:
+          $ref: '#/components/schemas/SupportBusinessMetricAvailability'
+        amounts:
+          type: [array, 'null']
+          description: One entry per currency. An empty list is a month with nothing collected.
+          items:
+            $ref: '#/components/schemas/SupportBusinessMoneyAmount'
+        reason:
+          type: [string, 'null']
+          maxLength: 64
+        period:
+          $ref: '#/components/schemas/SupportBusinessMetricPeriod'
+    SupportBusinessMoneyAmount:
+      type: object
+      additionalProperties: false
+      required: [currency_code, amount_minor]
+      properties:
+        currency_code:
+          type: string
+          pattern: '^[A-Z]{3}$'
+        amount_minor:
+          type: integer
+          minimum: 0
+          description: >-
+            In the minor unit of its own currency, by the ISO 4217 exponent. For COP
+            that is hundredths, whatever a display locale would choose to show.
     SupportBusinessMetricAvailability:
       type: string
       description: >-

@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 
 import {
+  NOTHING_BILLED,
   NOT_MODELLED_NOTE,
   businessMessage,
   businessSections,
@@ -9,6 +10,8 @@ import {
   metricLabel,
   metricNote,
   metricValue,
+  moneyLines,
+  moneyNote,
   periodPhrase,
   type SupportBusinessMetric,
   type SupportBusinessPanel,
@@ -20,6 +23,11 @@ const WEEK = {
   to: '2026-09-17T18:00:00.000Z',
 } as const
 const TOTAL = { kind: 'total', from: null, to: '2026-09-17T18:00:00.000Z' } as const
+const MONTH = {
+  kind: 'month',
+  from: '2026-09-01T05:00:00.000Z',
+  to: '2026-09-17T18:00:00.000Z',
+} as const
 
 function metric(overrides: Partial<SupportBusinessMetric> = {}): SupportBusinessMetric {
   return {
@@ -33,7 +41,12 @@ function metric(overrides: Partial<SupportBusinessMetric> = {}): SupportBusiness
 }
 
 function panel(metrics: SupportBusinessMetric[]): SupportBusinessPanel {
-  return { generated_at: '2026-09-17T18:00:00.000Z', minimum_aggregate: 5, metrics }
+  return {
+    generated_at: '2026-09-17T18:00:00.000Z',
+    minimum_aggregate: 5,
+    metrics,
+    money: [],
+  }
 }
 
 describe('business panel presentation', () => {
@@ -141,7 +154,7 @@ describe('business panel presentation', () => {
       panel([
         metric(),
         metric({ key: 'organizations', value: 12 }),
-        metric({ key: 'billed_this_month', availability: 'not_modelled', value: null }),
+        metric({ key: 'premium_people', value: 42 }),
         fromANewerApi,
       ]),
     )
@@ -153,6 +166,81 @@ describe('business panel presentation', () => {
       'other',
     ])
     expect(sections.at(-1)?.metrics.map((entry) => String(entry.key))).toEqual(['people_who_left'])
+  })
+
+  // Built with the same formatter the screen uses, so what is asserted is the amount
+  // and not which space character `Intl` puts after a currency code.
+  const money = (currency: string, fraction: number) =>
+    new Intl.NumberFormat('es-CO', {
+      style: 'currency',
+      currency,
+      currencyDisplay: 'code',
+      minimumFractionDigits: fraction,
+      maximumFractionDigits: fraction,
+    })
+
+  test('what Allfit billed is one line per currency, never a mixed total', () => {
+    expect(
+      moneyLines({
+        key: 'billed_this_month',
+        availability: 'available',
+        amounts: [
+          { currency_code: 'COP', amount_minor: 7960000 },
+          { currency_code: 'USD', amount_minor: 1198 },
+        ],
+        reason: null,
+        period: MONTH,
+      }),
+    ).toEqual([money('COP', 0).format(79600), money('USD', 2).format(11.98)])
+  })
+
+  test('and the minor unit belongs to the currency, not to what a locale shows', () => {
+    // COP resolves to zero decimals in es-CO, so dividing by that would turn
+    // 1.990.000 centavos into $1.990.000 instead of $19.900.
+    expect(
+      moneyLines({
+        key: 'billed_this_month',
+        availability: 'available',
+        amounts: [{ currency_code: 'COP', amount_minor: 1990000 }],
+        reason: null,
+        period: MONTH,
+      }),
+    ).toEqual([money('COP', 0).format(19900)])
+  })
+
+  test('a month with nothing collected says so, because zero is an answer', () => {
+    expect(
+      moneyLines({
+        key: 'billed_this_month',
+        availability: 'available',
+        amounts: [],
+        reason: null,
+        period: MONTH,
+      }),
+    ).toEqual([NOTHING_BILLED])
+  })
+
+  test('an amount behind too few payers is withheld, and the note says why', () => {
+    const withheld = {
+      key: 'billed_this_month',
+      availability: 'below_threshold',
+      amounts: null,
+      reason: null,
+      period: MONTH,
+    } as const
+    expect(moneyLines(withheld)).toEqual([])
+    expect(moneyNote(withheld, 5)).toContain('deducir lo que paga cada una')
+  })
+
+  test('the two routes to Pro are labelled apart, because they are not the same number', () => {
+    expect(metricLabel('pro_people_paying_allfit')).toBe('Con Pro, pagándole a Allfit')
+    expect(metricLabel('pro_people_through_organization')).toBe('Con Pro, por su gimnasio')
+    expect(metricHint('pro_people_through_organization')).toContain('se cuenta arriba y no aquí')
+  })
+
+  test("what a gym bills its clients is not Allfit's income, and the hint says it", () => {
+    expect(metricLabel('active_organization_subscriptions')).toBe('Planes de gimnasio activos')
+    expect(metricHint('active_organization_subscriptions')).toContain('no es ingreso de Allfit')
   })
 
   test('the two activity figures are labelled apart, because they are not the same question', () => {

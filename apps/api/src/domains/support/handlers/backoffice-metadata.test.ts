@@ -117,7 +117,15 @@ function diagnosisService(
 
 const panel: AllfitV1Schemas['SupportAttentionPanel'] = {
   generated_at: '2026-09-13T18:00:00.000Z',
-  billing: { availability: 'not_modelled' },
+  billing: {
+    availability: 'withheld',
+    window_hours: 24,
+    failed_platform_charges: null,
+    platform_subscriptions_in_grace: null,
+    platform_subscriptions_suspended: null,
+    organization_subscriptions_suspended: null,
+    failed_organization_charges_availability: null,
+  },
   credential_verifications: {
     availability: 'withheld',
     pending_count: null,
@@ -186,10 +194,23 @@ const business: AllfitV1Schemas['SupportBusinessPanel'] = {
     },
     {
       key: 'premium_people',
-      availability: 'not_modelled',
-      value: null,
-      reason: 'payments_not_modelled',
+      availability: 'available',
+      value: 12,
+      reason: null,
       period: { kind: 'total', from: null, to: '2026-09-17T18:00:00.000Z' },
+    },
+  ],
+  money: [
+    {
+      key: 'billed_this_month',
+      availability: 'available',
+      amounts: [{ currency_code: 'COP', amount_minor: 7960000 }],
+      reason: null,
+      period: {
+        kind: 'month',
+        from: '2026-09-01T05:00:00.000Z',
+        to: '2026-09-17T18:00:00.000Z',
+      },
     },
   ],
 }
