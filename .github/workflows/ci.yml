@@ -218,8 +218,11 @@ jobs:
       - name: Install
         run: bun install --frozen-lockfile
 
+      # Derived from Studio's own dependencies, not listed by hand. The hand-written
+      # version named `telemetry` alone, so the day a second workspace package needed
+      # building this job failed on a module it could not resolve.
       - name: Build Studio workspace dependencies
-        run: bun run --cwd packages/telemetry build
+        run: bunx turbo run build --filter=@allfitone/studio-web^...
 
       # Downloading the browser on every run costs more than storing it.
       - name: Cache Playwright browsers
