@@ -115,6 +115,12 @@ jobs:
       - name: Build
         run: bun run build
 
+      # Everything above this line runs on Bun, which loads a workspace package
+      # straight from its TypeScript. Vercel runs Node, which cannot. This loads
+      # what gets deployed the way production loads it.
+      - name: Node entry points
+        run: bun run check:node-entrypoints
+
       # The commit-msg hook covers local commits, but a push from a machine
       # without hooks installed would slip through. This closes that gap.
       - name: Commit messages

@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "bun --watch --env-file=../../.env.local src/main.ts",
+    "prebuild": "bun run --cwd ../../packages/auth-provider build && bun run --cwd ../../packages/queue build",
     "build": "tsc -p tsconfig.build.json",
     "test": "bun test --pass-with-no-tests",
     "lint": "eslint .",
