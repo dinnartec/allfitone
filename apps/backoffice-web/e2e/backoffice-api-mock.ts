@@ -14,6 +14,7 @@ export interface BackofficeFixture {
   resultContracts?: ResultContractFixture
   catalogue?: CatalogueFixture
   support?: SupportFixture
+  supportPayments?: SupportPaymentsFixture
   diagnosis?: DiagnosisFixture
   scopes?: ScopeFixture
   accessLog?: AccessLogFixture
@@ -1119,6 +1120,122 @@ export function diagnosisCircuit(
 export interface SupportFixture {
   refusal?: { status: number; code: string }
   people: SupportPersonFixture[]
+}
+
+/**
+ * What a person pays. Its own fixture because it is its own duty: an operator who
+ * opens the card may still be refused here, and that refusal is the common case
+ * rather than an error.
+ */
+export interface SupportPaymentsFixture {
+  refusal?: { status: number; code: string }
+  payments?: PersonPaymentsFixture
+}
+
+export interface PersonPaymentsFixture {
+  person_id: string
+  generated_at: string
+  pro: {
+    source: 'subscription' | 'organization' | 'free'
+    subscription: {
+      plan_name: string
+      version_number: number
+      amount_minor: number
+      currency_code: string | null
+      billing_period: 'month' | 'year' | null
+      store: 'app_store' | 'google_play'
+      status: 'active' | 'grace' | 'suspended' | 'ended'
+      auto_renews: boolean
+      started_at: string
+      current_period_end: string
+      grace_until: string | null
+      suspended_at: string | null
+      ended_at: string | null
+      ended_reason: 'expired' | 'refunded' | 'revoked' | 'replaced' | null
+    } | null
+    organizations: Array<{ organization_id: string; organization_name: string }>
+  }
+  payments: Array<{
+    occurred_at: string
+    store: 'app_store' | 'google_play'
+    result: 'succeeded' | 'failed'
+    failure_code: string | null
+    amount_minor: number | null
+    currency_code: string | null
+  }>
+  payments_truncated: boolean
+  organization_subscriptions: Array<{
+    subscription_id: string
+    organization_id: string
+    organization_name: string
+    status: 'active' | 'suspended' | 'ended'
+    started_at: string
+    suspended_at: string | null
+    ended_at: string | null
+  }>
+  organization_charges_availability: 'not_modelled'
+}
+
+/** One of each: a live subscription, a charge that worked and one that did not. */
+export function personPaymentsRecord(
+  overrides: Partial<PersonPaymentsFixture> = {},
+): PersonPaymentsFixture {
+  return {
+    person_id: '019a9000-0000-7000-8000-000000000005',
+    generated_at: new Date().toISOString(),
+    pro: {
+      source: 'subscription',
+      subscription: {
+        plan_name: 'Pro',
+        version_number: 1,
+        amount_minor: 1990000,
+        currency_code: 'COP',
+        billing_period: 'month',
+        store: 'app_store',
+        status: 'active',
+        auto_renews: true,
+        started_at: '2026-08-14T12:00:00.000Z',
+        current_period_end: '2026-11-14T12:00:00.000Z',
+        grace_until: null,
+        suspended_at: null,
+        ended_at: null,
+        ended_reason: null,
+      },
+      organizations: [],
+    },
+    payments: [
+      {
+        occurred_at: '2026-10-14T12:00:00.000Z',
+        store: 'app_store',
+        result: 'succeeded',
+        failure_code: null,
+        amount_minor: 1990000,
+        currency_code: 'COP',
+      },
+      {
+        occurred_at: '2026-10-13T12:00:00.000Z',
+        store: 'app_store',
+        result: 'failed',
+        failure_code: 'billing_retry',
+        amount_minor: 1990000,
+        currency_code: 'COP',
+      },
+    ],
+    payments_truncated: false,
+    organization_subscriptions: [
+      {
+        subscription_id: '019a9000-0000-7000-8000-000000000071',
+        organization_id: '019a9000-0000-7000-8000-000000000072',
+        organization_name: 'Gimnasio Pagos',
+        status: 'active',
+        started_at: '2026-09-01T12:00:00.000Z',
+        suspended_at: null,
+        ended_at: null,
+      },
+    ],
+    organization_charges_availability: 'not_modelled',
+    ...overrides,
+  }
 }
 
 export interface SupportPersonFixture {
@@ -3368,6 +3485,16 @@ async function routeSupport(
   }
 
   const segments = request.path.split('/').filter(Boolean)
+  if (segments.length === 6 && segments[5] === 'payments') {
+    const billing = fixture.supportPayments ?? {}
+    if (billing.refusal) {
+      await fulfillProblem(route, billing.refusal.status, billing.refusal.code)
+      return
+    }
+    await fulfill(route, 200, billing.payments ?? personPaymentsRecord())
+    return
+  }
+
   if (segments.length === 5) {
     const found = support.people.find((person) => person.person_id === segments[4])
     if (!found) {

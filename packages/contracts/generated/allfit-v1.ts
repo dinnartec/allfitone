@@ -371,6 +371,28 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/backoffice/v1/support/people/{personId}/payments': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Open what a person pays
+     * @description Her plan of Allfit, what it charges and through which store, every charge with its result and the reason when it failed, and whether it is suspended and since when. If her Pro comes from a gym, the gym is named.
+     *     No means of payment appears, because Allfit stores none. What she pays a gym is shown with its state only: the gym collects through its own gateway and those charges are not recorded here, so they are `not_modelled` rather than an empty list.
+     *     Requires `view_billing_metadata` — the duty that opens a person's card does not open her money — and a traceable case reference. Payments are not a break-glass category. The read is recorded against the person before its content is returned.
+     */
+    get: operations['readBackofficeSupportPersonPayments']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/backoffice/v1/support/operations': {
     parameters: {
       query?: never
@@ -4604,6 +4626,87 @@ export interface components {
       credential_verifications: components['schemas']['AttentionVerificationNotice']
       unclaimed_organizations: components['schemas']['AttentionUnclaimedOrganizationNotice']
       repeated_failures: components['schemas']['AttentionFailureNotice']
+    }
+    /** @description What a person pays. Closed by enumeration: no means of payment exists in the schema behind it, so there is nothing to filter out of a row. */
+    SupportPersonPayments: {
+      person_id: components['schemas']['Uuid']
+      /** Format: date-time */
+      generated_at: string
+      pro: components['schemas']['SupportPersonPro']
+      /** @description Newest first. Both the charges that went through and the ones that did not. */
+      payments: components['schemas']['SupportPersonCharge'][]
+      /** @description Whether she has more charges than the hundred returned. */
+      payments_truncated: boolean
+      /** @description What she pays her gyms, with the state of each bond and nothing else. The price belongs to the gym and the money never passes through Allfit. */
+      organization_subscriptions: components['schemas']['SupportPersonOrganizationBond'][]
+      /**
+       * @description A gym collects through its own gateway and Allfit does not record what the provider reports yet. Stated rather than returned as an empty list, which would read as the gym never having charged her.
+       * @enum {string}
+       */
+      organization_charges_availability: 'not_modelled'
+    }
+    SupportPersonPro: {
+      /**
+       * @description Which route her Pro comes from, resolved by the same rule the app uses.
+       * @enum {string}
+       */
+      source: 'subscription' | 'organization' | 'free'
+      subscription: components['schemas']['SupportPersonProSubscription'] | null
+      /** @description The gyms that give her Pro by her training there. */
+      organizations: {
+        organization_id: components['schemas']['Uuid']
+        organization_name: string
+      }[]
+    }
+    /** @description Her store subscription whatever its state, newest first. A complaint is usually about one that is no longer live, so a suspended or ended one still appears. */
+    SupportPersonProSubscription: {
+      plan_name: string
+      version_number: number
+      /** @description In the minor unit of its currency, by the ISO 4217 exponent. */
+      amount_minor: number
+      currency_code: string | null
+      /** @enum {string|null} */
+      billing_period: 'month' | 'year' | null
+      store: components['schemas']['SpaceProStore']
+      /** @enum {string} */
+      status: 'active' | 'grace' | 'suspended' | 'ended'
+      auto_renews: boolean
+      /** Format: date-time */
+      started_at: string
+      /** Format: date-time */
+      current_period_end: string
+      /** Format: date-time */
+      grace_until: string | null
+      /** Format: date-time */
+      suspended_at: string | null
+      /** Format: date-time */
+      ended_at: string | null
+      /** @enum {string|null} */
+      ended_reason: 'expired' | 'refunded' | 'revoked' | 'replaced' | null
+    }
+    SupportPersonCharge: {
+      /** Format: date-time */
+      occurred_at: string
+      store: components['schemas']['SpaceProStore']
+      /** @enum {string} */
+      result: 'succeeded' | 'failed'
+      /** @description Why the store could not collect. Null when it did. */
+      failure_code: string | null
+      amount_minor: number | null
+      currency_code: string | null
+    }
+    SupportPersonOrganizationBond: {
+      subscription_id: components['schemas']['Uuid']
+      organization_id: components['schemas']['Uuid']
+      organization_name: string
+      /** @enum {string} */
+      status: 'active' | 'suspended' | 'ended'
+      /** Format: date-time */
+      started_at: string
+      /** Format: date-time */
+      suspended_at: string | null
+      /** Format: date-time */
+      ended_at: string | null
     }
     /**
      * @description Whether a block of the projection can say anything. `unknown` is a statement about the person; `not_modelled` is a statement about the platform, and confusing the two makes the card lie by omission.
@@ -10007,6 +10110,40 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['SupportPersonMetadata']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  readBackofficeSupportPersonPayments: {
+    parameters: {
+      query: {
+        /** @description The case this read belongs to. A structured reference rather than free prose, so the record can be followed back to a case months later. */
+        case_reference: components['parameters']['SupportCaseReference']
+      }
+      header: {
+        Origin: components['parameters']['Origin']
+      }
+      path: {
+        personId: components['parameters']['SupportPersonId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description What the person pays, as of now */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SupportPersonPayments']
         }
       }
       400: components['responses']['BadRequest']

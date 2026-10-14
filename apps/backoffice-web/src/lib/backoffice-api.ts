@@ -56,6 +56,7 @@ export type PlatformPlan = AllfitV1Schemas['PlatformPlan']
 export type PlatformPlanCreate = AllfitV1Schemas['PlatformPlanCreate']
 export type PlatformPlanVersionProposal = AllfitV1Schemas['PlatformPlanVersionProposal']
 export type SupportPersonMetadata = AllfitV1Schemas['SupportPersonMetadata']
+export type SupportPersonPayments = AllfitV1Schemas['SupportPersonPayments']
 export type BackofficeAccountRecovery = AllfitV1Schemas['BackofficeAccountRecovery']
 export type BackofficeAccountRecoveryRequest = AllfitV1Schemas['BackofficeAccountRecoveryRequest']
 export type SupportPeopleSearch = AllfitV1Schemas['SupportPeopleSearch']
@@ -282,6 +283,14 @@ export const backofficeApi = {
   supportPersonMetadata: (personId: string, caseReference: string, signal?: AbortSignal) =>
     requestJson<SupportPersonMetadata>(
       `/backoffice/v1/support/people/${personId}${query({ case_reference: caseReference })}`,
+      signal ? { signal } : {},
+    ),
+
+  // Its own read because it is its own duty: `view_billing_metadata` opens this and
+  // the duty that opens the card does not.
+  supportPersonPayments: (personId: string, caseReference: string, signal?: AbortSignal) =>
+    requestJson<SupportPersonPayments>(
+      `/backoffice/v1/support/people/${personId}/payments${query({ case_reference: caseReference })}`,
       signal ? { signal } : {},
     ),
 

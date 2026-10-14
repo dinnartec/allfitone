@@ -413,6 +413,13 @@ export const allfitV1ContractManifest = {
     },
     {
       method: 'GET',
+      path: '/backoffice/v1/support/people/{personId}/payments',
+      operationId: 'readBackofficeSupportPersonPayments',
+      allfitOperation: 'NEW-SUP-PERSON-PAYMENTS',
+      responses: ['200', '400', '401', '403', '404', '422', '503'],
+    },
+    {
+      method: 'GET',
       path: '/backoffice/v1/telemetry-config',
       operationId: 'getBackofficeTelemetryConfig',
       allfitOperation: 'OP-SYS-011',

@@ -141,6 +141,7 @@ export type PlatformDutyClosure = PlatformCommandContext & {
  * closed set rather than a free query.
  */
 export type SupportPersonMetadata = AllfitV1Schemas['SupportPersonMetadata']
+export type SupportPersonPayments = AllfitV1Schemas['SupportPersonPayments']
 export type SupportPeopleSearch = AllfitV1Schemas['SupportPeopleSearch']
 
 export type SupportLookupKind = 'identifier' | 'email' | 'phone'
@@ -167,6 +168,13 @@ export interface SupportMetadataDatabase {
       lookupValue: string
     },
   ): Promise<SupportPersonMetadata | undefined>
+  payments(
+    input: SupportReader & {
+      requestId: string
+      caseReference: string
+      personId: string
+    },
+  ): Promise<SupportPersonPayments>
   read(
     input: SupportReader & {
       requestId: string
