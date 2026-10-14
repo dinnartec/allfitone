@@ -941,6 +941,7 @@
   [data-studio-choice-grid],
   [data-studio-field-grid],
   [data-profile-field-grid],
+  [data-relationship-substitution-dates],
   [data-membership-context-grid],
   [data-credential-grid],
   [data-team-invitation-summary],
@@ -1009,6 +1010,24 @@
     align-items: flex-start;
     flex-direction: column;
     gap: var(--afo-space-1);
+  }
+
+  /* Same move, same reason, for a cover. Beside a badge reading "Esperando
+     respuesta" the dates had about ten characters of column left and broke
+     mid-date — "13/10/" over "2026". Stacked they get the full width.
+
+     Three rhythms, each a rung apart, so the nesting reads without a divider:
+     4px holds a name to its own dates, the row's own 12px — the same gap it
+     uses set as a row on desktop — separates them from the badge, and 24px
+     separates one cover from the next. At one rhythm throughout, two covers of
+     three lines read as six covers of one. */
+  [data-relationship-substitution-list] {
+    gap: var(--afo-space-6);
+  }
+
+  [data-relationship-substitution-list] > li {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   /* The avatar belongs beside the name, not stranded on a line of its own.
@@ -1272,6 +1291,32 @@
   min-width: 0;
   flex: 1;
   margin-block-end: 0;
+}
+
+/* The subheading and its action on one line, the same shape as the holder's
+   head above. The heading takes the free space rather than a justify rule, so
+   the row reads the same whether or not the reader may propose. */
+[data-relationship-substitutions-head] {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--afo-space-3);
+}
+
+[data-relationship-substitutions-head] > [data-relationship-subheading] {
+  min-width: 0;
+  flex: 1;
+}
+
+/* Two dates side by side, like every other pair of fields in Studio. Named
+   `dates`, not `window`: the substitution rows already own
+   `[data-relationship-substitution-window]` for the sentence that states a
+   cover's days, and a grid rule under that name turned the sentence into two
+   columns. */
+[data-relationship-substitution-dates] {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--afo-space-4);
 }
 
 [data-relationship-holder-head] + [data-relationship-facts] {

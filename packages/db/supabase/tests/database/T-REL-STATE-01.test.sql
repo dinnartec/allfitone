@@ -77,11 +77,14 @@ insert into relationships.relationship_professional_assignments (
 );
 
 insert into relationships.relationship_professional_assignments (
-  id, relationship_id, person_id, organization_id, membership_id, kind, status, ends_on
+  id, relationship_id, person_id, organization_id, membership_id,
+  covers_membership_id, kind, status, ends_on
 ) values (
   '019c2000-0000-7000-8000-000000000802', '019c2000-0000-7000-8000-000000000701',
   '019c2000-0000-7000-8000-000000000001', '019c2000-0000-7000-8000-000000000101',
-  '019c2000-0000-7000-8000-000000000203', 'substitute', 'proposed',
+  '019c2000-0000-7000-8000-000000000203',
+  -- A cover stands in for a particular holder, and says which.
+  '019c2000-0000-7000-8000-000000000202', 'substitute', 'proposed',
   (clock_timestamp() + interval '10 days')::date
 );
 

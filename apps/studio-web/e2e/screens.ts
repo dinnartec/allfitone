@@ -26,6 +26,7 @@ import {
   professionalCredential,
   endedRelationshipState,
   professionalProfile,
+  holderMembership,
   relationshipState,
   secondActiveMembership,
   terminatedMembership,
@@ -984,6 +985,92 @@ export const SCREENS: Screen[] = [
     reveal: async (page) => {
       await page.getByRole('button', { name: 'Cambiar' }).click()
       await expect(page.getByText(/No hay otro entrenador activo/)).toBeVisible()
+    },
+  },
+  {
+    // HU-029. The dialog open, which is the state worth looking at: its first
+    // sentence is the only thing standing between "Proponer" and an
+    // administrator believing the client is already covered.
+    stories: 'HU-029 · the question put before a cover is proposed',
+    path: `${workspace}/clients/${relationshipId}`,
+    fixture: () =>
+      createStudioApiFixture({
+        memberships: [activeMembership],
+        organizationMemberships: coachedTeam(),
+        relationshipState: { ...relationshipState, substitutions: [] },
+      }),
+    reveal: async (page) => {
+      await page.getByRole('button', { name: 'Proponer suplencia' }).click()
+      await expect(page.getByText(/No pasa nada hasta que la persona acepte/)).toBeVisible()
+    },
+  },
+  {
+    // Two date fields side by side and an error under them. A field grid that
+    // collapses badly, or a message that crowds the footer, shows here and in
+    // no other state.
+    stories: 'HU-029 · a cover with no end date, refused before the round trip',
+    path: `${workspace}/clients/${relationshipId}`,
+    fixture: () =>
+      createStudioApiFixture({
+        memberships: [activeMembership],
+        organizationMemberships: coachedTeam(),
+        relationshipState: { ...relationshipState, substitutions: [] },
+      }),
+    reveal: async (page) => {
+      // Tomorrow, in the reader's own timezone, so the start is the one thing
+      // the dialog has no objection to and the end date is left alone.
+      const pad = (value: number) => `${value}`.padStart(2, '0')
+      const tomorrow = new Date()
+      tomorrow.setDate(tomorrow.getDate() + 1)
+      const startsOn = [
+        tomorrow.getFullYear(),
+        pad(tomorrow.getMonth() + 1),
+        pad(tomorrow.getDate()),
+      ].join('-')
+
+      await page.getByRole('button', { name: 'Proponer suplencia' }).click()
+      await page.getByRole('combobox', { name: 'Quién cubre' }).click()
+      await page.getByRole('option', { name: 'Daniela Hoyos' }).click()
+      await page.getByLabel('Desde').fill(startsOn)
+      await page.getByRole('button', { name: 'Proponer y preguntar' }).click()
+      await expect(page.getByText(/corta el acceso cuando termina/)).toBeVisible()
+    },
+  },
+  {
+    /*
+     * A cover in the list, which until STUDIO-94 nothing could create, so no
+     * sweep had ever drawn one. Beside a badge reading "Esperando respuesta"
+     * the dates had ten characters of column left and broke mid-date; the
+     * layout sweep is where that belongs, not a pair of eyes.
+     */
+    stories: 'HU-029 · a cover waiting for an answer, in the list',
+    path: `${workspace}/clients/${relationshipId}`,
+    fixture: () =>
+      createStudioApiFixture({
+        memberships: [activeMembership],
+        organizationMemberships: coachedTeam(),
+        relationshipState,
+      }),
+    reveal: async (page) => {
+      await expect(page.locator('[data-relationship-substitution-list]')).toContainText(
+        'Daniela Hoyos',
+      )
+    },
+  },
+  {
+    // The holder reading their own client. Since STUDIO-94 the action is
+    // offered to them without any capability to assign, and the card has to
+    // hold a heading and a button on one line at both widths.
+    stories: 'HU-029 · the holder, who may ask for cover on their own client',
+    path: `${workspace}/clients/${relationshipId}`,
+    fixture: () =>
+      createStudioApiFixture({
+        memberships: [holderMembership],
+        organizationMemberships: coachedTeam(),
+        relationshipState: { ...relationshipState, substitutions: [] },
+      }),
+    reveal: async (page) => {
+      await expect(page.getByRole('button', { name: 'Proponer suplencia' })).toBeVisible()
     },
   },
   // --- `/organizations/[id]/clients/[relationshipId]/history` · HU-026 ---
