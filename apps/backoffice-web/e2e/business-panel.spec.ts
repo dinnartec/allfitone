@@ -52,6 +52,29 @@ test('every figure arrives with its period, and what cannot be computed is blank
   await expect(unclaimed.locator('[data-business-note]')).toHaveCount(0)
 })
 
+test('what Allfit stopped collecting is on the panel beside what it still collects', async ({
+  context,
+  page,
+}) => {
+  await mockBackofficeApi(context, createBackofficeFixture({ session: activeSession() }))
+
+  await page.goto('/panel')
+
+  const active = page.locator('[data-business-metric="active_subscriptions"]')
+  const suspended = page.locator('[data-business-metric="suspended_subscriptions"]')
+  const lapsed = page.locator('[data-business-metric="lapsed_subscriptions"]')
+  const open = page.locator('[data-business-metric="open_subscriptions"]')
+
+  await expect(active.locator('[data-business-value]')).toHaveText('6')
+  await expect(suspended.locator('[data-business-value]')).toHaveText('2')
+  await expect(lapsed.locator('[data-business-value]')).toHaveText('1')
+  await expect(open.locator('[data-business-value]')).toHaveText('9')
+
+  // The third state is the one a reader would otherwise take for a rounding error,
+  // so the panel says who owns it rather than leaving the gap unexplained.
+  await expect(lapsed).toContainText('Solo la tienda mueve ese estado')
+})
+
 test('a group too small to publish is withheld, and says why without naming anybody', async ({
   context,
   page,
