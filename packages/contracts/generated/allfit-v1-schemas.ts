@@ -13403,7 +13403,7 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
   SupportBusinessMetricKey: {
     type: 'string',
     description:
-      '`active_people_this_week` counts people training in Space and has no signal at all; `studio_active_professionals_this_week` counts professionals working in Studio, which is the only activity the platform records. They are not the same question and must not be read as one.',
+      '`active_people_this_week` counts people training in Space and has no signal at all; `studio_active_professionals_this_week` counts professionals working in Studio, which is the only activity the platform records. They are not the same question and must not be read as one.\n\n`active_subscriptions`, `suspended_subscriptions` and `lapsed_subscriptions` partition the subscriptions that are not ended, and `open_subscriptions` is their total. A lapsed one is a subscription whose period or grace ran out while the store has not yet reported what became of it: only the store moves that status, so it is a standing state rather than a race, and it belongs to neither of the other two.',
     enum: [
       'registered_people',
       'new_people_this_week',
@@ -13413,6 +13413,9 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       'operating_organizations',
       'unclaimed_organizations',
       'active_subscriptions',
+      'suspended_subscriptions',
+      'lapsed_subscriptions',
+      'open_subscriptions',
       'active_organization_subscriptions',
       'pro_people_paying_allfit',
       'pro_people_through_organization',

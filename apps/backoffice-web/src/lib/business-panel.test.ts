@@ -253,6 +253,51 @@ describe('business panel presentation', () => {
     expect(metricHint('a_key_nobody_wrote_a_label_for')).toBeNull()
   })
 
+  test('the subscription states are labelled apart and say what the total is made of', () => {
+    expect(metricLabel('active_subscriptions')).toBe('Suscripciones activas')
+    expect(metricLabel('suspended_subscriptions')).toBe('Suscripciones suspendidas')
+    expect(metricLabel('lapsed_subscriptions')).toBe('Suscripciones vencidas sin reportar')
+    expect(metricLabel('open_subscriptions')).toBe('Suscripciones abiertas')
+    expect(metricHint('lapsed_subscriptions')).toContain('Solo la tienda mueve ese estado')
+    expect(metricHint('open_subscriptions')).toContain('suma exacta de las tres')
+    // One word, one meaning: the figure here is the one the billing notice counts.
+    expect(metricHint('suspended_subscriptions')).toContain('aviso de cobros')
+  })
+
+  test('the four subscription figures stay in the money section, in the order the API sent them', () => {
+    const keys = [
+      'active_subscriptions',
+      'suspended_subscriptions',
+      'lapsed_subscriptions',
+      'open_subscriptions',
+    ] as const
+    const sections = businessSections(panel(keys.map((key) => metric({ key, value: 4 }))))
+
+    expect(sections).toHaveLength(1)
+    expect(sections[0]?.key).toBe('money')
+    expect(sections[0]?.metrics.map((entry) => entry.key)).toEqual([...keys])
+  })
+
+  test('a state behind too few people is withheld, so the total stops adding up on screen', () => {
+    const withheld = metric({
+      key: 'suspended_subscriptions',
+      availability: 'below_threshold',
+      value: null,
+    })
+
+    expect(metricValue(withheld)).toBe('—')
+    expect(metricNote(withheld, 5)).toContain('señalar a alguien')
+    expect(metricBadge(withheld).label).toBe('Grupo muy pequeño')
+  })
+
+  test('a true zero is a figure: nobody suspended is not the same as nothing measured', () => {
+    const none = metric({ key: 'suspended_subscriptions', value: 0 })
+
+    expect(metricValue(none)).toBe('0')
+    expect(metricNote(none, 5)).toBeNull()
+    expect(metricBadge(none).label).toBe('Medido')
+  })
+
   test('a refusal explains the duty rather than blaming the operator', () => {
     expect(businessMessage('forbidden')).toContain('view_platform_metrics')
     expect(businessMessage('forbidden')).toContain('vencen por diseño')

@@ -934,6 +934,27 @@ export function businessPanelRecord(
         period: total,
       },
       {
+        key: 'suspended_subscriptions',
+        availability: 'available',
+        value: 2,
+        reason: null,
+        period: total,
+      },
+      {
+        key: 'lapsed_subscriptions',
+        availability: 'available',
+        value: 1,
+        reason: null,
+        period: total,
+      },
+      {
+        key: 'open_subscriptions',
+        availability: 'available',
+        value: 9,
+        reason: null,
+        period: total,
+      },
+      {
         key: 'active_organization_subscriptions',
         availability: 'available',
         value: 5,

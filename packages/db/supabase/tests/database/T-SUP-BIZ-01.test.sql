@@ -17,11 +17,16 @@
 -- withheld, so no metric narrows the platform down to somebody. A true zero is still
 -- shown, because it singles out nobody.
 --
+-- **What stopped is a figure too.** A panel that counts only what Allfit collects
+-- describes a business that never loses anybody. The subscriptions that are open are
+-- counted by state, and the states are a partition: what is collected, what the store
+-- suspended and what ran out while the store said nothing add up to the total.
+--
 -- The panel needs `view_platform_metrics`, an `A10` duty: the base role reads nothing.
 
 begin;
 
-select plan(40);
+select plan(46);
 
 create function pg_temp.metric(p_panel jsonb, p_key text) returns integer
 language sql immutable as $fn$
@@ -635,6 +640,127 @@ select is(
 );
 
 select set_config('app.actor_kind', 'support', true);
+
+/*
+ * Criterion 1 of `HU-BO-020`: what Allfit still has open, by state.
+ *
+ * `uidx_platform_subscriptions_live` allows one subscription per person that is not
+ * `ended`, so each person below stands in exactly one state. Five in each, because
+ * under the declared minimum a figure is withheld and a withheld figure is nothing to
+ * compare.
+ */
+insert into identity.people (id, given_name, family_name, status)
+select ('019b3000-0000-7000-8000-00000000110' || step)::uuid, 'Stopped', 'Person' || step,
+  'active'
+from generate_series(1, 5) as step;
+
+-- What the store itself reported as suspended. The billing notice of `HU-BO-005`
+-- counts these same rows, which is why the word may not mean two things.
+insert into payments.platform_subscriptions (
+  id, person_id, platform_plan_version_id, store, store_product_id, store_subscription_ref,
+  environment, status, auto_renews, current_period_end, suspended_at, last_observed_at
+)
+select ('019b3000-0000-7000-8000-00000000114' || step)::uuid,
+  ('019b3000-0000-7000-8000-00000000110' || step)::uuid,
+  '019b3000-0000-7000-8000-000000001002', 'app_store', 'allfit.pro.monthly.biz',
+  'ref-stopped-' || step, 'production', 'suspended', false,
+  clock_timestamp() - interval '10 days', clock_timestamp() - interval '3 days',
+  clock_timestamp()
+from generate_series(1, 5) as step;
+
+insert into identity.people (id, given_name, family_name, status)
+select ('019b3000-0000-7000-8000-00000000111' || step)::uuid, 'Lapsed', 'Person' || step,
+  'active'
+from generate_series(1, 5) as step;
+
+-- Three whose grace ran out and two whose period did, with the store silent. Only the
+-- store moves that status, so they stay here: before this they were in no count at all.
+insert into payments.platform_subscriptions (
+  id, person_id, platform_plan_version_id, store, store_product_id, store_subscription_ref,
+  environment, status, auto_renews, current_period_end, grace_until, last_observed_at
+)
+select ('019b3000-0000-7000-8000-00000000115' || step)::uuid,
+  ('019b3000-0000-7000-8000-00000000111' || step)::uuid,
+  '019b3000-0000-7000-8000-000000001002', 'app_store', 'allfit.pro.monthly.biz',
+  'ref-lapsed-' || step, 'production',
+  (case when step <= 3 then 'grace' else 'active' end)::payments.platform_subscription_status,
+  true,
+  clock_timestamp() - interval '8 days',
+  case when step <= 3 then clock_timestamp() - interval '1 day' end,
+  clock_timestamp()
+from generate_series(1, 5) as step;
+
+-- A subscription that is closed is not open in any state, so it enters no count.
+insert into identity.people (id, given_name, family_name, status)
+values ('019b3000-0000-7000-8000-000000001121', 'Gone', 'Person', 'active');
+
+insert into payments.platform_subscriptions (
+  id, person_id, platform_plan_version_id, store, store_product_id, store_subscription_ref,
+  environment, status, auto_renews, current_period_end, last_observed_at,
+  ended_at, ended_reason
+)
+values ('019b3000-0000-7000-8000-000000001161', '019b3000-0000-7000-8000-000000001121',
+  '019b3000-0000-7000-8000-000000001002', 'app_store', 'allfit.pro.monthly.biz',
+  'ref-gone-1', 'production', 'ended', false, clock_timestamp() - interval '40 days',
+  clock_timestamp(), clock_timestamp() - interval '40 days', 'expired');
+
+create temporary table biz_open on commit drop as
+select support.read_business_panel(
+  '019b3000-0000-7000-8000-000000000003', '019b3000-0000-7000-8000-000000000023'
+) as panel;
+
+select is(
+  (select pg_temp.metric(a.panel, 'suspended_subscriptions')
+        - pg_temp.metric(b.panel, 'suspended_subscriptions')
+   from biz_open as a, biz_money as b),
+  5,
+  'five subscriptions the store reported as suspended'
+);
+
+select is(
+  (select pg_temp.metric(a.panel, 'lapsed_subscriptions')
+        - pg_temp.metric(b.panel, 'lapsed_subscriptions')
+   from biz_open as a, biz_money as b),
+  5,
+  'and five whose period or grace ran out with the store still silent'
+);
+
+select is(
+  (select pg_temp.metric(a.panel, 'active_subscriptions')
+        - pg_temp.metric(b.panel, 'active_subscriptions')
+   from biz_open as a, biz_money as b),
+  0,
+  'Allfit collects on none of those ten, so what it does collect did not move'
+);
+
+select is(
+  (select pg_temp.metric(a.panel, 'open_subscriptions')
+        - pg_temp.metric(b.panel, 'open_subscriptions')
+   from biz_open as a, biz_money as b),
+  10,
+  'ten more subscriptions are open, and the one that ended is in none of them'
+);
+
+-- A missing key reads as null, and pgTAP holds null equal to null: without this the
+-- partition below would pass green against a panel that publishes none of the three.
+select isnt(
+  (select pg_temp.metric(panel, 'open_subscriptions') from biz_open),
+  null,
+  'what Allfit has open is a figure the panel actually publishes'
+);
+
+-- The property the panel is read for, asserted on the figures and not on this fixture:
+-- a bucket added later would pass every count above and still leave a reader with a
+-- total that does not add up.
+select is(
+  (select pg_temp.metric(panel, 'active_subscriptions')
+        + pg_temp.metric(panel, 'suspended_subscriptions')
+        + pg_temp.metric(panel, 'lapsed_subscriptions')
+   from biz_open),
+  (select pg_temp.metric(panel, 'open_subscriptions') from biz_open),
+  'and what is open is exactly what Allfit collects, lost, and has not heard about'
+);
+
 
 -- Billing, per currency, with the failed charge in neither.
 select results_eq(

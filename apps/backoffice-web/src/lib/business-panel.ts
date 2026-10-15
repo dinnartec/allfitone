@@ -11,6 +11,11 @@
  * Every figure is shown with the period it was measured over, and a figure whose
  * period is missing is not shown at all: it would be a number the reader would
  * date themselves.
+ *
+ * **What stopped is shown beside what continues.** The subscriptions Allfit has open
+ * are read by state, and the states add up to the total. Showing only the collecting
+ * one would describe a business that never loses anybody, which is the single wrong
+ * conclusion this screen can produce on its own.
  */
 
 import type { AllfitV1Schemas } from '@allfitone/contracts'
@@ -62,6 +67,9 @@ const METRIC_SECTIONS: Record<string, BusinessSectionKey> = {
   operating_organizations: 'organizations',
   unclaimed_organizations: 'organizations',
   active_subscriptions: 'money',
+  suspended_subscriptions: 'money',
+  lapsed_subscriptions: 'money',
+  open_subscriptions: 'money',
   active_organization_subscriptions: 'money',
   pro_people_paying_allfit: 'money',
   pro_people_through_organization: 'money',
@@ -76,7 +84,10 @@ const METRIC_LABELS: Record<string, string> = {
   organizations: 'Gimnasios creados',
   operating_organizations: 'Gimnasios operando',
   unclaimed_organizations: 'Gimnasios sin reclamar',
-  active_subscriptions: 'Suscripciones de Pro',
+  active_subscriptions: 'Suscripciones activas',
+  suspended_subscriptions: 'Suscripciones suspendidas',
+  lapsed_subscriptions: 'Suscripciones vencidas sin reportar',
+  open_subscriptions: 'Suscripciones abiertas',
   active_organization_subscriptions: 'Planes de gimnasio activos',
   pro_people_paying_allfit: 'Con Pro, pagándole a Allfit',
   pro_people_through_organization: 'Con Pro, por su gimnasio',
@@ -94,7 +105,14 @@ const METRIC_HINTS: Record<string, string> = {
   organizations: 'Todos, sin importar en qué estado estén.',
   operating_organizations: 'Reclamados, no cerrados y con al menos una persona en el equipo.',
   unclaimed_organizations: 'Allfit los creó y su dueño todavía no los aceptó.',
-  active_subscriptions: 'Lo que Allfit cobra por Pro a través de las tiendas.',
+  active_subscriptions:
+    'Las que siguen dando Pro: al día, o dentro del plazo de gracia que la tienda da tras un cobro fallido.',
+  suspended_subscriptions:
+    'La tienda dejó de cobrarlas y lo reportó. Es la misma cifra que cuenta el aviso de cobros.',
+  lapsed_subscriptions:
+    'Se les acabó el periodo o el plazo de gracia y la tienda todavía no dice si se renovaron o se suspendieron. Solo la tienda mueve ese estado.',
+  open_subscriptions:
+    'Todas las que no están cerradas. Es la suma exacta de las tres de arriba, así que lo que falte está en una de ellas.',
   active_organization_subscriptions:
     'Lo que las personas le pagan a su gimnasio. El gimnasio lo cobra en su propia pasarela: no es ingreso de Allfit y no pasa por aquí.',
   pro_people_paying_allfit: 'Compraron Pro en App Store o Google Play.',
