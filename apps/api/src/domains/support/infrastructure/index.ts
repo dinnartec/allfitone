@@ -20,6 +20,7 @@ import type {
   BreakGlassDatabase,
   BreakGlassExerciseOutcome,
   BreakGlassRequest,
+  BreakGlassReview,
   SupportAttentionDatabase,
   SupportAttentionPanel,
   SupportBusinessDatabase,
@@ -335,6 +336,7 @@ export function createSupportBusinessDatabase(): SupportBusinessDatabase {
 }
 
 type BreakGlassRow = { result: BreakGlassRequest; replayed: boolean }
+type BreakGlassReviewRow = { result: BreakGlassReview; replayed: boolean }
 
 export function createBreakGlassDatabase(): BreakGlassDatabase {
   const sql = database()
@@ -395,6 +397,30 @@ export function createBreakGlassDatabase(): BreakGlassDatabase {
         `
         if (!row) throw new Error('PostgreSQL did not close the break-glass window')
         return { resource: row.result, replayed: row.replayed }
+      }),
+
+    review: (input) =>
+      inTransaction(sql, input.actorPersonId, input.requestId, async (transaction) => {
+        const [row] = await transaction<BreakGlassReviewRow[]>`
+          select * from support.review_break_glass(
+            ${input.actorPersonId}::uuid, ${input.actorSessionId}::uuid,
+            ${input.breakGlassRequestId}::uuid, ${input.outcome},
+            ${input.idempotencyKey}::uuid, ${input.commandId}::uuid, ${input.requestHash}
+          )
+        `
+        if (!row) throw new Error('PostgreSQL did not record the break-glass review')
+        return { resource: row.result, replayed: row.replayed }
+      }),
+
+    reviewQueue: (input) =>
+      inTransaction(sql, input.actorPersonId, input.requestId, async (transaction) => {
+        const rows = await transaction<{ result: BreakGlassReview }[]>`
+          select * from support.break_glass_review_queue(
+            ${input.actorPersonId}::uuid, ${input.actorSessionId}::uuid,
+            ${input.limit}::integer
+          )
+        `
+        return rows.map((row) => row.result)
       }),
 
     list: (input) =>

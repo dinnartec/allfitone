@@ -2183,6 +2183,117 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  BreakGlassReview: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      'What is owed on one break-glass case and what was decided about it. Metadata and the count of exercises only: never a trace of what the window actually read.',
+    required: [
+      'request_id',
+      'case_reference',
+      'purpose',
+      'categories',
+      'sensitivity_tier',
+      'requester_person_id',
+      'subject_person_id',
+      'exercise_count',
+      'first_exercised_at',
+      'review_due_at',
+      'overdue',
+      'reviewed_at',
+      'reviewed_by_person_id',
+      'review_outcome',
+      'reviewed_late',
+    ],
+    properties: {
+      request_id: {
+        type: 'string',
+        format: 'uuid',
+      },
+      case_reference: {
+        type: 'string',
+      },
+      purpose: {
+        $ref: '#/components/schemas/BreakGlassPurpose',
+      },
+      categories: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/BreakGlassCategory',
+        },
+      },
+      sensitivity_tier: {
+        type: 'string',
+      },
+      requester_person_id: {
+        type: 'string',
+        format: 'uuid',
+      },
+      subject_person_id: {
+        type: 'string',
+        format: 'uuid',
+      },
+      exercise_count: {
+        type: 'integer',
+        minimum: 0,
+      },
+      first_exercised_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+        description:
+          'When the obligation started. Null means the window was approved and never used, so nothing is owed.',
+      },
+      review_due_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      overdue: {
+        type: 'boolean',
+        description:
+          'Owed, started and not yet met. A case that was reviewed is never overdue again however late the review was; that is `reviewed_late`.',
+      },
+      reviewed_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      reviewed_by_person_id: {
+        type: ['string', 'null'],
+        format: 'uuid',
+      },
+      review_outcome: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/BreakGlassReviewOutcome',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      reviewed_late: {
+        type: ['boolean', 'null'],
+        description: 'Null while unreviewed, or while the case was never exercised.',
+      },
+    },
+  },
+  BreakGlassReviewDecision: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['outcome'],
+    description:
+      'A verdict and nothing else. The reviewer does not restate the case: the scope, purpose and subject are already on the file and are immutable.',
+    properties: {
+      outcome: {
+        $ref: '#/components/schemas/BreakGlassReviewOutcome',
+      },
+    },
+  },
+  BreakGlassReviewOutcome: {
+    type: 'string',
+    description:
+      '`incident_opened` is not a worse `unjustified`: it says somebody has to act, and it publishes a different domain event for that reason.',
+    enum: ['justified', 'unjustified', 'incident_opened'],
+  },
   BreakGlassStatus: {
     type: 'string',
     enum: ['requested', 'approved', 'rejected', 'closed', 'expired'],

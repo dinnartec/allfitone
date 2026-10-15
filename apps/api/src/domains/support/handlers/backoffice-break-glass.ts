@@ -36,10 +36,12 @@ import { breakGlassService } from '../dependencies.js'
 import {
   BREAK_GLASS_CATEGORIES,
   BREAK_GLASS_PURPOSES,
+  BREAK_GLASS_REVIEW_OUTCOMES,
   BREAK_GLASS_STATUSES,
   type BreakGlassCategory,
   type BreakGlassPurpose,
   type BreakGlassRequestCreate,
+  type BreakGlassReviewOutcome,
   type BreakGlassStatus,
 } from '../domain/index.js'
 
@@ -196,7 +198,58 @@ export function backofficeBreakGlassRoutes(
     }
   })
 
+  // `OP-SUP-006`. The queue is the obligation, so it is not filtered by who may
+  // review each case: hiding a row the reader cannot act on would hide a debt.
+  routes.get('/break-glass/reviews', async (c) => {
+    const limit = Number(c.req.query('limit') ?? 25)
+    if (!Number.isInteger(limit) || limit < 1 || limit > MAX_PAGE) {
+      return problem(c, 'invalid-request')
+    }
+
+    try {
+      const actor = await backofficeActor(c, sessions())
+      if (actor instanceof Response) return actor
+      return c.json({
+        items: await windows().reviewQueue(actor, { requestId: randomUUID(), limit }),
+      })
+    } catch (error) {
+      return operationFailure(c, error)
+    }
+  })
+
+  routes.post('/break-glass/requests/:requestId/review', async (c) => {
+    if (!exactOrigin(c, origin)) return problem(c, 'forbidden')
+    const breakGlassRequestId = c.req.param('requestId')
+    if (!UUID_V7.test(breakGlassRequestId)) return problem(c, 'invalid-request')
+    const payload = await jsonPayload(c)
+    if (payload instanceof Response) return payload
+    const outcome = reviewOutcome(payload.value)
+    if (outcome === undefined) return problem(c, 'validation-failed')
+    const command = commandContext(c, { breakGlassRequestId, outcome })
+    if (!command) return problem(c, 'invalid-request')
+
+    try {
+      const actor = await backofficeActor(c, sessions())
+      if (actor instanceof Response) return actor
+      const result = await windows().review(actor, { ...command, breakGlassRequestId, outcome })
+      replay(c, result.replayed)
+      return c.json(result.resource)
+    } catch (error) {
+      return operationFailure(c, error)
+    }
+  })
+
   return routes
+}
+
+/** A verdict and nothing else: the reviewer does not get to restate the case. */
+function reviewOutcome(body: unknown): BreakGlassReviewOutcome | undefined {
+  if (!isObject(body)) return undefined
+  if (Object.keys(body).some((key) => key !== 'outcome')) return undefined
+  if (typeof body.outcome !== 'string') return undefined
+  return BREAK_GLASS_REVIEW_OUTCOMES.includes(body.outcome as BreakGlassReviewOutcome)
+    ? (body.outcome as BreakGlassReviewOutcome)
+    : undefined
 }
 
 /**

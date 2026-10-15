@@ -308,6 +308,21 @@ export interface BreakGlassCommandResult {
   replayed: boolean
 }
 
+export type BreakGlassReviewOutcome = 'justified' | 'unjustified' | 'incident_opened'
+
+export const BREAK_GLASS_REVIEW_OUTCOMES: readonly BreakGlassReviewOutcome[] = [
+  'justified',
+  'unjustified',
+  'incident_opened',
+]
+
+export type BreakGlassReview = AllfitV1Schemas['BreakGlassReview']
+
+export interface BreakGlassReviewResult {
+  resource: BreakGlassReview
+  replayed: boolean
+}
+
 export interface BreakGlassDatabase {
   request(
     input: PlatformCommandContext & {
@@ -341,6 +356,20 @@ export interface BreakGlassDatabase {
       breakGlassRequestId: string
     },
   ): Promise<BreakGlassCommandResult>
+  review(
+    input: PlatformCommandContext & {
+      actorPersonId: string
+      actorSessionId: string
+      breakGlassRequestId: string
+      outcome: BreakGlassReviewOutcome
+    },
+  ): Promise<BreakGlassReviewResult>
+  reviewQueue(input: {
+    actorPersonId: string
+    actorSessionId: string
+    requestId: string
+    limit: number
+  }): Promise<BreakGlassReview[]>
   list(input: {
     actorPersonId: string
     actorSessionId: string
