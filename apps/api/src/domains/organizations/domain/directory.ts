@@ -15,6 +15,7 @@ export type OrganizationLifecycleStatus = AllfitV1Schemas['OrganizationLifecycle
 export const ORGANIZATION_LIFECYCLE_STATUSES: readonly OrganizationLifecycleStatus[] = [
   'unclaimed',
   'active',
+  'suspended',
   'closed',
   'cancelled',
 ]

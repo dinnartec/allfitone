@@ -230,6 +230,20 @@ export const allfitV1ContractManifest = {
       responses: ['200', '400', '401', '403', '404', '409', '415', '422', '503'],
     },
     {
+      method: 'POST',
+      path: '/backoffice/v1/organizations/{organizationId}/reactivation',
+      operationId: 'reactivateBackofficeOrganization',
+      allfitOperation: 'OP-ORG-025',
+      responses: ['200', '400', '401', '403', '404', '409', '415', '422', '503'],
+    },
+    {
+      method: 'POST',
+      path: '/backoffice/v1/organizations/{organizationId}/suspension',
+      operationId: 'suspendBackofficeOrganization',
+      allfitOperation: 'OP-ORG-024',
+      responses: ['200', '400', '401', '403', '404', '409', '415', '422', '503'],
+    },
+    {
       method: 'GET',
       path: '/backoffice/v1/organizations/{organizationId}/team-invitations',
       operationId: 'listBackofficeTeamInvitations',

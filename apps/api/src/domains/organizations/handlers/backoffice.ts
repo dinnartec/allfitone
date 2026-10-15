@@ -36,11 +36,13 @@ import type { OrganizationDirectoryService } from '../application/directory.js'
 import type { OrganizationFileService } from '../application/file.js'
 import type { OrganizationHandoverService } from '../application/handover.js'
 import type { OrganizationGuestQuotaService } from '../application/quota.js'
+import type { OrganizationSuspensionService } from '../application/suspension.js'
 import {
   organizationDirectoryService,
   organizationFileService,
   organizationGuestQuotaService,
   organizationHandoverService,
+  organizationSuspensionService,
 } from '../dependencies.js'
 import {
   ORGANIZATION_LIFECYCLE_STATUSES,
@@ -50,6 +52,11 @@ import {
 } from '../domain/directory.js'
 import type { OrganizationHandoverCreate } from '../domain/handover.js'
 import { MAX_GUEST_QUOTA_SEATS, type OrganizationGuestQuotaDecision } from '../domain/quota.js'
+import {
+  SUSPENSION_REASONS,
+  type OrganizationSuspensionDecision,
+  type OrganizationSuspensionReason,
+} from '../domain/suspension.js'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -64,12 +71,14 @@ export function backofficeOrganizationRoutes(
   injectedHandover?: OrganizationHandoverService,
   injectedFile?: OrganizationFileService,
   injectedQuota?: OrganizationGuestQuotaService,
+  injectedSuspension?: OrganizationSuspensionService,
 ): Hono {
   const origin = new URL(trustedBackofficeWebUrl()).origin
   const directory = () => injectedDirectory ?? organizationDirectoryService()
   const handover = () => injectedHandover ?? organizationHandoverService()
   const file = () => injectedFile ?? organizationFileService()
   const quota = () => injectedQuota ?? organizationGuestQuotaService()
+  const suspension = () => injectedSuspension ?? organizationSuspensionService()
   const sessions = () => injectedSessions ?? backofficeAuthenticationService()
   const routes = new Hono()
 
@@ -233,7 +242,62 @@ export function backofficeOrganizationRoutes(
     }
   })
 
+  routes.post('/organizations/:organizationId/suspension', async (c) => {
+    const organizationId = c.req.param('organizationId')
+    const body = await commandBody(c, origin)
+    if (body instanceof Response) return body
+    if (!UUID.test(organizationId)) return problem(c, 'invalid-request')
+    const decision = suspensionDecision(body)
+    if (!decision) return problem(c, 'validation-failed')
+    const command = commandContext(c, decision)
+    if (!command) return problem(c, 'invalid-request')
+    try {
+      const actor = await backofficeActor(c, sessions())
+      if (actor instanceof Response) return actor
+      const result = await suspension().suspend(
+        { actorPersonId: actor.personId, actorSessionId: actor.sessionId },
+        { ...command, organizationId, decision },
+      )
+      if (result.replayed) c.header('Idempotent-Replay', 'true')
+      return c.json(result.resource)
+    } catch (error) {
+      return operationFailure(c, error)
+    }
+  })
+
+  // No body. Reactivation is subtractive: it removes one cause and recomputes from
+  // whatever is true now, so there is nothing to say about it beyond which gym.
+  routes.post('/organizations/:organizationId/reactivation', async (c) => {
+    const organizationId = c.req.param('organizationId')
+    const rejected = await emptyCommand(c, origin, organizationId)
+    if (rejected) return rejected
+    const command = commandContext(c, { organization_id: organizationId, action: 'reactivate' })
+    if (!command) return problem(c, 'invalid-request')
+    try {
+      const actor = await backofficeActor(c, sessions())
+      if (actor instanceof Response) return actor
+      const result = await suspension().reactivate(
+        { actorPersonId: actor.personId, actorSessionId: actor.sessionId },
+        { ...command, organizationId },
+      )
+      if (result.replayed) c.header('Idempotent-Replay', 'true')
+      return c.json(result.resource)
+    } catch (error) {
+      return operationFailure(c, error)
+    }
+  })
+
   return routes
+}
+
+/** A reason from the agreed list and nothing else: the record is not free text. */
+function suspensionDecision(body: unknown): OrganizationSuspensionDecision | undefined {
+  if (!isObject(body) || Object.keys(body).some((key) => key !== 'reason_code')) return undefined
+  const reason = body['reason_code']
+  if (typeof reason !== 'string') return undefined
+  return SUSPENSION_REASONS.includes(reason as OrganizationSuspensionReason)
+    ? { reason_code: reason as OrganizationSuspensionReason }
+    : undefined
 }
 
 /**

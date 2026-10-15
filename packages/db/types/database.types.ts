@@ -3590,6 +3590,70 @@ export type Database = {
           },
         ]
       }
+      organization_suspensions: {
+        Row: {
+          ended_at: string | null
+          ended_by_duty_assignment_id: string | null
+          ended_by_person_id: string | null
+          ended_event_id: string | null
+          id: string
+          organization_id: string
+          reason_code: string
+          started_at: string
+          started_by_duty_assignment_id: string
+          started_by_person_id: string
+          started_event_id: string
+        }
+        Insert: {
+          ended_at?: string | null
+          ended_by_duty_assignment_id?: string | null
+          ended_by_person_id?: string | null
+          ended_event_id?: string | null
+          id?: string
+          organization_id: string
+          reason_code: string
+          started_at?: string
+          started_by_duty_assignment_id: string
+          started_by_person_id: string
+          started_event_id: string
+        }
+        Update: {
+          ended_at?: string | null
+          ended_by_duty_assignment_id?: string | null
+          ended_by_person_id?: string | null
+          ended_event_id?: string | null
+          id?: string
+          organization_id?: string
+          reason_code?: string
+          started_at?: string
+          started_by_duty_assignment_id?: string
+          started_by_person_id?: string
+          started_event_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_organization_suspensions_ended_event'
+            columns: ['ended_event_id']
+            isOneToOne: false
+            referencedRelation: 'organization_events'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'fk_organization_suspensions_organization'
+            columns: ['organization_id']
+            isOneToOne: false
+            referencedRelation: 'organizations'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'fk_organization_suspensions_started_event'
+            columns: ['started_event_id']
+            isOneToOne: false
+            referencedRelation: 'organization_events'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       organization_type_transitions: {
         Row: {
           created_at: string
@@ -3663,6 +3727,7 @@ export type Database = {
           responsible_party_schema_version: number
           revision_number: number
           status: Database['organizations']['Enums']['organization_status']
+          suspended_at: string | null
           type_code: string
           updated_at: string
         }
@@ -3678,6 +3743,7 @@ export type Database = {
           responsible_party_schema_version?: number
           revision_number?: number
           status?: Database['organizations']['Enums']['organization_status']
+          suspended_at?: string | null
           type_code: string
           updated_at?: string
         }
@@ -3693,6 +3759,7 @@ export type Database = {
           responsible_party_schema_version?: number
           revision_number?: number
           status?: Database['organizations']['Enums']['organization_status']
+          suspended_at?: string | null
           type_code?: string
           updated_at?: string
         }
@@ -3918,6 +3985,24 @@ export type Database = {
         Args: { p_organization_id: string }
         Returns: Json
       }
+      organization_suspension_projection: {
+        Args: { p_organization_id: string }
+        Returns: Json
+      }
+      reactivate_organization: {
+        Args: {
+          p_actor_person_id: string
+          p_actor_session_id: string
+          p_command_id: string
+          p_idempotency_key: string
+          p_organization_id: string
+          p_request_hash: string
+        }
+        Returns: {
+          replayed: boolean
+          result: Json
+        }[]
+      }
       read_backoffice_organization: {
         Args: {
           p_actor_person_id: string
@@ -3979,6 +4064,21 @@ export type Database = {
         }[]
       }
       site_projection: { Args: { p_site_id: string }; Returns: Json }
+      suspend_organization: {
+        Args: {
+          p_actor_person_id: string
+          p_actor_session_id: string
+          p_command_id: string
+          p_idempotency_key: string
+          p_organization_id: string
+          p_reason_code: string
+          p_request_hash: string
+        }
+        Returns: {
+          replayed: boolean
+          result: Json
+        }[]
+      }
       transfer_ownership: {
         Args: {
           p_command_id: string
@@ -4043,7 +4143,7 @@ export type Database = {
     }
     Enums: {
       membership_status: 'active' | 'terminated'
-      organization_status: 'unclaimed' | 'active' | 'closed' | 'cancelled'
+      organization_status: 'unclaimed' | 'active' | 'suspended' | 'closed' | 'cancelled'
     }
     CompositeTypes: {
       [_ in never]: never
@@ -5633,7 +5733,7 @@ export const Constants = {
   organizations: {
     Enums: {
       membership_status: ['active', 'terminated'],
-      organization_status: ['unclaimed', 'active', 'closed', 'cancelled'],
+      organization_status: ['unclaimed', 'active', 'suspended', 'closed', 'cancelled'],
     },
   },
   planning: {

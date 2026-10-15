@@ -91,13 +91,19 @@ select is(
 
 -- `cancelled` is the state a gym nobody claimed reaches through `HU-BO-015`, which is
 -- a different thing from ending the relationships of one that operates.
+--
+-- `suspended` arrived with `HU-BO-016` and does not weaken what this asserts. The
+-- state this file rules out is a *terminal* one that lets Allfit end a gym over its
+-- head; suspension is the opposite of terminal, reverses with `OP-ORG-025`, and ends
+-- no relationship — `T-ORG-SUSPEND-01` is where that is proved. Both assertions above
+-- still hold: no closure table, and no column marking a gym closed by Allfit.
 select is(
   (select string_agg(label.enumlabel::text collate "C", ', ' order by label.enumsortorder)
    from pg_enum as label
    join pg_type as kind on kind.oid = label.enumtypid
    where kind.typname = 'organization_status'),
-  'unclaimed, active, closed, cancelled',
-  'the lifecycle gained no state for a platform closure'
+  'unclaimed, active, suspended, closed, cancelled',
+  'the lifecycle gained a reversible state and still none for a platform closure'
 );
 
 -- ---------------------------------------------------------------------------
