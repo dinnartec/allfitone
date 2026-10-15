@@ -542,6 +542,26 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/backoffice/v1/organizations/{organizationId}/guest-quota': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Set how many people a gym may have
+     * @description `HU-BO-034`. The number Allfit sold the gym: how many people may have a live relationship or an invitation still awaiting an answer at the same time. It is `manage_platform_commercial`, which is not the duty that creates a gym. A `null` is a deal with no cap, and it is told apart from a gym nobody has sold a number to only by its history. Lowering it below the occupancy ends no relationship and revokes no invitation: the gym is over its quota and says so, and `HU-STUDIO-087` is what refuses the next invitation. A gym that no longer operates is not sold a quota: 409.
+     */
+    post: operations['setBackofficeOrganizationGuestQuota']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/backoffice/v1/organizations/{organizationId}/cancellation': {
     parameters: {
       query?: never
@@ -4228,6 +4248,7 @@ export interface components {
       plans: components['schemas']['OrganizationFilePlan'][]
       payment_method: components['schemas']['OrganizationFilePaymentMethod']
       premium: components['schemas']['OrganizationFilePremium']
+      guest_quota: components['schemas']['OrganizationGuestQuota']
     }
     OrganizationFilePlan: {
       plan_id: components['schemas']['Uuid']
@@ -4241,6 +4262,34 @@ export interface components {
       billing_period: 'month' | 'year'
       /** @description How many of the gym's clients are paying this version right now. */
       subscribers: number
+    }
+    OrganizationGuestQuotaDecision: {
+      /** @description How many people the gym may have at once. `null` is no limit: a deal with no cap. Zero is not a quota and is refused — it would be a gym sold the right to invite nobody. */
+      seats: number | null
+    }
+    /** @description What the gym was sold and what stands against it. A quota without the occupancy beside it cannot be judged, so both travel together. */
+    OrganizationGuestQuota: {
+      organization_id: components['schemas']['Uuid']
+      /** @description Null is no limit, which is not the same as a limit of zero. */
+      seats: number | null
+      /** @description Live relationships plus invitations still awaiting an answer. It is not a count of people: an unanswered invitation names an address, not somebody who can be told apart from whoever may already be there. */
+      occupied: number
+      relationships_active: number
+      /** @description Client invitations with time left to run. One rejected, revoked or out of time has freed its place, and a team invitation never took one. */
+      invitations_pending: number
+      /** @description Null when there is no limit. Zero when the quota is full or already exceeded, because there is no such thing as a negative place. */
+      places_left: number | null
+      /** @description The gym has more taken than it was sold. It happens when Allfit lowers the number, which never ends a relationship. */
+      over_quota: boolean
+      /** @description Null when nobody has ever set a quota here, which is a different answer from somebody having set it to no limit. */
+      last_change: {
+        /** Format: date-time */
+        at: string
+        by_person_id: components['schemas']['Uuid']
+        by_duty_assignment_id: components['schemas']['Uuid']
+        /** @description What it was before. Null means it had no limit then. */
+        previous_seats: number | null
+      } | null
     }
     /** @description Whether the gym can be paid, and nothing more. The account reference and the vault key live in another table that this reader has no policy for at all, so no credential can travel here even by mistake. */
     OrganizationFilePaymentMethod: {
@@ -10399,6 +10448,48 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['OrganizationHandover']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  setBackofficeOrganizationGuestQuota: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['OrganizationGuestQuotaDecision']
+      }
+    }
+    responses: {
+      /** @description The quota as it now stands, with what is against it */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['OrganizationGuestQuota']
         }
       }
       400: components['responses']['BadRequest']

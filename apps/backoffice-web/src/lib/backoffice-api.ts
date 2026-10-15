@@ -29,6 +29,8 @@ export type BackofficeOrganizationPage = AllfitV1Schemas['BackofficeOrganization
 export type OrganizationHandover = AllfitV1Schemas['OrganizationHandover']
 export type BackofficeOrganizationFile = AllfitV1Schemas['BackofficeOrganizationFile']
 export type OrganizationHandoverCreate = AllfitV1Schemas['OrganizationHandoverCreate']
+export type OrganizationGuestQuota = AllfitV1Schemas['OrganizationGuestQuota']
+export type OrganizationGuestQuotaDecision = AllfitV1Schemas['OrganizationGuestQuotaDecision']
 export type BackofficeClientInvitation = AllfitV1Schemas['BackofficeClientInvitation']
 export type BackofficeClientInvitationList = AllfitV1Schemas['BackofficeClientInvitationList']
 export type BackofficeClientInvitationResend = AllfitV1Schemas['BackofficeClientInvitationResend']
@@ -547,6 +549,20 @@ export const backofficeApi = {
       { method: 'POST', headers: commandHeaders(command) },
     ),
 
+  setOrganizationGuestQuota: (
+    organizationId: string,
+    decision: OrganizationGuestQuotaDecision,
+    command: BackofficeCommand,
+  ) =>
+    requestJson<OrganizationGuestQuota>(
+      `/backoffice/v1/organizations/${organizationId}/guest-quota`,
+      {
+        method: 'POST',
+        headers: commandHeaders(command),
+        body: JSON.stringify(decision),
+      },
+    ),
+
   cancelOrganizationHandover: (organizationId: string, command: BackofficeCommand) =>
     requestJson<OrganizationHandover>(
       `/backoffice/v1/organizations/${organizationId}/cancellation`,
@@ -763,6 +779,7 @@ function organizationOperation(route: string, method: string): ClientOperation |
       : 'backoffice.organization.team_invitations'
   }
   if (segments[4] === 'cancellation') return 'backoffice.organization.handover_cancel'
+  if (segments[4] === 'guest-quota') return 'backoffice.organization.guest_quota_set'
   if (segments[4] !== 'handover') return undefined
   return segments[5] === 'resends'
     ? 'backoffice.organization.handover_resend'

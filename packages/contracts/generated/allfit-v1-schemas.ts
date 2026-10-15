@@ -1248,6 +1248,7 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       'plans',
       'payment_method',
       'premium',
+      'guest_quota',
     ],
     properties: {
       organization: {
@@ -1429,6 +1430,9 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
       premium: {
         $ref: '#/components/schemas/OrganizationFilePremium',
+      },
+      guest_quota: {
+        $ref: '#/components/schemas/OrganizationGuestQuota',
       },
     },
   },
@@ -6240,6 +6244,97 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       reason: {
         type: ['string', 'null'],
         enum: ['no_published_pro_version', 'organization_not_active', null],
+      },
+    },
+  },
+  OrganizationGuestQuota: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      'What the gym was sold and what stands against it. A quota without the occupancy beside it cannot be judged, so both travel together.',
+    required: [
+      'organization_id',
+      'seats',
+      'occupied',
+      'relationships_active',
+      'invitations_pending',
+      'places_left',
+      'over_quota',
+      'last_change',
+    ],
+    properties: {
+      organization_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      seats: {
+        type: ['integer', 'null'],
+        minimum: 1,
+        description: 'Null is no limit, which is not the same as a limit of zero.',
+      },
+      occupied: {
+        type: 'integer',
+        minimum: 0,
+        description:
+          'Live relationships plus invitations still awaiting an answer. It is not a count of people: an unanswered invitation names an address, not somebody who can be told apart from whoever may already be there.',
+      },
+      relationships_active: {
+        type: 'integer',
+        minimum: 0,
+      },
+      invitations_pending: {
+        type: 'integer',
+        minimum: 0,
+        description:
+          'Client invitations with time left to run. One rejected, revoked or out of time has freed its place, and a team invitation never took one.',
+      },
+      places_left: {
+        type: ['integer', 'null'],
+        minimum: 0,
+        description:
+          'Null when there is no limit. Zero when the quota is full or already exceeded, because there is no such thing as a negative place.',
+      },
+      over_quota: {
+        type: 'boolean',
+        description:
+          'The gym has more taken than it was sold. It happens when Allfit lowers the number, which never ends a relationship.',
+      },
+      last_change: {
+        type: ['object', 'null'],
+        additionalProperties: false,
+        description:
+          'Null when nobody has ever set a quota here, which is a different answer from somebody having set it to no limit.',
+        required: ['at', 'by_person_id', 'by_duty_assignment_id', 'previous_seats'],
+        properties: {
+          at: {
+            type: 'string',
+            format: 'date-time',
+          },
+          by_person_id: {
+            $ref: '#/components/schemas/Uuid',
+          },
+          by_duty_assignment_id: {
+            $ref: '#/components/schemas/Uuid',
+          },
+          previous_seats: {
+            type: ['integer', 'null'],
+            minimum: 1,
+            description: 'What it was before. Null means it had no limit then.',
+          },
+        },
+      },
+    },
+  },
+  OrganizationGuestQuotaDecision: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['seats'],
+    properties: {
+      seats: {
+        type: ['integer', 'null'],
+        minimum: 1,
+        maximum: 1000000,
+        description:
+          'How many people the gym may have at once. `null` is no limit: a deal with no cap. Zero is not a quota and is refused — it would be a gym sold the right to invite nobody.',
       },
     },
   },

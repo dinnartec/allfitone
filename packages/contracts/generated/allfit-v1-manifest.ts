@@ -195,6 +195,13 @@ export const allfitV1ContractManifest = {
       responses: ['200', '400', '401', '403', '404', '409', '415', '422', '429', '503'],
     },
     {
+      method: 'POST',
+      path: '/backoffice/v1/organizations/{organizationId}/guest-quota',
+      operationId: 'setBackofficeOrganizationGuestQuota',
+      allfitOperation: 'OP-ORG-023',
+      responses: ['200', '400', '401', '403', '404', '409', '415', '422', '503'],
+    },
+    {
       method: 'GET',
       path: '/backoffice/v1/organizations/{organizationId}/handover',
       operationId: 'readBackofficeOrganizationHandover',

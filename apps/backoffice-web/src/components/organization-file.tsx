@@ -66,6 +66,7 @@ import {
 import { formatInstant } from '@/lib/platform-access'
 
 import { OrganizationClientInvitations } from './organization-client-invitations'
+import { OrganizationGuestQuotaPanel } from './organization-guest-quota'
 import { OrganizationTeamInvitations } from './organization-team-invitations'
 
 type LoadState = 'loading' | 'ready' | 'failed'
@@ -309,6 +310,8 @@ export function OrganizationFile({ organizationId }: { organizationId: string })
           <p data-file-premium>{premiumLine(file)}</p>
         </CardContent>
       </Card>
+
+      <OrganizationGuestQuotaPanel quota={file.guest_quota} />
 
       <Link href="/organizations" data-handover-link>
         Volver al directorio

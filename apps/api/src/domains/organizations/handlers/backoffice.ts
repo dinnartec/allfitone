@@ -1,6 +1,6 @@
 /**
  * Backoffice organization routes: `NEW-SUP-ORG-SEARCH`, `NEW-SUP-ORG-DETAIL`,
- * `OP-ORG-018`, `OP-ORG-021` and `OP-ORG-022`.
+ * `OP-ORG-018`, `OP-ORG-021`, `OP-ORG-022` and `OP-ORG-023`.
  *
  * `HU-BO-012` to `HU-BO-015`. The handler shapes and rejects; it decides
  * nothing. The support or lifecycle duty, AAL2, the lifecycle states and who may claim
@@ -13,6 +13,10 @@
  *
  * The handover body has no field for a natural person's name, and a legal name sent
  * for one is refused: Allfit never writes the name of someone who has not accepted.
+ *
+ * The quota body carries `seats` and nothing else, and its null is a decision rather
+ * than an omission: a body without the field is refused, a body with `null` is a deal
+ * with no cap.
  */
 
 import { createHash, randomUUID } from 'node:crypto'
@@ -31,9 +35,11 @@ import { problem, type ApiErrorCode } from '../../../platform/http/index.js'
 import type { OrganizationDirectoryService } from '../application/directory.js'
 import type { OrganizationFileService } from '../application/file.js'
 import type { OrganizationHandoverService } from '../application/handover.js'
+import type { OrganizationGuestQuotaService } from '../application/quota.js'
 import {
   organizationDirectoryService,
   organizationFileService,
+  organizationGuestQuotaService,
   organizationHandoverService,
 } from '../dependencies.js'
 import {
@@ -43,6 +49,7 @@ import {
   type OrganizationLifecycleStatus,
 } from '../domain/directory.js'
 import type { OrganizationHandoverCreate } from '../domain/handover.js'
+import { MAX_GUEST_QUOTA_SEATS, type OrganizationGuestQuotaDecision } from '../domain/quota.js'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -56,11 +63,13 @@ export function backofficeOrganizationRoutes(
   injectedSessions?: BackofficeAuthenticationService,
   injectedHandover?: OrganizationHandoverService,
   injectedFile?: OrganizationFileService,
+  injectedQuota?: OrganizationGuestQuotaService,
 ): Hono {
   const origin = new URL(trustedBackofficeWebUrl()).origin
   const directory = () => injectedDirectory ?? organizationDirectoryService()
   const handover = () => injectedHandover ?? organizationHandoverService()
   const file = () => injectedFile ?? organizationFileService()
+  const quota = () => injectedQuota ?? organizationGuestQuotaService()
   const sessions = () => injectedSessions ?? backofficeAuthenticationService()
   const routes = new Hono()
 
@@ -201,7 +210,43 @@ export function backofficeOrganizationRoutes(
     }
   })
 
+  routes.post('/organizations/:organizationId/guest-quota', async (c) => {
+    const organizationId = c.req.param('organizationId')
+    const body = await commandBody(c, origin)
+    if (body instanceof Response) return body
+    if (!UUID.test(organizationId)) return problem(c, 'invalid-request')
+    const decision = guestQuotaDecision(body)
+    if (!decision) return problem(c, 'validation-failed')
+    const command = commandContext(c, decision)
+    if (!command) return problem(c, 'invalid-request')
+    try {
+      const actor = await backofficeActor(c, sessions())
+      if (actor instanceof Response) return actor
+      const result = await quota().set(
+        { actorPersonId: actor.personId, actorSessionId: actor.sessionId },
+        { ...command, organizationId, decision },
+      )
+      if (result.replayed) c.header('Idempotent-Replay', 'true')
+      return c.json(result.resource)
+    } catch (error) {
+      return operationFailure(c, error)
+    }
+  })
+
   return routes
+}
+
+/**
+ * `seats` must be present. A missing field would be read as "no limit", which is a
+ * commercial decision nobody made.
+ */
+function guestQuotaDecision(body: unknown): OrganizationGuestQuotaDecision | undefined {
+  if (!isObject(body) || Object.keys(body).some((key) => key !== 'seats')) return undefined
+  const seats = body['seats']
+  if (seats === null) return { seats: null }
+  if (typeof seats !== 'number' || !Number.isInteger(seats)) return undefined
+  if (seats < 1 || seats > MAX_GUEST_QUOTA_SEATS) return undefined
+  return { seats }
 }
 
 function directoryQuery(c: Context): OrganizationDirectoryQuery | undefined {
