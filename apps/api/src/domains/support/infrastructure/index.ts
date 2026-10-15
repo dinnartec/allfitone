@@ -29,6 +29,7 @@ import type {
   SupportOperation,
   SupportMetadataDatabase,
   SupportPersonMetadata,
+  SupportPersonPayments,
   PlatformAccessDatabase,
   PlatformCommandResult,
   PlatformDutyAssignment,
@@ -241,6 +242,18 @@ export function createSupportMetadataDatabase(): SupportMetadataDatabase {
         `
         if (!row) throw new Error('PostgreSQL did not project the operational state')
         return row.person_metadata
+      }),
+
+    payments: (input) =>
+      inTransaction(sql, input.actorPersonId, input.requestId, async (transaction) => {
+        const [row] = await transaction<{ person_payments: SupportPersonPayments }[]>`
+          select support.person_payments(
+            ${input.actorPersonId}::uuid, ${input.actorSessionId}::uuid,
+            ${input.caseReference}, ${input.personId}::uuid
+          )
+        `
+        if (!row) throw new Error('PostgreSQL did not project what the person pays')
+        return row.person_payments
       }),
   }
 }

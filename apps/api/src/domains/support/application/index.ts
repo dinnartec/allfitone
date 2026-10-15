@@ -28,6 +28,7 @@ import type {
   SupportOperationSourceKind,
   SupportOperationState,
   SupportMetadataDatabase,
+  SupportPersonPayments,
   SupportPeopleSearch,
   SupportPersonMetadata,
   SupportLookupKind,
@@ -131,6 +132,15 @@ export interface SupportMetadataService {
     reader: SupportReader,
     input: { requestId: string; caseReference: string; personId: string },
   ): Promise<SupportPersonMetadata>
+  /**
+   * What she pays. Nothing is decided here: the duty, the case reference and what
+   * the projection refuses to carry are all the database's, and a rule restated in
+   * TypeScript would be a second place to get it wrong.
+   */
+  payments(
+    reader: SupportReader,
+    input: { requestId: string; caseReference: string; personId: string },
+  ): Promise<SupportPersonPayments>
 }
 
 export function createSupportMetadataService(
@@ -142,6 +152,7 @@ export function createSupportMetadataService(
       return found ? { outcome: 'found', items: [found] } : { outcome: 'not_found', items: [] }
     },
     read: (reader, input) => database.read({ ...reader, ...input }),
+    payments: (reader, input) => database.payments({ ...reader, ...input }),
   }
 }
 

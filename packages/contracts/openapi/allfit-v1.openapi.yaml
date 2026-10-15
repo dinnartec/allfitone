@@ -1012,6 +1012,56 @@ paths:
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
 
+  /backoffice/v1/support/people/{personId}/payments:
+    get:
+      tags: [Backoffice Support]
+      operationId: readBackofficeSupportPersonPayments
+      x-allfit-operation: NEW-SUP-PERSON-PAYMENTS
+      x-allfit-cache: no-store
+      summary: Open what a person pays
+      description: >-
+        Her plan of Allfit, what it charges and through which store, every charge
+        with its result and the reason when it failed, and whether it is suspended
+        and since when. If her Pro comes from a gym, the gym is named.
+
+        No means of payment appears, because Allfit stores none. What she pays a gym
+        is shown with its state only: the gym collects through its own gateway and
+        those charges are not recorded here, so they are `not_modelled` rather than
+        an empty list.
+
+        Requires `view_billing_metadata` — the duty that opens a person's card does
+        not open her money — and a traceable case reference. Payments are not a
+        break-glass category. The read is recorded against the person before its
+        content is returned.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/SupportPersonId'
+        - $ref: '#/components/parameters/SupportCaseReference'
+      responses:
+        '200':
+          description: What the person pays, as of now
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportPersonPayments'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
   /backoffice/v1/support/operations:
     get:
       tags: [Backoffice Support]
@@ -12188,6 +12238,191 @@ components:
           $ref: '#/components/schemas/AttentionUnclaimedOrganizationNotice'
         repeated_failures:
           $ref: '#/components/schemas/AttentionFailureNotice'
+    SupportPersonPayments:
+      type: object
+      additionalProperties: false
+      description: >-
+        What a person pays. Closed by enumeration: no means of payment exists in the
+        schema behind it, so there is nothing to filter out of a row.
+      required:
+        - person_id
+        - generated_at
+        - pro
+        - payments
+        - payments_truncated
+        - organization_subscriptions
+        - organization_charges_availability
+      properties:
+        person_id:
+          $ref: '#/components/schemas/Uuid'
+        generated_at:
+          type: string
+          format: date-time
+        pro:
+          $ref: '#/components/schemas/SupportPersonPro'
+        payments:
+          type: array
+          maxItems: 100
+          description: Newest first. Both the charges that went through and the ones that did not.
+          items:
+            $ref: '#/components/schemas/SupportPersonCharge'
+        payments_truncated:
+          type: boolean
+          description: Whether she has more charges than the hundred returned.
+        organization_subscriptions:
+          type: array
+          description: >-
+            What she pays her gyms, with the state of each bond and nothing else. The
+            price belongs to the gym and the money never passes through Allfit.
+          items:
+            $ref: '#/components/schemas/SupportPersonOrganizationBond'
+        organization_charges_availability:
+          type: string
+          enum: [not_modelled]
+          description: >-
+            A gym collects through its own gateway and Allfit does not record what the
+            provider reports yet. Stated rather than returned as an empty list, which
+            would read as the gym never having charged her.
+    SupportPersonPro:
+      type: object
+      additionalProperties: false
+      required: [source, subscription, organizations]
+      properties:
+        source:
+          type: string
+          enum: [subscription, organization, free]
+          description: Which route her Pro comes from, resolved by the same rule the app uses.
+        subscription:
+          oneOf:
+            - $ref: '#/components/schemas/SupportPersonProSubscription'
+            - type: 'null'
+        organizations:
+          type: array
+          description: The gyms that give her Pro by her training there.
+          items:
+            type: object
+            additionalProperties: false
+            required: [organization_id, organization_name]
+            properties:
+              organization_id:
+                $ref: '#/components/schemas/Uuid'
+              organization_name:
+                type: string
+    SupportPersonProSubscription:
+      type: object
+      additionalProperties: false
+      description: >-
+        Her store subscription whatever its state, newest first. A complaint is usually
+        about one that is no longer live, so a suspended or ended one still appears.
+      required:
+        - plan_name
+        - version_number
+        - amount_minor
+        - currency_code
+        - billing_period
+        - store
+        - status
+        - auto_renews
+        - started_at
+        - current_period_end
+        - grace_until
+        - suspended_at
+        - ended_at
+        - ended_reason
+      properties:
+        plan_name:
+          type: string
+        version_number:
+          type: integer
+          minimum: 1
+        amount_minor:
+          type: integer
+          minimum: 0
+          description: In the minor unit of its currency, by the ISO 4217 exponent.
+        currency_code:
+          type: [string, 'null']
+          pattern: '^[A-Z]{3}$'
+        billing_period:
+          type: [string, 'null']
+          enum: [month, year, null]
+        store:
+          $ref: '#/components/schemas/SpaceProStore'
+        status:
+          type: string
+          enum: [active, grace, suspended, ended]
+        auto_renews:
+          type: boolean
+        started_at:
+          type: string
+          format: date-time
+        current_period_end:
+          type: string
+          format: date-time
+        grace_until:
+          type: [string, 'null']
+          format: date-time
+        suspended_at:
+          type: [string, 'null']
+          format: date-time
+        ended_at:
+          type: [string, 'null']
+          format: date-time
+        ended_reason:
+          type: [string, 'null']
+          enum: [expired, refunded, revoked, replaced, null]
+    SupportPersonCharge:
+      type: object
+      additionalProperties: false
+      required: [occurred_at, store, result, failure_code, amount_minor, currency_code]
+      properties:
+        occurred_at:
+          type: string
+          format: date-time
+        store:
+          $ref: '#/components/schemas/SpaceProStore'
+        result:
+          type: string
+          enum: [succeeded, failed]
+        failure_code:
+          type: [string, 'null']
+          maxLength: 64
+          description: Why the store could not collect. Null when it did.
+        amount_minor:
+          type: [integer, 'null']
+          minimum: 0
+        currency_code:
+          type: [string, 'null']
+          pattern: '^[A-Z]{3}$'
+    SupportPersonOrganizationBond:
+      type: object
+      additionalProperties: false
+      required:
+        - subscription_id
+        - organization_id
+        - organization_name
+        - status
+        - started_at
+        - suspended_at
+        - ended_at
+      properties:
+        subscription_id:
+          $ref: '#/components/schemas/Uuid'
+        organization_id:
+          $ref: '#/components/schemas/Uuid'
+        organization_name:
+          type: string
+        status:
+          type: string
+          enum: [active, suspended, ended]
+        started_at:
+          type: string
+          format: date-time
+        suspended_at:
+          type: [string, 'null']
+          format: date-time
+        ended_at:
+          type: [string, 'null']
+          format: date-time
     SupportBlockAvailability:
       type: string
       description: >-

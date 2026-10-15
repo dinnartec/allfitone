@@ -50,6 +50,44 @@ interface CapturedCall {
   input: unknown
 }
 
+const personPayments: AllfitV1Schemas['SupportPersonPayments'] = {
+  person_id: SUBJECT_ID,
+  generated_at: '2026-10-14T12:00:00.000Z',
+  pro: {
+    source: 'subscription',
+    subscription: {
+      plan_name: 'Pro',
+      version_number: 1,
+      amount_minor: 1990000,
+      currency_code: 'COP',
+      billing_period: 'month',
+      store: 'app_store',
+      status: 'active',
+      auto_renews: true,
+      started_at: '2026-09-14T12:00:00.000Z',
+      current_period_end: '2026-11-01T12:00:00.000Z',
+      grace_until: null,
+      suspended_at: null,
+      ended_at: null,
+      ended_reason: null,
+    },
+    organizations: [],
+  },
+  payments: [
+    {
+      occurred_at: '2026-10-01T12:00:00.000Z',
+      store: 'app_store',
+      result: 'succeeded',
+      failure_code: null,
+      amount_minor: 1990000,
+      currency_code: 'COP',
+    },
+  ],
+  payments_truncated: false,
+  organization_subscriptions: [],
+  organization_charges_availability: 'not_modelled',
+}
+
 let captured: CapturedCall[] = []
 
 function metadataService(overrides: Partial<SupportMetadataService> = {}): SupportMetadataService {
@@ -61,6 +99,10 @@ function metadataService(overrides: Partial<SupportMetadataService> = {}): Suppo
     read: (reader, input) => {
       captured.push({ operation: 'read', reader, input })
       return Promise.resolve(metadata)
+    },
+    payments: (reader, input) => {
+      captured.push({ operation: 'payments', reader, input })
+      return Promise.resolve(personPayments)
     },
     ...overrides,
   }
@@ -264,9 +306,12 @@ describe('Backoffice support metadata API contract', () => {
   test('T-SUP-API-21 mounts every support metadata operation with its contract method', () => {
     const contract = allfitV1ContractManifest.operations
       .filter((operation) =>
-        ['OP-SUP-005', 'NEW-SUP-ATTENTION', 'NEW-SUP-DASHBOARD'].includes(
-          operation.allfitOperation,
-        ),
+        [
+          'OP-SUP-005',
+          'NEW-SUP-ATTENTION',
+          'NEW-SUP-DASHBOARD',
+          'NEW-SUP-PERSON-PAYMENTS',
+        ].includes(operation.allfitOperation),
       )
       .map((operation) => `${operation.method} ${colonPath(operation.path)}`)
       .sort()
@@ -275,7 +320,7 @@ describe('Backoffice support metadata API contract', () => {
       .map((route) => `${route.method} /backoffice/v1${route.path}`)
       .sort()
 
-    expect(contract).toHaveLength(6)
+    expect(contract).toHaveLength(7)
     expect(mounted).toEqual(contract)
   })
 
@@ -370,6 +415,34 @@ describe('Backoffice support metadata API contract', () => {
     for (const forbidden of ['given_name', 'family_name', 'display_name', 'username', 'subject']) {
       expect(body).not.toHaveProperty(forbidden)
     }
+  })
+
+  test('T-SUP-API-45 opens what a person pays, with her case reference carried through', async () => {
+    const response = await routes().fetch(
+      request(`/support/people/${SUBJECT_ID}/payments?case_reference=${CASE}`),
+    )
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('cache-control')).toBe('no-store')
+    expect(await response.json()).toEqual(personPayments)
+    const call = captured.find((entry) => entry.operation === 'payments')
+    expect(call?.input).toMatchObject({ caseReference: CASE, personId: SUBJECT_ID })
+  })
+
+  test('T-SUP-API-46 refuses the read without a case reference, before the database', async () => {
+    const response = await routes().fetch(request(`/support/people/${SUBJECT_ID}/payments`))
+
+    expect(response.status).toBe(400)
+    expect(captured.some((entry) => entry.operation === 'payments')).toBe(false)
+  })
+
+  test('T-SUP-API-47 refuses a person identifier that is not one', async () => {
+    const response = await routes().fetch(
+      request(`/support/people/not-a-uuid/payments?case_reference=${CASE}`),
+    )
+
+    expect(response.status).toBe(400)
+    expect(captured.some((entry) => entry.operation === 'payments')).toBe(false)
   })
 
   test('T-SUP-API-29 rejects a malformed person before reaching the database', async () => {

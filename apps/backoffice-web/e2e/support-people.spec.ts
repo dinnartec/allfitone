@@ -6,6 +6,7 @@ import {
   activeSession,
   createBackofficeFixture,
   mockBackofficeApi,
+  personPaymentsRecord,
   supportPerson,
 } from './backoffice-api-mock'
 
@@ -141,6 +142,86 @@ test('shows what Allfit does not store instead of leaving the blocks out', async
   // The distinction the API preserved has to survive into the screen.
   await expect(page.getByText('Allfit no lo guarda todavía').first()).toBeVisible()
   await expect(page.getByText(/no es una afirmación sobre la persona/).first()).toBeVisible()
+})
+
+test('shows what she pays, telling the charge that failed from the one that did not', async ({
+  context,
+  page,
+}) => {
+  await mockBackofficeApi(
+    context,
+    createBackofficeFixture({ session: activeSession(), support: support() }),
+  )
+
+  await page.goto(`/people/${SUPPORT_SUBJECT_ID}?case_reference=${CASE}`)
+
+  const panel = page.locator('[data-payments-panel]')
+  await expect(panel.getByText(/Tiene Pro porque se lo paga a Allfit por Apple/)).toBeVisible()
+  // The amount is read from the ISO minor unit: 1.990.000 centavos are $19.900.
+  await expect(panel.locator('[data-payments-charge]').first()).toContainText('19.900')
+  await expect(panel.getByText('Cobrado', { exact: true })).toBeVisible()
+  await expect(panel.getByText('No se cobró', { exact: true })).toBeVisible()
+  await expect(panel.getByText(/motivo: billing_retry/)).toBeVisible()
+
+  // Criterion 4, said out loud because its honesty is the point.
+  await expect(panel.getByText(/no guarda datos de tarjeta/)).toBeVisible()
+
+  // And what the gym charges, which Allfit does not record.
+  await expect(panel.locator('[data-payments-bond]')).toContainText('Gimnasio Pagos')
+  await expect(panel.locator('[data-payments-gym-note]')).toContainText('no guardamos los cobros')
+})
+
+test('a suspended subscription says since when, which is what a complaint needs', async ({
+  context,
+  page,
+}) => {
+  const live = personPaymentsRecord()
+  const paused = personPaymentsRecord({
+    pro: {
+      ...live.pro,
+      subscription: live.pro.subscription && {
+        ...live.pro.subscription,
+        status: 'suspended',
+        suspended_at: '2026-10-05T12:00:00.000Z',
+      },
+    },
+  })
+  await mockBackofficeApi(
+    context,
+    createBackofficeFixture({
+      session: activeSession(),
+      support: support(),
+      supportPayments: { payments: paused },
+    }),
+  )
+
+  await page.goto(`/people/${SUPPORT_SUBJECT_ID}?case_reference=${CASE}`)
+
+  await expect(page.locator('[data-payments-state="suspended"]')).toContainText(
+    'En pausa por falta de cobro desde el',
+  )
+})
+
+test('the duty that opens the card does not open her money, and the panel says which one does', async ({
+  context,
+  page,
+}) => {
+  await mockBackofficeApi(
+    context,
+    createBackofficeFixture({
+      session: activeSession(),
+      support: support(),
+      supportPayments: { refusal: { status: 403, code: 'forbidden' } },
+    }),
+  )
+
+  await page.goto(`/people/${SUPPORT_SUBJECT_ID}?case_reference=${CASE}`)
+
+  // The card still loads: one duty refused is not the whole screen failing.
+  await expect(page.getByRole('heading', { name: 'Estado operativo' })).toBeVisible()
+  const refused = page.locator('[data-payments-refused]')
+  await expect(refused).toContainText('view_billing_metadata')
+  await expect(refused).toContainText('distinto del que abre su ficha')
 })
 
 test('will not open a card without the case that justifies the read', async ({ context, page }) => {
