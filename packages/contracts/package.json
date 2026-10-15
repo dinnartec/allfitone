@@ -4,14 +4,27 @@
   "private": true,
   "description": "Contrato OpenAPI y DTOs generados",
   "type": "module",
-  "main": "./src/index.ts",
+  "main": "./dist/src/index.js",
   "types": "./src/index.ts",
   "exports": {
-    ".": "./src/index.ts",
-    "./commands": "./src/commands.ts",
-    "./nutrients": "./src/nutrients.ts"
+    ".": {
+      "types": "./src/index.ts",
+      "bun": "./src/index.ts",
+      "import": "./dist/src/index.js"
+    },
+    "./commands": {
+      "types": "./src/commands.ts",
+      "bun": "./src/commands.ts",
+      "import": "./dist/src/commands.js"
+    },
+    "./nutrients": {
+      "types": "./src/nutrients.ts",
+      "bun": "./src/nutrients.ts",
+      "import": "./dist/src/nutrients.js"
+    }
   },
   "scripts": {
+    "build": "tsc -p tsconfig.build.json",
     "check:openapi": "redocly lint openapi/allfit-v1.openapi.yaml --config ../../redocly.yaml",
     "generate": "bun scripts/generate.ts",
     "check:generated": "bun run generate && git diff --exit-code -- generated",

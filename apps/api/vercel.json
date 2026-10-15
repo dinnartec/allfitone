@@ -3,7 +3,7 @@
   "regions": ["pdx1"],
   "functions": {
     "src/index.ts": {
-      "includeFiles": "../../packages/auth-provider/**"
+      "includeFiles": "../../packages/{auth-provider,contracts,db,food-recognition,notifications,object-store,queue,store-billing,telemetry}/**"
     }
   }
 }

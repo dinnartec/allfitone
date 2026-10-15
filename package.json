@@ -28,6 +28,7 @@
     "check:ui-boundaries": "node scripts/check-ui-boundaries.mjs",
     "check:api-boundaries": "node scripts/check-api-boundaries.mjs",
     "check:db-policy": "node scripts/check-db-policy.mjs",
+    "check:node-entrypoints": "node scripts/check-node-entrypoints.mjs",
     "check:openapi": "redocly lint packages/contracts/openapi/allfit-v1.openapi.yaml",
     "generate:contracts": "bun run --cwd packages/contracts generate",
     "check:contracts": "bun run --cwd packages/contracts check:generated",
