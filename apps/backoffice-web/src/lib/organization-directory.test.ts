@@ -74,7 +74,8 @@ describe('organization directory presentation', () => {
 
   test('a link can open the directory already filtered, but only by a known state', () => {
     expect(directoryFiltersFromStatus('unclaimed')).toEqual({ query: '', status: 'unclaimed' })
-    expect(directoryFiltersFromStatus('suspended')).toEqual(EMPTY_DIRECTORY_FILTERS)
+    expect(directoryFiltersFromStatus('suspended')).toEqual({ query: '', status: 'suspended' })
+    expect(directoryFiltersFromStatus('dormant')).toEqual(EMPTY_DIRECTORY_FILTERS)
     expect(directoryFiltersFromStatus(null)).toEqual(EMPTY_DIRECTORY_FILTERS)
   })
 })

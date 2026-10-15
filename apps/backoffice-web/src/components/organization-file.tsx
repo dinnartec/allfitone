@@ -67,6 +67,7 @@ import { formatInstant } from '@/lib/platform-access'
 
 import { OrganizationClientInvitations } from './organization-client-invitations'
 import { OrganizationGuestQuotaPanel } from './organization-guest-quota'
+import { OrganizationSuspensionPanel } from './organization-suspension'
 import { OrganizationTeamInvitations } from './organization-team-invitations'
 
 type LoadState = 'loading' | 'ready' | 'failed'
@@ -312,6 +313,10 @@ export function OrganizationFile({ organizationId }: { organizationId: string })
       </Card>
 
       <OrganizationGuestQuotaPanel quota={file.guest_quota} />
+      <OrganizationSuspensionPanel
+        suspension={file.suspension}
+        peopleServed={file.relationship_counts.active}
+      />
 
       <Link href="/organizations" data-handover-link>
         Volver al directorio

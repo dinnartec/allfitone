@@ -28,6 +28,7 @@ export type OrganizationStatus = AllfitV1Schemas['OrganizationLifecycleStatus']
 /** Operating first: it is what the team is usually looking for. */
 export const ORGANIZATION_STATUSES: readonly OrganizationStatus[] = [
   'active',
+  'suspended',
   'unclaimed',
   'closed',
   'cancelled',
@@ -35,6 +36,7 @@ export const ORGANIZATION_STATUSES: readonly OrganizationStatus[] = [
 
 const STATUS_LABELS: Record<OrganizationStatus, string> = {
   active: 'Operando',
+  suspended: 'Suspendido',
   unclaimed: 'Sin reclamar',
   closed: 'Cerrado',
   cancelled: 'Cancelado sin reclamar',
@@ -51,6 +53,8 @@ export function statusFilterLabel(status: OrganizationStatus | 'any'): string {
 
 const STATUS_MEANINGS: Record<OrganizationStatus, string> = {
   active: 'Su dueño lo reclamó y está operando.',
+  suspended:
+    'Allfit le cortó el servicio y no opera. No terminó ninguna relación ni se le quitó ningún permiso: se levanta y vuelve a operar.',
   unclaimed: 'Allfit lo creó y su dueño todavía no aceptó. Existe, pero no opera.',
   closed: 'Operó y se cerró.',
   cancelled: 'Allfit lo creó, nadie lo reclamó y se canceló.',

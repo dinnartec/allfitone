@@ -562,6 +562,50 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/backoffice/v1/organizations/{organizationId}/suspension': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Stop a gym without destroying anything
+     * @description `HU-BO-016`. The gym stops operating: it cannot invite, assign, publish or charge, and its clients drop to the free plan while it lasts. Nothing is destroyed — no permission is revoked, no relationship ends, no session is cancelled — because each affected person gets a reversible cause instead.
+     *
+     *     Only a gym that is operating is suspended: one nobody claimed is not operating and one that is cancelled or closed is terminal, so both answer 409. Suspending a suspended gym converges and does not open a second period.
+     */
+    post: operations['suspendBackofficeOrganization']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/organizations/{organizationId}/reactivation': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Let a suspended gym operate again
+     * @description `HU-BO-016` criteria 6 and 7. Subtractive: it closes only the causes this suspension opened and recomputes from whatever is true now. It restores no earlier copy of permissions, relationships, memberships, assignments, subscriptions or sessions, and nothing revoked, ended, changed, cancelled, started or expired during the suspension comes back. Any other open cause — an unpaid subscription, say — keeps denying.
+     *
+     *     The command carries no body. Reactivating a gym that is operating converges; one that was never suspended answers 409.
+     */
+    post: operations['reactivateBackofficeOrganization']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/backoffice/v1/organizations/{organizationId}/cancellation': {
     parameters: {
       query?: never
@@ -4212,10 +4256,10 @@ export interface components {
     /** @enum {string} */
     BreakGlassStatus: 'requested' | 'approved' | 'rejected' | 'closed' | 'expired'
     /**
-     * @description `unclaimed` exists but does not operate: Allfit created it and its owner has not accepted yet. `cancelled` was never claimed. `closed` operated and ended.
+     * @description `unclaimed` exists but does not operate: Allfit created it and its owner has not accepted yet. `cancelled` was never claimed. `closed` operated and ended. `suspended` operates no longer but has ended nothing: it is the only one of these that reverses, and it keeps every permission and relationship.
      * @enum {string}
      */
-    OrganizationLifecycleStatus: 'unclaimed' | 'active' | 'closed' | 'cancelled'
+    OrganizationLifecycleStatus: 'unclaimed' | 'active' | 'suspended' | 'closed' | 'cancelled'
     /** @description An organization as the directory shows it. Nothing here identifies a person: no legal name and no responsible party. */
     BackofficeOrganizationSummary: {
       organization_id: components['schemas']['Uuid']
@@ -4295,6 +4339,7 @@ export interface components {
       payment_method: components['schemas']['OrganizationFilePaymentMethod']
       premium: components['schemas']['OrganizationFilePremium']
       guest_quota: components['schemas']['OrganizationGuestQuota']
+      suspension: components['schemas']['OrganizationSuspension']
     }
     OrganizationFilePlan: {
       plan_id: components['schemas']['Uuid']
@@ -4312,6 +4357,50 @@ export interface components {
     OrganizationGuestQuotaDecision: {
       /** @description How many people the gym may have at once. `null` is no limit: a deal with no cap. Zero is not a quota and is refused — it would be a gym sold the right to invite nobody. */
       seats: number | null
+    }
+    /**
+     * @description A closed list, so the record of why a gym was stopped cannot become free text nobody reads. Non-payment is the case the story names; the rest exist because they would otherwise be recorded as non-payment for lack of anywhere else.
+     * @enum {string}
+     */
+    OrganizationSuspensionReason:
+      'nonpayment' | 'terms_breach' | 'security_incident' | 'legal_requirement'
+    OrganizationSuspensionDecision: {
+      reason_code: components['schemas']['OrganizationSuspensionReason']
+    }
+    OrganizationSuspensionPeriod: {
+      /** Format: uuid */
+      suspension_id: string
+      reason_code: components['schemas']['OrganizationSuspensionReason']
+      /** Format: date-time */
+      started_at: string
+      /** Format: uuid */
+      started_by_person_id: string
+      /** Format: date-time */
+      ended_at: string | null
+      /** Format: uuid */
+      ended_by_person_id: string | null
+    }
+    /** @description Whether a gym is stopped, why, and what it cost. `history` outlives the state: a gym back on its feet still says it was stopped, which a status column alone cannot do. */
+    OrganizationSuspension: {
+      /** Format: uuid */
+      organization_id: string
+      status: components['schemas']['OrganizationLifecycleStatus']
+      suspended: boolean
+      /** Format: date-time */
+      suspended_at: string | null
+      /** @description The open period, or null when the gym is operating. */
+      current: {
+        /** Format: uuid */
+        suspension_id: string
+        reason_code: components['schemas']['OrganizationSuspensionReason']
+        /** Format: date-time */
+        started_at: string
+        /** Format: uuid */
+        started_by_person_id: string
+        /** @description Counted from the causes the decision opened, not from the relationships it did not touch. */
+        people_blocked: number
+      } | null
+      history: components['schemas']['OrganizationSuspensionPeriod'][]
     }
     /** @description What the gym was sold and what stands against it. A quota without the occupancy beside it cannot be judged, so both travel together. */
     OrganizationGuestQuota: {
@@ -10580,6 +10669,86 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['OrganizationGuestQuota']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  suspendBackofficeOrganization: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['OrganizationSuspensionDecision']
+      }
+    }
+    responses: {
+      /** @description The stopped gym */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['OrganizationSuspension']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  reactivateBackofficeOrganization: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The gym operating again */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['OrganizationSuspension']
         }
       }
       400: components['responses']['BadRequest']

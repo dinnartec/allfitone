@@ -1458,6 +1458,119 @@ paths:
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
 
+  /backoffice/v1/organizations/{organizationId}/suspension:
+    post:
+      tags: [Backoffice Organizations]
+      operationId: suspendBackofficeOrganization
+      x-allfit-operation: OP-ORG-024
+      x-allfit-cache: no-store
+      summary: Stop a gym without destroying anything
+      description: >-
+        `HU-BO-016`. The gym stops operating: it cannot invite, assign, publish or
+        charge, and its clients drop to the free plan while it lasts. Nothing is
+        destroyed — no permission is revoked, no relationship ends, no session is
+        cancelled — because each affected person gets a reversible cause instead.
+
+
+        Only a gym that is operating is suspended: one nobody claimed is not operating
+        and one that is cancelled or closed is terminal, so both answer 409.
+        Suspending a suspended gym converges and does not open a second period.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrganizationSuspensionDecision'
+      responses:
+        '200':
+          description: The stopped gym
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationSuspension'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/organizations/{organizationId}/reactivation:
+    post:
+      tags: [Backoffice Organizations]
+      operationId: reactivateBackofficeOrganization
+      x-allfit-operation: OP-ORG-025
+      x-allfit-cache: no-store
+      summary: Let a suspended gym operate again
+      description: >-
+        `HU-BO-016` criteria 6 and 7. Subtractive: it closes only the causes this
+        suspension opened and recomputes from whatever is true now. It restores no
+        earlier copy of permissions, relationships, memberships, assignments,
+        subscriptions or sessions, and nothing revoked, ended, changed, cancelled,
+        started or expired during the suspension comes back. Any other open cause —
+        an unpaid subscription, say — keeps denying.
+
+
+        The command carries no body. Reactivating a gym that is operating converges;
+        one that was never suspended answers 409.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      responses:
+        '200':
+          description: The gym operating again
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationSuspension'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
   /backoffice/v1/organizations/{organizationId}/cancellation:
     post:
       tags: [Backoffice Organizations]
@@ -11223,8 +11336,9 @@ components:
       description: >-
         `unclaimed` exists but does not operate: Allfit created it and its owner has
         not accepted yet. `cancelled` was never claimed. `closed` operated and
-        ended.
-      enum: [unclaimed, active, closed, cancelled]
+        ended. `suspended` operates no longer but has ended nothing: it is the only
+        one of these that reverses, and it keeps every permission and relationship.
+      enum: [unclaimed, active, suspended, closed, cancelled]
     BackofficeOrganizationSummary:
       type: object
       additionalProperties: false
@@ -11300,6 +11414,7 @@ components:
         - payment_method
         - premium
         - guest_quota
+        - suspension
       properties:
         organization:
           type: object
@@ -11439,6 +11554,8 @@ components:
           $ref: '#/components/schemas/OrganizationFilePremium'
         guest_quota:
           $ref: '#/components/schemas/OrganizationGuestQuota'
+        suspension:
+          $ref: '#/components/schemas/OrganizationSuspension'
     OrganizationFilePlan:
       type: object
       additionalProperties: false
@@ -11488,6 +11605,92 @@ components:
             How many people the gym may have at once. `null` is no limit: a deal with
             no cap. Zero is not a quota and is refused — it would be a gym sold the
             right to invite nobody.
+    OrganizationSuspensionReason:
+      type: string
+      description: >-
+        A closed list, so the record of why a gym was stopped cannot become free text
+        nobody reads. Non-payment is the case the story names; the rest exist because
+        they would otherwise be recorded as non-payment for lack of anywhere else.
+      enum: [nonpayment, terms_breach, security_incident, legal_requirement]
+    OrganizationSuspensionDecision:
+      type: object
+      additionalProperties: false
+      required: [reason_code]
+      properties:
+        reason_code:
+          $ref: '#/components/schemas/OrganizationSuspensionReason'
+    OrganizationSuspensionPeriod:
+      type: object
+      additionalProperties: false
+      required:
+        [suspension_id, reason_code, started_at, started_by_person_id, ended_at, ended_by_person_id]
+      properties:
+        suspension_id:
+          type: string
+          format: uuid
+        reason_code:
+          $ref: '#/components/schemas/OrganizationSuspensionReason'
+        started_at:
+          type: string
+          format: date-time
+        started_by_person_id:
+          type: string
+          format: uuid
+        ended_at:
+          type: [string, 'null']
+          format: date-time
+        ended_by_person_id:
+          type: [string, 'null']
+          format: uuid
+    OrganizationSuspension:
+      type: object
+      additionalProperties: false
+      description: >-
+        Whether a gym is stopped, why, and what it cost. `history` outlives the state:
+        a gym back on its feet still says it was stopped, which a status column alone
+        cannot do.
+      required: [organization_id, status, suspended, suspended_at, current, history]
+      properties:
+        organization_id:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/OrganizationLifecycleStatus'
+        suspended:
+          type: boolean
+        suspended_at:
+          type: [string, 'null']
+          format: date-time
+        current:
+          description: The open period, or null when the gym is operating.
+          oneOf:
+            - type: object
+              additionalProperties: false
+              required:
+                [suspension_id, reason_code, started_at, started_by_person_id, people_blocked]
+              properties:
+                suspension_id:
+                  type: string
+                  format: uuid
+                reason_code:
+                  $ref: '#/components/schemas/OrganizationSuspensionReason'
+                started_at:
+                  type: string
+                  format: date-time
+                started_by_person_id:
+                  type: string
+                  format: uuid
+                people_blocked:
+                  type: integer
+                  minimum: 0
+                  description: >-
+                    Counted from the causes the decision opened, not from the
+                    relationships it did not touch.
+            - type: 'null'
+        history:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrganizationSuspensionPeriod'
     OrganizationGuestQuota:
       type: object
       additionalProperties: false

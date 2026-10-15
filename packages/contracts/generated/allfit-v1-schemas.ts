@@ -1249,6 +1249,7 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       'payment_method',
       'premium',
       'guest_quota',
+      'suspension',
     ],
     properties: {
       organization: {
@@ -1433,6 +1434,9 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
       guest_quota: {
         $ref: '#/components/schemas/OrganizationGuestQuota',
+      },
+      suspension: {
+        $ref: '#/components/schemas/OrganizationSuspension',
       },
     },
   },
@@ -6592,8 +6596,8 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
   OrganizationLifecycleStatus: {
     type: 'string',
     description:
-      '`unclaimed` exists but does not operate: Allfit created it and its owner has not accepted yet. `cancelled` was never claimed. `closed` operated and ended.',
-    enum: ['unclaimed', 'active', 'closed', 'cancelled'],
+      '`unclaimed` exists but does not operate: Allfit created it and its owner has not accepted yet. `cancelled` was never claimed. `closed` operated and ended. `suspended` operates no longer but has ended nothing: it is the only one of these that reverses, and it keeps every permission and relationship.',
+    enum: ['unclaimed', 'active', 'suspended', 'closed', 'cancelled'],
   },
   OrganizationMembershipListItem: {
     type: 'object',
@@ -6986,6 +6990,130 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         $ref: '#/components/schemas/Page',
       },
     },
+  },
+  OrganizationSuspension: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      'Whether a gym is stopped, why, and what it cost. `history` outlives the state: a gym back on its feet still says it was stopped, which a status column alone cannot do.',
+    required: ['organization_id', 'status', 'suspended', 'suspended_at', 'current', 'history'],
+    properties: {
+      organization_id: {
+        type: 'string',
+        format: 'uuid',
+      },
+      status: {
+        $ref: '#/components/schemas/OrganizationLifecycleStatus',
+      },
+      suspended: {
+        type: 'boolean',
+      },
+      suspended_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      current: {
+        description: 'The open period, or null when the gym is operating.',
+        oneOf: [
+          {
+            type: 'object',
+            additionalProperties: false,
+            required: [
+              'suspension_id',
+              'reason_code',
+              'started_at',
+              'started_by_person_id',
+              'people_blocked',
+            ],
+            properties: {
+              suspension_id: {
+                type: 'string',
+                format: 'uuid',
+              },
+              reason_code: {
+                $ref: '#/components/schemas/OrganizationSuspensionReason',
+              },
+              started_at: {
+                type: 'string',
+                format: 'date-time',
+              },
+              started_by_person_id: {
+                type: 'string',
+                format: 'uuid',
+              },
+              people_blocked: {
+                type: 'integer',
+                minimum: 0,
+                description:
+                  'Counted from the causes the decision opened, not from the relationships it did not touch.',
+              },
+            },
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      history: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/OrganizationSuspensionPeriod',
+        },
+      },
+    },
+  },
+  OrganizationSuspensionDecision: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['reason_code'],
+    properties: {
+      reason_code: {
+        $ref: '#/components/schemas/OrganizationSuspensionReason',
+      },
+    },
+  },
+  OrganizationSuspensionPeriod: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'suspension_id',
+      'reason_code',
+      'started_at',
+      'started_by_person_id',
+      'ended_at',
+      'ended_by_person_id',
+    ],
+    properties: {
+      suspension_id: {
+        type: 'string',
+        format: 'uuid',
+      },
+      reason_code: {
+        $ref: '#/components/schemas/OrganizationSuspensionReason',
+      },
+      started_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      started_by_person_id: {
+        type: 'string',
+        format: 'uuid',
+      },
+      ended_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      ended_by_person_id: {
+        type: ['string', 'null'],
+        format: 'uuid',
+      },
+    },
+  },
+  OrganizationSuspensionReason: {
+    type: 'string',
+    description:
+      'A closed list, so the record of why a gym was stopped cannot become free text nobody reads. Non-payment is the case the story names; the rest exist because they would otherwise be recorded as non-payment for lack of anywhere else.',
+    enum: ['nonpayment', 'terms_breach', 'security_incident', 'legal_requirement'],
   },
   OrganizationType: {
     type: 'object',

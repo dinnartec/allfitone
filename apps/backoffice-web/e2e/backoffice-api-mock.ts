@@ -438,7 +438,8 @@ export interface OrganizationDirectoryFixture {
   organizations: DirectoryOrganizationFixture[]
 }
 
-export type DirectoryOrganizationStatus = 'unclaimed' | 'active' | 'closed' | 'cancelled'
+export type DirectoryOrganizationStatus =
+  'unclaimed' | 'active' | 'suspended' | 'closed' | 'cancelled'
 
 export interface DirectoryOrganizationFixture {
   organization_id: string
@@ -491,6 +492,7 @@ export function directoryOrganization(
  */
 export interface OrganizationFileFixture {
   refusal?: { status: number; code: string }
+  suspensionRefusal?: { status: number; code: string }
   files: OrganizationFileRecordFixture[]
 }
 
@@ -500,7 +502,7 @@ export interface OrganizationFileRecordFixture {
     display_name: string
     type_code: 'professional_practice' | 'gym' | 'studio'
     type_name: string
-    status: 'unclaimed' | 'active' | 'closed' | 'cancelled'
+    status: 'unclaimed' | 'active' | 'suspended' | 'closed' | 'cancelled'
     party_kind: 'natural_person' | 'legal_entity'
     legal_name: string | null
     created_at: string
@@ -541,6 +543,7 @@ export interface OrganizationFileRecordFixture {
     reason: 'no_published_pro_version' | 'organization_not_active' | null
   }
   guest_quota: GuestQuotaFixture
+  suspension: SuspensionFixture
 }
 
 export interface GuestQuotaFixture {
@@ -560,6 +563,45 @@ export interface GuestQuotaFixture {
 }
 
 /** A gym nobody has sold a number to: no limit, and no decision behind it. */
+export interface SuspensionPeriodFixture {
+  suspension_id: string
+  reason_code: string
+  started_at: string
+  started_by_person_id: string
+  ended_at: string | null
+  ended_by_person_id: string | null
+}
+
+export interface SuspensionFixture {
+  organization_id: string
+  status: string
+  suspended: boolean
+  suspended_at: string | null
+  current: {
+    suspension_id: string
+    reason_code: string
+    started_at: string
+    started_by_person_id: string
+    people_blocked: number
+  } | null
+  history: SuspensionPeriodFixture[]
+}
+
+export function suspensionRecord(
+  organizationId: string,
+  overrides: Partial<SuspensionFixture> = {},
+): SuspensionFixture {
+  return {
+    organization_id: organizationId,
+    status: 'active',
+    suspended: false,
+    suspended_at: null,
+    current: null,
+    history: [],
+    ...overrides,
+  }
+}
+
 export function guestQuotaRecord(
   organizationId: string,
   overrides: Partial<GuestQuotaFixture> = {},
@@ -623,6 +665,7 @@ export function organizationFileRecord(
     },
     premium: { gives_pro: true, reason: null },
     guest_quota: guestQuotaRecord(`019a9200-0000-7000-8000-${suffix}`),
+    suspension: suspensionRecord(`019a9200-0000-7000-8000-${suffix}`),
     ...overrides,
   }
 }
@@ -653,7 +696,7 @@ export interface HandoverRecordFixture {
   type_name: string
   party_kind: 'natural_person' | 'legal_entity'
   legal_name: string | null
-  status: 'unclaimed' | 'active' | 'closed' | 'cancelled'
+  status: 'unclaimed' | 'active' | 'suspended' | 'closed' | 'cancelled'
   created_at: string
   claimed_at: string | null
   cancelled_at: string | null
@@ -1699,6 +1742,10 @@ export async function mockBackofficeApi(
       /^\/backoffice\/v1\/organizations\/[^/]+\/guest-quota$/.test(request.path)
     ) {
       await routeGuestQuota(route, request, fixture)
+      return
+    }
+    if (request.method === 'POST' && SUSPENSION_PATH.test(request.path)) {
+      await routeSuspension(route, request, fixture)
       return
     }
     if (request.method === 'GET' && /^\/backoffice\/v1\/organizations\/[^/]+$/.test(request.path)) {
@@ -2941,6 +2988,74 @@ async function routeOrganizationFile(
     return
   }
   await fulfill(route, 200, record)
+}
+
+const SUSPENSION_PATH = new RegExp('^/backoffice/v1/organizations/[^/]+/(suspension|reactivation)$')
+
+/**
+ * Suspending writes one cause per person the gym is serving, so the figure is derived
+ * from the file rather than invented: a fixture that disagreed with the relationship
+ * count would let the screen pass while showing a number it never got.
+ */
+async function routeSuspension(
+  route: Route,
+  request: MockRequest,
+  fixture: BackofficeFixture,
+): Promise<void> {
+  const segments = request.path.split('/').filter(Boolean)
+  const files = fixture.organizationFiles ?? { files: [] }
+  const record = files.files.find((file) => file.organization.organization_id === segments[3])
+  if (!record) {
+    await fulfillProblem(route, 404, 'not-found')
+    return
+  }
+  if (files.suspensionRefusal) {
+    await fulfillProblem(route, files.suspensionRefusal.status, files.suspensionRefusal.code)
+    return
+  }
+
+  if (segments[4] === 'suspension') {
+    const reason = (request.body as { reason_code?: string } | undefined)?.reason_code
+    const startedAt = new Date().toISOString()
+    record.suspension = {
+      ...record.suspension,
+      status: 'suspended',
+      suspended: true,
+      suspended_at: startedAt,
+      current: {
+        suspension_id: '019a9200-0000-7000-8000-000000000801',
+        reason_code: reason ?? 'nonpayment',
+        started_at: startedAt,
+        started_by_person_id: '019a9200-0000-7000-8000-000000000003',
+        people_blocked: record.relationship_counts.active,
+      },
+    }
+    record.organization.status = 'suspended'
+  } else {
+    const open = record.suspension.current
+    record.suspension = {
+      ...record.suspension,
+      status: 'active',
+      suspended: false,
+      suspended_at: null,
+      current: null,
+      history: open
+        ? [
+            {
+              suspension_id: open.suspension_id,
+              reason_code: open.reason_code,
+              started_at: open.started_at,
+              started_by_person_id: open.started_by_person_id,
+              ended_at: new Date().toISOString(),
+              ended_by_person_id: '019a9200-0000-7000-8000-000000000003',
+            },
+            ...record.suspension.history,
+          ]
+        : record.suspension.history,
+    }
+    record.organization.status = 'active'
+  }
+  await fulfill(route, 200, record.suspension)
 }
 
 async function routeGuestQuota(

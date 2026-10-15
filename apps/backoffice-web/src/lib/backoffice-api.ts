@@ -46,6 +46,8 @@ export type BreakGlassRequest = AllfitV1Schemas['BreakGlassRequest']
 export type BreakGlassRequestCreate = AllfitV1Schemas['BreakGlassRequestCreate']
 export type BreakGlassExerciseOutcome = AllfitV1Schemas['BreakGlassExerciseOutcome']
 export type BreakGlassReview = AllfitV1Schemas['BreakGlassReview']
+export type OrganizationSuspension = AllfitV1Schemas['OrganizationSuspension']
+export type OrganizationSuspensionReason = AllfitV1Schemas['OrganizationSuspensionReason']
 export type BreakGlassReviewOutcome = AllfitV1Schemas['BreakGlassReviewOutcome']
 export type ScopeDefinition = AllfitV1Schemas['ScopeDefinition']
 export type ScopeDefinitionPublication = AllfitV1Schemas['ScopeDefinitionPublication']
@@ -622,6 +624,26 @@ export const backofficeApi = {
       { method: 'POST', body: JSON.stringify(exercise) },
     ),
 
+  suspendOrganization: (
+    organizationId: string,
+    reason: OrganizationSuspensionReason,
+    command: BackofficeCommand,
+  ) =>
+    requestJson<OrganizationSuspension>(
+      `/backoffice/v1/organizations/${organizationId}/suspension`,
+      {
+        method: 'POST',
+        headers: commandHeaders(command),
+        body: JSON.stringify({ reason_code: reason }),
+      },
+    ),
+
+  reactivateOrganization: (organizationId: string, command: BackofficeCommand) =>
+    requestJson<OrganizationSuspension>(
+      `/backoffice/v1/organizations/${organizationId}/reactivation`,
+      { method: 'POST', headers: commandHeaders(command), body: '{}' },
+    ),
+
   breakGlassReviewQueue: (signal?: AbortSignal) =>
     requestJson<{ items: BreakGlassReview[] }>(
       '/backoffice/v1/break-glass/reviews',
@@ -799,6 +821,8 @@ function organizationOperation(route: string, method: string): ClientOperation |
   }
   if (segments[4] === 'cancellation') return 'backoffice.organization.handover_cancel'
   if (segments[4] === 'guest-quota') return 'backoffice.organization.guest_quota_set'
+  if (segments[4] === 'suspension') return 'backoffice.organization.suspended'
+  if (segments[4] === 'reactivation') return 'backoffice.organization.reactivated'
   if (segments[4] !== 'handover') return undefined
   return segments[5] === 'resends'
     ? 'backoffice.organization.handover_resend'

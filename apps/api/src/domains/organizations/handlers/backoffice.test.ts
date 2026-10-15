@@ -12,6 +12,7 @@ import type { OrganizationDirectoryService } from '../application/directory.js'
 import type { OrganizationFileService } from '../application/file.js'
 import type { OrganizationHandoverService } from '../application/handover.js'
 import type { OrganizationGuestQuotaService } from '../application/quota.js'
+import type { OrganizationSuspensionService } from '../application/suspension.js'
 import { backofficeOrganizationRoutes } from './backoffice.js'
 
 const ORIGIN = 'https://backoffice.example.test'
@@ -77,6 +78,15 @@ const quotaResource: AllfitV1Schemas['OrganizationGuestQuota'] = {
   },
 }
 
+const fileSuspension: AllfitV1Schemas['OrganizationSuspension'] = {
+  organization_id: ORGANIZATION_ID,
+  status: 'active',
+  suspended: false,
+  suspended_at: null,
+  current: null,
+  history: [],
+}
+
 const fileResource: AllfitV1Schemas['BackofficeOrganizationFile'] = {
   organization: {
     organization_id: ORGANIZATION_ID,
@@ -112,6 +122,7 @@ const fileResource: AllfitV1Schemas['BackofficeOrganizationFile'] = {
   payment_method: { connected: false, provider: null, connected_at: null },
   premium: { gives_pro: true, reason: null },
   guest_quota: quotaResource,
+  suspension: fileSuspension,
 }
 
 function fileService(overrides: Partial<OrganizationFileService> = {}): OrganizationFileService {
@@ -166,6 +177,77 @@ function handoverService(
     },
     ...overrides,
   }
+}
+
+const suspensionResource: AllfitV1Schemas['OrganizationSuspension'] = {
+  organization_id: ORGANIZATION_ID,
+  status: 'suspended',
+  suspended: true,
+  suspended_at: '2026-10-18T15:00:00.000Z',
+  current: {
+    suspension_id: '019ab000-0000-7000-8000-000000000801',
+    reason_code: 'nonpayment',
+    started_at: '2026-10-18T15:00:00.000Z',
+    started_by_person_id: ACTOR_PERSON_ID,
+    people_blocked: 2,
+  },
+  history: [],
+}
+
+let suspensionCalls: { organizationId: string; reason?: string; action: string }[] = []
+
+function suspensionService(
+  overrides: Partial<OrganizationSuspensionService> = {},
+  replayed = false,
+): OrganizationSuspensionService {
+  return {
+    suspend: (_actor, input) => {
+      suspensionCalls.push({
+        organizationId: input.organizationId,
+        reason: input.decision.reason_code,
+        action: 'suspend',
+      })
+      return Promise.resolve({ resource: suspensionResource, replayed })
+    },
+    reactivate: (_actor, input) => {
+      suspensionCalls.push({ organizationId: input.organizationId, action: 'reactivate' })
+      return Promise.resolve({
+        resource: {
+          ...suspensionResource,
+          status: 'active',
+          suspended: false,
+          suspended_at: null,
+          current: null,
+          history: [
+            {
+              suspension_id: '019ab000-0000-7000-8000-000000000801',
+              reason_code: 'nonpayment',
+              started_at: '2026-10-18T15:00:00.000Z',
+              started_by_person_id: ACTOR_PERSON_ID,
+              ended_at: '2026-10-18T18:00:00.000Z',
+              ended_by_person_id: ACTOR_PERSON_ID,
+            },
+          ],
+        },
+        replayed,
+      })
+    },
+    ...overrides,
+  }
+}
+
+function suspensionRoutes(suspension: OrganizationSuspensionService): Hono {
+  return new Hono().route(
+    '/backoffice/v1',
+    backofficeOrganizationRoutes(
+      directoryService(),
+      sessionService(),
+      handoverService(),
+      fileService(),
+      quotaService(),
+      suspension,
+    ),
+  )
 }
 
 function quotaService(
@@ -242,6 +324,8 @@ const validCreate = {
 }
 
 const quotaPath = `/organizations/${ORGANIZATION_ID}/guest-quota`
+const suspensionPath = `/organizations/${ORGANIZATION_ID}/suspension`
+const reactivationPath = `/organizations/${ORGANIZATION_ID}/reactivation`
 
 function quotaRoutes(quota: OrganizationGuestQuotaService): Hono {
   return routes(directoryService(), sessionService(), handoverService(), fileService(), quota)
@@ -260,6 +344,7 @@ beforeEach(() => {
   handoverCalls = []
   fileCalls = []
   quotaCalls = []
+  suspensionCalls = []
   process.env.BACKOFFICE_WEB_URL = ORIGIN
   process.env.STUDIO_WEB_URL = 'https://studio.example.test'
   process.env.API_PUBLIC_URL = 'https://api.example.test'
@@ -280,7 +365,7 @@ describe('Backoffice organization API contract', () => {
       .map((route) => `${route.method} /backoffice/v1${route.path}`)
       .sort()
 
-    expect(contract).toHaveLength(7)
+    expect(contract).toHaveLength(9)
     expect(mounted).toEqual(contract)
   })
 
@@ -622,5 +707,82 @@ describe('Backoffice organization API contract', () => {
     expect(file.guest_quota.seats).toBe(50)
     expect(file.guest_quota.occupied).toBe(3)
     expect(file.guest_quota.places_left).toBe(47)
+  })
+
+  test('T-ORG-API-24 stops a gym under a reason from the agreed list', async () => {
+    const app = suspensionRoutes(suspensionService())
+    const response = await app.request(
+      post(suspensionPath, JSON.stringify({ reason_code: 'nonpayment' })),
+    )
+
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as AllfitV1Schemas['OrganizationSuspension']
+    expect(body.suspended).toBe(true)
+    expect(body.current?.people_blocked).toBe(2)
+    expect(suspensionCalls).toEqual([
+      { organizationId: ORGANIZATION_ID, reason: 'nonpayment', action: 'suspend' },
+    ])
+  })
+
+  test('T-ORG-API-25 refuses a reason the platform never agreed to', async () => {
+    const app = suspensionRoutes(suspensionService())
+    const response = await app.request(
+      post(suspensionPath, JSON.stringify({ reason_code: 'because_i_said_so' })),
+    )
+
+    expect(response.status).toBe(422)
+    expect(suspensionCalls).toHaveLength(0)
+  })
+
+  // The reason is the whole body. A second field would be a decision nobody reviewed.
+  test('T-ORG-API-26 refuses a body carrying anything besides the reason', async () => {
+    const app = suspensionRoutes(suspensionService())
+    const response = await app.request(
+      post(suspensionPath, JSON.stringify({ reason_code: 'nonpayment', status: 'closed' })),
+    )
+
+    expect(response.status).toBe(422)
+    expect(suspensionCalls).toHaveLength(0)
+  })
+
+  test('T-ORG-API-27 reactivation carries no body and reads the period back closed', async () => {
+    const app = suspensionRoutes(suspensionService())
+    const response = await app.request(post(reactivationPath, ''))
+
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as AllfitV1Schemas['OrganizationSuspension']
+    expect(body.suspended).toBe(false)
+    expect(body.current).toBeNull()
+    // Criterion 8 outliving the state: the gym operates and still says it was stopped.
+    expect(body.history[0]?.reason_code).toBe('nonpayment')
+    expect(body.history[0]?.ended_by_person_id).toBe(ACTOR_PERSON_ID)
+    expect(suspensionCalls).toEqual([{ organizationId: ORGANIZATION_ID, action: 'reactivate' }])
+  })
+
+  test('T-ORG-API-28 maps the refusals of both commands to their status codes', async () => {
+    const refusal = (code: string) =>
+      suspensionRoutes(
+        suspensionService({
+          suspend: () => Promise.reject(Object.assign(new Error('refused'), { code })),
+          reactivate: () => Promise.reject(Object.assign(new Error('refused'), { code })),
+        }),
+      )
+
+    const body = JSON.stringify({ reason_code: 'nonpayment' })
+    expect((await refusal('42501').request(post(suspensionPath, body))).status).toBe(403)
+    expect((await refusal('55000').request(post(suspensionPath, body))).status).toBe(409)
+    expect((await refusal('P0002').request(post(suspensionPath, body))).status).toBe(404)
+    expect((await refusal('22023').request(post(suspensionPath, body))).status).toBe(422)
+    expect((await refusal('55000').request(post(reactivationPath, ''))).status).toBe(409)
+  })
+
+  test('T-ORG-API-29 a replayed suspension says so in the header', async () => {
+    const app = suspensionRoutes(suspensionService({}, true))
+    const response = await app.request(
+      post(suspensionPath, JSON.stringify({ reason_code: 'nonpayment' })),
+    )
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('Idempotent-Replay')).toBe('true')
   })
 })
