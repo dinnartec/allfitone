@@ -1350,6 +1350,64 @@ paths:
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
 
+  /backoffice/v1/organizations/{organizationId}/guest-quota:
+    post:
+      tags: [Backoffice Organizations]
+      operationId: setBackofficeOrganizationGuestQuota
+      x-allfit-operation: OP-ORG-023
+      x-allfit-cache: no-store
+      summary: Set how many people a gym may have
+      description: >-
+        `HU-BO-034`. The number Allfit sold the gym: how many people may have a live
+        relationship or an invitation still awaiting an answer at the same time. It is
+        `manage_platform_commercial`, which is not the duty that creates a gym. A
+        `null` is a deal with no cap, and it is told apart from a gym nobody has sold
+        a number to only by its history. Lowering it below the occupancy ends no
+        relationship and revokes no invitation: the gym is over its quota and says so,
+        and `HU-STUDIO-087` is what refuses the next invitation. A gym that no longer
+        operates is not sold a quota: 409.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrganizationGuestQuotaDecision'
+      responses:
+        '200':
+          description: The quota as it now stands, with what is against it
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationGuestQuota'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
   /backoffice/v1/organizations/{organizationId}/cancellation:
     post:
       tags: [Backoffice Organizations]
@@ -11084,6 +11142,7 @@ components:
         - plans
         - payment_method
         - premium
+        - guest_quota
       properties:
         organization:
           type: object
@@ -11221,6 +11280,8 @@ components:
           $ref: '#/components/schemas/OrganizationFilePaymentMethod'
         premium:
           $ref: '#/components/schemas/OrganizationFilePremium'
+        guest_quota:
+          $ref: '#/components/schemas/OrganizationGuestQuota'
     OrganizationFilePlan:
       type: object
       additionalProperties: false
@@ -11257,6 +11318,87 @@ components:
           type: integer
           minimum: 0
           description: How many of the gym's clients are paying this version right now.
+    OrganizationGuestQuotaDecision:
+      type: object
+      additionalProperties: false
+      required: [seats]
+      properties:
+        seats:
+          type: [integer, 'null']
+          minimum: 1
+          maximum: 1000000
+          description: >-
+            How many people the gym may have at once. `null` is no limit: a deal with
+            no cap. Zero is not a quota and is refused — it would be a gym sold the
+            right to invite nobody.
+    OrganizationGuestQuota:
+      type: object
+      additionalProperties: false
+      description: >-
+        What the gym was sold and what stands against it. A quota without the occupancy
+        beside it cannot be judged, so both travel together.
+      required:
+        - organization_id
+        - seats
+        - occupied
+        - relationships_active
+        - invitations_pending
+        - places_left
+        - over_quota
+        - last_change
+      properties:
+        organization_id:
+          $ref: '#/components/schemas/Uuid'
+        seats:
+          type: [integer, 'null']
+          minimum: 1
+          description: Null is no limit, which is not the same as a limit of zero.
+        occupied:
+          type: integer
+          minimum: 0
+          description: >-
+            Live relationships plus invitations still awaiting an answer. It is not a
+            count of people: an unanswered invitation names an address, not somebody
+            who can be told apart from whoever may already be there.
+        relationships_active:
+          type: integer
+          minimum: 0
+        invitations_pending:
+          type: integer
+          minimum: 0
+          description: >-
+            Client invitations with time left to run. One rejected, revoked or out of
+            time has freed its place, and a team invitation never took one.
+        places_left:
+          type: [integer, 'null']
+          minimum: 0
+          description: >-
+            Null when there is no limit. Zero when the quota is full or already
+            exceeded, because there is no such thing as a negative place.
+        over_quota:
+          type: boolean
+          description: >-
+            The gym has more taken than it was sold. It happens when Allfit lowers the
+            number, which never ends a relationship.
+        last_change:
+          type: [object, 'null']
+          additionalProperties: false
+          description: >-
+            Null when nobody has ever set a quota here, which is a different answer
+            from somebody having set it to no limit.
+          required: [at, by_person_id, by_duty_assignment_id, previous_seats]
+          properties:
+            at:
+              type: string
+              format: date-time
+            by_person_id:
+              $ref: '#/components/schemas/Uuid'
+            by_duty_assignment_id:
+              $ref: '#/components/schemas/Uuid'
+            previous_seats:
+              type: [integer, 'null']
+              minimum: 1
+              description: What it was before. Null means it had no limit then.
     OrganizationFilePaymentMethod:
       type: object
       additionalProperties: false

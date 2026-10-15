@@ -21,6 +21,7 @@ export interface BackofficeFixture {
   organizationDirectory?: OrganizationDirectoryFixture
   organizationHandover?: OrganizationHandoverFixture
   organizationFiles?: OrganizationFileFixture
+  guestQuota?: { refusal?: { status: number; code: string } }
   teamInvitations?: TeamInvitationFixture
   clientInvitations?: ClientInvitationFixture
   accountRecovery?: AccountRecoveryFixture
@@ -490,6 +491,41 @@ export interface OrganizationFileRecordFixture {
     gives_pro: boolean
     reason: 'no_published_pro_version' | 'organization_not_active' | null
   }
+  guest_quota: GuestQuotaFixture
+}
+
+export interface GuestQuotaFixture {
+  organization_id: string
+  seats: number | null
+  occupied: number
+  relationships_active: number
+  invitations_pending: number
+  places_left: number | null
+  over_quota: boolean
+  last_change: {
+    at: string
+    by_person_id: string
+    by_duty_assignment_id: string
+    previous_seats: number | null
+  } | null
+}
+
+/** A gym nobody has sold a number to: no limit, and no decision behind it. */
+export function guestQuotaRecord(
+  organizationId: string,
+  overrides: Partial<GuestQuotaFixture> = {},
+): GuestQuotaFixture {
+  return {
+    organization_id: organizationId,
+    seats: null,
+    occupied: 3,
+    relationships_active: 2,
+    invitations_pending: 1,
+    places_left: null,
+    over_quota: false,
+    last_change: null,
+    ...overrides,
+  }
 }
 
 let fileSequence = 0
@@ -537,6 +573,7 @@ export function organizationFileRecord(
       connected_at: '2026-06-02T12:00:00.000Z',
     },
     premium: { gives_pro: true, reason: null },
+    guest_quota: guestQuotaRecord(`019a9200-0000-7000-8000-${suffix}`),
     ...overrides,
   }
 }
@@ -1469,6 +1506,13 @@ export async function mockBackofficeApi(
       )
     ) {
       await routeClientInvitations(route, request, fixture)
+      return
+    }
+    if (
+      request.method === 'POST' &&
+      /^\/backoffice\/v1\/organizations\/[^/]+\/guest-quota$/.test(request.path)
+    ) {
+      await routeGuestQuota(route, request, fixture)
       return
     }
     if (request.method === 'GET' && /^\/backoffice\/v1\/organizations\/[^/]+$/.test(request.path)) {
@@ -2675,6 +2719,45 @@ async function routeOrganizationFile(
     return
   }
   await fulfill(route, 200, record)
+}
+
+async function routeGuestQuota(
+  route: Route,
+  request: MockRequest,
+  fixture: BackofficeFixture,
+): Promise<void> {
+  const state = fixture.guestQuota ?? {}
+  fixture.guestQuota = state
+  if (state.refusal) {
+    await fulfillProblem(route, state.refusal.status, state.refusal.code)
+    return
+  }
+
+  const organizationId = request.path.split('/').filter(Boolean)[3] ?? ''
+  const files = fixture.organizationFiles ?? { files: [] }
+  const record = files.files.find((file) => file.organization.organization_id === organizationId)
+  if (!record) {
+    await fulfillProblem(route, 404, 'not-found')
+    return
+  }
+
+  const body = (request.body ?? {}) as { seats?: number | null }
+  const seats = body.seats === undefined ? null : body.seats
+  const quota = record.guest_quota
+  const next: GuestQuotaFixture = {
+    ...quota,
+    seats,
+    places_left: seats === null ? null : Math.max(seats - quota.occupied, 0),
+    over_quota: seats !== null && quota.occupied > seats,
+    last_change: {
+      at: '2026-10-15T15:00:00.000Z',
+      by_person_id: '019a9000-0000-7000-8000-000000000003',
+      by_duty_assignment_id: '019a9000-0000-7000-8000-000000000703',
+      previous_seats: quota.seats,
+    },
+  }
+  record.guest_quota = next
+  await fulfill(route, 200, next)
 }
 
 async function routeTeamInvitations(

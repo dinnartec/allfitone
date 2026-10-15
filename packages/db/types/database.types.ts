@@ -3656,6 +3656,7 @@ export type Database = {
           claimed_at: string | null
           created_at: string
           display_name: string
+          guest_quota_seats: number | null
           id: string
           legal_name: string | null
           responsible_party: Json
@@ -3670,6 +3671,7 @@ export type Database = {
           claimed_at?: string | null
           created_at?: string
           display_name: string
+          guest_quota_seats?: number | null
           id?: string
           legal_name?: string | null
           responsible_party: Json
@@ -3684,6 +3686,7 @@ export type Database = {
           claimed_at?: string | null
           created_at?: string
           display_name?: string
+          guest_quota_seats?: number | null
           id?: string
           legal_name?: string | null
           responsible_party?: Json
@@ -3822,6 +3825,10 @@ export type Database = {
           result: Json
         }[]
       }
+      guest_quota_projection: {
+        Args: { p_organization_id: string }
+        Returns: Json
+      }
       handover_projection: {
         Args: { p_organization_id: string }
         Returns: Json
@@ -3899,6 +3906,14 @@ export type Database = {
           name: string
         }[]
       }
+      organization_guest_occupancy: {
+        Args: { p_organization_id: string }
+        Returns: {
+          invitations_pending: number
+          occupied: number
+          relationships_active: number
+        }[]
+      }
       organization_projection: {
         Args: { p_organization_id: string }
         Returns: Json
@@ -3928,6 +3943,10 @@ export type Database = {
         Args: { p_actor_person_id: string; p_actor_session_id: string }
         Returns: string
       }
+      require_platform_commercial_duty: {
+        Args: { p_actor_person_id: string; p_actor_session_id: string }
+        Returns: string
+      }
       resend_ownership_invitation: {
         Args: {
           p_actor_person_id: string
@@ -3938,6 +3957,21 @@ export type Database = {
           p_request_hash: string
           p_token_hash: string
           p_token_key_version: number
+        }
+        Returns: {
+          replayed: boolean
+          result: Json
+        }[]
+      }
+      set_organization_guest_quota: {
+        Args: {
+          p_actor_person_id: string
+          p_actor_session_id: string
+          p_command_id: string
+          p_idempotency_key: string
+          p_organization_id: string
+          p_request_hash: string
+          p_seats: number
         }
         Returns: {
           replayed: boolean

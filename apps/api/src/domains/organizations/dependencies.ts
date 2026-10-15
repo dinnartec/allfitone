@@ -11,15 +11,26 @@ import {
   createOrganizationHandoverService,
   type OrganizationHandoverService,
 } from './application/handover.js'
+import {
+  createOrganizationGuestQuotaService,
+  type OrganizationGuestQuotaService,
+} from './application/quota.js'
 import { createOrganizationDirectoryDatabase } from './infrastructure/directory.js'
 import { createOrganizationFileDatabase } from './infrastructure/file.js'
 import { createOrganizationHandoverDatabase } from './infrastructure/handover.js'
+import { createOrganizationGuestQuotaDatabase } from './infrastructure/quota.js'
 import { createOrganizationDatabase } from './infrastructure/index.js'
 
 let cached: StudioOrganizationService | undefined
 let cachedDirectory: OrganizationDirectoryService | undefined
 let cachedHandover: OrganizationHandoverService | undefined
 let cachedFile: OrganizationFileService | undefined
+let cachedQuota: OrganizationGuestQuotaService | undefined
+
+export function organizationGuestQuotaService(): OrganizationGuestQuotaService {
+  cachedQuota ??= createOrganizationGuestQuotaService(createOrganizationGuestQuotaDatabase())
+  return cachedQuota
+}
 
 export function organizationFileService(): OrganizationFileService {
   cachedFile ??= createOrganizationFileService(createOrganizationFileDatabase())

@@ -46,6 +46,16 @@ function file(overrides: Partial<OrganizationFile> = {}): OrganizationFile {
     plans: [],
     payment_method: { connected: false, provider: null, connected_at: null },
     premium: { gives_pro: true, reason: null },
+    guest_quota: {
+      organization_id: '019a8000-0000-7000-8000-000000000301',
+      seats: null,
+      occupied: 0,
+      relationships_active: 0,
+      invitations_pending: 0,
+      places_left: null,
+      over_quota: false,
+      last_change: null,
+    },
     ...overrides,
   }
 }
