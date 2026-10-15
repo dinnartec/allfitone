@@ -12,6 +12,9 @@ import type { BackofficeActor } from '../../identity/index.js'
 import type {
   BreakGlassCategory,
   BreakGlassCommandResult,
+  BreakGlassReview,
+  BreakGlassReviewOutcome,
+  BreakGlassReviewResult,
   BreakGlassDatabase,
   BreakGlassExerciseOutcome,
   BreakGlassRequest,
@@ -259,6 +262,17 @@ export interface BreakGlassService {
     actor: BackofficeActor,
     input: PlatformCommandContext & { breakGlassRequestId: string },
   ): Promise<BreakGlassCommandResult>
+  review(
+    actor: BackofficeActor,
+    input: PlatformCommandContext & {
+      breakGlassRequestId: string
+      outcome: BreakGlassReviewOutcome
+    },
+  ): Promise<BreakGlassReviewResult>
+  reviewQueue(
+    actor: BackofficeActor,
+    input: { requestId: string; limit: number },
+  ): Promise<BreakGlassReview[]>
   list(
     actor: BackofficeActor,
     input: { requestId: string; mine: boolean; status?: BreakGlassStatus; limit: number },
@@ -275,6 +289,8 @@ export function createBreakGlassService(database: BreakGlassDatabase): BreakGlas
     decide: (actor, input) => database.decide({ ...from(actor), ...input }),
     exercise: (actor, input) => database.exercise({ ...from(actor), ...input }),
     close: (actor, input) => database.close({ ...from(actor), ...input }),
+    review: (actor, input) => database.review({ ...from(actor), ...input }),
+    reviewQueue: (actor, input) => database.reviewQueue({ ...from(actor), ...input }),
     list: (actor, input) => database.list({ ...from(actor), ...input }),
   }
 }

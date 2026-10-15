@@ -45,6 +45,8 @@ export type CredentialRenewalDue = AllfitV1Schemas['CredentialRenewalDue']
 export type BreakGlassRequest = AllfitV1Schemas['BreakGlassRequest']
 export type BreakGlassRequestCreate = AllfitV1Schemas['BreakGlassRequestCreate']
 export type BreakGlassExerciseOutcome = AllfitV1Schemas['BreakGlassExerciseOutcome']
+export type BreakGlassReview = AllfitV1Schemas['BreakGlassReview']
+export type BreakGlassReviewOutcome = AllfitV1Schemas['BreakGlassReviewOutcome']
 export type ScopeDefinition = AllfitV1Schemas['ScopeDefinition']
 export type ScopeDefinitionPublication = AllfitV1Schemas['ScopeDefinitionPublication']
 export type SupportOperation = AllfitV1Schemas['SupportOperation']
@@ -620,6 +622,23 @@ export const backofficeApi = {
       { method: 'POST', body: JSON.stringify(exercise) },
     ),
 
+  breakGlassReviewQueue: (signal?: AbortSignal) =>
+    requestJson<{ items: BreakGlassReview[] }>(
+      '/backoffice/v1/break-glass/reviews',
+      signal ? { signal } : {},
+    ),
+
+  reviewBreakGlass: (
+    requestId: string,
+    outcome: BreakGlassReviewOutcome,
+    command: BackofficeCommand,
+  ) =>
+    requestJson<BreakGlassReview>(`/backoffice/v1/break-glass/requests/${requestId}/review`, {
+      method: 'POST',
+      headers: commandHeaders(command),
+      body: JSON.stringify({ outcome }),
+    }),
+
   closeBreakGlass: (requestId: string, command: BackofficeCommand) =>
     requestJson<BreakGlassRequest>(`/backoffice/v1/break-glass/requests/${requestId}/closure`, {
       method: 'POST',
@@ -792,8 +811,13 @@ function breakGlassOperation(route: string): ClientOperation | undefined {
   if (segments[0] !== 'backoffice' || segments[1] !== 'v1' || segments[2] !== 'break-glass') {
     return undefined
   }
-  if (segments.length === 4) return 'backoffice.break_glass.list'
+  if (segments.length === 4) {
+    return segments[3] === 'reviews'
+      ? 'backoffice.break_glass.review_queue'
+      : 'backoffice.break_glass.list'
+  }
   if (segments[5] === 'decisions') return 'backoffice.break_glass.decide'
+  if (segments[5] === 'review') return 'backoffice.break_glass.review'
   if (segments[5] === 'reads') return 'backoffice.break_glass.exercise'
   if (segments[5] === 'closure') return 'backoffice.break_glass.close'
   return undefined

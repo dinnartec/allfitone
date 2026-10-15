@@ -778,6 +778,52 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/backoffice/v1/break-glass/reviews': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Read the cases that still owe a review
+     * @description What is still owed, most overdue first. A case enters this queue the moment it is first exercised and leaves it when it is reviewed, so a window somebody opened and never used never appears.
+     *
+     *     The queue is not filtered by who may review each case: a reviewer who turns out not to be independent is refused by the command, and hiding the row would hide an obligation that is still outstanding.
+     */
+    get: operations['listBackofficeBreakGlassReviewQueue']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/break-glass/requests/{requestId}/review': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Review a break-glass case that was used
+     * @description The only control on break-glass that fires after the reading. Asks for `audit_break_glass`, and for independence: the reviewer is neither the requester, nor the subject, nor anybody who approved the case.
+     *
+     *     A case is reviewable once it was exercised, not once it was approved. A verdict is terminal: the same command replays, a different one conflicts.
+     *
+     *     The twenty-four hours are an obligation and not a filter. A late review is accepted and recorded as late, because refusing it would leave the case unreviewed for good and make "100% of exercised cases are reviewed" unreachable by construction.
+     */
+    post: operations['reviewBackofficeBreakGlass']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/space/v1/telemetry-config': {
     parameters: {
       query?: never
@@ -4487,6 +4533,45 @@ export interface components {
       reason_code: string
       /** Format: date-time */
       decided_at: string
+    }
+    /** @description A verdict and nothing else. The reviewer does not restate the case: the scope, purpose and subject are already on the file and are immutable. */
+    BreakGlassReviewDecision: {
+      outcome: components['schemas']['BreakGlassReviewOutcome']
+    }
+    /**
+     * @description `incident_opened` is not a worse `unjustified`: it says somebody has to act, and it publishes a different domain event for that reason.
+     * @enum {string}
+     */
+    BreakGlassReviewOutcome: 'justified' | 'unjustified' | 'incident_opened'
+    /** @description What is owed on one break-glass case and what was decided about it. Metadata and the count of exercises only: never a trace of what the window actually read. */
+    BreakGlassReview: {
+      /** Format: uuid */
+      request_id: string
+      case_reference: string
+      purpose: components['schemas']['BreakGlassPurpose']
+      categories: components['schemas']['BreakGlassCategory'][]
+      sensitivity_tier: string
+      /** Format: uuid */
+      requester_person_id: string
+      /** Format: uuid */
+      subject_person_id: string
+      exercise_count: number
+      /**
+       * Format: date-time
+       * @description When the obligation started. Null means the window was approved and never used, so nothing is owed.
+       */
+      first_exercised_at: string | null
+      /** Format: date-time */
+      review_due_at: string | null
+      /** @description Owed, started and not yet met. A case that was reviewed is never overdue again however late the review was; that is `reviewed_late`. */
+      overdue: boolean
+      /** Format: date-time */
+      reviewed_at: string | null
+      /** Format: uuid */
+      reviewed_by_person_id: string | null
+      review_outcome: components['schemas']['BreakGlassReviewOutcome'] | null
+      /** @description Null while unreviewed, or while the case was never exercised. */
+      reviewed_late: boolean | null
     }
     /** @description The file. It carries metadata about purpose and subject, and never the person's content. */
     BreakGlassRequest: {
@@ -10969,6 +11054,76 @@ export interface operations {
       403: components['responses']['Forbidden']
       404: components['responses']['NotFound']
       409: components['responses']['Conflict']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listBackofficeBreakGlassReviewQueue: {
+    parameters: {
+      query?: {
+        limit?: components['parameters']['Limit']
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Cases awaiting review */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': {
+            items: components['schemas']['BreakGlassReview'][]
+          }
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  reviewBackofficeBreakGlass: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        requestId: components['parameters']['BreakGlassRequestId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['BreakGlassReviewDecision']
+      }
+    }
+    responses: {
+      /** @description The reviewed case */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['BreakGlassReview']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      422: components['responses']['ValidationFailed']
       503: components['responses']['UpstreamUnavailable']
     }
   }

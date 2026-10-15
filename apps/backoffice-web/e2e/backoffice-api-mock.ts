@@ -102,8 +102,56 @@ export function scopeDefinition(
  * permissive than the real command would let the screen pass while production
  * refused — which is the whole failure this file exists to prevent.
  */
+export interface BreakGlassReviewFixture {
+  request_id: string
+  case_reference: string
+  purpose: string
+  categories: string[]
+  sensitivity_tier: string
+  requester_person_id: string
+  subject_person_id: string
+  exercise_count: number
+  first_exercised_at: string | null
+  review_due_at: string | null
+  overdue: boolean
+  reviewed_at: string | null
+  reviewed_by_person_id: string | null
+  review_outcome: string | null
+  reviewed_late: boolean | null
+}
+
+/** Hours back from now, so a fixture is overdue because of its age and not a date. */
+export function reviewRecord(
+  caseReference: string,
+  hoursAgo: number,
+  overrides: Partial<BreakGlassReviewFixture> = {},
+): BreakGlassReviewFixture {
+  const used = new Date(Date.now() - hoursAgo * 3_600_000)
+  return {
+    request_id: `019c2000-0000-7000-8000-0000000003${String(hoursAgo).padStart(2, '0')}`,
+    case_reference: caseReference,
+    purpose: 'customer_support_request',
+    categories: ['prior_training_history'],
+    sensitivity_tier: 'standard',
+    requester_person_id: '019c2000-0000-7000-8000-000000000003',
+    subject_person_id: '019c2000-0000-7000-8000-000000000006',
+    exercise_count: 2,
+    first_exercised_at: used.toISOString(),
+    review_due_at: new Date(used.getTime() + 24 * 3_600_000).toISOString(),
+    overdue: hoursAgo > 24,
+    reviewed_at: null,
+    reviewed_by_person_id: null,
+    review_outcome: null,
+    reviewed_late: null,
+    ...overrides,
+  }
+}
+
 export interface BreakGlassFixture {
   refusal?: { status: number; code: string }
+  /** The cases that were exercised and still owe a review. */
+  reviews?: BreakGlassReviewFixture[]
+  reviewRefusal?: { status: number; code: string }
   nextCommandFailure?: { status: number; code: string } | undefined
   /**
    * The reason the next exercise is denied, consumed once. It stands for the real
@@ -2041,10 +2089,46 @@ async function routeBreakGlass(
   }
   const segments = request.path.split('/').filter(Boolean)
 
+  if (request.method === 'GET' && segments[3] === 'reviews') {
+    const queue = [...(glass.reviews ?? [])].sort((left, right) =>
+      (left.first_exercised_at ?? '').localeCompare(right.first_exercised_at ?? ''),
+    )
+    await fulfill(route, 200, { items: queue })
+    return
+  }
+
   if (request.method === 'GET') {
     const status = new URLSearchParams(request.query).get('status')
     const rows = status ? glass.files.filter((file) => file.status === status) : glass.files
     await fulfill(route, 200, { items: rows.map((file) => breakGlassProjection(file)) })
+    return
+  }
+
+  if (segments[5] === 'review') {
+    if (glass.reviewRefusal) {
+      await fulfillProblem(route, glass.reviewRefusal.status, glass.reviewRefusal.code)
+      return
+    }
+    const entry = (glass.reviews ?? []).find((row) => row.request_id === segments[4])
+    if (!entry) {
+      await fulfillProblem(route, 404, 'not-found')
+      return
+    }
+    if (entry.reviewed_at !== null) {
+      await fulfillProblem(route, 409, 'conflict')
+      return
+    }
+    const outcome = (request.body as { outcome?: string } | undefined)?.outcome
+    entry.reviewed_at = new Date().toISOString()
+    entry.reviewed_by_person_id = '019c2000-0000-7000-8000-000000000005'
+    entry.review_outcome = outcome ?? 'justified'
+    // Late is decided by the deadline, not by the queue flag: a case stops being
+    // overdue the moment it is answered and stays late for good.
+    entry.reviewed_late =
+      entry.review_due_at !== null &&
+      Date.parse(entry.reviewed_at) > Date.parse(entry.review_due_at)
+    entry.overdue = false
+    await fulfill(route, 200, entry)
     return
   }
 

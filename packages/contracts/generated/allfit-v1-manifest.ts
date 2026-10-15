@@ -83,6 +83,20 @@ export const allfitV1ContractManifest = {
       responses: ['200', '400', '401', '403', '404', '415', '422', '503'],
     },
     {
+      method: 'POST',
+      path: '/backoffice/v1/break-glass/requests/{requestId}/review',
+      operationId: 'reviewBackofficeBreakGlass',
+      allfitOperation: 'OP-SUP-006',
+      responses: ['200', '400', '401', '403', '404', '409', '422', '503'],
+    },
+    {
+      method: 'GET',
+      path: '/backoffice/v1/break-glass/reviews',
+      operationId: 'listBackofficeBreakGlassReviewQueue',
+      allfitOperation: 'OP-SUP-006',
+      responses: ['200', '400', '401', '403', '503'],
+    },
+    {
       method: 'GET',
       path: '/backoffice/v1/catalogue',
       operationId: 'readBackofficeGlobalCatalogue',

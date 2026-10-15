@@ -44,6 +44,24 @@ const file: AllfitV1Schemas['BreakGlassRequest'] = {
   viewer_can_exercise: false,
 }
 
+const review: AllfitV1Schemas['BreakGlassReview'] = {
+  request_id: REQUEST_ID,
+  case_reference: 'CASE-2026-001',
+  purpose: 'customer_support_request',
+  categories: ['nutrition_guidance'],
+  sensitivity_tier: 'standard',
+  requester_person_id: ACTOR_PERSON_ID,
+  subject_person_id: SUBJECT_ID,
+  exercise_count: 2,
+  first_exercised_at: '2026-09-10T18:05:00.000Z',
+  review_due_at: '2026-09-11T18:05:00.000Z',
+  overdue: false,
+  reviewed_at: null,
+  reviewed_by_person_id: null,
+  review_outcome: null,
+  reviewed_late: null,
+}
+
 const creation = {
   subject_person_id: SUBJECT_ID,
   categories: ['nutrition_guidance'],
@@ -80,6 +98,23 @@ function windowService(overrides: Partial<BreakGlassService> = {}): BreakGlassSe
     list: (_actor, input) => {
       captured.push({ operation: 'list', input })
       return Promise.resolve([file])
+    },
+    review: (_actor, input) => {
+      captured.push({ operation: 'review', input })
+      return Promise.resolve({
+        resource: {
+          ...review,
+          reviewed_at: '2026-09-10T19:00:00.000Z',
+          reviewed_by_person_id: ACTOR_PERSON_ID,
+          review_outcome: 'justified',
+          reviewed_late: false,
+        },
+        replayed: false,
+      })
+    },
+    reviewQueue: (_actor, input) => {
+      captured.push({ operation: 'reviewQueue', input })
+      return Promise.resolve([review])
     },
     ...overrides,
   }
@@ -147,7 +182,7 @@ describe('Backoffice break-glass API contract', () => {
   test('T-BG-API-01 mounts every break-glass operation with its contract method', () => {
     const contract = allfitV1ContractManifest.operations
       .filter((operation) =>
-        ['OP-SUP-001', 'OP-SUP-002', 'OP-SUP-003', 'OP-SUP-004'].includes(
+        ['OP-SUP-001', 'OP-SUP-002', 'OP-SUP-003', 'OP-SUP-004', 'OP-SUP-006'].includes(
           operation.allfitOperation ?? '',
         ),
       )
@@ -158,7 +193,7 @@ describe('Backoffice break-glass API contract', () => {
       .map((route) => `${route.method} /backoffice/v1${route.path}`)
       .sort()
 
-    expect(contract).toHaveLength(5)
+    expect(contract).toHaveLength(7)
     expect(mounted).toEqual(contract)
   })
 
@@ -637,5 +672,81 @@ describe('Backoffice break-glass API contract', () => {
       category: 'prior_training_history',
       resourceType: 'execution.executed_sessions',
     })
+  })
+
+  test('T-BG-API-25 the review queue is what is still owed, and says when each clock started', async () => {
+    const response = await routes().fetch(get('/break-glass/reviews'))
+
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as { items: (typeof review)[] }
+    expect(body.items).toEqual([review])
+    expect(body.items[0]?.first_exercised_at).not.toBeNull()
+    expect(captured[0]).toMatchObject({ operation: 'reviewQueue', input: { limit: 25 } })
+  })
+
+  test('T-BG-API-26 records a verdict and passes nothing else through', async () => {
+    const response = await routes().fetch(
+      post(`/break-glass/requests/${REQUEST_ID}/review`, { body: { outcome: 'justified' } }),
+    )
+
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as typeof review
+    expect(body.review_outcome).toBe('justified')
+    expect(body.reviewed_late).toBe(false)
+    expect(captured[0]?.input).toMatchObject({
+      breakGlassRequestId: REQUEST_ID,
+      outcome: 'justified',
+    })
+  })
+
+  test('T-BG-API-27 refuses an outcome the contract does not name', async () => {
+    const response = await routes().fetch(
+      post(`/break-glass/requests/${REQUEST_ID}/review`, { body: { outcome: 'fine' } }),
+    )
+
+    expect(response.status).toBe(422)
+    expect(captured).toHaveLength(0)
+  })
+
+  // The reviewer gives a verdict, not a new account of the case: scope, purpose and
+  // subject are already on the file and are immutable.
+  test('T-BG-API-28 refuses a body that carries anything besides the verdict', async () => {
+    const response = await routes().fetch(
+      post(`/break-glass/requests/${REQUEST_ID}/review`, {
+        body: { outcome: 'justified', case_reference: 'CASE-2026-999' },
+      }),
+    )
+
+    expect(response.status).toBe(422)
+    expect(captured).toHaveLength(0)
+  })
+
+  test('T-BG-API-29 a review needs its idempotency key, like every other command', async () => {
+    const response = await routes().fetch(
+      post(`/break-glass/requests/${REQUEST_ID}/review`, {
+        body: { outcome: 'justified' },
+        idempotencyKey: '',
+      }),
+    )
+
+    expect(response.status).toBe(400)
+    expect(captured).toHaveLength(0)
+  })
+
+  test('T-BG-API-30 a replayed review says so in the header', async () => {
+    const response = await routes(
+      windowService({
+        review: (_actor, input) => {
+          captured.push({ operation: 'review', input })
+          return Promise.resolve({
+            resource: { ...review, review_outcome: 'justified' },
+            replayed: true,
+          })
+        },
+      }),
+    ).fetch(post(`/break-glass/requests/${REQUEST_ID}/review`, { body: { outcome: 'justified' } }))
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('idempotent-replay')).toBe('true')
   })
 })

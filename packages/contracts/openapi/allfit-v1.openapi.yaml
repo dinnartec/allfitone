@@ -2059,6 +2059,113 @@ paths:
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
 
+  /backoffice/v1/break-glass/reviews:
+    get:
+      tags: [Backoffice Break Glass]
+      operationId: listBackofficeBreakGlassReviewQueue
+      x-allfit-operation: OP-SUP-006
+      x-allfit-cache: no-store
+      summary: Read the cases that still owe a review
+      description: >-
+        What is still owed, most overdue first. A case enters this queue the
+        moment it is first exercised and leaves it when it is reviewed, so a
+        window somebody opened and never used never appears.
+
+
+        The queue is not filtered by who may review each case: a reviewer who
+        turns out not to be independent is refused by the command, and hiding
+        the row would hide an obligation that is still outstanding.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Cases awaiting review
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/BreakGlassReview'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /backoffice/v1/break-glass/requests/{requestId}/review:
+    post:
+      tags: [Backoffice Break Glass]
+      operationId: reviewBackofficeBreakGlass
+      x-allfit-operation: OP-SUP-006
+      x-allfit-cache: no-store
+      summary: Review a break-glass case that was used
+      description: >-
+        The only control on break-glass that fires after the reading. Asks for
+        `audit_break_glass`, and for independence: the reviewer is neither the
+        requester, nor the subject, nor anybody who approved the case.
+
+
+        A case is reviewable once it was exercised, not once it was approved. A
+        verdict is terminal: the same command replays, a different one conflicts.
+
+
+        The twenty-four hours are an obligation and not a filter. A late review
+        is accepted and recorded as late, because refusing it would leave the
+        case unreviewed for good and make "100% of exercised cases are reviewed"
+        unreachable by construction.
+      security:
+        - backofficeCookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/BreakGlassRequestId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BreakGlassReviewDecision'
+      responses:
+        '200':
+          description: The reviewed case
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BreakGlassReview'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
   /space/v1/telemetry-config:
     get:
       tags: [Platform Telemetry]
@@ -11906,6 +12013,97 @@ components:
         decided_at:
           type: string
           format: date-time
+    BreakGlassReviewDecision:
+      type: object
+      additionalProperties: false
+      required: [outcome]
+      description: >-
+        A verdict and nothing else. The reviewer does not restate the case: the
+        scope, purpose and subject are already on the file and are immutable.
+      properties:
+        outcome:
+          $ref: '#/components/schemas/BreakGlassReviewOutcome'
+    BreakGlassReviewOutcome:
+      type: string
+      description: >-
+        `incident_opened` is not a worse `unjustified`: it says somebody has to
+        act, and it publishes a different domain event for that reason.
+      enum: [justified, unjustified, incident_opened]
+    BreakGlassReview:
+      type: object
+      additionalProperties: false
+      description: >-
+        What is owed on one break-glass case and what was decided about it.
+        Metadata and the count of exercises only: never a trace of what the
+        window actually read.
+      required:
+        [
+          request_id,
+          case_reference,
+          purpose,
+          categories,
+          sensitivity_tier,
+          requester_person_id,
+          subject_person_id,
+          exercise_count,
+          first_exercised_at,
+          review_due_at,
+          overdue,
+          reviewed_at,
+          reviewed_by_person_id,
+          review_outcome,
+          reviewed_late,
+        ]
+      properties:
+        request_id:
+          type: string
+          format: uuid
+        case_reference:
+          type: string
+        purpose:
+          $ref: '#/components/schemas/BreakGlassPurpose'
+        categories:
+          type: array
+          items:
+            $ref: '#/components/schemas/BreakGlassCategory'
+        sensitivity_tier:
+          type: string
+        requester_person_id:
+          type: string
+          format: uuid
+        subject_person_id:
+          type: string
+          format: uuid
+        exercise_count:
+          type: integer
+          minimum: 0
+        first_exercised_at:
+          type: [string, 'null']
+          format: date-time
+          description: >-
+            When the obligation started. Null means the window was approved and
+            never used, so nothing is owed.
+        review_due_at:
+          type: [string, 'null']
+          format: date-time
+        overdue:
+          type: boolean
+          description: >-
+            Owed, started and not yet met. A case that was reviewed is never
+            overdue again however late the review was; that is `reviewed_late`.
+        reviewed_at:
+          type: [string, 'null']
+          format: date-time
+        reviewed_by_person_id:
+          type: [string, 'null']
+          format: uuid
+        review_outcome:
+          oneOf:
+            - $ref: '#/components/schemas/BreakGlassReviewOutcome'
+            - type: 'null'
+        reviewed_late:
+          type: [boolean, 'null']
+          description: Null while unreviewed, or while the case was never exercised.
     BreakGlassRequest:
       type: object
       additionalProperties: false
