@@ -2325,6 +2325,32 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/studio/v1/organizations/{organizationId}/relationships/{relationshipId}/termination': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * End a client's relationship with the gym
+     * @description Ends the relationship **at once**, with no notice period, and stops every permission it carried at the same instant.
+     *
+     *     **Freezing is not revoking.** The organization keeps the history it was shown up to that moment and receives nothing created after it. That history is not readable through ordinary screens: it needs a historical-access case, an eligible actor, MFA and a stated purpose.
+     *
+     *     The professional in charge and every accepted cover are closed at the same instant, so nobody keeps reading through an assignment. The person is told, inside the command's own transaction — a termination that cannot be announced does not happen.
+     *
+     *     A `coach` may not call this, even for a client they attend. A reason is optional.
+     */
+    post: operations['terminateRelationship']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/studio/v1/organizations/{organizationId}/relationships/{relationshipId}/substitutions': {
     parameters: {
       query?: never
@@ -6702,6 +6728,21 @@ export interface components {
       starts_on: string
       /** Format: date */
       ends_on: string
+    }
+    /** @description A reason is optional: a gym does not owe the system a justification. An empty one is refused rather than stored, because a blank reason reads as a reason that was given. */
+    RelationshipTerminationCreate: {
+      reason?: string
+    }
+    /** @description The relationship after it ended, and what stopped with it. `ended_at` is the single instant the whole thing used: the relationship, every permission frozen and every assignment closed carry that same moment. */
+    RelationshipTermination: {
+      relationship_id: components['schemas']['UuidV7']
+      person_id: components['schemas']['UuidV7']
+      /** Format: date-time */
+      ended_at: string
+      /** @description Permissions that stopped at that instant. **Frozen is not revoked**: the organization keeps what it was shown up to then and receives nothing after, and reading that history needs its own restricted path. */
+      frozen_grants: number
+      /** @description The holder and every accepted cover. A cover nobody answered granted nothing and is not counted. */
+      closed_assignments: number
     }
     /** @description The cover after being cut short. `ended_at` is the instant the access stopped, which is now and not the day it was meant to run until — the professional named here reads nothing of this person's from that moment. */
     RelationshipSubstitutionTermination: {
@@ -14065,6 +14106,47 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['RelationshipReassignment']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  terminateRelationship: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+        relationshipId: components['parameters']['RelationshipId']
+      }
+      cookie?: never
+    }
+    requestBody?: {
+      content: {
+        'application/json': components['schemas']['RelationshipTerminationCreate']
+      }
+    }
+    responses: {
+      /** @description The relationship is over, and every permission it carried is frozen */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['RelationshipTermination']
         }
       }
       400: components['responses']['BadRequest']

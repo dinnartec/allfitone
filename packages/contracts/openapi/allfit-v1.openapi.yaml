@@ -5801,6 +5801,72 @@ paths:
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
 
+  /studio/v1/organizations/{organizationId}/relationships/{relationshipId}/termination:
+    post:
+      tags: [Studio Relationships]
+      operationId: terminateRelationship
+      x-allfit-operation: OP-REL-008
+      x-allfit-cache: no-store
+      summary: End a client's relationship with the gym
+      description: >-
+        Ends the relationship **at once**, with no notice period, and stops
+        every permission it carried at the same instant.
+
+
+        **Freezing is not revoking.** The organization keeps the history it was
+        shown up to that moment and receives nothing created after it. That
+        history is not readable through ordinary screens: it needs a
+        historical-access case, an eligible actor, MFA and a stated purpose.
+
+
+        The professional in charge and every accepted cover are closed at the
+        same instant, so nobody keeps reading through an assignment. The person
+        is told, inside the command's own transaction — a termination that
+        cannot be announced does not happen.
+
+
+        A `coach` may not call this, even for a client they attend. A reason is
+        optional.
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/RelationshipId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RelationshipTerminationCreate'
+      responses:
+        '200':
+          description: The relationship is over, and every permission it carried is frozen
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RelationshipTermination'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
   /studio/v1/organizations/{organizationId}/relationships/{relationshipId}/substitutions:
     get:
       tags: [Studio Relationships]
@@ -17094,6 +17160,46 @@ components:
         ends_on:
           type: string
           format: date
+    RelationshipTerminationCreate:
+      description: >-
+        A reason is optional: a gym does not owe the system a justification. An
+        empty one is refused rather than stored, because a blank reason reads as
+        a reason that was given.
+      type: object
+      additionalProperties: false
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 2000
+    RelationshipTermination:
+      description: >-
+        The relationship after it ended, and what stopped with it. `ended_at` is
+        the single instant the whole thing used: the relationship, every
+        permission frozen and every assignment closed carry that same moment.
+      type: object
+      additionalProperties: false
+      required: [relationship_id, person_id, ended_at, frozen_grants, closed_assignments]
+      properties:
+        relationship_id:
+          $ref: '#/components/schemas/UuidV7'
+        person_id:
+          $ref: '#/components/schemas/UuidV7'
+        ended_at:
+          type: string
+          format: date-time
+        frozen_grants:
+          type: integer
+          description: >-
+            Permissions that stopped at that instant. **Frozen is not revoked**:
+            the organization keeps what it was shown up to then and receives
+            nothing after, and reading that history needs its own restricted
+            path.
+        closed_assignments:
+          type: integer
+          description: >-
+            The holder and every accepted cover. A cover nobody answered granted
+            nothing and is not counted.
     RelationshipSubstitutionTermination:
       description: >-
         The cover after being cut short. `ended_at` is the instant the access

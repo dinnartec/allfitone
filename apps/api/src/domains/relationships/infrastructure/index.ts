@@ -19,6 +19,7 @@ import type {
   RelationshipSubstitution,
   SubstitutionProposalDatabase,
   SubstitutionListDatabase,
+  RelationshipTerminationDatabase,
   SubstitutionTerminationDatabase,
   MyRelationship,
   MyRelationshipDatabase,
@@ -669,4 +670,63 @@ type ListedSubstitutionRow = {
   valid_to: Date | null
   ends_on: string | null
   accepted_by_person_at: Date | null
+}
+
+/**
+ * `OP-REL-008`. The counts come back as numbers rather than being recomputed
+ * here: the command is the only place that knows how many grants were still
+ * active when `T` happened, and asking again afterwards would answer a
+ * different question.
+ */
+export function createRelationshipTerminationDatabase(
+  sql: postgres.Sql = database(),
+): RelationshipTerminationDatabase {
+  return {
+    terminate: (input) =>
+      measureStudioRequestPhase('business-db', async () => {
+        const row = await sql.begin(async (transaction) => {
+          await setPersonActor(transaction, input.actorPersonId)
+          const [termination] = await transaction<RelationshipTerminationRow[]>`
+            select
+              relationship_id,
+              person_id,
+              ended_at,
+              frozen_grants,
+              closed_assignments,
+              replayed
+            from relationships.terminate_relationship(
+              ${input.actorPersonId}::uuid,
+              ${input.organizationId}::uuid,
+              ${input.relationshipId}::uuid,
+              ${input.reason ?? null}::text,
+              ${input.idempotencyKey}::uuid,
+              ${input.commandId}::uuid,
+              ${input.requestHash}
+            )
+          `
+          return termination
+        })
+
+        if (!row) throw new Error('terminate_relationship returned no row')
+        return {
+          resource: {
+            relationshipId: row.relationship_id,
+            personId: row.person_id,
+            endedAt: row.ended_at,
+            frozenGrants: row.frozen_grants,
+            closedAssignments: row.closed_assignments,
+          },
+          replayed: row.replayed,
+        }
+      }),
+  }
+}
+
+type RelationshipTerminationRow = {
+  relationship_id: string
+  person_id: string
+  ended_at: Date
+  frozen_grants: number
+  closed_assignments: number
+  replayed: boolean
 }

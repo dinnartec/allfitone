@@ -12,6 +12,7 @@ import type {
   RelationshipStateDatabase,
   SubstitutionProposalDatabase,
   SubstitutionListDatabase,
+  RelationshipTerminationDatabase,
   SubstitutionPage,
   SubstitutionQuery,
   SubstitutionTerminationDatabase,
@@ -230,6 +231,33 @@ export function createSubstitutionTerminationService(
     },
     endMine(personId, input) {
       return database.endSubstitution({ actorPersonId: personId, ...input })
+    },
+  }
+}
+
+/**
+ * `OP-REL-008`. Thin, like its siblings: whether the relationship is live, who
+ * the caller is and what freezing a grant means are all decisions the command
+ * makes, and none of them is visible from here.
+ */
+export interface RelationshipTerminationService {
+  terminate(
+    actor: AccountActor,
+    input: CommandContext & {
+      organizationId: string
+      relationshipId: string
+      reason?: string
+    },
+  ): ReturnType<RelationshipTerminationDatabase['terminate']>
+}
+
+export function createRelationshipTerminationService(
+  database: RelationshipTerminationDatabase,
+): RelationshipTerminationService {
+  return {
+    terminate(actor, input) {
+      if (!actor.personId) throw new RelationshipsError('registration-incomplete')
+      return database.terminate({ actorPersonId: actor.personId, ...input })
     },
   }
 }

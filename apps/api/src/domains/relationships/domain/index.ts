@@ -332,6 +332,41 @@ export interface SubstitutionTerminationDatabase {
 }
 
 /**
+ * `OP-REL-008`. A relationship the organization ended, and what stopped with it.
+ *
+ * `endedAt` is the single instant `T` the whole transaction used: the
+ * relationship, every grant it froze and every assignment it closed carry this
+ * same moment. A historical-access case is measured against it, so three
+ * answers to «when did this stop» would be three different boundaries.
+ *
+ * The counts are what the screen reports back. `frozenGrants` is the one that
+ * matters to a reader: freezing is not revoking, and saying how many permissions
+ * stopped is saying what the organization keeps as history and no longer
+ * receives.
+ */
+export interface RelationshipTermination {
+  readonly relationshipId: string
+  readonly personId: string
+  readonly endedAt: Date
+  readonly frozenGrants: number
+  readonly closedAssignments: number
+}
+
+export type RelationshipTerminationResult = CommandResult<RelationshipTermination>
+
+export interface RelationshipTerminationDatabase {
+  terminate(
+    input: CommandContext & {
+      actorPersonId: string
+      organizationId: string
+      relationshipId: string
+      /** Optional by the catalogue: a gym need not justify itself to the system. */
+      reason?: string
+    },
+  ): Promise<RelationshipTerminationResult>
+}
+
+/**
  * `OP-REL-013`. The covers of one relationship, running and finished, newest
  * first.
  *
