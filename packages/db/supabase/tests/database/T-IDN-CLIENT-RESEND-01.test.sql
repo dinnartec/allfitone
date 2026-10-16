@@ -19,7 +19,7 @@
 
 begin;
 
-select plan(38);
+select plan(40);
 
 insert into identity.people (id, given_name, family_name, status)
 values
@@ -347,6 +347,34 @@ select is(
 -- ---------------------------------------------------------------------------
 -- A lapsed invitation is reissued, offering exactly what it offered
 -- ---------------------------------------------------------------------------
+
+-- A reissue is a new invitation, so it takes a place (`HU-STUDIO-087`). The gym holds one
+-- live invitation and one client; sold exactly two places, the reissue is refused, and
+-- the same command succeeds below once the quota is lifted.
+update organizations.organizations set guest_quota_seats = 2
+where id = '019b3000-0000-7000-8000-000000000301';
+
+select throws_ok(
+  $$ select * from identity.resend_client_invitation(
+    '019b3000-0000-7000-8000-000000000002', '019b3000-0000-7000-8000-000000000042',
+    '019b3000-0000-7000-8000-000000000301', '019b3000-0000-7000-8000-000000000502',
+    extensions.digest('T-IDN-CLIENT-RESEND-01 r2', 'sha256'), 1::smallint,
+    'a0000000-0000-4000-8000-000000000002', '019b3000-0000-7000-8000-000000000602',
+    decode(repeat('a2', 32), 'hex')
+  ) $$,
+  '55000',
+  'the gym has no places left in its guest quota',
+  'support cannot reissue an invitation into a gym that has no places left'
+);
+
+select is(
+  (select count(*) from identity.invitations where reissues_invitation_id is not null),
+  0::bigint,
+  'and the refusal reissued nothing'
+);
+
+update organizations.organizations set guest_quota_seats = null
+where id = '019b3000-0000-7000-8000-000000000301';
 
 create temporary table reissue on commit drop as
 select * from identity.resend_client_invitation(

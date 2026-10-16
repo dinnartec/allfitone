@@ -50,6 +50,8 @@ export type ApiErrorCode =
   /** The command already ran, and what it created has been deleted since. */
   | 'command-effect-disposed'
   | 'separation-of-duties'
+  /** The gym has no places left in the guest quota Allfit sold it. */
+  | 'guest-quota-full'
 
 const STATUS: Record<ApiErrorCode, ContentfulStatusCode> = {
   unauthenticated: 401,
@@ -72,6 +74,7 @@ const STATUS: Record<ApiErrorCode, ContentfulStatusCode> = {
   'rate-limited': 429,
   'command-effect-disposed': 410,
   'separation-of-duties': 403,
+  'guest-quota-full': 409,
 }
 
 const TITLE: Record<ApiErrorCode, string> = {
@@ -95,6 +98,7 @@ const TITLE: Record<ApiErrorCode, string> = {
   'rate-limited': 'Too many requests',
   'command-effect-disposed': 'The command effect was disposed',
   'separation-of-duties': 'This actor already asked to read this person',
+  'guest-quota-full': 'The gym has no places left in its guest quota',
 }
 
 /**

@@ -36,6 +36,7 @@ import {
   directoryEntryId,
   seesEveryClient,
 } from '@/lib/client-directory'
+import { guestQuotaOf, quotaSummary } from '@/lib/guest-quota'
 import { useCompactViewport } from '@/lib/use-compact-viewport'
 import { StudioApiError, type ClientDirectoryItem } from '@/lib/studio-api'
 import {
@@ -72,6 +73,7 @@ export function ClientDirectoryList() {
   const query = useInfiniteQuery({ ...options, enabled: canView })
   const forbidden = isStudioForbidden(query.error)
   const items = forbidden ? [] : flattenClientPages(query.data)
+  const quotaLine = forbidden ? undefined : quotaSummary(guestQuotaOf(query.data))
   const loading = (canView && query.isPending) || rolesQuery.isPending
   const loadingMore = query.isFetchingNextPage
   const staleCursor =
@@ -168,6 +170,9 @@ export function ClientDirectoryList() {
           ) : null
         }
       />
+
+      {/* Counted over the whole gym whatever the filter or the caller's narrowing. */}
+      {quotaLine ? <p data-guest-quota-summary>{quotaLine}</p> : null}
 
       <ToggleGroup
         value={[filter]}

@@ -215,6 +215,10 @@ function operationFailure(c: Context, error: unknown) {
     return fail(c, 'rate-limited')
   }
   if (sqlState === 'P0004') return fail(c, 'conflict')
+  // The command's only 55000 is the quota: the gym has no place left for it.
+  if (sqlState === '55000') {
+    return fail(c, 'guest-quota-full', 'the gym has no places left in its guest quota')
+  }
   if (sqlState === '23505' || sqlState === '40001') return fail(c, 'conflict')
   if (sqlState === '22023' || sqlState === '23514' || sqlState === '22P02') {
     return fail(c, 'validation-failed')

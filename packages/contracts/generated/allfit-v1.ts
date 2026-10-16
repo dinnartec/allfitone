@@ -1817,6 +1817,8 @@ export interface paths {
      *     An entry is either a **relationship** — somebody who accepted — or an **invitation** nobody has answered yet. An invitation entry has no person and no name, because until somebody accepts, neither exists; it carries the masked contact instead.
      *
      *     What comes back depends on the caller. A role holding `view_directory` reads the whole directory and every unanswered invitation. A coach reads only the relationships they hold or stand in for, and only the invitations they themselves sent.
+     *
+     *     HU-STUDIO-087. `guest_quota` is how full the gym is, counted over the whole organization whatever the caller may list: a coach is held to the same quota as everyone else and has to be told how much of it is left. Allfit fixes the number; Studio never changes it, and who set it is not part of the answer.
      */
     get: operations['listStudioOrganizationClients']
     put?: never
@@ -2002,6 +2004,8 @@ export interface paths {
      *     Reissuing the same offer to the same contact reuses the pending invitation so the person does not receive two. Asking for a different set of scopes is a different proposal and issues a new one, because the person would be answering a different question.
      *
      *     The initial-program proposal in criteria 2, 6 and 7 of the story is not implemented: an organization has no way to publish a program yet.
+     *
+     *     HU-STUDIO-087. A gym holds as many people as Allfit sold it. A new invitation that would take a place the gym does not have is refused with 409 `guest-quota-full` before anything is written, for every role that may invite. Reusing a pending invitation is not refused, because it already holds its place, and neither is a retry of a command that went through. A gym with no quota is not limited. The figure is read beforehand from the client directory (`guest_quota`).
      */
     post: operations['createStudioClientInvitation']
     delete?: never
@@ -6761,6 +6765,18 @@ export interface components {
     ClientDirectoryPage: {
       data: components['schemas']['ClientDirectoryItem'][]
       page: components['schemas']['Page']
+      guest_quota: components['schemas']['StudioGuestQuota']
+    }
+    /** @description How full the gym is against the quota Allfit sold it. It carries nothing about who set that number or when. */
+    StudioGuestQuota: {
+      /** @description Null is no limit, which is not the same as a limit of zero. */
+      seats: number | null
+      /** @description Live relationships plus client invitations still awaiting an answer. An invitation that was rejected, revoked or has run out of time has freed its place, and so has a terminated relationship. */
+      occupied: number
+      /** @description Null when there is no limit. Zero when the quota is full or already exceeded, because there is no such thing as a negative place. */
+      places_left: number | null
+      /** @description The gym has more taken than it was sold, because Allfit lowered the number. Nobody is removed; only new invitations are refused. */
+      over_quota: boolean
     }
     OrganizationCapability: {
       code: string
@@ -13305,7 +13321,24 @@ export interface operations {
       401: components['responses']['Unauthenticated']
       403: components['responses']['Forbidden']
       404: components['responses']['NotFound']
-      409: components['responses']['Conflict']
+      /** @description The gym has no places left in its guest quota (`guest-quota-full`), or the command conflicts with a concurrent one or reuses an idempotency identity. */
+      409: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          /**
+           * @example {
+           *       "type": "https://errors.allfit.invalid/guest-quota-full",
+           *       "title": "The gym has no places left in its guest quota",
+           *       "status": 409,
+           *       "request_id": "01JEXAMPLE0000000000000000"
+           *     }
+           */
+          'application/problem+json': components['schemas']['Problem']
+        }
+      }
       422: components['responses']['ValidationFailed']
       429: components['responses']['RateLimited']
       503: components['responses']['UpstreamUnavailable']
