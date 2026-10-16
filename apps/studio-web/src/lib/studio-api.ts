@@ -55,6 +55,8 @@ export type RelationshipReassignment = AllfitV1Schemas['RelationshipReassignment
 export type RelationshipSubstitutionProposalCreate =
   AllfitV1Schemas['RelationshipSubstitutionProposalCreate']
 export type RelationshipSubstitutionProposal = AllfitV1Schemas['RelationshipSubstitutionProposal']
+export type RelationshipSubstitutionTermination =
+  AllfitV1Schemas['RelationshipSubstitutionTermination']
 export type Organization = AllfitV1Schemas['Organization']
 export type OrganizationSite = AllfitV1Schemas['OrganizationSite']
 export type OrganizationSiteStatus = AllfitV1Schemas['OrganizationSiteStatus']
@@ -447,6 +449,25 @@ export const studioApi = {
         method: 'POST',
         headers: commandHeaders(command),
         body: JSON.stringify(body),
+      },
+    ),
+
+  /**
+   * `OP-REL-006`. No body: what the command acts on is entirely in the path, so
+   * the request hash that makes it idempotent is derived there too.
+   */
+  endRelationshipSubstitution: (
+    organizationId: string,
+    relationshipId: string,
+    substitutionId: string,
+    command: CommandHeaders,
+  ) =>
+    request<RelationshipSubstitutionTermination>(
+      `/studio/v1/organizations/${organizationId}/relationships/${relationshipId}` +
+        `/substitutions/${substitutionId}/termination`,
+      {
+        method: 'POST',
+        headers: commandHeaders(command),
       },
     ),
 

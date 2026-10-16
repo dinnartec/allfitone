@@ -122,6 +122,25 @@ async function settleAnimations(page: Page): Promise<void> {
 const workspace = `/organizations/${activeMembership.organization_id}`
 const relationshipId = relationshipState.relationship_id
 
+/** The fixture's cover is `proposed`; this one is actually running. */
+function runningCover() {
+  return {
+    ...relationshipState,
+    substitutions: [
+      {
+        assignment_id: '01991600-7000-7000-8000-000000000402',
+        membership_id: '01991600-7000-7000-8000-000000000003',
+        professional_person_id: '01991600-7000-7000-8000-000000000203',
+        display_name: 'Daniela Hoyos',
+        status: 'active',
+        valid_from: '2026-10-10T00:00:00.000Z',
+        ends_on: '2026-10-24',
+        accepted_by_person_at: '2026-10-09T18:00:00.000Z',
+      },
+    ],
+  }
+}
+
 const memberOfTwo = () =>
   createStudioApiFixture({
     memberships: [activeMembership, secondActiveMembership, terminatedMembership],
@@ -1071,6 +1090,45 @@ export const SCREENS: Screen[] = [
       }),
     reveal: async (page) => {
       await expect(page.getByRole('button', { name: 'Proponer suplencia' })).toBeVisible()
+    },
+  },
+  {
+    /*
+     * HU-030. A cover that is running, which is the only kind that can be cut
+     * short — and the row now carries a third thing beside the name and the
+     * badge. Stacked on a phone that is three lines where there were two.
+     */
+    stories: 'HU-030 · una suplencia corriendo, con la acción de terminarla',
+    path: `${workspace}/clients/${relationshipId}`,
+    fixture: () =>
+      createStudioApiFixture({
+        memberships: [activeMembership],
+        organizationMemberships: coachedTeam(),
+        relationshipState: runningCover(),
+      }),
+    reveal: async (page) => {
+      await expect(page.getByRole('button', { name: 'Terminar', exact: true })).toBeVisible()
+    },
+  },
+  {
+    /*
+     * The question itself. It is the one dialog in this card that takes an
+     * access away rather than asking for one, so it is an `AlertDialog` and its
+     * confirm button is destructive — worth looking at beside its siblings.
+     */
+    stories: 'HU-030 · la pregunta antes de cortar un acceso',
+    path: `${workspace}/clients/${relationshipId}`,
+    fixture: () =>
+      createStudioApiFixture({
+        memberships: [activeMembership],
+        organizationMemberships: coachedTeam(),
+        relationshipState: runningCover(),
+      }),
+    reveal: async (page) => {
+      await page.getByRole('button', { name: 'Terminar', exact: true }).click()
+      await expect(
+        page.getByText(/dejará de ver los datos de esta persona ahora mismo/),
+      ).toBeVisible()
     },
   },
   // --- `/organizations/[id]/clients/[relationshipId]/history` · HU-026 ---

@@ -54,6 +54,7 @@ import { useParams } from 'next/navigation'
 import { useOrganizationContext } from './organization-context'
 import { RelationshipHolderChange } from './relationship-holder-change'
 import { RelationshipHolderForm } from './relationship-holder-form'
+import { RelationshipSubstitutionEnd } from './relationship-substitution-end'
 import { RelationshipSubstitutionPropose } from './relationship-substitution-propose'
 import { WorkspacePageHeader } from './workspace-page-header'
 import { clientInitials, seesEveryClient } from '@/lib/client-directory'
@@ -71,6 +72,7 @@ import {
   substitutionStatusTone,
 } from '@/lib/relationship-state'
 import {
+  canEndSubstitution,
   canProposeSubstitution,
   coversAvailable,
   seesEverySubstitution,
@@ -367,7 +369,18 @@ function ProfessionalsPanel({
           ) : (
             <ul data-relationship-substitution-list aria-label="Suplencias del vínculo">
               {substitutions.map((substitution) => (
-                <SubstitutionRow key={substitution.assignment_id} substitution={substitution} />
+                <SubstitutionRow
+                  key={substitution.assignment_id}
+                  substitution={substitution}
+                  organizationId={organizationId}
+                  relationshipId={relationship.relationship_id}
+                  holderName={holder?.display_name ?? 'el profesional responsable'}
+                  mayEnd={canEndSubstitution({
+                    mayAssignProfessionals,
+                    relationshipActive: active,
+                    status: substitution.status,
+                  })}
+                />
               ))}
             </ul>
           )}
@@ -377,7 +390,24 @@ function ProfessionalsPanel({
   )
 }
 
-function SubstitutionRow({ substitution }: { substitution: RelationshipSubstitution }) {
+function SubstitutionRow({
+  substitution,
+  organizationId,
+  relationshipId,
+  holderName,
+  mayEnd,
+}: {
+  substitution: RelationshipSubstitution
+  organizationId: string
+  relationshipId: string
+  holderName: string
+  /*
+   * Decided by the card, not here: the rule needs the relationship's state and
+   * the reader's capability, and a row that worked it out for itself would be
+   * a second copy of `OP-REL-006`'s actors to drift from the first.
+   */
+  mayEnd: boolean
+}) {
   return (
     <li data-relationship-substitution>
       <div data-relationship-substitution-identity>
@@ -387,6 +417,15 @@ function SubstitutionRow({ substitution }: { substitution: RelationshipSubstitut
       <Badge variant={substitutionStatusTone(substitution.status)}>
         {substitutionStatusLabel(substitution.status)}
       </Badge>
+      {mayEnd ? (
+        <RelationshipSubstitutionEnd
+          organizationId={organizationId}
+          relationshipId={relationshipId}
+          substitutionId={substitution.assignment_id}
+          substituteName={substitution.display_name}
+          holderName={holderName}
+        />
+      ) : null}
     </li>
   )
 }

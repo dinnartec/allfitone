@@ -1,12 +1,16 @@
 import { describe, expect, test } from 'bun:test'
 
 import {
+  canEndSubstitution,
   canProposeSubstitution,
   coversAvailable,
   proposalRefusalDescription,
   proposalRefusalFor,
   proposalRefusalTitle,
   seesEverySubstitution,
+  terminationRefusalDescription,
+  terminationRefusalFor,
+  terminationRefusalTitle,
   todayAsCalendarDay,
   windowProblem,
   windowProblemMessage,
@@ -214,5 +218,94 @@ describe('whether the list the reader sees is the whole list', () => {
   // An accepted substitute reading the screen sees their own row and no other.
   test('is not the whole list for a reader who is neither', () => {
     expect(seesEverySubstitution({ everyClient: false, isHolder: false })).toBe(false)
+  })
+})
+
+describe('quién puede cortar una suplencia', () => {
+  /*
+   * La asimetría, escrita como prueba. `OP-REL-004` acepta al titular y
+   * `OP-REL-006` no: puede pedir que le cubran y no puede cancelarlo. Si
+   * alguien lo «arregla» leyendo al titular en esta regla, el botón aparecerá
+   * en pantalla para quien el comando va a rechazar.
+   */
+  test('el titular no puede, aunque sí pueda proponerla', () => {
+    expect(
+      canEndSubstitution({
+        mayAssignProfessionals: false,
+        relationshipActive: true,
+        status: 'active',
+      }),
+    ).toBe(false)
+  })
+
+  test('quien puede asignar profesionales, sí', () => {
+    expect(
+      canEndSubstitution({
+        mayAssignProfessionals: true,
+        relationshipActive: true,
+        status: 'active',
+      }),
+    ).toBe(true)
+  })
+
+  // Una propuesta sin responder no concede acceso que cortar. Retirarla es otra
+  // operación y todavía no existe (STUDIO-150).
+  test('una suplencia que nadie ha respondido no se termina', () => {
+    expect(
+      canEndSubstitution({
+        mayAssignProfessionals: true,
+        relationshipActive: true,
+        status: 'proposed',
+      }),
+    ).toBe(false)
+  })
+
+  test('una que ya terminó tampoco', () => {
+    expect(
+      canEndSubstitution({
+        mayAssignProfessionals: true,
+        relationshipActive: true,
+        status: 'ended',
+      }),
+    ).toBe(false)
+  })
+
+  test('ni en un vínculo que ya terminó', () => {
+    expect(
+      canEndSubstitution({
+        mayAssignProfessionals: true,
+        relationshipActive: false,
+        status: 'active',
+      }),
+    ).toBe(false)
+  })
+})
+
+describe('qué dice la pantalla cuando no se puede terminar', () => {
+  test('un conflicto es que ya no está corriendo, no que alguien se adelantó', () => {
+    expect(terminationRefusalFor(409)).toBe('already-ended')
+    expect(terminationRefusalTitle('already-ended')).toContain('ya no está corriendo')
+  })
+
+  test('separa la negativa del fallo temporal', () => {
+    expect(terminationRefusalFor(403)).toBe('not-allowed')
+    expect(terminationRefusalFor(404)).toBe('gone')
+    expect(terminationRefusalFor(undefined)).toBe('unavailable')
+  })
+
+  /*
+   * Solo el fallo temporal invita a reintentar, y dice por qué es seguro: no se
+   * escribió nada, así que la suplencia sigue corriendo exactamente igual.
+   */
+  test('ofrece reintentar solo donde no se escribió nada', () => {
+    expect(terminationRefusalDescription('unavailable')).toContain('otra vez')
+    expect(terminationRefusalDescription('already-ended')).not.toContain('otra vez')
+    expect(terminationRefusalDescription('not-allowed')).not.toContain('otra vez')
+  })
+
+  // La negativa explica la asimetría en vez de dejar al lector adivinando por
+  // qué el botón no estaba donde esperaba.
+  test('la negativa explica que el titular propone pero no corta', () => {
+    expect(terminationRefusalDescription('not-allowed')).toContain('no cortarlas')
   })
 })
