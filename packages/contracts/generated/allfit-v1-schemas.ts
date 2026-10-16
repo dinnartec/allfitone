@@ -9269,6 +9269,48 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  RelationshipTermination: {
+    description:
+      'The relationship after it ended, and what stopped with it. `ended_at` is the single instant the whole thing used: the relationship, every permission frozen and every assignment closed carry that same moment.',
+    type: 'object',
+    additionalProperties: false,
+    required: ['relationship_id', 'person_id', 'ended_at', 'frozen_grants', 'closed_assignments'],
+    properties: {
+      relationship_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      person_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      ended_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      frozen_grants: {
+        type: 'integer',
+        description:
+          'Permissions that stopped at that instant. **Frozen is not revoked**: the organization keeps what it was shown up to then and receives nothing after, and reading that history needs its own restricted path.',
+      },
+      closed_assignments: {
+        type: 'integer',
+        description:
+          'The holder and every accepted cover. A cover nobody answered granted nothing and is not counted.',
+      },
+    },
+  },
+  RelationshipTerminationCreate: {
+    description:
+      'A reason is optional: a gym does not owe the system a justification. An empty one is refused rather than stored, because a blank reason reads as a reason that was given.',
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      reason: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 2000,
+      },
+    },
+  },
   RequiredScope: {
     type: 'object',
     additionalProperties: false,

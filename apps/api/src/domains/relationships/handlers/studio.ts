@@ -23,6 +23,7 @@ import {
   substitutionProposalService,
   substitutionTerminationService,
   substitutionListService,
+  relationshipTerminationService,
 } from '../dependencies.js'
 import {
   RelationshipsError,
@@ -34,6 +35,7 @@ import {
   type SubstitutionProposalService,
   type SubstitutionTerminationService,
   type SubstitutionListService,
+  type RelationshipTerminationService,
 } from '../application/index.js'
 import type {
   DirectoryEntry,
@@ -66,6 +68,7 @@ export interface StudioRelationshipDependencies {
   readonly substitutions?: SubstitutionProposalService
   readonly terminations?: SubstitutionTerminationService
   readonly substitutionPages?: SubstitutionListService
+  readonly relationshipTerminations?: RelationshipTerminationService
 }
 
 export function studioRelationshipRoutes(injected: StudioRelationshipDependencies = {}): Hono {
@@ -78,6 +81,8 @@ export function studioRelationshipRoutes(injected: StudioRelationshipDependencie
   const substitutions = () => injected.substitutions ?? substitutionProposalService()
   const terminations = () => injected.terminations ?? substitutionTerminationService()
   const substitutionPages = () => injected.substitutionPages ?? substitutionListService()
+  const relationshipEndings = () =>
+    injected.relationshipTerminations ?? relationshipTerminationService()
   const sessions = () => injected.sessions ?? studioSessionService()
   const routes = new Hono()
 
@@ -378,6 +383,56 @@ export function studioRelationshipRoutes(injected: StudioRelationshipDependencie
           },
           result.proposed ? 201 : 200,
         )
+      } catch (error) {
+        return failure(c, error)
+      }
+    },
+  )
+
+  /*
+   * `OP-REL-008`. The heaviest command on this surface: it ends the
+   * relationship, freezes every permission it carried and closes every
+   * assignment, all at one instant and all or nothing.
+   *
+   * The body is optional and carries at most a reason, so a request with no
+   * body at all is valid. What makes the command idempotent is hashed from the
+   * body and the relationship together: two different relationships ended under
+   * one key must not replay each other's answer.
+   */
+  routes.post(
+    '/organizations/:organizationId/relationships/:relationshipId/termination',
+    async (c) => {
+      c.header('Cache-Control', 'no-store')
+      if (c.req.header('origin') !== studioOrigin) {
+        return fail(c, 'forbidden', 'origin is not allowed')
+      }
+      const organizationId = c.req.param('organizationId')
+      const relationshipId = c.req.param('relationshipId')
+      if (!UUID.test(organizationId) || !UUID.test(relationshipId)) {
+        return fail(c, 'invalid-request')
+      }
+      const body = (await readJson(c)) ?? {}
+      if (!isTerminationRequest(body)) return fail(c, 'validation-failed')
+      const command = commandContext(c, { relationshipId, ...body })
+      if (!command) return fail(c, 'invalid-request', 'valid command headers are required')
+
+      try {
+        const actor = await studioActor(c, sessions())
+        if (actor instanceof Response) return actor
+        const result = await relationshipEndings().terminate(actor, {
+          organizationId,
+          relationshipId,
+          ...(body.reason === undefined ? {} : { reason: body.reason }),
+          ...command,
+        })
+        if (result.replayed) c.header('Idempotent-Replay', 'true')
+        return c.json({
+          relationship_id: result.resource.relationshipId,
+          person_id: result.resource.personId,
+          ended_at: result.resource.endedAt.toISOString(),
+          frozen_grants: result.resource.frozenGrants,
+          closed_assignments: result.resource.closedAssignments,
+        })
       } catch (error) {
         return failure(c, error)
       }
@@ -764,4 +819,19 @@ function encodeClientCursor(
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
+}
+
+/**
+ * A body that is absent, empty, or carries a reason and nothing else. A blank
+ * reason is refused rather than trimmed away: a request that sends one is a
+ * caller who thinks they gave a reason.
+ */
+function isTerminationRequest(value: unknown): value is { reason?: string } {
+  if (!isObject(value)) return false
+  const keys = Object.keys(value)
+  if (keys.length === 0) return true
+  if (keys.length > 1 || keys[0] !== 'reason') return false
+  return (
+    typeof value.reason === 'string' && value.reason.trim() !== '' && value.reason.length <= 2000
+  )
 }

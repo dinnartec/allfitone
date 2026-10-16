@@ -60,9 +60,10 @@ select is(
     || 'list_my_relationships, list_organization_clients, '
     || 'list_relationship_substitutions, propose_substitution, '
     || 'read_relationship_history, read_relationship_state, '
-    || 'reassign_relationship_holder, relationship_assignment_is_visible',
-  'the runtime reaches eleven relationship functions, and ending a relationship '
-    || 'is still not among them'
+    || 'reassign_relationship_holder, relationship_assignment_is_visible, '
+    || 'terminate_relationship',
+  'the runtime reaches twelve relationship functions, ending a relationship '
+    || 'among them at last'
 );
 
 -- ---------------------------------------------------------------------------

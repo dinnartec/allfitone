@@ -11,6 +11,7 @@ import type {
   SubstitutionProposalService,
   SubstitutionTerminationService,
   SubstitutionListService,
+  RelationshipTerminationService,
 } from '../application/index.js'
 import type {
   DirectoryEntry,
@@ -1295,5 +1296,135 @@ describe('who has covered this client', () => {
   test('is never stored by a cache', async () => {
     const response = await listApp().fetch(askList())
     expect(response.headers.get('cache-control')).toBe('private, no-store')
+  })
+})
+
+const TERMINATE_PATH = `/studio/v1/organizations/${ORGANIZATION}/relationships/${RELATIONSHIP}/termination`
+
+function relationshipEndings(
+  overrides: Partial<RelationshipTerminationService> = {},
+  capture?: (input: Record<string, unknown>) => void,
+): RelationshipTerminationService {
+  return {
+    terminate: async (_actor, input) => {
+      capture?.(input as unknown as Record<string, unknown>)
+      return {
+        resource: {
+          relationshipId: RELATIONSHIP,
+          personId: '019ad000-0000-7000-8000-000000000001',
+          endedAt: new Date('2026-11-04T15:20:00.000Z'),
+          frozenGrants: 3,
+          closedAssignments: 2,
+        },
+        replayed: false,
+      }
+    },
+    ...overrides,
+  }
+}
+
+function endRelationshipApp(service: RelationshipTerminationService = relationshipEndings()): Hono {
+  const routes = new Hono()
+  routes.route(
+    '/studio/v1',
+    studioRelationshipRoutes({ sessions: sessions(), relationshipTerminations: service }),
+  )
+  return routes
+}
+
+function terminate(body?: unknown, headers: Record<string, string> = ASSIGN_HEADERS): Request {
+  return new Request(`https://api.example.test${TERMINATE_PATH}`, {
+    method: 'POST',
+    headers,
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  })
+}
+
+describe('ending a client relationship', () => {
+  /*
+   * The counts are the answer, not decoration. «Three permissions frozen» is
+   * what tells a reader the organization keeps that history and receives
+   * nothing after — and freezing is not revoking.
+   */
+  test('answers with the instant and what stopped with it', async () => {
+    const response = await endRelationshipApp().fetch(terminate())
+    expect(response.status).toBe(200)
+    const payload = (await response.json()) as Record<string, unknown>
+    expect(payload.ended_at).toBe('2026-11-04T15:20:00.000Z')
+    expect(payload.frozen_grants).toBe(3)
+    expect(payload.closed_assignments).toBe(2)
+  })
+
+  // A gym does not owe the system a justification, so no body is a valid body.
+  test('a request with no body at all is valid', async () => {
+    const response = await endRelationshipApp().fetch(terminate())
+    expect(response.status).toBe(200)
+  })
+
+  test('a reason goes down as the caller wrote it', async () => {
+    const seen: Record<string, unknown>[] = []
+    const app = endRelationshipApp(relationshipEndings({}, (input) => seen.push(input)))
+    await app.fetch(terminate({ reason: 'Se mudó de ciudad' }))
+    expect(seen[0]?.reason).toBe('Se mudó de ciudad')
+  })
+
+  /*
+   * A blank reason is refused rather than trimmed away. A caller who sends one
+   * believes they gave a reason, and storing nothing would quietly disagree.
+   */
+  test('a blank reason is refused, not trimmed away', async () => {
+    const response = await endRelationshipApp().fetch(terminate({ reason: '   ' }))
+    expect(response.status).toBe(422)
+  })
+
+  test('a body carrying a field the contract does not declare', async () => {
+    const response = await endRelationshipApp().fetch(terminate({ reason: 'ok', notify: false }))
+    expect(response.status).toBe(422)
+  })
+
+  /*
+   * The catalogue is explicit that a coach may not do this, even for a client
+   * they attend. The command decides it; this proves the refusal arrives as a
+   * refusal rather than as an outage.
+   */
+  test('a coach is refused, and told so', async () => {
+    const refused = relationshipEndings({
+      terminate: async () => {
+        throw Object.assign(new Error('not allowed'), { code: '42501' })
+      },
+    })
+    const response = await endRelationshipApp(refused).fetch(terminate())
+    expect(response.status).toBe(403)
+  })
+
+  // Two different relationships under one key must not replay each other.
+  test('the relationship is part of what makes the command idempotent', async () => {
+    const seen: Record<string, unknown>[] = []
+    const app = endRelationshipApp(relationshipEndings({}, (input) => seen.push(input)))
+    await app.fetch(terminate())
+    await app.fetch(terminate({ reason: 'otra cosa' }))
+    expect(seen[0]?.requestHash).not.toEqual(seen[1]?.requestHash)
+  })
+
+  test('marks a replayed command', async () => {
+    const replayed = relationshipEndings({
+      terminate: async () => ({
+        resource: {
+          relationshipId: RELATIONSHIP,
+          personId: '019ad000-0000-7000-8000-000000000001',
+          endedAt: new Date('2026-11-04T15:20:00.000Z'),
+          frozenGrants: 0,
+          closedAssignments: 0,
+        },
+        replayed: true,
+      }),
+    })
+    const response = await endRelationshipApp(replayed).fetch(terminate())
+    expect(response.headers.get('Idempotent-Replay')).toBe('true')
+  })
+
+  test('is never stored by a cache', async () => {
+    const response = await endRelationshipApp().fetch(terminate())
+    expect(response.headers.get('cache-control')).toBe('no-store')
   })
 })
