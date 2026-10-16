@@ -18,6 +18,7 @@ import type {
   RelationshipStateDatabase,
   RelationshipSubstitution,
   SubstitutionProposalDatabase,
+  SubstitutionListDatabase,
   SubstitutionTerminationDatabase,
   MyRelationship,
   MyRelationshipDatabase,
@@ -605,4 +606,67 @@ function presentMyRelationship(row: MyRelationshipRow): MyRelationship {
     ended_at: row.ended_at ? new Date(row.ended_at).toISOString() : null,
     previous_relationship_id: row.previous_relationship_id,
   }
+}
+
+/**
+ * `OP-REL-013`. One more than asked for, and its presence is what says another
+ * page exists — the same trick `listMine` uses, and cheaper than counting the
+ * whole set to answer a yes-or-no question.
+ *
+ * The organization goes down as `null` on the Space surface. The command reads
+ * that as «the caller is not claiming to act inside one» and resolves it from
+ * the relationship, so there is no second place where a tenant could be
+ * decided.
+ */
+export function createSubstitutionListDatabase(
+  sql: postgres.Sql = database(),
+): SubstitutionListDatabase {
+  return {
+    listSubstitutions: (personId, query) =>
+      measureStudioRequestPhase('business-db', async () => {
+        const outcome = await sql.begin(async (transaction) => {
+          await setPersonActor(transaction, personId)
+          const rows = await transaction<ListedSubstitutionRow[]>`
+            select * from relationships.list_relationship_substitutions(
+              ${personId}::uuid,
+              ${query.organizationId ?? null}::uuid,
+              ${query.relationshipId}::uuid,
+              ${query.limit + 1}::integer,
+              ${query.cursorValidFrom ?? null}::timestamptz,
+              ${query.cursorAssignmentId ?? null}::uuid
+            )
+          `
+          const hasMore = rows.length > query.limit
+          return {
+            value: {
+              items: rows.slice(0, query.limit).map((row) => ({
+                assignmentId: row.assignment_id,
+                membershipId: row.membership_id,
+                professionalPersonId: row.professional_person_id,
+                displayName: row.display_name,
+                status: row.status,
+                validFrom: row.valid_from,
+                validTo: row.valid_to,
+                endsOn: row.ends_on,
+                acceptedByPersonAt: row.accepted_by_person_at,
+              })),
+              hasMore,
+            },
+          }
+        })
+        return outcome.value
+      }),
+  }
+}
+
+type ListedSubstitutionRow = {
+  assignment_id: string
+  membership_id: string
+  professional_person_id: string
+  display_name: string
+  status: 'proposed' | 'active' | 'ended'
+  valid_from: Date
+  valid_to: Date | null
+  ends_on: string | null
+  accepted_by_person_at: Date | null
 }

@@ -11,6 +11,9 @@ import type {
   RelationshipState,
   RelationshipStateDatabase,
   SubstitutionProposalDatabase,
+  SubstitutionListDatabase,
+  SubstitutionPage,
+  SubstitutionQuery,
   SubstitutionTerminationDatabase,
   MyRelationshipDatabase,
   MyRelationshipPage,
@@ -228,6 +231,37 @@ export function createSubstitutionTerminationService(
     endMine(personId, input) {
       return database.endSubstitution({ actorPersonId: personId, ...input })
     },
+  }
+}
+
+/**
+ * `OP-REL-013`. Takes a person id for the same reason `listMine` does: both
+ * surfaces resolve the person before anything else, Studio from the session and
+ * Space from the token, and an actor without one has no relationship to read.
+ */
+export interface SubstitutionListService {
+  /** Studio: a coach, administrator or owner of the organization. */
+  list(
+    actor: AccountActor,
+    query: SubstitutionQuery & { organizationId: string },
+  ): Promise<SubstitutionPage>
+
+  /** Space: the person the relationship belongs to, with no organization. */
+  listMine(
+    personId: string,
+    query: Omit<SubstitutionQuery, 'organizationId'>,
+  ): Promise<SubstitutionPage>
+}
+
+export function createSubstitutionListService(
+  database: SubstitutionListDatabase,
+): SubstitutionListService {
+  return {
+    list(actor, query) {
+      if (!actor.personId) throw new RelationshipsError('registration-incomplete')
+      return database.listSubstitutions(actor.personId, query)
+    },
+    listMine: (personId, query) => database.listSubstitutions(personId, query),
   }
 }
 

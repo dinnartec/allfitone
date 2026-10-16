@@ -16,13 +16,22 @@ import { Hono, type Context } from 'hono'
 
 import { authProvider } from '../../../platform/auth/index.js'
 import { fail } from '../../../platform/http/index.js'
+import { parseSubstitutionCursor, presentSubstitutionPage } from './substitution-page.js'
 import {
   SpaceActorError,
   spaceActorResolver,
   type SpaceActorResolver,
 } from '../../identity/index.js'
-import { myRelationshipService, substitutionTerminationService } from '../dependencies.js'
-import type { MyRelationshipService, SubstitutionTerminationService } from '../application/index.js'
+import {
+  myRelationshipService,
+  substitutionTerminationService,
+  substitutionListService,
+} from '../dependencies.js'
+import type {
+  MyRelationshipService,
+  SubstitutionTerminationService,
+  SubstitutionListService,
+} from '../application/index.js'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$/
@@ -35,9 +44,11 @@ export function spaceRelationshipRoutes(
   injectedVerifier?: TokenVerifier,
   injectedActors?: SpaceActorResolver,
   injectedTerminations?: SubstitutionTerminationService,
+  injectedSubstitutionPages?: SubstitutionListService,
 ): Hono {
   const relationships = () => injectedService ?? myRelationshipService()
   const terminations = () => injectedTerminations ?? substitutionTerminationService()
+  const substitutionPages = () => injectedSubstitutionPages ?? substitutionListService()
   const actors = () => injectedActors ?? spaceActorResolver()
   const verify: TokenVerifier =
     injectedVerifier ?? ((token) => authProvider().verifyAccessToken(token, 'space'))
@@ -70,6 +81,41 @@ export function spaceRelationshipRoutes(
             page.hasMore && last ? encodeCursor([last.started_at, last.relationship_id]) : null,
         },
       })
+    } catch (cause) {
+      return failure(c, cause)
+    }
+  })
+
+  /*
+   * `OP-REL-013` from the person's side, and **the only way she has of asking
+   * it**: the relationship document is a Studio operation, so until now nothing
+   * told her who had been authorised over her data.
+   *
+   * Covers still waiting on her answer are included, because being asked is
+   * itself something she is entitled to see — and a finished one grants
+   * nothing, which is why showing it costs nobody anything.
+   */
+  routes.get('/relationships/:relationshipId/substitutions', async (c) => {
+    c.header('Cache-Control', 'private, no-store')
+
+    const relationshipId = c.req.param('relationshipId')
+    if (!UUID.test(relationshipId)) return fail(c, 'invalid-request')
+    const limit = parseLimit(c.req.query('limit'))
+    if (!limit) return fail(c, 'validation-failed')
+    const cursor = parseSubstitutionCursor(c.req.query('cursor'), (id) => UUID.test(id))
+    if (cursor === null) return fail(c, 'validation-failed')
+
+    const token = await verified(c, verify)
+    if (!token) return fail(c, 'unauthenticated')
+
+    try {
+      const personId = await actors().personFor(token.subject)
+      const page = await substitutionPages().listMine(personId, {
+        relationshipId,
+        limit,
+        ...(cursor ?? {}),
+      })
+      return c.json(presentSubstitutionPage(page))
     } catch (cause) {
       return failure(c, cause)
     }

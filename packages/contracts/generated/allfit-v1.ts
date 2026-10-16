@@ -2332,7 +2332,15 @@ export interface paths {
       path?: never
       cookie?: never
     }
-    get?: never
+    /**
+     * Who has covered this client, and when
+     * @description Running covers and finished ones together, **newest first** — the relationship's own document lists them oldest-first, so the cover that is running sinks under every cover that is over once a client has a few years of history.
+     *
+     *     A finished cover appearing here **grants nothing**. Whether a professional may read anything is decided from these same dates, so listing one is reading a fact about the past, not reopening it.
+     *
+     *     Which covers come back is the row policy's decision: a coach sees their own and the covers of clients they hold, an administrator sees them all.
+     */
+    get: operations['listRelationshipSubstitutions']
     put?: never
     /**
      * Ask a client to accept somebody covering for their coach
@@ -2347,6 +2355,30 @@ export interface paths {
      *     Asking twice for the same professional over the same days answers `409`.
      */
     post: operations['proposeRelationshipSubstitution']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/relationships/{relationshipId}/substitutions': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Who has been authorised over my data, and when
+     * @description Who has covered this client, and when. Running covers and finished ones together, **newest first** — the relationship's own document lists them oldest-first, so the cover that is running sinks under every cover that is over once a client has a few years of history.
+     *
+     *     A finished cover appearing here **grants nothing**. Whether a professional may read anything is decided from these same dates, so listing one is reading a fact about the past, not reopening it.
+     *
+     *     This is the person's own route, and the only way she has of seeing it: the relationship document is a Studio operation. It includes covers still waiting on her answer, because being asked is itself something she is entitled to see.
+     */
+    get: operations['listMyRelationshipSubstitutions']
+    put?: never
+    post?: never
     delete?: never
     options?: never
     head?: never
@@ -9257,6 +9289,33 @@ export interface components {
       ended_at: string | null
       previous_relationship_id: components['schemas']['UuidV7'] | null
     }
+    /** @description One cover of a relationship, running or finished. A finished one appearing here grants nothing: validity is read from these dates, so this is a fact about the past rather than a key to it. */
+    ListedRelationshipSubstitution: {
+      assignment_id: components['schemas']['UuidV7']
+      membership_id: components['schemas']['UuidV7']
+      professional_person_id: components['schemas']['UuidV7']
+      display_name: string
+      /** @enum {string} */
+      status: 'proposed' | 'active' | 'ended'
+      /** Format: date-time */
+      valid_from: string
+      /**
+       * Format: date-time
+       * @description When the cover stopped, or null while it is still running.
+       */
+      valid_to: string | null
+      /** Format: date */
+      ends_on: string | null
+      /**
+       * Format: date-time
+       * @description Null means nobody has answered. Silence is never acceptance.
+       */
+      accepted_by_person_at: string | null
+    }
+    RelationshipSubstitutionPage: {
+      data: components['schemas']['ListedRelationshipSubstitution'][]
+      page: components['schemas']['Page']
+    }
     SpaceRelationshipPage: {
       data: components['schemas']['SpaceRelationship'][]
       page: components['schemas']['Page']
@@ -14017,6 +14076,39 @@ export interface operations {
       503: components['responses']['UpstreamUnavailable']
     }
   }
+  listRelationshipSubstitutions: {
+    parameters: {
+      query?: {
+        limit?: number
+        cursor?: components['parameters']['Cursor']
+      }
+      header?: never
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+        relationshipId: components['parameters']['RelationshipId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The covers of this relationship, newest first */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['PrivateNoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['RelationshipSubstitutionPage']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
   proposeRelationshipSubstitution: {
     parameters: {
       query?: never
@@ -14064,6 +14156,38 @@ export interface operations {
       403: components['responses']['Forbidden']
       404: components['responses']['NotFound']
       409: components['responses']['Conflict']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listMyRelationshipSubstitutions: {
+    parameters: {
+      query?: {
+        limit?: number
+        cursor?: components['parameters']['Cursor']
+      }
+      header?: never
+      path: {
+        relationshipId: components['parameters']['RelationshipId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The covers of this relationship, newest first */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['PrivateNoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['RelationshipSubstitutionPage']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
       422: components['responses']['ValidationFailed']
       503: components['responses']['UpstreamUnavailable']
     }

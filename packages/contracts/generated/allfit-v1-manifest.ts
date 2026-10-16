@@ -1049,6 +1049,13 @@ export const allfitV1ContractManifest = {
       responses: ['200', '400', '401', '403', '422', '503'],
     },
     {
+      method: 'GET',
+      path: '/space/v1/relationships/{relationshipId}/substitutions',
+      operationId: 'listMyRelationshipSubstitutions',
+      allfitOperation: 'OP-REL-013',
+      responses: ['200', '400', '401', '403', '404', '422', '503'],
+    },
+    {
       method: 'POST',
       path: '/space/v1/relationships/{relationshipId}/substitutions/{substitutionId}/termination',
       operationId: 'endMyRelationshipSubstitution',
@@ -1439,6 +1446,13 @@ export const allfitV1ContractManifest = {
       operationId: 'reassignRelationshipHolder',
       allfitOperation: 'OP-REL-003',
       responses: ['200', '201', '400', '401', '403', '404', '409', '422', '503'],
+    },
+    {
+      method: 'GET',
+      path: '/studio/v1/organizations/{organizationId}/relationships/{relationshipId}/substitutions',
+      operationId: 'listRelationshipSubstitutions',
+      allfitOperation: 'OP-REL-013',
+      responses: ['200', '400', '401', '403', '404', '422', '503'],
     },
     {
       method: 'POST',
