@@ -11,6 +11,7 @@ import type {
   RelationshipState,
   RelationshipStateDatabase,
   SubstitutionProposalDatabase,
+  SubstitutionTerminationDatabase,
   MyRelationshipDatabase,
   MyRelationshipPage,
   MyRelationshipQuery,
@@ -184,6 +185,48 @@ export function createSubstitutionProposalService(
     propose(actor, input) {
       if (!actor.personId) throw new RelationshipsError('registration-incomplete')
       return database.proposeSubstitution({ actorPersonId: actor.personId, ...input })
+    },
+  }
+}
+
+/**
+ * `OP-REL-006`, which is one operation reached from two surfaces, so it is one
+ * service with two doors.
+ *
+ * They differ only in how the person is found — Studio from the session, Space
+ * from the token — and in whether an organization is being claimed. Folding
+ * them into a single method would mean an optional organization and an actor
+ * that is sometimes an id, which hides the one thing a reader needs to know:
+ * which surface is calling. The command decides authority either way.
+ */
+export interface SubstitutionTerminationService {
+  /** Studio: somebody who may assign professionals inside the organization. */
+  end(
+    actor: AccountActor,
+    input: CommandContext & {
+      organizationId: string
+      relationshipId: string
+      assignmentId: string
+    },
+  ): ReturnType<SubstitutionTerminationDatabase['endSubstitution']>
+
+  /** Space: the person the relationship belongs to, with no organization in the route. */
+  endMine(
+    personId: string,
+    input: CommandContext & { relationshipId: string; assignmentId: string },
+  ): ReturnType<SubstitutionTerminationDatabase['endSubstitution']>
+}
+
+export function createSubstitutionTerminationService(
+  database: SubstitutionTerminationDatabase,
+): SubstitutionTerminationService {
+  return {
+    end(actor, input) {
+      if (!actor.personId) throw new RelationshipsError('registration-incomplete')
+      return database.endSubstitution({ actorPersonId: actor.personId, ...input })
+    },
+    endMine(personId, input) {
+      return database.endSubstitution({ actorPersonId: personId, ...input })
     },
   }
 }

@@ -2353,6 +2353,62 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/studio/v1/organizations/{organizationId}/relationships/{relationshipId}/substitutions/{substitutionId}/termination': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * End a cover before its last day
+     * @description Ends a cover before the day it was meant to run until. The substitute stops reading this person's data **at once** — not at midnight, not when a nightly process notices.
+     *
+     *     It touches nothing else. The coach in charge stays in charge, the relationship is unaffected, and whatever the substitute recorded while covering stays recorded under their name: this closes an authorisation, it does not retract work.
+     *
+     *     Only a cover that is actually running can be ended. One the person has not answered grants no access, so there is nothing to cut, and it answers `409`.
+     *
+     *     Ending a cover that is already over is not an error: the caller asked for it to be over and it is.
+     *
+     *     Unlike proposing one, the coach in charge may **not** call this: it is for an administrator or an owner. The person being covered has their own route for it in Space.
+     */
+    post: operations['endRelationshipSubstitution']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/relationships/{relationshipId}/substitutions/{substitutionId}/termination': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Stop somebody covering for your coach
+     * @description Ends a cover before the day it was meant to run until. The substitute stops reading this person's data **at once** — not at midnight, not when a nightly process notices.
+     *
+     *     It touches nothing else. The coach in charge stays in charge, the relationship is unaffected, and whatever the substitute recorded while covering stays recorded under their name: this closes an authorisation, it does not retract work.
+     *
+     *     Only a cover that is actually running can be ended. One the person has not answered grants no access, so there is nothing to cut, and it answers `409`.
+     *
+     *     Ending a cover that is already over is not an error: the caller asked for it to be over and it is.
+     *
+     *     This is the person's own route: no organization in the path, because she reaches a relationship of hers directly. She needs nobody's agreement to close it — the cover reads her data, and it is hers to stop.
+     */
+    post: operations['endMyRelationshipSubstitution']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/studio/v1/organizations/{organizationId}/relationships/{relationshipId}/assignments': {
     parameters: {
       query?: never
@@ -6615,6 +6671,15 @@ export interface components {
       /** Format: date */
       ends_on: string
     }
+    /** @description The cover after being cut short. `ended_at` is the instant the access stopped, which is now and not the day it was meant to run until — the professional named here reads nothing of this person's from that moment. */
+    RelationshipSubstitutionTermination: {
+      assignment_id: components['schemas']['UuidV7']
+      relationship_id: components['schemas']['UuidV7']
+      membership_id: components['schemas']['UuidV7']
+      professional_person_id: components['schemas']['UuidV7']
+      /** Format: date-time */
+      ended_at: string
+    }
     /** @description One moment in a relationship's past. `detail` carries different keys per `type`, and every one of them is metadata about the moment — never the content a permission covers. */
     RelationshipHistoryEvent: {
       /** @enum {string} */
@@ -9560,6 +9625,7 @@ export interface components {
     TemplateId: components['schemas']['Uuid']
     VersionNumber: number
     RelationshipId: components['schemas']['Uuid']
+    SubstitutionId: components['schemas']['Uuid']
     PlannedSessionId: components['schemas']['Uuid']
     ExecutionId: components['schemas']['Uuid']
     PersonId: components['schemas']['Uuid']
@@ -13999,6 +14065,79 @@ export interface operations {
       404: components['responses']['NotFound']
       409: components['responses']['Conflict']
       422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  endRelationshipSubstitution: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+        relationshipId: components['parameters']['RelationshipId']
+        substitutionId: components['parameters']['SubstitutionId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The cover is over, and the substitute's access with it */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['RelationshipSubstitutionTermination']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  endMyRelationshipSubstitution: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        relationshipId: components['parameters']['RelationshipId']
+        substitutionId: components['parameters']['SubstitutionId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The cover is over, and the substitute's access with it */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['RelationshipSubstitutionTermination']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
       503: components['responses']['UpstreamUnavailable']
     }
   }

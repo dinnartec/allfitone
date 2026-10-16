@@ -297,6 +297,41 @@ export interface SubstitutionProposalDatabase {
 }
 
 /**
+ * `OP-REL-006`. A cover that has been cut short, and the instant it stopped.
+ *
+ * `endedAt` is an instant and not a day, unlike the window above: the cover was
+ * agreed in days, and this is the moment somebody ended it. Rounding that to a
+ * day would say the access stopped at midnight when it stopped at four.
+ */
+export interface SubstitutionTermination {
+  readonly assignmentId: string
+  readonly relationshipId: string
+  readonly membershipId: string
+  readonly professionalPersonId: string
+  readonly endedAt: string
+}
+
+export type SubstitutionTerminationResult = CommandResult<SubstitutionTermination>
+
+export interface SubstitutionTerminationDatabase {
+  /**
+   * `organizationId` is absent on the Space surface, whose route carries no
+   * organization: the person reaches a relationship of her own directly. The
+   * command resolves it from the relationship either way, so this is the
+   * caller's claim to be acting inside an organization, not the source of
+   * truth about which one the relationship belongs to.
+   */
+  endSubstitution(
+    input: CommandContext & {
+      actorPersonId: string
+      organizationId?: string
+      relationshipId: string
+      assignmentId: string
+    },
+  ): Promise<SubstitutionTerminationResult>
+}
+
+/**
  * `OP-REL-012`. A page of the caller's own relationships, shaped as the contract sends
  * it: this answer is handed straight to the client, so the row and the DTO are the same
  * thing and a mapping layer between them would only be a place to drop a field.

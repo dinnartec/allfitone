@@ -11,7 +11,7 @@ import { Hono } from 'hono'
 
 import type { VerifiedToken } from '@allfitone/auth-provider'
 import type { SpaceActorResolver } from '../../identity/index.js'
-import type { MyRelationshipService } from '../application/index.js'
+import type { MyRelationshipService, SubstitutionTerminationService } from '../application/index.js'
 import type { MyRelationship } from '../domain/index.js'
 import { spaceRelationshipRoutes } from './space.js'
 
@@ -133,5 +133,97 @@ describe('the gyms I train at', () => {
       data: [],
       page: { has_more: false, next_cursor: null },
     })
+  })
+})
+
+const SUBSTITUTION = '019c7000-0000-7000-8000-000000000401'
+const END_PATH = `/space/v1/relationships/${RELATIONSHIP}/substitutions/${SUBSTITUTION}/termination`
+const END_HEADERS = {
+  ...AUTH,
+  'idempotency-key': 'd4444444-4444-4444-8444-444444444444',
+  'command-id': '019c7000-0000-7000-8000-000000000071',
+}
+
+function terminations(
+  overrides: Partial<SubstitutionTerminationService> = {},
+  capture?: (personId: string, input: Record<string, unknown>) => void,
+): SubstitutionTerminationService {
+  return {
+    end: async () => {
+      throw new Error('the Studio door is not this one')
+    },
+    endMine: async (personId, input) => {
+      capture?.(personId, input as unknown as Record<string, unknown>)
+      return {
+        resource: {
+          assignmentId: SUBSTITUTION,
+          relationshipId: RELATIONSHIP,
+          membershipId: '019c7000-0000-7000-8000-000000000301',
+          professionalPersonId: '019c7000-0000-7000-8000-000000000011',
+          endedAt: '2026-11-04T15:20:00.000Z',
+        },
+        replayed: false,
+      }
+    },
+    ...overrides,
+  }
+}
+
+function endApp(service: SubstitutionTerminationService = terminations()): Hono {
+  const routes = new Hono()
+  routes.route('/space/v1', spaceRelationshipRoutes(undefined, verifier, actors, service))
+  return routes
+}
+
+function endCover(headers: Record<string, string> = END_HEADERS): Request {
+  return new Request(`https://api.example.test${END_PATH}`, { method: 'POST', headers })
+}
+
+describe('stopping somebody covering for your coach', () => {
+  test('answers with the instant the access stopped', async () => {
+    const response = await endApp().fetch(endCover())
+    expect(response.status).toBe(200)
+    const payload = (await response.json()) as Record<string, unknown>
+    expect(payload.ended_at).toBe('2026-11-04T15:20:00.000Z')
+  })
+
+  /*
+   * The person comes from the token and nothing else. A relationship id in the
+   * path that is not hers is the command's refusal to make, not this handler's
+   * to guess — but the person it acts for must be the one who presented the
+   * token, never a value the caller supplied.
+   */
+  test('acts for the person the token names', async () => {
+    const seen: { personId?: string } = {}
+    const app = endApp(terminations({}, (personId) => (seen.personId = personId)))
+    await app.fetch(endCover())
+    expect(seen.personId).toBe(PERSON)
+  })
+
+  test('without a token it is nobody', async () => {
+    const { authorization: _auth, ...headers } = END_HEADERS
+    const response = await endApp().fetch(endCover(headers))
+    expect(response.status).toBe(401)
+  })
+
+  test('without command headers it is not a command', async () => {
+    const { 'command-id': _id, ...headers } = END_HEADERS
+    const response = await endApp().fetch(endCover(headers))
+    expect(response.status).toBe(400)
+  })
+
+  test('a cover that is not running is a conflict', async () => {
+    const refused = terminations({
+      endMine: async () => {
+        throw Object.assign(new Error('not running'), { code: 'P0004' })
+      },
+    })
+    const response = await endApp(refused).fetch(endCover())
+    expect(response.status).toBe(409)
+  })
+
+  test('is never stored by a cache', async () => {
+    const response = await endApp().fetch(endCover())
+    expect(response.headers.get('cache-control')).toBe('no-store')
   })
 })

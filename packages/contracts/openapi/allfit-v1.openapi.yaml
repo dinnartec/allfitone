@@ -5883,6 +5883,133 @@ paths:
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
 
+  /studio/v1/organizations/{organizationId}/relationships/{relationshipId}/substitutions/{substitutionId}/termination:
+    post:
+      tags: [Studio Relationships]
+      operationId: endRelationshipSubstitution
+      x-allfit-operation: OP-REL-006
+      x-allfit-cache: no-store
+      summary: End a cover before its last day
+      description: >-
+        Ends a cover before the day it was meant to run until. The substitute
+        stops reading this person's data **at once** — not at midnight, not when
+        a nightly process notices.
+
+
+        It touches nothing else. The coach in charge stays in charge, the
+        relationship is unaffected, and whatever the substitute recorded while
+        covering stays recorded under their name: this closes an authorisation,
+        it does not retract work.
+
+
+        Only a cover that is actually running can be ended. One the person has
+        not answered grants no access, so there is nothing to cut, and it
+        answers `409`.
+
+
+        Ending a cover that is already over is not an error: the caller asked
+        for it to be over and it is.
+
+
+        Unlike proposing one, the coach in charge may **not** call this: it is
+        for an administrator or an owner. The person being covered has their own
+        route for it in Space.
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/RelationshipId'
+        - $ref: '#/components/parameters/SubstitutionId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      responses:
+        '200':
+          description: The cover is over, and the substitute's access with it
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RelationshipSubstitutionTermination'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /space/v1/relationships/{relationshipId}/substitutions/{substitutionId}/termination:
+    post:
+      tags: [Space Relationships]
+      operationId: endMyRelationshipSubstitution
+      x-allfit-operation: OP-REL-006
+      x-allfit-cache: no-store
+      summary: Stop somebody covering for your coach
+      description: >-
+        Ends a cover before the day it was meant to run until. The substitute
+        stops reading this person's data **at once** — not at midnight, not when
+        a nightly process notices.
+
+
+        It touches nothing else. The coach in charge stays in charge, the
+        relationship is unaffected, and whatever the substitute recorded while
+        covering stays recorded under their name: this closes an authorisation,
+        it does not retract work.
+
+
+        Only a cover that is actually running can be ended. One the person has
+        not answered grants no access, so there is nothing to cut, and it
+        answers `409`.
+
+
+        Ending a cover that is already over is not an error: the caller asked
+        for it to be over and it is.
+
+
+        This is the person's own route: no organization in the path, because she
+        reaches a relationship of hers directly. She needs nobody's agreement to
+        close it — the cover reads her data, and it is hers to stop.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RelationshipId'
+        - $ref: '#/components/parameters/SubstitutionId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      responses:
+        '200':
+          description: The cover is over, and the substitute's access with it
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RelationshipSubstitutionTermination'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
   /studio/v1/organizations/{organizationId}/relationships/{relationshipId}/assignments:
     post:
       tags: [Studio Planning]
@@ -10649,6 +10776,12 @@ components:
         maximum: 2147483647
     RelationshipId:
       name: relationshipId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Uuid'
+    SubstitutionId:
+      name: substitutionId
       in: path
       required: true
       schema:
@@ -16846,6 +16979,28 @@ components:
         ends_on:
           type: string
           format: date
+    RelationshipSubstitutionTermination:
+      description: >-
+        The cover after being cut short. `ended_at` is the instant the access
+        stopped, which is now and not the day it was meant to run until — the
+        professional named here reads nothing of this person's from that moment.
+      type: object
+      additionalProperties: false
+      required:
+        [assignment_id, relationship_id, membership_id, professional_person_id,
+         ended_at]
+      properties:
+        assignment_id:
+          $ref: '#/components/schemas/UuidV7'
+        relationship_id:
+          $ref: '#/components/schemas/UuidV7'
+        membership_id:
+          $ref: '#/components/schemas/UuidV7'
+        professional_person_id:
+          $ref: '#/components/schemas/UuidV7'
+        ended_at:
+          type: string
+          format: date-time
     RelationshipHistoryEvent:
       description: >-
         One moment in a relationship's past. `detail` carries different keys per
