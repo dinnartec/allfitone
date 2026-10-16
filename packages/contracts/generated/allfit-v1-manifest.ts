@@ -1050,6 +1050,13 @@ export const allfitV1ContractManifest = {
     },
     {
       method: 'POST',
+      path: '/space/v1/relationships/{relationshipId}/substitutions/{substitutionId}/termination',
+      operationId: 'endMyRelationshipSubstitution',
+      allfitOperation: 'OP-REL-006',
+      responses: ['200', '400', '401', '403', '404', '409', '503'],
+    },
+    {
+      method: 'POST',
       path: '/space/v1/session-templates',
       operationId: 'createMySessionTemplate',
       allfitOperation: 'OP-PLN-001',
@@ -1439,6 +1446,13 @@ export const allfitV1ContractManifest = {
       operationId: 'proposeRelationshipSubstitution',
       allfitOperation: 'OP-REL-004',
       responses: ['200', '201', '400', '401', '403', '404', '409', '422', '503'],
+    },
+    {
+      method: 'POST',
+      path: '/studio/v1/organizations/{organizationId}/relationships/{relationshipId}/substitutions/{substitutionId}/termination',
+      operationId: 'endRelationshipSubstitution',
+      allfitOperation: 'OP-REL-006',
+      responses: ['200', '400', '401', '403', '404', '409', '503'],
     },
     {
       method: 'GET',

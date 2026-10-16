@@ -9168,6 +9168,37 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  RelationshipSubstitutionTermination: {
+    description:
+      "The cover after being cut short. `ended_at` is the instant the access stopped, which is now and not the day it was meant to run until — the professional named here reads nothing of this person's from that moment.",
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'assignment_id',
+      'relationship_id',
+      'membership_id',
+      'professional_person_id',
+      'ended_at',
+    ],
+    properties: {
+      assignment_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      relationship_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      membership_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      professional_person_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      ended_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+    },
+  },
   RequiredScope: {
     type: 'object',
     additionalProperties: false,

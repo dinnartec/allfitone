@@ -20,6 +20,7 @@ import {
   relationshipHistoryService,
   relationshipStateService,
   substitutionProposalService,
+  substitutionTerminationService,
 } from '../dependencies.js'
 import {
   RelationshipsError,
@@ -29,6 +30,7 @@ import {
   type RelationshipHistoryService,
   type RelationshipStateService,
   type SubstitutionProposalService,
+  type SubstitutionTerminationService,
 } from '../application/index.js'
 import type {
   DirectoryEntry,
@@ -59,6 +61,7 @@ export interface StudioRelationshipDependencies {
   readonly reassignments?: HolderReassignmentService
   readonly histories?: RelationshipHistoryService
   readonly substitutions?: SubstitutionProposalService
+  readonly terminations?: SubstitutionTerminationService
 }
 
 export function studioRelationshipRoutes(injected: StudioRelationshipDependencies = {}): Hono {
@@ -69,6 +72,7 @@ export function studioRelationshipRoutes(injected: StudioRelationshipDependencie
   const reassignments = () => injected.reassignments ?? holderReassignmentService()
   const histories = () => injected.histories ?? relationshipHistoryService()
   const substitutions = () => injected.substitutions ?? substitutionProposalService()
+  const terminations = () => injected.terminations ?? substitutionTerminationService()
   const sessions = () => injected.sessions ?? studioSessionService()
   const routes = new Hono()
 
@@ -369,6 +373,55 @@ export function studioRelationshipRoutes(injected: StudioRelationshipDependencie
           },
           result.proposed ? 201 : 200,
         )
+      } catch (error) {
+        return failure(c, error)
+      }
+    },
+  )
+
+  /*
+   * `OP-REL-006`. The mirror of the route above, and deliberately not its
+   * mirror in who may call it: proposing a cover accepts the coach in charge,
+   * ending one does not. An administrator or owner here; the person has her own
+   * route in Space.
+   *
+   * No body, so the hash that makes the command idempotent is taken from what
+   * the path names. Hashing an empty object instead would let one key replay
+   * across two different covers.
+   */
+  routes.post(
+    '/organizations/:organizationId/relationships/:relationshipId/substitutions/:substitutionId/termination',
+    async (c) => {
+      c.header('Cache-Control', 'no-store')
+      if (c.req.header('origin') !== studioOrigin) {
+        return fail(c, 'forbidden', 'origin is not allowed')
+      }
+      const organizationId = c.req.param('organizationId')
+      const relationshipId = c.req.param('relationshipId')
+      const substitutionId = c.req.param('substitutionId')
+      if (!UUID.test(organizationId) || !UUID.test(relationshipId) || !UUID.test(substitutionId)) {
+        return fail(c, 'invalid-request')
+      }
+      const command = commandContext(c, { relationshipId, substitutionId })
+      if (!command) return fail(c, 'invalid-request', 'valid command headers are required')
+
+      try {
+        const actor = await studioActor(c, sessions())
+        if (actor instanceof Response) return actor
+        const result = await terminations().end(actor, {
+          organizationId,
+          relationshipId,
+          assignmentId: substitutionId,
+          ...command,
+        })
+        if (result.replayed) c.header('Idempotent-Replay', 'true')
+        return c.json({
+          assignment_id: result.resource.assignmentId,
+          relationship_id: result.resource.relationshipId,
+          membership_id: result.resource.membershipId,
+          professional_person_id: result.resource.professionalPersonId,
+          ended_at: result.resource.endedAt,
+        })
       } catch (error) {
         return failure(c, error)
       }

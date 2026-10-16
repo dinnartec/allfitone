@@ -18,6 +18,7 @@ import type {
   RelationshipStateDatabase,
   RelationshipSubstitution,
   SubstitutionProposalDatabase,
+  SubstitutionTerminationDatabase,
   MyRelationship,
   MyRelationshipDatabase,
 } from '../domain/index.js'
@@ -481,6 +482,69 @@ type SubstitutionProposalRow = {
   starts_on: string
   ends_on: string
   proposed: boolean
+  replayed: boolean
+}
+
+/**
+ * `OP-REL-006`. The organization is `null` on the Space surface, and the command
+ * reads that as «the caller is not claiming to act inside one» rather than as a
+ * missing argument: it resolves the organization from the relationship either
+ * way, and only a Studio caller has one to be checked against.
+ *
+ * `ended_at` is cast to text for the same reason the proposal's dates are. The
+ * driver would hand back a `Date`, and a `Date` serialised by the route is the
+ * server's timezone leaking into a contract that says instant.
+ */
+export function createSubstitutionTerminationDatabase(
+  sql: postgres.Sql = database(),
+): SubstitutionTerminationDatabase {
+  return {
+    endSubstitution: (input) =>
+      measureStudioRequestPhase('business-db', async () => {
+        const row = await sql.begin(async (transaction) => {
+          await setPersonActor(transaction, input.actorPersonId)
+          const [termination] = await transaction<SubstitutionTerminationRow[]>`
+            select
+              assignment_id,
+              relationship_id,
+              membership_id,
+              professional_person_id,
+              ended_at::text as ended_at,
+              replayed
+            from relationships.end_substitution(
+              ${input.actorPersonId}::uuid,
+              ${input.organizationId ?? null}::uuid,
+              ${input.relationshipId}::uuid,
+              ${input.assignmentId}::uuid,
+              ${input.idempotencyKey}::uuid,
+              ${input.commandId}::uuid,
+              ${input.requestHash}
+            )
+          `
+          return termination
+        })
+
+        if (!row) throw new Error('end_substitution returned no row')
+        return {
+          resource: {
+            assignmentId: row.assignment_id,
+            relationshipId: row.relationship_id,
+            membershipId: row.membership_id,
+            professionalPersonId: row.professional_person_id,
+            endedAt: row.ended_at,
+          },
+          replayed: row.replayed,
+        }
+      }),
+  }
+}
+
+type SubstitutionTerminationRow = {
+  assignment_id: string
+  relationship_id: string
+  membership_id: string
+  professional_person_id: string
+  ended_at: string
   replayed: boolean
 }
 

@@ -9,6 +9,7 @@ import type {
   RelationshipHistoryService,
   RelationshipStateService,
   SubstitutionProposalService,
+  SubstitutionTerminationService,
 } from '../application/index.js'
 import type {
   DirectoryEntry,
@@ -1041,5 +1042,139 @@ describe('asking a client to accept a cover', () => {
   test('the response is never stored', async () => {
     const response = await coverApp().fetch(propose(COVER_BODY))
     expect(response.headers.get('Cache-Control')).toBe('no-store')
+  })
+})
+
+const SUBSTITUTION = '019ad000-0000-7000-8000-000000000403'
+const END_PATH =
+  `/studio/v1/organizations/${ORGANIZATION}/relationships/${RELATIONSHIP}` +
+  `/substitutions/${SUBSTITUTION}/termination`
+
+function terminations(
+  overrides: Partial<SubstitutionTerminationService> = {},
+  capture?: (input: Record<string, unknown>) => void,
+): SubstitutionTerminationService {
+  const answer = async (input: Record<string, unknown>) => {
+    capture?.(input)
+    return {
+      resource: {
+        assignmentId: SUBSTITUTION,
+        relationshipId: RELATIONSHIP,
+        membershipId: MEMBERSHIP,
+        professionalPersonId: '019ad000-0000-7000-8000-000000000014',
+        endedAt: '2026-11-04T15:20:00.000Z',
+      },
+      replayed: false,
+    }
+  }
+  return {
+    end: async (_actor, input) => answer(input as unknown as Record<string, unknown>),
+    endMine: async (_personId, input) => answer(input as unknown as Record<string, unknown>),
+    ...overrides,
+  }
+}
+
+function endApp(service: SubstitutionTerminationService = terminations()): Hono {
+  const routes = new Hono()
+  routes.route(
+    '/studio/v1',
+    studioRelationshipRoutes({ sessions: sessions(), terminations: service }),
+  )
+  return routes
+}
+
+function endCover(path: string = END_PATH, headers: Record<string, string> = ASSIGN_HEADERS) {
+  return new Request(`https://api.example.test${path}`, { method: 'POST', headers })
+}
+
+describe('ending a cover before its last day', () => {
+  test('answers with the cover and the instant the access stopped', async () => {
+    const response = await endApp().fetch(endCover())
+    expect(response.status).toBe(200)
+    const payload = (await response.json()) as Record<string, unknown>
+    expect(payload.assignment_id).toBe(SUBSTITUTION)
+    expect(payload.ended_at).toBe('2026-11-04T15:20:00.000Z')
+  })
+
+  test('marks a replayed command', async () => {
+    const replayed = terminations({
+      end: async () => ({
+        resource: {
+          assignmentId: SUBSTITUTION,
+          relationshipId: RELATIONSHIP,
+          membershipId: MEMBERSHIP,
+          professionalPersonId: '019ad000-0000-7000-8000-000000000014',
+          endedAt: '2026-11-04T15:20:00.000Z',
+        },
+        replayed: true,
+      }),
+    })
+    const response = await endApp(replayed).fetch(endCover())
+    expect(response.headers.get('Idempotent-Replay')).toBe('true')
+  })
+
+  /*
+   * The command carries no body, so what makes it idempotent is hashed from
+   * what the path names. Hashing an empty object instead would make one key
+   * replay the first cover's answer for a second, different one — and the
+   * caller would be told an access was cut that is still running.
+   */
+  test('two different covers under one key are two different commands', async () => {
+    const seen: Record<string, unknown>[] = []
+    const app = endApp(terminations({}, (input) => seen.push(input)))
+    await app.fetch(endCover())
+    const other = '019ad000-0000-7000-8000-000000000404'
+    await app.fetch(
+      endCover(
+        `/studio/v1/organizations/${ORGANIZATION}/relationships/${RELATIONSHIP}` +
+          `/substitutions/${other}/termination`,
+      ),
+    )
+    expect(seen[0]?.requestHash).not.toEqual(seen[1]?.requestHash)
+  })
+
+  // A cover nobody answered grants nothing, so there is no access to cut. The
+  // command refuses it and that has to read as a conflict, not an outage.
+  test('a cover that is not running is a conflict', async () => {
+    const refused = terminations({
+      end: async () => {
+        throw Object.assign(new Error('not running'), { code: 'P0004' })
+      },
+    })
+    const response = await endApp(refused).fetch(endCover())
+    expect(response.status).toBe(409)
+  })
+
+  // The coach in charge may propose a cover and may not end one. The command
+  // decides it; this proves the refusal reaches the caller as a refusal.
+  test('a caller the command refuses gets a refusal, not an outage', async () => {
+    const refused = terminations({
+      end: async () => {
+        throw Object.assign(new Error('not allowed'), { code: '42501' })
+      },
+    })
+    const response = await endApp(refused).fetch(endCover())
+    expect(response.status).toBe(403)
+  })
+
+  test('a substitution id that is not an id', async () => {
+    const response = await endApp().fetch(
+      endCover(
+        `/studio/v1/organizations/${ORGANIZATION}/relationships/${RELATIONSHIP}` +
+          `/substitutions/not-an-id/termination`,
+      ),
+    )
+    expect(response.status).toBe(400)
+  })
+
+  test('without command headers it is not a command', async () => {
+    const { 'idempotency-key': _key, ...headers } = ASSIGN_HEADERS
+    const response = await endApp().fetch(endCover(END_PATH, headers))
+    expect(response.status).toBe(400)
+  })
+
+  test('is never stored by a cache', async () => {
+    const response = await endApp().fetch(endCover())
+    expect(response.headers.get('cache-control')).toBe('no-store')
   })
 })
