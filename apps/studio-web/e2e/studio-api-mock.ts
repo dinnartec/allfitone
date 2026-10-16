@@ -34,6 +34,12 @@ export interface StudioApiFixture {
    * click lands there, which is why the screen offers no retry.
    */
   substitutionOutcome: 'proposed' | 'already-proposed' | 'forbidden'
+  /**
+   * `ended` closes the cover in the fixture, the way the command does — the
+   * screen refetches rather than trusting the answer, so the list has to agree.
+   * `already-ended` is the `409` for a cover that is no longer running.
+   */
+  substitutionEndOutcome: 'ended' | 'already-ended' | 'forbidden'
   organizationSubscriptions: unknown[]
   /**
    * `applied` moves the row in the fixture, the way the real command does; the other two
@@ -657,6 +663,7 @@ export function createStudioApiFixture(
     assignmentOutcome: 'created',
     reassignmentOutcome: 'reassigned',
     substitutionOutcome: 'proposed',
+    substitutionEndOutcome: 'ended',
     organizationSubscriptions: [structuredClone(activeSubscription)],
     subscriptionOutcome: 'applied',
     roleGrantOutcome: 'granted',
@@ -890,6 +897,40 @@ function defaultResponse(
       return { status: 200, body: { subscription_id: subscriptionId, status } }
     }
   }
+  const ending = request.path.match(
+    /^\/studio\/v1\/organizations\/[^/]+\/relationships\/[^/]+\/substitutions\/([^/]+)\/termination$/,
+  )
+  if (request.method === 'POST' && ending) {
+    if (fixture.substitutionEndOutcome !== 'ended') {
+      return {
+        status: fixture.substitutionEndOutcome === 'already-ended' ? 409 : 403,
+        body: {
+          error: fixture.substitutionEndOutcome === 'already-ended' ? 'conflict' : 'forbidden',
+        },
+      }
+    }
+    const current = fixture.relationshipState as Record<string, unknown>
+    const covers = (current.substitutions ?? []) as Array<Record<string, unknown>>
+    const endedAt = '2026-11-04T15:20:00.000Z'
+    fixture.relationshipState = {
+      ...current,
+      substitutions: covers.map((cover) =>
+        cover.assignment_id === ending[1] ? { ...cover, status: 'ended' } : cover,
+      ),
+    }
+    const closed = covers.find((cover) => cover.assignment_id === ending[1])
+    return {
+      status: 200,
+      body: {
+        assignment_id: ending[1],
+        relationship_id: relationshipState.relationship_id,
+        membership_id: closed?.membership_id ?? '',
+        professional_person_id: closed?.professional_person_id ?? '',
+        ended_at: endedAt,
+      },
+    }
+  }
+
   if (
     request.method === 'POST' &&
     /^\/studio\/v1\/organizations\/[^/]+\/relationships\/[^/]+\/substitutions$/.test(request.path)
