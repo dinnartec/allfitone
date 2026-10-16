@@ -5802,6 +5802,62 @@ paths:
           $ref: '#/components/responses/UpstreamUnavailable'
 
   /studio/v1/organizations/{organizationId}/relationships/{relationshipId}/substitutions:
+    get:
+      tags: [Studio Relationships]
+      operationId: listRelationshipSubstitutions
+      x-allfit-operation: OP-REL-013
+      x-allfit-cache: private-no-store
+      summary: Who has covered this client, and when
+      description: >-
+        Running covers and finished ones together, **newest first** — the
+        relationship's own document lists them oldest-first, so the cover that
+        is running sinks under every cover that is over once a client has a few
+        years of history.
+
+
+        A finished cover appearing here **grants nothing**. Whether a
+        professional may read anything is decided from these same dates, so
+        listing one is reading a fact about the past, not reopening it.
+
+
+        Which covers come back is the row policy's decision: a coach sees their
+        own and the covers of clients they hold, an administrator sees them all.
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/RelationshipId'
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: The covers of this relationship, newest first
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/PrivateNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RelationshipSubstitutionPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
     post:
       tags: [Studio Relationships]
       operationId: proposeRelationshipSubstitution
@@ -5878,6 +5934,65 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /space/v1/relationships/{relationshipId}/substitutions:
+    get:
+      tags: [Space Privacy]
+      operationId: listMyRelationshipSubstitutions
+      x-allfit-operation: OP-REL-013
+      x-allfit-cache: private-no-store
+      summary: Who has been authorised over my data, and when
+      description: >-
+        Who has covered this client, and when. Running covers and finished ones
+        together, **newest first** — the relationship's own document lists them
+        oldest-first, so the cover that is running sinks under every cover that
+        is over once a client has a few years of history.
+
+
+        A finished cover appearing here **grants nothing**. Whether a
+        professional may read anything is decided from these same dates, so
+        listing one is reading a fact about the past, not reopening it.
+
+
+        This is the person's own route, and the only way she has of seeing it:
+        the relationship document is a Studio operation. It includes covers
+        still waiting on her answer, because being asked is itself something
+        she is entitled to see.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RelationshipId'
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: The covers of this relationship, newest first
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/PrivateNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RelationshipSubstitutionPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '422':
           $ref: '#/components/responses/ValidationFailed'
         '503':
@@ -22094,6 +22209,54 @@ components:
           anyOf:
             - $ref: '#/components/schemas/UuidV7'
             - type: 'null'
+    ListedRelationshipSubstitution:
+      description: >-
+        One cover of a relationship, running or finished. A finished one
+        appearing here grants nothing: validity is read from these dates, so
+        this is a fact about the past rather than a key to it.
+      type: object
+      additionalProperties: false
+      required:
+        [assignment_id, membership_id, professional_person_id, display_name,
+         status, valid_from, valid_to, ends_on, accepted_by_person_at]
+      properties:
+        assignment_id:
+          $ref: '#/components/schemas/UuidV7'
+        membership_id:
+          $ref: '#/components/schemas/UuidV7'
+        professional_person_id:
+          $ref: '#/components/schemas/UuidV7'
+        display_name:
+          type: string
+        status:
+          type: string
+          enum: [proposed, active, ended]
+        valid_from:
+          type: string
+          format: date-time
+        valid_to:
+          type: [string, 'null']
+          format: date-time
+          description: When the cover stopped, or null while it is still running.
+        ends_on:
+          type: [string, 'null']
+          format: date
+        accepted_by_person_at:
+          type: [string, 'null']
+          format: date-time
+          description: Null means nobody has answered. Silence is never acceptance.
+    RelationshipSubstitutionPage:
+      type: object
+      additionalProperties: false
+      required: [data, page]
+      properties:
+        data:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/ListedRelationshipSubstitution'
+        page:
+          $ref: '#/components/schemas/Page'
     SpaceRelationshipPage:
       type: object
       additionalProperties: false

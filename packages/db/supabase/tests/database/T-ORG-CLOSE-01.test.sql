@@ -57,10 +57,11 @@ select is(
        and has_function_privilege('allfit_api', routine.oid, 'EXECUTE')
    ) as runnable),
   'actor_is_assigned, assign_relationship_holder, end_substitution, '
-    || 'list_my_relationships, list_organization_clients, propose_substitution, '
+    || 'list_my_relationships, list_organization_clients, '
+    || 'list_relationship_substitutions, propose_substitution, '
     || 'read_relationship_history, read_relationship_state, '
     || 'reassign_relationship_holder, relationship_assignment_is_visible',
-  'the runtime reaches ten relationship functions, and ending a relationship '
+  'the runtime reaches eleven relationship functions, and ending a relationship '
     || 'is still not among them'
 );
 

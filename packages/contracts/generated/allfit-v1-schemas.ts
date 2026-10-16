@@ -4478,6 +4478,59 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
     description:
       'Centimetres are canonical. Feet and inches are sent as **total inches**, an integer like any other, and only the label renders them as `5\' 10"` — so no control has to hold two fields that can disagree.',
   },
+  ListedRelationshipSubstitution: {
+    description:
+      'One cover of a relationship, running or finished. A finished one appearing here grants nothing: validity is read from these dates, so this is a fact about the past rather than a key to it.',
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'assignment_id',
+      'membership_id',
+      'professional_person_id',
+      'display_name',
+      'status',
+      'valid_from',
+      'valid_to',
+      'ends_on',
+      'accepted_by_person_at',
+    ],
+    properties: {
+      assignment_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      membership_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      professional_person_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      display_name: {
+        type: 'string',
+      },
+      status: {
+        type: 'string',
+        enum: ['proposed', 'active', 'ended'],
+      },
+      valid_from: {
+        type: 'string',
+        format: 'date-time',
+      },
+      valid_to: {
+        type: ['string', 'null'],
+        format: 'date-time',
+        description: 'When the cover stopped, or null while it is still running.',
+      },
+      ends_on: {
+        type: ['string', 'null'],
+        format: 'date',
+      },
+      accepted_by_person_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+        description: 'Null means nobody has answered. Silence is never acceptance.',
+      },
+    },
+  },
   Load: {
     type: 'object',
     additionalProperties: false,
@@ -9106,6 +9159,23 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         type: ['string', 'null'],
         format: 'date-time',
         description: 'Null until the person has accepted this substitution.',
+      },
+    },
+  },
+  RelationshipSubstitutionPage: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['data', 'page'],
+    properties: {
+      data: {
+        type: 'array',
+        maxItems: 100,
+        items: {
+          $ref: '#/components/schemas/ListedRelationshipSubstitution',
+        },
+      },
+      page: {
+        $ref: '#/components/schemas/Page',
       },
     },
   },

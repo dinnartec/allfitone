@@ -332,6 +332,45 @@ export interface SubstitutionTerminationDatabase {
 }
 
 /**
+ * `OP-REL-013`. The covers of one relationship, running and finished, newest
+ * first.
+ *
+ * Newest first is the point rather than a preference: the relationship card
+ * embeds its covers oldest-first, so the one that is running sinks under every
+ * one that is over — unnoticeable with two and a wall after a few years.
+ *
+ * A finished cover appearing here grants nothing. That is not enforced by this
+ * query: `relationships.actor_is_assigned` already refuses an assignment whose
+ * validity has passed, so reading a fact about the past is reading, not
+ * reopening.
+ */
+export interface ListedSubstitution extends RelationshipSubstitution {
+  /**
+   * Present here and not on the card's own shape: a cover that is over has an
+   * instant it stopped, and a list that spans years is where that matters.
+   */
+  readonly validTo: Date | null
+}
+
+export interface SubstitutionPage {
+  readonly items: readonly ListedSubstitution[]
+  readonly hasMore: boolean
+}
+
+export interface SubstitutionQuery {
+  /** Absent on the Space surface, whose route carries no organization. */
+  readonly organizationId?: string
+  readonly relationshipId: string
+  readonly limit: number
+  readonly cursorValidFrom?: string
+  readonly cursorAssignmentId?: string
+}
+
+export interface SubstitutionListDatabase {
+  listSubstitutions(personId: string, query: SubstitutionQuery): Promise<SubstitutionPage>
+}
+
+/**
  * `OP-REL-012`. A page of the caller's own relationships, shaped as the contract sends
  * it: this answer is handed straight to the client, so the row and the DTO are the same
  * thing and a mapping layer between them would only be a place to drop a field.

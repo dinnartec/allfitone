@@ -10,6 +10,7 @@ import type {
   RelationshipStateService,
   SubstitutionProposalService,
   SubstitutionTerminationService,
+  SubstitutionListService,
 } from '../application/index.js'
 import type {
   DirectoryEntry,
@@ -1176,5 +1177,123 @@ describe('ending a cover before its last day', () => {
   test('is never stored by a cache', async () => {
     const response = await endApp().fetch(endCover())
     expect(response.headers.get('cache-control')).toBe('no-store')
+  })
+})
+
+const LIST_PATH = `/studio/v1/organizations/${ORGANIZATION}/relationships/${RELATIONSHIP}/substitutions`
+
+function listedCover(overrides: Record<string, unknown> = {}) {
+  return {
+    assignmentId: '019ad000-0000-7000-8000-000000000403',
+    membershipId: MEMBERSHIP,
+    professionalPersonId: '019ad000-0000-7000-8000-000000000014',
+    displayName: 'Daniela Hoyos',
+    status: 'active' as const,
+    validFrom: new Date('2026-11-02T00:00:00.000Z'),
+    validTo: null,
+    endsOn: '2026-11-09',
+    acceptedByPersonAt: new Date('2026-11-01T12:00:00.000Z'),
+    ...overrides,
+  }
+}
+
+function substitutionPages(
+  page: { items: ReturnType<typeof listedCover>[]; hasMore: boolean } = {
+    items: [listedCover()],
+    hasMore: false,
+  },
+  capture?: (query: Record<string, unknown>) => void,
+): SubstitutionListService {
+  return {
+    list: async (_actor, query) => {
+      capture?.(query as unknown as Record<string, unknown>)
+      return page
+    },
+    listMine: async () => page,
+  }
+}
+
+function listApp(service: SubstitutionListService = substitutionPages()): Hono {
+  const routes = new Hono()
+  routes.route(
+    '/studio/v1',
+    studioRelationshipRoutes({ sessions: sessions(), substitutionPages: service }),
+  )
+  return routes
+}
+
+function askList(query = '', headers: Record<string, string> = HEADERS): Request {
+  return new Request(`https://api.example.test${LIST_PATH}${query}`, { headers })
+}
+
+describe('who has covered this client', () => {
+  test('answers the covers with their dates', async () => {
+    const response = await listApp().fetch(askList())
+    expect(response.status).toBe(200)
+    const payload = (await response.json()) as {
+      data: Record<string, unknown>[]
+      page: Record<string, unknown>
+    }
+    expect(payload.data[0]?.display_name).toBe('Daniela Hoyos')
+    expect(payload.data[0]?.valid_from).toBe('2026-11-02T00:00:00.000Z')
+    expect(payload.page.has_more).toBe(false)
+    expect(payload.page.next_cursor).toBeNull()
+  })
+
+  /*
+   * A cover that is over carries the instant it stopped, and the card's own
+   * shape has no room for it. A list spanning years is where that matters.
+   */
+  test('a finished cover carries when it stopped', async () => {
+    const finished = listedCover({
+      status: 'ended',
+      validTo: new Date('2026-11-05T15:20:00.000Z'),
+    })
+    const response = await listApp(substitutionPages({ items: [finished], hasMore: false })).fetch(
+      askList(),
+    )
+    const payload = (await response.json()) as { data: Record<string, unknown>[] }
+    expect(payload.data[0]?.status).toBe('ended')
+    expect(payload.data[0]?.valid_to).toBe('2026-11-05T15:20:00.000Z')
+  })
+
+  test('a running cover has no stopping instant', async () => {
+    const response = await listApp().fetch(askList())
+    const payload = (await response.json()) as { data: Record<string, unknown>[] }
+    expect(payload.data[0]?.valid_to).toBeNull()
+  })
+
+  // The cursor round-trips: what the page hands out is what the next request
+  // can be read back from. A cursor nobody can parse is a list that repeats.
+  test('the cursor it hands out is one it can read back', async () => {
+    const first = await listApp(substitutionPages({ items: [listedCover()], hasMore: true })).fetch(
+      askList(),
+    )
+    const { page } = (await first.json()) as { page: { next_cursor: string } }
+    expect(page.next_cursor).toBeTruthy()
+
+    const seen: Record<string, unknown>[] = []
+    const app = listApp(substitutionPages(undefined, (query) => seen.push(query)))
+    const second = await app.fetch(askList(`?cursor=${page.next_cursor}`))
+    expect(second.status).toBe(200)
+    expect(seen[0]?.cursorValidFrom).toBe('2026-11-02T00:00:00.000Z')
+    expect(seen[0]?.cursorAssignmentId).toBe('019ad000-0000-7000-8000-000000000403')
+  })
+
+  test('a cursor nobody could have issued is refused', async () => {
+    const response = await listApp().fetch(askList('?cursor=not-a-cursor'))
+    expect(response.status).toBe(422)
+  })
+
+  test('a limit that is not a page size is refused', async () => {
+    expect((await listApp().fetch(askList('?limit=0'))).status).toBe(422)
+    expect((await listApp().fetch(askList('?limit=500'))).status).toBe(422)
+  })
+
+  // Read for deciding who has seen somebody's data, so a stale copy is worse
+  // than a slow one.
+  test('is never stored by a cache', async () => {
+    const response = await listApp().fetch(askList())
+    expect(response.headers.get('cache-control')).toBe('private, no-store')
   })
 })

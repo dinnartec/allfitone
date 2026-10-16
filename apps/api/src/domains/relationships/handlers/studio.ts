@@ -13,6 +13,7 @@ import {
   trustedStudioWebUrl,
 } from '../../identity/index.js'
 import { fail } from '../../../platform/http/index.js'
+import { parseSubstitutionCursor, presentSubstitutionPage } from './substitution-page.js'
 import {
   clientDirectoryService,
   holderAssignmentService,
@@ -21,6 +22,7 @@ import {
   relationshipStateService,
   substitutionProposalService,
   substitutionTerminationService,
+  substitutionListService,
 } from '../dependencies.js'
 import {
   RelationshipsError,
@@ -31,6 +33,7 @@ import {
   type RelationshipStateService,
   type SubstitutionProposalService,
   type SubstitutionTerminationService,
+  type SubstitutionListService,
 } from '../application/index.js'
 import type {
   DirectoryEntry,
@@ -62,6 +65,7 @@ export interface StudioRelationshipDependencies {
   readonly histories?: RelationshipHistoryService
   readonly substitutions?: SubstitutionProposalService
   readonly terminations?: SubstitutionTerminationService
+  readonly substitutionPages?: SubstitutionListService
 }
 
 export function studioRelationshipRoutes(injected: StudioRelationshipDependencies = {}): Hono {
@@ -73,6 +77,7 @@ export function studioRelationshipRoutes(injected: StudioRelationshipDependencie
   const histories = () => injected.histories ?? relationshipHistoryService()
   const substitutions = () => injected.substitutions ?? substitutionProposalService()
   const terminations = () => injected.terminations ?? substitutionTerminationService()
+  const substitutionPages = () => injected.substitutionPages ?? substitutionListService()
   const sessions = () => injected.sessions ?? studioSessionService()
   const routes = new Hono()
 
@@ -373,6 +378,51 @@ export function studioRelationshipRoutes(injected: StudioRelationshipDependencie
           },
           result.proposed ? 201 : 200,
         )
+      } catch (error) {
+        return failure(c, error)
+      }
+    },
+  )
+
+  /*
+   * `OP-REL-013`. Who has covered this client, newest first.
+   *
+   * The relationship document already carries its covers, so this exists for
+   * two things the document cannot do: it orders them so the running one is
+   * first rather than last, and it pages, which a document embedding an
+   * unbounded list cannot.
+   *
+   * A finished cover listed here grants nothing. That is not this route's
+   * promise to keep — validity is read from the same dates everywhere — but it
+   * is the thing a reader of this list most needs to be true.
+   */
+  routes.get(
+    '/organizations/:organizationId/relationships/:relationshipId/substitutions',
+    async (c) => {
+      c.header('Cache-Control', 'private, no-store')
+      if (c.req.header('origin') !== studioOrigin) {
+        return fail(c, 'forbidden', 'origin is not allowed')
+      }
+      const organizationId = c.req.param('organizationId')
+      const relationshipId = c.req.param('relationshipId')
+      if (!UUID.test(organizationId) || !UUID.test(relationshipId)) {
+        return fail(c, 'invalid-request')
+      }
+      const limit = parseLimit(c.req.query('limit'))
+      if (!limit) return fail(c, 'validation-failed')
+      const cursor = parseSubstitutionCursor(c.req.query('cursor'), (id) => UUID.test(id))
+      if (cursor === null) return fail(c, 'validation-failed')
+
+      try {
+        const actor = await studioActor(c, sessions())
+        if (actor instanceof Response) return actor
+        const page = await substitutionPages().list(actor, {
+          organizationId,
+          relationshipId,
+          limit,
+          ...(cursor ?? {}),
+        })
+        return c.json(presentSubstitutionPage(page))
       } catch (error) {
         return failure(c, error)
       }
