@@ -74,6 +74,7 @@ import {
 import {
   canEndSubstitution,
   canProposeSubstitution,
+  coversThatStillMatterFirst,
   coversAvailable,
   seesEverySubstitution,
 } from '@/lib/relationship-substitution'
@@ -368,7 +369,7 @@ function ProfessionalsPanel({
             </p>
           ) : (
             <ul data-relationship-substitution-list aria-label="Suplencias del vínculo">
-              {substitutions.map((substitution) => (
+              {coversThatStillMatterFirst(substitutions).map((substitution) => (
                 <SubstitutionRow
                   key={substitution.assignment_id}
                   substitution={substitution}

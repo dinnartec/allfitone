@@ -184,3 +184,48 @@ test('cancelling leaves the cover running', async ({ page }) => {
     ),
   ).toHaveLength(0)
 })
+
+/*
+ * El defecto que este ticket arregla, visto desde la pantalla. El servidor
+ * entrega las suplencias de la más vieja a la más nueva, así que la que está
+ * corriendo —la única sobre la que hay algo que hacer— quedaba debajo de todas
+ * las terminadas. Esta prueba fija que la primera fila es la accionable.
+ */
+test('la suplencia que corre encabeza la lista, no las terminadas', async ({ page }) => {
+  const fixture = createStudioApiFixture({
+    memberships: [activeMembership],
+    organizationMemberships: coachedTeam(),
+    relationshipState: {
+      ...relationshipState,
+      substitutions: [
+        {
+          assignment_id: '01991600-7000-7000-8000-000000000410',
+          membership_id: '01991600-7000-7000-8000-000000000003',
+          professional_person_id: '01991600-7000-7000-8000-000000000203',
+          display_name: 'Daniela Hoyos',
+          status: 'ended',
+          valid_from: '2026-09-01T00:00:00.000Z',
+          ends_on: '2026-09-10',
+          accepted_by_person_at: '2026-08-30T10:00:00.000Z',
+        },
+        {
+          assignment_id: '01991600-7000-7000-8000-000000000411',
+          membership_id: '01991600-7000-7000-8000-000000000004',
+          professional_person_id: '01991600-7000-7000-8000-000000000204',
+          display_name: 'Sara Posada',
+          status: 'active',
+          valid_from: '2026-01-15T00:00:00.000Z',
+          ends_on: '2026-12-20',
+          accepted_by_person_at: '2026-01-14T10:00:00.000Z',
+        },
+      ],
+    },
+  })
+  await installStudioApiMock(page, fixture)
+  await open(page, activeMembership.organization_id)
+
+  const rows = page.locator('[data-relationship-substitution-list] > li')
+  await expect(rows.first()).toContainText('Sara Posada')
+  await expect(rows.first()).toContainText('Cubriendo')
+  await expect(rows.last()).toContainText('Daniela Hoyos')
+})
