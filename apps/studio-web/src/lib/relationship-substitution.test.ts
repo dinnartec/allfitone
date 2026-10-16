@@ -4,6 +4,7 @@ import {
   canEndSubstitution,
   canProposeSubstitution,
   coversAvailable,
+  coversThatStillMatterFirst,
   proposalRefusalDescription,
   proposalRefusalFor,
   proposalRefusalTitle,
@@ -15,7 +16,7 @@ import {
   windowProblem,
   windowProblemMessage,
 } from './relationship-substitution'
-import type { OrganizationMembership } from './studio-api'
+import type { OrganizationMembership, RelationshipSubstitution } from './studio-api'
 
 function member(overrides: Partial<OrganizationMembership> = {}): OrganizationMembership {
   return {
@@ -307,5 +308,70 @@ describe('qué dice la pantalla cuando no se puede terminar', () => {
   // qué el botón no estaba donde esperaba.
   test('la negativa explica que el titular propone pero no corta', () => {
     expect(terminationRefusalDescription('not-allowed')).toContain('no cortarlas')
+  })
+})
+
+describe('en qué orden se leen las suplencias', () => {
+  function cover(
+    status: RelationshipSubstitution['status'],
+    validFrom: string,
+    name: string,
+  ): RelationshipSubstitution {
+    return {
+      assignment_id: `019ad000-0000-7000-8000-0000000004${name.length}`,
+      membership_id: 'm',
+      professional_person_id: 'p',
+      display_name: name,
+      valid_from: validFrom,
+      status,
+      ends_on: null,
+      accepted_by_person_at: null,
+    } as RelationshipSubstitution
+  }
+
+  /*
+   * El problema real: el servidor las entrega de la más vieja a la más nueva,
+   * así que la que está corriendo queda debajo de todas las terminadas. Con
+   * dos no se nota; con unos años de historia, la única que importa es la
+   * última que el lector alcanza.
+   */
+  test('la que está corriendo sale primero, aunque sea la más antigua', () => {
+    const ordered = coversThatStillMatterFirst([
+      cover('ended', '2026-09-01T00:00:00.000Z', 'Vieja'),
+      cover('active', '2026-01-01T00:00:00.000Z', 'Corriendo'),
+      cover('ended', '2026-10-01T00:00:00.000Z', 'Reciente'),
+    ])
+    expect(ordered.map((entry) => entry.display_name)).toEqual(['Corriendo', 'Reciente', 'Vieja'])
+  })
+
+  /*
+   * Y una que espera respuesta va por delante de las terminadas aunque empiece
+   * más tarde: es la única de las tres que lleva una decisión pendiente.
+   */
+  test('la que espera respuesta va antes que las terminadas', () => {
+    const ordered = coversThatStillMatterFirst([
+      cover('ended', '2026-10-01T00:00:00.000Z', 'Terminada'),
+      cover('proposed', '2026-12-01T00:00:00.000Z', 'Esperando'),
+    ])
+    expect(ordered[0]?.display_name).toBe('Esperando')
+  })
+
+  // Corriendo antes que esperando: una da acceso ahora, la otra todavía no.
+  test('corriendo va antes que esperando respuesta', () => {
+    const ordered = coversThatStillMatterFirst([
+      cover('proposed', '2026-12-01T00:00:00.000Z', 'Esperando'),
+      cover('active', '2026-11-01T00:00:00.000Z', 'Corriendo'),
+    ])
+    expect(ordered.map((entry) => entry.display_name)).toEqual(['Corriendo', 'Esperando'])
+  })
+
+  // Ordenar no es filtrar: no se pierde ninguna por el camino.
+  test('no pierde ni añade ninguna', () => {
+    const input = [
+      cover('ended', '2026-09-01T00:00:00.000Z', 'Una'),
+      cover('active', '2026-01-01T00:00:00.000Z', 'Dos'),
+    ]
+    expect(coversThatStillMatterFirst(input)).toHaveLength(2)
+    expect(input[0]?.display_name).toBe('Una')
   })
 })

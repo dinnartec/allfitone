@@ -232,3 +232,30 @@ export function terminationRefusalDescription(refusal: TerminationRefusal): stri
   // Nothing was written, so the access is exactly as it was: still running.
   return 'La conexión falló de forma temporal. La suplencia sigue corriendo, así que puedes intentarlo otra vez.'
 }
+
+/**
+ * The covers of a relationship, ordered so the ones that still matter are
+ * first.
+ *
+ * The server hands them to the relationship document oldest-first, which is
+ * fine for a client with one cover and wrong for a client with a history: the
+ * cover that is **running** ends up below every cover that is **over**, and
+ * the row somebody came to act on is the last one they reach.
+ *
+ * Two keys, not one. Sorting by date alone would put a cover that finished
+ * last week above one that starts tomorrow, and the second is the one with a
+ * decision attached. So: anything unfinished first — running, then waiting on
+ * an answer — and within each group the most recent first.
+ */
+export function coversThatStillMatterFirst(
+  substitutions: readonly RelationshipSubstitution[],
+): readonly RelationshipSubstitution[] {
+  const rank = (status: RelationshipSubstitution['status']) =>
+    status === 'active' ? 0 : status === 'proposed' ? 1 : 2
+
+  return [...substitutions].sort((left, right) => {
+    const byRank = rank(left.status) - rank(right.status)
+    if (byRank !== 0) return byRank
+    return right.valid_from.localeCompare(left.valid_from)
+  })
+}

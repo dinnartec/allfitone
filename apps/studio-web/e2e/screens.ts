@@ -122,6 +122,46 @@ async function settleAnimations(page: Page): Promise<void> {
 const workspace = `/organizations/${activeMembership.organization_id}`
 const relationshipId = relationshipState.relationship_id
 
+/** Una corriendo y dos terminadas: el vínculo que ya acumuló historia. */
+function coversWithHistory() {
+  const cover = (id: string, name: string, status: string, from: string, to: string) => ({
+    assignment_id: id,
+    membership_id: '01991600-7000-7000-8000-000000000003',
+    professional_person_id: '01991600-7000-7000-8000-000000000203',
+    display_name: name,
+    status,
+    valid_from: from,
+    ends_on: to,
+    accepted_by_person_at: from,
+  })
+  return {
+    ...relationshipState,
+    substitutions: [
+      cover(
+        '01991600-7000-7000-8000-000000000420',
+        'Daniela Hoyos',
+        'ended',
+        '2026-03-01T00:00:00.000Z',
+        '2026-03-12',
+      ),
+      cover(
+        '01991600-7000-7000-8000-000000000421',
+        'Sara Posada',
+        'active',
+        '2026-01-10T00:00:00.000Z',
+        '2026-12-20',
+      ),
+      cover(
+        '01991600-7000-7000-8000-000000000422',
+        'Elena Soto',
+        'ended',
+        '2026-08-05T00:00:00.000Z',
+        '2026-08-19',
+      ),
+    ],
+  }
+}
+
 /** The fixture's cover is `proposed`; this one is actually running. */
 function runningCover() {
   return {
@@ -1129,6 +1169,28 @@ export const SCREENS: Screen[] = [
       await expect(
         page.getByText(/dejará de ver los datos de esta persona ahora mismo/),
       ).toBeVisible()
+    },
+  },
+  {
+    /*
+     * HU-031. Un vínculo con historia: una suplencia corriendo y dos
+     * terminadas. El servidor las entrega de la más vieja a la más nueva, así
+     * que esta pantalla es donde se ve que la accionable encabeza la lista en
+     * vez de quedar sepultada — y a la vez, cómo se lee una lista larga en un
+     * teléfono.
+     */
+    stories: 'HU-031 · las suplencias de un cliente con historia',
+    path: `${workspace}/clients/${relationshipId}`,
+    fixture: () =>
+      createStudioApiFixture({
+        memberships: [activeMembership],
+        organizationMemberships: coachedTeam(),
+        relationshipState: coversWithHistory(),
+      }),
+    reveal: async (page) => {
+      await expect(
+        page.locator('[data-relationship-substitution-list] > li').first(),
+      ).toContainText('Cubriendo')
     },
   },
   // --- `/organizations/[id]/clients/[relationshipId]/history` · HU-026 ---
