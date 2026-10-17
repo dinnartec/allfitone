@@ -1193,6 +1193,43 @@ export const SCREENS: Screen[] = [
       ).toContainText('Cubriendo')
     },
   },
+  {
+    /*
+     * HU-032. La acción más pesada de Studio, en su sitio: al final de la
+     * ficha, separada del resto, para que nadie la encuentre de camino a otra
+     * cosa.
+     */
+    stories: 'HU-032 · la ficha con la acción de terminar el vínculo',
+    path: `${workspace}/clients/${relationshipId}`,
+    fixture: () =>
+      createStudioApiFixture({
+        memberships: [activeMembership],
+        organizationMemberships: coachedTeam(),
+        relationshipState,
+      }),
+    reveal: async (page) => {
+      await expect(page.getByRole('button', { name: 'Terminar el vínculo' })).toBeVisible()
+    },
+  },
+  {
+    /*
+     * El diálogo. Dice tres cosas que nadie adivina, en dos frases, y además
+     * lleva un campo. En un teléfono es donde se ve si cabe o si el pie se sale
+     * de la pantalla.
+     */
+    stories: 'HU-032 · la pregunta antes de cerrar la atención a alguien',
+    path: `${workspace}/clients/${relationshipId}`,
+    fixture: () =>
+      createStudioApiFixture({
+        memberships: [activeMembership],
+        organizationMemberships: coachedTeam(),
+        relationshipState,
+      }),
+    reveal: async (page) => {
+      await page.getByRole('button', { name: 'Terminar el vínculo' }).click()
+      await expect(page.getByText(/Pasa ahora mismo, sin preaviso/)).toBeVisible()
+    },
+  },
   // --- `/organizations/[id]/clients/[relationshipId]/history` · HU-026 ---
   {
     // The timeline with every kind in it, including the handover whose two

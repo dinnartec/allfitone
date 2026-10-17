@@ -40,6 +40,12 @@ export interface StudioApiFixture {
    * `already-ended` is the `409` for a cover that is no longer running.
    */
   substitutionEndOutcome: 'ended' | 'already-ended' | 'forbidden'
+  /**
+   * `terminated` closes the relationship in the fixture, the way the command
+   * does: the screen refetches rather than trusting the answer, so the page has
+   * to agree with it.
+   */
+  terminationOutcome: 'terminated' | 'already-ended' | 'forbidden'
   organizationSubscriptions: unknown[]
   /**
    * `applied` moves the row in the fixture, the way the real command does; the other two
@@ -664,6 +670,7 @@ export function createStudioApiFixture(
     reassignmentOutcome: 'reassigned',
     substitutionOutcome: 'proposed',
     substitutionEndOutcome: 'ended',
+    terminationOutcome: 'terminated',
     organizationSubscriptions: [structuredClone(activeSubscription)],
     subscriptionOutcome: 'applied',
     roleGrantOutcome: 'granted',
@@ -897,6 +904,45 @@ function defaultResponse(
       return { status: 200, body: { subscription_id: subscriptionId, status } }
     }
   }
+  if (
+    request.method === 'POST' &&
+    /^\/studio\/v1\/organizations\/[^/]+\/relationships\/[^/]+\/termination$/.test(request.path)
+  ) {
+    if (fixture.terminationOutcome !== 'terminated') {
+      return {
+        status: fixture.terminationOutcome === 'already-ended' ? 409 : 403,
+        body: {
+          error: fixture.terminationOutcome === 'already-ended' ? 'conflict' : 'forbidden',
+        },
+      }
+    }
+    const current = fixture.relationshipState as Record<string, unknown>
+    const endedAt = '2026-11-04T15:20:00.000Z'
+    const grants = ((current.grants ?? []) as Array<Record<string, unknown>>).map((grant) =>
+      grant.status === 'active' ? { ...grant, status: 'frozen' } : grant,
+    )
+    fixture.relationshipState = {
+      ...current,
+      status: 'terminated',
+      ended_at: endedAt,
+      holder: null,
+      substitutions: ((current.substitutions ?? []) as Array<Record<string, unknown>>).map(
+        (cover) => (cover.status === 'active' ? { ...cover, status: 'ended' } : cover),
+      ),
+      grants,
+    }
+    return {
+      status: 200,
+      body: {
+        relationship_id: relationshipState.relationship_id,
+        person_id: relationshipState.person_id,
+        ended_at: endedAt,
+        frozen_grants: grants.filter((grant) => grant.status === 'frozen').length,
+        closed_assignments: 1,
+      },
+    }
+  }
+
   const ending = request.path.match(
     /^\/studio\/v1\/organizations\/[^/]+\/relationships\/[^/]+\/substitutions\/([^/]+)\/termination$/,
   )

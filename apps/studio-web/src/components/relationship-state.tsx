@@ -56,6 +56,7 @@ import { RelationshipHolderChange } from './relationship-holder-change'
 import { RelationshipHolderForm } from './relationship-holder-form'
 import { RelationshipSubstitutionEnd } from './relationship-substitution-end'
 import { RelationshipSubstitutionPropose } from './relationship-substitution-propose'
+import { RelationshipTermination } from './relationship-termination'
 import { WorkspacePageHeader } from './workspace-page-header'
 import { clientInitials, seesEveryClient } from '@/lib/client-directory'
 import {
@@ -78,6 +79,7 @@ import {
   coversAvailable,
   seesEverySubstitution,
 } from '@/lib/relationship-substitution'
+import { canTerminateRelationship } from '@/lib/relationship-termination'
 import { useCompactViewport } from '@/lib/use-compact-viewport'
 import type {
   OrganizationMembership,
@@ -190,6 +192,16 @@ export function RelationshipStateScreen() {
         }
       />
       <GrantsPanel grants={relationship.grants} compact={compact} />
+      {canTerminateRelationship({
+        mayAssignProfessionals: mayAssign,
+        relationshipActive: relationship.status === 'active',
+      }) ? (
+        <RelationshipTermination
+          organizationId={current.organization_id}
+          relationship={relationship}
+          clientName={relationship.display_name}
+        />
+      ) : null}
     </div>
   )
 }
