@@ -1272,6 +1272,36 @@
 
 /* The form sits under the empty state it resolves, separated the way the
    substitutions block is: a rule and space, not another card inside a card. */
+/* La acción más pesada de la ficha, y por eso suelta del resto: título, una
+   frase y el botón, con dos ritmos distintos. El título y su frase son una sola
+   cosa y van juntos; entre la frase y el botón hay un paso mayor, para que leer
+   y actuar no sean el mismo gesto.
+
+   `justify-items: start` porque el botón se dimensiona a su etiqueta: estirado
+   de lado a lado se leería como el siguiente paso de la página en vez de como
+   lo que es. */
+[data-relationship-termination] {
+  display: grid;
+  justify-items: start;
+  gap: var(--afo-space-2);
+}
+
+[data-relationship-termination-lead] {
+  max-width: 62ch;
+  margin-block: 0;
+  color: var(--afo-color-text-muted);
+}
+
+[data-relationship-termination] > [data-relationship-terminate] {
+  margin-block-start: var(--afo-space-3);
+}
+
+/* Lo que se conserva, lo que se deja de ver y bajo qué condición se lee: una
+   sola frase dentro del diálogo, al mismo ancho que la pregunta. */
+[data-relationship-termination-kept] {
+  margin-block: 0;
+}
+
 [data-relationship-assign-panel] {
   display: grid;
   gap: var(--afo-space-4);

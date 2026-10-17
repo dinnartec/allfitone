@@ -55,6 +55,8 @@ export type RelationshipReassignment = AllfitV1Schemas['RelationshipReassignment
 export type RelationshipSubstitutionProposalCreate =
   AllfitV1Schemas['RelationshipSubstitutionProposalCreate']
 export type RelationshipSubstitutionProposal = AllfitV1Schemas['RelationshipSubstitutionProposal']
+export type RelationshipTermination = AllfitV1Schemas['RelationshipTermination']
+export type RelationshipTerminationCreate = AllfitV1Schemas['RelationshipTerminationCreate']
 export type RelationshipSubstitutionTermination =
   AllfitV1Schemas['RelationshipSubstitutionTermination']
 export type Organization = AllfitV1Schemas['Organization']
@@ -468,6 +470,25 @@ export const studioApi = {
       {
         method: 'POST',
         headers: commandHeaders(command),
+      },
+    ),
+
+  /**
+   * `OP-REL-008`. The body is optional and carries at most a reason: a gym owes
+   * the system no justification for ending a relationship.
+   */
+  terminateRelationship: (
+    organizationId: string,
+    relationshipId: string,
+    body: RelationshipTerminationCreate,
+    command: CommandHeaders,
+  ) =>
+    request<RelationshipTermination>(
+      `/studio/v1/organizations/${organizationId}/relationships/${relationshipId}/termination`,
+      {
+        method: 'POST',
+        headers: commandHeaders(command),
+        body: JSON.stringify(body),
       },
     ),
 
