@@ -309,6 +309,7 @@ function harness(overrides?: {
   }
   const executions = {
     readWeekSummary: async () => weekSummary,
+    readOpenFreeSession: async () => null,
     ...overrides?.executions,
   } as unknown as SpaceExecutionService
   const app = new Hono()
@@ -958,6 +959,27 @@ describe('GET /space/v1/today', () => {
     const body = (await response.json()) as { week: { tonnage_kg: number | null } }
     expect(body.week.tonnage_kg).toBe(5120.5)
     assertMatchesContract('SpaceToday', body)
+  })
+
+  test('T-PLN-API-168 names the free session still open, so Today resumes it', async () => {
+    const open = '019e4000-0000-7000-8000-000000000999'
+    const response = await harness({
+      executions: { readOpenFreeSession: async () => open },
+    }).request('/space/v1/today?timezone=America/Bogota', { headers: authorized })
+
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as { open_free_session_id: string | null }
+    expect(body.open_free_session_id).toBe(open)
+    assertMatchesContract('SpaceToday', body)
+  })
+
+  test('T-PLN-API-169 and says null when nothing is open', async () => {
+    const response = await harness().request('/space/v1/today?timezone=America/Bogota', {
+      headers: authorized,
+    })
+
+    const body = (await response.json()) as { open_free_session_id: string | null }
+    expect(body.open_free_session_id).toBeNull()
   })
 
   test('T-PLN-API-104 refuses a request with no timezone, because today is local', async () => {

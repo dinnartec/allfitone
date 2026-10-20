@@ -14,6 +14,7 @@ import {
   createExecutionFlow,
   type Abandoned,
   type Attempt,
+  type FreeSession,
   type Execution,
   type ExecutionFlow,
   type ExecutionSummary,
@@ -67,6 +68,10 @@ export function createSpaceExecutionFlow(): ExecutionFlow {
             start,
             token,
           ),
+        ),
+      startFreeSession: (command, start) =>
+        authenticated((token) =>
+          authorizedPost<FreeSession>('/space/v1/executions', command, start, token),
         ),
       saveResults: (command, executedSessionId, revisionNumber, results) =>
         authenticated((token) =>

@@ -23,6 +23,7 @@ import { measureStudioRequestPhase } from '../../../platform/observability/index
 import type {
   Abandoned,
   Attempt,
+  FreeSession,
   Execution,
   ExecutionDatabase,
   ExecutionResultsReplace,
@@ -57,6 +58,8 @@ interface AttemptRow {
   contract_version: number
   requested_level: Attempt['result_contract']['requested_level']
 }
+
+type FreeSessionRow = Omit<AttemptRow, 'attempt_number'>
 
 interface ResultsRow {
   id: string
@@ -120,6 +123,28 @@ export function createExecutionDatabase(): ExecutionDatabase {
         `
         if (!row) throw new Error('PostgreSQL did not start the attempt')
         return attempt(row)
+      }),
+
+    startFreeSession: (input) =>
+      transact(sql, input.personId, '', async (transaction) => {
+        const [row] = await transaction<FreeSessionRow[]>`
+          select * from execution.start_free_session(
+            ${input.personId}::uuid, ${input.disciplineCode},
+            ${input.startedAt}::timestamptz, ${input.timezone},
+            ${input.requestedLevel}::catalog.completeness_level, ${input.captureSource},
+            ${input.idempotencyKey}::uuid, ${input.commandId}::uuid, ${input.requestHash}
+          )
+        `
+        if (!row) throw new Error('PostgreSQL did not start the free session')
+        return freeSession(row)
+      }),
+
+    readOpenFreeSession: (input) =>
+      transact(sql, input.personId, input.requestId, async (transaction) => {
+        const [row] = await transaction<{ id: string | null }[]>`
+          select execution.read_open_free_session(${input.personId}::uuid) as id
+        `
+        return row?.id ?? null
       }),
 
     replaceResults: (input) =>
@@ -342,6 +367,19 @@ function flatten(
     ...entry,
   }))
   return [...strength, ...endurance, ...intervals, ...mobility]
+}
+
+function freeSession(row: FreeSessionRow): FreeSession {
+  return {
+    id: row.id,
+    status: 'in_progress',
+    revision_number: Number(row.revision_number),
+    result_contract: {
+      id: row.result_contract_id,
+      version: row.contract_version,
+      requested_level: row.requested_level,
+    },
+  }
 }
 
 function attempt(row: AttemptRow): Attempt {

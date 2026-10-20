@@ -79,6 +79,27 @@ export function spaceExecutionRoutes(
     }
   })
 
+  routes.post('/executions', async (c) => {
+    c.header('Cache-Control', 'no-store')
+
+    const token = await verified(c, verify)
+    if (!token) return fail(c, 'unauthenticated')
+
+    const body = await readJson(c)
+    const start = readFreeStart(body)
+    const command = commandContext(c, body)
+    if (!start || !command) return fail(c, 'invalid-request')
+
+    try {
+      const personId = await actors().personFor(token.subject)
+      const started = await execution().startFreeSession({ personId, ...start, ...command })
+      c.header('Location', `/space/v1/executions/${started.id}`)
+      return c.json(started, 201)
+    } catch (cause) {
+      return failure(c, cause)
+    }
+  })
+
   routes.get('/executions/:executionId', async (c) => {
     c.header('Cache-Control', 'no-store')
 
@@ -503,6 +524,17 @@ function readStart(
   if (typeof requestedLevel !== 'string' || !LEVELS.has(requestedLevel)) return undefined
   if (typeof captureSource !== 'string' || !SOURCES.has(captureSource)) return undefined
   return { startedAt, timezone: zone, requestedLevel, captureSource }
+}
+
+const DISCIPLINE = /^[a-z][a-z0-9_]{1,63}$/
+
+/** A planned start's four fields, plus the discipline whose contract the session freezes. */
+function readFreeStart(body: unknown) {
+  if (typeof body !== 'object' || body === null) return undefined
+  const { discipline_code: disciplineCode, ...rest } = body as Record<string, unknown>
+  if (typeof disciplineCode !== 'string' || !DISCIPLINE.test(disciplineCode)) return undefined
+  const start = readStart(rest)
+  return start ? { ...start, disciplineCode } : undefined
 }
 
 function readResults(body: unknown): ExecutionResultsReplace | undefined {

@@ -31,6 +31,17 @@ const attempt = {
   },
 }
 
+const freeSession = {
+  id: COMMAND_ID,
+  status: 'in_progress' as const,
+  revision_number: 0,
+  result_contract: {
+    id: '019e4000-0000-7000-8000-000000000401',
+    version: 1,
+    requested_level: 'detailed' as const,
+  },
+}
+
 const state = {
   id: EXECUTION_ID,
   status: 'in_progress' as const,
@@ -176,6 +187,8 @@ const finished: FinishedExecution = {
 function harness(overrides?: Partial<SpaceExecutionService>, actorFails = false): Hono {
   const service: SpaceExecutionService = {
     startAttempt: async () => attempt,
+    startFreeSession: async () => freeSession,
+    readOpenFreeSession: async () => null,
     replaceResults: async () => state,
     finalize: async () => finalized,
     abandon: async () => abandonedState,
@@ -247,6 +260,7 @@ describe('the Space execution surface honours the contract', () => {
     expect(declared.map((operation) => operation.allfitOperation).sort()).toEqual([
       'OP-EXE-001',
       'OP-EXE-003',
+      'OP-EXE-004',
       'OP-EXE-005',
       'OP-EXE-006',
       'OP-EXE-007',
@@ -331,6 +345,64 @@ describe('POST /space/v1/planned-sessions/{id}/attempts', () => {
   test('T-EXE-API-05 refuses without command headers', async () => {
     const response = await begin(start, { ...authorized, 'content-type': 'application/json' })
     expect(response.status).toBe(400)
+  })
+})
+
+describe('POST /space/v1/executions', () => {
+  const free = { ...start, discipline_code: 'strength' }
+  const begin = (
+    body: unknown,
+    headers: Record<string, string> = commanded,
+    overrides?: Partial<SpaceExecutionService>,
+  ) =>
+    harness(overrides).request('/space/v1/executions', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+    })
+
+  test('T-EXE-API-17 starts a free session under the id the device chose', async () => {
+    let received: Parameters<SpaceExecutionService['startFreeSession']>[0] | undefined
+    const response = await begin(free, commanded, {
+      startFreeSession: async (input) => {
+        received = input
+        return freeSession
+      },
+    })
+
+    expect(response.status).toBe(201)
+    expect(await response.json()).toEqual(freeSession)
+    expect(response.headers.get('location')).toBe(`/space/v1/executions/${COMMAND_ID}`)
+    expect(received?.commandId).toBe(COMMAND_ID)
+    expect(received?.disciplineCode).toBe('strength')
+    expect(received?.personId).toBe(PERSON_ID)
+  })
+
+  test('T-EXE-API-18 refuses a body without the discipline, or with a malformed one', async () => {
+    expect((await begin(start)).status).toBe(400)
+    expect((await begin({ ...free, discipline_code: 'Fuerza!' })).status).toBe(400)
+  })
+
+  test('T-EXE-API-19 refuses without command headers', async () => {
+    const response = await begin(free, { ...authorized, 'content-type': 'application/json' })
+    expect(response.status).toBe(400)
+  })
+
+  test('T-EXE-API-20 a second free session while one is open is a conflict', async () => {
+    const response = await begin(free, commanded, {
+      startFreeSession: async () => {
+        throw Object.assign(new Error('a free session is already open'), { code: '55006' })
+      },
+    })
+    expect(response.status).toBe(409)
+  })
+
+  test('T-EXE-API-21 requires a bearer token', async () => {
+    const response = await harness().request('/space/v1/executions', {
+      method: 'POST',
+      body: JSON.stringify(free),
+    })
+    expect(response.status).toBe(401)
   })
 })
 
