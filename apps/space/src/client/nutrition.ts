@@ -346,6 +346,61 @@ export function rangeProgress(target: GoalTarget, eaten: number): RangeProgress 
   return { ...marks, state: 'above', over: Math.round(eaten - high) }
 }
 
+export interface RangeCardCopy {
+  /** The one figure that matters now: missing, margin or excess, in kcal. */
+  readonly figure: string
+  readonly line: string
+  /** Inside the ring: share of the minimum, «En meta», or the excess. */
+  readonly center: string
+  readonly centerLabel: string
+  readonly detail: string
+  readonly over: boolean
+}
+
+/**
+ * What the range card says (NE-2). The big figure answers the question of the moment and
+ * the range is said once, in the detail line, so an empty day does not repeat it.
+ */
+export function rangeCardCopy(
+  target: GoalTarget,
+  eaten: number,
+  range: RangeProgress,
+): RangeCardCopy {
+  const low = target.minimum ?? 0
+  const high = target.maximum ?? 0
+  const span = `${figure(low)}–${figure(high)}`
+  const detail = `Meta ${span}`
+  if (range.state === 'below') {
+    const share = low > 0 ? Math.round((eaten / low) * 100) : 0
+    return {
+      figure: figure(range.fromLow),
+      line: 'Te faltan para tu mínimo',
+      center: `${String(share)}%`,
+      centerLabel: 'Del mínimo',
+      detail,
+      over: false,
+    }
+  }
+  if (range.state === 'within') {
+    return {
+      figure: figure(range.fromHigh),
+      line: 'Margen hasta tu máximo',
+      center: 'En meta',
+      centerLabel: span,
+      detail: `Consumido ${figure(eaten)}`,
+      over: false,
+    }
+  }
+  return {
+    figure: figure(range.over),
+    line: 'Por encima de tu máximo',
+    center: `+${figure(range.over)}`,
+    centerLabel: 'De más',
+    detail,
+    over: true,
+  }
+}
+
 const localHour = (iso: string, timeZone: string) =>
   Number(
     new Intl.DateTimeFormat('en-GB', { timeZone, hour: '2-digit', hourCycle: 'h23' }).format(

@@ -22,6 +22,7 @@ import {
   addToMeal,
   mealTotals,
   goalLine,
+  rangeCardCopy,
   rangeProgress,
   remainingFor,
   targetsFromForm,
@@ -433,6 +434,52 @@ describe('progress against an energy range', () => {
     expect(rangeProgress(range, 2250)).toMatchObject({ state: 'within', fromHigh: 150 })
     expect(rangeProgress(range, 2520)).toMatchObject({ state: 'above', over: 120 })
     expect(rangeProgress(range, 9000)?.eatenAt).toBe(1)
+  })
+
+  test('T-SPC-UNIT-305 below the range, the card leads with what is missing for the minimum', () => {
+    const goal = { ...range, minimum: 2000, maximum: 2850 }
+    const nothing = rangeProgress(goal, 0)
+    const halfway = rangeProgress(goal, 1420)
+    if (!nothing || !halfway) throw new Error('a range goal has range progress')
+    expect(rangeCardCopy(goal, 0, nothing)).toEqual({
+      figure: '2.000',
+      line: 'Te faltan para tu mínimo',
+      center: '0%',
+      centerLabel: 'Del mínimo',
+      detail: 'Meta 2.000–2.850',
+      over: false,
+    })
+    expect(rangeCardCopy(goal, 1420, halfway)).toMatchObject({ figure: '580', center: '71%' })
+  })
+
+  test('T-SPC-UNIT-306 inside it the margin to the maximum; past it, the excess, flagged', () => {
+    const goal = { ...range, minimum: 2000, maximum: 2850 }
+    const within = rangeProgress(goal, 2300)
+    const above = rangeProgress(goal, 3100)
+    if (!within || !above) throw new Error('a range goal has range progress')
+    expect(rangeCardCopy(goal, 2300, within)).toMatchObject({
+      figure: '550',
+      line: 'Margen hasta tu máximo',
+      center: 'En meta',
+      centerLabel: '2.000–2.850',
+      over: false,
+    })
+    expect(rangeCardCopy(goal, 3100, above)).toMatchObject({
+      figure: '250',
+      line: 'Por encima de tu máximo',
+      center: '+250',
+      centerLabel: 'De más',
+      over: true,
+    })
+  })
+
+  test('T-SPC-UNIT-307 the range is said once, in the line under the card', () => {
+    const goal = { ...range, minimum: 2000, maximum: 2850 }
+    const nothing = rangeProgress(goal, 0)
+    if (!nothing) throw new Error('a range goal has range progress')
+    const copy = rangeCardCopy(goal, 0, nothing)
+    const said = [copy.figure, copy.line, copy.center, copy.centerLabel, copy.detail]
+    expect(said.filter((text) => text.includes('2.000–2.850'))).toHaveLength(1)
   })
 
   test('T-SPC-UNIT-278 a goal that is not a range has no range progress', () => {
