@@ -80,7 +80,7 @@ select isnt((select assignment_id from chosen), null, 'T-PLN-IDEM-30 choosing a 
 -- The runtime role reaches this only through the closed function; it has no
 -- privilege on the tables themselves, and that is what keeps the policy honest.
 select ok(
-  has_function_privilege('allfit_api', 'planning.self_assign_program(uuid, uuid, text, uuid, uuid, bytea)', 'execute')
+  has_function_privilege('allfit_api', 'planning.self_assign_program(uuid, uuid, text, uuid, uuid, bytea, boolean)', 'execute')
   and not has_table_privilege('allfit_api', 'planning.program_assignments', 'select'),
   'T-PLN-RLS-43 the runtime role executes the command and cannot touch the table');
 

@@ -5164,6 +5164,10 @@ export type Database = {
         Returns: string[]
       }
       program_draft_projection: { Args: { p_draft_id: string }; Returns: Json }
+      program_nutrition: {
+        Args: { p_person_id: string; p_program_version_id: string }
+        Returns: Json
+      }
       program_projection: { Args: { p_program_id: string }; Returns: Json }
       program_region: { Args: { p_program_id: string }; Returns: string }
       program_regions: {
@@ -5324,6 +5328,7 @@ export type Database = {
           goals: string[]
           levels: string[]
           notes: string
+          nutrition: Json
           program_version_id: string
           sex_affinity: string
           title: string
@@ -5480,6 +5485,7 @@ export type Database = {
       }
       self_assign_program: {
         Args: {
+          p_adopt_nutrition?: boolean
           p_command_id: string
           p_idempotency_key: string
           p_person_id: string
