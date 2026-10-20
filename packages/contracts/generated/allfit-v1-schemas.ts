@@ -11657,6 +11657,12 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       program_version_id: {
         $ref: '#/components/schemas/UuidV7',
       },
+      adopt_nutrition: {
+        type: 'boolean',
+        default: false,
+        description:
+          "Also publish the programme's nutrition goal as the person's own (OP-NUT-007), in the same command. Ignored when the programme has none for this person.",
+      },
       timezone: {
         type: 'string',
         minLength: 1,
@@ -11757,6 +11763,7 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       'emphases',
       'days',
       'cover_url',
+      'nutrition',
     ],
     properties: {
       program_version_id: {
@@ -11764,6 +11771,18 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
       title: {
         type: 'string',
+      },
+      nutrition: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/SpaceProgramNutrition',
+          },
+          {
+            type: 'null',
+          },
+        ],
+        description:
+          "The nutrition goal an Allfit programme brings, sized to the person's latest weight. Null for a programme the person owns, with no weight recorded, or with no reference for its goal.",
       },
       notes: {
         oneOf: [
@@ -11837,6 +11856,24 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         ],
         description:
           "The same photograph the catalogue listed this programme with, so opening it is not meeting a different programme. It is the set of whoever is asking, resolved by `planning.cover_for`, which is why the answer is cacheable per set and never per version: the version is frozen, the cover hangs off the programme, and a cache keyed only by version id would serve one person the other's picture. Null for a programme with no artwork.",
+      },
+    },
+  },
+  SpaceProgramNutrition: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['goal_code', 'targets'],
+    properties: {
+      goal_code: {
+        $ref: '#/components/schemas/PrimaryTrainingGoal',
+      },
+      targets: {
+        type: 'array',
+        minItems: 1,
+        maxItems: 4,
+        items: {
+          $ref: '#/components/schemas/NutritionGoalTarget',
+        },
       },
     },
   },

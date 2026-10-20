@@ -210,6 +210,8 @@ export interface SpacePlanningDatabase {
     personId: string
     programVersionId: string
     timezone: string
+    /** Also publish the programme's nutrition goal as the person's own (OP-NUT-007). */
+    adoptNutrition: boolean
     idempotencyKey: string
     commandId: string
     requestHash: Buffer

@@ -69,6 +69,7 @@ interface DetailRow {
   emphases: string[]
   days: StoredProgramDetail['days']
   cover_object_key: string | null
+  nutrition: StoredProgramDetail['nutrition']
 }
 
 interface TodayRow {
@@ -390,7 +391,8 @@ export function createSpacePlanningDatabase(): SpacePlanningDatabase {
         const [chosen] = await transaction<{ assignment_id: string }[]>`
           select planning.self_assign_program(
             ${input.personId}::uuid, ${input.programVersionId}::uuid, ${input.timezone},
-            ${input.idempotencyKey}::uuid, ${input.commandId}::uuid, ${input.requestHash}
+            ${input.idempotencyKey}::uuid, ${input.commandId}::uuid, ${input.requestHash},
+            ${input.adoptNutrition}
           ) as assignment_id
         `
         if (!chosen) throw new Error('PostgreSQL did not assign the program')
@@ -447,6 +449,7 @@ function detail(row: DetailRow): StoredProgramDetail {
     emphases: row.emphases as StoredProgramDetail['emphases'],
     days: row.days,
     cover_object_key: row.cover_object_key,
+    nutrition: row.nutrition,
   }
 }
 

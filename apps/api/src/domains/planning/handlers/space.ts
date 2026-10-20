@@ -625,20 +625,29 @@ async function readJson(c: Context): Promise<unknown> {
   }
 }
 
-/** Exactly two keys. An extra one is a client sending something we do not honour. */
-function readChoice(body: unknown): { programVersionId: string; timezone: string } | undefined {
+const CHOICE_KEYS = new Set(['program_version_id', 'timezone', 'adopt_nutrition'])
+
+/** The keys the contract names and no other: an extra one is something we do not honour. */
+function readChoice(
+  body: unknown,
+): { programVersionId: string; timezone: string; adoptNutrition: boolean } | undefined {
   if (typeof body !== 'object' || body === null) return undefined
-  const keys = Object.keys(body)
-  if (keys.length !== 2) return undefined
-  const { program_version_id: version, timezone } = body as {
+  if (Object.keys(body).some((key) => !CHOICE_KEYS.has(key))) return undefined
+  const {
+    program_version_id: version,
+    timezone,
+    adopt_nutrition: adopt,
+  } = body as {
     program_version_id: unknown
     timezone: unknown
+    adopt_nutrition?: unknown
   }
+  if (adopt !== undefined && typeof adopt !== 'boolean') return undefined
   if (typeof version !== 'string' || !UUID_V7.test(version)) return undefined
   if (typeof timezone !== 'string') return undefined
   const trimmed = timezone.trim()
   if (trimmed === '' || trimmed.length > MAX_TIMEZONE) return undefined
-  return { programVersionId: version, timezone: trimmed }
+  return { programVersionId: version, timezone: trimmed, adoptNutrition: adopt === true }
 }
 
 /**
